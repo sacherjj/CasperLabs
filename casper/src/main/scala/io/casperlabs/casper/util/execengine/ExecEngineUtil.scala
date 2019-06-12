@@ -2,30 +2,29 @@ package io.casperlabs.casper.util.execengine
 
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Foldable, Monad, MonadError}
 import cats.kernel.Monoid
+import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
+import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
-import io.casperlabs.models.{DeployResult => _, _}
+import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
-
-import scala.collection.immutable.BitSet
-
-import Op.{OpMap, OpMapAddComm}
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
     postStateHash: StateHash,
-    deploysForBlock: Seq[ProcessedDeploy],
+    deploysForBlock: Seq[Block.ProcessedDeploy],
+    invalidNonceDeploys: Seq[InvalidNonceDeploy],
+    deploysToDiscard: Seq[PreconditionFailure],
     blockNumber: Long,
     protocolVersion: ProtocolVersion
 )
@@ -33,9 +32,14 @@ case class DeploysCheckpoint(
 object ExecEngineUtil {
   type StateHash = ByteString
 
-  def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
-      merged: MergeResult[TransformMap, BlockMessage],
-      deploys: Seq[DeployData],
+  case class InvalidDeploys(
+      invalidNonceDeploys: List[InvalidNonceDeploy],
+      preconditionFailures: List[PreconditionFailure]
+  )
+
+  def computeDeploysCheckpoint[F[_]: MonadThrowable: BlockStore: Log: ExecutionEngineService](
+      merged: MergeResult[TransformMap, Block],
+      deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
@@ -45,17 +49,29 @@ object ExecEngineUtil {
                            deploys,
                            protocolVersion
                          )
-      deployEffects   = findCommutingEffects(processedDeployEffects(deploys zip processedDeploys))
-      deploysForBlock = extractProcessedDepoys(deployEffects)
-      transforms      = extractTransforms(deployEffects)
-      postStateHash <- MonadError[F, Throwable].rethrow(
-                        ExecutionEngineService[F].commit(preStateHash, transforms)
-                      )
+      processedDeployResults = zipDeploysResults(deploys, processedDeploys).toList
+      invalidDeploys <- processedDeployResults.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
+                         case (acc, d: InvalidNonceDeploy) =>
+                           acc.copy(invalidNonceDeploys = d :: acc.invalidNonceDeploys).pure[F]
+                         case (acc, d: PreconditionFailure) =>
+                           // Log precondition failures as we will be getting rid of them.
+                           Log[F].warn(
+                             s"Deploy ${PrettyPrinter.buildString(d.deploy.deployHash)} failed precondition error: ${d.errorMessage}"
+                           ) as {
+                             acc.copy(preconditionFailures = d :: acc.preconditionFailures)
+                           }
+                         case (acc, _) =>
+                           acc.pure[F]
+                       }
+      deployEffects                 = findCommutingEffects(processedDeployResults)
+      (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
+      postStateHash                 <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       maxBlockNumber = merged.parents.foldl(-1L) {
         case (acc, b) => math.max(acc, blockNumber(b))
       }
       number = maxBlockNumber + 1
-      msgBody = transforms
+      //TODO: Remove this logging at some point
+      msgBody = transforms.flatten
         .map(t => {
           val k    = PrettyPrinter.buildString(t.key.get)
           val tStr = PrettyPrinter.buildString(t.transform.get)
@@ -64,48 +80,48 @@ object ExecEngineUtil {
         .mkString("\n")
       _ <- Log[F]
             .info(s"Block #$number created with effects:\n$msgBody")
-    } yield DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number, protocolVersion)
+    } yield
+      DeploysCheckpoint(
+        preStateHash,
+        postStateHash,
+        deploysForBlock,
+        invalidDeploys.invalidNonceDeploys,
+        invalidDeploys.preconditionFailures,
+        number,
+        protocolVersion
+      )
 
   def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       prestate: StateHash,
-      deploys: Seq[DeployData],
+      deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Seq[DeployResult]] =
     ExecutionEngineService[F]
       .exec(prestate, deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
       .rethrow
 
-  /** Produce effects for each processed deploy. */
-  def processedDeployEffects(
-      deployResults: Seq[(DeployData, DeployResult)]
-  ): Seq[(DeployData, Long, Option[ExecutionEffect])] =
-    deployResults.map {
-      case (deploy, DeployResult(_, DeployResult.Result.Empty)) =>
-        (deploy, 0L, None) //This should never happen either
-      case (deploy, DeployResult(cost, DeployResult.Result.Error(_))) =>
-        (deploy, cost, None)
-      case (deploy, DeployResult(cost, DeployResult.Result.Effects(eff))) =>
-        (deploy, cost, Some(eff))
-    }
-
   //TODO: Logic for picking the commuting group? Prioritize highest revenue? Try to include as many deploys as possible?
   def findCommutingEffects(
-      deployEffects: Seq[(DeployData, Long, Option[ExecutionEffect])]
-  ): Seq[(DeployData, Long, Option[ExecutionEffect])] = {
-    val (errors, errorFree) = deployEffects.span(_._3.isEmpty)
+      deployEffects: Seq[ProcessedDeployResult]
+  ): Seq[ProcessedDeployResult] = {
+    // All the deploys that do not change the global state in a way that can conflict with others:
+    // which can be only`ExecutionError` now as `InvalidNonce` and `PreconditionFailure` has been
+    // filtered out when creating block and when we're validating block it shouldn't include those either.
+    val (conflictFree, mergeCandidates) =
+      deployEffects.partition(!_.isInstanceOf[ExecutionSuccessful])
 
-    val nonConflicting = errorFree.toList match {
-      case Nil                           => Nil
-      case (head @ (_, _, eff0)) :: tail =>
-        // the `eff0.get` call is safe because of the `span` above which separates into Some and None cases
-        val (result, _) = tail.foldLeft(Vector(head) -> Op.fromIpcEntry(eff0.get.opMap)) {
-          case (unchanged @ (acc, totalOps), next @ (_, _, Some(eff))) =>
-            val ops = Op.fromIpcEntry(eff.opMap)
-            if (totalOps ~ ops)
-              (acc :+ next, totalOps + ops)
-            else
-              unchanged
-        }
+    val nonConflicting = mergeCandidates match {
+      case Nil => List.empty[ProcessedDeployResult]
+      case list =>
+        val (result, _) =
+          list.foldLeft(List.empty[ProcessedDeployResult] -> Map.empty[ipc.Key, Op]) {
+            case (unchanged @ (acc, totalOps), next @ ExecutionSuccessful(_, effects, _)) =>
+              val ops = Op.fromIpcEntry(effects.opMap)
+              if (totalOps ~ ops)
+                (next :: acc, totalOps + ops)
+              else
+                unchanged
+          }
 
         result
     }
@@ -114,34 +130,41 @@ object ExecEngineUtil {
     // commuting with everything since we will never
     // re-run them (this is a policy decision we have made) and
     // they touch no keys because we rolled back the changes
-    nonConflicting ++ errors
+    nonConflicting ++ conflictFree
   }
 
-  def extractProcessedDepoys(
-      commutingEffects: Seq[(DeployData, Long, Option[ExecutionEffect])]
-  ): Seq[protocol.ProcessedDeploy] =
-    commutingEffects.map {
-      case (deploy, cost, maybeEffect) => {
-        protocol.ProcessedDeploy(
+  def zipDeploysResults(
+      deploys: Seq[Deploy],
+      results: Seq[DeployResult]
+  ): Seq[ProcessedDeployResult] =
+    deploys.zip(results).map((ProcessedDeployResult.apply _).tupled)
+
+  def unzipEffectsAndDeploys(
+      commutingEffects: Seq[ProcessedDeployResult]
+  ): Seq[(Block.ProcessedDeploy, Seq[TransformEntry])] =
+    commutingEffects.collect {
+      case ExecutionSuccessful(deploy, effects, cost) =>
+        Block.ProcessedDeploy(
           Some(deploy),
           cost,
-          maybeEffect.isEmpty // `None` means there was an error
-        )
-      }
+          false
+        ) -> effects.transformMap
+      case ExecutionError(deploy, error, effects, cost) =>
+        Block.ProcessedDeploy(
+          Some(deploy),
+          cost,
+          true,
+          utils.deployErrorsShow.show(error)
+        ) -> effects.transformMap
     }
 
-  def extractTransforms(
-      commutingEffects: Seq[(DeployData, Long, Option[ExecutionEffect])]
-  ): Seq[TransformEntry] =
-    commutingEffects.collect { case (_, _, Some(eff)) => eff.transformMap }.flatten
-
   def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
-      block: BlockMessage,
+      block: Block,
       prestate: StateHash,
       dag: BlockDagRepresentation[F]
   ): F[Seq[TransformEntry]] = {
     val deploys         = ProtoUtil.deploys(block)
-    val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlockMessage(block)
+    val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(block)
 
     for {
       processedDeploys <- processDeploys[F](
@@ -149,13 +172,14 @@ object ExecEngineUtil {
                            deploys.flatMap(_.deploy),
                            protocolVersion
                          )
-      deployEffects = processedDeployEffects(deploys.map(_.getDeploy) zip processedDeploys)
-      transformMap  = (findCommutingEffects _ andThen extractTransforms)(deployEffects)
+      deployEffects = zipDeploysResults(deploys.flatMap(_.deploy), processedDeploys)
+      transformMap = (findCommutingEffects _ andThen unzipEffectsAndDeploys)(deployEffects)
+        .flatMap(_._2)
     } yield transformMap
   }
 
   def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
-      merged: MergeResult[TransformMap, BlockMessage]
+      merged: MergeResult[TransformMap, Block]
   ): F[StateHash] = merged match {
     case MergeResult.EmptyMerge => ExecutionEngineService[F].emptyStateHash.pure[F] //no parents
     case MergeResult.Result(soleParent, _, others) if others.isEmpty =>
@@ -170,10 +194,12 @@ object ExecEngineUtil {
   type TransformMap = Seq[TransformEntry]
   implicit val TransformMapMonoid: Monoid[TransformMap] = new Monoid[TransformMap] {
     def combine(t1: TransformMap, t2: TransformMap): TransformMap = t1 ++ t2
-    def empty: TransformMap                                       = Nil
+
+    def empty: TransformMap = Nil
   }
 
-  sealed trait MergeResult[+T, +A] { self =>
+  sealed trait MergeResult[+T, +A] {
+    self =>
     def parents: Vector[A] = self match {
       case MergeResult.EmptyMerge            => Vector.empty[A]
       case MergeResult.Result(head, _, tail) => head +: tail
@@ -184,8 +210,11 @@ object ExecEngineUtil {
       case MergeResult.Result(_, t, _) => Some(t)
     }
   }
+
   object MergeResult {
+
     case object EmptyMerge extends MergeResult[Nothing, Nothing]
+
     case class Result[T, A](
         firstParent: A,
         nonFirstParentsCombinedEffect: T,
@@ -193,6 +222,7 @@ object ExecEngineUtil {
     ) extends MergeResult[T, A]
 
     def empty[T, A]: MergeResult[T, A] = EmptyMerge
+
     def result[T, A](
         firstParent: A,
         nonFirstParentsCombinedEffect: T,
@@ -202,14 +232,15 @@ object ExecEngineUtil {
 
   /** Computes the largest commuting sub-set of blocks from the `candidateParents` along with an effect which
     * can be used to find the combined post-state of those commuting blocks.
+    *
     * @tparam F effect type (a la tagless final)
     * @tparam T type for transforms (i.e. effects deploys create when executed)
     * @tparam A type for "blocks". Order must be a topological order of the DAG blocks form
     * @tparam K type for keys specifying what a transform is applied to (equal to ipc.Key in production)
     * @param candidates "blocks" to attempt to merge
-    * @param parents function for computing the parents of a "block" (equal to _.parents in production)
-    * @param effect function for computing the transforms of a block (looks up the transaforms from the blockstore in production)
-    * @param toOps function for converting transforms into the OpMap, which is then used for commutativity checking
+    * @param parents    function for computing the parents of a "block" (equal to _.parents in production)
+    * @param effect     function for computing the transforms of a block (looks up the transaforms from the blockstore in production)
+    * @param toOps      function for converting transforms into the OpMap, which is then used for commutativity checking
     * @return an instance of the MergeResult class. It is either an `EmptyMerge` (which only happens when `candidates` is empty)
     *         or a `Result` which contains the "first parent" (the who's post-state will be used to apply the effects to obtain
     *         the merged post-state), the combined effect of all parents apart from the first (i.e. this effect will give
@@ -299,9 +330,9 @@ object ExecEngineUtil {
   }
 
   def merge[F[_]: MonadThrowable: BlockStore](
-      candidateParentBlocks: Seq[BlockMessage],
+      candidateParentBlocks: Seq[Block],
       dag: BlockDagRepresentation[F]
-  ): F[MergeResult[TransformMap, BlockMessage]] = {
+  ): F[MergeResult[TransformMap, Block]] = {
 
     def parents(b: BlockMetadata): F[List[BlockMetadata]] =
       b.parents.traverse(b => dag.lookup(b).map(_.get))
@@ -324,9 +355,10 @@ object ExecEngineUtil {
           toOps
         )
       }
+      // TODO: Aren't these parents already in `candidateParentBlocks`?
       blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
     } yield
-      merged.transform.fold(MergeResult.empty[TransformMap, BlockMessage])(
+      merged.transform.fold(MergeResult.empty[TransformMap, Block])(
         MergeResult.result(blocks.head, _, blocks.tail)
       )
   }

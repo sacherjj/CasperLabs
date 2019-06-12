@@ -1,3 +1,12 @@
+Version 0.7.0 (2019-06-09)
+==========================
+* [[#563]](https://github.com/CasperLabs/CasperLabs/pull/563) Change encoding of URef's access rights to `Option<..>`.
+* [[#604]](https://github.com/CasperLabs/CasperLabs/pull/604) Fixed serialization bug in URef's access rights encoding.
+
+Version 0.6.0 (2019-05-28)
+==========================
+* `read_local` and `write_local` functions are defined for interacting with the new "context-local partitions of global state".
+
 Version 0.5.0 (2019-04-10)
 ==========================
 * API method `call_contract` has been simplified. Instead of requiring arguments passed in the binary form it now accepts tuples up to 8 elements. It is required that for every type in the tuple there exists an instance of `ToBytes` trait.

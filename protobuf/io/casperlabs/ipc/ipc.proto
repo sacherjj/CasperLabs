@@ -8,13 +8,17 @@ message DeployCode {
 }
 
 message Deploy {
-    bytes address = 1; // length 20 bytes
+    // Public key of the account which is the context of the execution.
+    bytes address = 1; // length 32 bytes
     uint64 timestamp = 2;
     DeployCode session = 3;
     DeployCode payment = 4;
     uint64 gas_limit = 5;
     uint64 gas_price = 6;
     uint64 nonce = 7;
+    // Public keys used to sign this deploy, to be checked against the keys
+    // associated with the account.
+    repeated bytes authorization_keys = 8;
 }
 
 message ProtocolVersion  {
@@ -58,7 +62,6 @@ message CommitResponse {
         Key key_not_found = 3;
         TypeMismatch type_mismatch = 4;
         PostEffectsError failed_transform = 5;
-        AdditionOverflow overflow = 6;
     }
 }
 
@@ -75,12 +78,13 @@ message ReadOp {}
 message WriteOp {}
 message AddOp {}
 message NoOp {}
- 
+
 message Key {
     oneof key_instance {
         KeyAddress account = 1; // hash of the key of the account, length 20 bytes
         KeyHash hash = 2; // hash of the key of the contract, length 32 bytes
         KeyURef uref = 3; // length 32 bytes TODO: more bytes?
+        KeyLocal local = 4;
     }
 }
 message KeyAddress {
@@ -91,6 +95,23 @@ message KeyHash {
 }
 message KeyURef {
     bytes uref = 1;
+    // NOTE: Numeric values correspond to values of the domain
+    // AccessRights struct.
+    enum AccessRights {
+        UNKNOWN        = 0;
+        READ           = 1;
+        WRITE          = 2;
+        ADD            = 4;
+        READ_ADD       = 5;
+        READ_WRITE     = 3;
+        ADD_WRITE      = 6;
+        READ_ADD_WRITE = 7;
+    }
+    AccessRights access_rights = 2;
+}
+message KeyLocal {
+    bytes seed = 1;
+    bytes key_hash = 2;
 }
 
 // oneof cannot contain `repeated` label
@@ -112,6 +133,8 @@ message RustBigInt {
     uint32 bit_width = 2;
 }
 
+message UnitValue {}
+
 // Things to store under the key in the global state.
 message Value {
     oneof value_instance {
@@ -124,20 +147,40 @@ message Value {
         StringList string_list = 7;
         NamedKey named_key = 8;
         RustBigInt big_int = 9;
+        Key key = 10;
+        UnitValue unit = 11;
     }
 }
- 
+
 message Account {
+    message AssociatedKey {
+        bytes pub_key = 1; // Should have 32 elements
+        uint32 weight = 2;
+    }
+    message ActionThresholds {
+        uint32 deployment_threshold = 1;
+        uint32 key_management_threshold = 2;
+    }
+    message AccountActivity {
+        uint64 key_management_last_used = 1;
+        uint64 deployment_last_used = 2;
+        uint64 inactivity_period_limit = 3;
+    }
     bytes pub_key = 1; // Should have 32 elements
     uint64 nonce = 2;
     repeated NamedKey known_urefs = 3;
+    KeyURef purse_id = 4;
+    repeated AssociatedKey associated_keys = 5;
+    ActionThresholds action_threshold = 6;
+    AccountActivity account_activity = 7;
 }
 message Contract {
     bytes body = 1;
     repeated NamedKey known_urefs = 2;
+    ProtocolVersion protocol_version = 3;
 }
- 
- 
+
+
 // Final transformation to the value under the key.
 // It's the outcome of applying all `op`s
 message Transform {
@@ -150,7 +193,7 @@ message Transform {
         TransformAddBigInt add_big_int = 6;
     }
 }
- 
+
 message TransformIdentity {}
 message TransformAddInt32 {
     int32 value = 1;
@@ -164,14 +207,12 @@ message TransformAddKeys {
 message TransformWrite {
     Value value = 1;
 }
-message AdditionOverflow {}
 message TransformFailure {
     oneof failure_instance {
         TypeMismatch type_mismatch = 1;
-        AdditionOverflow overflow = 2;
      }
 }
- 
+
 //Errors which may occur while interacting with global state
 message StorageError {
     oneof error_instance {
@@ -203,12 +244,12 @@ message OpEntry {
     Key key = 1;
     Op operation = 2;
 }
- 
+
 message TransformEntry {
     Key key = 1;
     Transform transform = 2;
 }
- 
+
 // Returned by ExecutionEngine to consensus layer.
 // (Map[Key, Op], Map[Key, Transform]) pair, describes how the deploy modifies the global state.
 // op_map and transform_map should be of equal lengths
@@ -216,25 +257,50 @@ message ExecutionEffect {
     repeated OpEntry op_map = 1;
     repeated TransformEntry transform_map = 2;
 }
- 
-//TODO: be more specific about errors
+
 message DeployError {
-    oneof deploy_errors {
-        OutOfGasError gasErr = 1;
-        WasmError wasmErr = 2;
+    // Run out of gas during contract execution.
+    message OutOfGasError {}
+
+    // Error during contract execution.
+    message ExecutionError {
+        string message = 1;
+    }
+
+    oneof value {
+        OutOfGasError gas_error = 1;
+        ExecutionError exec_error = 2;
     }
 }
-message OutOfGasError {}
-message WasmError {
-    string message = 1;
-}
- 
+
 message DeployResult {
-    oneof result {
+    // Invalid nonce is not an error, it's also not a successful execution.
+    // Deploys with invalid nonce are returned to the deploy buffer.
+    message InvalidNonce {
+        uint64 deploy_nonce = 1;
+        uint64 expected_nonce = 2;
+    }
+
+    // Deploys that failed because of precondition failure that we can't charge for
+    // (invalid key format, invalid key address, invalid Wasm deploys).
+    message PreconditionFailure {
+        string message = 1;
+    }
+
+    // Execution result has effects and/or errors.
+    // Failed execution mutates the GlobalState by increasing the nonce and paying for the deploy.
+    message ExecutionResult {
         ExecutionEffect effects = 1;
         DeployError error = 2;
+        uint64 cost = 3;
     }
-    uint64 cost = 3;
+
+    oneof value {
+        InvalidNonce invalid_nonce = 1;
+        PreconditionFailure precondition_failure = 2;
+        ExecutionResult execution_result = 3;
+    }
+
 }
 
 //TODO: be more specific about errors

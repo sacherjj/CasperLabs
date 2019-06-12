@@ -4,12 +4,12 @@ import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.ValidatorIdentity
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ProcessedDeployResult}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProcessedDeployUtil, ProtoUtil}
+import io.casperlabs.casper.{consensus, LegacyConversions, ValidatorIdentity}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node
@@ -17,6 +17,7 @@ import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.RPConfAsk
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.shared._
@@ -31,7 +32,7 @@ import scala.util.Try
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
-    bonds: Map[Array[Byte], Long],
+    bonds: Map[PublicKey, Long],
     wallets: Seq[PreWallet],
     minimumBond: Long,
     maximumBond: Long,
@@ -126,6 +127,7 @@ object BlockApproverProtocol {
         faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
+          .map(LegacyConversions.fromDeploy(_))
           .toSet
         blockDeploys = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
         _ <- blockDeploys
@@ -142,21 +144,21 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
-      deploys                   = blockDeploys.map(_.deploy)
+      deploys                   = blockDeploys.map(pd => LegacyConversions.toDeploy(pd.deploy))
       protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
         postState.blockNumber
       )
       processedDeploys <- EitherT(
                            ExecutionEngineService[F].exec(
                              ExecutionEngineService[F].emptyStateHash,
-                             deploys.map(ProtoUtil.deployDataToEEDeploy),
+                             deploys
+                               .map(ProtoUtil.deployDataToEEDeploy),
                              protocolVersion
                            )
                          ).leftMap(_.getMessage)
-      deployEffects = ExecEngineUtil.findCommutingEffects(
-        ExecEngineUtil.processedDeployEffects(deploys zip processedDeploys)
-      )
-      transforms = ExecEngineUtil.extractTransforms(deployEffects)
+      processedDeployResults = ExecEngineUtil.zipDeploysResults(deploys, processedDeploys)
+      deployEffects          = ExecEngineUtil.findCommutingEffects(processedDeployResults)
+      transforms             = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).flatMap(_._2)
       postStateHash <- EitherT(
                         ExecutionEngineService[F]
                           .commit(ExecutionEngineService[F].emptyStateHash, transforms)
@@ -174,7 +176,7 @@ object BlockApproverProtocol {
                             )
                         ).leftMap(_.getMessage)
       tuplespaceBondsMap = tuplespaceBonds.map {
-        case Bond(validator, stake) => validator -> stake
+        case consensus.Bond(validator, stake) => validator -> stake
       }.toMap
       _ <- EitherT(
             (tuplespaceBondsMap == bonds)

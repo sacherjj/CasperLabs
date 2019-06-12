@@ -1,6 +1,6 @@
 package io.casperlabs.casper.util
 
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
 import io.casperlabs.ipc
 
@@ -11,10 +11,10 @@ class ProtocolVersions private (l: List[BlockThreshold]) {
         protocolVersion
     }.get // This cannot throw because we validate in `apply` that list is never empty.
 
-  def fromBlockMessage(
-      b: BlockMessage
+  def fromBlock(
+      b: Block
   ): ipc.ProtocolVersion =
-    versionAt(b.getBody.getState.blockNumber)
+    versionAt(b.getHeader.rank)
 }
 
 object ProtocolVersions {

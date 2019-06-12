@@ -5,10 +5,10 @@ http-port = 1
 kademlia-port = 1
 dynamic-host-address = false
 no-upnp = false
-default-timeout = 1
-bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1"
+default-timeout = "1second"
 standalone = false
 map-size = 1
+bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1"
 store-type = "lmdb"
 data-dir = "/tmp"
 max-num-of-connections = 1
@@ -17,6 +17,24 @@ chunk-size = 1
 use-gossiping = true
 relay-factor = 1
 relay-saturation = 1
+approval-relay-factor = 1
+approval-poll-interval = "1second"
+sync-max-possible-depth = 1
+sync-min-block-count-to-check-branching-factor = 1
+sync-max-branching-factor = 1.0
+sync-max-depth-ancestors-request = 1
+init-sync-max-nodes = 1
+init-sync-min-successful = 1
+init-sync-memoize-nodes = false
+init-sync-skip-failed-nodes = false
+init-sync-round-period = "1second"
+init-sync-max-block-count = 1
+download-max-parallel-blocks = 1
+download-max-retries = 1
+download-retry-initial-backoff-period = "1second"
+download-retry-backoff-factor = 1.0
+relay-max-parallel-blocks = 1
+relay-block-chunk-consumer-timeout = "1second"
 clean-block-storage = false
 
 [lmdb]
@@ -38,6 +56,7 @@ secure-random-non-blocking = false
 
 [casper]
 validator-public-key = "test"
+validator-public-key-path = "/tmp/test"
 validator-private-key = "test"
 validator-private-key-path = "/tmp/test"
 validator-sig-algorithm = "test"
@@ -55,6 +74,11 @@ approve-genesis = false
 approve-genesis-interval = "1second"
 approve-genesis-duration = "1second"
 deploy-timestamp = 1
+ignore-deploy-signature = false
+auto-propose-enabled = false
+auto-propose-check-interval = "1second"
+auto-propose-max-interval = "1second"
+auto-propose-max-count = 1
 
 [blockstorage]
 latest-messages-log-max-size-factor = 1

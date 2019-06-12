@@ -1,0 +1,11 @@
+[package]
+name = "test-counter-define"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>"]
+
+[lib]
+name = "test_counterdefine"
+crate-type = ["cdylib"]
+
+[dependencies]
+common = { package = "casperlabs-contract-ffi", path = "../../../../execution-engine/common/" }

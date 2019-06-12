@@ -30,8 +30,8 @@ class StashingSynchronizerSpec
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
   val requestsGen: Gen[List[(Node, Set[ByteString])]] = for {
-    nodes       <- Gen.listOfN(100, arbNode.arbitrary)
-    blockHashes <- Gen.listOfN(100, genHash)
+    nodes       <- Gen.listOfN(10, arbNode.arbitrary)
+    blockHashes <- Gen.listOfN(10, genHash)
     hashesPerNode <- nodes.traverse(
                       n =>
                         for {
@@ -50,7 +50,7 @@ class StashingSynchronizerSpec
               fiber <- requests.parTraverse {
                         case (source, hashes) => synchronizer.syncDag(source, hashes)
                       }.start
-              _ <- Task.sleep(500.milliseconds)
+              _ <- Task.sleep(30.milliseconds)
               _ <- Task(mock.requests.get().toList shouldBe empty)
               _ <- deferred.complete(())
               _ <- fiber.join
@@ -76,7 +76,7 @@ class StashingSynchronizerSpec
               fiber <- requests.traverse {
                         case (source, hashes) => synchronizer.syncDag(source, hashes)
                       }.start
-              _   <- Task.sleep(500.milliseconds)
+              _   <- Task.sleep(30.milliseconds)
               _   <- Task(mock.requests.get().toList shouldBe empty)
               _   <- deferred.complete(())
               res <- fiber.join
@@ -102,7 +102,7 @@ class StashingSynchronizerSpec
               fiber <- requests.traverse {
                         case (source, hashes) => synchronizer.syncDag(source, hashes).attempt
                       }.start
-              _   <- Task.sleep(100.milliseconds)
+              _   <- Task.sleep(30.milliseconds)
               _   <- Task(mock.requests.get().toList shouldBe empty)
               _   <- deferred.complete(())
               res <- fiber.join
@@ -174,7 +174,7 @@ object StashingSynchronizerSpec {
           parallelism = 100,
           executionModel = ExecutionModel.AlwaysAsyncExecution
         )
-      run.runSyncUnsafe(10.seconds)
+      run.runSyncUnsafe(5.seconds)
     }
   }
 }

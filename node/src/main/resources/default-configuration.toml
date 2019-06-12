@@ -20,10 +20,10 @@ dynamic-host-address = false
 no-upnp = false
 
 # Default timeout for roundtrip connections.
-default-timeout = 2000
+default-timeout = "5second"
 
 # Bootstrap casperlabs node address for initial seed.
-bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
+# bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
 
 # Type of Casperlabs space backing store. Valid values are: lmdb, inmem, mixed.
 store-type = "lmdb"
@@ -49,8 +49,63 @@ relay-factor = 2
 # Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes.
 relay-saturation = 90
 
-## Use this flag to clear the blockStore and blockDagStorage
+# Number of nodes to relay genesis approvals to.
+approval-relay-factor = 10
+
+# Time to wait between asking the bootstrap node for an updated list of genesis approvals.
+approval-poll-interval = "30second"
+
+# Maximum DAG depth to allow when syncing after a new block notification.
+sync-max-possible-depth = 1000
+
+# Minimum DAG depth before we start checking the branching factor for abnormal growth.
+sync-min-block-count-to-check-branching-factor = 100
+
+# Maximum branching factor to allow during syncs before terminating the operation as malicious.
+sync-max-branching-factor = 1.5
+
+# Maximum DAG depth to ask in iterative requests during syncing.
+sync-max-depth-ancestors-request = 10
+
+# Maximum number of nodes to try to sync with initially in a round.
+init-sync-max-nodes = 5
+
+# Minimum number of successful initial syncs in a round to call it done.
+init-sync-min-successful = 1
+
+# Remember the selection of nodes to synchronize with initially, or pick a new set in each round.
+init-sync-memoize-nodes = false
+
+# Skip nodes which failed previous synchronization attempts or allow them to be tried again.
+init-sync-skip-failed-nodes = false
+
+# Time to wait between initial synchronization attempts.
+init-sync-round-period = "30second"
+
+# Maximum number of blocks to allow to be synced initially.
+init-sync-max-block-count = 1000000
+
+# Maximum number of parallel block downloads initiated by the download manager.
+download-max-parallel-blocks = 10
+
+# Maximum number of times to retry to download a block from the same node.
+download-max-retries = 0
+
+# Time to wait before trying to download a failed block again from the same node.
+download-retry-initial-backoff-period = "5second"
+
+# Exponential factor to apply on subsequent wait times before trying to download again.
+download-retry-backoff-factor = 2.0
+
+# Maximum number of parallel block downloads allowed to peers.
+relay-max-parallel-blocks = 5
+
+# Maximum time to allow a peer downloading a block to consume each chunk.
+relay-block-chunk-consumer-timeout = "10second"
+
+# Use this flag to clear the blockStore and blockDagStorage
 clean-block-storage = false
+
 
 # io.casperlabs.blockstorage.LMDBBlockStore.Config
 [lmdb]
@@ -97,7 +152,7 @@ port-internal = 40402
 # Path to node's X.509 certificate file, that is being used for identification.
 certificate = "$HOME/.casperlabs/node.certificate.pem"
 
-# Path to node's private key PEM file, that is being used for TLS communication.
+# Path to node's unencrypted secp256r1 PKCS#8 private key file, that is being used for TLS communication.
 key = "$HOME/.casperlabs/node.key.pem"
 
 # Use a non blocking secure random instance.
@@ -107,16 +162,20 @@ secure-random-non-blocking = false
 # io.casperlabs.casper.CasperConf
 [casper]
 
-# Base16 encoding of the public key to use for signing a proposed blocks.
+# base-64 or PEM encoding of the public key to use for signing a proposed blocks.
 # Can be inferred from the private key for some signature algorithms.
 # validator-public-key =
 
-# Base16 encoding of the private key to use for signing a proposed blocks.
+# Path to the base-64 or PEM encoded public key to use for signing a proposed blocks.
+# Can be inferred from the private key for some signature algorithms.
+# validator-public-key-path =
+
+# base-64 or PEM encoding of the private key to use for signing a proposed blocks.
 # It is not recommended to use in production since private key could be revealed through the process table.
 # Use the `validator-private-key-path` instead.
 # validator-private-key =
 
-# Path to the base16 encoded private key to use for signing a proposed blocks.
+# Path to the base-64 or PEM encoded private key to use for signing a proposed blocks.
 # validator-private-key-path =
 
 # Name of the algorithm to use for signing proposed blocks.
@@ -125,7 +184,7 @@ validator-sig-algorithm = "ed25519"
 
 # Path to plain text file consisting of lines of the form `<pk> <stake>`
 # which defines the bond amounts for each validator at genesis.
-# <pk> is the public key (in base-16 encoding) identifying the validator and
+# <pk> is the public key (in base-64 encoding) identifying the validator and
 # <stake> is the amount of CSPR they have bonded (an integer).
 # Note: this overrides the --num-validators option.
 bonds-file = "$HOME/.casperlabs/genesis/bonds.txt"
@@ -140,8 +199,8 @@ num-validators = 5
 
 # Path to plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`
 # which defines the CSPR wallets that exist at genesis.
-# <algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1),
-# <pk> is the public key (in base-16 encoding) identifying the wallet and
+# <algorithm> is the algorithm used to verify signatures when using the wallet (currently supported value is only ed25519),
+# <pk> is the public key (in base-64 encoding) identifying the wallet and
 # <revBalance> is the amount of CSPR in the wallet.
 wallets-file = "$HOME/.casperlabs/genesis/wallets.txt"
 
@@ -174,6 +233,22 @@ approve-genesis-duration = "5minutes"
 
 # Timestamp for the deploys.
 # deploy-timestamp =
+
+# Ignore while client side support for signing deploys is not in place.
+ignore-deploy-signature = true
+
+
+# Enable auto-proposal of blocks.
+auto-propose-enabled = false
+
+# Time between proposal checks.
+auto-propose-check-interval = "1second"
+
+# Time to accumulate deploys before proposing.
+auto-propose-max-interval = "5seconds"
+
+# Number of deploys to accumulate before proposing.
+auto-propose-max-count = 10
 
 
 # io.casperlabs.node.configuration.Configuration.Kamon

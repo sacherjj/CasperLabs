@@ -1,17 +1,15 @@
 use crate::key::*;
+use crate::uref::{AccessRights, URef};
+use crate::value::account::{
+    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+    MAX_KEYS,
+};
 use crate::value::*;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use proptest::collection::{btree_map, vec};
 use proptest::prelude::*;
-
-pub fn u8_slice_20() -> impl Strategy<Value = [u8; 20]> {
-    vec(any::<u8>(), 20).prop_map(|b| {
-        let mut res = [0u8; 20];
-        res.clone_from_slice(b.as_slice());
-        res
-    })
-}
+use proptest::{array, bits, option};
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
     vec(any::<u8>(), 32).prop_map(|b| {
@@ -37,26 +35,79 @@ pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
     ]
 }
 
+pub fn uref_arb() -> impl Strategy<Value = URef> {
+    (
+        array::uniform32(bits::u8::ANY),
+        option::weighted(option::Probability::new(0.8), access_rights_arb()),
+    )
+        .prop_map(|(id, maybe_access_rights)| URef::unsafe_new(id, maybe_access_rights))
+}
+
 pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
-        u8_slice_20().prop_map(Key::Account),
+        u8_slice_32().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
-        access_rights_arb()
-            .prop_flat_map(|right| { u8_slice_32().prop_map(move |addr| Key::URef(addr, right)) })
+        uref_arb().prop_map(Key::URef),
+        (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key_hash)| Key::Local { seed, key_hash })
     ]
 }
 
-pub fn account_arb() -> impl Strategy<Value = Account> {
-    u8_slice_32().prop_flat_map(|b| {
-        any::<u64>().prop_flat_map(move |u64arb| {
-            uref_map_arb(3).prop_map(move |urefs| Account::new(b, u64arb, urefs))
-        })
+pub fn public_key_arb() -> impl Strategy<Value = PublicKey> {
+    u8_slice_32().prop_map(Into::into)
+}
+
+pub fn weight_arb() -> impl Strategy<Value = Weight> {
+    any::<u8>().prop_map(Weight::new)
+}
+
+pub fn associated_keys_arb(size: usize) -> impl Strategy<Value = AssociatedKeys> {
+    proptest::collection::btree_map(public_key_arb(), weight_arb(), size).prop_map(|keys| {
+        let mut associated_keys = AssociatedKeys::empty();
+        keys.into_iter().for_each(|(k, v)| {
+            associated_keys.add_key(k, v).unwrap();
+        });
+        associated_keys
     })
 }
 
+pub fn action_threshold_arb() -> impl Strategy<Value = ActionThresholds> {
+    Just(Default::default())
+}
+
+pub fn account_activity_arb() -> impl Strategy<Value = AccountActivity> {
+    Just(AccountActivity::new(BlockTime(1), BlockTime(1000)))
+}
+
+prop_compose! {
+    pub fn account_arb()(
+        pub_key in u8_slice_32(),
+        nonce in any::<u64>(),
+        urefs in uref_map_arb(3),
+        purse_id in uref_arb(),
+        thresholds in action_threshold_arb(),
+        account_activity in account_activity_arb(),
+        mut associated_keys in associated_keys_arb(MAX_KEYS - 1),
+    ) -> Account {
+            let purse_id = PurseId::new(purse_id);
+            associated_keys.add_key(pub_key.into(), Weight::new(1)).unwrap();
+            Account::new(
+                pub_key,
+                nonce,
+                urefs,
+                purse_id,
+                associated_keys.clone(),
+                thresholds.clone(),
+                account_activity.clone(),
+            )
+    }
+}
+
 pub fn contract_arb() -> impl Strategy<Value = Contract> {
-    uref_map_arb(20).prop_flat_map(|urefs| {
-        vec(any::<u8>(), 1..1000).prop_map(move |body| Contract::new(body, urefs.clone()))
+    any::<u64>().prop_flat_map(move |u64arb| {
+        uref_map_arb(20).prop_flat_map(move |urefs| {
+            vec(any::<u8>(), 1..1000)
+                .prop_map(move |body| Contract::new(body, urefs.clone(), u64arb))
+        })
     })
 }
 
@@ -80,6 +131,7 @@ pub fn value_arb() -> impl Strategy<Value = Value> {
         ("\\PC*".prop_map(Value::String)),
         (vec(any::<String>(), 1..500).prop_map(Value::ListString)),
         ("\\PC*", key_arb()).prop_map(|(n, k)| Value::NamedKey(n, k)),
+        key_arb().prop_map(Value::Key),
         account_arb().prop_map(Value::Account),
         contract_arb().prop_map(Value::Contract),
         u128_arb().prop_map(Value::UInt128),

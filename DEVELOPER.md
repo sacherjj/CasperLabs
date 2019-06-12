@@ -340,10 +340,12 @@ cargo run --bin casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 
 In the root of CasperLabs.
 
-If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/casperlabs-node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
+[Generate secp256r1 key and X.509 certificate firstly](/VALIDATOR.md#setting-up-keys).
 
-```
-./node/target/universal/stage/bin/casperlabs-node run --casper-validator-private-key <private key from <public_key>.sk file> --casper-validator-public-key <public_key> -s
+```bash
+./node/target/universal/stage/bin/casperlabs-node run -s \
+    --tls-certificate node.certificate.pem \
+    --tls-key secp256r1-private-pkcs8.pem
 ```
 
 ### Deploying data
@@ -351,7 +353,7 @@ If you're doing it for the first time you don't have private and public keys. Th
 In the root of CasperLabs, run:
 
 ```
-./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 deploy --from 00000000000000000000 --gas-limit 100000000 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
+./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 deploy --from 3030303030303030303030303030303030303030303030303030303030303030 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
 ```
 
 At the moment, payment wasm file is not used so use the same file as for the `--session`.
@@ -359,10 +361,12 @@ At the moment, payment wasm file is not used so use the same file as for the `--
 After deploying contract it's not yet executed (its effects are not applied to the global state), so you have to `propose` a block. Run:
 
 ```
-./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 propose
+./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port-internal 40402 propose
 ```
 
 For the demo purposes we have to propose contracts separately because second contract (`hello-name/call`) won't see the changes (in practice it won't be able to call `hello-name/define` contract) from the previous deploy.
+
+Note that propose uses a different port then the deploy because it's considered an operator-only function, it's not part of the same interface.
 
 ### Visualising DAG state
 
@@ -508,9 +512,9 @@ This tells `sbt` to run `JMH` benchmarks from the `blockStorage` project with th
 This procedure requires machine with at least 32GB RAM.
 This is a recommended way to run benchmarks.
 
-There is also a properties file which could be use to configure some values: `block-storage/src/test/resources/block-store-benchmark.properties` 
+There is also a properties file which could be use to configure some values: `block-storage/src/test/resources/block-store-benchmark.properties`
 
-For more information about JMH, you can visit JMH project page: http://openjdk.java.net/projects/code-tools/jmh/ 
+For more information about JMH, you can visit JMH project page: http://openjdk.java.net/projects/code-tools/jmh/
 
 ## Description of subprojects
 

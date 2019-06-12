@@ -1,52 +1,18 @@
-import os
 import logging
-from pathlib import Path
+import os
+import re
 import shutil
 import tempfile
-from typing import TYPE_CHECKING, Tuple, Generator, Optional, List
-import re
+from pathlib import Path
+from typing import List, Tuple, Dict
 
-from docker.errors import ContainerError
-
-from test.cl_node.errors import (
-    CasperLabsNodeAddressNotFoundError,
-    NonZeroExitCodeError,
-)
-
+from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from test.cl_node.docker_base import LoggingDockerBase
-from test.cl_node.common import random_string
-from test.cl_node.casperlabsnode import (
-    extract_block_count_from_show_blocks,
-    extract_block_hash_from_propose_output,
-)
+from test.cl_node.docker_client import DockerClient
+from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-
-if TYPE_CHECKING:
-    from test.cl_node.docker_base import DockerConfig
-
-# TODO: Either load casper_client as a package, or fix import
-# Copied casper_client into directory structure for now.
-# from test.cl_node.client.casper_client import CasperClient
-
-# def get_python_client_folder() -> Path:
-#     """ This will return the resources folder that is copied into the correct location for testing """
-#     cur_path = Path(os.path.realpath(__file__)).parent
-#     while cur_path.name != 'CasperLabs':
-#         cur_path = cur_path.parent
-#     return cur_path / 'client' / 'python' / 'src'
-#
-#
-#
-# sys.path.append(get_python_client_folder())
-#
-
-
-def get_resources_folder() -> Path:
-    """ This will return the resources folder that is copied into the correct location for testing """
-    cur_path = Path(os.path.realpath(__file__)).parent
-    while cur_path.name != 'integration-testing':
-        cur_path = cur_path.parent
-    return cur_path / 'resources'
+from test.cl_node.python_client import PythonClient
+from test.cl_node.docker_base import DockerConfig
 
 
 class DockerNode(LoggingDockerBase):
@@ -61,18 +27,105 @@ class DockerNode(LoggingDockerBase):
     CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
     CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
 
-    NETWORK_PORT = '40400'
-    GRPC_PORT = '40401'
-    HTTP_PORT = '40403'
-    KADEMLIA_PORT = '40404'
+    NETWORK_PORT = 40400
+    GRPC_EXTERNAL_PORT = 40401
+    GRPC_INTERNAL_PORT = 40402
+    HTTP_PORT = 40403
+    KADEMLIA_PORT = 40404
+
+    DOCKER_CLIENT = 'd'
+    PYTHON_CLIENT = 'p'
+
+    def __init__(self, config: DockerConfig, socket_volume: str):
+        super().__init__(config, socket_volume)
+        self._client = self.DOCKER_CLIENT
+        self.p_client = PythonClient(self)
+        self.d_client = DockerClient(self)
+        self.join_client_network()
+
+    @property
+    def docker_port_offset(self) -> int:
+        if self.is_in_docker:
+            return 0
+        else:
+            return self.number * 10
+
+    @property
+    def grpc_external_docker_port(self) -> int:
+        return self.GRPC_EXTERNAL_PORT + self.docker_port_offset
+
+    @property
+    def grpc_internal_docker_port(self) -> int:
+        return self.GRPC_INTERNAL_PORT + self.docker_port_offset
+
+    @property
+    def resources_folder(self) -> Path:
+        """ This will return the resources folder that is copied into the correct location for testing """
+        cur_path = Path(os.path.realpath(__file__)).parent
+        while cur_path.name != 'integration-testing':
+            cur_path = cur_path.parent
+        return cur_path / 'resources'
+
+    @property
+    def timeout(self):
+        """
+        Number of seconds for a node to timeout.
+        :return: int (seconds)
+        """
+        return self.config.command_timeout
+
+    @property
+    def number(self) -> int:
+        return self.config.number
 
     @property
     def container_type(self):
         return 'node'
 
+    @property
+    def client(self) -> 'CasperLabsClient':
+        return {self.DOCKER_CLIENT: self.d_client,
+                self.PYTHON_CLIENT: self.p_client}[self._client]
+
+    def use_python_client(self):
+        self._client = self.PYTHON_CLIENT
+
+    def use_docker_client(self):
+        self._client = self.DOCKER_CLIENT
+
+    @property
+    def client_network_name(self) -> str:
+        """
+        This renders the network name that the docker client should have opened for Python Client connection
+        """
+        # Networks are created in docker_run_tests.sh.  Must stay in sync.
+        return f'cl-{self.docker_tag}-{self.config.number}'
+
+    def join_client_network(self) -> None:
+        """
+        Joins DockerNode to client network to enable Python Client communication
+        """
+        if os.environ.get('TAG_NAME'):
+            # We are running in docker, because we have this environment variable
+            self.connect_to_network(self.client_network_name)
+            logging.info(f'Joining {self.container_name} to {self.client_network_name}.')
+
+    @property
+    def docker_ports(self) -> Dict[str, int]:
+        """
+        Generates a dictionary for docker port mapping.
+
+        :return: dict for use in docker container run to open ports based on node number
+        """
+        return {f'{self.GRPC_INTERNAL_PORT}/tcp': self.grpc_internal_docker_port,
+                f'{self.GRPC_EXTERNAL_PORT}/tcp': self.grpc_external_docker_port}
+
     def _get_container(self):
         env = {
-            'RUST_BACKTRACE': 'full'
+            'RUST_BACKTRACE': 'full',
+            'CL_LOG_LEVEL': 'DEBUG',
+            'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'true',
+            'CL_SERVER_NO_UPNP': 'true'
         }
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
@@ -84,6 +137,11 @@ class DockerNode(LoggingDockerBase):
         commands = self.container_command
         logging.info(f'{self.container_name} commands: {commands}')
 
+        # Locally, we use tcp ports.  In docker, we used docker networks
+        ports = {}
+        if not self.is_in_docker:
+            ports = self.docker_ports
+
         container = self.config.docker_client.containers.run(
             self.image_name,
             name=self.container_name,
@@ -91,9 +149,7 @@ class DockerNode(LoggingDockerBase):
             auto_remove=False,
             detach=True,
             mem_limit=self.config.mem_limit,
-            # If multiple tests are running in drone, local ports are duplicated.  Need a solution to this
-            # Prior to implementing the python client.
-            # ports={f'{self.GRPC_PORT}/tcp': self.config.grpc_port},  # Exposing grpc for Python Client
+            ports=ports,  # Exposing grpc for Python Client
             network=self.network,
             volumes=self.volumes,
             command=commands,
@@ -110,8 +166,7 @@ class DockerNode(LoggingDockerBase):
     def create_resources_dir(self) -> None:
         if os.path.exists(self.host_mount_dir):
             shutil.rmtree(self.host_mount_dir)
-        resources_source_path = get_resources_folder()
-        shutil.copytree(resources_source_path, self.host_mount_dir)
+        shutil.copytree(str(self.resources_folder), self.host_mount_dir)
         self.create_bonds_file()
 
     def create_bonds_file(self) -> None:
@@ -169,74 +224,21 @@ class DockerNode(LoggingDockerBase):
         output = self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
         return output
 
-    def invoke_client(self, command: str) -> str:
-        volumes = {
-            self.host_mount_dir: {
-                'bind': '/data',
-                'mode': 'ro'
-            }
-        }
-        try:
-            command = f'--host {self.container_name} {command}'
-            logging.info(f"COMMAND {command}")
-            output = self.config.docker_client.containers.run(
-                image=f"casperlabs/client:{self.docker_tag}",
-                auto_remove=True,
-                name=f"client-{self.config.number}-{random_string(5)}",
-                command=command,
-                network=self.network,
-                volumes=volumes,
-            ).decode('utf-8')
-            logging.debug(f"OUTPUT {self.container_name} {output}")
-            return output
-        except ContainerError as err:
-            logging.warning(f"EXITED code={err.exit_status} command='{err.command}' stderr='{err.stderr}'")
-            raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
-
-    def deploy(self,
-               from_address: str = "00000000000000000000",
-               gas_limit: int = 1000000,
-               gas_price: int = 1,
-               nonce: int = 0,
-               session_contract: Optional[str]='helloname.wasm',
-               payment_contract: Optional[str]='helloname.wasm') -> str:
-
-        command = " ".join([
-            "deploy",
-            f"--from {from_address}",
-            f"--gas-limit {gas_limit}",
-            f"--gas-price {gas_price}",
-            f"--nonce {nonce}",
-            f"--session=/data/{session_contract}",
-            f"--payment=/data/{payment_contract}"
-        ])
-
-        return self.invoke_client(command)
-
-    def propose(self) -> str:
-        return self.invoke_client('propose')
-
     def deploy_and_propose(self, **deploy_kwargs) -> str:
-        deploy_output = self.deploy(**deploy_kwargs)
+        deploy_output = self.client.deploy(**deploy_kwargs)
         assert 'Success!' in deploy_output
-        block_hash_output_string = self.propose()
+        block_hash_output_string = self.client.propose()
         block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
         assert block_hash is not None
         logging.info(f"The block hash: {block_hash} generated for {self.container.name}")
         return block_hash
 
-    def show_block(self, hash: str) -> str:
-        return self.invoke_client(f'show-block {hash}')
-
     def show_blocks(self) -> Tuple[int, str]:
         return self.exec_run(f'{self.CL_NODE_BINARY} show-blocks')
 
-    def show_blocks_with_depth(self, depth: int) -> str:
-        return self.invoke_client(f"show-blocks --depth={depth}")
-
     def blocks_as_list_with_depth(self, depth: int) -> List:
         # TODO: Replace with generator using Python client
-        result = self.show_blocks_with_depth(depth)
+        result = self.client.show_blocks(depth)
         block_list = []
         for i, section in enumerate(result.split(' ---------------\n')):
             if i == 0:
@@ -252,14 +254,6 @@ class DockerNode(LoggingDockerBase):
         block_list.reverse()
         return block_list
 
-    def get_blocks_count(self, depth: int) -> int:
-        show_blocks_output = self.show_blocks_with_depth(depth)
-        return extract_block_count_from_show_blocks(show_blocks_output)
-
-    def vdag(self, depth: int, show_justification_lines: bool = False) -> str:
-        just_text = '--show-justification-lines' if show_justification_lines else ''
-        return self.invoke_client(f'vdag --depth {depth} {just_text}')
-
     @property
     def address(self) -> str:
         m = re.search(f"Listening for traffic on (casperlabs://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$",
@@ -269,32 +263,3 @@ class DockerNode(LoggingDockerBase):
             raise CasperLabsNodeAddressNotFoundError()
         address = m.group(1)
         return address
-
-    # Methods for new Python Client that was temp removed.
-    #
-    # def deploy(self, from_address: str = "00000000000000000000",
-    #            gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0,
-    #            session_contract_path=None,
-    #            payment_contract_path=None) -> str:
-    #
-    #     if session_contract_path is None:
-    #         session_contract_path = f'{self.host_mount_dir}/helloname.wasm'
-    #     if payment_contract_path is None:
-    #         payment_contract_path = f'{self.host_mount_dir}/helloname.wasm'
-    #
-    #     logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
-    #                  f'payment_contract={payment_contract_path}, session_contract={session_contract_path}, '
-    #                  f'nonce={nonce})')
-    #     return self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price,
-    #                               payment_contract_path, session_contract_path, nonce)
-    #
-    # def propose(self):
-    #     logging.info(f'PY_CLIENT.propose()')
-    #     return self.client.propose()
-    #
-    # def show_blocks_with_depth(self, depth: int) -> Generator:
-    #     return self.client.showBlocks(depth)
-    #
-    # def get_blocks_count(self, depth: int) -> int:
-    #     block_count = sum([1 for _ in self.show_blocks_with_depth(depth)])
-    #     return block_count

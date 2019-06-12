@@ -1,7 +1,8 @@
 package io.casperlabs.blockstorage
 
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.ipc._
 import io.casperlabs.storage.BlockMsgWithTransform
 import org.scalacheck.Arbitrary.arbitrary
@@ -29,7 +30,20 @@ object blockImplicits {
 
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
-  val blockMessageGen: Gen[BlockMessage] =
+  val deployGen: Gen[Deploy] = for {
+    n          <- Gen.choose(0, 10)
+    deployHash = ByteString.copyFromUtf8(s"$n")
+  } yield Deploy().withDeployHash(deployHash)
+  implicit val arbitraryDeploy: Arbitrary[Deploy] = Arbitrary(deployGen)
+
+  val processedDeployGen: Gen[Block.ProcessedDeploy] = for {
+    deploy <- arbitrary[Deploy]
+  } yield Block.ProcessedDeploy().withDeploy(deploy).withCost(1L)
+
+  implicit val arbitraryProcessedDeploy: Arbitrary[Block.ProcessedDeploy] =
+    Arbitrary(processedDeployGen)
+
+  val blockMessageGen: Gen[Block] =
     for {
       hash            <- arbitrary[ByteString]
       validator       <- arbitrary[ByteString]
@@ -37,15 +51,19 @@ object blockImplicits {
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[ByteString]]
       justifications  <- arbitrary[Seq[Justification]]
+      deploys         <- arbitrary[Seq[Block.ProcessedDeploy]]
     } yield
-      BlockMessage(blockHash = hash)
+      Block()
+        .withBlockHash(hash)
         .withHeader(
-          Header()
-            .withParentsHashList(parentsHashList)
+          Block
+            .Header()
+            .withParentHashes(parentsHashList)
             .withProtocolVersion(version)
             .withTimestamp(timestamp)
+            .withValidatorPublicKey(validator)
         )
-        .withSender(validator)
+        .withBody(Block.Body().withDeploys(deploys))
 
   val blockMsgWithTransformGen: Gen[BlockMsgWithTransform] =
     for {
@@ -69,13 +87,13 @@ object blockImplicits {
             BlockMsgWithTransform(Some(b), transform) = blockMsgWithTransform
             parents                                   <- Gen.someOf(blocks)
             parentHashes                              = parents.map(_.getBlockMessage.blockHash)
-            newBlock                                  = b.withHeader(b.header.get.withParentsHashList(parentHashes))
+            newBlock                                  = b.withHeader(b.header.get.withParentHashes(parentHashes))
             newBlockWithTransform                     = BlockMsgWithTransform(Some(newBlock), transform)
           } yield newBlockWithTransform :: blocks
       }
     }
 
-  def blockWithNewHashesGen(blockElements: List[BlockMessage]): Gen[List[BlockMessage]] =
+  def blockWithNewHashesGen(blockElements: List[Block]): Gen[List[Block]] =
     Gen.listOfN(blockElements.size, blockHashGen).map { blockHashes =>
       blockElements.zip(blockHashes).map {
         case (b, hash) => b.withBlockHash(hash)

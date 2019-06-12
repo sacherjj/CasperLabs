@@ -1,8 +1,8 @@
 ///! Log levels are [ fatal | error | warning | info | debug ]
 ///!    all emergency, alert, and critical level log events will be coalesced into
-///         a single category, fatal
+///!        a single category, fatal
 ///!    all notice and informational level log events will be coalesced into
-///         a single category, info
+///!        a single category, info
 ///!    "no log" / "none" is NOT an option; the minimum allowed loglevel is fatal
 ///!   internally, syslog levels will be maintained for cross compatibility, with
 ///!        the following mapping:
@@ -10,12 +10,16 @@
 ///!            error: 3
 ///!            warning: 4
 ///!            info: 5
+///!            metric: 6
 ///!            debug: 7
 use std::cmp::{Ord, Ordering};
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 /// LogLevels to be used in CasperLabs EE logic
 #[repr(u8)] // https://doc.rust-lang.org/1.6.0/nomicon/other-reprs.html
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum LogLevel {
     /// emergency, alert, critical
     Fatal = 0,
@@ -25,13 +29,23 @@ pub enum LogLevel {
     Warning = 4,
     /// notice, informational
     Info = 5,
+    /// metrics
+    Metric = 6,
     /// debug, dev oriented messages
     Debug = 7,
 }
 
 impl LogLevel {
-    pub fn get_priority(self) -> u8 {
+    pub fn get_priority(self) -> LogPriority {
+        LogPriority::new(self)
+    }
+
+    pub fn value(self) -> u8 {
         self as u8
+    }
+
+    pub fn to_uppercase(self) -> String {
+        (format!("{:?}", self)).to_uppercase()
     }
 }
 
@@ -99,15 +113,44 @@ impl PartialOrd for LogLevel {
     }
 }
 
-impl Into<slog::Level> for LogLevel {
-    fn into(self) -> slog::Level {
+impl fmt::Display for LogLevel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+impl Into<log::Level> for LogLevel {
+    fn into(self) -> log::Level {
         match self {
-            LogLevel::Fatal => slog::Level::Critical,
-            LogLevel::Error => slog::Level::Error,
-            LogLevel::Warning => slog::Level::Warning,
-            LogLevel::Info => slog::Level::Info,
-            LogLevel::Debug => slog::Level::Debug,
+            LogLevel::Fatal => log::Level::Error,
+            LogLevel::Error => log::Level::Error,
+            LogLevel::Warning => log::Level::Warn,
+            LogLevel::Info => log::Level::Info,
+            LogLevel::Metric => log::Level::Trace,
+            LogLevel::Debug => log::Level::Debug,
         }
+    }
+}
+
+/// newtype to encapsulate log level priority
+#[derive(Clone, Copy, Debug, Hash, Serialize)]
+pub struct LogPriority(u8);
+
+impl LogPriority {
+    pub fn new(log_level: LogLevel) -> LogPriority {
+        let priority = log_level.value();
+        LogPriority(priority)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn value(self) -> u8 {
+        self.0
+    }
+}
+
+impl fmt::Display for LogPriority {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0.to_string())
     }
 }
 
@@ -192,6 +235,16 @@ mod tests {
     }
 
     #[test]
+    fn metric_should_be_max_vs_debug() {
+        let lvl = LogLevel::Debug;
+        let other = LogLevel::Metric;
+
+        let max = lvl.max(other);
+
+        assert_eq!(max, LogLevel::Metric, "metric should be more severe");
+    }
+
+    #[test]
     fn fatal_should_be_syslog_0() {
         assert_eq!(LogLevel::Fatal as u8, 0, "Fatal should be priority 0");
     }
@@ -212,48 +265,86 @@ mod tests {
     }
 
     #[test]
+    fn metric_should_be_syslog_6() {
+        assert_eq!(LogLevel::Metric as u8, 6, "Metric should be priority 6");
+    }
+
+    #[test]
     fn debug_should_be_syslog_7() {
         assert_eq!(LogLevel::Debug as u8, 7, "Debug should be priority 7");
     }
 
     #[test]
-    fn slog_critical_eq_fatal() {
-        let ll: slog::Level = LogLevel::Fatal.into();
-        assert_eq!(ll, slog::Level::Critical, "Fatal eq Critical");
-    }
-
-    #[test]
-    fn slog_error_eq_error() {
-        let ll: slog::Level = LogLevel::Error.into();
-        assert_eq!(ll, slog::Level::Error, "Error eq Error");
-    }
-
-    #[test]
-    fn slog_warning_eq_warning() {
-        let ll: slog::Level = LogLevel::Warning.into();
-        assert_eq!(ll, slog::Level::Warning, "Warning eq Warning");
-    }
-
-    #[test]
-    fn slog_info_eq_info() {
-        let ll: slog::Level = LogLevel::Info.into();
-        assert_eq!(ll, slog::Level::Info, "Info eq Info");
-    }
-
-    #[test]
-    fn slog_debug_eq_debug() {
-        let ll: slog::Level = LogLevel::Debug.into();
-        assert_eq!(ll, slog::Level::Debug, "Debug eq Debug");
-    }
-
-    #[test]
     fn should_get_loglevel_priority() {
-        assert_eq!(LogLevel::Warning.get_priority(), 4, "warn should be 4");
+        assert_eq!(LogLevel::Warning.value(), 4, "warn should be 4");
     }
 
     #[test]
     fn should_get_loglevel_item_priority() {
         let ll = LogLevel::Error;
-        assert_eq!(ll.get_priority(), 3, "error should be 3");
+        assert_eq!(ll.value(), 3, "error should be 3");
+    }
+
+    #[test]
+    fn should_get_log_priority_fm_log_level() {
+        let log_level = LogLevel::Info;
+
+        let log_priority = LogPriority::new(log_level);
+
+        let priority = log_priority.value();
+
+        assert_eq!(log_level.value(), priority, "priority mismatch");
+    }
+
+    #[test]
+    fn should_get_uppercase_label() {
+        let log_level = LogLevel::Info;
+        assert_eq!(
+            log_level.to_uppercase(),
+            "INFO".to_string(),
+            "expected uppercase"
+        );
+    }
+
+    #[test]
+    fn log_error_eq_fatal() {
+        let ll: log::Level = LogLevel::Fatal.into();
+        assert_eq!(ll, log::Level::Error, "Fatal eq Error");
+    }
+
+    #[test]
+    fn log_error_eq_error() {
+        let ll: log::Level = LogLevel::Error.into();
+        assert_eq!(ll, log::Level::Error, "Error eq Error");
+    }
+
+    #[test]
+    fn log_warn_eq_warning() {
+        let ll: log::Level = LogLevel::Warning.into();
+        assert_eq!(ll, log::Level::Warn, "Warn eq Warning");
+    }
+
+    #[test]
+    fn log_info_eq_info() {
+        let ll: log::Level = LogLevel::Info.into();
+        assert_eq!(ll, log::Level::Info, "Info eq Info");
+    }
+
+    #[test]
+    fn log_trace_eq_metric() {
+        let ll: log::Level = LogLevel::Metric.into();
+        assert_eq!(ll, log::Level::Trace, "Trace eq Metric");
+    }
+
+    #[test]
+    fn log_debug_eq_debug() {
+        let ll: log::Level = LogLevel::Debug.into();
+        assert_eq!(ll, log::Level::Debug, "Debug eq Debug");
+    }
+
+    #[test]
+    fn log_metric_gt_debug() {
+        let ll: log::Level = LogLevel::Metric.into();
+        assert!(ll > log::Level::Debug, "Metric should be gt Debug");
     }
 }

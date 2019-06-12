@@ -6,7 +6,8 @@ import cats.effect.{Resource, Sync}
 import cats.implicits._
 import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.Bond
+import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
@@ -27,7 +28,7 @@ import scala.util.Either
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
   def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
-  def setBonds(bonds: Map[Array[Byte], Long]): F[Unit]
+  def setBonds(bonds: Map[PublicKey, Long]): F[Unit]
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
@@ -42,8 +43,10 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
   private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
   override def emptyStateHash: ByteString = {
-    val arr: Array[Byte] = Array(86, 34, 94, 200, 7, 200, 168, 251, 27, 186, 60, 15, 247, 221, 85,
-      229, 213, 163, 251, 227, 103, 100, 22, 220, 98, 40, 57, 16, 139, 74, 114, 76).map(_.toByte)
+    val arr: Array[Byte] = Array(
+      202, 169, 195, 180, 73, 241, 1, 207, 158, 155, 105, 130, 222, 149, 113, 83, 244, 33, 11, 132,
+      57, 102, 129, 52, 188, 253, 43, 243, 67, 176, 41, 151
+    ).map(_.toByte)
     ByteString.copyFrom(arr)
   }
 
@@ -84,21 +87,20 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
       effects: Seq[TransformEntry]
   ): F[Either[Throwable, ByteString]] =
     sendMessage(CommitRequest(prestate, effects), _.commit) {
-      // TODO:
-      // [warn] match may not be exhaustive.
-      // [warn] It would fail on the following inputs: KeyNotFound(_), Overflow(_), TypeMismatch(_)
-      // [warn]       _.result match {
       _.result match {
         case CommitResponse.Result.Success(CommitResult(poststateHash)) =>
           Right(poststateHash)
         case CommitResponse.Result.Empty =>
-          Left(new SmartContractEngineError("empty response"))
+          Left(SmartContractEngineError("empty response"))
         case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
-          Left(
-            new SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}")
-          )
+          Left(SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}"))
         case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
-          Left(new SmartContractEngineError(s"Error executing transform: $message"))
+          Left(SmartContractEngineError(s"Error executing transform: $message"))
+        case CommitResponse.Result.KeyNotFound(value) =>
+          Left(SmartContractEngineError(s"Key not found in global state: $value"))
+        case CommitResponse.Result.TypeMismatch(err) =>
+          Left(SmartContractEngineError(err.toString))
+
       }
     }
 
@@ -110,8 +112,8 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
     sendMessage(QueryRequest(state, Some(baseKey), path), _.query) {
       _.result match {
         case QueryResponse.Result.Success(value) => Right(value)
-        case QueryResponse.Result.Empty          => Left(new SmartContractEngineError("empty response"))
-        case QueryResponse.Result.Failure(err)   => Left(new SmartContractEngineError(err))
+        case QueryResponse.Result.Empty          => Left(SmartContractEngineError("empty response"))
+        case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
       }
     }
   // Todo
@@ -120,7 +122,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
     bonds.pure[F]
 
   // Todo Pass in the genesis bonds until we have a solution based on the BlockStore.
-  override def setBonds(newBonds: Map[Array[Byte], Long]): F[Unit] =
+  override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =
     Defer[F].defer(Applicative[F].pure {
       bonds = newBonds.map {
         case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)

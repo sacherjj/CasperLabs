@@ -39,7 +39,7 @@ lazy val projectSettings = Seq(
     case None    => Seq()
     case Some(v) => Seq("-source", v, "-target", v)
   }),
-  Test / fork := true,
+  Test / fork := false, // Forking may cause "Reporter closed abruptly..." messages due to non-serializable exceptions.
   Test / parallelExecution := false,
   Test / testForkedParallel := false,
   IntegrationTest / fork := true,
@@ -127,7 +127,6 @@ lazy val casper = (project in file("casper"))
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
     smartContracts % "compile->compile;test->test",
-		graphz,
     crypto,
     models
   )
@@ -170,7 +169,8 @@ lazy val crypto = (project in file("crypto"))
     name := "crypto",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
-      bouncyCastle,
+      bouncyProvCastle,
+      bouncyPkixCastle,
       scalacheckNoTest,
       kalium,
       jaxb,
@@ -194,9 +194,12 @@ lazy val models = (project in file("models"))
     // TODO: As we refactor the interfaces this project should only depend on consensus
     // related models, ones that get stored, passed to client. The client for example
     // shouldn't transitively depend on node-to-node and node-to-EE interfaces.
-    PB.protoSources in Compile := Seq(protobufDirectory),
+    PB.protoSources in Compile := Seq(
+      protobufDirectory
+    ),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
+        "google/api",
         "io/casperlabs/casper/consensus",
         "io/casperlabs/casper/protocol" // TODO: Eventually remove.
       )),
@@ -207,7 +210,7 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto, shared % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.3.1"
+val nodeAndClientVersion = "0.4.0"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -229,14 +232,17 @@ lazy val node = (project in file("node"))
         scallop,
         scalaUri,
         scalapbRuntimegGrpc,
-        tomlScala
+        tomlScala,
+        sangria,
+        javaWebsocket
       ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
+        "google/api",
         "io/casperlabs/node/api",
       )),
-    // Generating into /protobuf because of https://github.com/thesamet/sbt-protoc/issues/8
+    // Generating into /protobuf because of a clash with sbt-buildinfo: https://github.com/thesamet/sbt-protoc/issues/8
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf",
       grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
@@ -335,7 +341,8 @@ lazy val node = (project in file("node"))
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
     ),
-    rpmAutoreq := "no"
+    rpmAutoreq := "no",
+    Test / fork := true // Config tests errors would quit SBT itself due to Scallops.
   )
   .dependsOn(casper, comm, crypto)
 
@@ -478,9 +485,21 @@ lazy val client = (project in file("client"))
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
     ),
-    rpmAutoreq := "no"
+    rpmAutoreq := "no",
+    // Generate client stubs for the node API.
+    PB.protoSources in Compile := Seq(protobufDirectory),
+    includeFilter in PB.generate := new SimpleFileFilter(
+      protobufSubDirectoryFilter(
+        "google/api",
+        "io/casperlabs/node/api",
+      )),
+    // Generating into /protobuf because of a clash with sbt-buildinfo: https://github.com/thesamet/sbt-protoc/issues/8
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
+    )
   )
-  .dependsOn(crypto, shared, models)
+  .dependsOn(crypto, shared, models, graphz)
 
 /**
   * This project contains Gatling test suits which perform load testing.

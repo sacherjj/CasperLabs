@@ -1,18 +1,19 @@
 package io.casperlabs.casper.util.comm
 
+import io.casperlabs.casper.LegacyConversions
 import io.casperlabs.casper.HashSetCasperTest
 import io.casperlabs.casper.genesis.contracts._
+import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
 import io.casperlabs.casper.helper.{
-  HashSetCasperTestNode,
   TransportLayerCasperTestNode,
   TransportLayerCasperTestNodeFactory
 }
-import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.transport
-import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -28,7 +29,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val bonds                      = Map(validatorPk -> 10L)
     createProtocol(n, Seq.empty, validatorSk, bonds).flatMap {
       case (approver, node) =>
-        val unapproved = createUnapproved(n, node.genesis)
+        val unapproved = createUnapproved(n, LegacyConversions.fromBlock(node.genesis))
         import node._
 
         for {
@@ -50,7 +51,10 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val bonds                      = Map(validatorPk -> 10L)
     createProtocol(n, Seq.empty, validatorSk, bonds).flatMap {
       case (approver, node) =>
-        val differentUnapproved1 = createUnapproved(n / 2, node.genesis)             //wrong number of signatures
+        val differentUnapproved1 = createUnapproved(
+          n / 2,
+          LegacyConversions.fromBlock(node.genesis)
+        ) //wrong number of signatures
         val differentUnapproved2 = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
         import node._
 
@@ -82,8 +86,8 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
   def createProtocol(
       requiredSigs: Int,
       wallets: Seq[PreWallet],
-      sk: Array[Byte],
-      bonds: Map[Array[Byte], Long]
+      sk: PrivateKey,
+      bonds: Map[PublicKey, Long]
   ): Effect[(BlockApproverProtocol, TransportLayerCasperTestNode[Effect])] = {
 
     val deployTimestamp = 1L

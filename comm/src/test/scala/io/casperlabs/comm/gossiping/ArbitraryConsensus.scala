@@ -5,6 +5,9 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.discovery.Node
+import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.crypto.Keys.PrivateKey
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 import scala.collection.JavaConverters._
@@ -55,8 +58,31 @@ trait ArbitraryConsensus {
     loop(10)
   }
 
+  private def protoHash[T <: scalapb.GeneratedMessage](proto: T): ByteString =
+    ByteString.copyFrom(Blake2b256.hash(proto.toByteArray))
+
   val genHash = genBytes(32)
   val genKey  = genBytes(32)
+
+  protected case class AccountKeys(privateKey: ByteString, publicKey: ByteString) {
+    def sign(data: ByteString): Signature = {
+      val sig = Ed25519.sign(data.toByteArray, PrivateKey(privateKey.toByteArray))
+      Signature("ed25519", ByteString.copyFrom(sig))
+    }
+  }
+
+  protected val genAccountKeys: Gen[AccountKeys] =
+    Gen.delay(Gen.const(Ed25519.newKeyPair match {
+      case (privateKey, publicKey) =>
+        AccountKeys(ByteString.copyFrom(privateKey), ByteString.copyFrom(publicKey))
+    }))
+
+  // Override these before generating values if you want more or less random account keys.
+  def numAccounts: Int   = 10
+  def numValidators: Int = 10
+
+  protected lazy val randomAccounts   = sample(Gen.listOfN(numAccounts, genAccountKeys))
+  protected lazy val randomValidators = sample(Gen.listOfN(numAccounts, genAccountKeys))
 
   implicit val arbNode: Arbitrary[Node] = Arbitrary {
     for {
@@ -80,7 +106,7 @@ trait ArbitraryConsensus {
     for {
       pk  <- genKey
       sig <- arbitrary[Signature]
-    } yield Approval().withValidatorPublicKey(pk).withSignature(sig)
+    } yield Approval().withApproverPublicKey(pk).withSignature(sig)
   }
 
   implicit val arbBond: Arbitrary[Bond] = Arbitrary {
@@ -132,36 +158,38 @@ trait ArbitraryConsensus {
 
   implicit def arbDeploy(implicit c: ConsensusConfig): Arbitrary[Deploy] = Arbitrary {
     for {
-      deployHash       <- genHash
-      accountPublicKey <- genKey
-      nonce            <- arbitrary[Long]
-      timestamp        <- arbitrary[Long]
-      gasPrice         <- arbitrary[Long]
-      bodyHash         <- genHash
-      deployHash       <- genHash
-      sessionCode      <- Gen.choose(0, c.maxSessionCodeBytes).flatMap(genBytes(_))
-      paymentCode      <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
-      signature        <- arbitrary[Signature]
-    } yield {
-      Deploy()
+      accountKeys <- Gen.oneOf(randomAccounts)
+      nonce       <- arbitrary[Long]
+      timestamp   <- arbitrary[Long]
+      gasPrice    <- arbitrary[Long]
+      sessionCode <- Gen.choose(0, c.maxSessionCodeBytes).flatMap(genBytes(_))
+      paymentCode <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
+      body = Deploy
+        .Body()
+        .withSession(Deploy.Code().withCode(sessionCode))
+        .withPayment(Deploy.Code().withCode(paymentCode))
+      bodyHash = protoHash(body)
+      header = Deploy
+        .Header()
+        .withAccountPublicKey(accountKeys.publicKey)
+        .withNonce(nonce)
+        .withTimestamp(timestamp)
+        .withGasPrice(gasPrice)
+        .withBodyHash(bodyHash)
+      deployHash = protoHash(header)
+      signature  = accountKeys.sign(deployHash)
+      deploy = Deploy()
         .withDeployHash(deployHash)
-        .withHeader(
-          Deploy
-            .Header()
-            .withAccountPublicKey(accountPublicKey)
-            .withNonce(nonce)
-            .withTimestamp(timestamp)
-            .withGasPrice(gasPrice)
-            .withBodyHash(bodyHash)
+        .withHeader(header)
+        .withBody(body)
+        .withApprovals(
+          List(
+            Approval()
+              .withApproverPublicKey(header.accountPublicKey)
+              .withSignature(signature)
+          )
         )
-        .withBody(
-          Deploy
-            .Body()
-            .withSession(Deploy.Code().withCode(sessionCode))
-            .withPayment(Deploy.Code().withCode(paymentCode))
-        )
-        .withSignature(signature)
-    }
+    } yield deploy
   }
 
   implicit def arbProcessedDeploy(implicit c: ConsensusConfig): Arbitrary[Block.ProcessedDeploy] =
@@ -302,7 +330,7 @@ trait ArbitraryConsensus {
                               s.getHeader
                                 .withParentHashes(Seq.empty)
                                 .withJustifications(Seq.empty)
-                                .withRank(c.dagDepth - depth)
+                                .withRank((c.dagDepth - depth).toLong)
                             )
                         )
                       )
@@ -321,7 +349,7 @@ trait ArbitraryConsensus {
             newest.getHeader
               .withParentHashes(Seq.empty)
               .withJustifications(Seq.empty)
-              .withRank(c.dagDepth)
+              .withRank(c.dagDepth.toLong)
           )
         ),
         1

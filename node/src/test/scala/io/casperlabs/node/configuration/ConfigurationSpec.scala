@@ -2,22 +2,23 @@ package io.casperlabs.node.configuration
 
 import java.nio.file.{Files, Path, Paths, StandardOpenOption}
 import java.util.concurrent.TimeUnit
-
 import cats.data.Validated.Valid
 import cats.syntax.option._
 import cats.syntax.show._
+import eu.timepit.refined._
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
-import io.casperlabs.comm.discovery.{Node, NodeIdentifier, NodeUtils}
 import io.casperlabs.comm.discovery.NodeUtils._
+import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.ignore
-import io.casperlabs.node.configuration.MagnoliaArbitrary._
 import io.casperlabs.node.configuration.Utils._
 import io.casperlabs.shared.StoreType
+import org.scalacheck.ScalacheckShapeless._
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import shapeless.<:!<
 
 import scala.concurrent.duration._
 import scala.io.Source
@@ -34,7 +35,7 @@ class ConfigurationSpec
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(
-      minSuccessful = 2000,
+      minSuccessful = 500,
       workers = 1
     )
 
@@ -46,13 +47,13 @@ class ConfigurationSpec
       kademliaPort = 1,
       dynamicHostAddress = false,
       noUpnp = false,
-      defaultTimeout = 1,
+      defaultTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       bootstrap = Node(
         NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
         "52.119.8.109",
         1,
         1
-      ),
+      ).some,
       storeType = StoreType.LMDB,
       dataDir = Paths.get("/tmp"),
       maxNumOfConnections = 1,
@@ -61,6 +62,24 @@ class ConfigurationSpec
       useGossiping = true,
       relayFactor = 1,
       relaySaturation = 1,
+      approvalRelayFactor = 1,
+      approvalPollInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      syncMaxPossibleDepth = 1,
+      syncMinBlockCountToCheckBranchingFactor = 1,
+      syncMaxBranchingFactor = 1.0,
+      syncMaxDepthAncestorsRequest = 1,
+      initSyncMaxNodes = 1,
+      initSyncMinSuccessful = 1,
+      initSyncMemoizeNodes = false,
+      initSyncSkipFailedNodes = false,
+      initSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
+      initSyncMaxBlockCount = 1,
+      downloadMaxParallelBlocks = 1,
+      downloadMaxRetries = 1,
+      downloadRetryInitialBackoffPeriod = FiniteDuration(1, TimeUnit.SECONDS),
+      downloadRetryBackoffFactor = 1.0,
+      relayMaxParallelBlocks = 1,
+      relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       cleanBlockStorage = false
     )
     val grpcServer = Configuration.GrpcServer(
@@ -71,6 +90,7 @@ class ConfigurationSpec
     )
     val casper = CasperConf(
       validatorPublicKey = "test".some,
+      validatorPublicKeyPath = Paths.get("/tmp/test").some,
       validatorPrivateKey = "test".some,
       validatorPrivateKeyPath = Paths.get("/tmp/test").some,
       validatorSigAlgorithm = "test",
@@ -88,7 +108,12 @@ class ConfigurationSpec
       approveGenesisInterval = FiniteDuration(1, TimeUnit.SECONDS),
       approveGenesisDuration = FiniteDuration(1, TimeUnit.SECONDS),
       deployTimestamp = 1L.some,
-      genesisPath = Paths.get("/tmp/genesis")
+      genesisPath = Paths.get("/tmp/genesis"),
+      ignoreDeploySignature = false,
+      autoProposeEnabled = false,
+      autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      autoProposeMaxInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      autoProposeMaxCount = 1
     )
     val tls = Tls(
       certificate = Paths.get("/tmp/test"),

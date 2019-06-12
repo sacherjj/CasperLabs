@@ -1,14 +1,18 @@
 package io.casperlabs.client
 import java.io.File
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
-import cats.Apply
 import cats.effect.{Sync, Timer}
-import cats.syntax.all._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 
 import scala.concurrent.duration._
 import scala.language.higherKinds
@@ -19,15 +23,29 @@ object DeployRuntime {
   def propose[F[_]: Sync: DeployService](): F[Unit] =
     gracefulExit(
       for {
-        response <- DeployService[F].createBlock()
+        response <- DeployService[F].propose()
       } yield response.map(r => s"Response: $r")
     )
 
   def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showBlock(BlockQuery(hash)))
+    gracefulExit(DeployService[F].showBlock(hash))
+
+  def showDeploys[F[_]: Sync: DeployService](hash: String): F[Unit] =
+    gracefulExit(DeployService[F].showDeploys(hash))
+
+  def showDeploy[F[_]: Sync: DeployService](hash: String): F[Unit] =
+    gracefulExit(DeployService[F].showDeploy(hash))
 
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
-    gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
+    gracefulExit(DeployService[F].showBlocks(depth))
+
+  def queryState[F[_]: Sync: DeployService](
+      blockHash: String,
+      keyVariant: String,
+      keyValue: String,
+      path: String
+  ): F[Unit] =
+    gracefulExit(DeployService[F].queryState(blockHash, keyVariant, keyValue, path))
 
   def visualizeDag[F[_]: Sync: DeployService: Timer](
       depth: Int,
@@ -38,7 +56,7 @@ object DeployRuntime {
     gracefulExit({
       def askDag =
         DeployService[F]
-          .visualizeDag(VisualizeDagQuery(depth, showJustificationLines))
+          .visualizeDag(depth, showJustificationLines)
           .rethrow
 
       val useJdkRenderer = Sync[F].delay(Graphviz.useEngine(new GraphvizJdkEngine))
@@ -66,7 +84,6 @@ object DeployRuntime {
               sleep >>
                 subscribe(out, streaming, format, index, prevDag)
             } else {
-              val f = format.name().toLowerCase
               val filename = streaming match {
                 case Streaming.Single => out
                 case Streaming.Multiple =>
@@ -97,36 +114,76 @@ object DeployRuntime {
         case (None, Some(_)) =>
           Sync[F].raiseError[String](new Throwable("--out must be specified if --stream"))
       }
+
       eff.attempt
     })
 
   def deployFileProgram[F[_]: Sync: DeployService](
-      from: String,
-      gasLimit: Long,
+      from: Option[String],
       nonce: Long,
       sessionCode: File,
-      paymentCode: File
+      paymentCode: File,
+      maybePublicKeyFile: Option[File],
+      maybePrivateKeyFile: Option[File]
   ): F[Unit] = {
-    def readFile(file: File) =
+    def readFile(file: File): F[ByteString] =
       Sync[F].fromTry(
         Try(ByteString.copyFrom(Files.readAllBytes(file.toPath)))
       )
-    gracefulExit(
-      Apply[F]
-        .map2(
-          readFile(sessionCode),
-          readFile(paymentCode)
-        ) {
-          case (session, payment) =>
-            //TODO: allow user to specify their public key
-            DeployData()
-              .withTimestamp(System.currentTimeMillis())
-              .withSession(DeployCode().withCode(session))
-              .withPayment(DeployCode().withCode(payment))
-              .withAddress(ByteString.copyFromUtf8(from))
-              .withGasLimit(gasLimit)
-              .withNonce(nonce)
+
+    def readFileAsString(file: File): F[String] =
+      for {
+        raw <- readFile(file)
+        str = new String(raw.toByteArray, StandardCharsets.UTF_8)
+      } yield str
+
+    val deploy = for {
+      session <- readFile(sessionCode)
+      payment <- readFile(paymentCode)
+      maybePrivateKey <- {
+        maybePrivateKeyFile.fold(none[PrivateKey].pure[F]) { file =>
+          readFileAsString(file).map(Ed25519.tryParsePrivateKey)
         }
+      }
+      maybePublicKey <- {
+        maybePublicKeyFile.map { file =>
+          // In the future with multiple signatures and recovery the
+          // account public key  can be different then the private key
+          // we sign with, so not checking that they match.
+          readFileAsString(file).map(Ed25519.tryParsePublicKey)
+        } getOrElse {
+          maybePrivateKey.flatMap(Ed25519.tryToPublic).pure[F]
+        }
+      }
+      accountPublicKey <- Sync[F].fromOption(
+                           from
+                             .map(account => ByteString.copyFrom(Base16.decode(account)))
+                             .orElse(maybePublicKey.map(ByteString.copyFrom)),
+                           new IllegalArgumentException("--from or --public-key must be presented")
+                         )
+    } yield {
+      val deploy = consensus
+        .Deploy()
+        .withHeader(
+          consensus.Deploy
+            .Header()
+            .withTimestamp(System.currentTimeMillis)
+            .withAccountPublicKey(accountPublicKey)
+            .withNonce(nonce)
+        )
+        .withBody(
+          consensus.Deploy
+            .Body()
+            .withSession(consensus.Deploy.Code().withCode(session))
+            .withPayment(consensus.Deploy.Code().withCode(payment))
+        )
+        .withHashes
+
+      (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
+    }
+
+    gracefulExit(
+      deploy
         .flatMap(DeployService[F].deploy)
         .handleError(
           ex => Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex))
@@ -153,5 +210,32 @@ object DeployRuntime {
 
   private def processError(t: Throwable): Throwable =
     Option(t.getCause).getOrElse(t)
+
+  private def hash[T <: scalapb.GeneratedMessage](data: T): ByteString =
+    ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
+
+  implicit class DeployOps(d: consensus.Deploy) {
+    def withHashes = {
+      val h = d.getHeader.withBodyHash(hash(d.getBody))
+      d.withHeader(h).withDeployHash(hash(h))
+    }
+
+    def sign(privateKey: PrivateKey, publicKey: PublicKey) = {
+      val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
+      d.withApprovals(
+        List(
+          consensus
+            .Approval()
+            .withApproverPublicKey(ByteString.copyFrom(publicKey))
+            .withSignature(
+              consensus
+                .Signature()
+                .withSigAlgorithm(Ed25519.name)
+                .withSig(ByteString.copyFrom(sig))
+            )
+        )
+      )
+    }
+  }
 
 }

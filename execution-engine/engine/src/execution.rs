@@ -1,34 +1,38 @@
-extern crate blake2;
-
-use self::blake2::digest::VariableOutput;
-use self::blake2::VarBlake2b;
-use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
-use common::key::{AccessRights, Key};
-use common::value::Value;
-use shared::newtypes::Validated;
-use storage::global_state::{ExecutionEffect, StateReader};
-use storage::transform::TypeMismatch;
-use trackingcopy::TrackingCopy;
-use wasmi::memory_units::Pages;
-use wasmi::{
-    Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
-    MemoryDescriptor, MemoryInstance, MemoryRef, ModuleImportResolver, ModuleInstance, ModuleRef,
-    RuntimeArgs, RuntimeValue, Signature, Trap, ValueType,
-};
-
-use argsparser::Args;
-use itertools::Itertools;
-use parity_wasm::elements::{Error as ParityWasmError, Module};
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::convert::TryFrom;
 use std::fmt;
 use std::iter::IntoIterator;
 use std::rc::Rc;
 
-use super::runtime_context::RuntimeContext;
-use super::URefAddr;
+use blake2::digest::VariableOutput;
+use blake2::VarBlake2b;
+use itertools::Itertools;
+use parity_wasm::elements::{Error as ParityWasmError, Module};
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
+use wasmi::{
+    Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
+    ModuleRef, RuntimeArgs, RuntimeValue, Trap,
+};
+
+use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
+use common::key::Key;
+use common::uref::AccessRights;
+use common::value::Value;
+use shared::newtypes::{CorrelationId, Validated};
+use shared::transform::TypeMismatch;
+use storage::global_state::StateReader;
+
+use args::Args;
+use engine_state::execution_result::ExecutionResult;
+use function_index::FunctionIndex;
+use resolvers::create_module_resolver;
+use resolvers::error::ResolverError;
+use resolvers::memory_resolver::MemoryResolver;
+use runtime_context::RuntimeContext;
+use tracking_copy::TrackingCopy;
+use URefAddr;
 
 #[derive(Debug)]
 pub enum Error {
@@ -37,10 +41,10 @@ pub enum Error {
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
-    Overflow,
-    InvalidAccess { required: AccessRights },
+    InvalidAccess {
+        required: AccessRights,
+    },
     ForgedReference(Key),
-    NoImportedMemory,
     ArgIndexOutOfBounds(usize),
     URefNotFound(String),
     FunctionNotFound(String),
@@ -48,7 +52,13 @@ pub enum Error {
     GasLimit,
     Ret(Vec<Key>),
     Rng(rand::Error),
-    Unreachable,
+    ResolverError(ResolverError),
+    InvalidNonce {
+        deploy_nonce: u64,
+        expected_nonce: u64,
+    },
+    /// Reverts execution with a provided status
+    Revert(u32),
 }
 
 impl fmt::Display for Error {
@@ -82,14 +92,20 @@ impl From<BytesReprError> for Error {
 }
 
 impl From<!> for Error {
-    fn from(_err: !) -> Error {
-        Error::Unreachable
+    fn from(error: !) -> Error {
+        match error {}
+    }
+}
+
+impl From<ResolverError> for Error {
+    fn from(err: ResolverError) -> Error {
+        Error::ResolverError(err)
     }
 }
 
 impl HostError for Error {}
 
-pub struct Runtime<'a, R: StateReader<Key, Value>> {
+pub struct Runtime<'a, R> {
     memory: MemoryRef,
     module: Module,
     result: Vec<u8>,
@@ -197,6 +213,12 @@ where
         }
     }
 
+    pub fn value_is_valid(&mut self, value_ptr: u32, value_size: u32) -> Result<bool, Trap> {
+        let value = self.value_from_mem(value_ptr, value_size)?;
+
+        Ok(self.context.validate_keys(&value).is_ok())
+    }
+
     /// Load the i-th argument invoked as part of a `sub_call` into
     /// the runtime buffer so that a subsequent `get_arg` can return it
     /// to the caller.
@@ -287,7 +309,7 @@ where
         args_bytes: Vec<u8>,
         urefs_bytes: Vec<u8>,
     ) -> Result<usize, Error> {
-        let (args, module, mut refs) = {
+        let (args, module, mut refs, protocol_version) = {
             match self.context.read_gs(&key)? {
                 None => Err(Error::KeyNotFound(key)),
                 Some(value) => {
@@ -295,7 +317,12 @@ where
                         let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
                         let module = parity_wasm::deserialize_buffer(contract.bytes())?;
 
-                        Ok((args, module, contract.urefs_lookup().clone()))
+                        Ok((
+                            args,
+                            module,
+                            contract.urefs_lookup().clone(),
+                            contract.protocol_version(),
+                        ))
                     } else {
                         Err(Error::FunctionNotFound(format!(
                             "Value at {:?} is not a contract",
@@ -307,7 +334,15 @@ where
         }?;
 
         let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
-        let result = sub_call(module, args, &mut refs, key, self, extra_urefs)?;
+        let result = sub_call(
+            module,
+            args,
+            &mut refs,
+            key,
+            self,
+            extra_urefs,
+            protocol_version,
+        )?;
         self.host_buf = result;
         Ok(self.host_buf.len())
     }
@@ -325,8 +360,12 @@ where
         fn_bytes: Vec<u8>,
         urefs: BTreeMap<String, Key>,
     ) -> Result<[u8; 32], Error> {
-        let contract = Value::Contract(common::value::contract::Contract::new(fn_bytes, urefs));
-        let new_hash = self.context.store_contract(contract)?;
+        let contract = common::value::contract::Contract::new(
+            fn_bytes,
+            urefs,
+            self.context.protocol_version(),
+        );
+        let new_hash = self.context.store_contract(contract.into())?;
         Ok(new_hash)
     }
 
@@ -378,46 +417,30 @@ where
     /// where this data lives in the exported memory (pass its pointer and length).
     pub fn read(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        let value = err_on_missing_key(key, self.context.read_gs(&key))?;
+        let value: Option<Value> = self.context.read_gs(&key)?;
         let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
     }
-}
 
-// Helper function for turning result of lookup into domain values.
-fn err_on_missing_key<A, E>(key: Key, r: Result<Option<A>, E>) -> Result<A, Error>
-where
-    E: Into<Error>,
-{
-    match r {
-        Ok(None) => Err(Error::KeyNotFound(key)),
-        Err(error) => Err(error.into()),
-        Ok(Some(v)) => Ok(v),
+    /// Writes the seed associated with the [`RuntimeContext`] to the given destination
+    /// in runtime memory.
+    fn write_seed(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        let seed = self.context.seed();
+        self.memory
+            .set(dest_ptr, &seed)
+            .map_err(|e| Error::Interpreter(e).into())
+    }
+
+    /// Reverts contract execution with a status specified.
+    pub fn revert(&mut self, status: u32) -> Trap {
+        Error::Revert(status).into()
     }
 }
 
 fn as_usize(u: u32) -> usize {
     u as usize
 }
-
-const WRITE_FUNC_INDEX: usize = 0;
-const READ_FUNC_INDEX: usize = 1;
-const ADD_FUNC_INDEX: usize = 2;
-const NEW_FUNC_INDEX: usize = 3;
-const GET_READ_FUNC_INDEX: usize = 4;
-const SER_FN_FUNC_INDEX: usize = 5;
-const GET_FN_FUNC_INDEX: usize = 6;
-const LOAD_ARG_FUNC_INDEX: usize = 7;
-const GET_ARG_FUNC_INDEX: usize = 8;
-const RET_FUNC_INDEX: usize = 9;
-const GET_CALL_RESULT_FUNC_INDEX: usize = 10;
-const CALL_CONTRACT_FUNC_INDEX: usize = 11;
-const GET_UREF_FUNC_INDEX: usize = 12;
-const GAS_FUNC_INDEX: usize = 13;
-const HAS_UREF_FUNC_INDEX: usize = 14;
-const ADD_UREF_FUNC_INDEX: usize = 15;
-const STORE_FN_INDEX: usize = 16;
 
 impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
 where
@@ -428,8 +451,9 @@ where
         index: usize,
         args: RuntimeArgs,
     ) -> Result<Option<RuntimeValue>, Trap> {
-        match index {
-            READ_FUNC_INDEX => {
+        let func = FunctionIndex::try_from(index).expect("unknown function index");
+        match func {
+            FunctionIndex::ReadFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key in Wasm memory
                 let (key_ptr, key_size) = Args::parse(args)?;
@@ -437,7 +461,7 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            SER_FN_FUNC_INDEX => {
+            FunctionIndex::SerFnFuncIndex => {
                 // args(0) = pointer to name in Wasm memory
                 // args(1) = size of name in Wasm memory
                 let (name_ptr, name_size) = Args::parse(args)?;
@@ -445,7 +469,7 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            WRITE_FUNC_INDEX => {
+            FunctionIndex::WriteFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key
                 // args(2) = pointer to value
@@ -455,7 +479,7 @@ where
                 Ok(None)
             }
 
-            ADD_FUNC_INDEX => {
+            FunctionIndex::AddFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key
                 // args(2) = pointer to value
@@ -465,7 +489,7 @@ where
                 Ok(None)
             }
 
-            NEW_FUNC_INDEX => {
+            FunctionIndex::NewFuncIndex => {
                 // args(0) = pointer to key destination in Wasm memory
                 // args(1) = pointer to initial value
                 // args(2) = size of initial value
@@ -474,35 +498,35 @@ where
                 Ok(None)
             }
 
-            GET_READ_FUNC_INDEX => {
+            FunctionIndex::GetReadFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            GET_FN_FUNC_INDEX => {
+            FunctionIndex::GetFnFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            LOAD_ARG_FUNC_INDEX => {
+            FunctionIndex::LoadArgFuncIndex => {
                 // args(0) = index of host runtime arg to load
                 let i = Args::parse(args)?;
                 let size = self.load_arg(i)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            GET_ARG_FUNC_INDEX => {
+            FunctionIndex::GetArgFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            RET_FUNC_INDEX => {
+            FunctionIndex::RetFuncIndex => {
                 // args(0) = pointer to value
                 // args(1) = size of value
                 // args(2) = pointer to extra returned urefs
@@ -517,7 +541,7 @@ where
                 ))
             }
 
-            CALL_CONTRACT_FUNC_INDEX => {
+            FunctionIndex::CallContractFuncIndex => {
                 // args(0) = pointer to key where contract is at in global state
                 // args(1) = size of key
                 // args(2) = pointer to function arguments in Wasm memory
@@ -540,14 +564,14 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            GET_CALL_RESULT_FUNC_INDEX => {
+            FunctionIndex::GetCallResultFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            GET_UREF_FUNC_INDEX => {
+            FunctionIndex::GetURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 // args(2) = pointer to destination in Wasm memory
@@ -556,7 +580,7 @@ where
                 Ok(None)
             }
 
-            HAS_UREF_FUNC_INDEX => {
+            FunctionIndex::HasURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 let (name_ptr, name_size) = Args::parse(args)?;
@@ -564,7 +588,7 @@ where
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
-            ADD_UREF_FUNC_INDEX => {
+            FunctionIndex::AddURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 // args(2) = pointer to destination in Wasm memory
@@ -573,13 +597,13 @@ where
                 Ok(None)
             }
 
-            GAS_FUNC_INDEX => {
+            FunctionIndex::GasFuncIndex => {
                 let gas: u32 = Args::parse(args)?;
                 self.gas(u64::from(gas))?;
                 Ok(None)
             }
 
-            STORE_FN_INDEX => {
+            FunctionIndex::StoreFnIndex => {
                 // args(0) = pointer to function name in Wasm memory
                 // args(1) = size of the name
                 // args(2) = pointer to additional unforgable names
@@ -600,160 +624,49 @@ where
                 Ok(None)
             }
 
-            _ => panic!("unknown function index"),
-        }
-    }
-}
-
-pub struct RuntimeModuleImportResolver {
-    memory: RefCell<Option<MemoryRef>>,
-    max_memory: u32,
-}
-
-impl Default for RuntimeModuleImportResolver {
-    fn default() -> Self {
-        RuntimeModuleImportResolver {
-            memory: RefCell::new(None),
-            max_memory: 256,
-        }
-    }
-}
-
-impl RuntimeModuleImportResolver {
-    pub fn new() -> RuntimeModuleImportResolver {
-        Default::default()
-    }
-
-    pub fn mem_ref(&self) -> Result<MemoryRef, Error> {
-        let maybe_mem: &Option<MemoryRef> = &self.memory.borrow();
-        match maybe_mem {
-            Some(mem) => Ok(mem.clone()),
-            None => Err(Error::NoImportedMemory),
-        }
-    }
-}
-
-impl ModuleImportResolver for RuntimeModuleImportResolver {
-    fn resolve_func(
-        &self,
-        field_name: &str,
-        _signature: &Signature,
-    ) -> Result<FuncRef, InterpreterError> {
-        let func_ref = match field_name {
-            "read_value" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                READ_FUNC_INDEX,
-            ),
-            "serialize_function" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                SER_FN_FUNC_INDEX,
-            ),
-            "write" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
-                WRITE_FUNC_INDEX,
-            ),
-            "get_read" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                GET_READ_FUNC_INDEX,
-            ),
-            "get_function" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                GET_FN_FUNC_INDEX,
-            ),
-            "add" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
-                ADD_FUNC_INDEX,
-            ),
-            "new_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 3][..], None),
-                NEW_FUNC_INDEX,
-            ),
-            "load_arg" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
-                LOAD_ARG_FUNC_INDEX,
-            ),
-            "get_arg" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                GET_ARG_FUNC_INDEX,
-            ),
-            "ret" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
-                RET_FUNC_INDEX,
-            ),
-            "call_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
-                CALL_CONTRACT_FUNC_INDEX,
-            ),
-            "get_call_result" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                GET_CALL_RESULT_FUNC_INDEX,
-            ),
-            "get_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 3][..], None),
-                GET_UREF_FUNC_INDEX,
-            ),
-            "has_uref_name" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                HAS_UREF_FUNC_INDEX,
-            ),
-            "add_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
-                ADD_UREF_FUNC_INDEX,
-            ),
-            "gas" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                GAS_FUNC_INDEX,
-            ),
-            "store_function" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 5][..], None),
-                STORE_FN_INDEX,
-            ),
-            _ => {
-                return Err(InterpreterError::Function(format!(
-                    "host module doesn't export function with name {}",
-                    field_name
-                )));
+            FunctionIndex::ProtocolVersionFuncIndex => {
+                Ok(Some(self.context.protocol_version().into()))
             }
-        };
-        Ok(func_ref)
-    }
 
-    fn resolve_memory(
-        &self,
-        field_name: &str,
-        descriptor: &MemoryDescriptor,
-    ) -> Result<MemoryRef, InterpreterError> {
-        if field_name == "memory" {
-            let effective_max = descriptor.maximum().unwrap_or(self.max_memory + 1);
-            if descriptor.initial() > self.max_memory || effective_max > self.max_memory {
-                Err(InterpreterError::Instantiation(
-                    "Module requested too much memory".to_owned(),
-                ))
-            } else {
-                // Note: each "page" is 64 KiB
-                let mem = MemoryInstance::alloc(
-                    Pages(descriptor.initial() as usize),
-                    descriptor.maximum().map(|x| Pages(x as usize)),
-                )?;
-                *self.memory.borrow_mut() = Some(mem.clone());
-                Ok(mem)
+            FunctionIndex::SeedFnIndex => {
+                let dest_ptr = Args::parse(args)?;
+                self.write_seed(dest_ptr)?;
+                Ok(None)
             }
-        } else {
-            Err(InterpreterError::Instantiation(
-                "Memory imported under unknown name".to_owned(),
-            ))
+
+            FunctionIndex::IsValidFnIndex => {
+                // args(0) = pointer to value to validate
+                // args(1) = size of value
+                let (value_ptr, value_size) = Args::parse(args)?;
+
+                if self.value_is_valid(value_ptr, value_size)? {
+                    Ok(Some(RuntimeValue::I32(1)))
+                } else {
+                    Ok(Some(RuntimeValue::I32(0)))
+                }
+            }
+
+            FunctionIndex::RevertFuncIndex => {
+                // args(0) = status u32
+                let status = Args::parse(args)?;
+
+                Err(self.revert(status))
+            }
         }
     }
 }
 
-fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), Error> {
+fn instance_and_memory(
+    parity_module: Module,
+    protocol_version: u64,
+) -> Result<(ModuleRef, MemoryRef), Error> {
     let module = wasmi::Module::from_parity_wasm_module(parity_module)?;
-    let resolver = RuntimeModuleImportResolver::new();
+    let resolver = create_module_resolver(protocol_version)?;
     let mut imports = ImportsBuilder::new();
     imports.push_resolver("env", &resolver);
     let instance = ModuleInstance::new(&module, &imports)?.assert_no_start();
 
-    let memory = resolver.mem_ref()?;
+    let memory = resolver.memory_ref()?;
     Ok((instance, memory))
 }
 
@@ -766,13 +679,15 @@ fn sub_call<R: StateReader<Key, Value>>(
     // Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
+    protocol_version: u64,
 ) -> Result<Vec<u8>, Error>
 where
     R::Error: Into<Error>,
 {
-    let (instance, memory) = instance_and_memory(parity_module.clone())?;
+    let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
+
     let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
-    let rng = ChaChaRng::from_rng(current_runtime.context.rng().clone()).map_err(Error::Rng)?;
+    let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
     let mut runtime = Runtime {
         memory,
         module: parity_module,
@@ -789,6 +704,8 @@ where
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
             rng,
+            protocol_version,
+            current_runtime.context.correlation_id(),
         ),
     };
 
@@ -801,12 +718,21 @@ where
                 // If the "error" was in fact a trap caused by calling `ret` then
                 // this is normal operation and we should return the value captured
                 // in the Runtime result field.
-                if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
-                    //insert extra urefs returned from call
-                    let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
-                        vec_key_rights_to_map(ret_urefs.clone());
-                    current_runtime.context.add_urefs(ret_urefs_map);
-                    return Ok(runtime.result);
+                let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
+                match downcasted_error {
+                    Error::Ret(ref ret_urefs) => {
+                        //insert extra urefs returned from call
+                        let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
+                            vec_key_rights_to_map(ret_urefs.clone());
+                        current_runtime.context.add_urefs(ret_urefs_map);
+                        return Ok(runtime.result);
+                    }
+                    Error::Revert(status) => {
+                        // Propagate revert as revert, instead of passing it as
+                        // InterpreterError.
+                        return Err(Error::Revert(*status));
+                    }
+                    _ => {}
                 }
             }
             Err(Error::Interpreter(e))
@@ -827,13 +753,15 @@ pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
         .map(|(key, group)| {
             (
                 key,
-                group.map(|(_, x)| x).collect::<HashSet<AccessRights>>(),
+                group
+                    .filter_map(|(_, x)| x)
+                    .collect::<HashSet<AccessRights>>(),
             )
         })
         .collect()
 }
 
-pub fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng {
+pub fn create_rng(account_addr: &[u8; 32], timestamp: u64, nonce: u64) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let hasher = VarBlake2b::new(32).unwrap();
@@ -846,12 +774,38 @@ pub fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaCha
 
 #[macro_export]
 macro_rules! on_fail_charge {
+    ($fn:expr) => {
+        match $fn {
+            Ok(res) => res,
+            Err(e) => {
+                let exec_err: ::execution::Error = e.into();
+                return ExecutionResult::precondition_failure(exec_err.into());
+            }
+        }
+    };
     ($fn:expr, $cost:expr) => {
         match $fn {
             Ok(res) => res,
-            Err(er) => {
-                let mut lambda = || $cost;
-                return (Err(er.into()), lambda());
+            Err(e) => {
+                let exec_err: ::execution::Error = e.into();
+                return ExecutionResult::Failure {
+                    error: exec_err.into(),
+                    effect: Default::default(),
+                    cost: $cost,
+                };
+            }
+        }
+    };
+    ($fn:expr, $cost:expr, $effect:expr) => {
+        match $fn {
+            Ok(res) => res,
+            Err(e) => {
+                let exec_err: ::execution::Error = e.into();
+                return ExecutionResult::Failure {
+                    error: exec_err.into(),
+                    effect: $effect,
+                    cost: $cost,
+                };
             }
         }
     };
@@ -863,13 +817,15 @@ pub trait Executor<A> {
         &self,
         parity_module: A,
         args: &[u8],
-        account_addr: [u8; 20],
+        account: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
+        correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
-    ) -> (Result<ExecutionEffect, Error>, u64)
+        nonce_check: bool,
+    ) -> ExecutionResult
     where
         R::Error: Into<Error>;
 }
@@ -881,42 +837,87 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        account_addr: [u8; 20],
+        acct_key: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
-        _protocol_version: u64,
+        protocol_version: u64,
+        correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
-    ) -> (Result<ExecutionEffect, Error>, u64)
+        nonce_check: bool,
+    ) -> ExecutionResult
     where
         R::Error: Into<Error>,
     {
-        let acct_key = Key::Account(account_addr);
-        let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
+        let (instance, memory) =
+            on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
         #[allow(unreachable_code)]
-        let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid), 0);
+        let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid));
         let value = on_fail_charge! {
-            match tc.borrow_mut().get(&validated_key) {
+            match tc.borrow_mut().get(correlation_id, &validated_key) {
                 Ok(None) => Err(Error::KeyNotFound(acct_key)),
                 Err(error) => Err(error.into()),
                 Ok(Some(value)) => Ok(value)
-            },
-            0
+            }
         };
-        let account = value.as_account();
+
+        let account = match value {
+            Value::Account(a) => a,
+            other => {
+                return ExecutionResult::precondition_failure(
+                    ::engine_state::error::Error::ExecError(Error::TypeMismatch(
+                        TypeMismatch::new("Account".to_string(), other.type_string()),
+                    )),
+                )
+            }
+        };
+
+        if nonce_check {
+            // Check the difference of a request nonce and account nonce.
+            // Since both nonce and account's nonce are unsigned, so line below performs
+            // a checked subtraction, where underflow (or overflow) would be safe.
+            let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
+            // Difference should always be 1 greater than current nonce for a
+            // given account.
+            if delta != 1 {
+                return ExecutionResult::precondition_failure(
+                    Error::InvalidNonce {
+                        deploy_nonce: nonce,
+                        expected_nonce: account.nonce() + 1,
+                    }
+                    .into(),
+                );
+            }
+
+            let mut updated_account = account.clone();
+            updated_account.increment_nonce();
+            // Store updated account with new nonce
+            tc.borrow_mut().write(
+                validated_key,
+                Validated::new(updated_account.into(), Validated::valid).unwrap(),
+            );
+        }
+
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
-        let rng = create_rng(&account_addr, timestamp, nonce);
+        let account_bytes = acct_key.as_account().unwrap();
+        let rng = create_rng(&account_bytes, timestamp, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
+
+        // Snapshot of effects before execution, so in case of error
+        // only nonce update can be returned.
+        let effects_snapshot = tc.borrow().effect();
+
         let arguments: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
         } else {
             // TODO: figure out how this works with the cost model
             // https://casperlabs.atlassian.net/browse/EE-239
-            on_fail_charge!(deserialize(args), 0)
+            on_fail_charge!(deserialize(args), args.len() as u64, effects_snapshot)
         };
+
         let context = RuntimeContext::new(
             tc,
             &mut uref_lookup_local,
@@ -928,75 +929,192 @@ impl Executor<Module> for WasmiExecutor {
             gas_counter,
             fn_store_id,
             rng,
+            protocol_version,
+            correlation_id,
         );
+
         let mut runtime = Runtime::new(memory, parity_module, context);
         on_fail_charge!(
             instance.invoke_export("call", &[], &mut runtime),
-            runtime.context.gas_counter()
+            runtime.context.gas_counter(),
+            effects_snapshot
         );
 
-        (Ok(runtime.context.effect()), runtime.context.gas_counter())
+        ExecutionResult::Success {
+            effect: runtime.context.effect(),
+            cost: runtime.context.gas_counter(),
+        }
     }
 }
 
 /// Turns `key` into a `([u8; 32], AccessRights)` tuple.
 /// Returns None if `key` is not `Key::URef` as it wouldn't have `AccessRights` associated with it.
 /// Helper function for creating `known_urefs` associating addresses and corresponding `AccessRights`.
-pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
+pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
     match key {
-        Key::URef(raw_addr, rights) => Some((raw_addr, rights)),
+        Key::URef(uref) => Some((uref.addr(), uref.access_rights())),
         Key::Account(_) => None,
         Key::Hash(_) => None,
+        Key::Local { .. } => None,
     }
 }
 
 #[cfg(test)]
-mod on_fail_charge_macro_tests {
-    struct Counter {
-        pub counter: u32,
-    }
+mod tests {
+    use super::Error;
+    use common::key::Key;
+    use common::uref::{AccessRights, URef};
+    use common::value::account::{
+        AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+    };
+    use common::value::{Account, Value};
+    use engine_state::execution_effect::ExecutionEffect;
+    use engine_state::execution_result::ExecutionResult;
+    use execution::{Executor, WasmiExecutor};
+    use parity_wasm::builder::ModuleBuilder;
+    use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
+    use shared::newtypes::CorrelationId;
+    use std::cell::RefCell;
+    use std::collections::btree_map::BTreeMap;
+    use std::collections::HashMap;
+    use std::rc::Rc;
+    use storage::global_state::StateReader;
+    use tracking_copy::TrackingCopy;
 
-    impl Counter {
-        fn count(&mut self, count: u32) -> u32 {
-            self.counter += count;
-            count
+    fn on_fail_charge_test_helper<T>(
+        f: impl Fn() -> Result<T, Error>,
+        success_cost: u64,
+        error_cost: u64,
+    ) -> ExecutionResult {
+        let _result = on_fail_charge!(f(), error_cost);
+        ExecutionResult::Success {
+            effect: Default::default(),
+            cost: success_cost,
+        }
+    }
+    #[test]
+    fn on_fail_charge_ok_test() {
+        match on_fail_charge_test_helper(|| Ok(()), 123, 456) {
+            ExecutionResult::Success { cost, .. } => assert_eq!(cost, 123),
+            ExecutionResult::Failure { .. } => panic!("Should be success"),
+        }
+    }
+    #[test]
+    fn on_fail_charge_err_laziness_test() {
+        match on_fail_charge_test_helper(|| Err(Error::GasLimit) as Result<(), _>, 123, 456) {
+            ExecutionResult::Success { .. } => panic!("Should fail"),
+            ExecutionResult::Failure { cost, .. } => assert_eq!(cost, 456),
+        }
+    }
+    #[test]
+    fn on_fail_charge_with_action() {
+        use common::key::Key;
+        use engine_state::execution_effect::ExecutionEffect;
+        use engine_state::op::Op;
+        use shared::transform::Transform;
+        let f = || {
+            let input: Result<(), Error> = Err(Error::GasLimit);
+            on_fail_charge!(input, 456, {
+                let mut effect = ExecutionEffect::default();
+
+                effect.0.insert(Key::Hash([42u8; 32]), Op::Read);
+                effect.1.insert(Key::Hash([42u8; 32]), Transform::Identity);
+
+                effect
+            });
+            ExecutionResult::Success {
+                effect: Default::default(),
+                cost: 0,
+            }
+        };
+        match f() {
+            ExecutionResult::Success { .. } => panic!("Should fail"),
+            ExecutionResult::Failure { cost, effect, .. } => {
+                assert_eq!(cost, 456);
+                // Check if the containers are non-empty
+                assert_eq!(effect.0.len(), 1);
+                assert_eq!(effect.1.len(), 1);
+            }
         }
     }
 
-    fn on_fail_charge_test_helper(
-        counter: &mut Counter,
-        inc_value: u32,
-        input: Result<u32, String>,
-        fallback_value: u32,
-    ) -> (Result<u32, String>, u32) {
-        let res: u32 = on_fail_charge!(input, counter.count(inc_value));
-        (Ok(res), fallback_value)
-    }
-
     #[test]
-    fn on_fail_charge_ok_test() {
-        let mut cntr = Counter { counter: 0 };
-        let fallback_value = 9999;
-        let inc_value = 10;
-        let ok_value = Ok(13);
-        let res: (Result<u32, String>, u32) =
-            on_fail_charge_test_helper(&mut cntr, inc_value, ok_value.clone(), fallback_value);
-        assert_eq!(res.0, ok_value);
-        assert_eq!(res.1, fallback_value);
-        assert_eq!(cntr.counter, 0); // test that lambda was NOT executed for the Ok-case
-    }
+    fn invalid_nonce_no_cost_effect() {
+        let init_nonce = 1u64;
+        let invalid_nonce = init_nonce + 2;
+        struct DummyReader;
+        impl StateReader<Key, Value> for DummyReader {
+            type Error = ::storage::error::Error;
 
-    #[test]
-    fn on_fail_charge_err_laziness_test() {
-        let mut cntr = Counter { counter: 1 };
-        let fallback_value = 9999;
-        let inc_value = 10;
-        let expected_value = cntr.counter + inc_value;
-        let err = Err("BOOM".to_owned());
-        let res: (Result<u32, String>, u32) =
-            on_fail_charge_test_helper(&mut cntr, inc_value, err.clone(), fallback_value);
-        assert_eq!(res.0, err);
-        assert_eq!(res.1, inc_value);
-        assert_eq!(cntr.counter, expected_value) // test that lambda executed
+            fn read(
+                &self,
+                _correlation_id: CorrelationId,
+                key: &Key,
+            ) -> Result<Option<Value>, Self::Error> {
+                let pub_key: [u8; 32] = match key {
+                    Key::Account(pub_key) => *pub_key,
+                    _ => panic!("Key must be of an Account type"),
+                };
+                let acc = Account::new(
+                    pub_key,
+                    1,
+                    BTreeMap::new(),
+                    PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+                    AssociatedKeys::new(PublicKey::new(pub_key), Weight::new(1)),
+                    Default::default(),
+                    AccountActivity::new(BlockTime(0), BlockTime(0)),
+                );
+                Ok(Some(Value::Account(acc)))
+            }
+        }
+
+        let executor = WasmiExecutor;
+        let account_address = [0u8; 32];
+        let account_key: Key = Key::Account(account_address);
+        let parity_module: Module = ModuleBuilder::new()
+            .with_import(ImportEntry::new(
+                "env".to_string(),
+                "memory".to_string(),
+                External::Memory(MemoryType::new(16, Some(::wasm_prep::MEM_PAGES))),
+            ))
+            .build();
+
+        let tc: Rc<RefCell<TrackingCopy<DummyReader>>> =
+            Rc::new(RefCell::new(TrackingCopy::new(DummyReader)));
+
+        let exec_result = executor.exec(
+            parity_module,
+            &[],
+            account_key,
+            0u64,
+            invalid_nonce,
+            100u64,
+            1u64,
+            CorrelationId::new(),
+            tc,
+            true,
+        );
+
+        match exec_result {
+            ExecutionResult::Success { .. } => panic!("Expected ExecutionResult::Failure."),
+            ExecutionResult::Failure {
+                error,
+                effect,
+                cost,
+            } => {
+                assert_eq!(effect, ExecutionEffect(HashMap::new(), HashMap::new()));
+                assert_eq!(cost, 0);
+                if let ::engine_state::error::Error::ExecError(Error::InvalidNonce {
+                    deploy_nonce,
+                    expected_nonce,
+                }) = error
+                {
+                    assert_eq!(deploy_nonce, invalid_nonce);
+                    assert_eq!(expected_nonce, init_nonce + 1);
+                } else {
+                    panic!("Expected InvalidNonce error got: {:?}", error);
+                }
+            }
+        }
     }
 }

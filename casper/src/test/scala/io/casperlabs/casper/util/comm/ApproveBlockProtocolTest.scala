@@ -3,20 +3,18 @@ package io.casperlabs.casper.util.comm
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
-import io.casperlabs.casper.helper.{
-  HashSetCasperTestNode,
-  TransportLayerCasperTestNode,
-  TransportLayerCasperTestNodeFactory
-}
+import io.casperlabs.casper.helper.TransportLayerCasperTestNodeFactory
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.LegacyConversions
 import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.util.comm.ApproveBlockProtocolTest.TestFixture
 import io.casperlabs.casper.{HashSetCasperTest, LastApprovedBlock}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.rp.Connect.Connections
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, _}
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -298,8 +296,8 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 object ApproveBlockProtocolTest extends TransportLayerCasperTestNodeFactory {
   def approval(
       c: ApprovedBlockCandidate,
-      validatorSk: Array[Byte],
-      validatorPk: Array[Byte]
+      validatorSk: PrivateKey,
+      validatorPk: PublicKey
   ): BlockApproval = {
     val sigData = Blake2b256.hash(c.toByteArray)
     val sig     = Ed25519.sign(sigData, validatorSk)
@@ -345,14 +343,14 @@ object ApproveBlockProtocolTest extends TransportLayerCasperTestNodeFactory {
     val bonds                                            = HashSetCasperTest.createBonds(Seq(pk))
     val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.createGenesis(bonds)
     val validators                                       = validatorsPk.map(ByteString.copyFrom)
-    val candidate                                        = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+    val candidate                                        = ApprovedBlockCandidate(Some(LegacyConversions.fromBlock(genesis)), requiredSigs)
     val sigs                                             = Ref.unsafe[Task, Set[Signature]](Set.empty)
     val startTime                                        = System.currentTimeMillis()
 
     val node = standaloneEff(genesis, transforms, sk)
     val protocol = ApproveBlockProtocol
       .unsafe[Task](
-        genesis,
+        LegacyConversions.fromBlock(genesis),
         transforms,
         validators,
         requiredSigs,

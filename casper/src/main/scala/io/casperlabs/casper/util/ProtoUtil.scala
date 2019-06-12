@@ -8,18 +8,18 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.casper.protocol.{DeployData, _}
-import io.casperlabs.casper.util.implicits._
+import io.casperlabs.casper.consensus._, Block.Justification
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski.id
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
-import io.casperlabs.models.BlockMetadata
-import io.casperlabs.shared.{Log, Time}
-
+import io.casperlabs.blockstorage.BlockMetadata
+import io.casperlabs.shared.Time
+import java.util.NoSuchElementException
 import scala.collection.immutable
-import scala.util.control.NonFatal
 
 object ProtoUtil {
   /*
@@ -49,10 +49,10 @@ object ProtoUtil {
     }
 
   def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStore](
-      estimate: BlockMessage,
-      acc: IndexedSeq[BlockMessage],
+      estimate: Block,
+      acc: IndexedSeq[Block],
       depth: Int
-  ): F[IndexedSeq[BlockMessage]] = {
+  ): F[IndexedSeq[Block]] = {
     val parentsHashes       = ProtoUtil.parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
     for {
@@ -77,47 +77,67 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  def unsafeGetBlock[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[BlockMessage] =
+  def unsafeGetBlockSummary[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[BlockSummary] =
+    for {
+      maybeBlock <- BlockStore[F].getBlockSummary(hash)
+      block <- maybeBlock match {
+                case Some(b) => b.pure[F]
+                case None =>
+                  MonadThrowable[F].raiseError(
+                    new NoSuchElementException(
+                      s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}"
+                    )
+                  )
+              }
+    } yield block
+
+  def unsafeGetBlock[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[Block] =
     for {
       maybeBlock <- BlockStore[F].getBlockMessage(hash)
       block <- maybeBlock match {
                 case Some(b) => b.pure[F]
                 case None =>
                   MonadThrowable[F].raiseError(
-                    new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+                    new NoSuchElementException(
+                      s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}"
+                    )
                   )
               }
     } yield block
 
-  def creatorJustification(block: BlockMessage): Option[Justification] =
-    block.justifications
+  def creatorJustification(block: Block): Option[Justification] =
+    creatorJustification(block.getHeader)
+
+  def creatorJustification(header: Block.Header): Option[Justification] =
+    header.justifications
       .find {
         case Justification(validator: Validator, _) =>
-          validator == block.sender
+          validator == header.validatorPublicKey
       }
 
   def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
-      b: BlockMessage,
+      b: Block,
       seqNum: SequenceNumber
-  ): F[Option[BlockMessage]] =
-    if (b.seqNum == seqNum) {
-      Option[BlockMessage](b).pure[F]
+  ): F[Option[Block]] =
+    if (b.getHeader.validatorBlockSeqNum == seqNum) {
+      Option[Block](b).pure[F]
     } else {
       DagOperations
         .bfTraverseF(List(b)) { block =>
-          getCreatorJustificationAsList[F](block, block.sender)
+          getCreatorJustificationAsList[F](block, block.getHeader.validatorPublicKey)
         }
-        .find(_.seqNum == seqNum)
+        .find(_.getHeader.validatorBlockSeqNum == seqNum)
     }
 
   // TODO: Replace with getCreatorJustificationAsListUntilGoal
   def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
-      block: BlockMessage,
+      block: Block,
       validator: Validator,
-      goalFunc: BlockMessage => Boolean = _ => false
-  ): F[List[BlockMessage]] = {
+      goalFunc: Block => Boolean = _ => false
+  ): F[List[Block]] = {
     val maybeCreatorJustificationHash =
-      block.justifications.find(_.validator == validator)
+      block.getHeader.justifications.find(_.validatorPublicKey == validator)
+
     maybeCreatorJustificationHash match {
       case Some(creatorJustificationHash) =>
         for {
@@ -127,15 +147,15 @@ object ProtoUtil {
           maybeCreatorJustificationAsList = maybeCreatorJustification match {
             case Some(creatorJustification) =>
               if (goalFunc(creatorJustification)) {
-                List.empty[BlockMessage]
+                List.empty[Block]
               } else {
                 List(creatorJustification)
               }
             case None =>
-              List.empty[BlockMessage]
+              List.empty[Block]
           }
         } yield maybeCreatorJustificationAsList
-      case None => List.empty[BlockMessage].pure[F]
+      case None => List.empty[Block].pure[F]
     }
   }
 
@@ -152,10 +172,12 @@ object ProtoUtil {
       goalFunc: BlockHash => Boolean = _ => false
   ): F[List[BlockHash]] =
     (for {
-      block <- OptionT(blockDag.lookup(blockHash))
+      meta <- OptionT(blockDag.lookup(blockHash))
       creatorJustificationHash <- OptionT.fromOption[F](
-                                   block.justifications
-                                     .find(_.validator == block.sender)
+                                   meta.justifications
+                                     .find(
+                                       _.validatorPublicKey == meta.validatorPublicKey
+                                     )
                                      .map(_.latestBlockHash)
                                  )
       creatorJustification <- OptionT(blockDag.lookup(creatorJustificationHash))
@@ -166,18 +188,11 @@ object ProtoUtil {
       }
     } yield creatorJustificationAsList).fold(List.empty[BlockHash])(id)
 
-  def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
-    blockMessage.body match {
-      case Some(block) =>
-        block.state match {
-          case Some(state) => weightMap(state)
-          case None        => Map.empty[ByteString, Long]
-        }
-      case None => Map.empty[ByteString, Long]
-    }
+  def weightMap(block: Block): Map[ByteString, Long] =
+    weightMap(block.getHeader)
 
-  private def weightMap(state: RChainState): Map[ByteString, Long] =
-    state.bonds.map {
+  def weightMap(header: Block.Header): Map[ByteString, Long] =
+    header.getState.bonds.map {
       case Bond(validator, stake) => validator -> stake
     }.toMap
 
@@ -194,14 +209,11 @@ object ProtoUtil {
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
-    val maybeParentHash = for {
-      hdr        <- blockMessage.header
-      parentHash <- hdr.parentsHashList.headOption
-    } yield parentHash
+  private def mainParent[F[_]: Monad: BlockStore](header: Block.Header): F[Option[BlockSummary]] = {
+    val maybeParentHash = header.parentHashes.headOption
     maybeParentHash match {
-      case Some(parentHash) => BlockStore[F].getBlockMessage(parentHash)
-      case None             => none[BlockMessage].pure[F]
+      case Some(parentHash) => BlockStore[F].getBlockSummary(parentHash)
+      case None             => none[BlockSummary].pure[F]
     }
   }
 
@@ -216,74 +228,83 @@ object ProtoUtil {
       resultOpt <- blockParentOpt.traverse { bh =>
                     dag.lookup(bh).map(_.get.weightMap.getOrElse(validator, 0L))
                   }
-      result <- resultOpt match {
-                 case Some(result) => result.pure[F]
-                 case None         => dag.lookup(blockHash).map(_.get.weightMap.getOrElse(validator, 0L))
-               }
+      result = resultOpt match {
+        case Some(result) => result
+        case None         => blockMetadata.get.weightMap.getOrElse(validator, 0L)
+      }
     } yield result
 
   def weightFromValidator[F[_]: Monad: BlockStore](
-      b: BlockMessage,
+      header: Block.Header,
       validator: ByteString
   ): F[Long] =
     for {
-      maybeMainParent <- mainParent[F](b)
+      maybeMainParent <- mainParent[F](header)
       weightFromValidator = maybeMainParent
-        .map(weightMap(_).getOrElse(validator, 0L))
-        .getOrElse(weightMap(b).getOrElse(validator, 0L)) //no parents means genesis -- use itself
+        .map(p => weightMap(p.getHeader).getOrElse(validator, 0L))
+        .getOrElse(weightMap(header).getOrElse(validator, 0L)) //no parents means genesis -- use itself
     } yield weightFromValidator
 
-  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Long] =
-    weightFromValidator[F](b, b.sender)
+  def weightFromValidator[F[_]: Monad: BlockStore](
+      b: Block,
+      validator: ByteString
+  ): F[Long] =
+    weightFromValidator[F](b.getHeader, validator)
 
-  def parentHashes(b: BlockMessage): Seq[ByteString] =
-    b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
+  def weightFromSender[F[_]: Monad: BlockStore](b: Block): F[Long] =
+    weightFromValidator[F](b, b.getHeader.validatorPublicKey)
 
-  def unsafeGetParents[F[_]: MonadThrowable: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
+  def weightFromSender[F[_]: Monad: BlockStore](header: Block.Header): F[Long] =
+    weightFromValidator[F](header, header.validatorPublicKey)
+
+  def parentHashes(b: Block): Seq[ByteString] =
+    b.getHeader.parentHashes
+
+  def unsafeGetParents[F[_]: MonadThrowable: BlockStore](b: Block): F[List[Block]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
+    } handleErrorWith {
+      case ex: NoSuchElementException =>
+        MonadThrowable[F].raiseError {
+          new NoSuchElementException(
+            s"Could not retrieve parents of ${PrettyPrinter.buildString(b.blockHash)}: ${ex.getMessage}"
+          )
+        }
     }
 
-  def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
+  def containsDeploy(b: Block, accountPublicKey: ByteString, timestamp: Long): Boolean =
     deploys(b).toStream
       .flatMap(_.deploy)
-      .exists(deployData => deployData.user == user && deployData.timestamp == timestamp)
+      .exists(
+        d => d.getHeader.accountPublicKey == accountPublicKey && d.getHeader.timestamp == timestamp
+      )
 
-  def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
-    b.body.fold(Seq.empty[ProcessedDeploy])(_.deploys)
+  def deploys(b: Block): Seq[Block.ProcessedDeploy] =
+    b.getBody.deploys
 
-  def tuplespace(b: BlockMessage): Option[ByteString] =
-    for {
-      bd <- b.body
-      ps <- bd.state
-    } yield ps.postStateHash
+  def postStateHash(b: Block): ByteString =
+    b.getHeader.getState.postStateHash
 
-  // TODO: Reconcile with def tuplespace above
-  def postStateHash(b: BlockMessage): ByteString =
-    b.getBody.getState.postStateHash
+  def preStateHash(b: Block): ByteString =
+    b.getHeader.getState.preStateHash
 
-  def preStateHash(b: BlockMessage): ByteString =
-    b.getBody.getState.preStateHash
+  def bonds(b: Block): Seq[Bond] =
+    b.getHeader.getState.bonds
 
-  def bonds(b: BlockMessage): Seq[Bond] =
-    (for {
-      bd <- b.body
-      ps <- bd.state
-    } yield ps.bonds).getOrElse(List.empty[Bond])
+  def bonds(b: BlockSummary): Seq[Bond] =
+    b.getHeader.getState.bonds
 
-  def blockNumber(b: BlockMessage): Long =
-    (for {
-      bd <- b.body
-      ps <- bd.state
-    } yield ps.blockNumber).getOrElse(0L)
+  def blockNumber(b: Block): Long =
+    b.getHeader.rank
 
   def toJustification(
       latestMessages: collection.Map[Validator, BlockMetadata]
   ): Seq[Justification] =
     latestMessages.toSeq.map {
       case (validator, blockMetadata) =>
-        Justification()
-          .withValidator(validator)
+        Block
+          .Justification()
+          .withValidatorPublicKey(validator)
           .withLatestBlockHash(blockMetadata.blockHash)
     }
 
@@ -306,163 +327,162 @@ object ProtoUtil {
         } yield acc.updated(validator, BlockMetadata.fromBlock(block))
     }
 
-  def protoHash[A <: { def toByteArray: Array[Byte] }](protoSeq: A*): ByteString =
+  def protoHash[A <: scalapb.GeneratedMessage](protoSeq: A*): ByteString =
     protoSeqHash(protoSeq)
 
-  def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString =
+  def protoSeqHash[A <: scalapb.GeneratedMessage](protoSeq: Seq[A]): ByteString =
     hashByteArrays(protoSeq.map(_.toByteArray): _*)
 
   def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
   def blockHeader(
-      body: Body,
+      body: Block.Body,
       parentHashes: Seq[ByteString],
+      justifications: Seq[Justification],
+      state: Block.GlobalState,
+      rank: Long,
       protocolVersion: Long,
-      timestamp: Long
-  ): Header =
-    Header()
-      .withParentsHashList(parentHashes)
-      .withPostStateHash(protoHash(body.state.get))
-      .withDeploysHash(protoSeqHash(body.deploys))
+      timestamp: Long,
+      chainId: String
+  ): Block.Header =
+    Block
+      .Header()
+      .withParentHashes(parentHashes)
+      .withJustifications(justifications)
       .withDeployCount(body.deploys.size)
+      .withState(state)
+      .withRank(rank)
       .withProtocolVersion(protocolVersion)
       .withTimestamp(timestamp)
+      .withChainId(chainId)
+      .withBodyHash(protoHash(body))
 
   def unsignedBlockProto(
-      body: Body,
-      header: Header,
-      justifications: Seq[Justification],
-      shardId: String
-  ): BlockMessage = {
-    val hash = hashUnsignedBlock(header, justifications)
+      body: Block.Body,
+      header: Block.Header
+  ): Block = {
+    val headerWithBodyHash = header
+      .withBodyHash(protoHash(body))
 
-    BlockMessage()
-      .withBlockHash(hash)
-      .withHeader(header)
+    val blockHash = protoHash(headerWithBodyHash)
+
+    Block()
+      .withBlockHash(blockHash)
+      .withHeader(headerWithBodyHash)
       .withBody(body)
-      .withJustifications(justifications)
-      .withShardId(shardId)
   }
-
-  // TODO: Why isn't the shard ID part of this?
-  def hashUnsignedBlock(header: Header, justifications: Seq[Justification]): BlockHash = {
-    val items = header.toByteArray +: justifications.map(_.toByteArray)
-    hashByteArrays(items: _*)
-  }
-
-  // TODO: Why isn't the justifications part of this?
-  def hashSignedBlock(
-      header: Header,
-      sender: ByteString,
-      sigAlgorithm: String,
-      seqNum: Int,
-      shardId: String,
-      extraBytes: ByteString
-  ): BlockHash =
-    hashByteArrays(
-      header.toByteArray,
-      sender.toByteArray,
-      StringValue.of(sigAlgorithm).toByteArray,
-      Int32Value.of(seqNum).toByteArray,
-      StringValue.of(shardId).toByteArray,
-      extraBytes.toByteArray
-    )
 
   def signBlock[F[_]: Applicative](
-      block: BlockMessage,
+      block: Block,
       dag: BlockDagRepresentation[F],
-      pk: Array[Byte],
-      sk: Array[Byte],
-      sigAlgorithm: String,
-      shardId: String
-  ): F[BlockMessage] = {
-
-    val header = {
-      //TODO refactor casper code to avoid the usage of Option fields in the block data structures
-      // https://rchain.atlassian.net/browse/RHOL-572
-      assert(block.header.isDefined, "A block without a header doesn't make sense")
-      block.header.get
-    }
-
-    val sender = ByteString.copyFrom(pk)
+      pk: PublicKey,
+      sk: PrivateKey,
+      sigAlgorithm: SignatureAlgorithm
+  ): F[Block] = {
+    val validator = ByteString.copyFrom(pk)
     for {
-      latestMessageOpt  <- dag.latestMessage(sender)
-      seqNum            = latestMessageOpt.fold(0)(_.seqNum) + 1
-      blockHash         = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
-      sigAlgorithmBlock = block.withSigAlgorithm(sigAlgorithm)
-      sig               = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
-      signedBlock = sigAlgorithmBlock
-        .withSender(sender)
-        .withSig(sig)
-        .withSeqNum(seqNum)
+      latestMessageOpt <- dag.latestMessage(validator)
+      seqNum           = latestMessageOpt.fold(0)(_.validatorBlockSeqNum) + 1
+      header = {
+        assert(block.header.isDefined, "A block without a header doesn't make sense")
+        block.getHeader
+          .withValidatorPublicKey(validator)
+          .withValidatorBlockSeqNum(seqNum)
+      }
+      blockHash = protoHash(header)
+      sig       = ByteString.copyFrom(sigAlgorithm.sign(blockHash.toByteArray, sk))
+      signedBlock = block
         .withBlockHash(blockHash)
-        .withShardId(shardId)
+        .withHeader(header)
+        .withSignature(
+          Signature()
+            .withSigAlgorithm(sigAlgorithm.name)
+            .withSig(sig)
+        )
     } yield signedBlock
   }
 
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
-  def basicDeployData[F[_]: Monad: Time](id: Int): F[DeployData] =
-    Time[F].currentMillis.map(
-      now =>
-        DeployData()
-          .withUser(ByteString.EMPTY)
-          .withTimestamp(now)
-          .withSession(DeployCode())
-          .withPayment(DeployCode())
-          .withGasLimit(Integer.MAX_VALUE)
-    )
+  def basicDeploy[F[_]: Monad: Time](
+      nonce: Int
+  ): F[Deploy] =
+    Time[F].currentMillis.map { now =>
+      basicDeploy(now, ByteString.EMPTY, nonce)
+    }
 
-  def basicDeploy[F[_]: Monad: Time](id: Int): F[DeployData] =
-    for {
-      d <- basicDeployData[F](id)
-    } yield d
+  def basicDeploy(
+      timestamp: Long,
+      sessionCode: ByteString = ByteString.EMPTY,
+      nonce: Long = 0,
+      accountPublicKey: ByteString = ByteString.EMPTY
+  ): Deploy = {
+    val b = Deploy
+      .Body()
+      .withSession(Deploy.Code().withCode(sessionCode))
+      .withPayment(Deploy.Code())
+    val h = Deploy
+      .Header()
+      .withAccountPublicKey(accountPublicKey)
+      .withTimestamp(timestamp)
+      .withNonce(nonce)
+      .withBodyHash(protoHash(b))
+    Deploy()
+      .withDeployHash(protoHash(h))
+      .withHeader(h)
+      .withBody(b)
+  }
 
-  //Todo: it is for testing
-  def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
-    basicDeploy[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
+  // TODO: it is for testing
+  def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[Block.ProcessedDeploy] =
+    basicDeploy[F](id).map(deploy => Block.ProcessedDeploy(deploy = Some(deploy)))
 
-  def sourceDeploy(source: String, timestamp: Long, gasLimit: Long): DeployData =
-    DeployData(
-      user = ByteString.EMPTY,
-      timestamp = timestamp,
-      session = Some(DeployCode().withCode(ByteString.copyFromUtf8(source))),
-      payment = Some(DeployCode()),
-      gasLimit = gasLimit
-    )
+  def sourceDeploy(source: String, timestamp: Long, gasLimit: Long): Deploy =
+    sourceDeploy(ByteString.copyFromUtf8(source), timestamp, gasLimit)
 
-  def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): DeployData =
-    DeployData(
-      user = ByteString.EMPTY,
-      timestamp = timestamp,
-      session = Some(DeployCode().withCode(sessionCode)),
-      payment = Some(DeployCode()),
-      gasLimit = gasLimit
-    )
+  def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): Deploy =
+    basicDeploy(timestamp, sessionCode)
 
   // https://casperlabs.atlassian.net/browse/EE-283
   // We are hardcoding exchange rate for DEV NET at 10:1
   // (1 token buys you 10 units of gas).
   // Later, post DEV NET, conversion rate will be part of a deploy.
   val GAS_PRICE = 10
+  val GAS_LIMIT = 100000000L
 
-  def deployDataToEEDeploy(dd: DeployData): ipc.Deploy = ipc.Deploy(
-    address = dd.address,
-    timestamp = dd.timestamp,
-    session = dd.session.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
-    payment = dd.payment.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
-    gasLimit = dd.gasLimit,
+  def deployDataToEEDeploy(d: Deploy): ipc.Deploy = ipc.Deploy(
+    address = d.getHeader.accountPublicKey,
+    timestamp = d.getHeader.timestamp,
+    session = d.getBody.session.map { case Deploy.Code(code, args) => ipc.DeployCode(code, args) },
+    payment = d.getBody.payment.map { case Deploy.Code(code, args) => ipc.DeployCode(code, args) },
+    // The new data type doesn't have a limit field. Remove this once payment is implemented.
+    gasLimit =
+      if (d.getBody.getPayment.code.isEmpty || d.getBody.getPayment == d.getBody.getSession) {
+        sys.env.get("CL_DEFAULT_GAS_LIMIT").map(_.toLong).getOrElse(GAS_LIMIT)
+      } else 0L,
     gasPrice = GAS_PRICE,
-    nonce = dd.nonce
+    nonce = d.getHeader.nonce,
+    authorizationKeys = d.approvals.map(_.approverPublicKey)
   )
 
-  def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {
+  def dependenciesHashesOf(b: Block): List[BlockHash] = {
     val missingParents = parentHashes(b).toSet
-    val missingJustifications = b.justifications
+    val missingJustifications = b.getHeader.justifications
       .map(_.latestBlockHash)
       .toSet
     (missingParents union missingJustifications).toList
   }
+
+  implicit class DeployOps(d: Deploy) {
+    def incrementNonce(): Deploy =
+      this.withNonce(d.header.get.nonce + 1)
+
+    def withNonce(newNonce: Long): Deploy =
+      d.withHeader(d.header.get.withNonce(newNonce))
+  }
+
+  def randomAccountAddress(): ByteString =
+    ByteString.copyFrom(scala.util.Random.nextString(32), "UTF-8")
 }

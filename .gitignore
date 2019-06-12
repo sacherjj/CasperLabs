@@ -85,6 +85,7 @@ execution-engine/engine/*.lock
 execution-engine/wasm-prep/*.lock
 execution-engine/tests/*.lock
 execution-engine/gens/*.lock
+execution-engine/blessed-contracts/mint-token/*.lock
 
 .make
 .bloop

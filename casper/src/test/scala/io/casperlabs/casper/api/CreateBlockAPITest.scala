@@ -1,31 +1,29 @@
 package io.casperlabs.casper.api
 
-import scala.concurrent.duration._
 import cats.Monad
 import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import io.casperlabs.casper._
-import io.casperlabs.casper.helper.{
-  HashSetCasperTestNode,
-  TransportLayerCasperTestNode,
-  TransportLayerCasperTestNodeFactory
-}, HashSetCasperTestNode.Effect
-import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util._
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.shared.Time
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper._
+import io.casperlabs.casper.helper.{HashSetCasperTestNode, TransportLayerCasperTestNodeFactory}
+import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.protocol.DeployServiceResponse
+import io.casperlabs.casper.util._
+import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.p2p.EffectsTestInstances._
+import io.casperlabs.shared.Time
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
+
+import scala.concurrent.duration._
 
 class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCasperTestNodeFactory {
   import HashSetCasperTest._
@@ -51,17 +49,21 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
-    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+    ).zipWithIndex.map {
+      case (deploy, nonce) =>
+        ProtoUtil
+          .basicDeploy(System.currentTimeMillis(), ByteString.copyFromUtf8(deploy), nonce + 1)
+    }
 
     implicit val logEff = new LogStub[Effect]
     def testProgram(blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
     ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
       for {
-        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI
+        t1 <- (BlockAPI.deploy[Effect](deploys.head, ignoreDeploySignature = true) *> BlockAPI
                .createBlock[Effect](blockApiLock)).value.start
         _ <- Time[Task].sleep(2.second)
-        t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
+        t2 <- (BlockAPI.deploy[Effect](deploys.last, ignoreDeploySignature = true) *> BlockAPI
                .createBlock[Effect](blockApiLock)).value.start //should fail because other not done
         r1 <- t1.join
         r2 <- t2.join
@@ -85,17 +87,17 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
 
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
-  def addBlock(b: BlockMessage): F[BlockStatus]         = underlying.addBlock(b)
-  def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
+  def addBlock(b: Block): F[BlockStatus]            = underlying.addBlock(b)
+  def contains(b: Block): F[Boolean]                = underlying.contains(b)
+  def deploy(d: Deploy): F[Either[Throwable, Unit]] = underlying.deploy(d)
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
   def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
-  def lastFinalizedBlock: F[BlockMessage]          = underlying.lastFinalizedBlock
-  def storageContents(hash: ByteString): F[String] = underlying.storageContents(hash)
-  def fetchDependencies: F[Unit]                   = underlying.fetchDependencies
+  def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
+  def fetchDependencies: F[Unit]   = underlying.fetchDependencies
+  def bufferedDeploys              = underlying.bufferedDeploys
 
   override def createBlock: F[CreateBlockStatus] =
     for {

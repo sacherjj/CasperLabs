@@ -29,9 +29,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val port =
     opt[Int](descr = "Port used for external gRPC API.", default = Option(40401))
 
+  val portInternal =
+    opt[Int](descr = "Port used for internal gRPC API.", default = Option(40402))
+
   val host =
     opt[String](
-      descr = "Hostname or IP of node on which gRPC service is running.",
+      descr = "Hostname or IP of node on which the gRPC service is running.",
       required = true
     )
 
@@ -47,16 +50,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val from = opt[String](
-      descr = "Purse address that will be used to pay for the deployment.",
-      default = Option("00")
+      descr =
+        "The public key of the account which is the context of this deployment, base16 encoded.",
+      required = false
     )
 
     val gasLimit =
       opt[Long](
         descr =
-          "The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
+          "[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
         validate = _ > 0,
-        required = true
+        required = false // Leaving it here for now so old examples don't complain about its presence.
       )
 
     val gasPrice = opt[Long](
@@ -67,14 +71,29 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val nonce = opt[Long](
       descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
-      default = Option(0L)
+      validate = _ > 0,
+      required = true
     )
 
     val session =
       opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
+
     val payment =
       opt[File](required = true, descr = "Path to the file with payment code", validate = fileCheck)
 
+    val publicKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck
+      )
+
+    val privateKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account private key (Ed25519)",
+        validate = fileCheck
+      )
   }
   addSubcommand(deploy)
 
@@ -87,14 +106,45 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val showBlock = new Subcommand("show-block") {
     descr(
-      "View properties of a block known by Casper on an existing running node." +
-        "Output includes: parent hashes, storage contents of the tuplespace."
+      "View properties of a block known by Casper on an existing running node."
     )
 
     val hash =
-      trailArg[String](name = "hash", required = true, descr = "the hash value of the block")
+      trailArg[String](
+        name = "hash",
+        required = true,
+        descr = "Value of the block hash, base16 encoded."
+      )
   }
   addSubcommand(showBlock)
+
+  val showDeploys = new Subcommand("show-deploys") {
+    descr(
+      "View deploys included in a block."
+    )
+
+    val hash =
+      trailArg[String](
+        name = "hash",
+        required = true,
+        descr = "Value of the block hash, base16 encoded."
+      )
+  }
+  addSubcommand(showDeploys)
+
+  val showDeploy = new Subcommand("show-deploy") {
+    descr(
+      "View properties of a deploy known by Casper on an existing running node."
+    )
+
+    val hash =
+      trailArg[String](
+        name = "hash",
+        required = true,
+        descr = "Value of the deploy hash, base16 encoded."
+      )
+  }
+  addSubcommand(showDeploy)
 
   val showBlocks = new Subcommand("show-blocks") {
     descr(

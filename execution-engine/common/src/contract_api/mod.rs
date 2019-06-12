@@ -6,13 +6,26 @@ use self::alloc_util::*;
 use self::pointers::*;
 use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::ext_ffi;
-use crate::key::{Key, UREF_SIZE};
+use crate::key::{Key, LOCAL_KEY_HASH_SIZE, LOCAL_SEED_SIZE, UREF_SIZE};
+use crate::uref::URef;
 use crate::value::{Contract, Value};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
+use blake2::digest::{Input, VariableOutput};
+use blake2::VarBlake2b;
 use core::convert::{TryFrom, TryInto};
+
+/// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
+fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_HASH_SIZE] {
+    let mut ret = [0u8; LOCAL_KEY_HASH_SIZE];
+    // Safe to unwrap here because our digest length is constant and valid
+    let mut hasher = VarBlake2b::new(LOCAL_KEY_HASH_SIZE).unwrap();
+    hasher.input(bytes);
+    hasher.variable_result(|hash| ret.clone_from_slice(hash));
+    ret
+}
 
 /// Read value under the key in the global state
 pub fn read<T>(u_ptr: UPointer<T>) -> T
@@ -22,12 +35,36 @@ where
     let key: Key = u_ptr.into();
     let value = read_untyped(&key);
     value
+        .unwrap() // TODO: return an Option instead of unwrapping (https://casperlabs.atlassian.net/browse/EE-349)
         .try_into()
         .map_err(|_| "T could not be derived from Value")
         .unwrap()
 }
 
-fn read_untyped(key: &Key) -> Value {
+/// Reads the value at the given key in the context-local partition of global state
+pub fn read_local<K, V>(key: K) -> Option<V>
+where
+    K: ToBytes,
+    V: TryFrom<Value>,
+{
+    let seed: [u8; LOCAL_SEED_SIZE] = {
+        let mut ret = [0u8; LOCAL_SEED_SIZE];
+        unsafe { ext_ffi::seed(ret.as_mut_ptr()) };
+        ret
+    };
+    let key_hash: [u8; LOCAL_KEY_HASH_SIZE] = {
+        let key_bytes = key.to_bytes().unwrap();
+        hash(&key_bytes)
+    };
+    let key = Key::Local { seed, key_hash };
+    read_untyped(&key).map(|v| {
+        v.try_into()
+            .map_err(|_| "T could not be derived from Value")
+            .unwrap()
+    })
+}
+
+fn read_untyped(key: &Key) -> Option<Value> {
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
     //      dropped then key_ptr becomes invalid.
 
@@ -49,6 +86,25 @@ where
     let key = u_ptr.into();
     let value = t.into();
     write_untyped(&key, &value)
+}
+
+/// Writes the given value at the given key in the context-local partition of global state
+pub fn write_local<K, V>(key: K, value: V)
+where
+    K: ToBytes,
+    V: Into<Value>,
+{
+    let seed: [u8; LOCAL_SEED_SIZE] = {
+        let mut ret = [0u8; LOCAL_SEED_SIZE];
+        unsafe { ext_ffi::seed(ret.as_mut_ptr()) };
+        ret
+    };
+    let key_hash: [u8; LOCAL_KEY_HASH_SIZE] = {
+        let key_bytes = key.to_bytes().unwrap();
+        hash(&key_bytes)
+    };
+    let key = Key::Local { seed, key_hash };
+    write_untyped(&key, &value.into());
 }
 
 fn write_untyped(key: &Key, value: &Value) {
@@ -92,10 +148,10 @@ where
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
     };
     let key: Key = deserialize(&bytes).unwrap();
-    if let Key::URef(id, access_rights) = key {
-        UPointer::new(id, access_rights)
+    if let Key::URef(uref) = key {
+        UPointer::from_uref(uref).unwrap()
     } else {
-        panic!("URef FFI did not return a URef!");
+        panic!("URef FFI did not return a valid URef!");
     }
 }
 
@@ -119,7 +175,8 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
 /// an unforgable reference.
 pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
     let bytes = fn_bytes_by_name(name);
-    Contract::new(bytes, known_urefs)
+    let protocol_version = unsafe { ext_ffi::protocol_version() };
+    Contract::new(bytes, known_urefs, protocol_version)
 }
 
 /// Gets the serialized bytes of an exported function (see `fn_by_name`), then
@@ -189,7 +246,7 @@ pub fn add_uref(name: &str, key: &Key) {
 /// return a value to their caller. The return value of a directly deployed
 /// contract is never looked at.
 #[allow(clippy::ptr_arg)]
-pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<Key>) -> ! {
+pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<URef>) -> ! {
     let (ptr, size, _bytes) = to_ptr(t);
     let (urefs_ptr, urefs_size, _bytes2) = to_ptr(extra_urefs);
     unsafe {
@@ -222,4 +279,24 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
         Vec::from_raw_parts(res_ptr, res_size, res_size)
     };
     deserialize(&res_bytes).unwrap()
+}
+
+/// Stops execution of a contract and reverts execution effects
+/// with a given reason.
+pub fn revert(status: u32) -> ! {
+    unsafe {
+        ext_ffi::revert(status);
+    }
+}
+
+/// Checks if all the keys contained in the given `Value`
+/// (rather, thing that can be turned into a `Value`) are
+/// valid, in the sense that all of the urefs (and their access rights)
+/// are known in the current context.
+#[allow(clippy::ptr_arg)]
+pub fn is_valid<T: Into<Value>>(t: T) -> bool {
+    let value = t.into();
+    let (value_ptr, value_size, _bytes) = to_ptr(&value);
+    let result = unsafe { ext_ffi::is_valid(value_ptr, value_size) };
+    result != 0
 }

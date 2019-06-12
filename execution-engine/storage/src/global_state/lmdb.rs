@@ -1,19 +1,21 @@
-use common::key::Key;
-use common::value::Value;
-use error;
-use global_state::StateReader;
-use history::trie::operations::create_hashed_empty_trie;
-use history::trie::Trie;
-use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use history::trie_store::operations::{read, write, ReadResult, WriteResult};
-use history::trie_store::{Transaction, TransactionSource, TrieStore};
-use history::{commit, CommitResult, History};
-use lmdb;
-use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
-use transform::Transform;
+
+use common::key::Key;
+use common::value::Value;
+use lmdb;
+use shared::newtypes::{Blake2bHash, CorrelationId};
+use shared::transform::Transform;
+
+use error;
+use global_state::StateReader;
+use global_state::{commit, CommitResult, History};
+use trie::operations::create_hashed_empty_trie;
+use trie::Trie;
+use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+use trie_store::operations::{read, write, ReadResult, WriteResult};
+use trie_store::{Transaction, TransactionSource, TrieStore};
 
 /// Represents a "view" of global state at a particular root hash.
 pub struct LmdbGlobalState {
@@ -55,6 +57,7 @@ impl LmdbGlobalState {
     /// Creates a state from an environement, a store, and given set of [`Key`](common::key::key),
     /// [`Value`](common::value::Value) pairs.
     pub fn from_pairs(
+        correlation_id: CorrelationId,
         environment: Arc<LmdbEnvironment>,
         store: Arc<LmdbTrieStore>,
         pairs: &[(Key, Value)],
@@ -64,11 +67,13 @@ impl LmdbGlobalState {
             let mut txn = ret.environment.create_read_write_txn()?;
             let mut current_root = ret.root_hash;
             for (key, value) in pairs {
+                let key = key.normalize();
                 match write::<_, _, _, LmdbTrieStore, error::Error>(
+                    correlation_id,
                     &mut txn,
                     &ret.store,
                     &current_root,
-                    key,
+                    &key,
                     value,
                 )? {
                     WriteResult::Written(root_hash) => {
@@ -88,9 +93,10 @@ impl LmdbGlobalState {
 impl StateReader<Key, Value> for LmdbGlobalState {
     type Error = error::Error;
 
-    fn read(&self, key: &Key) -> Result<Option<Value>, Self::Error> {
+    fn read(&self, correlation_id: CorrelationId, key: &Key) -> Result<Option<Value>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
         let ret = match read::<Key, Value, lmdb::RoTransaction, LmdbTrieStore, Self::Error>(
+            correlation_id,
             &txn,
             self.store.deref(),
             &self.root_hash,
@@ -124,12 +130,14 @@ impl History for LmdbGlobalState {
 
     fn commit(
         &mut self,
+        correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error> {
         let commit_result = commit::<LmdbEnvironment, LmdbTrieStore, _, Self::Error>(
             &self.environment,
             &self.store,
+            correlation_id,
             prestate_hash,
             effects,
         )?;
@@ -142,21 +150,12 @@ impl History for LmdbGlobalState {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use history::trie_store::operations::{write, WriteResult};
     use lmdb::DatabaseFlags;
-    use shared::os::get_page_size;
     use tempfile::tempdir;
 
-    lazy_static! {
-        // 10 MiB = 10485760 bytes
-        // page size on x86_64 linux = 4096 bytes
-        // 10485760 / 4096 = 2560
-        static ref TEST_MAP_SIZE: usize = {
-            let page_size = get_page_size().unwrap();
-            page_size * 2560
-        };
-    }
+    use super::*;
+    use trie_store::operations::{write, WriteResult};
+    use TEST_MAP_SIZE;
 
     #[derive(Debug, Clone)]
     struct TestPair {
@@ -166,11 +165,11 @@ mod tests {
 
     const TEST_PAIRS: [TestPair; 2] = [
         TestPair {
-            key: Key::Account([1u8; 20]),
+            key: Key::Account([1u8; 32]),
             value: Value::Int32(1),
         },
         TestPair {
-            key: Key::Account([2u8; 20]),
+            key: Key::Account([2u8; 32]),
             value: Value::Int32(2),
         },
     ];
@@ -178,21 +177,22 @@ mod tests {
     fn create_test_pairs_updated() -> [TestPair; 3] {
         [
             TestPair {
-                key: Key::Account([1u8; 20]),
+                key: Key::Account([1u8; 32]),
                 value: Value::String("one".to_string()),
             },
             TestPair {
-                key: Key::Account([2u8; 20]),
+                key: Key::Account([2u8; 32]),
                 value: Value::String("two".to_string()),
             },
             TestPair {
-                key: Key::Account([3u8; 20]),
+                key: Key::Account([3u8; 32]),
                 value: Value::Int32(3),
             },
         ]
     }
 
     fn create_test_state() -> LmdbGlobalState {
+        let correlation_id = CorrelationId::new();
         let _temp_dir = tempdir().unwrap();
         let environment = Arc::new(
             LmdbEnvironment::new(&_temp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap(),
@@ -206,6 +206,7 @@ mod tests {
 
             for TestPair { key, value } in &TEST_PAIRS {
                 match write::<_, _, _, LmdbTrieStore, error::Error>(
+                    correlation_id,
                     &mut txn,
                     &ret.store,
                     &current_root,
@@ -230,10 +231,11 @@ mod tests {
 
     #[test]
     fn reads_from_a_checkout_return_expected_values() {
+        let correlation_id = CorrelationId::new();
         let state = create_test_state();
         let checkout = state.checkout(state.root_hash).unwrap().unwrap();
         for TestPair { key, value } in TEST_PAIRS.iter().cloned() {
-            assert_eq!(Some(value), checkout.read(&key).unwrap());
+            assert_eq!(Some(value), checkout.read(correlation_id, &key).unwrap());
         }
     }
 
@@ -247,6 +249,7 @@ mod tests {
 
     #[test]
     fn commit_updates_state() {
+        let correlation_id = CorrelationId::new();
         let test_pairs_updated = create_test_pairs_updated();
 
         let mut state = create_test_state();
@@ -260,7 +263,7 @@ mod tests {
             tmp
         };
 
-        let updated_hash = match state.commit(root_hash, effects).unwrap() {
+        let updated_hash = match state.commit(correlation_id, root_hash, effects).unwrap() {
             CommitResult::Success(hash) => hash,
             _ => panic!("commit failed"),
         };
@@ -268,12 +271,16 @@ mod tests {
         let updated_checkout = state.checkout(updated_hash).unwrap().unwrap();
 
         for TestPair { key, value } in test_pairs_updated.iter().cloned() {
-            assert_eq!(Some(value), updated_checkout.read(&key).unwrap());
+            assert_eq!(
+                Some(value),
+                updated_checkout.read(correlation_id, &key).unwrap()
+            );
         }
     }
 
     #[test]
     fn commit_updates_state_and_original_state_stays_intact() {
+        let correlation_id = CorrelationId::new();
         let test_pairs_updated = create_test_pairs_updated();
 
         let mut state = create_test_state();
@@ -287,23 +294,31 @@ mod tests {
             tmp
         };
 
-        let updated_hash = match state.commit(root_hash, effects).unwrap() {
+        let updated_hash = match state.commit(correlation_id, root_hash, effects).unwrap() {
             CommitResult::Success(hash) => hash,
             _ => panic!("commit failed"),
         };
 
         let updated_checkout = state.checkout(updated_hash).unwrap().unwrap();
         for TestPair { key, value } in test_pairs_updated.iter().cloned() {
-            assert_eq!(Some(value), updated_checkout.read(&key).unwrap());
+            assert_eq!(
+                Some(value),
+                updated_checkout.read(correlation_id, &key).unwrap()
+            );
         }
 
         let original_checkout = state.checkout(root_hash).unwrap().unwrap();
         for TestPair { key, value } in TEST_PAIRS.iter().cloned() {
-            assert_eq!(Some(value), original_checkout.read(&key).unwrap());
+            assert_eq!(
+                Some(value),
+                original_checkout.read(correlation_id, &key).unwrap()
+            );
         }
         assert_eq!(
             None,
-            original_checkout.read(&test_pairs_updated[2].key).unwrap()
+            original_checkout
+                .read(correlation_id, &test_pairs_updated[2].key)
+                .unwrap()
         );
     }
 }

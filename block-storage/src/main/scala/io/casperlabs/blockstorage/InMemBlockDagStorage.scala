@@ -8,13 +8,11 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockDagStorage.MeteredBlockDagStorage
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
-import io.casperlabs.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.Log
 
 import scala.collection.immutable.HashSet
@@ -39,7 +37,11 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.contains(blockHash).pure[F]
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
-      topoSortVector.drop(startBlockNumber.toInt).pure[F]
+      topoSort(startBlockNumber, topoSortVector.size.toLong - 1)
+    def topoSort(startBlockNumber: Long, endBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
+      topoSortVector
+        .slice(startBlockNumber.toInt, endBlockNumber.toInt + 1)
+        .pure[F]
     def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
       topoSortVector.takeRight(tailLength).pure[F]
     def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
@@ -71,33 +73,34 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
 
-  override def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  override def insert(block: Block): F[BlockDagRepresentation[F]] =
     for {
       _ <- lock.acquire
       _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
       _ <- childMapRef.update(
             childMap =>
-              parentHashes(block).foldLeft(childMap) {
+              block.getHeader.parentHashes.foldLeft(childMap) {
                 case (acc, p) =>
                   val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
                   acc.updated(p, currChildren + block.blockHash)
               }
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
-      newValidators = bonds(block)
-        .map(_.validator)
+      newValidators = block.getHeader.getState.bonds
+        .map(_.validatorPublicKey)
         .toSet
-        .diff(block.justifications.map(_.validator).toSet)
-      newValidatorsWithSender <- if (block.sender.isEmpty) {
+        .diff(block.getHeader.justifications.map(_.validatorPublicKey).toSet)
+      validator = block.getHeader.validatorPublicKey
+      newValidatorsWithSender <- if (validator.isEmpty) {
                                   // Ignore empty sender for special cases such as genesis block
                                   Log[F].warn(
-                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} validator is empty"
                                   ) *> newValidators.pure[F]
-                                } else if (block.sender.size() == 32) {
-                                  (newValidators + block.sender).pure[F]
+                                } else if (validator.size == 32) {
+                                  (newValidators + validator).pure[F]
                                 } else {
                                   Sync[F].raiseError[Set[ByteString]](
-                                    BlockSenderIsMalformed(block)
+                                    BlockValidatorIsMalformed(block)
                                   )
                                 }
       _ <- latestMessagesRef.update { latestMessages =>

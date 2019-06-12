@@ -1,24 +1,24 @@
-import docker
+import os
 import logging
+from typing import Callable, Dict, List
 
-from typing import List, Callable
-
+import docker
+import docker.errors
 
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_node import CasperLabsNode
-from test.cl_node.docker_node import DockerNode
 from test.cl_node.common import random_string
+from test.cl_node.docker_base import DockerConfig
+from test.cl_node.docker_node import DockerNode
+from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.wait import (
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
     wait_for_peers_count_at_least,
 )
-from test.cl_node.log_watcher import (
-    wait_for_log_watcher,
-    GoodbyeInLogLine,
-    RequestedForkTipFromPeersInLogLine,
-)
+from test.cl_node.nonce_registry import NonceRegistry
+
 
 
 class CasperLabsNetwork:
@@ -30,11 +30,13 @@ class CasperLabsNetwork:
     Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
 
-    def __init__(self, docker_client: 'DockerClient'):
+    def __init__(self, docker_client: 'DockerClient', extra_docker_params: Dict = None):
+        self.extra_docker_params = extra_docker_params or {}
         self._next_key_number = 0
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []
         self._created_networks: List[str] = []
+        NonceRegistry.reset()
 
     @property
     def node_count(self) -> int:
@@ -56,7 +58,8 @@ class CasperLabsNetwork:
         raise NotImplementedError("Must implement '_create_network' in subclass.")
 
     def create_docker_network(self) -> str:
-        network_name = f'casperlabs{random_string(5)}'
+        tag_name = os.environ.get("TAG_NAME") or 'test'
+        network_name = f'casperlabs_{random_string(5)}_{tag_name}'
         self._created_networks.append(network_name)
         self.docker_client.networks.create(network_name, driver="bridge")
         logging.info(f'Docker network {network_name} created.')
@@ -66,6 +69,13 @@ class CasperLabsNetwork:
         config.number = self.node_count
         cl_node = CasperLabsNode(config)
         self.cl_nodes.append(cl_node)
+
+    def add_new_node_to_network(self) -> None:
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
+        self.add_cl_node(config)
+        self.wait_method(wait_for_approved_block_received_handler_state, 1)
+        self.wait_for_peers()
 
     def add_bootstrap(self, config: DockerConfig) -> None:
         if self.node_count > 0:
@@ -91,8 +101,9 @@ class CasperLabsNetwork:
     def start_cl_node(self, node_number: int) -> None:
         self.cl_nodes[node_number].execution_engine.start()
         node = self.cl_nodes[node_number].node
-        with wait_for_log_watcher(RequestedForkTipFromPeersInLogLine(node.container), 60):
-            node.start()
+        node.truncate_logs()
+        node.start()
+        wait_for_approved_block_received_handler_state(node, node.config.command_timeout)
 
     def wait_for_peers(self) -> None:
         if self.node_count < 2:
@@ -127,7 +138,10 @@ class CasperLabsNetwork:
 
     def cleanup(self):
         for network_name in self._created_networks:
-            self.docker_client.networks.get(network_name).remove()
+            try:
+                self.docker_client.networks.get(network_name).remove()
+            except docker.errors.NotFound:
+                pass
 
 
 class OneNodeNetwork(CasperLabsNetwork):
@@ -152,15 +166,10 @@ class TwoNodeNetwork(CasperLabsNetwork):
                               network=self.create_docker_network())
         self.add_bootstrap(config)
 
-        kp = self.get_key()
-        config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
-        self.add_cl_node(config)
-        self.wait_method(wait_for_approved_block_received_handler_state, 1)
-        self.wait_for_peers()
+        self.add_new_node_to_network()
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):
-
     def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(self.docker_client,
@@ -197,6 +206,69 @@ class MultiNodeJoinedNetwork(CasperLabsNetwork):
         for node_number in range(1, node_count):
             self.wait_method(wait_for_approved_block_received_handler_state, node_number)
         self.wait_for_peers()
+
+
+class CustomConnectionNetwork(CasperLabsNetwork):
+
+    def create_cl_network(self, node_count: int = 3, network_connections: List[List[int]] = None) -> None:
+        """
+        Allow creation of a network where all nodes are not connected to node-0's network and therefore each other.
+
+        Ex:  Star Network
+
+                     node3
+                       |
+            node1 -- node0 -- node2
+
+            create_cl_network(node_count=4, network_connections=[[0, 1], [0, 2], [0, 3]])
+
+        :param node_count: Number of nodes to create.
+        :param network_connections: A list of lists of node indexes that should be joined.
+        """
+        self.network_names = {}
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client,
+                              node_private_key=kp.private_key,
+                              node_public_key=kp.public_key,
+                              network=self.create_docker_network())
+        self.add_bootstrap(config)
+
+        for i in range(1, node_count):
+            kp = self.get_key()
+            config = DockerConfig(self.docker_client,
+                                  node_private_key=kp.private_key,
+                                  network=self.create_docker_network())
+            self.add_cl_node(config, network_with_bootstrap=False)
+
+        for network_members in network_connections:
+            self.connect(network_members)
+
+        for node_number in range(1, node_count):
+            self.wait_method(wait_for_approved_block_received_handler_state, node_number)
+
+        # Calculate how many peers should be connected to each node.
+        # Assumes duplicate network connections are not given, else wait_for_peers will time out.
+        peer_counts = [0] * node_count
+        for network in network_connections:
+            for node_num in network:
+                peer_counts[node_num] += len(network) - 1
+
+        timeout = self.docker_nodes[0].timeout
+        for node_num, peer_count in enumerate(peer_counts):
+            if peer_count > 0:
+                wait_for_peers_count_at_least(self.docker_nodes[node_num], peer_count, timeout)
+
+    def connect(self, network_members):
+        network_name = self.create_docker_network()
+        self.network_names[tuple(network_members)] = network_name
+        for node_num in network_members:
+            self.docker_nodes[node_num].connect_to_network(network_name)
+
+    def disconnect(self, connection):
+        network_name = self.network_names[tuple(connection)]
+        for node_num in connection:
+            self.docker_nodes[node_num].disconnect_from_network(network_name)
+        del self.network_names[tuple(connection)]
 
 
 if __name__ == '__main__':

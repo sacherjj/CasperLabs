@@ -1,48 +1,35 @@
 package io.casperlabs.node.casper
 
 import cats._
-import cats.data._
 import cats.effect.{Concurrent, Resource, Sync}
-import cats.effect.concurrent.{Ref, Semaphore}
-import cats.mtl.{ApplicativeAsk, MonadState}
 import cats.instances.option._
 import cats.instances.unit._
+import cats.mtl.{ApplicativeAsk, MonadState}
 import cats.syntax.applicative._
 import cats.syntax.apply._
-import cats.syntax.flatMap._
-import cats.syntax.functor._
 import cats.syntax.foldable._
-import com.olegpy.meow.effects._
-import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
-  BlockStore,
-  FileLMDBIndexBlockStore
-}
+import cats.syntax.functor._
+import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
-import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
-import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
+import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.rp._
 import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node._
+import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.p2p.effects._
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import monix.eval.{Task, TaskLike}
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.concurrent.duration._
@@ -70,6 +57,7 @@ package object transport {
       rpConfState: MonadState[Task, RPConf],
       multiParentCasperRef: MultiParentCasperRef[Effect],
       executionEngineService: ExecutionEngineService[Effect],
+      finalizationHandler: LastFinalizedBlockHashContainer[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {
     for {
@@ -107,7 +95,7 @@ package object transport {
       time                  = effects.time
       timeEff: Time[Effect] = Time.eitherTTime(Monad[Task], time)
 
-      defaultTimeout = conf.server.defaultTimeout.millis
+      defaultTimeout = conf.server.defaultTimeout
 
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](
@@ -132,6 +120,7 @@ package object transport {
                                 multiParentCasperRef,
                                 blockDagStorage,
                                 executionEngineService,
+                                finalizationHandler,
                                 scheduler
                               )
 

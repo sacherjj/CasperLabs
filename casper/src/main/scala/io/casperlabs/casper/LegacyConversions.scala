@@ -1,6 +1,8 @@
 package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.util.ProtoUtil
+
 import scala.util.Try
 
 /** Convert between the message in CasperMessage.proto and consensus.proto while we have both.
@@ -8,9 +10,10 @@ import scala.util.Try
   * and that the consensus.* ones are just used for communication, so hashes don't have to be
   * correct on the new objects, they are purely serving as DTOs. */
 object LegacyConversions {
-  def toBlockSummary(block: protocol.BlockMessage): consensus.BlockSummary =
+
+  def toBlock(block: protocol.BlockMessage): consensus.Block =
     consensus
-      .BlockSummary()
+      .Block()
       .withBlockHash(block.blockHash)
       .withHeader(
         consensus.Block
@@ -37,13 +40,16 @@ object LegacyConversions {
           .withBodyHash(
             // The new structure has body hash, but the old has two separate fields.
             // In order to be able to restore them the `BodyHashes` message was introduced.
-            ByteString.copyFrom(
-              protocol
-                .BodyHashes()
-                .withDeploysHash(block.getHeader.deploysHash)
-                .withStateHash(block.getHeader.postStateHash)
-                .toByteArray
-            )
+            Option(block.getHeader.extraBytes).filterNot(_.isEmpty).getOrElse {
+              ByteString.copyFrom(
+                protocol
+                  .BodyHashes()
+                  .withDeploysHash(block.getHeader.deploysHash)
+                  .withStateHash(block.getHeader.postStateHash)
+                  .withDummy(true)
+                  .toByteArray
+              )
+            }
           )
           .withTimestamp(block.getHeader.timestamp)
           .withProtocolVersion(block.getHeader.protocolVersion)
@@ -51,66 +57,15 @@ object LegacyConversions {
           .withChainId(block.shardId)
           .withValidatorBlockSeqNum(block.seqNum)
           .withValidatorPublicKey(block.sender)
-          .withRank(block.getBody.getState.blockNumber.toInt)
+          .withRank(block.getBody.getState.blockNumber)
       )
-      .withSignature(
-        consensus
-          .Signature()
-          .withSigAlgorithm(block.sigAlgorithm)
-          .withSig(block.sig)
-      )
-
-  def toBlock(block: protocol.BlockMessage): consensus.Block = {
-    val summary = toBlockSummary(block)
-    consensus
-      .Block()
-      .withBlockHash(summary.blockHash)
-      .withHeader(summary.getHeader)
       .withBody(
         consensus.Block
           .Body()
           .withDeploys(block.getBody.deploys.map { x =>
             consensus.Block
               .ProcessedDeploy()
-              .withDeploy(
-                consensus
-                  .Deploy()
-                  //.withDeployHash() // Legacy doesn't have it.
-                  .withHeader(
-                    consensus.Deploy
-                      .Header()
-                      // TODO: The client isn't signing the deploy yet, but it's sending an account address.
-                      // Once we sign the deploy, we can derive the account address from it on the way back.
-                      //.withAccountPublicKey(x.getDeploy.user)
-                      .withAccountPublicKey(x.getDeploy.address)
-                      .withNonce(x.getDeploy.nonce)
-                      .withTimestamp(x.getDeploy.timestamp)
-                      //.withBodyHash() // Legacy doesn't have it.
-                      .withGasPrice(x.getDeploy.gasPrice)
-                  )
-                  .withBody(
-                    consensus.Deploy
-                      .Body()
-                      .withSession(
-                        consensus.Deploy
-                          .Code()
-                          .withCode(x.getDeploy.getSession.code)
-                          .withArgs(x.getDeploy.getSession.args)
-                      )
-                      .withPayment(
-                        consensus.Deploy
-                          .Code()
-                          .withCode(x.getDeploy.getPayment.code)
-                          .withArgs(x.getDeploy.getPayment.args)
-                      )
-                  )
-                  .withSignature(
-                    consensus
-                      .Signature()
-                      .withSigAlgorithm(x.getDeploy.sigAlgorithm)
-                      .withSig(x.getDeploy.signature)
-                  )
-              )
+              .withDeploy(toDeploy(x.getDeploy))
               .withCost(x.cost)
               .withIsError(x.errored)
               //.withErrorMessage() // Legacy doesn't have it.
@@ -119,11 +74,27 @@ object LegacyConversions {
               ) // New version doesn't have limit. Preserve it so signatures can be checked.
           })
       )
-      .withSignature(summary.getSignature)
-  }
+      .copy(
+        signature = Option(
+          consensus
+            .Signature()
+            .withSigAlgorithm(block.sigAlgorithm)
+            .withSig(block.sig)
+        ).filterNot(s => s.sigAlgorithm.isEmpty && s.sig.isEmpty)
+      )
 
   def fromBlock(block: consensus.Block): protocol.BlockMessage = {
-    val bodyHashes = protocol.BodyHashes.parseFrom(block.getHeader.bodyHash.toByteArray)
+    val (deploysHash, stateHash, headerExtraBytes) =
+      Try(protocol.BodyHashes.parseFrom(block.getHeader.bodyHash.toByteArray)).toOption
+        .filter(_.dummy) match {
+        case Some(bodyHashes) =>
+          // `block` was originally created from a BlockMessage by `toBlock`.
+          (bodyHashes.deploysHash, bodyHashes.stateHash, ByteString.EMPTY)
+        case None =>
+          // `block` came first, we want to transfer it as a BlockMessage.
+          (ByteString.EMPTY, ByteString.EMPTY, block.getHeader.bodyHash)
+      }
+
     protocol
       .BlockMessage()
       .withBlockHash(block.blockHash)
@@ -131,11 +102,12 @@ object LegacyConversions {
         protocol
           .Header()
           .withParentsHashList(block.getHeader.parentHashes)
-          .withPostStateHash(bodyHashes.stateHash)
-          .withDeploysHash(bodyHashes.deploysHash)
+          .withPostStateHash(stateHash)
+          .withDeploysHash(deploysHash)
           .withTimestamp(block.getHeader.timestamp)
           .withProtocolVersion(block.getHeader.protocolVersion)
           .withDeployCount(block.getHeader.deployCount)
+          .withExtraBytes(headerExtraBytes)
       )
       .withBody(
         protocol
@@ -157,28 +129,10 @@ object LegacyConversions {
             protocol
               .ProcessedDeploy()
               .withDeploy(
-                protocol
-                  .DeployData()
-                  .withAddress(x.getDeploy.getHeader.accountPublicKey) // TODO: Once we sign deploys, this needs to be derived.
-                  .withTimestamp(x.getDeploy.getHeader.timestamp)
-                  .withSession(
-                    protocol
-                      .DeployCode()
-                      .withCode(x.getDeploy.getBody.getSession.code)
-                      .withArgs(x.getDeploy.getBody.getSession.args)
-                  )
-                  .withPayment(
-                    protocol
-                      .DeployCode()
-                      .withCode(x.getDeploy.getBody.getPayment.code)
-                      .withArgs(x.getDeploy.getBody.getPayment.args)
-                  )
-                  .withGasLimit(Try(x.errorMessage.toLong).toOption.getOrElse(0L)) // New version doesn't have it.
-                  .withGasPrice(x.getDeploy.getHeader.gasPrice)
-                  .withNonce(x.getDeploy.getHeader.nonce)
-                  .withSigAlgorithm(x.getDeploy.getSignature.sigAlgorithm)
-                  .withSignature(x.getDeploy.getSignature.sig)
-                //.withUser() // We aren't signing deploys yet.
+                fromDeploy(
+                  x.getDeploy,
+                  gasLimit = Try(x.errorMessage.toLong).toOption.getOrElse(0L)
+                )
               )
               .withCost(x.cost)
               .withErrored(x.isError)
@@ -192,8 +146,79 @@ object LegacyConversions {
       })
       .withSender(block.getHeader.validatorPublicKey)
       .withSeqNum(block.getHeader.validatorBlockSeqNum)
+      .withShardId(block.getHeader.chainId)
       .withSig(block.getSignature.sig)
       .withSigAlgorithm(block.getSignature.sigAlgorithm)
-      .withShardId(block.getHeader.chainId)
+  }
+
+  def fromDeploy(deploy: consensus.Deploy, gasLimit: Long = 0L): protocol.DeployData =
+    protocol
+      .DeployData()
+      .withAddress(deploy.getHeader.accountPublicKey) // TODO: Once we sign deploys, this needs to be derived.
+      .withTimestamp(deploy.getHeader.timestamp)
+      .withSession(
+        protocol
+          .DeployCode()
+          .withCode(deploy.getBody.getSession.code)
+          .withArgs(deploy.getBody.getSession.args)
+      )
+      .withPayment(
+        protocol
+          .DeployCode()
+          .withCode(deploy.getBody.getPayment.code)
+          .withArgs(deploy.getBody.getPayment.args)
+      )
+      .withGasLimit(gasLimit) // New version doesn't have it.
+      .withGasPrice(deploy.getHeader.gasPrice)
+      .withNonce(deploy.getHeader.nonce)
+      .withSigAlgorithm(deploy.approvals.headOption.fold("")(_.getSignature.sigAlgorithm))
+      .withSignature(deploy.approvals.headOption.fold(ByteString.EMPTY)(_.getSignature.sig))
+  //.withUser() // We weren't using signing when this was in use.
+
+  def toDeploy(deploy: protocol.DeployData): consensus.Deploy = {
+    val body = consensus.Deploy
+      .Body()
+      .withSession(
+        consensus.Deploy
+          .Code()
+          .withCode(deploy.getSession.code)
+          .withArgs(deploy.getSession.args)
+      )
+      .withPayment(
+        consensus.Deploy
+          .Code()
+          .withCode(deploy.getPayment.code)
+          .withArgs(deploy.getPayment.args)
+      )
+
+    val header = consensus.Deploy
+      .Header()
+      // The client can either send a public key or an account address here.
+      // If they signed the deploy, we can derive the account address from the key.
+      //.withAccountPublicKey(x.getDeploy.user)
+      .withAccountPublicKey(deploy.address)
+      .withNonce(deploy.nonce)
+      .withTimestamp(deploy.timestamp)
+      .withGasPrice(deploy.gasPrice)
+      .withBodyHash(ProtoUtil.protoHash(body)) // Legacy doesn't have it.
+
+    consensus
+      .Deploy()
+      .withDeployHash(ProtoUtil.protoHash(header)) // Legacy doesn't have it.
+      .withHeader(header)
+      .withBody(body)
+      .withApprovals(
+        List(
+          consensus
+            .Approval()
+            .withApproverPublicKey(header.accountPublicKey)
+            .withSignature(
+              consensus
+                .Signature()
+                .withSigAlgorithm(deploy.sigAlgorithm)
+                .withSig(deploy.signature)
+            )
+        ).filterNot(x => x.getSignature.sigAlgorithm.isEmpty && x.getSignature.sig.isEmpty)
+      )
   }
 }

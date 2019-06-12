@@ -1,23 +1,36 @@
-from dataclasses import dataclass
+import logging
+import json
 import os
 import threading
-import logging
+from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from queue import Empty
-from typing import (
-    Optional,
-    Dict,
-    Any,
-    Union,
-    Tuple,
-)
-
-from test.cl_node.errors import (
-    NonZeroExitCodeError,
-    CommandTimeoutError,
-)
+from typing import Any, Dict, Optional, Tuple, Union
 
 from test.cl_node.common import random_string
+from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
+
+from docker import DockerClient
+import docker.errors
+
+
+def humanify(line):
+    """
+    Decode json dump of execution engine's structured log and render a human friendly line,
+    containing, together with prefix rendered by the Python test framewoork, all useful
+    information. The original dictionary in the EE structured log looks like follows:
+
+        {'timestamp': '2019-06-08T17:51:35.308Z', 'process_id': 1, 'process_name': 'casperlabs-engine-grpc-server', 'host_name': 'execution-engine-0-mlgtn', 'log_level': 'Info', 'priority': 5, 'message_type': 'ee-structured', 'message_type_version': '1.0.0', 'message_id': '14039567985248808663', 'description': 'starting Execution Engine Server', 'properties': {'message': 'starting Execution Engine Server', 'message_template': '{message}'}}
+    """
+    if not 'execution-engine-' in line:
+        return line
+    try:
+        _, payload = line.split('payload=')
+    except:
+        return line
+
+    d = json.loads(payload)
+    return ' '.join(str(d[k]) for k in ('log_level', 'description',))
 
 
 class LoggingThread(threading.Thread):
@@ -34,12 +47,10 @@ class LoggingThread(threading.Thread):
                 if self.terminate_thread_event.is_set():
                     break
                 line = next(containers_log_lines_generator)
-                self.logger.info(f"  {self.container.name}: {line.decode('utf-8').rstrip()}")
+                s = line.decode('utf-8').rstrip()
+                self.logger.info(f"  {self.container.name}: {humanify(s)}")
         except StopIteration:
             pass
-
-
-CI_BUILD_NUMBER = 'DRONE_BUILD_NUMBER'
 
 
 @dataclass
@@ -54,35 +65,37 @@ class DockerConfig:
     number: int = 0
     rand_str: Optional[str] = None
     volumes: Optional[Dict[str, Dict[str, str]]] = None
-    command_timeout: int = 60
+    command_timeout: int = 180
     mem_limit: str = '4G'
     is_bootstrap: bool = False
+    is_validator: bool = True
+    is_signed_deploy: bool = True
     bootstrap_address: Optional[str] = None
+    use_new_gossiping: bool = True
 
     def __post_init__(self):
         if self.rand_str is None:
             self.rand_str = random_string(5)
 
     def node_command_options(self, server_host: str) -> dict:
-        options = {'--server-host': server_host,
+        bootstrap_path = '/root/.casperlabs/bootstrap'
+        options = {'--server-default-timeout': "10second",
+                   '--server-host': server_host,
                    '--casper-validator-private-key': self.node_private_key,
                    '--grpc-socket': '/root/.casperlabs/sockets/.casper-node.sock',
-                   '--metrics-prometheus': ''}
-        if self.is_bootstrap:
-            options['--tls-certificate'] = '/root/.casperlabs/bootstrap/node.certificate.pem'
-            options['--tls-key'] = '/root/.casperlabs/bootstrap/node.key.pem'
+                   '--metrics-prometheus': '',
+                   '--tls-certificate': f'{bootstrap_path}/node-{self.number}.certificate.pem',
+                   '--tls-key': f'{bootstrap_path}/node-{self.number}.key.pem'}
+        # if self.is_validator:
+        #     options['--casper-validator-private-key-path'] = f'{bootstrap_path}/validator-{self.number}-private.pem'
+        #     options['--casper-validator-public-key-path'] = f'{bootstrap_path}/validator-{self.number}-public.pem'
         if self.bootstrap_address:
             options['--server-bootstrap'] = self.bootstrap_address
         if self.node_public_key:
             options['--casper-validator-public-key'] = self.node_public_key
+        if self.use_new_gossiping:
+            options['--server-use-gossiping'] = ''
         return options
-
-    @property
-    def grpc_port(self) -> int:
-        """
-        Each node will get a port for grpc calls starting at 40500.
-        """
-        return 40500 + self.number
 
 
 class DockerBase:
@@ -97,12 +110,16 @@ class DockerBase:
     def __init__(self, config: DockerConfig, socket_volume: str) -> None:
         self.config = config
         self.socket_volume = socket_volume
+        self.connected_networks = []
 
         self.docker_tag: str = 'test'
-        if os.environ.get(CI_BUILD_NUMBER) is not None:
-            self.docker_tag = f'DRONE-{os.environ.get(CI_BUILD_NUMBER)}'
-
+        if self.is_in_docker:
+            self.docker_tag = os.environ.get("TAG_NAME")
         self.container = self._get_container()
+
+    @property
+    def is_in_docker(self) -> bool:
+        return os.environ.get("TAG_NAME") is not None
 
     @property
     def image_name(self) -> str:
@@ -115,7 +132,7 @@ class DockerBase:
 
     @property
     def container_name(self) -> str:
-        return f'{self.container_type}-{self.config.number}-{self.config.rand_str}'
+        return f'{self.container_type}-{self.config.number}-{self.config.rand_str}-{self.docker_tag}'
 
     @property
     def container_type(self) -> str:
@@ -136,6 +153,10 @@ class DockerBase:
     @property
     def host_bootstrap_dir(self) -> str:
         return f'{self.host_mount_dir}/bootstrap_certificate'
+
+    @property
+    def docker_client(self) -> DockerClient:
+        return self.config.docker_client
 
     def _get_container(self):
         raise NotImplementedError('No implementation of _get_container')
@@ -179,9 +200,34 @@ class DockerBase:
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
         return output
 
+    def network_from_name(self, network_name: str):
+        nets = self.docker_client.networks.list(names=[network_name])
+        if nets:
+            network = nets[0]
+            return network
+        raise Exception(f"Docker network '{network_name}' not found.")
+
+    def connect_to_network(self, network_name: str) -> None:
+        self.connected_networks.append(network_name)
+        network = self.network_from_name(network_name)
+        network.connect(self.container)
+
+    def disconnect_from_network(self, network_name: str) -> None:
+        try:
+            self.connected_networks.remove(network_name)
+            network = self.network_from_name(network_name)
+            network.disconnect(self.container)
+        except Exception as e:
+            logging.error(f'Error disconnecting {self.container_name} from {network_name}: {e}')
+
     def cleanup(self) -> None:
         if self.container:
-            self.container.remove(force=True, v=True)
+            for network_name in self.connected_networks:
+                self.disconnect_from_network(network_name)
+            try:
+                self.container.remove(force=True, v=True)
+            except docker.errors.NotFound:
+                pass
 
 
 class LoggingDockerBase(DockerBase):
@@ -193,6 +239,7 @@ class LoggingDockerBase(DockerBase):
         super().__init__(config, socket_volume)
         self.terminate_background_logging_event = threading.Event()
         self._start_logging_thread()
+        self._truncatedLength = 0
 
     def _start_logging_thread(self):
         self.background_logging = LoggingThread(
@@ -215,7 +262,10 @@ class LoggingDockerBase(DockerBase):
         return super()._get_container()
 
     def logs(self) -> str:
-        return self.container.logs().decode('utf-8')
+        return self.container.logs().decode('utf-8')[self._truncatedLength:]
+
+    def truncate_logs(self):
+        self._truncatedLength = len(self.container.logs().decode('utf-8'))
 
     def cleanup(self):
         super().cleanup()

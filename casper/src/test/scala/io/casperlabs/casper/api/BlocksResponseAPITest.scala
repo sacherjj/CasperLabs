@@ -5,7 +5,7 @@ import cats.effect.Sync
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.{genesis, _}
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.BlockGenerator._

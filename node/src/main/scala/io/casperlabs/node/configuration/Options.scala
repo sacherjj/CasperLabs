@@ -123,7 +123,7 @@ private[configuration] final case class Options private (
 
   val configFile = opt[Path](descr = "Path to the TOML configuration file.")
 
-  version(s"Casper Labs Node ${BuildInfo.version}")
+  version(s"CasperLabs Node ${BuildInfo.version}")
   printedName = "casperlabs"
   banner(
     """
@@ -205,7 +205,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverDefaultTimeout =
-      gen[Int](
+      gen[FiniteDuration](
         "Default timeout for roundtrip connections."
       )
 
@@ -219,7 +219,7 @@ private[configuration] final case class Options private (
     @scallop
     val tlsKey =
       gen[Path](
-        "Path to node's private key PEM file, that is being used for TLS communication.",
+        "Path to node's unencrypted secp256r1 PKCS#8 private key file, that is being used for TLS communication.",
         'k'
       )
 
@@ -254,7 +254,7 @@ private[configuration] final case class Options private (
       gen[Path](
         "Path to plain text file consisting of lines of the form `<pk> <stake>`, " +
           "which defines the bond amounts for each validator at genesis. " +
-          "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
+          "<pk> is the public key (in base-64 encoding) identifying the validator and <stake>" +
           s"is the amount of CSPR they have bonded (an integer). Note: this overrides the --num-validators option."
       )
     @scallop
@@ -269,8 +269,8 @@ private[configuration] final case class Options private (
       gen[Path](
         "Path to plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
           "which defines the CSPR wallets that exist at genesis. " +
-          "<algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1)," +
-          "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
+          "<algorithm> is the algorithm used to verify signatures when using the wallet (currently supported value is only ed25519)," +
+          "<pk> is the public key (in base-64 encoding) identifying the wallet and <revBalance>" +
           s"is the amount of CSPR in the wallet."
       )
     @scallop
@@ -284,6 +284,26 @@ private[configuration] final case class Options private (
     @scallop
     val casperHasFaucet =
       gen[Flag]("True if there should be a public access CSPR faucet in the genesis block.")
+
+    @scallop
+    val casperIgnoreDeploySignature =
+      gen[Flag]("Bypass deploy hash and signature validation, for debug purposes.")
+
+    @scallop
+    val casperAutoProposeEnabled =
+      gen[Flag]("Enable auto-proposal of blocks.")
+
+    @scallop
+    val casperAutoProposeCheckInterval =
+      gen[FiniteDuration]("Time between proposal checks.")
+
+    @scallop
+    val casperAutoProposeMaxInterval =
+      gen[FiniteDuration]("Time to accumulate deploys before proposing.")
+
+    @scallop
+    val casperAutoProposeMaxCount =
+      gen[Int]("Number of deploys to accumulate before proposing.")
 
     @scallop
     val serverBootstrap =
@@ -310,6 +330,90 @@ private[configuration] final case class Options private (
         "Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes."
       )
 
+    @scallop
+    val serverApprovalRelayFactor =
+      gen[Int]("Number of nodes to relay genesis approvals to.")
+
+    @scallop
+    val serverApprovalPollInterval =
+      gen[FiniteDuration](
+        "Time to wait between asking the bootstrap node for an updated list of genesis approvals."
+      )
+
+    @scallop
+    val serverSyncMaxPossibleDepth =
+      gen[Int]("Maximum DAG depth to allow when syncing after a new block notification.")
+
+    @scallop
+    val serverSyncMinBlockCountToCheckBranchingFactor =
+      gen[Int](
+        "Minimum DAG depth before we start checking the branching factor for abnormal growth."
+      )
+
+    @scallop
+    val serverSyncMaxBranchingFactor =
+      gen[Double](
+        "Maximum branching factor to allow during syncs before terminating the operation as malicious."
+      )
+
+    @scallop
+    val serverSyncMaxDepthAncestorsRequest =
+      gen[Int]("Maximum DAG depth to ask in iterative requests during syncing.")
+
+    @scallop
+    val serverInitSyncMaxNodes =
+      gen[Int]("Maximum number of nodes to try to sync with initially in a round.")
+
+    @scallop
+    val serverInitSyncMinSuccessful =
+      gen[Int]("Minimum number of successful initial syncs in a round to call it done.")
+
+    @scallop
+    val serverInitSyncMemoizeNodes =
+      gen[Boolean](
+        "Remember the selection of nodes to synchronize with initially, or pick a new set in each round."
+      )
+
+    @scallop
+    val serverInitSyncSkipFailedNodes =
+      gen[Boolean](
+        "Skip nodes which failed previous synchronization attempts or allow them to be tried again."
+      )
+
+    @scallop
+    val serverInitSyncMaxBlockCount =
+      gen[Int]("Maximum number of blocks to allow to be synced initially.")
+
+    @scallop
+    val serverInitSyncRoundPeriod =
+      gen[FiniteDuration]("Time to wait between initial synchronization attempts.")
+
+    @scallop
+    val serverDownloadMaxParallelBlocks =
+      gen[Int]("Maximum number of parallel block downloads initiated by the download manager.")
+    @scallop
+    val serverDownloadMaxRetries =
+      gen[Int]("Maximum number of times to retry to download a block from the same node.")
+
+    @scallop
+    val serverDownloadRetryInitialBackoffPeriod =
+      gen[FiniteDuration](
+        "Time to wait before trying to download a failed block again from the same node."
+      )
+
+    @scallop
+    val serverDownloadRetryBackoffFactor =
+      gen[Double](
+        "Exponential factor to apply on subsequent wait times before trying to download again."
+      )
+
+    @scallop
+    val serverRelayMaxParallelBlocks =
+      gen[Int]("Maximum number of parallel block downloads allowed to peers.")
+
+    @scallop
+    val serverRelayBlockChunkConsumerTimeout =
+      gen[FiniteDuration]("Maximum time to allow a peer downloading a block to consume each chunk.")
     @scallop
     val casperStandalone =
       gen[Flag](
@@ -386,21 +490,30 @@ private[configuration] final case class Options private (
     @scallop
     val casperValidatorPublicKey =
       gen[String](
-        "Base16 encoding of the public key to use for signing a proposed blocks. " +
+        "base-64 or PEM encoding of the public key to use for signing a proposed blocks. " +
+          s"Can be inferred from the private key for some signature algorithms."
+      )
+
+    @scallop
+    val casperValidatorPublicKeyPath =
+      gen[Path](
+        "base-64 or PEM encoding of the public key to use for signing a proposed blocks." +
           s"Can be inferred from the private key for some signature algorithms."
       )
 
     @scallop
     val casperValidatorPrivateKey =
       gen[String](
-        "Base16 encoding of the private key to use for signing a proposed blocks. " +
+        "base-64 or PEM encoding of the private key to use for signing a proposed blocks. " +
           s"It is not recommended to use in production since private key could be revealed through the process table." +
           "Use the `validator-private-key-path` instead."
       )
 
     @scallop
     val casperValidatorPrivateKeyPath =
-      gen[Path]("Path to the base16 encoded private key to use for signing a proposed blocks.")
+      gen[Path](
+        "Path to the base-64 or PEM encoded private key to use for signing a proposed blocks."
+      )
 
     @scallop
     val casperValidatorSigAlgorithm =

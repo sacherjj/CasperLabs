@@ -1,0 +1,129 @@
+syntax = "proto3";
+
+package io.casperlabs.node.api.casper;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "io/casperlabs/casper/consensus/consensus.proto";
+import "io/casperlabs/casper/consensus/info.proto";
+import "io/casperlabs/casper/consensus/state.proto";
+
+// CasperService is the way for user and dApp developer to interact with the system,
+// including deploying contracts, looking at the DAG and querying state.
+service CasperService {
+
+    // Add a deploy to the deploy pool on the node,
+    // to be processed during subsequent block proposals.
+    rpc Deploy(DeployRequest) returns (google.protobuf.Empty) {
+        option (google.api.http) = {
+            post: "/v2/deploys"
+            body: "deploy"
+        };
+    }
+
+    // Get the block summary with extra information about finality.
+    rpc GetBlockInfo(GetBlockInfoRequest) returns (io.casperlabs.casper.consensus.info.BlockInfo) {
+    	option (google.api.http) = {
+    		get: "/v2/blocks/{block_hash_base16=*}"
+    	};
+    }
+
+    // Get slices of the DAG, going backwards, rank by rank.
+    rpc StreamBlockInfos(StreamBlockInfosRequest) returns (stream io.casperlabs.casper.consensus.info.BlockInfo) {
+    	option (google.api.http) = {
+    		get: "/v2/blocks"
+    	};
+    }
+
+    // Retrieve information about a single deploy by hash.
+    rpc GetDeployInfo(GetDeployInfoRequest) returns (io.casperlabs.casper.consensus.info.DeployInfo) {
+        option (google.api.http) = {
+            get: "/v2/deploys/{deploy_hash_base16=*}"
+        };
+    }
+
+    // Get the processed deploys within a block.
+    rpc StreamBlockDeploys(StreamBlockDeploysRequest) returns (stream io.casperlabs.casper.consensus.Block.ProcessedDeploy) {
+        option (google.api.http) = {
+            get: "/v2/blocks{block_hash_base16=*}/deploys"
+        };
+    }
+
+    // Query the value of global state as it was after the execution of a block.
+    rpc GetBlockState(GetBlockStateRequest) returns (io.casperlabs.casper.consensus.state.Value) {
+        option (google.api.http) = {
+            post: "v2/blocks/{block_hash_base16=*}/state"
+            body: "*"
+        };
+    }
+
+    // Execute multiple state queries at once.
+    rpc BatchGetBlockState(BatchGetBlockStateRequest) returns (BatchGetBlockStateResponse) {
+        option (google.api.http) = {
+            post: "v2/blocks/{block_hash_base16=*}/state:batchGet",
+            body: "*"
+        };
+    }
+}
+
+message DeployRequest {
+    io.casperlabs.casper.consensus.Deploy deploy = 1;
+}
+
+message GetBlockInfoRequest {
+	// Either the full or just the first few characters of the block hash in base16 encoding,
+	// so that it works with the client's redacted displays.
+	string block_hash_base16 = 1;
+	io.casperlabs.casper.consensus.info.BlockInfo.View view = 2;
+}
+
+message StreamBlockInfosRequest {
+	// How many of the top ranks of the DAG to show.
+	uint32 depth = 1;
+
+	// Optionally specify the maximum rank to to go back from.
+	// 0 means go from the current tip of the DAG.
+	uint64 max_rank = 2;
+
+	io.casperlabs.casper.consensus.info.BlockInfo.View view = 3;
+}
+
+
+
+message GetDeployInfoRequest {
+    string deploy_hash_base16 = 1;
+    io.casperlabs.casper.consensus.info.DeployInfo.View view = 2;
+}
+
+message StreamBlockDeploysRequest {
+    string block_hash_base16 = 1;
+    io.casperlabs.casper.consensus.info.DeployInfo.View view = 2;
+}
+
+message StateQuery {
+    KeyVariant key_variant = 1;
+    string key_base16 = 2;
+    // Path of human readable names to the value.
+    repeated string path_segments = 3;
+
+    enum KeyVariant {
+        KEY_VARIANT_UNSPECIFIED = 0;
+        HASH = 1;
+        UREF = 2;
+        ADDRESS = 3;
+    }
+}
+
+message GetBlockStateRequest {
+    string block_hash_base16 = 1;
+    StateQuery query = 2;
+}
+
+message BatchGetBlockStateRequest {
+    string block_hash_base16 = 1;
+    repeated StateQuery queries = 2;
+}
+
+message BatchGetBlockStateResponse {
+    repeated io.casperlabs.casper.consensus.state.Value values = 1;
+}

@@ -100,6 +100,7 @@ object CommError {
 sealed trait ServiceError extends NoStackTrace
 object ServiceError {
   // Created class so that in logs it's a bit more readable.
+  // TODO: Provide customer `Serializable` implementation so test can be forked.
   class Exception(status: Status) extends StatusRuntimeException(status) with ServiceError
 
   /** Factory to create and match gRPC errors. */
@@ -120,11 +121,18 @@ object ServiceError {
       apply(s"Block ${Base16.encode(blockHash.toByteArray)} could not be found.")
   }
 
-  object Internal         extends StatusError(Status.INTERNAL)
-  object InvalidArgument  extends StatusError(Status.INVALID_ARGUMENT)
-  object Unauthenticated  extends StatusError(Status.UNAUTHENTICATED)
-  object DeadlineExceeded extends StatusError(Status.DEADLINE_EXCEEDED)
-  object Unavailable      extends StatusError(Status.UNAVAILABLE)
+  // NOTE: See https://github.com/grpc/grpc/blob/master/doc/statuscodes.md about when to use which one.
+
+  object Aborted            extends StatusError(Status.ABORTED)
+  object DeadlineExceeded   extends StatusError(Status.DEADLINE_EXCEEDED)
+  object FailedPrecondition extends StatusError(Status.FAILED_PRECONDITION)
+  object Internal           extends StatusError(Status.INTERNAL)
+  object InvalidArgument    extends StatusError(Status.INVALID_ARGUMENT)
+  object OutOfRange         extends StatusError(Status.OUT_OF_RANGE)
+  object ResourceExhausted  extends StatusError(Status.RESOURCE_EXHAUSTED)
+  object Unauthenticated    extends StatusError(Status.UNAUTHENTICATED)
+  object Unavailable        extends StatusError(Status.UNAVAILABLE)
+  object Unimplemented      extends StatusError(Status.UNIMPLEMENTED)
 }
 
 sealed trait GossipError extends NoStackTrace

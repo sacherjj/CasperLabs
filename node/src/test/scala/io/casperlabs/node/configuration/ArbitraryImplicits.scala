@@ -1,9 +1,12 @@
 package io.casperlabs.node.configuration
+
 import java.io.File
 import java.nio.file.{Path, Paths}
-
+import eu.timepit.refined._
+import eu.timepit.refined.numeric._
+import eu.timepit.refined.api.Refined
 import com.google.protobuf.ByteString
-import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
+import io.casperlabs.comm.discovery.Node
 import org.scalacheck.{Arbitrary, Gen}
 
 import scala.concurrent.duration._
@@ -25,8 +28,13 @@ trait ArbitraryImplicits {
   }
 
   //There is no way expressing explicit 'false' using CLI options.
-  implicit val optionBooleanGen: Arbitrary[Boolean] = Arbitrary {
+  implicit val booleanGen: Arbitrary[Boolean] = Arbitrary {
     Gen.const(true)
+  }
+
+  // Got into trouble with values like -4.587171438322464E-226
+  implicit val doubleGen: Arbitrary[Double] = Arbitrary {
+    Gen.oneOf(0.1, 0.5, 1.0, 1.5, 2.0, 10.0)
   }
 
   implicit val nodeGen: Arbitrary[Node] = Arbitrary {
@@ -45,5 +53,23 @@ trait ArbitraryImplicits {
     for {
       n <- Gen.choose(0, Int.MaxValue)
     } yield FiniteDuration(n.toLong, MILLISECONDS)
+  }
+
+  implicit val positiveIntGen: Arbitrary[Refined[Int, Positive]] = Arbitrary {
+    for {
+      n <- Gen.choose(1, Int.MaxValue)
+    } yield refineV[Positive](n).right.get
+  }
+
+  implicit val nonNegativeIntGen: Arbitrary[Refined[Int, NonNegative]] = Arbitrary {
+    for {
+      n <- Gen.choose(0, Int.MaxValue)
+    } yield refineV[NonNegative](n).right.get
+  }
+
+  implicit val gte1DoubleGen: Arbitrary[Refined[Double, GreaterEqual[W.`1.0`.T]]] = Arbitrary {
+    for {
+      d <- Gen.choose(1.0, 10.0)
+    } yield refineV[GreaterEqual[W.`1.0`.T]](d).right.get
   }
 }

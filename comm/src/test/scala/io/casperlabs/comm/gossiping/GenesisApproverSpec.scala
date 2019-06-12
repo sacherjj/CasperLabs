@@ -24,7 +24,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
     "started with a candidate that passes the threshold" should {
       "immediately trigger the transition" in {
         TestFixture.fromGenesis() { approver =>
-          approver.awaitApproval.timeout(Duration.Zero).map { blockHash =>
+          approver.awaitApproval.timeout(500.millis).map { blockHash =>
             blockHash shouldBe genesis.blockHash
           }
         }
@@ -40,6 +40,26 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
           approver.awaitApproval.timeout(50.millis).attempt.map { res =>
             res.isLeft shouldBe true
             res.left.get shouldBe a[TimeoutException]
+          }
+        }
+      }
+    }
+    "started without an approval" should {
+      "not trigger the transition if approvals are needed" in {
+        TestFixture.fromGenesis(approve = false, environment = new MockEnvironment() {
+          override def canTransition(block: Block, signatories: Set[ByteString]) = false
+        }) { approver =>
+          approver.awaitApproval.timeout(50.millis).attempt.map { res =>
+            res.isLeft shouldBe true
+            res.left.get shouldBe a[TimeoutException]
+          }
+        }
+      }
+
+      "trigger the transition if approvals are not needed" in {
+        TestFixture.fromGenesis(approve = false) { approver =>
+          approver.awaitApproval.timeout(50.millis).attempt.map { res =>
+            res.isRight shouldBe true
           }
         }
       }
@@ -78,7 +98,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
       ) { approver =>
         for {
           r0 <- approver.getCandidate
-          _  <- Task.sleep(200.millis)
+          _  <- Task.sleep(500.millis)
           r1 <- approver.getCandidate
         } yield {
           r0.isLeft shouldBe true
@@ -150,7 +170,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
           .withSignature(sample(arbitrary[Signature]).withSigAlgorithm("XXX")),
         // Good one.
         sample(arbitrary[Approval])
-          .copy(validatorPublicKey = genesis.getHeader.getState.bonds.head.validatorPublicKey)
+          .withApproverPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
       )
       TestFixture.fromBootstrap(
         remoteCandidate = () =>
@@ -235,6 +255,20 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
         }
       }
     }
+
+    "trigger transition if no approvals are required" in {
+      TestFixture.fromBootstrap(
+        remoteCandidate = () => Task.delay(GenesisCandidate(genesis.blockHash, approvals = Nil)),
+        pollInterval = 10.millis,
+        environment = new MockEnvironment() {
+          override def canTransition(block: Block, signatories: Set[ByteString]) = true
+        }
+      ) { approver =>
+        approver.awaitApproval.timeout(250.millis).map { blockHash =>
+          blockHash shouldBe genesis.blockHash
+        }
+      }
+    }
   }
 
   "addApproval" should {
@@ -314,7 +348,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
           r1 <- approver.addApproval(genesis.blockHash, correctApproval)
           r2 <- approver.addApproval(
                  genesis.blockHash,
-                 correctApproval.withValidatorPublicKey(
+                 correctApproval.withApproverPublicKey(
                    genesis.getHeader.getState.bonds(1).validatorPublicKey
                  )
                )
@@ -328,7 +362,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
     "accumulate approvals arriving in parallel" in {
       TestFixture.fromGenesis() { approver =>
         val approvals = genesis.getHeader.getState.bonds.tail.map { b =>
-          sample(arbitrary[Approval]).withValidatorPublicKey(b.validatorPublicKey)
+          sample(arbitrary[Approval]).withApproverPublicKey(b.validatorPublicKey)
         }
         for {
           _ <- Task.gatherUnordered(approvals.map(approver.addApproval(genesis.blockHash, _)))
@@ -434,7 +468,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
 
   // Example of an approval that we can use in tests that won't be rejected.
   val correctApproval = sample(arbitrary[Approval])
-    .withValidatorPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
+    .withApproverPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
 
   class MockNodeDiscovery(peers: List[Node]) extends NodeDiscovery[Task] {
     override def discover                    = ???
@@ -448,9 +482,9 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
     override def streamBlockSummaries(
         request: StreamBlockSummariesRequest
-    ): Iterant[Task, BlockSummary]                                     = ???
-    override def getBlockChunked(request: GetBlockChunkedRequest)      = ???
-    override def addApproval(request: AddApprovalRequest): Task[Empty] = ???
+    ): Iterant[Task, BlockSummary]                                    = ???
+    override def getBlockChunked(request: GetBlockChunkedRequest)     = ???
+    override def addApproval(request: AddApprovalRequest): Task[Unit] = ???
     override def getGenesisCandidate(
         request: GetGenesisCandidateRequest
     ): Task[GenesisCandidate] = ???
@@ -473,7 +507,6 @@ object GenesisApproverSpec extends ArbitraryConsensus {
       override def addApproval(request: AddApprovalRequest) = Task.delay {
         synchronized {
           received = received + 1
-          Empty()
         }
       }
     }
@@ -536,7 +569,8 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     def fromGenesis(
         environment: MockEnvironment = new MockEnvironment(),
         gossipService: MockGossipService = new MockGossipService(),
-        relayFactor: Int = 0
+        relayFactor: Int = 0,
+        approve: Boolean = true
     )(
         test: GenesisApprover[Task] => Task[Unit]
     )(
@@ -549,8 +583,10 @@ object GenesisApproverSpec extends ArbitraryConsensus {
           connectToGossip = _ => Task.now(gossipService),
           relayFactor,
           genesis,
-          approval = sample(arbitrary[Approval])
-            .withValidatorPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
+          maybeApproval = sample(arbitrary[Approval])
+            .withApproverPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
+            .some
+            .filter(_ => approve)
         )
         .use(test)
         .runSyncUnsafe(DefaultTimeout)

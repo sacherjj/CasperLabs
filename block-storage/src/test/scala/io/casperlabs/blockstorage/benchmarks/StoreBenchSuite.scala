@@ -6,6 +6,8 @@ import java.util.{Properties, UUID}
 
 import cats.Monad
 import cats.effect.Concurrent
+import cats.effect.concurrent.{Ref, Semaphore}
+import cats.implicits.none
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{
@@ -17,15 +19,8 @@ import io.casperlabs.blockstorage.{
   IndexedBlockDagStorage,
   LMDBBlockStore
 }
-import io.casperlabs.casper.protocol.{
-  BlockMessage,
-  Body,
-  DeployCode,
-  DeployData,
-  Header,
-  Justification,
-  ProcessedDeploy
-}
+import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.ipc.Key.KeyInstance
 import io.casperlabs.ipc.Transform.TransformInstance
 import io.casperlabs.ipc.{DeployCode => _, _}
@@ -83,45 +78,56 @@ object StoreBenchSuite {
   //The implementation assumes that this method will return a data
   //with approximately 1KB size
   //Take this into account before change it
-  def randomDeployData: DeployData =
-    DeployData()
-      .withAddress(randomHexString(32))
-      .withPayment(
-        DeployCode()
-          .withCode(randomHexString(512))
-      )
-      .withSession(
-        DeployCode()
-          .withCode(randomHexString(480))
+  def randomDeployData: Deploy =
+    Deploy()
+      .withHeader(Deploy.Header().withAccountPublicKey(randomHexString(32)))
+      .withBody(
+        Deploy
+          .Body()
+          .withPayment(
+            Deploy
+              .Code()
+              .withCode(randomHexString(512))
+          )
+          .withSession(
+            Deploy
+              .Code()
+              .withCode(randomHexString(480))
+          )
       )
 
-  def randomDeploy: ProcessedDeploy =
-    ProcessedDeploy()
+  def randomDeploy: Block.ProcessedDeploy =
+    Block
+      .ProcessedDeploy()
       .withDeploy(randomDeployData)
 
-  def randomBody: Body =
-    Body()
+  def randomBody: Block.Body =
+    Block
+      .Body()
       .withDeploys(
         (0 to blockSize) map (_ => randomDeploy)
       )
 
-  def randomBlockMessage: BlockMessage = {
+  def randomBlockMessage: Block = {
     val hash      = randomHash
     val validator = randomHexString(32)
     val version   = Random.nextLong()
     val timestamp = Random.nextLong()
     val parents   = (0 to Random.nextInt(3)) map (_ => randomHash)
     val justifications = (0 to Random.nextInt(10)) map (
-        _ => Justification(randomHash, randomHash)
+        _ => Block.Justification(randomHash, randomHash)
     )
-    BlockMessage(blockHash = hash)
+    Block()
+      .withBlockHash(hash)
       .withHeader(
-        Header()
-          .withParentsHashList(parents)
+        Block
+          .Header()
+          .withParentHashes(parents)
+          .withJustifications(justifications)
           .withProtocolVersion(version)
           .withTimestamp(timestamp)
+          .withValidatorPublicKey(validator)
       )
-      .withSender(validator)
       .withBody(randomBody)
   }
 
@@ -176,6 +182,7 @@ object Init {
         FileLMDBIndexBlockStore.Config(
           storagePath = createPath("file_lmdb_storage"),
           indexPath = createPath("file_lmdb_index"),
+          approvedBlockPath = createPath("file_lmdb_approvedBlock"),
           checkpointsDirPath = createPath("file_lmdb_checkpoints"),
           mapSize = 1073741824L * 12
         )
@@ -186,7 +193,9 @@ object Init {
 
   def inMemBlockStore = InMemBlockStore.create[Task](
     Monad[Task],
-    InMemBlockStore.emptyMapRef[Task].runSyncUnsafe(),
+    InMemBlockStore.emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)].runSyncUnsafe(),
+    InMemBlockStore.emptyMapRef[Task, Seq[BlockHash]].runSyncUnsafe(),
+    Ref[Task].of(none[ApprovedBlock]).runSyncUnsafe(),
     metricsNop
   )
 

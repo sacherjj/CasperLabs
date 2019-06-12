@@ -1,6 +1,7 @@
-from threading import Thread
-from time import time, sleep
 import logging
+from threading import Thread
+from time import sleep, time
+
 
 CONTRACT_1 = 'helloname_invalid_just_1.wasm'
 CONTRACT_2 = 'helloname_invalid_just_2.wasm'
@@ -27,30 +28,46 @@ class TimedThread(Thread):
         self.my_call(self.kwargs)
 
     def my_call(self, kwargs):
-        pass
+        raise NotImplementedError()
 
 
 class DeployTimedTread(TimedThread):
 
     def my_call(self, kwargs):
-        self.node.deploy(**kwargs)
+        self.node.client.deploy(**kwargs)
 
 
 class ProposeTimedThread(TimedThread):
 
     def my_call(self, kwargs):
-        self.node.propose()
+        self.node.client.propose()
 
 
 def test_neglected_invalid_block(three_node_network):
+    """
+    Feature file: neglected_invalid_justification.feature
+    Scenario: 3 Nodes doing simultaneous deploys and proposes do not have neglected invalid blocks
+    """
     bootstrap, node1, node2 = three_node_network.docker_nodes
     for cycle_count in range(4):
         logging.info(f'DEPLOY_PROPOSE CYCLE COUNT: {cycle_count + 1}')
         start_time = time() + 1
 
-        boot_deploy = DeployTimedTread(bootstrap, {'session_contract': CONTRACT_1}, start_time)
-        node1_deploy = DeployTimedTread(node1, {'session_contract': CONTRACT_2}, start_time)
-        node2_deploy = DeployTimedTread(node2, {'session_contract': CONTRACT_2}, start_time)
+        boot_deploy = DeployTimedTread(bootstrap,
+                                       {'session_contract': CONTRACT_1,
+                                        'private_key': 'validator-0-private.pem',
+                                        'public_key': 'validator-0-public.pem'},
+                                       start_time)
+        node1_deploy = DeployTimedTread(node1,
+                                        {'session_contract': CONTRACT_2,
+                                         'private_key': 'validator-0-private.pem',
+                                         'public_key': 'validator-0-public.pem'},
+                                        start_time)
+        node2_deploy = DeployTimedTread(node2,
+                                        {'session_contract': CONTRACT_2,
+                                         'private_key': 'validator-0-private.pem',
+                                         'public_key': 'validator-0-public.pem'},
+                                        start_time)
 
         # Simultaneous Deploy
         node1_deploy.start()

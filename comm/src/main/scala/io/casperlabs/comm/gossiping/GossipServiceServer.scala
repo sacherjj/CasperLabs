@@ -69,6 +69,10 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
     def handleSyncError(syncError: SyncError): F[Unit] = {
       val prefix = s"Failed to sync DAG, source: ${source.show}."
       syncError match {
+        case SyncError.TooMany(summary, limit) =>
+          Log[F].warn(
+            s"$prefix Returned DAG is too big, limit: $limit, exceeded hash: ${hex(summary)}"
+          )
         case SyncError.TooDeep(summaries, limit) =>
           Log[F].warn(
             s"$prefix Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries
@@ -106,6 +110,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
       _ <- dagOrError.fold(
             syncError => handleSyncError(syncError), { dag =>
               for {
+                _ <- Log[F].info(s"Syncing ${dag.size} blocks with ${source.show}...")
                 _ <- consensus.onPending(dag)
                 watches <- dag.traverse { summary =>
                             downloadManager.scheduleDownload(
@@ -225,8 +230,8 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
   override def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
     rethrow(genesisApprover.getCandidate)
 
-  override def addApproval(request: AddApprovalRequest): F[Empty] =
-    rethrow(genesisApprover.addApproval(request.blockHash, request.getApproval)) *> Empty().pure[F]
+  override def addApproval(request: AddApprovalRequest): F[Unit] =
+    rethrow(genesisApprover.addApproval(request.blockHash, request.getApproval)).void
 
   private def effectiveChunkSize(chunkSize: Int): Int =
     if (0 < chunkSize && chunkSize < maxChunkSize) chunkSize

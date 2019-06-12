@@ -8,6 +8,7 @@ import io.casperlabs.configuration.SubConfig
 import shapeless.<:!<
 import shapeless.tag.@@
 
+import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
 private[configuration] object Utils {
@@ -30,7 +31,7 @@ private[configuration] object Utils {
     try {
       source.mkString.asRight[String]
     } catch {
-      case e: Throwable => e.getMessage.asLeft[String]
+      case NonFatal(e) => e.getMessage.asLeft[String]
     }
 
   def dashToCamel(s: String): CamelCase =

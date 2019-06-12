@@ -1,8 +1,7 @@
-import threading
 import contextlib
-import time
 import logging
-
+import threading
+import time
 from typing import Any
 
 
@@ -21,14 +20,16 @@ class LogWatcherThread(threading.Thread):
         self.data = None
 
     def __repr__(self):
-        return f'<{self.__class__.__name__}({self.container.name})'
+        return f'<{self.__class__.__name__}({self.container.name})>'
 
     def run(self) -> None:
         end_line = self.container.logs(tail=1)
         containers_log_lines_generator = self.container.logs(stream=True, follow=True)
         # Fast Forward to end, so we don't get previous false positives
+        lines_count = 0
         while end_line != next(containers_log_lines_generator):
-            pass
+            lines_count += 1
+        logging.info(f'Fast Forward Complete with {lines_count} lines skipped.  End Line: {end_line}')
         try:
             while not self.stop_event.is_set() and not self.located_event.is_set():
                 line = next(containers_log_lines_generator).decode('utf-8').rstrip()
@@ -70,7 +71,7 @@ class RequestedForkTipFromPeersInLogLine(TextInLogLine):
 
 
 @contextlib.contextmanager
-def wait_for_log_watcher(log_watcher: "LogWatcherThread", timeout_secs: float = 30) -> Any:
+def wait_for_log_watcher(log_watcher: "LogWatcherThread", timeout_secs: float = 180) -> Any:
     """
     Log watcher does not parse the entire log, so a context manager starts up detection prior to
     the command that will cause it.  This can allow detection to be complete prior to coming back from
@@ -106,11 +107,21 @@ def wait_for_log_watcher(log_watcher: "LogWatcherThread", timeout_secs: float = 
             logging.info(f'SATISFIED {log_watcher.__repr__()} with data: {log_watcher.data}')
             return
         if time.time() > stop_time:
-            # Setting stop event will tear down thread after next log line received
+
+            # While debugging issues with Log Watcher, doing final check
+            logging.info(f'LOG_WATCHER_ERROR_STATE_RECHECK')
+            c_logs = log_watcher.container.logs(tail=10).decode('utf-8').split('\n')
+            search_text = log_watcher.__class__.search_text
+            for line in c_logs:
+                if search_text in line:
+                    logging.info(f'RETRY OF {log_watcher.__class__.__name__} Successful.')
+                    stop_event.set()
+                    return
+
+            # Setting stop event will tear down thread after next log line received or container shutdown
             stop_event.set()
-            # It is likely, thread exit with StopIterator when environment tears down container
             raise Exception(f'{log_watcher.container.name} did not satisfy {log_watcher.__repr__()} '
                             f'after {timeout_secs} sec(s).')
-        time.sleep(0.05)
+        time.sleep(0.1)
 
 

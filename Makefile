@@ -110,7 +110,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 .make/docker-build/integration-testing: \
 		integration-testing/Dockerfile
 	$(eval IT_PATH = integration-testing)
+	cp -r protobuf $(IT_PATH)/
 	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
+	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@
 
 # Dockerize the Execution Engine.
@@ -138,13 +140,13 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:test
 	mkdir -p $(dir $@) && touch $@
 
-# Make a test tagged version of client so all tags exist for integration-testing
+# Make a test tagged version of client so all tags exist for integration-testing.
 .make/docker-build/test/client: \
 		.make/docker-build/universal/client
 	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:test
 	mkdir -p $(dir $@) && touch $@
 
-# Make a test tagged version of client so all tags exist for integration-testing
+# Make an image to run Python tests under integration-testing.
 .make/docker-build/test/integration-testing: \
 		.make/docker-build/integration-testing
 	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:test
@@ -226,6 +228,16 @@ execution-engine/target/release/casperlabs-engine-grpc-server: \
 	cd execution-engine/comm && \
 	cargo update && \
 	cargo build --release
+
+# Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
+# There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.
+protobuf/google/api:
+	$(eval DIR = protobuf/google/api)
+	$(eval SRC = https://raw.githubusercontent.com/googleapis/googleapis/master/google/api)
+	mkdir -p $(DIR)
+	cd $(DIR) && \
+	curl -s -O $(SRC)/annotations.proto && \
+	curl -s -O $(SRC)/http.proto
 
 # Miscellaneous tools to install once.
 

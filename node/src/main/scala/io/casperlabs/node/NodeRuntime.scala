@@ -4,39 +4,30 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.mtl.MonadState
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
+import cats.syntax.show._
 import com.olegpy.meow.effects._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
-  BlockStore,
-  FileLMDBIndexBlockStore
-}
+import io.casperlabs.blockstorage.{BlockDagFileStorage, BlockStore, FileLMDBIndexBlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
-import io.casperlabs.catscontrib.ski._
-import io.casperlabs.comm.CommError.ErrorHandler
+import io.casperlabs.catscontrib.effect.implicits.{syncId, taskLiftEitherT}
 import io.casperlabs.comm._
+import io.casperlabs.comm.discovery.NodeDiscovery._
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery._
-import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
+import io.casperlabs.comm.rp.Connect.RPConfState
 import io.casperlabs.comm.rp._
-import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.node.diagnostics._
-import io.casperlabs.p2p.effects._
-import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import monix.eval.{Task, TaskLike}
@@ -52,14 +43,14 @@ class NodeRuntime private[node] (
 
   private[this] val loopScheduler =
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
-  private[this] val grpcScheduler =
-    Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
-
-  private val initPeer = if (conf.casper.standalone) None else Some(conf.server.bootstrap)
+  private[this] val blockingScheduler =
+    Scheduler.cached("blocking-io", 4, 64, reporter = UncaughtExceptionLogger)
+  private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
+    catsConcurrentEffectForEffect(
+      scheduler
+    )
 
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
-
-  import ApplicativeError_._
 
   private val port           = conf.server.port
   private val kademliaPort   = conf.server.kademliaPort
@@ -75,40 +66,61 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
 
   val main: Effect[Unit] = {
-    val rpConfState         = localPeerNode[Task].flatMap(rpConf[Task]).toEffect
+    val rpConfState = (for {
+      local     <- localPeerNode[Task]
+      bootstrap <- initPeer[Task]
+      conf      <- rpConf[Task](local, bootstrap)
+    } yield conf).toEffect
+
     val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
+
+    val logId: Log[Id]         = Log.logId
+    val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
 
     rpConfState >>= (_.runState { implicit state =>
       val resources = for {
-        executionEngineService <- GrpcExecutionEngineService[Effect](
-                                   conf.grpc.socket,
-                                   conf.server.maxMessageSize,
-                                   initBonds = Map.empty
-                                 )
+        implicit0(executionEngineService: ExecutionEngineService[Effect]) <- GrpcExecutionEngineService[
+                                                                              Effect
+                                                                            ](
+                                                                              conf.grpc.socket,
+                                                                              conf.server.maxMessageSize,
+                                                                              initBonds = Map.empty
+                                                                            )
 
         metrics                     = diagnostics.effects.metrics[Task]
         metricsEff: Metrics[Effect] = Metrics.eitherT[CommError, Task](Monad[Task], metrics)
 
-        nodeDiscovery <- effects.nodeDiscovery(id, kademliaPort, conf.server.defaultTimeout.millis)(
-                          initPeer
-                        )(
-                          grpcScheduler,
-                          effects.peerNodeAsk,
-                          log,
-                          effects.time,
-                          metrics
-                        )
+        maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
-        blockStore <- FileLMDBIndexBlockStore[Effect](
-                       conf.server.dataDir,
-                       blockstorePath,
-                       100L * 1024L * 1024L * 4096L
-                     )(
-                       Concurrent[Effect],
-                       logEff,
-                       raiseIOError,
-                       metricsEff
-                     )
+        implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
+                                                                            FinalizedBlocksStream
+                                                                              .of[Effect]
+                                                                          )
+
+        implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
+                                                          id,
+                                                          kademliaPort,
+                                                          conf.server.defaultTimeout
+                                                        )(
+                                                          maybeBootstrap
+                                                        )(
+                                                          blockingScheduler,
+                                                          effects.peerNodeAsk,
+                                                          log,
+                                                          effects.time,
+                                                          metrics
+                                                        )
+
+        implicit0(blockStore: BlockStore[Effect]) <- FileLMDBIndexBlockStore[Effect](
+                                                      conf.server.dataDir,
+                                                      blockstorePath,
+                                                      100L * 1024L * 1024L * 4096L
+                                                    )(
+                                                      Concurrent[Effect],
+                                                      logEff,
+                                                      raiseIOError,
+                                                      metricsEff
+                                                    )
 
         blockDagStorage <- BlockDagFileStorage[Effect](
                             conf.server.dataDir,
@@ -137,31 +149,61 @@ class NodeRuntime private[node] (
         // TODO: Only a loop started with the TransportLayer keeps filling this up,
         // so if we use the GossipService it's going to stay empty. The diagnostics
         // should use NodeDiscovery instead.
-        connectionsCell <- Resource.liftF(effects.rpConnections.toEffect)
+        implicit0(connectionsCell: Connect.ConnectionsCell[Task]) <- Resource.liftF(
+                                                                      effects.rpConnections.toEffect
+                                                                    )
 
-        multiParentCasperRef <- Resource.liftF(MultiParentCasperRef.of[Effect])
+        implicit0(multiParentCasperRef: MultiParentCasperRef[Effect]) <- Resource.liftF(
+                                                                          MultiParentCasperRef
+                                                                            .of[Effect]
+                                                                        )
 
-        safetyOracle = SafetyOracle
+        implicit0(safetyOracle: SafetyOracle[Effect]) = SafetyOracle
           .cliqueOracle[Effect](Monad[Effect], logEff)
 
+        blockApiLock <- Resource.liftF(Semaphore[Effect](1))
+
+        // For now just either starting the auto-proposer or not, but ostensibly we
+        // could pass it the flag to run or not and also wire it into the ControlService
+        // so that the operator can turn it on/off on the fly.
+        _ <- AutoProposer[Effect](
+              checkInterval = conf.casper.autoProposeCheckInterval,
+              maxInterval = conf.casper.autoProposeMaxInterval,
+              maxCount = conf.casper.autoProposeMaxCount,
+              blockApiLock = blockApiLock
+            )(
+              Concurrent[Effect],
+              Time.eitherTTime(Monad[Task], effects.time),
+              logEff,
+              metricsEff,
+              multiParentCasperRef
+            ).whenA(conf.casper.autoProposeEnabled)
+
         _ <- api.Servers
-              .diagnosticsServerR(
+              .internalServersR(
                 conf.grpc.portInternal,
                 conf.server.maxMessageSize,
-                grpcScheduler
+                blockingScheduler,
+                blockApiLock
               )(
                 logEff,
+                logId,
+                metricsEff,
+                metricsId,
                 nodeDiscovery,
                 jvmMetrics,
                 nodeMetrics,
                 connectionsCell,
+                multiParentCasperRef,
                 scheduler
               )
 
-        _ <- api.Servers.deploymentServerR[Effect](
+        _ <- api.Servers.externalServersR[Effect](
               conf.grpc.portExternal,
               conf.server.maxMessageSize,
-              grpcScheduler
+              blockingScheduler,
+              blockApiLock,
+              conf.casper.ignoreDeploySignature
             )(
               Concurrent[Effect],
               TaskLike[Effect],
@@ -171,25 +213,23 @@ class NodeRuntime private[node] (
               safetyOracle,
               blockStore,
               executionEngineService,
-              scheduler
+              scheduler,
+              logId,
+              metricsId
             )
 
-        _ <- api.Servers.httpServerR(
+        _ <- api.Servers.httpServerR[Effect](
               conf.server.httpPort,
               conf,
-              id
-            )(
-              log,
-              nodeDiscovery,
-              connectionsCell,
-              scheduler
+              id,
+              blockingScheduler
             )
 
         _ <- if (conf.server.useGossiping) {
               casper.gossiping.apply[Effect](
                 port,
                 conf,
-                grpcScheduler
+                blockingScheduler
               )(
                 catsParForEffect,
                 catsConcurrentEffectForEffect(scheduler),
@@ -204,13 +244,16 @@ class NodeRuntime private[node] (
                 eitherTApplicativeAsk(effects.peerNodeAsk(state)),
                 multiParentCasperRef,
                 executionEngineService,
-                scheduler
+                finalizedBlocksStream,
+                scheduler,
+                logId,
+                metricsId
               )
             } else {
               casper.transport.apply(
                 port,
                 conf,
-                grpcScheduler
+                blockingScheduler
               )(
                 log,
                 logEff,
@@ -224,6 +267,7 @@ class NodeRuntime private[node] (
                 state,
                 multiParentCasperRef,
                 executionEngineService,
+                finalizedBlocksStream,
                 scheduler
               )
             }
@@ -253,7 +297,10 @@ class NodeRuntime private[node] (
 
     val info: Effect[Unit] =
       if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
-      else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
+      else
+        Log[Effect].info(
+          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).getOrElse("n/a")}"
+        )
 
     val fetchLoop: Effect[Unit] =
       for {
@@ -304,12 +351,12 @@ class NodeRuntime private[node] (
         } *> Task.delay(System.exit(1)).as(Right(()))
     )
 
-  private def rpConf[F[_]: Sync](local: Node) =
-    Ref.of(
+  private def rpConf[F[_]: Sync](local: Node, maybeBootstrap: Option[Node]) =
+    Ref.of[F, RPConf](
       RPConf(
         local,
-        initPeer,
-        conf.server.defaultTimeout.millis,
+        maybeBootstrap,
+        conf.server.defaultTimeout,
         ClearConnectionsConf(
           conf.server.maxNumOfConnections,
           // TODO read from conf
@@ -327,6 +374,19 @@ class NodeRuntime private[node] (
         conf.server.noUpnp,
         id
       )
+
+  private def initPeer[F[_]: MonadThrowable]: F[Option[Node]] =
+    conf.server.bootstrap match {
+      case None if !conf.casper.standalone =>
+        MonadThrowable[F].raiseError(
+          new java.lang.IllegalStateException(
+            "Not in standalone mode but there's no bootstrap configured!"
+          )
+        )
+      case other =>
+        other.pure[F]
+    }
+
 }
 
 object NodeRuntime {

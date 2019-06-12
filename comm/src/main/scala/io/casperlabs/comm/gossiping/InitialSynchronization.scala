@@ -18,6 +18,7 @@ trait InitialSynchronization[F[_]] {
 
   /**
     * Synchronizes the node with the last tips.
+    *
     * @return Handle which will be resolved when node is considered to be fully synced
     */
   def sync(): F[F[Unit]]
@@ -27,18 +28,17 @@ trait InitialSynchronization[F[_]] {
   * Synchronizes the node with peers in rounds until [[minSuccessful]] nodes
   * respond successfully in some round.
   *
-  * @param selectNodes Filtering function to select nodes to synchronize with in a round.
-  *                    Second arg is a list of all known peers excluding bootstrap
-  * @param memoizeNodes If true applies [[selectNodes]] function only once and stores results for next rounds
-  *                     Otherwise, invokes it each round
+  * @param selectNodes   Filtering function to select nodes to synchronize with in a round.
+  *                      Second arg is a list of all known peers excluding bootstrap
+  * @param memoizeNodes  If true applies [[selectNodes]] function only once and stores results for next rounds
+  *                      Otherwise, invokes it each round
   * @param minSuccessful Minimal number of successful responses in a round to consider synchronisation as successful
-  * @param roundPeriod Delay between synchronisation rounds
+  * @param roundPeriod   Delay between synchronisation rounds
   */
 class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
     nodeDiscovery: NodeDiscovery[F],
     selfGossipService: GossipServiceServer[F],
-    bootstrap: InitialSynchronizationImpl.Bootstrap,
-    selectNodes: (InitialSynchronizationImpl.Bootstrap, List[Node]) => List[Node],
+    selectNodes: List[Node] => List[Node],
     memoizeNodes: Boolean,
     connector: GossipService.Connector[F],
     minSuccessful: Int Refined Positive,
@@ -61,7 +61,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
       } yield ()
 
     def loop(nodes: List[Node], failed: Set[Node]): F[Unit] =
-      if (nodes.isEmpty) {
+      if (nodes.isEmpty && failed.nonEmpty) {
         Log[F].error("Failed to run initial sync - no more nodes to try") >>
           Sync[F].raiseError(SynchronizationError())
       } else {
@@ -83,7 +83,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
                     (if (skipFailedNodesInNextRounds) successful else nodes).pure[F]
                   } else {
                     nodeDiscovery.alivePeersAscendingDistance.map { peers =>
-                      val nodes = selectNodes(bootstrap, peers.filterNot(_ == bootstrap))
+                      val nodes = selectNodes(peers)
                       if (skipFailedNodesInNextRounds) {
                         nodes.filterNot(newFailed)
                       } else {
@@ -103,7 +103,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
 
     nodeDiscovery.alivePeersAscendingDistance
       .flatMap { peers =>
-        val nodesToSyncWith = selectNodes(bootstrap, peers.filterNot(_ == bootstrap))
+        val nodesToSyncWith = selectNodes(peers)
         loop(nodesToSyncWith, Set.empty)
       }
       .start
@@ -113,15 +113,5 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
 }
 
 object InitialSynchronizationImpl {
-
-  import shapeless.tag.@@
-  import shapeless.tag
-
-  sealed trait BootstrapTag
-
-  type Bootstrap = Node @@ BootstrapTag
-
   final case class SynchronizationError() extends Exception
-
-  def Bootstrap(node: Node): Bootstrap = node.asInstanceOf[Bootstrap]
 }

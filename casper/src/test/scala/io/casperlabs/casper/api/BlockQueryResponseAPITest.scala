@@ -9,7 +9,8 @@ import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper._
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.protocol.{BlockQuery}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import org.scalatest.{FlatSpec, Matchers}
@@ -27,44 +28,58 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   val genesisHashString = "0" * 64
   val version           = 1L
 
-  def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
+  def genesisBlock(genesisHashString: String, version: Long): Block = {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
-    val blockNumber = 0L
-    val timestamp   = 1527191663L
-    val ps = RChainState()
-      .withBlockNumber(blockNumber)
+    val ps = Block
+      .GlobalState()
       .withBonds(Seq(Bond(ByteString.copyFromUtf8("random"), 1)))
-    val body   = Body().withState(ps)
-    val header = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
-    BlockMessage().withBlockHash(genesisHash).withHeader(header).withBody(body)
+    val body = Block.Body()
+    val header = ProtoUtil.blockHeader(
+      body,
+      parentHashes = Nil,
+      justifications = Nil,
+      state = ps,
+      rank = 0,
+      protocolVersion = version,
+      timestamp = 1527191663,
+      chainId = "casperlabs"
+    )
+    ProtoUtil.unsignedBlockProto(body, header).withBlockHash(genesisHash)
   }
-  val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
+  val genesisBlock: Block = genesisBlock(genesisHashString, version)
 
   val secondHashString     = "1234567891011121314151617181921234567891011121314151617181928192"
   val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
   val blockNumber          = 1L
   val timestamp            = 1527191665L
-  val ps: RChainState      = RChainState().withBlockNumber(blockNumber)
+  val ps                   = Block.GlobalState()
   val deployCount          = 10
   val randomDeploys =
     (0 until deployCount).toList
       .traverse(ProtoUtil.basicProcessedDeploy[Task])
       .unsafeRunSync(scheduler)
-  val body: Body                       = Body().withState(ps).withDeploys(randomDeploys)
+  val body                             = Block.Body().withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
-  val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
+  val header = ProtoUtil.blockHeader(
+    body,
+    parentsHashList,
+    Nil,
+    ps,
+    blockNumber,
+    version,
+    timestamp,
+    "casperlabs"
+  )
   val secondBlockSenderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192"
   val secondBlockSender: ByteString = ProtoUtil.stringToByteString(secondBlockSenderString)
-  val shardId: String               = "abcdefgh"
-  val secondBlock: BlockMessage =
-    BlockMessage()
+  val chainId: String               = "abcdefgh"
+  val secondBlock: Block =
+    Block()
       .withBlockHash(blockHash)
-      .withHeader(header)
+      .withHeader(header.withValidatorPublicKey(secondBlockSender).withChainId(chainId))
       .withBody(body)
-      .withSender(secondBlockSender)
-      .withShardId(shardId)
 
   val faultTolerance = -1f
 
@@ -94,7 +109,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
         _         = blockInfo.mainParentHash should be(genesisHashString)
         _         = blockInfo.parentsHashList should be(parentsString)
         _         = blockInfo.sender should be(secondBlockSenderString)
-        result    = blockInfo.shardId should be(shardId)
+        result    = blockInfo.shardId should be(chainId)
       } yield result
   }
 
@@ -142,7 +157,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
         _         = blockInfo.mainParentHash should be(genesisHashString)
         _         = blockInfo.parentsHashList should be(parentsString)
         _         = blockInfo.sender should be(secondBlockSenderString)
-        result    = blockInfo.shardId should be(shardId)
+        result    = blockInfo.shardId should be(chainId)
       } yield result
   }
 

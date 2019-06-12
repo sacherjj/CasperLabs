@@ -10,7 +10,11 @@ use test::black_box;
 use test::Bencher;
 
 use casperlabs_contract_ffi::bytesrepr::{FromBytes, ToBytes};
-use casperlabs_contract_ffi::key::{AccessRights, Key};
+use casperlabs_contract_ffi::key::Key;
+use casperlabs_contract_ffi::uref::{AccessRights, URef};
+use casperlabs_contract_ffi::value::account::{
+    AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+};
 use casperlabs_contract_ffi::value::{
     account::Account,
     contract::Contract,
@@ -221,14 +225,14 @@ fn deserialize_unit(b: &mut Bencher) {
 
 #[bench]
 fn serialize_key_account(b: &mut Bencher) {
-    let account = Key::Account([0u8; 20]);
+    let account = Key::Account([0u8; 32]);
 
     b.iter(|| ToBytes::to_bytes(black_box(&account)))
 }
 
 #[bench]
 fn deserialize_key_account(b: &mut Bencher) {
-    let account = Key::Account([0u8; 20]);
+    let account = Key::Account([0u8; 32]);
     let account_bytes = account.to_bytes().unwrap();
 
     b.iter(|| Key::from_bytes(black_box(&account_bytes)))
@@ -249,12 +253,12 @@ fn deserialize_key_hash(b: &mut Bencher) {
 
 #[bench]
 fn serialize_key_uref(b: &mut Bencher) {
-    let uref = Key::URef([0u8; 32], AccessRights::ADD_WRITE);
+    let uref = Key::URef(URef::new([0u8; 32], AccessRights::ADD_WRITE));
     b.iter(|| ToBytes::to_bytes(black_box(&uref)))
 }
 #[bench]
 fn deserialize_key_uref(b: &mut Bencher) {
-    let uref = Key::URef([0u8; 32], AccessRights::ADD_WRITE);
+    let uref = Key::URef(URef::new([0u8; 32], AccessRights::ADD_WRITE));
     let uref_bytes = uref.to_bytes().unwrap();
 
     b.iter(|| Key::from_bytes(black_box(&uref_bytes)))
@@ -263,7 +267,7 @@ fn deserialize_key_uref(b: &mut Bencher) {
 #[bench]
 fn serialize_vec_of_keys(b: &mut Bencher) {
     let keys: Vec<Key> = (0..32)
-        .map(|i| Key::URef([i; 32], AccessRights::ADD_WRITE))
+        .map(|i| Key::URef(URef::new([i; 32], AccessRights::ADD_WRITE)))
         .collect();
     b.iter(|| ToBytes::to_bytes(black_box(&keys)))
 }
@@ -271,7 +275,7 @@ fn serialize_vec_of_keys(b: &mut Bencher) {
 #[bench]
 fn deserialize_vec_of_keys(b: &mut Bencher) {
     let keys: Vec<Key> = (0..32)
-        .map(|i| Key::URef([i; 32], AccessRights::ADD_WRITE))
+        .map(|i| Key::URef(URef::new([i; 32], AccessRights::ADD_WRITE)))
         .collect();
     let keys_bytes = keys.clone().to_bytes().unwrap();
     b.iter(|| Vec::<Key>::from_bytes(black_box(&keys_bytes)));
@@ -334,23 +338,45 @@ fn deserialize_accessrights_add_write(b: &mut Bencher) {
 
 fn make_known_urefs() -> BTreeMap<String, Key> {
     let mut urefs = BTreeMap::new();
-    urefs.insert("ref1".to_string(), Key::URef([0u8; 32], AccessRights::READ));
+    urefs.insert(
+        "ref1".to_string(),
+        Key::URef(URef::new([0u8; 32], AccessRights::READ)),
+    );
     urefs.insert(
         "ref2".to_string(),
-        Key::URef([1u8; 32], AccessRights::WRITE),
+        Key::URef(URef::new([1u8; 32], AccessRights::WRITE)),
     );
-    urefs.insert("ref3".to_string(), Key::URef([2u8; 32], AccessRights::ADD));
+    urefs.insert(
+        "ref3".to_string(),
+        Key::URef(URef::new([2u8; 32], AccessRights::ADD)),
+    );
     urefs
+}
+
+fn make_purse_id() -> PurseId {
+    PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE))
 }
 
 fn make_contract() -> Contract {
     let known_urefs = make_known_urefs();
-    Contract::new(vec![0u8; 1024], known_urefs)
+    Contract::new(vec![0u8; 1024], known_urefs, 1)
 }
 
 fn make_account() -> Account {
     let known_urefs = make_known_urefs();
-    Account::new([0u8; 32], 2_635_333_365_164_409_670u64, known_urefs)
+    let purse_id = make_purse_id();
+    let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1));
+    let action_thresholds = Default::default();
+    let account_activity = AccountActivity::new(BlockTime(0), BlockTime(100));
+    Account::new(
+        [0u8; 32],
+        2_635_333_365_164_409_670u64,
+        known_urefs,
+        purse_id,
+        associated_keys,
+        action_thresholds,
+        account_activity,
+    )
 }
 
 #[bench]
@@ -454,12 +480,12 @@ fn deserialize_value_liststring(b: &mut Bencher) {
 }
 #[bench]
 fn serialize_value_namedkey(b: &mut Bencher) {
-    let value = Value::NamedKey("Key".to_string(), Key::Account([0xffu8; 20]));
+    let value = Value::NamedKey("Key".to_string(), Key::Account([0xffu8; 32]));
     b.iter(|| value.to_bytes());
 }
 #[bench]
 fn deserialize_value_namedkey(b: &mut Bencher) {
-    let value = Value::NamedKey("Key".to_string(), Key::Account([0xffu8; 20]))
+    let value = Value::NamedKey("Key".to_string(), Key::Account([0xffu8; 32]))
         .to_bytes()
         .unwrap();
     b.iter(|| Value::from_bytes(&value));
