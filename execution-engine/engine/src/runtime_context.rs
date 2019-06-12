@@ -248,7 +248,8 @@ where
             | Value::ListInt32(_)
             | Value::String(_)
             | Value::ListString(_)
-            | Value::Unit => Ok(()),
+            | Value::Unit
+            | Value::U64(_) => Ok(()),
             Value::NamedKey(_, key) => self.validate_key(&key),
             Value::Key(key) => self.validate_key(&key),
             Value::Account(account) => {

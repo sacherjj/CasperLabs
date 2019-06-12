@@ -138,5 +138,6 @@ pub fn value_arb() -> impl Strategy<Value = Value> {
         u256_arb().prop_map(Value::UInt256),
         u512_arb().prop_map(Value::UInt512),
         Just(Value::Unit),
+        (any::<u64>().prop_map(Value::U64)),
     ]
 }

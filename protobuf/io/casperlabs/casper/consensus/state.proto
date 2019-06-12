@@ -15,6 +15,7 @@ message Value {
 		BigInt big_int = 9;
 		Key key = 10;
 		Unit unit = 11;
+		uint64 long_value = 12;
 	}
 }
 

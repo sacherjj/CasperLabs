@@ -182,6 +182,7 @@ impl From<common::value::Value> for super::state::Value {
                 tv.set_contract(contract.into());
             }
             common::value::Value::Unit => tv.set_unit(state::Unit::new()),
+            common::value::Value::U64(num) => tv.set_long_value(num),
         };
         tv
     }
@@ -225,6 +226,8 @@ impl TryFrom<&super::state::Value> for common::value::Value {
             Ok(common::value::Value::Key(value.get_key().try_into()?))
         } else if value.has_unit() {
             Ok(common::value::Value::Unit)
+        } else if value.has_long_value() {
+            Ok(common::value::Value::U64(value.get_long_value()))
         } else {
             parse_error(format!(
                 "IPC Value {:?} couldn't be parsed to domain representation.",

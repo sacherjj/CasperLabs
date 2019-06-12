@@ -252,11 +252,19 @@ package object types {
     )
   )
 
+  lazy val ValueLong = ObjectType(
+    "LongValue",
+    fields[Unit, state.Value.Value.LongValue](
+      Field("value", LongType, resolve = _.value.value)
+    )
+  )
+
   lazy val ValueUnion = UnionType(
     "ValueUnion",
     types = List(
       ValueInt,
       ValueByteArray,
+      ValueLong,
       IntList,
       ValueString,
       Account,
