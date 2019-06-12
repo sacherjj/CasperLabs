@@ -270,6 +270,8 @@ impl TryFrom<&super::state::Value> for common::value::Value {
             Ok(value.get_big_int().try_into()?)
         } else if value.has_key() {
             Ok(common::value::Value::Key(value.get_key().try_into()?))
+        } else if value.has_unit() {
+            Ok(common::value::Value::Unit)
         } else {
             parse_error(format!(
                 "IPC Value {:?} couldn't be parsed to domain representation.",
