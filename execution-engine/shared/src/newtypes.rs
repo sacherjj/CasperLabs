@@ -37,20 +37,28 @@ impl Blake2bHash {
 impl core::fmt::LowerHex for Blake2bHash {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let hex_string = base16::encode_lower(&self.to_vec());
-        write!(f, "{}", hex_string)
+        if f.alternate() {
+            write!(f, "0x{}", hex_string)
+        } else {
+            write!(f, "{}", hex_string)
+        }
     }
 }
 
 impl core::fmt::UpperHex for Blake2bHash {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let hex_string = base16::encode_upper(&self.to_vec());
-        write!(f, "{}", hex_string)
+        if f.alternate() {
+            write!(f, "0x{}", hex_string)
+        } else {
+            write!(f, "{}", hex_string)
+        }
     }
 }
 
 impl core::fmt::Display for Blake2bHash {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(f, "Blake2bHash({:x})", self)
+        write!(f, "Blake2bHash({:#x})", self)
     }
 }
 
@@ -267,7 +275,7 @@ mod tests {
         let hash_hex = format!("{}", hash);
         assert_eq!(
             hash_hex,
-            "Blake2bHash(0000000000000000000000000000000000000000000000000000000000000000)"
+            "Blake2bHash(0x0000000000000000000000000000000000000000000000000000000000000000)"
         );
     }
 
@@ -289,5 +297,12 @@ mod tests {
             hash_lower_hex,
             "0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A"
         )
+    }
+
+    #[test]
+    fn alternate_should_prepend_0x() {
+        let hash = Blake2bHash([0u8; 32]);
+        let hash_hex_alt = format!("{:#x}", hash);
+        assert_eq!(hash_hex_alt, "0x0000000000000000000000000000000000000000000000000000000000000000")
     }
 }
