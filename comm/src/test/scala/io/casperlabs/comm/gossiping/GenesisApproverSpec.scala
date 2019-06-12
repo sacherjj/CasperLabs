@@ -247,7 +247,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
         relayFactor = 5
       ) { approver =>
         for {
-          _ <- Task.sleep(50.millis)
+          _ <- Task.sleep(500.millis)
           r <- approver.getCandidate
         } yield {
           r.isRight shouldBe true
