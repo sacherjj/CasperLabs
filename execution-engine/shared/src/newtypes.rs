@@ -303,6 +303,9 @@ mod tests {
     fn alternate_should_prepend_0x() {
         let hash = Blake2bHash([0u8; 32]);
         let hash_hex_alt = format!("{:#x}", hash);
-        assert_eq!(hash_hex_alt, "0x0000000000000000000000000000000000000000000000000000000000000000")
+        assert_eq!(
+            hash_hex_alt,
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+        )
     }
 }
