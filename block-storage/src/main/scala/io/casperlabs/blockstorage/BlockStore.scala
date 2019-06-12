@@ -81,12 +81,12 @@ object BlockStore {
       incAndMeasure("put", super.put(blockHash, blockMsgWithTransform))
 
     abstract override def checkpoint(): F[Unit] =
-      super.checkpoint().timer("checkpoint-time")
+      incAndMeasure("checkpoint", super.checkpoint())
 
     abstract override def contains(
         blockHash: BlockHash
     )(implicit applicativeF: Applicative[F]): F[Boolean] =
-      super.contains(blockHash).timer("contains-time")
+      incAndMeasure("contains", super.contains(blockHash))
   }
 
   implicit class RichBlockStore[F[_]](blockStore: BlockStore[F]) {

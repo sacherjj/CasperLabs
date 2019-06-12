@@ -3,15 +3,15 @@ package io.casperlabs.blockstorage
 import cats._
 import cats.effect._
 import cats.implicits._
+import cats.data.OptionT
 import com.google.protobuf.ByteString
 import com.google.common.cache.{Cache, CacheBuilder, Weigher}
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
 import io.casperlabs.casper.protocol.ApprovedBlock
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.metrics.{Metered, Metrics}
-import io.casperlabs.metrics.implicits._
 import io.casperlabs.storage.BlockMsgWithTransform
+import scala.collection.JavaConverters._
 
 /** Caches recently created blocks so queries that need the full body
   * (e.g. ones that return a deploy, or ones that want block statistics)
@@ -22,24 +22,24 @@ class CachingBlockStore[F[_]: Sync](
     cache: Cache[BlockHash, BlockMsgWithTransform]
 ) extends BlockStore[F] {
 
+  private def cacheOrUnderlying[A](fromCache: => Option[A], fromUnderlying: F[Option[A]]) =
+    OptionT(Sync[F].delay(fromCache)).orElseF(fromUnderlying).value
+
   override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
-    Sync[F].delay {
-      Option(cache.getIfPresent(blockHash))
-    } flatMap {
-      _.fold(underlying.get(blockHash))(_.some.pure[F])
-    }
+    cacheOrUnderlying(Option(cache.getIfPresent(blockHash)), underlying.get(blockHash))
 
   override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
-    underlying.findBlockHash(p)
+    cacheOrUnderlying(cache.asMap.keySet.asScala.find(p), underlying.findBlockHash(p))
 
   override def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
-    Sync[F].delay {
-      cache.put(blockHash, blockMsgWithTransform)
-    } *>
+    Sync[F]
+      .delay(cache.put(blockHash, blockMsgWithTransform)) *>
       underlying.put(blockHash, blockMsgWithTransform)
 
   override def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
-    underlying.contains(blockHash)
+    Sync[F]
+      .delay(cache.asMap.keySet.contains(blockHash))
+      .ifM(true.pure[F], underlying.contains(blockHash))
 
   override def getApprovedBlock(): F[Option[ApprovedBlock]] =
     underlying.getApprovedBlock()
@@ -48,7 +48,12 @@ class CachingBlockStore[F[_]: Sync](
     underlying.putApprovedBlock(block)
 
   override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
-    underlying.getBlockSummary(blockHash)
+    cacheOrUnderlying(
+      Option(cache.getIfPresent(blockHash)).map(_.getBlockMessage).map { x =>
+        BlockSummary(x.blockHash, x.header, x.signature)
+      },
+      underlying.getBlockSummary(blockHash)
+    )
 
   override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
     underlying.findBlockHashesWithDeployhash(deployHash)
