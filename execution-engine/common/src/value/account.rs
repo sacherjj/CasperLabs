@@ -466,13 +466,21 @@ impl FromBytes for ActionThresholds {
         let (weight_2, rem4): (Weight, &[u8]) = FromBytes::from_bytes(&rem3)?;
         match (id_1, id_2) {
             (DEPLOYMENT_THRESHOLD_ID, KEY_MANAGEMENT_THRESHOLD_ID) => {
-                let _ = action_thresholds.set_key_management_threshold(weight_2);
-                let _ = action_thresholds.set_deployment_threshold(weight_1);
+                action_thresholds
+                    .set_key_management_threshold(weight_2)
+                    .map_err(Error::custom)?;
+                action_thresholds
+                    .set_deployment_threshold(weight_1)
+                    .map_err(Error::custom)?;
                 Ok((action_thresholds, rem4))
             }
             (KEY_MANAGEMENT_THRESHOLD_ID, DEPLOYMENT_THRESHOLD_ID) => {
-                let _ = action_thresholds.set_key_management_threshold(weight_1);
-                let _ = action_thresholds.set_deployment_threshold(weight_2);
+                action_thresholds
+                    .set_key_management_threshold(weight_1)
+                    .map_err(Error::custom)?;
+                action_thresholds
+                    .set_deployment_threshold(weight_2)
+                    .map_err(Error::custom)?;
                 Ok((action_thresholds, rem4))
             }
             _ => Err(Error::FormattingError),
