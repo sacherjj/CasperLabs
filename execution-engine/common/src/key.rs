@@ -70,6 +70,15 @@ impl core::fmt::Debug for Key {
 
 use alloc::string::String;
 
+/// Drops "0x" prefix from the input string and turns rest of it into slice.
+fn drop_hex_prefix(s: &str) -> &[u8] {
+    if s.starts_with("0x") {
+        s[2..].as_bytes()
+    } else {
+        s.as_bytes()
+    }
+}
+
 impl Key {
     pub fn to_u_ptr<T>(self) -> Option<UPointer<T>> {
         if let Key::URef(uref) = self {
@@ -106,7 +115,8 @@ impl Key {
     /// Returns `None` if [addr] is not valid Blake2b hash.
     pub fn parse_hash(addr: String) -> Option<Key> {
         let mut buff = [0u8; 32];
-        match binascii::hex2bin(addr.replace("0x", "").as_bytes(), &mut buff) {
+        let parsed_addr = drop_hex_prefix(&addr);
+        match binascii::hex2bin(parsed_addr, &mut buff) {
             Ok(_) => Some(Key::Hash(buff)),
             _ => None,
         }
@@ -116,7 +126,8 @@ impl Key {
     /// Returns `None` if [addr] is not valid Blake2b hash.
     pub fn parse_uref(addr: String, access_rights: AccessRights) -> Option<Key> {
         let mut buff = [0u8; 32];
-        match binascii::hex2bin(addr.replace("0x", "").as_bytes(), &mut buff) {
+        let parsed_addr = drop_hex_prefix(&addr);
+        match binascii::hex2bin(parsed_addr, &mut buff) {
             Ok(_) => Some(Key::URef(URef::new(buff, access_rights))),
             _ => None,
         }
@@ -127,9 +138,11 @@ impl Key {
     pub fn parse_local(seed: String, key_hash: String) -> Option<Key> {
         let mut seed_buff = [0u8; 32];
         let mut key_buff = [0u8; 32];
-        match binascii::hex2bin(seed.replace("0x", "").as_bytes(), &mut seed_buff).and(
-            binascii::hex2bin(key_hash.replace("0x", "").as_bytes(), &mut key_buff),
-        ) {
+        let parsed_seed = drop_hex_prefix(&seed);
+        let parsed_key = drop_hex_prefix(&key_hash);
+        match binascii::hex2bin(parsed_seed, &mut seed_buff)
+            .and(binascii::hex2bin(parsed_key, &mut key_buff))
+        {
             Ok(_) => Some(Key::Local {
                 seed: seed_buff,
                 key_hash: key_buff,
