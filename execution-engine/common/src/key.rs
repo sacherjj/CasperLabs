@@ -392,7 +392,7 @@ mod tests {
         fn should_fail_parse_invalid_length_base16_to_key(base16_addr in base16_str_arb(70)) {
             assert!(Key::parse_hash(base16_addr.clone()).is_none());
             assert!(Key::parse_uref(base16_addr.clone(), AccessRights::READ).is_none());
-            assert!(Key::parse_local(base16_addr.clone()).is_none());
+            assert!(Key::parse_local(base16_addr.clone(), base16_addr).is_none());
         }
 
         #[test]
