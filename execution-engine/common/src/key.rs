@@ -133,7 +133,7 @@ impl Key {
     /// Returns `None` if [addr] is not valid Blake2b hash.
     pub fn parse_hash(addr: String) -> Option<Key> {
         let mut buff = [0u8; 32];
-        match binascii::hex2bin(addr.as_bytes(), &mut buff) {
+        match binascii::hex2bin(addr.replace("0x", "").as_bytes(), &mut buff) {
             Ok(_) => Some(Key::Hash(buff)),
             _ => None,
         }
@@ -143,7 +143,7 @@ impl Key {
     /// Returns `None` if [addr] is not valid Blake2b hash.
     pub fn parse_uref(addr: String, access_rights: AccessRights) -> Option<Key> {
         let mut buff = [0u8; 32];
-        match binascii::hex2bin(addr.as_bytes(), &mut buff) {
+        match binascii::hex2bin(addr.replace("0x", "").as_bytes(), &mut buff) {
             Ok(_) => Some(Key::URef(buff, Some(access_rights))),
             _ => None,
         }
@@ -154,9 +154,9 @@ impl Key {
     pub fn parse_local(seed: String, key_hash: String) -> Option<Key> {
         let mut seed_buff = [0u8; 32];
         let mut key_buff = [0u8; 32];
-        match binascii::hex2bin(seed.as_bytes(), &mut seed_buff)
-            .and(binascii::hex2bin(key_hash.as_bytes(), &mut key_buff))
-        {
+        match binascii::hex2bin(seed.replace("0x", "").as_bytes(), &mut seed_buff).and(
+            binascii::hex2bin(key_hash.replace("0x", "").as_bytes(), &mut key_buff),
+        ) {
             Ok(_) => Some(Key::Local {
                 seed: seed_buff,
                 key_hash: key_buff,
@@ -401,6 +401,13 @@ mod tests {
             assert!(Key::parse_hash(invalid_addr.clone()).is_none());
             assert!(Key::parse_uref(invalid_addr.clone(), AccessRights::READ).is_none());
             assert!(Key::parse_local(invalid_addr.clone(), invalid_addr).is_none());
+        }
+
+        #[test]
+        fn should_parse_base16_0x_prefixed(base16_addr in base16_str_arb(64)) {
+            let preppended = format!("0x{}", base16_addr.clone());
+            assert!(Key::parse_hash(preppended.clone()).is_some());
+            assert_eq!(Key::parse_hash(preppended), Key::parse_hash(base16_addr));
         }
 
     }
