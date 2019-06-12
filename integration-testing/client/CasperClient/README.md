@@ -139,7 +139,7 @@ optional arguments:
 ```
 
 ```bash
-$ ./casper_client.py deploy --from 00000000000000000000000000000000 --gas-limit 100000000 --gas-price 1 --session session.wasm --payment payment.wasm 
+$ ./casper_client.py deploy --from 3030303030303030303030303030303030303030303030303030303030303030 --gas-limit 100000000 --gas-price 1 --session session.wasm --payment payment.wasm
 Success!
 ```
 

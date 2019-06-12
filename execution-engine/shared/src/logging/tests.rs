@@ -12,7 +12,6 @@ const PROC_NAME: &str = "ee-shared-lib-tests";
 
 lazy_static! {
     static ref LOG_SETTINGS: LogSettings = get_log_settings(LogLevel::Debug);
-    static ref LOG_SETTINGS_ERROR: LogSettings = get_log_settings(LogLevel::Error);
 }
 
 fn get_log_settings(log_level: LogLevel) -> LogSettings {
@@ -129,23 +128,6 @@ fn should_log_when_level_at_or_above_filter() {
         .expect("expected message");
 
     assert_eq!(message.log_level, "Error", "expected Error");
-}
-
-#[test]
-fn should_not_log_when_level_below_filter() {
-    setup();
-    let handle = thread::spawn(move || {
-        set_log_settings_provider(&*LOG_SETTINGS_ERROR);
-
-        let message_id = log(
-            LogLevel::Debug,
-            "this should not log as the filter is set to Info and this message is Debug",
-        );
-
-        assert_eq!(message_id, None, "this message should not have logged");
-    });
-
-    let _r = handle.join();
 }
 
 #[test]

@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Optional
 from collections import defaultdict
 
@@ -48,17 +49,34 @@ class DockerClient(CasperLabsClient):
     def propose(self) -> str:
         return self.invoke_client('propose')
 
+    def propose_with_retry(self, max_attempts: int, retry_seconds: int) -> str:
+        # With many threads using the same account the nonces will be interleaved.
+        # Only one node can propose at a time, the others have to wait until they
+        # receive the block and then try proposing again.
+        attempt = 0
+        while True:
+            try:
+                return self.propose()
+            except NonZeroExitCodeError:
+                if attempt < max_attempts:
+                    logging.debug("Could not propose; retrying later.")
+                    attempt += 1
+                    time.sleep(retry_seconds)
+                else:
+                    logging.debug("Could not propose; no more retries!")
+                    raise ex
+
     def deploy(self,
-               from_address: str = "00000000000000000000000000000000",
+               from_address: str = "3030303030303030303030303030303030303030303030303030303030303030",
                gas_limit: int = 1000000,
                gas_price: int = 1,
-               nonce: int = None,
-               session_contract: Optional[str] = 'test_helloname.wasm',
-               payment_contract: Optional[str] = 'test_helloname.wasm',
+               nonce: Optional[int] = None,
+               session_contract: str = 'test_helloname.wasm',
+               payment_contract: str = 'test_helloname.wasm',
                private_key: Optional[str] = None,
                public_key: Optional[str] = None) -> str:
 
-        deploy_nonce = nonce if nonce is not None else NonceRegistry.registry[from_address]
+        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(from_address)
 
         command = (f"deploy --from {from_address}"
                    f" --gas-limit {gas_limit}"
@@ -68,17 +86,15 @@ class DockerClient(CasperLabsClient):
 
         # For testing CLI: option will not be passed to CLI if nonce is ''
         if deploy_nonce != '':
-            command += f" --nonce {deploy_nonce}" 
+            command += f" --nonce {deploy_nonce}"
 
         if public_key and private_key:
             command += (f" --private-key=/data/{private_key}"
                         f" --public-key=/data/{public_key}")
 
         r = self.invoke_client(command)
-        if 'Success' in r and nonce is None:
-            NonceRegistry.registry[from_address] += 1
         return r
-        
+
 
     def show_block(self, block_hash: str) -> str:
         return self.invoke_client(f'show-block {block_hash}')

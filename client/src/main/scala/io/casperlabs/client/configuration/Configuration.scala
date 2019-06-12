@@ -10,7 +10,7 @@ final case class ConnectOptions(
 sealed trait Configuration
 
 final case class Deploy(
-    from: String,
+    from: Option[String],
     nonce: Long,
     sessionCode: File,
     paymentCode: File,
@@ -51,7 +51,7 @@ object Configuration {
     val conf = options.subcommand.map {
       case options.deploy =>
         Deploy(
-          options.deploy.from(),
+          options.deploy.from.toOption,
           options.deploy.nonce(),
           options.deploy.session(),
           options.deploy.payment(),

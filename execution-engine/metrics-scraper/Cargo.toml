@@ -1,0 +1,14 @@
+[package]
+name = "metrics-scraper"
+version = "0.1.0"
+authors = ["Henry Till <henrytill@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+clap = "2.33.0"
+hyper = "0.12.29"
+shared = { path = "../shared" }
+
+[dev-dependencies]
+futures = "0.1.27"
+tokio = "0.1.21"

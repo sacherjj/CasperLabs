@@ -532,6 +532,7 @@ object Validate {
   def parents[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: Block,
       lastFinalizedBlockHash: BlockHash,
+      genesisBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
@@ -545,12 +546,15 @@ object Validate {
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.getHeader.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
+      tipHashes            <- Estimator.tips[F](dag, genesisBlockHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
       computedParentHashes = merged.parents.map(_.blockHash)
-      _ <- if (parentHashes == computedParentHashes)
+      parentHashes         = ProtoUtil.parentHashes(b)
+      _ <- if (parentHashes.isEmpty)
+            RaiseValidationError[F].raise[Unit](InvalidParents)
+          else if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {
             val parentsString =

@@ -63,6 +63,30 @@ $ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock
 Server is listening on socket: casperlabs-node-data/.caspernode.sock
 ```
 
+#### --loglevel
+
+The execution engine supports an optional `--loglevel` command line argument following the mandatory socket argument,
+which sets the log level for the execution engine. 
+
+```console
+$ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock --loglevel=error
+```
+
+The log levels supported are:
+
+```
+    --loglevel=
+    fatal : critical problems that result in the execution engine crashing
+    error : recoverable errors  
+    warning : unsuccessful but not erroneous activity 
+    info : normal, expected activity
+    metric : execution durations, counts, and similar data points (verbose)
+    debug : developer messages
+```
+
+The execution engine will log messages at the configured log level or above (thus, `error` will log errors and fatals but not warnings and below) to stdout.
+
+If the `--loglevel` argument is not provided, the execution engine defaults to the `info` log level.
 
 ### Setting up keys
 1. `secp256r1` (required) private key encoded in unencrypted `PKCS#8` format and `X.509` certificate. Used for node-to-node interaction.

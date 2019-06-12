@@ -54,7 +54,7 @@ class InitialSynchronizationSpec
         ) { (initialSynchronizer, _) =>
           for {
             w <- initialSynchronizer.sync()
-            _ <- w.timeout(250.millis)
+            _ <- w.timeout(1.second)
           } yield {
             counter.get() shouldBe 2
           }
