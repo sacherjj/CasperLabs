@@ -312,7 +312,7 @@ pub fn add_key(public_key: PublicKey, weight: Weight) -> Result<(), AddKeyFailur
         unsafe { ext_ffi::add_key(public_key_ptr, public_key_size, weight.value().into()) };
     // Translates FFI
     match result {
-        d if d <= 0 => Ok(()),
+        d if d == 0 => Ok(()),
         d => Err(AddKeyFailure::from(d)),
     }
 }
@@ -322,7 +322,7 @@ pub fn remove_key(public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
     let (public_key_ptr, public_key_size, _bytes) = to_ptr(&public_key);
     let result = unsafe { ext_ffi::remove_key(public_key_ptr, public_key_size) };
     match result {
-        d if d <= 0 => Ok(()),
+        d if d == 0 => Ok(()),
         d => Err(RemoveKeyFailure::from(d)),
     }
 }
@@ -335,7 +335,7 @@ pub fn set_threshold(
     let threshold = threshold.value().into();
     let result = unsafe { ext_ffi::set_threshold(permission_level, threshold) };
     match result {
-        d if d <= 0 => Ok(()),
+        d if d == 0 => Ok(()),
         d => Err(SetThresholdFailure::from(d)),
     }
 }
