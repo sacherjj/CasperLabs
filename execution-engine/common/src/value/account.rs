@@ -25,8 +25,6 @@ pub enum ActionType {
     Deployment = 0,
     /// Required when adding/removing associated keys, changing threshold levels.
     KeyManagement,
-    /// Required when recovering inactive account.
-    InactiveAccountRecovery,
 }
 
 impl From<u32> for ActionType {
@@ -37,17 +35,12 @@ impl From<u32> for ActionType {
         match value {
             d if d == ActionType::Deployment as u32 => ActionType::Deployment,
             d if d == ActionType::KeyManagement as u32 => ActionType::KeyManagement,
-            d if d == ActionType::InactiveAccountRecovery as u32 => {
-                ActionType::InactiveAccountRecovery
-            }
             _ => unreachable!(),
         }
     }
 }
 
 /// Thresholds that has to be met when executing an action of certain type.
-/// Note that `InactiveAccountRecovery` doesn't have a threshold defined here.
-/// It's so that accounts don't change that value as it's system-wide set to 0.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionThresholds {
     deployment: Weight,
@@ -74,10 +67,6 @@ impl From<i32> for SetThresholdFailure {
 }
 
 impl ActionThresholds {
-    // NOTE: I chose to not provide one method for setting action thresholds b/c `InactiveAccountRecovery`
-    // threshold is 0. If there was a polymorphic method then trying to set threshold for `InactiveAccountRecovery`
-    // would have to return an error.
-
     /// Sets new threshold for [ActionType::Deployment].
     /// Should return an error if setting new threshold for `action_type` breaks one of the invariants.
     /// Currently, invariant is that `ActionType::Deployment` threshold shouldn't be higher than any other,
@@ -125,7 +114,6 @@ impl ActionThresholds {
         match action_type {
             ActionType::Deployment => self.set_deployment_threshold(new_threshold),
             ActionType::KeyManagement => self.set_key_management_threshold(new_threshold),
-            _ => panic!("Invalid action type"),
         }
     }
 }
