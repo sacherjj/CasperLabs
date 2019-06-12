@@ -83,7 +83,7 @@ object CachingBlockStore {
                   .maximumWeight(maxSizeBytes)
                   .weigher(new Weigher[BlockHash, BlockMsgWithTransform] {
                     def weigh(key: BlockHash, value: BlockMsgWithTransform): Int =
-                      value.toByteArray.length
+                      value.serializedSize
                   })
                   .build[BlockHash, BlockMsgWithTransform]()
               }
