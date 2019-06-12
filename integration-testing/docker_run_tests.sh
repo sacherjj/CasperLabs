@@ -32,6 +32,14 @@ cleanup() {
 }
 trap cleanup 0
 
+# Build contracts before standing up docker image and they will be copied
+# into the docker image when docker-compose up occurs.
+echo 'Building contracts...'
+cd contracts
+make all
+make copy
+cd ..
+
 echo "Setting up networks for Python Client..."
 for num in $(seq 0 $MAX_NODE_COUNT)
 do
@@ -39,7 +47,7 @@ do
 done
 
 # Need to make network names in docker-compose.yml match tag based network.
-# Using ||TAG|| as replacable element in docker-compose.yml.template
+# Using ||TAG|| as replaceable element in docker-compose.yml.template
 sed 's/||TAG||/'"${TAG_NAME}"'/g' docker-compose.yml.template > docker-compose.yml
 
 docker-compose up --exit-code-from test --abort-on-container-exit
