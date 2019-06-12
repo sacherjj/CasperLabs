@@ -7,7 +7,9 @@ use self::pointers::*;
 use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::ext_ffi;
 use crate::key::{Key, LOCAL_KEY_HASH_SIZE, LOCAL_SEED_SIZE, UREF_SIZE};
-use crate::value::account::{ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, Weight};
+use crate::value::account::{
+    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+};
 use crate::value::{Contract, Value};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -316,9 +318,15 @@ pub fn remove_key(public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
     }
 }
 
-pub fn set_threshold(permission_level: ActionType, threshold: Weight) -> bool {
+pub fn set_threshold(
+    permission_level: ActionType,
+    threshold: Weight,
+) -> Result<(), SetThresholdFailure> {
     let permission_level = permission_level as u32;
     let threshold = threshold.value().into();
     let result = unsafe { ext_ffi::set_threshold(permission_level, threshold) };
-    result != 0
+    match result {
+        d if d <= 0 => Ok(()),
+        d => Err(SetThresholdFailure::from(d)),
+    }
 }

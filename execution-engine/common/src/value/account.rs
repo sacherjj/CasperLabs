@@ -3,6 +3,7 @@ use crate::key::{Key, UREF_SIZE};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use failure::Fail;
 
 #[repr(u32)]
 pub enum ActionType {
@@ -39,6 +40,25 @@ pub struct ActionThresholds {
     key_management: Weight,
 }
 
+#[repr(i32)]
+#[derive(Debug, Fail)]
+pub enum SetThresholdFailure {
+    // Returned when sum of weights of keys that signed this deploy doesn't meet `KeyManagement` threshold.
+    #[fail(display = "Insufficient weight")]
+    InsufficientWeight = 1,
+}
+
+impl From<i32> for SetThresholdFailure {
+    fn from(value: i32) -> SetThresholdFailure {
+        match value {
+            d if d == SetThresholdFailure::InsufficientWeight as i32 => {
+                SetThresholdFailure::InsufficientWeight
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl ActionThresholds {
     // NOTE: I chose to not provide one method for setting action thresholds b/c `InactiveAccountRecovery`
     // threshold is 0. If there was a polymorphic method then trying to set threshold for `InactiveAccountRecovery`
@@ -48,22 +68,28 @@ impl ActionThresholds {
     /// Should return an error if setting new threshold for `action_type` breaks one of the invariants.
     /// Currently, invariant is that `ActionType::Deployment` threshold shouldn't be higher than any other,
     /// which should be checked both when increasing `Deployment` threshold and decreasing the other.
-    pub fn set_deployment_threshold(&mut self, new_threshold: Weight) -> bool {
+    pub fn set_deployment_threshold(
+        &mut self,
+        new_threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
         if new_threshold > self.key_management {
-            false
+            Err(SetThresholdFailure::InsufficientWeight)
         } else {
             self.deployment = new_threshold;
-            true
+            Ok(())
         }
     }
 
     /// Sets new threshold for [ActionType::KeyManagement].
-    pub fn set_key_management_threshold(&mut self, new_threshold: Weight) -> bool {
+    pub fn set_key_management_threshold(
+        &mut self,
+        new_threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
         if self.deployment > new_threshold {
-            false
+            Err(SetThresholdFailure::InsufficientWeight)
         } else {
             self.key_management = new_threshold;
-            true
+            Ok(())
         }
     }
 
@@ -77,11 +103,15 @@ impl ActionThresholds {
 
     /// Unified function that takes an action type, and changes appropriate
     /// threshold defined by the [ActionType] variants.
-    pub fn set_threshold(&mut self, action_type: ActionType, new_threshold: Weight) -> bool {
+    pub fn set_threshold(
+        &mut self,
+        action_type: ActionType,
+        new_threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
         match action_type {
             ActionType::Deployment => self.set_deployment_threshold(new_threshold),
             ActionType::KeyManagement => self.set_key_management_threshold(new_threshold),
-            _ => false,
+            _ => panic!("Invalid action type"),
         }
     }
 }
@@ -436,13 +466,13 @@ impl FromBytes for ActionThresholds {
         let (weight_2, rem4): (Weight, &[u8]) = FromBytes::from_bytes(&rem3)?;
         match (id_1, id_2) {
             (DEPLOYMENT_THRESHOLD_ID, KEY_MANAGEMENT_THRESHOLD_ID) => {
-                action_thresholds.set_key_management_threshold(weight_2);
-                action_thresholds.set_deployment_threshold(weight_1);
+                let _ = action_thresholds.set_key_management_threshold(weight_2);
+                let _ = action_thresholds.set_deployment_threshold(weight_1);
                 Ok((action_thresholds, rem4))
             }
             (KEY_MANAGEMENT_THRESHOLD_ID, DEPLOYMENT_THRESHOLD_ID) => {
-                action_thresholds.set_key_management_threshold(weight_1);
-                action_thresholds.set_deployment_threshold(weight_2);
+                let _ = action_thresholds.set_key_management_threshold(weight_1);
+                let _ = action_thresholds.set_deployment_threshold(weight_2);
                 Ok((action_thresholds, rem4))
             }
             _ => Err(Error::FormattingError),

@@ -474,7 +474,10 @@ where
         let mut action_thresholds = RefMut::map(account.borrow_mut(), |account| {
             account.action_thresholds_mut()
         });
-        Ok(action_thresholds.set_threshold(action_type, threshold) as i32)
+        match action_thresholds.set_threshold(action_type, threshold) {
+            Ok(()) => Ok(0),
+            Err(e) => Ok(e as i32),
+        }
     }
 }
 

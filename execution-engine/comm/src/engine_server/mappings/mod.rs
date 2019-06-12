@@ -22,6 +22,7 @@ use shared::logging;
 use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;
 use shared::transform::{self, TypeMismatch};
+use std::string::ToString;
 use storage::global_state::{CommitResult, History};
 
 /// Helper method for turning instances of Value into Transform::Write.
@@ -31,6 +32,18 @@ fn transform_write(v: common::value::Value) -> Result<transform::Transform, Pars
 
 #[derive(Debug)]
 pub struct ParsingError(pub String);
+
+impl ParsingError {
+    /// Creates custom error given any type that implements ToString.
+    ///
+    /// This includes types derived from Fail (for example) so it enables
+    /// short syntax for functions returning Result<_, ParsingError>:
+    ///
+    ///   any_func().map_err(ParsingError::custom)
+    fn custom<T: ToString>(value: T) -> ParsingError {
+        ParsingError(value.to_string())
+    }
+}
 
 /// Smart constructor for parse errors
 fn parse_error<T>(message: String) -> Result<T, ParsingError> {
@@ -328,10 +341,12 @@ impl TryFrom<&super::ipc::Account> for common::value::account::Account {
             let action_thresholds_ipc = value.get_action_threshold();
             tmp.set_deployment_threshold(Weight::new(
                 action_thresholds_ipc.get_deployment_threshold() as u8,
-            ));
+            ))
+            .map_err(ParsingError::custom)?;
             tmp.set_key_management_threshold(Weight::new(
                 action_thresholds_ipc.get_key_management_threshold() as u8,
-            ));
+            ))
+            .map_err(ParsingError::custom)?;
             tmp
         };
         let account_activity: AccountActivity = {
