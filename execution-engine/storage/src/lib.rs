@@ -19,6 +19,10 @@ extern crate shared;
 #[macro_use]
 extern crate lazy_static;
 #[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
+
+#[cfg(test)]
 extern crate proptest;
 #[cfg(test)]
 extern crate tempfile;
