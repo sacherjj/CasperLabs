@@ -1,20 +1,19 @@
 package io.casperlabs.client
 import java.io.File
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
-import cats.Apply
 import cats.effect.{Sync, Timer}
-import cats.syntax.all._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
-import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
-import io.casperlabs.crypto.codec.Base16
-import java.nio.charset.StandardCharsets
+
 import scala.concurrent.duration._
 import scala.language.higherKinds
 import scala.util.Try
@@ -120,7 +119,7 @@ object DeployRuntime {
     })
 
   def deployFileProgram[F[_]: Sync: DeployService](
-      from: String,
+      from: Option[String],
       nonce: Long,
       sessionCode: File,
       paymentCode: File,
@@ -156,6 +155,12 @@ object DeployRuntime {
           maybePrivateKey.flatMap(Ed25519.tryToPublic).pure[F]
         }
       }
+      accountPublicKey <- Sync[F].fromOption(
+                           from
+                             .map(account => ByteString.copyFrom(Base16.decode(account)))
+                             .orElse(maybePublicKey.map(ByteString.copyFrom)),
+                           new IllegalArgumentException("--from or --public-key must be presented")
+                         )
     } yield {
       val deploy = consensus
         .Deploy()
@@ -163,12 +168,7 @@ object DeployRuntime {
           consensus.Deploy
             .Header()
             .withTimestamp(System.currentTimeMillis)
-            .withAccountPublicKey(
-              // Allowing --from until we explicitly require signing.
-              // It's an account address but there's no other field to carry it.
-              maybePublicKey.map(ByteString.copyFrom(_)) getOrElse ByteString
-                .copyFrom(Base16.decode(from))
-            )
+            .withAccountPublicKey(accountPublicKey)
             .withNonce(nonce)
         )
         .withBody(
@@ -179,7 +179,7 @@ object DeployRuntime {
         )
         .withHashes
 
-      maybePrivateKey.map(deploy.sign) getOrElse deploy
+      (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
     }
 
     gracefulExit(
@@ -220,13 +220,13 @@ object DeployRuntime {
       d.withHeader(h).withDeployHash(hash(h))
     }
 
-    def sign(privateKey: PrivateKey) = {
+    def sign(privateKey: PrivateKey, publicKey: PublicKey) = {
       val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
       d.withApprovals(
         List(
           consensus
             .Approval()
-            .withApproverPublicKey(d.getHeader.accountPublicKey)
+            .withApproverPublicKey(ByteString.copyFrom(publicKey))
             .withSignature(
               consensus
                 .Signature()

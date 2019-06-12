@@ -7,6 +7,7 @@ use self::pointers::*;
 use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::ext_ffi;
 use crate::key::{Key, LOCAL_KEY_HASH_SIZE, LOCAL_SEED_SIZE, UREF_SIZE};
+use crate::uref::URef;
 use crate::value::{Contract, Value};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -147,8 +148,8 @@ where
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
     };
     let key: Key = deserialize(&bytes).unwrap();
-    if let Key::URef(id, Some(access_rights)) = key {
-        UPointer::new(id, access_rights)
+    if let Key::URef(uref) = key {
+        UPointer::from_uref(uref).unwrap()
     } else {
         panic!("URef FFI did not return a valid URef!");
     }
@@ -245,7 +246,7 @@ pub fn add_uref(name: &str, key: &Key) {
 /// return a value to their caller. The return value of a directly deployed
 /// contract is never looked at.
 #[allow(clippy::ptr_arg)]
-pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<Key>) -> ! {
+pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<URef>) -> ! {
     let (ptr, size, _bytes) = to_ptr(t);
     let (urefs_ptr, urefs_size, _bytes2) = to_ptr(extra_urefs);
     unsafe {

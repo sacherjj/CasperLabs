@@ -48,9 +48,18 @@ object PrettyPrinter {
   def buildString(v: ipc.Value): String = v.valueInstance match {
     case ipc.Value.ValueInstance.Empty => "ValueEmpty"
     case ipc.Value.ValueInstance.Account(
-        ipc.Account(pk, nonce, urefs, associatedKeys, actionThresholds, accountActivity)
+        ipc.Account(
+          pk,
+          nonce,
+          urefs,
+          purseId,
+          associatedKeys,
+          actionThresholds,
+          accountActivity
+        )
         ) =>
-      s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}}, {${associatedKeys
+      s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}}, ${purseId
+        .map(buildString)}, {${associatedKeys
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}}, {${accountActivity.map(buildString)})"
     case ipc.Value.ValueInstance.ByteArr(bytes) => s"ByteArray(${buildString(bytes)})"
@@ -108,6 +117,9 @@ object PrettyPrinter {
       case ipc.KeyURef.AccessRights.Unrecognized(value) =>
         s"Unrecognized AccessRights variant: $value"
     }
+
+  private def buildString(uref: ipc.KeyURef): String =
+    s"URef(${buildString(uref.uref)}, ${buildString(uref.accessRights)})"
 
   private def buildString(ak: ipc.Account.AssociatedKey): String = {
     val pk     = buildString(ak.pubKey)

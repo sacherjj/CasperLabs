@@ -50,8 +50,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val from = opt[String](
-      descr = "Purse address that will be used to pay for the deployment, base16 encoded.",
-      default = Option("00")
+      descr =
+        "The public key of the account which is the context of this deployment, base16 encoded.",
+      required = false
     )
 
     val gasLimit =

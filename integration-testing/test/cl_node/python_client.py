@@ -29,7 +29,7 @@ class PythonClient(CasperLabsClient):
                session_contract: Optional[str] = 'test_helloname.wasm',
                payment_contract: Optional[str] = 'test_helloname.wasm') -> str:
 
-        deploy_nonce = nonce if nonce is not None else NonceRegistry.registry[from_address]
+        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(from_address)
 
         resources_path = self.node.resources_folder
         session_contract_path = str(resources_path / session_contract)
@@ -40,8 +40,6 @@ class PythonClient(CasperLabsClient):
                      f'nonce={deploy_nonce})')
 
         r = self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price, payment_contract, session_contract, deploy_nonce)
-        if nonce is None:
-            NonceRegistry.registry[from_address] += 1
         return r
 
     def propose(self) -> str:

@@ -6,6 +6,7 @@ members = [
     "comm",
     "common",
     "engine",
+    "metrics-scraper",
     "shared",
     "storage",
     "wasm-prep",
