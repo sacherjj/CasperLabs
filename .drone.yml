@@ -245,7 +245,7 @@ pipeline:
 
   package-sbt-artifacts:
     commands:
-      - "sbt update compile client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
+      - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
       - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
@@ -355,6 +355,20 @@ pipeline:
       event:
         - push
         - tag
+
+#  push-codecov:
+#    secrets: [ codecov_token ]
+#    commands:
+#      - "codecov -t $CODECOV_TOKEN"
+#    image: "casperlabs/buildenv:latest"
+#    when:
+#      branch:
+#        - dev
+#        - release-*
+#        - master
+#      event:
+#        - push
+#        - tag
 
   contract-examples:
     fork: true

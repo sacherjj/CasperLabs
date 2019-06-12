@@ -1,6 +1,6 @@
 use std::cell::{RefCell, RefMut};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::iter::IntoIterator;
 use std::rc::Rc;
@@ -17,7 +17,8 @@ use wasmi::{
 };
 
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
-use common::key::{AccessRights, Key};
+use common::key::Key;
+use common::uref::AccessRights;
 use common::value::account::{ActionType, PublicKey, Weight};
 use common::value::Value;
 use shared::newtypes::{CorrelationId, Validated};
@@ -26,14 +27,7 @@ use storage::global_state::StateReader;
 
 use args::Args;
 use engine_state::execution_result::ExecutionResult;
-use functions::{
-    ADD_FUNC_INDEX, ADD_KEY_FN_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX,
-    GAS_FUNC_INDEX, GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX,
-    GET_READ_FUNC_INDEX, GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, IS_VALID_FN_INDEX,
-    LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX, PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX,
-    REMOVE_KEY_FN_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX, SET_THRESHOLD_FN_INDEX,
-    STORE_FN_INDEX, WRITE_FUNC_INDEX,
-};
+use function_index::FunctionIndex;
 use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
 use resolvers::memory_resolver::MemoryResolver;
@@ -64,6 +58,8 @@ pub enum Error {
         deploy_nonce: u64,
         expected_nonce: u64,
     },
+    /// Reverts execution with a provided status
+    Revert(u32),
 }
 
 impl fmt::Display for Error {
@@ -479,6 +475,11 @@ where
             Err(e) => Ok(e as i32),
         }
     }
+
+    /// Reverts contract execution with a status specified.
+    pub fn revert(&mut self, status: u32) -> Trap {
+        Error::Revert(status).into()
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -494,8 +495,9 @@ where
         index: usize,
         args: RuntimeArgs,
     ) -> Result<Option<RuntimeValue>, Trap> {
-        match index {
-            READ_FUNC_INDEX => {
+        let func = FunctionIndex::try_from(index).expect("unknown function index");
+        match func {
+            FunctionIndex::ReadFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key in Wasm memory
                 let (key_ptr, key_size) = Args::parse(args)?;
@@ -503,7 +505,7 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            SER_FN_FUNC_INDEX => {
+            FunctionIndex::SerFnFuncIndex => {
                 // args(0) = pointer to name in Wasm memory
                 // args(1) = size of name in Wasm memory
                 let (name_ptr, name_size) = Args::parse(args)?;
@@ -511,7 +513,7 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            WRITE_FUNC_INDEX => {
+            FunctionIndex::WriteFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key
                 // args(2) = pointer to value
@@ -521,7 +523,7 @@ where
                 Ok(None)
             }
 
-            ADD_FUNC_INDEX => {
+            FunctionIndex::AddFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key
                 // args(2) = pointer to value
@@ -531,7 +533,7 @@ where
                 Ok(None)
             }
 
-            NEW_FUNC_INDEX => {
+            FunctionIndex::NewFuncIndex => {
                 // args(0) = pointer to key destination in Wasm memory
                 // args(1) = pointer to initial value
                 // args(2) = size of initial value
@@ -540,35 +542,35 @@ where
                 Ok(None)
             }
 
-            GET_READ_FUNC_INDEX => {
+            FunctionIndex::GetReadFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            GET_FN_FUNC_INDEX => {
+            FunctionIndex::GetFnFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            LOAD_ARG_FUNC_INDEX => {
+            FunctionIndex::LoadArgFuncIndex => {
                 // args(0) = index of host runtime arg to load
                 let i = Args::parse(args)?;
                 let size = self.load_arg(i)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            GET_ARG_FUNC_INDEX => {
+            FunctionIndex::GetArgFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            RET_FUNC_INDEX => {
+            FunctionIndex::RetFuncIndex => {
                 // args(0) = pointer to value
                 // args(1) = size of value
                 // args(2) = pointer to extra returned urefs
@@ -583,7 +585,7 @@ where
                 ))
             }
 
-            CALL_CONTRACT_FUNC_INDEX => {
+            FunctionIndex::CallContractFuncIndex => {
                 // args(0) = pointer to key where contract is at in global state
                 // args(1) = size of key
                 // args(2) = pointer to function arguments in Wasm memory
@@ -606,14 +608,14 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            GET_CALL_RESULT_FUNC_INDEX => {
+            FunctionIndex::GetCallResultFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            GET_UREF_FUNC_INDEX => {
+            FunctionIndex::GetURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 // args(2) = pointer to destination in Wasm memory
@@ -622,7 +624,7 @@ where
                 Ok(None)
             }
 
-            HAS_UREF_FUNC_INDEX => {
+            FunctionIndex::HasURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 let (name_ptr, name_size) = Args::parse(args)?;
@@ -630,7 +632,7 @@ where
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
-            ADD_UREF_FUNC_INDEX => {
+            FunctionIndex::AddURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 // args(2) = pointer to destination in Wasm memory
@@ -639,13 +641,13 @@ where
                 Ok(None)
             }
 
-            GAS_FUNC_INDEX => {
+            FunctionIndex::GasFuncIndex => {
                 let gas: u32 = Args::parse(args)?;
                 self.gas(u64::from(gas))?;
                 Ok(None)
             }
 
-            STORE_FN_INDEX => {
+            FunctionIndex::StoreFnIndex => {
                 // args(0) = pointer to function name in Wasm memory
                 // args(1) = size of the name
                 // args(2) = pointer to additional unforgable names
@@ -666,15 +668,17 @@ where
                 Ok(None)
             }
 
-            PROTOCOL_VERSION_FUNC_INDEX => Ok(Some(self.context.protocol_version().into())),
+            FunctionIndex::ProtocolVersionFuncIndex => {
+                Ok(Some(self.context.protocol_version().into()))
+            }
 
-            SEED_FN_INDEX => {
+            FunctionIndex::SeedFnIndex => {
                 let dest_ptr = Args::parse(args)?;
                 self.write_seed(dest_ptr)?;
                 Ok(None)
             }
 
-            IS_VALID_FN_INDEX => {
+            FunctionIndex::IsValidFnIndex => {
                 // args(0) = pointer to value to validate
                 // args(1) = size of value
                 let (value_ptr, value_size) = Args::parse(args)?;
@@ -686,7 +690,14 @@ where
                 }
             }
 
-            ADD_KEY_FN_INDEX => {
+            FunctionIndex::RevertFuncIndex => {
+                // args(0) = status u32
+                let status = Args::parse(args)?;
+
+                Err(self.revert(status))
+            }
+
+            FunctionIndex::AddKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = weight of the key
                 let (public_key_ptr, public_key_size, weight): (u32, u32, u32) = Args::parse(args)?;
@@ -710,7 +721,7 @@ where
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
-            REMOVE_KEY_FN_INDEX => {
+            FunctionIndex::RemoveKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = size of serialized bytes of public key
                 let (public_key_ptr, public_key_size): (u32, u32) = Args::parse(args)?;
@@ -727,7 +738,7 @@ where
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
-            SET_THRESHOLD_FN_INDEX => {
+            FunctionIndex::SetThresholdFuncIndex => {
                 // args(0) = action type
                 // args(1) = new threshold
                 let (action_type_value, threshold_value): (u32, u32) = Args::parse(args)?;
@@ -740,8 +751,6 @@ where
                 let result = self.set_threshold(action_type, threshold)?;
                 Ok(Some(RuntimeValue::I32(result as i32)))
             }
-
-            _ => panic!("unknown function index"),
         }
     }
 }
@@ -808,12 +817,21 @@ where
                 // If the "error" was in fact a trap caused by calling `ret` then
                 // this is normal operation and we should return the value captured
                 // in the Runtime result field.
-                if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
-                    //insert extra urefs returned from call
-                    let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
-                        vec_key_rights_to_map(ret_urefs.clone());
-                    current_runtime.context.add_urefs(ret_urefs_map);
-                    return Ok(runtime.result);
+                let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
+                match downcasted_error {
+                    Error::Ret(ref ret_urefs) => {
+                        //insert extra urefs returned from call
+                        let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
+                            vec_key_rights_to_map(ret_urefs.clone());
+                        current_runtime.context.add_urefs(ret_urefs_map);
+                        return Ok(runtime.result);
+                    }
+                    Error::Revert(status) => {
+                        // Propagate revert as revert, instead of passing it as
+                        // InterpreterError.
+                        return Err(Error::Revert(*status));
+                    }
+                    _ => {}
                 }
             }
             Err(Error::Interpreter(e))
@@ -898,13 +916,14 @@ pub trait Executor<A> {
         &self,
         parity_module: A,
         args: &[u8],
-        account_addr: [u8; 32],
+        account: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+        nonce_check: bool,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -917,18 +936,18 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        account_addr: [u8; 32],
+        acct_key: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+        nonce_check: bool,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
     {
-        let acct_key = Key::Account(account_addr);
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
         #[allow(unreachable_code)]
@@ -952,34 +971,37 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
-        // Check the difference of a request nonce and account nonce.
-        // Since both nonce and account's nonce are unsigned, so line below performs
-        // a checked subtraction, where underflow (or overflow) would be safe.
-        let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
-        // Difference should always be 1 greater than current nonce for a
-        // given account.
-        if delta != 1 {
-            return ExecutionResult::precondition_failure(
-                Error::InvalidNonce {
-                    deploy_nonce: nonce,
-                    expected_nonce: account.nonce() + 1,
-                }
-                .into(),
+        if nonce_check {
+            // Check the difference of a request nonce and account nonce.
+            // Since both nonce and account's nonce are unsigned, so line below performs
+            // a checked subtraction, where underflow (or overflow) would be safe.
+            let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
+            // Difference should always be 1 greater than current nonce for a
+            // given account.
+            if delta != 1 {
+                return ExecutionResult::precondition_failure(
+                    Error::InvalidNonce {
+                        deploy_nonce: nonce,
+                        expected_nonce: account.nonce() + 1,
+                    }
+                    .into(),
+                );
+            }
+
+            let mut updated_account = account.clone();
+            updated_account.increment_nonce();
+            // Store updated account with new nonce
+            tc.borrow_mut().write(
+                validated_key,
+                Validated::new(updated_account.into(), Validated::valid).unwrap(),
             );
         }
-
-        let mut updated_account = account.clone();
-        updated_account.increment_nonce();
-        // Store updated account with new nonce
-        tc.borrow_mut().write(
-            validated_key,
-            Validated::new(updated_account.into(), Validated::valid).unwrap(),
-        );
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
-        let rng = create_rng(&account_addr, timestamp, nonce);
+        let account_bytes = acct_key.as_account().unwrap();
+        let rng = create_rng(&account_bytes, timestamp, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
@@ -1029,7 +1051,7 @@ impl Executor<Module> for WasmiExecutor {
 /// Helper function for creating `known_urefs` associating addresses and corresponding `AccessRights`.
 pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
     match key {
-        Key::URef(raw_addr, maybe_rights) => Some((raw_addr, maybe_rights)),
+        Key::URef(uref) => Some((uref.addr(), uref.access_rights())),
         Key::Account(_) => None,
         Key::Hash(_) => None,
         Key::Local { .. } => None,
@@ -1040,7 +1062,10 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
 mod tests {
     use super::Error;
     use common::key::Key;
-    use common::value::account::{AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight};
+    use common::uref::{AccessRights, URef};
+    use common::value::account::{
+        AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+    };
     use common::value::{Account, Value};
     use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
@@ -1133,6 +1158,7 @@ mod tests {
                     pub_key,
                     1,
                     BTreeMap::new(),
+                    PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
                     AssociatedKeys::new(PublicKey::new(pub_key), Weight::new(1)),
                     Default::default(),
                     AccountActivity::new(BlockTime(0), BlockTime(0)),
@@ -1143,6 +1169,7 @@ mod tests {
 
         let executor = WasmiExecutor;
         let account_address = [0u8; 32];
+        let account_key: Key = Key::Account(account_address);
         let parity_module: Module = ModuleBuilder::new()
             .with_import(ImportEntry::new(
                 "env".to_string(),
@@ -1157,13 +1184,14 @@ mod tests {
         let exec_result = executor.exec(
             parity_module,
             &[],
-            account_address,
+            account_key,
             0u64,
             invalid_nonce,
             100u64,
             1u64,
             CorrelationId::new(),
             tc,
+            true,
         );
 
         match exec_result {

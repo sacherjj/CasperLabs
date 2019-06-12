@@ -1,7 +1,22 @@
-use crate::key::AccessRights;
 use crate::key::Key;
+use crate::uref::AccessRights;
+use crate::uref::URef;
 use crate::value::Contract;
+use core::fmt;
 use core::marker::PhantomData;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum AccessRightsError {
+    NoAccessRights,
+}
+
+impl fmt::Display for AccessRightsError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            AccessRightsError::NoAccessRights => write!(f, "URef has no access rights"),
+        }
+    }
+}
 
 // TODO: UPointer might needs to be encoded into more fine grained types
 // rather than hold AccessRights as one of the fields in order to be able
@@ -15,6 +30,14 @@ impl<T> UPointer<T> {
     pub fn new(id: [u8; 32], rights: AccessRights) -> UPointer<T> {
         UPointer(id, rights, PhantomData)
     }
+
+    pub fn from_uref(uref: URef) -> Result<Self, AccessRightsError> {
+        if let Some(access_rights) = uref.access_rights() {
+            Ok(UPointer(uref.addr(), access_rights, PhantomData))
+        } else {
+            Err(AccessRightsError::NoAccessRights)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,7 +48,8 @@ pub enum ContractPointer {
 
 impl<T> From<UPointer<T>> for Key {
     fn from(u_ptr: UPointer<T>) -> Self {
-        Key::URef(u_ptr.0, Some(u_ptr.1))
+        let uref = URef::new(u_ptr.0, u_ptr.1);
+        Key::URef(uref)
     }
 }
 

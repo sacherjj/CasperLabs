@@ -84,5 +84,5 @@ class GrpcCasperService extends FlatSpec with EitherValues with Matchers {
     Base16.encode(Array.fill(length)(util.Random.nextInt(256).toByte))
 
   private def attemptToKey(keyType: String, keyValue: String): Either[Throwable, ipc.Key] =
-    GrpcDeployService.toKey[Task](keyType, keyValue).attempt.runSyncUnsafe()
+    Utils.toKey[Task](keyType, keyValue).attempt.runSyncUnsafe()
 }

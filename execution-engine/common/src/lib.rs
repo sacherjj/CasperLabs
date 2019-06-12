@@ -32,6 +32,7 @@ pub mod gens;
 pub mod key;
 #[cfg(any(test, feature = "gens"))]
 pub mod test_utils;
+pub mod uref;
 pub mod value;
 
 mod ext_ffi {
@@ -40,7 +41,6 @@ mod ext_ffi {
         pub fn get_read(value_ptr: *mut u8); //can only be called after `read_value`
         pub fn write(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
         pub fn add(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
-        //TODO: update the FFI to take the initial value to place in the GS under the new URef
         pub fn new_uref(key_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
         pub fn serialize_function(name_ptr: *const u8, name_size: usize) -> usize;
         pub fn get_function(dest_ptr: *mut u8); //can only be called after `serialize_function`
@@ -75,6 +75,7 @@ mod ext_ffi {
         pub fn add_uref(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);
         pub fn protocol_version() -> u64;
         pub fn seed(dest: *mut u8);
+        pub fn revert(status: u32) -> !;
         pub fn is_valid(value_ptr: *const u8, value_size: usize) -> i32;
         pub fn add_key(public_key_ptr: *const u8, public_key_size: usize, weight: i32) -> i32;
         pub fn remove_key(public_key_ptr: *const u8, public_key_size: usize) -> i32;

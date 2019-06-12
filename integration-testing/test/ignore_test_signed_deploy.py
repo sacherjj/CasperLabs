@@ -15,6 +15,7 @@ def test_deploy_with_invalid_signature(one_node_network):
     """
 
     node0 = one_node_network.docker_nodes[0]
+
     try:
         node0.client.deploy(private_key="validator-0-private-invalid.pem",
                             public_key="validator-0-public-invalid.pem")

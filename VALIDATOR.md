@@ -63,10 +63,35 @@ $ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock
 Server is listening on socket: casperlabs-node-data/.caspernode.sock
 ```
 
+#### --loglevel
+
+The execution engine supports an optional `--loglevel` command line argument following the mandatory socket argument,
+which sets the log level for the execution engine. 
+
+```console
+$ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock --loglevel=error
+```
+
+The log levels supported are:
+
+```
+    --loglevel=
+    fatal : critical problems that result in the execution engine crashing
+    error : recoverable errors  
+    warning : unsuccessful but not erroneous activity 
+    info : normal, expected activity
+    metric : execution durations, counts, and similar data points (verbose)
+    debug : developer messages
+```
+
+The execution engine will log messages at the configured log level or above (thus, `error` will log errors and fatals but not warnings and below) to stdout.
+
+If the `--loglevel` argument is not provided, the execution engine defaults to the `info` log level.
 
 ### Setting up keys
 1. `secp256r1` (required) private key encoded in unencrypted `PKCS#8` format and `X.509` certificate. Used for node-to-node interaction.
 2. `ed25519` (optional) private and public keys. Used as a validator identity. If not provided then a node starts in the read-only mode.
+3. `ed25519` (optional) another set of private and public keys used by dApp developers to sign their deploys.
 
 #### Prerequisites: OpenSSL
 Download and install the latest version of the [openssl 1.1](https://github.com/openssl/openssl/releases).
@@ -84,7 +109,7 @@ export LD_LIBRARY_PATH=/usr/local/lib
 
 To continue to have working lib folder, consider adding last line to bottom of `.bashrc` or relevent file with:
 
-`echo "export LD_LIBRARY_PATH=/use/local/lib" >> ~/.bashrc`
+`echo "export LD_LIBRARY_PATH=/usr/local/lib" >> ~/.bashrc`
 
 You might want to add `/usr/local/ssh/bin` to your `/etc/environment` file so that the right executable is found; check it by running `openssl version`.
 
@@ -117,27 +142,50 @@ sudo make install
 #### Script
 You may want to use [the script](/docker/gen-keys.sh) which will generate all the keys. The commands below are excerpts from this script.
 
-#### ed25519
+#### ed25519 Validator
 Generate private key:
 ```bash
-openssl genpkey -algorithm Ed25519 -out ed25519-private.pem
+openssl genpkey -algorithm Ed25519 -out ed25519-validator-private.pem
 ```
 
 Public key:
 ```bash
-openssl pkey -in ed25519-private.pem -pubout -out ed25519-public.pem
+openssl pkey -in ed25519-validator-private.pem -pubout -out ed25519-validator-public.pem
 ```
 
 To obtain your validator ID (used in bonds.txt file which contains a list of initially bonded of validators):
 ```bash
-openssl pkey -outform DER -pubout -in ed25519-private.pem | tail -c +13 | openssl base64
+openssl pkey -outform DER -pubout -in ed25519-validator-private.pem | tail -c +13 | openssl base64
 ```
 
 Use as:
 ```bash
 ./node/target/universal/stage/bin/casperlabs-node run -s \
-    --casper-validator-private-key-path ed25519-private.pem \
-    --casper-validator-public-key-path ed25519-public.pem
+    --casper-validator-private-key-path ed25519-validator-private.pem \
+    --casper-validator-public-key-path ed25519-validator-public.pem
+```
+
+#### ed25519 dApp Developer
+Generate private key:
+```bash
+openssl genpkey -algorithm Ed25519 -out ed25519-developer-private.pem
+```
+
+Public key:
+```bash
+openssl pkey -in ed25519-developer-private.pem -pubout -out ed25519-developer-public.pem
+```
+
+Use them sign a deploy as:
+```bash
+./client/target/universal/stage/bin/casperlabs-node --host <node hostname> deploy \
+    --public-key ed25519-developer-public.pem \
+    --private-key ed25519-developer-public.pem \
+    --from <purse address that will be used to pay for the deployment> \
+    --gas-price <The price of gas for this transaction in units dust/gas> \
+    --nonce <The counter that should be incremented during each deploy> \
+    --session <path to the file with session code> \
+    --payment <path to the file with payment code>
 ```
 
 #### secp256r1

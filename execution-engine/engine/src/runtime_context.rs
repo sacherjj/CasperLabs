@@ -8,7 +8,8 @@ use rand::RngCore;
 use rand_chacha::ChaChaRng;
 
 use common::bytesrepr::{deserialize, ToBytes};
-use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
+use common::key::{Key, LOCAL_SEED_SIZE};
+use common::uref::{AccessRights, URef};
 use common::value::account::Account;
 use common::value::Value;
 use shared::newtypes::{Blake2bHash, CorrelationId, Validated};
@@ -130,7 +131,7 @@ where
         match self.base_key {
             Key::Account(bytes) => bytes,
             Key::Hash(bytes) => bytes,
-            Key::URef(bytes, _) => bytes,
+            Key::URef(uref) => uref.addr(),
             Key::Local { seed, key_hash } => Blake2bHash::new(&[seed, key_hash].concat()).into(),
         }
     }
@@ -166,11 +167,13 @@ where
     }
 
     pub fn new_uref(&mut self, value: Value) -> Result<Key, Error> {
-        let mut key = [0u8; 32];
-        self.rng.fill_bytes(&mut key);
-        let key = Key::URef(key, Some(AccessRights::READ_ADD_WRITE));
-        let validated_key = Validated::new(key, Validated::valid)?;
-        self.insert_uref(validated_key);
+        let uref = {
+            let mut addr = [0u8; 32];
+            self.rng.fill_bytes(&mut addr);
+            URef::new(addr, AccessRights::READ_ADD_WRITE)
+        };
+        let key = Key::URef(uref);
+        self.insert_uref(uref);
         self.write_gs(key, value)?;
         Ok(key)
     }
@@ -216,15 +219,17 @@ where
     }
 
     pub fn insert_named_uref(&mut self, name: String, key: Validated<Key>) {
-        self.insert_uref(key.clone());
+        if let Key::URef(uref) = *key {
+            self.insert_uref(uref);
+        }
         self.uref_lookup.insert(name, *key);
     }
 
-    pub fn insert_uref(&mut self, key: Validated<Key>) {
-        if let Key::URef(raw_addr, Some(rights)) = *key {
+    pub fn insert_uref(&mut self, uref: URef) {
+        if let Some(rights) = uref.access_rights() {
             let entry_rights = self
                 .known_urefs
-                .entry(raw_addr)
+                .entry(uref.addr())
                 .or_insert_with(|| std::iter::empty().collect());
             entry_rights.insert(rights);
         }
@@ -267,19 +272,22 @@ where
     /// and whether the version of a key that contract wants to use, has access rights
     /// that are less powerful than access rights' of the key in the `known_urefs`.
     pub fn validate_key(&self, key: &Key) -> Result<(), Error> {
-        match key {
-            Key::URef(raw_addr, Some(new_rights)) => {
-                self.known_urefs
-                    .get(raw_addr) // Check if the `key` is known
-                    .map(|known_rights| {
-                        known_rights
-                            .iter()
-                            .any(|right| *right & *new_rights == *new_rights)
-                    }) // are we allowed to use it this way?
-                    .map(|_| ()) // at this point we know it's valid to use `key`
-                    .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
-            }
-            _ => Ok(()),
+        let uref = match key {
+            Key::URef(uref) => uref,
+            _ => return Ok(()),
+        };
+        if let Some(new_rights) = uref.access_rights() {
+            self.known_urefs
+                .get(&uref.addr()) // Check if the `key` is known
+                .map(|known_rights| {
+                    known_rights
+                        .iter()
+                        .any(|right| *right & new_rights == new_rights)
+                }) // are we allowed to use it this way?
+                .map(|_| ()) // at this point we know it's valid to use `key`
+                .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
+        } else {
+            Ok(())
         }
     }
 
@@ -324,8 +332,7 @@ where
         match key {
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
-            Key::URef(_, Some(rights)) => rights.is_readable(),
-            Key::URef(_, None) => false,
+            Key::URef(uref) => uref.is_readable(),
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -334,8 +341,7 @@ where
     pub fn is_addable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
-            Key::URef(_, Some(rights)) => rights.is_addable(),
-            Key::URef(_, None) => false,
+            Key::URef(uref) => uref.is_addable(),
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -344,8 +350,7 @@ where
     pub fn is_writeable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => false,
-            Key::URef(_, Some(rights)) => rights.is_writeable(),
-            Key::URef(_, None) => false,
+            Key::URef(uref) => uref.is_writeable(),
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -382,14 +387,17 @@ mod tests {
     use rand::RngCore;
     use rand_chacha::ChaChaRng;
 
-    use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
+    use common::key::{Key, LOCAL_SEED_SIZE};
+    use common::uref::{AccessRights, URef};
     use common::value::{self, Account, Contract, Value};
     use shared::transform::Transform;
     use storage::global_state::in_memory::InMemoryGlobalState;
     use storage::global_state::{CommitResult, History};
 
     use super::{Error, RuntimeContext, URefAddr, Validated};
-    use common::value::account::{AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight};
+    use common::value::account::{
+        AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+    };
     use execution::{create_rng, vec_key_rights_to_map};
     use shared::newtypes::{Blake2bHash, CorrelationId};
     use tracking_copy::TrackingCopy;
@@ -425,6 +433,7 @@ mod tests {
             addr,
             0,
             BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
             Default::default(),
             AccountActivity::new(BlockTime(0), BlockTime(100)),
@@ -452,7 +461,7 @@ mod tests {
     fn random_uref_key<G: RngCore>(entropy_source: &mut G, rights: AccessRights) -> Key {
         let mut key = [0u8; 32];
         entropy_source.fill_bytes(&mut key);
-        Key::URef(key, Some(rights))
+        Key::URef(URef::new(key, rights))
     }
 
     fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SIZE]) -> Key {

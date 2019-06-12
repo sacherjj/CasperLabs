@@ -144,7 +144,12 @@ class ValidateTest
       b.withSignature(b.getSignature.withSigAlgorithm(sigAlgorithm))
     def changeSig(sig: ByteString): Block =
       b.withSignature(b.getSignature.withSig(sig))
+
   }
+
+  // Originally validation methods wanted blocks, now they work on summaries.
+  implicit def `Block => BlockSummary`(b: Block) =
+    BlockSummary(b.blockHash, b.header, b.signature)
 
   "Block signature validation" should "return false on unknown algorithms" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -160,11 +165,13 @@ class ValidateTest
                    .map(_.changeSigAlgorithm(rsa))
         _ <- Validate.blockSignature[Task](block0) shouldBeF false
         _ = log.warns.last
-          .contains(s"signature algorithm $unknownAlgorithm is unsupported") should be(
+          .contains(s"signature algorithm '$unknownAlgorithm' is unsupported") should be(
           true
         )
-        _      <- Validate.blockSignature[Task](block1) shouldBeF false
-        result = log.warns.last.contains(s"signature algorithm $rsa is unsupported") should be(true)
+        _ <- Validate.blockSignature[Task](block1) shouldBeF false
+        result = log.warns.last.contains(s"signature algorithm '$rsa' is unsupported") should be(
+          true
+        )
       } yield result
   }
 
@@ -183,7 +190,7 @@ class ValidateTest
         block4       <- signedBlock(4).map(_.changeSig(invalidKey))
         block5       <- signedBlock(5).map(_.changeSig(block0.getSignature.sig)) //wrong sig
         blocks       = Vector(block0, block1, block2, block3, block4, block5)
-        _            <- blocks.existsM[Task](Validate.blockSignature[Task]) shouldBeF false
+        _            <- blocks.existsM[Task](b => Validate.blockSignature[Task](b)) shouldBeF false
         _            = log.warns.size should be(blocks.length)
         result       = log.warns.forall(_.contains("signature is invalid")) should be(true)
       } yield result
@@ -423,10 +430,8 @@ class ValidateTest
         invalidBlock <- blockDagStorage
                          .lookupByIdUnsafe(2)
                          .map(_.changeValidator(impostor))
-        dag    <- blockDagStorage.getRepresentation
-        _      <- Validate.blockSender[Task](genesis, genesis, dag) shouldBeF true
-        _      <- Validate.blockSender[Task](validBlock, genesis, dag) shouldBeF true
-        result <- Validate.blockSender[Task](invalidBlock, genesis, dag) shouldBeF false
+        _      <- Validate.blockSender[Task](validBlock) shouldBeF true
+        result <- Validate.blockSender[Task](invalidBlock) shouldBeF false
       } yield result
   }
 
@@ -463,32 +468,34 @@ class ValidateTest
         } yield block
 
       for {
-        b0 <- createBlock[Task](Seq.empty, bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 0)
-        b2 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 1)
-        b3 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 2)
-        b4 <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
-        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
-        b6 <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
-        b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
-        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
-        b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0) //empty justification
+        b0  <- createBlock[Task](Seq.empty, bonds = bonds)
+        b1  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 0)
+        b2  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 1)
+        b3  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 2)
+        b4  <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
+        b5  <- createValidatorBlock[Task](Seq(b3, b1, b2), Seq(b1, b2, b3), 1)
+        b6  <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
+        b7  <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
+        b8  <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
+        b9  <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0) //empty justification
+        b10 <- createValidatorBlock[Task](Seq.empty, Seq.empty, 0) //empty justification
         result <- for {
-                   dag <- blockDagStorage.getRepresentation
+                   dag              <- blockDagStorage.getRepresentation
+                   genesisBlockHash = b0.blockHash
 
                    // Valid
-                   _ <- Validate.parents[Task](b0, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b1, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b2, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b3, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b4, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b5, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b6, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b1, b0.blockHash, genesisBlockHash, dag)
+                   _ <- Validate.parents[Task](b2, b0.blockHash, genesisBlockHash, dag)
+                   _ <- Validate.parents[Task](b3, b0.blockHash, genesisBlockHash, dag)
+                   _ <- Validate.parents[Task](b4, b0.blockHash, genesisBlockHash, dag)
+                   _ <- Validate.parents[Task](b5, b0.blockHash, genesisBlockHash, dag)
+                   _ <- Validate.parents[Task](b6, b0.blockHash, genesisBlockHash, dag)
 
                    // Not valid
-                   _ <- Validate.parents[Task](b7, b0.blockHash, dag).attempt
-                   _ <- Validate.parents[Task](b8, b0.blockHash, dag).attempt
-                   _ <- Validate.parents[Task](b9, b0.blockHash, dag).attempt
+                   _ <- Validate.parents[Task](b7, b0.blockHash, genesisBlockHash, dag).attempt
+                   _ <- Validate.parents[Task](b8, b0.blockHash, genesisBlockHash, dag).attempt
+                   _ <- Validate.parents[Task](b9, b0.blockHash, genesisBlockHash, dag).attempt
+                   _ <- Validate.parents[Task](b10, b0.blockHash, genesisBlockHash, dag).attempt
 
                    _ = log.warns should have size (3)
                    result = log.warns.forall(
@@ -503,7 +510,7 @@ class ValidateTest
   }
 
   // Creates a block with an invalid block number and sequence number
-  "Block summary validation" should "short circuit after first invalidity" in withStorage {
+  "Block validation" should "short circuit after first invalidity" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
         _        <- createChain[Task](2)
@@ -517,17 +524,19 @@ class ValidateTest
                         sk,
                         Ed25519
                       )
-        _ <- Validate
-              .blockSummary[Task](
-                signedBlock,
-                Block.defaultInstance,
-                dag,
-                "casperlabs",
-                Block.defaultInstance.blockHash
-              )
-              .attempt shouldBeF Left(InvalidBlockNumber)
-        result = log.warns.size should be(1)
-      } yield result
+        result <- Validate
+                   .blockFull[Task](
+                     signedBlock,
+                     dag,
+                     "casperlabs",
+                     Block.defaultInstance.some
+                   )
+                   .attempt
+        _ = result shouldBe Left(
+          Validate.DropErrorWrapper(InvalidUnslashableBlock)
+        )
+
+      } yield ()
   }
 
   "Justification follow validation" should "return valid for proper justifications and failed otherwise" in withStorage {
@@ -719,7 +728,7 @@ class ValidateTest
         _       <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _       <- Validate.formatOfFields[Task](genesis.withBlockHash(ByteString.EMPTY)) shouldBeF false
         _       <- Validate.formatOfFields[Task](genesis.clearHeader) shouldBeF false
-        _       <- Validate.formatOfFields[Task](genesis.clearBody) shouldBeF false
+        _       <- Validate.formatOfFields[Task](genesis.clearBody) shouldBeF true // Body is only checked in `Validate.blockFull`
         _ <- Validate.formatOfFields[Task](
               genesis.withSignature(genesis.getSignature.withSig(ByteString.EMPTY))
             ) shouldBeF false
@@ -888,7 +897,7 @@ class ValidateTest
                               deploys,
                               ProtocolVersion(1)
                             )
-        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _, _) = deploysCheckpoint
+        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _, _, _) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq.empty,
                   deploys = processedDeploys,
