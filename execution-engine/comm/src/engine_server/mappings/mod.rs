@@ -105,54 +105,7 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             }
         } else if tr.has_write() {
             let v = tr.get_write().get_value();
-            if v.has_int_value() {
-                transform_write(common::value::Value::Int32(v.get_int_value()))
-            } else if v.has_big_int() {
-                let b = v.get_big_int();
-                let v = b.try_into()?;
-                transform_write(v)
-            } else if v.has_bytes_value() {
-                let v: Vec<u8> = Vec::from(v.get_bytes_value());
-                transform_write(common::value::Value::ByteArray(v))
-            } else if v.has_int_list() {
-                let list = v.get_int_list().values.to_vec();
-                transform_write(common::value::Value::ListInt32(list))
-            } else if v.has_string_value() {
-                transform_write(common::value::Value::String(
-                    v.get_string_value().to_string(),
-                ))
-            } else if v.has_account() {
-                let account = v.get_account().try_into()?;
-                transform_write(common::value::Value::Account(account))
-            } else if v.has_contract() {
-                let ipc_contr = v.get_contract();
-                let contr_body = ipc_contr.get_body().to_vec();
-                let known_urefs: URefMap = ipc_contr.get_known_urefs().try_into()?;
-                let contract = common::value::Contract::new(
-                    contr_body,
-                    known_urefs.0,
-                    ipc_contr.get_protocol_version().value,
-                );
-                transform_write(contract.into())
-            } else if v.has_string_list() {
-                let list = v.get_string_list().values.to_vec();
-                transform_write(common::value::Value::ListString(list.clone()))
-            } else if v.has_named_key() {
-                let nk = v.get_named_key();
-                let name = nk.get_name().to_string();
-                let key = nk.get_key().try_into()?;
-                transform_write(common::value::Value::NamedKey(name, key))
-            } else if v.has_key() {
-                let key = v.get_key().try_into()?;
-                transform_write(common::value::Value::Key(key))
-            } else if v.has_unit() {
-                transform_write(common::value::Value::Unit)
-            } else {
-                parse_error(format!(
-                    "TransformEntry write contained unknown value: {:?}",
-                    v
-                ))
-            }
+            transform_write(v.try_into()?)
         } else {
             parse_error("TransformEntry couldn't be parsed to known Transform.".to_owned())
         }
