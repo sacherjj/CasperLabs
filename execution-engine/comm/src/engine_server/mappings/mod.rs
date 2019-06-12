@@ -22,6 +22,7 @@ use shared::logging;
 use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;
 use shared::transform::{self, TypeMismatch};
+use std::fmt::Display;
 use std::string::ToString;
 use storage::global_state::{CommitResult, History};
 
@@ -34,13 +35,13 @@ fn transform_write(v: common::value::Value) -> Result<transform::Transform, Pars
 pub struct ParsingError(pub String);
 
 impl ParsingError {
-    /// Creates custom error given any type that implements ToString.
+    /// Creates custom error given any type that implements Display.
     ///
     /// This includes types derived from Fail (for example) so it enables
     /// short syntax for functions returning Result<_, ParsingError>:
     ///
     ///   any_func().map_err(ParsingError::custom)
-    fn custom<T: ToString>(value: T) -> ParsingError {
+    fn custom<T: Display>(value: T) -> ParsingError {
         ParsingError(value.to_string())
     }
 }
