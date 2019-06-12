@@ -1,3 +1,5 @@
+use core::fmt::Write;
+
 use crate::alloc::vec::Vec;
 use crate::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
 use crate::contract_api::pointers::*;
@@ -18,7 +20,7 @@ pub const UREF_SIZE: usize = KEY_ID_SIZE + UREF_SIZE_SERIALIZED;
 const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_SEED_SIZE + U32_SIZE + LOCAL_KEY_HASH_SIZE;
 
 #[repr(C)]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Key {
     Account([u8; 32]),
     Hash([u8; 32]),
@@ -28,6 +30,45 @@ pub enum Key {
         key_hash: [u8; LOCAL_KEY_HASH_SIZE],
     },
 }
+
+// There is no impl LowerHex for neither [u8; 32] nor &[u8] in std.
+// I can't impl them b/c they're not living in current crate.
+fn addr_to_hex(addr: &[u8; 32]) -> String {
+    let mut str = String::with_capacity(64);
+    for b in addr {
+        write!(&mut str, "{:02x}", b).unwrap();
+    }
+    str
+}
+
+impl core::fmt::Display for Key {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Key::Account(addr) => write!(f, "Account({})", addr_to_hex(addr)),
+            Key::Hash(addr) => write!(f, "Hash({})", addr_to_hex(addr)),
+            Key::URef(uref) => {
+                let addr = uref.addr();
+                let access_rights_o = uref.access_rights();
+                if let Some(access_rights) = access_rights_o {
+                    write!(f, "URef({}, {})", addr_to_hex(&addr), access_rights)
+                } else {
+                    write!(f, "URef({}, None)", addr_to_hex(&addr))
+                }
+            }
+            Key::Local { seed, key_hash } => {
+                write!(f, "Local({}, {})", addr_to_hex(seed), addr_to_hex(key_hash))
+            }
+        }
+    }
+}
+
+impl core::fmt::Debug for Key {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+use alloc::string::String;
 
 impl Key {
     pub fn to_u_ptr<T>(self) -> Option<UPointer<T>> {
@@ -147,5 +188,84 @@ impl ToBytes for Vec<Key> {
                 .flatten(),
         );
         Ok(result)
+    }
+}
+
+#[allow(clippy::unnecessary_operation)]
+#[cfg(test)]
+mod tests {
+    use crate::key::Key;
+    use crate::uref::{AccessRights, URef};
+    use alloc::string::String;
+
+    fn test_readable(right: AccessRights, is_true: bool) {
+        assert_eq!(right.is_readable(), is_true)
+    }
+
+    #[test]
+    fn test_is_readable() {
+        test_readable(AccessRights::READ, true);
+        test_readable(AccessRights::READ_ADD, true);
+        test_readable(AccessRights::READ_WRITE, true);
+        test_readable(AccessRights::READ_ADD_WRITE, true);
+        test_readable(AccessRights::ADD, false);
+        test_readable(AccessRights::ADD_WRITE, false);
+        test_readable(AccessRights::WRITE, false);
+    }
+
+    fn test_writable(right: AccessRights, is_true: bool) {
+        assert_eq!(right.is_writeable(), is_true)
+    }
+
+    #[test]
+    fn test_is_writable() {
+        test_writable(AccessRights::WRITE, true);
+        test_writable(AccessRights::READ_WRITE, true);
+        test_writable(AccessRights::ADD_WRITE, true);
+        test_writable(AccessRights::READ, false);
+        test_writable(AccessRights::ADD, false);
+        test_writable(AccessRights::READ_ADD, false);
+        test_writable(AccessRights::READ_ADD_WRITE, true);
+    }
+
+    fn test_addable(right: AccessRights, is_true: bool) {
+        assert_eq!(right.is_addable(), is_true)
+    }
+
+    #[test]
+    fn test_is_addable() {
+        test_addable(AccessRights::ADD, true);
+        test_addable(AccessRights::READ_ADD, true);
+        test_addable(AccessRights::READ_WRITE, false);
+        test_addable(AccessRights::ADD_WRITE, true);
+        test_addable(AccessRights::READ, false);
+        test_addable(AccessRights::WRITE, false);
+        test_addable(AccessRights::READ_ADD_WRITE, true);
+    }
+
+    #[test]
+    fn should_display_key() {
+        let expected_hash = core::iter::repeat("0").take(64).collect::<String>();
+        let addr_array = [0u8; 32];
+        let account_key = Key::Account(addr_array);
+        assert_eq!(
+            format!("{}", account_key),
+            format!("Account({})", expected_hash)
+        );
+        let uref_key = Key::URef(URef::new(addr_array, AccessRights::READ));
+        assert_eq!(
+            format!("{}", uref_key),
+            format!("URef({}, READ)", expected_hash)
+        );
+        let hash_key = Key::Hash(addr_array);
+        assert_eq!(format!("{}", hash_key), format!("Hash({})", expected_hash));
+        let local_key = Key::Local {
+            seed: addr_array,
+            key_hash: addr_array,
+        };
+        assert_eq!(
+            format!("{}", local_key),
+            format!("Local({}, {})", expected_hash, expected_hash)
+        );
     }
 }

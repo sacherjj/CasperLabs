@@ -37,6 +37,21 @@ impl AccessRights {
     }
 }
 
+impl core::fmt::Display for AccessRights {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match *self {
+            AccessRights::READ => write!(f, "READ"),
+            AccessRights::WRITE => write!(f, "WRITE"),
+            AccessRights::ADD => write!(f, "ADD"),
+            AccessRights::READ_ADD => write!(f, "READ_ADD"),
+            AccessRights::READ_WRITE => write!(f, "READ_WRITE"),
+            AccessRights::ADD_WRITE => write!(f, "ADD_WRITE"),
+            AccessRights::READ_ADD_WRITE => write!(f, "READ_ADD_WRITE"),
+            _ => write!(f, "UNKNOWN"),
+        }
+    }
+}
+
 impl bytesrepr::ToBytes for AccessRights {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         self.bits.to_bytes()
