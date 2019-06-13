@@ -14,6 +14,7 @@ message Value {
 		NamedKey named_key = 8;
 		BigInt big_int = 9;
 		Key key = 10;
+		Unit unit = 11;
 	}
 }
 
@@ -102,3 +103,5 @@ message Account {
 		uint64 inactivity_period_limit = 3;
 	}
 }
+
+message Unit {}

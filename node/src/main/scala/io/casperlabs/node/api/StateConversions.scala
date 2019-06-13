@@ -1,6 +1,7 @@
 package io.casperlabs.node.api
 
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.casper.consensus.state.NamedKey
 import io.casperlabs.ipc
 
 trait StateConversions {
@@ -27,6 +28,10 @@ trait StateConversions {
         Value.BigInt(state.BigInt(v.value, v.bitWidth))
       case ValueInstance.Key(v) =>
         Value.Key(fromIpc(v))
+      case ValueInstance.Unit(_) =>
+        Value.Unit(state.Unit())
+      case ValueInstance.NamedKey(ipc.NamedKey(name, key)) =>
+        Value.NamedKey(state.NamedKey(name, key.map(fromIpc(_))))
     }
 
     state.Value(v)
