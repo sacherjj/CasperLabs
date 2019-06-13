@@ -55,7 +55,10 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
           .basicDeploy(System.currentTimeMillis(), ByteString.copyFromUtf8(deploy), nonce + 1)
     }
 
-    implicit val logEff = new LogStub[Effect]
+    implicit val logEff       = new LogStub[Effect]
+    implicit val blockStore   = node.blockStore
+    implicit val safetyOracle = node.safetyOracleEff
+
     def testProgram(blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
     ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
