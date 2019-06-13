@@ -13,8 +13,8 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.ipc
 import io.casperlabs.ipc._
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -26,7 +26,7 @@ case class DeploysCheckpoint(
     invalidNonceDeploys: Seq[InvalidNonceDeploy],
     deploysToDiscard: Seq[PreconditionFailure],
     blockNumber: Long,
-    protocolVersion: ProtocolVersion
+    protocolVersion: state.ProtocolVersion
 )
 
 object ExecEngineUtil {
@@ -40,7 +40,7 @@ object ExecEngineUtil {
   def computeDeploysCheckpoint[F[_]: MonadThrowable: BlockStore: Log: ExecutionEngineService](
       merged: MergeResult[TransformMap, Block],
       deploys: Seq[Deploy],
-      protocolVersion: ProtocolVersion
+      protocolVersion: state.ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
       preStateHash <- computePrestate[F](merged)
@@ -94,7 +94,7 @@ object ExecEngineUtil {
   def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       prestate: StateHash,
       deploys: Seq[Deploy],
-      protocolVersion: ProtocolVersion
+      protocolVersion: state.ProtocolVersion
   ): F[Seq[DeployResult]] =
     ExecutionEngineService[F]
       .exec(prestate, deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
@@ -114,7 +114,7 @@ object ExecEngineUtil {
       case Nil => List.empty[ProcessedDeployResult]
       case list =>
         val (result, _) =
-          list.foldLeft(List.empty[ProcessedDeployResult] -> Map.empty[ipc.Key, Op]) {
+          list.foldLeft(List.empty[ProcessedDeployResult] -> Map.empty[state.Key, Op]) {
             case (unchanged @ (acc, totalOps), next @ ExecutionSuccessful(_, effects, _)) =>
               val ops = Op.fromIpcEntry(effects.opMap)
               if (totalOps ~ ops)
@@ -236,7 +236,7 @@ object ExecEngineUtil {
     * @tparam F effect type (a la tagless final)
     * @tparam T type for transforms (i.e. effects deploys create when executed)
     * @tparam A type for "blocks". Order must be a topological order of the DAG blocks form
-    * @tparam K type for keys specifying what a transform is applied to (equal to ipc.Key in production)
+    * @tparam K type for keys specifying what a transform is applied to (equal to state.Key in production)
     * @param candidates "blocks" to attempt to merge
     * @param parents    function for computing the parents of a "block" (equal to _.parents in production)
     * @param effect     function for computing the transforms of a block (looks up the transaforms from the blockstore in production)
@@ -340,7 +340,7 @@ object ExecEngineUtil {
     def effect(block: BlockMetadata): F[Option[TransformMap]] =
       BlockStore[F].getTransforms(block.blockHash)
 
-    def toOps(t: TransformMap): OpMap[ipc.Key] = Op.fromTransforms(t)
+    def toOps(t: TransformMap): OpMap[state.Key] = Op.fromTransforms(t)
 
     val candidateParents = candidateParentBlocks.map(BlockMetadata.fromBlock).toVector
 
@@ -348,7 +348,7 @@ object ExecEngineUtil {
       ordering <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
       merged <- {
         implicit val order = ordering
-        abstractMerge[F, TransformMap, BlockMetadata, ipc.Key](
+        abstractMerge[F, TransformMap, BlockMetadata, state.Key](
           candidateParents,
           parents,
           effect,

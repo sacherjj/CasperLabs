@@ -2,6 +2,7 @@ package io.casperlabs.casper.util.execengine
 
 import cats.kernel.Monoid
 import io.casperlabs.ipc
+import io.casperlabs.casper.consensus.state
 
 import Op.{Add, NoOp, Read, Write}
 
@@ -80,7 +81,7 @@ object Op {
         acc.updated(k, curr + op)
     }
 
-  def fromIpcEntry(os: Seq[ipc.OpEntry]): OpMap[ipc.Key] = fromTuples(
+  def fromIpcEntry(os: Seq[ipc.OpEntry]): OpMap[state.Key] = fromTuples(
     os.flatMap {
       case ipc.OpEntry(maybeKey, maybeOp) =>
         for {
@@ -91,7 +92,7 @@ object Op {
     }
   )
 
-  def fromTransforms(ts: Seq[ipc.TransformEntry]): OpMap[ipc.Key] = fromTuples(
+  def fromTransforms(ts: Seq[ipc.TransformEntry]): OpMap[state.Key] = fromTuples(
     ts.flatMap {
       case ipc.TransformEntry(maybeKey, maybeTransform) =>
         for {

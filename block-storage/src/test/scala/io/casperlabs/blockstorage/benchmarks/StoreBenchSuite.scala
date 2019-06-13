@@ -21,7 +21,7 @@ import io.casperlabs.blockstorage.{
 }
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.ipc.Key.KeyInstance
+import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.ipc.Transform.TransformInstance
 import io.casperlabs.ipc.{DeployCode => _, _}
 import io.casperlabs.metrics.Metrics
@@ -132,7 +132,7 @@ object StoreBenchSuite {
   }
 
   def randomKey: Key = Key(
-    KeyInstance.Hash(KeyHash(randomHash))
+    Key.Value.Hash(Key.Hash(randomHash))
   )
 
   def randomTransform: Transform = Transform(

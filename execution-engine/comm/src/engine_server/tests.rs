@@ -3,10 +3,10 @@ use parity_wasm::builder::ModuleBuilder;
 use parity_wasm::elements::{MemorySection, MemoryType, Module, Section, Serialize};
 
 use engine_server::ipc::{
-    CommitRequest, Deploy, DeployCode, ExecRequest, KeyAddress, ProtocolVersion, QueryRequest,
-    ValidateRequest,
+    CommitRequest, Deploy, DeployCode, ExecRequest, QueryRequest, ValidateRequest,
 };
 use engine_server::ipc_grpc::ExecutionEngineService;
+use engine_server::state::{Key, Key_Address, ProtocolVersion};
 use shared::logging::log_level::LogLevel;
 use shared::logging::logger::initialize_buffered_logger;
 use shared::logging::logger::{LogBufferProvider, BUFFERED_LOGGER};
@@ -25,10 +25,10 @@ fn should_query_with_metrics() {
 
     let mut query_request = QueryRequest::new();
     {
-        let mut key = engine_server::ipc::Key::new();
-        let mut key_address = KeyAddress::new();
+        let mut key = Key::new();
+        let mut key_address = Key_Address::new();
         key_address.set_account(MOCKED_ACCOUNT_ADDRESS.to_vec());
-        key.set_account(key_address);
+        key.set_address(key_address);
 
         query_request.set_base_key(key);
         query_request.set_path(vec![].into());
@@ -229,7 +229,7 @@ fn get_log_settings(log_level: LogLevel) -> LogSettings {
 
 fn get_protocol_version() -> ProtocolVersion {
     let mut protocol_version: ProtocolVersion = ProtocolVersion::new();
-    protocol_version.set_version(1);
+    protocol_version.set_value(1);
     protocol_version
 }
 

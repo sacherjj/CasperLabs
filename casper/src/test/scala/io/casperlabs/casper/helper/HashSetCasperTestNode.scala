@@ -21,6 +21,7 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
+import io.casperlabs.casper.consensus.state.{Unit => _, BigInt => _, _}
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
@@ -270,7 +271,9 @@ object HashSetCasperTestNode {
         // The real execution engine will get the keys from what the code changes, which will include
         // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
         // here isn't more specific to a deploy then the real thing would be.
-        val key           = Key(Key.KeyInstance.Hash(KeyHash(deploy.session.fold(ByteString.EMPTY)(_.code))))
+        val key = Key(
+          Key.Value.Hash(Key.Hash(deploy.session.fold(ByteString.EMPTY)(_.code)))
+        )
         val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
         val op            = Op(Op.OpInstance.Read(ReadOp()))
         val transforEntry = TransformEntry(Some(key), Some(transform))
@@ -299,7 +302,7 @@ object HashSetCasperTestNode {
       override def exec(
           prestate: ByteString,
           deploys: Seq[Deploy],
-          protocolVersion: ipc.ProtocolVersion
+          protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =
         //This function returns the same `DeployResult` for all deploys,
         //regardless of their wasm code. It pretends to have run all the deploys,

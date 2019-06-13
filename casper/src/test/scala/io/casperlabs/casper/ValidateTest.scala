@@ -24,7 +24,7 @@ import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import io.casperlabs.ipc.ProtocolVersion
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService

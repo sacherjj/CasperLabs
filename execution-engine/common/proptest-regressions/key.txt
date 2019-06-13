@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 459a6e8297ca537991060cd3ac46e51ba0e918aece8aa2d5f0d1adb2bdffe0cf # shrinks to base16_addr = "a0aaa0000aaa0a0a0aa0aaa00a0aaaaa"
+cc eb41b5047efcc366e5e56359074a1ae5b8eca8586806987a70e5abf34968f77a # shrinks to invalid_addr = ""

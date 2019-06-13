@@ -19,6 +19,7 @@ import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -300,11 +301,11 @@ object Validate {
   // Validates whether block was built using correct protocol version.
   def version[F[_]: Applicative: Log](
       b: BlockSummary,
-      m: BlockHeight => ipc.ProtocolVersion
+      m: BlockHeight => state.ProtocolVersion
   ): F[Boolean] = {
     val blockVersion = b.getHeader.protocolVersion
     val blockHeight  = b.getHeader.rank
-    val version      = m(blockHeight).version
+    val version      = m(blockHeight).value
     if (blockVersion == version) {
       true.pure[F]
     } else {

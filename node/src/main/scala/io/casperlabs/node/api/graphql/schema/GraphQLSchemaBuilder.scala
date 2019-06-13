@@ -7,6 +7,7 @@ import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
@@ -82,7 +83,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                 maybePostStateHash <- BlockAPI
                                        .getBlockInfoOpt[F](blockHashBase16Prefix)
                                        .map(_.map(_._1.getSummary.getHeader.getState.postStateHash))
-                values <- maybePostStateHash.fold(List.empty[Option[ipc.Value]].pure[F]) {
+                values <- maybePostStateHash.fold(List.empty[Option[state.Value]].pure[F]) {
                            stateHash =>
                              for {
 
@@ -105,7 +106,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                                         .handleError {
                                                           case SmartContractEngineError(message)
                                                               if message contains "Value not found" =>
-                                                            none[ipc.Value]
+                                                            none[state.Value]
                                                         }
                                             } yield value
                                         }
