@@ -24,7 +24,7 @@ pub enum ActionType {
     /// Required by deploy execution.
     Deployment = 0,
     /// Required when adding/removing associated keys, changing threshold levels.
-    KeyManagement,
+    KeyManagement = 1,
 }
 
 impl From<u32> for ActionType {
@@ -227,7 +227,7 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
 #[repr(i32)]
 pub enum AddKeyFailure {
     MaxKeysLimit = 1,
-    DuplicateKey,
+    DuplicateKey = 2,
 }
 
 impl From<i32> for AddKeyFailure {
