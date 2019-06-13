@@ -102,7 +102,8 @@ object BlockAPI {
       _ <- check("Invalid deploy signature.")(Validate.deploySignature[F](d))
             .whenA(!ignoreDeploySignature)
 
-      _ <- ensureNotInDag[F](d)
+      t = casper.faultToleranceThreshold
+      _ <- ensureNotInDag[F](d, t)
 
       r <- MultiParentCasper[F].deploy(d)
       _ <- r match {
@@ -118,7 +119,8 @@ object BlockAPI {
 
   /** Check that we don't have this deploy already in the finalized part of the DAG. */
   private def ensureNotInDag[F[_]: MonadThrowable: MultiParentCasperRef: BlockStore: SafetyOracle: Log](
-      d: Deploy
+      d: Deploy,
+      faultToleranceThreshold: Float
   ): F[Unit] =
     BlockStore[F]
       .findBlockHashesWithDeployhash(d.deployHash)
@@ -129,13 +131,14 @@ object BlockAPI {
         case Nil =>
           ().pure[F]
         case infos =>
-          infos.find(_.getStatus.faultTolerance > 0).fold(().pure[F]) { finalized =>
-            MonadThrowable[F].raiseError {
-              AlreadyExists(
-                s"Block ${PrettyPrinter.buildString(finalized.getSummary.blockHash)} with fault tolerance ${finalized.getStatus.faultTolerance} already contains ${PrettyPrinter
-                  .buildString(d)}"
-              )
-            }
+          infos.find(_.getStatus.faultTolerance > faultToleranceThreshold).fold(().pure[F]) {
+            finalized =>
+              MonadThrowable[F].raiseError {
+                AlreadyExists(
+                  s"Block ${PrettyPrinter.buildString(finalized.getSummary.blockHash)} with fault tolerance ${finalized.getStatus.faultTolerance} already contains ${PrettyPrinter
+                    .buildString(d)}"
+                )
+              }
           }
       }
 

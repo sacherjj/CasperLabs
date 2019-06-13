@@ -55,7 +55,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     genesis: Block,
     chainId: String,
     blockProcessingLock: Semaphore[F],
-    faultToleranceThreshold: Float = 0f
+    val faultToleranceThreshold: Float = 0f
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
