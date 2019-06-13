@@ -202,7 +202,7 @@ impl Weight {
 
 pub const WEIGHT_SIZE: usize = U8_SIZE;
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug, Default)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct PublicKey([u8; KEY_SIZE]);
 
 pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
