@@ -3,7 +3,6 @@ package io.casperlabs.blockstorage
 import cats._
 import cats.effect._
 import cats.implicits._
-import cats.data.OptionT
 import com.google.protobuf.ByteString
 import com.google.common.cache.{Cache, CacheBuilder, Weigher}
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
@@ -23,7 +22,10 @@ class CachingBlockStore[F[_]: Sync](
 ) extends BlockStore[F] {
 
   private def cacheOrUnderlying[A](fromCache: => Option[A], fromUnderlying: F[Option[A]]) =
-    OptionT(Sync[F].delay(fromCache)).orElseF(fromUnderlying).value
+    Sync[F].delay(fromCache) flatMap {
+      case None     => fromUnderlying
+      case maybeHit => maybeHit.pure[F]
+    }
 
   override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     cacheOrUnderlying(Option(cache.getIfPresent(blockHash)), underlying.get(blockHash))
