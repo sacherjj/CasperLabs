@@ -7,6 +7,7 @@ from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
+import docker.errors
 from test.cl_node.nonce_registry import NonceRegistry
 
 from docker.errors import ContainerError
@@ -46,9 +47,15 @@ class DockerClient(CasperLabsClient):
         stdout = container.logs(stdout=True, stderr=False).decode('utf-8')
         stderr = container.logs(stdout=False, stderr=True).decode('utf-8')
         logging.info(f"EXITED exit_code: {status_code} STDERR: {stderr} STDOUT: {stdout}")
+
+        try:
+            container.remove()
+        except docker.errors.APIError as e:
+            logging.warning(f"Exception while removing docker client container: {str(e)}")
+
         if status_code: 
-            logging.warning(f"EXITED code={status_code} command='{command}' stderr='{stderr}'")
             raise NonZeroExitCodeError(command=(command, status_code), exit_code=status_code, output=stderr)
+
         return stdout
 
     def propose(self) -> str:
