@@ -1,4 +1,4 @@
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -433,49 +433,6 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    fn add_key(&mut self, public_key: PublicKey, weight: Weight) -> Result<i32, Trap> {
-        let account = Rc::clone(&self.context.account());
-        // Mutably borrows associated keys of a given account avoiding temporary
-        // account object.
-        let mut associated_keys = RefMut::map(account.borrow_mut(), |account| {
-            account.associated_keys_mut()
-        });
-        match associated_keys.add_key(public_key, weight) {
-            Ok(_) => Ok(0),
-            // This relies on the fact that `AddKeyFailure` is represented as
-            // i32 and first variant start with number `1`, so all other variants
-            // are greater than the first one, so it's safe to assume `0` is success,
-            // and any error is greater than 0.
-            Err(e) => Ok(e as i32),
-        }
-    }
-
-    fn remove_key(&mut self, public_key: PublicKey) -> Result<i32, Trap> {
-        let account = Rc::clone(&self.context.account());
-        // Mutably borrows associated keys of a given account avoiding temporary
-        // account object.
-        let mut associated_keys = RefMut::map(account.borrow_mut(), |account| {
-            account.associated_keys_mut()
-        });
-        match associated_keys.remove_key(&public_key) {
-            Ok(_) => Ok(0),
-            Err(e) => Ok(e as i32),
-        }
-    }
-
-    fn set_threshold(&mut self, action_type: ActionType, threshold: Weight) -> Result<i32, Trap> {
-        let account = Rc::clone(&self.context.account());
-        // Mutably borrows associated keys of a given account avoiding temporary
-        // account object.
-        let mut action_thresholds = RefMut::map(account.borrow_mut(), |account| {
-            account.action_thresholds_mut()
-        });
-        match action_thresholds.set_threshold(action_type, threshold) {
-            Ok(()) => Ok(0),
-            Err(e) => Ok(e as i32),
-        }
-    }
-
     /// Reverts contract execution with a status specified.
     pub fn revert(&mut self, status: u32) -> Trap {
         Error::Revert(status).into()
@@ -717,8 +674,16 @@ where
                     .map(Weight::new)
                     // Raises an invalid conversion to int
                     .map_err(|_| Trap::new(TrapKind::InvalidConversionToInt))?;
-                let result = self.add_key(public_key, weight)?;
-                Ok(Some(RuntimeValue::I32(result)))
+
+                let value = match self.context.add_associated_key(public_key, weight) {
+                    Ok(_) => 0,
+                    // This relies on the fact that `AddKeyFailure` is represented as
+                    // i32 and first variant start with number `1`, so all other variants
+                    // are greater than the first one, so it's safe to assume `0` is success,
+                    // and any error is greater than 0.
+                    Err(e) => e as i32,
+                };
+                Ok(Some(RuntimeValue::I32(value)))
             }
 
             FunctionIndex::RemoveKeyFuncIndex => {
@@ -734,8 +699,11 @@ where
                         deserialize(&source_serialized).map_err(Error::BytesRepr)?;
                     source
                 };
-                let result = self.remove_key(public_key)?;
-                Ok(Some(RuntimeValue::I32(result)))
+                let value = match self.context.remove_associated_key(public_key) {
+                    Ok(_) => 0,
+                    Err(e) => e as i32,
+                };
+                Ok(Some(RuntimeValue::I32(value)))
             }
 
             FunctionIndex::SetThresholdFuncIndex => {
@@ -748,8 +716,11 @@ where
                     .map(Weight::new)
                     // Raises an invalid conversion to int
                     .map_err(|_| Trap::new(TrapKind::InvalidConversionToInt))?;
-                let result = self.set_threshold(action_type, threshold)?;
-                Ok(Some(RuntimeValue::I32(result as i32)))
+                let value = match self.context.set_action_threshold(action_type, threshold) {
+                    Ok(_) => 0,
+                    Err(e) => e as i32,
+                };
+                Ok(Some(RuntimeValue::I32(value)))
             }
         }
     }

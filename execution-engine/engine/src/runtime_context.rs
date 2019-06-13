@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
@@ -10,7 +10,9 @@ use rand_chacha::ChaChaRng;
 use common::bytesrepr::{deserialize, ToBytes};
 use common::key::{Key, LOCAL_SEED_SIZE};
 use common::uref::{AccessRights, URef};
-use common::value::account::Account;
+use common::value::account::{
+    Account, ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+};
 use common::value::Value;
 use shared::newtypes::{Blake2bHash, CorrelationId, Validated};
 use storage::global_state::StateReader;
@@ -374,6 +376,41 @@ where
             Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
             Ok(AddResult::TypeMismatch(type_mismatch)) => Err(Error::TypeMismatch(type_mismatch)),
         }
+    }
+
+    pub fn add_associated_key(
+        &mut self,
+        public_key: PublicKey,
+        weight: Weight,
+    ) -> Result<(), AddKeyFailure> {
+        // Mutably borrows associated keys of a given account avoiding temporary
+        // account object.
+        let mut associated_keys = RefMut::map(self.account.borrow_mut(), |account| {
+            account.associated_keys_mut()
+        });
+        associated_keys.add_key(public_key, weight)
+    }
+
+    pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
+        // Mutably borrows associated keys of a given account avoiding temporary
+        // account object.
+        let mut associated_keys = RefMut::map(self.account.borrow_mut(), |account| {
+            account.associated_keys_mut()
+        });
+        associated_keys.remove_key(&public_key)
+    }
+
+    pub fn set_action_threshold(
+        &mut self,
+        action_type: ActionType,
+        threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
+        // Mutably borrows associated keys of a given account avoiding temporary
+        // account object.
+        let mut action_thresholds = RefMut::map(self.account.borrow_mut(), |account| {
+            account.action_thresholds_mut()
+        });
+        action_thresholds.set_threshold(action_type, threshold)
     }
 }
 
