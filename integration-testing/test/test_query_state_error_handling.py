@@ -25,15 +25,15 @@ KEY = '30' * 32
 assert KEY == "3030303030303030303030303030303030303030303030303030303030303030"
 
 
-@pytest.fixture()
-def node(one_node_network):
-    return one_node_network.docker_nodes[0]
+@pytest.fixture(scope='module')
+def node(one_node_network_module_scope):
+    return one_node_network_module_scope.docker_nodes[0]
 
-@pytest.fixture()
+@pytest.fixture(scope='module')
 def client(node):
     return node.d_client
 
-@pytest.fixture()
+@pytest.fixture(scope='module')
 def block_hash(node):
     return node.deploy_and_propose()
 
