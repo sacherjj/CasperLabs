@@ -137,16 +137,15 @@ object InMemBlockDagStorage {
       childMapRef       <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
       dataLookupRef     <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
       topoSortRef       <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
-    } yield
-      new InMemBlockDagStorage[F](
-        lock,
-        latestMessagesRef,
-        childMapRef,
-        dataLookupRef,
-        topoSortRef
-      ) with MeteredBlockDagStorage[F] {
-        override implicit val m: Metrics[F] = met
-        override implicit val ms: Source    = Metrics.Source(BlockDagStorageMetricsSource, "in-mem")
-        override implicit val a: Apply[F]   = Concurrent[F]
-      }
+    } yield new InMemBlockDagStorage[F](
+      lock,
+      latestMessagesRef,
+      childMapRef,
+      dataLookupRef,
+      topoSortRef
+    ) with MeteredBlockDagStorage[F] {
+      override implicit val m: Metrics[F] = met
+      override implicit val ms: Source    = Metrics.Source(BlockDagStorageMetricsSource, "in-mem")
+      override implicit val a: Apply[F]   = Concurrent[F]
+    }
 }

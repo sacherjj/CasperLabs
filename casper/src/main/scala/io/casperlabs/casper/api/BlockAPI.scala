@@ -309,19 +309,18 @@ object BlockAPI {
                        timestamp
                      )
         blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
-      } yield
-        blockQueryResponse.fold(
-          BlockQueryResponse(
-            status = s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
-              .buildString(accountPublicKey)} with timestamp ${timestamp.toString}"
-          )
-        )(
-          blockInfo =>
-            BlockQueryResponse(
-              status = "Success",
-              blockInfo = Some(blockInfo)
-            )
+      } yield blockQueryResponse.fold(
+        BlockQueryResponse(
+          status = s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
+            .buildString(accountPublicKey)} with timestamp ${timestamp.toString}"
         )
+      )(
+        blockInfo =>
+          BlockQueryResponse(
+            status = "Success",
+            blockInfo = Some(blockInfo)
+          )
+      )
 
     MultiParentCasperRef.withCasper[F, BlockQueryResponse](
       casperResponse(_),
@@ -545,11 +544,10 @@ object BlockAPI {
                                case Some(block) =>
                                  for {
                                    blockInfo <- getFullBlockInfo[F](block)
-                                 } yield
-                                   BlockQueryResponse(
-                                     status = "Success",
-                                     blockInfo = Some(blockInfo)
-                                   )
+                                 } yield BlockQueryResponse(
+                                   status = "Success",
+                                   blockInfo = Some(blockInfo)
+                                 )
                                case None =>
                                  BlockQueryResponse(
                                    status = s"Error: Failure to find block with hash ${q.hash}"

@@ -250,10 +250,9 @@ class ValidateTest
     val genDeploy = for {
       d <- arbitrary[consensus.Deploy]
       h <- genHash
-    } yield
-      d.withApprovals(
-        d.approvals ++ d.approvals.take(1).map(a => a.withSignature(a.getSignature.withSig(h)))
-      )
+    } yield d.withApprovals(
+      d.approvals ++ d.approvals.take(1).map(a => a.withSignature(a.getSignature.withSig(h)))
+    )
 
     val deploy = sample(genDeploy)
     Validate.deploySignature[Task](deploy) shouldBeF false
