@@ -94,6 +94,8 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             Ok(transform::Transform::AddKeys(keys_map))
         } else if tr.has_add_i32() {
             Ok(transform::Transform::AddInt32(tr.get_add_i32().value))
+        } else if tr.has_add_u64() {
+            Ok(transform::Transform::AddUInt64(tr.get_add_u64().value))
         } else if tr.has_add_big_int() {
             let b = tr.get_add_big_int().get_value();
             let v = b.try_into()?;
@@ -182,7 +184,7 @@ impl From<common::value::Value> for super::state::Value {
                 tv.set_contract(contract.into());
             }
             common::value::Value::Unit => tv.set_unit(state::Unit::new()),
-            common::value::Value::U64(num) => tv.set_long_value(num),
+            common::value::Value::UInt64(num) => tv.set_long_value(num),
         };
         tv
     }
@@ -227,7 +229,7 @@ impl TryFrom<&super::state::Value> for common::value::Value {
         } else if value.has_unit() {
             Ok(common::value::Value::Unit)
         } else if value.has_long_value() {
-            Ok(common::value::Value::U64(value.get_long_value()))
+            Ok(common::value::Value::UInt64(value.get_long_value()))
         } else {
             parse_error(format!(
                 "IPC Value {:?} couldn't be parsed to domain representation.",
@@ -379,6 +381,11 @@ impl From<transform::Transform> for super::ipc::Transform {
                 let mut add = super::ipc::TransformAddInt32::new();
                 add.set_value(i);
                 t.set_add_i32(add);
+            }
+            transform::Transform::AddUInt64(i) => {
+                let mut add = super::ipc::TransformAddUInt64::new();
+                add.set_value(i);
+                t.set_add_u64(add);
             }
             transform::Transform::AddUInt128(u) => {
                 add_big_int_transform(&mut t, u);

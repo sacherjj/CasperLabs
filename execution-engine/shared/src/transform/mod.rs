@@ -41,6 +41,7 @@ pub enum Transform {
     Identity,
     Write(Value),
     AddInt32(i32),
+    AddUInt64(u64),
     AddUInt128(U128),
     AddUInt256(U256),
     AddUInt512(U512),
@@ -73,6 +74,7 @@ use self::Transform::*;
 
 from_try_from_impl!(Value, Write);
 from_try_from_impl!(i32, AddInt32);
+from_try_from_impl!(u64, AddUInt64);
 from_try_from_impl!(U128, AddUInt128);
 from_try_from_impl!(U256, AddUInt256);
 from_try_from_impl!(U512, AddUInt512);
@@ -93,6 +95,18 @@ where
         // greater than 0.
         let j_abs = j.abs().to_u32().unwrap();
         i.wrapping_sub(&j_abs.into())
+    }
+}
+
+fn u64_wrapping_add<T>(i: T, j: u64) -> T
+where
+    T: WrappingAdd + WrappingSub + From<u64>,
+{
+    if j > 0 {
+        let j_unsigned = j.to_u64().unwrap();
+        i.wrapping_add(&j_unsigned.into())
+    } else {
+        i.wrapping_sub(&j.into())
     }
 }
 
@@ -119,11 +133,27 @@ impl Transform {
             Write(w) => Ok(w),
             AddInt32(i) => match v {
                 Value::Int32(j) => Ok(Value::Int32(j.wrapping_add(i))),
+                Value::UInt64(j) => Ok(Value::UInt64(i32_wrapping_addition(j, i))),
                 Value::UInt128(j) => Ok(Value::UInt128(i32_wrapping_addition(j, i))),
                 Value::UInt256(j) => Ok(Value::UInt256(i32_wrapping_addition(j, i))),
                 Value::UInt512(j) => Ok(Value::UInt512(i32_wrapping_addition(j, i))),
                 other => {
                     let expected = String::from("Int32");
+                    Err(TypeMismatch {
+                        expected,
+                        found: other.type_string(),
+                    }
+                    .into())
+                }
+            },
+            AddUInt64(i) => match v {
+                Value::Int32(j) => Ok(Value::UInt64(i32_wrapping_addition(i, j))),
+                Value::UInt64(j) => Ok(Value::UInt64(i.wrapping_add(j))),
+                Value::UInt128(_) => wrapping_addition(i, v, "UInt128"),
+                Value::UInt256(_) => wrapping_addition(i, v, "UInt256"),
+                Value::UInt512(_) => wrapping_addition(i, v, "UInt512"),
+                other => {
+                    let expected = String::from("UInt64");
                     Err(TypeMismatch {
                         expected,
                         found: other.type_string(),
@@ -163,10 +193,17 @@ impl Transform {
 /// again.
 fn wrapped_transform_addition<T>(i: T, b: Transform, expected: &str) -> Transform
 where
-    T: WrappingAdd + WrappingSub + From<u32> + Into<Transform> + TryFrom<Transform, Error = String>,
+    T: WrappingAdd
+        + WrappingSub
+        + From<u32>
+        + From<u64>
+        + Into<Transform>
+        + TryFrom<Transform, Error = String>,
 {
     if let Transform::AddInt32(j) = b {
         i32_wrapping_addition(i, j).into()
+    } else if let Transform::AddUInt64(j) = b {
+        i.wrapping_add(&j.into()).into()
     } else {
         match T::try_from(b) {
             Err(b_type) => Failure(
@@ -201,11 +238,27 @@ impl Add for Transform {
             }
             (AddInt32(i), b) => match b {
                 AddInt32(j) => AddInt32(i.wrapping_add(j)),
+                AddUInt64(j) => AddUInt64(i32_wrapping_addition(j, i)),
+                AddUInt128(j) => AddUInt128(i32_wrapping_addition(j, i)),
                 AddUInt256(j) => AddUInt256(i32_wrapping_addition(j, i)),
                 AddUInt512(j) => AddUInt512(i32_wrapping_addition(j, i)),
                 other => Failure(
                     TypeMismatch {
                         expected: "AddInt32".to_owned(),
+                        found: format!("{:?}", other),
+                    }
+                    .into(),
+                ),
+            },
+            (AddUInt64(i), b) => match b {
+                AddInt32(j) => AddInt32(j.wrapping_add(i.to_i32().unwrap())),
+                AddUInt64(j) => AddUInt64(i.wrapping_add(j)),
+                AddUInt128(j) => AddUInt128(u64_wrapping_add(j, i)),
+                AddUInt256(j) => AddUInt256(u64_wrapping_add(j, i)),
+                AddUInt512(j) => AddUInt512(u64_wrapping_add(j, i)),
+                other => Failure(
+                    TypeMismatch {
+                        expected: "AddUInt64".to_owned(),
                         found: format!("{:?}", other),
                     }
                     .into(),
@@ -248,6 +301,7 @@ pub mod gens {
             Just(Transform::Identity),
             value_arb().prop_map(Transform::Write),
             any::<i32>().prop_map(Transform::AddInt32),
+            any::<u64>().prop_map(Transform::AddUInt64),
             any::<u128>().prop_map(|u| Transform::AddUInt128(u.into())),
             vec(any::<u8>(), 32).prop_map(|u| {
                 let mut buf: [u8; 32] = [0u8; 32];

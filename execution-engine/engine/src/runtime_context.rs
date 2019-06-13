@@ -249,7 +249,7 @@ where
             | Value::String(_)
             | Value::ListString(_)
             | Value::Unit
-            | Value::U64(_) => Ok(()),
+            | Value::UInt64(_) => Ok(()),
             Value::NamedKey(_, key) => self.validate_key(&key),
             Value::Key(key) => self.validate_key(&key),
             Value::Account(account) => {
