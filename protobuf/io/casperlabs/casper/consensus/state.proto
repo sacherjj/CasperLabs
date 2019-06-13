@@ -80,7 +80,7 @@ message NamedKey {
 message Contract {
 	bytes body = 1;
 	repeated NamedKey known_urefs = 2;
-    	ProtocolVersion protocol_version = 3;
+    ProtocolVersion protocol_version = 3;
 }
 
 message Account {
