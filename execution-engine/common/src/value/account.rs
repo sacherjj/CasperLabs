@@ -50,16 +50,20 @@ pub struct ActionThresholds {
 #[repr(i32)]
 #[derive(Debug, Fail)]
 pub enum SetThresholdFailure {
-    // Returned when sum of weights of keys that signed this deploy doesn't meet `KeyManagement` threshold.
-    #[fail(display = "Insufficient weight")]
-    InsufficientWeight = 1,
+    #[fail(display = "New threshold should be lower or equal than key management threshold")]
+    KeyManagementError = 1,
+    #[fail(display = "New threshold should be lower or equal than deployment threshold")]
+    DeploymentThresholdError = 2,
 }
 
 impl From<i32> for SetThresholdFailure {
     fn from(value: i32) -> SetThresholdFailure {
         match value {
-            d if d == SetThresholdFailure::InsufficientWeight as i32 => {
-                SetThresholdFailure::InsufficientWeight
+            d if d == SetThresholdFailure::KeyManagementError as i32 => {
+                SetThresholdFailure::KeyManagementError
+            }
+            d if d == SetThresholdFailure::DeploymentThresholdError as i32 => {
+                SetThresholdFailure::DeploymentThresholdError
             }
             _ => unreachable!(),
         }
@@ -76,7 +80,7 @@ impl ActionThresholds {
         new_threshold: Weight,
     ) -> Result<(), SetThresholdFailure> {
         if new_threshold > self.key_management {
-            Err(SetThresholdFailure::InsufficientWeight)
+            Err(SetThresholdFailure::KeyManagementError)
         } else {
             self.deployment = new_threshold;
             Ok(())
@@ -89,7 +93,7 @@ impl ActionThresholds {
         new_threshold: Weight,
     ) -> Result<(), SetThresholdFailure> {
         if self.deployment > new_threshold {
-            Err(SetThresholdFailure::InsufficientWeight)
+            Err(SetThresholdFailure::DeploymentThresholdError)
         } else {
             self.key_management = new_threshold;
             Ok(())
