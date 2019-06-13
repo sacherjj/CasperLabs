@@ -123,7 +123,7 @@ private[configuration] final case class Options private (
 
   val configFile = opt[Path](descr = "Path to the TOML configuration file.")
 
-  version(s"Casper Labs Node ${BuildInfo.version}")
+  version(s"CasperLabs Node ${BuildInfo.version}")
   printedName = "casperlabs"
   banner(
     """
@@ -486,6 +486,10 @@ private[configuration] final case class Options private (
     @scallop
     val blockstorageLatestMessagesLogMaxSizeFactor =
       gen[Int]("Size factor for squashing block storage latest messages.")
+
+    @scallop
+    val blockstorageCacheMaxSizeBytes =
+      gen[Long]("Maximum size of the in-memory block cache in bytes.")
 
     @scallop
     val casperValidatorPublicKey =

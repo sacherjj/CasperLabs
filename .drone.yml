@@ -356,19 +356,19 @@ pipeline:
         - push
         - tag
 
-  push-codecov:
-    secrets: [ codecov_token ]
-    commands:
-      - "codecov -t $CODECOV_TOKEN"
-    image: "casperlabs/buildenv:latest"
-    when:
-      branch:
-        - dev
-        - release-*
-        - master
-      event:
-        - push
-        - tag
+#  push-codecov:
+#    secrets: [ codecov_token ]
+#    commands:
+#      - "codecov -t $CODECOV_TOKEN"
+#    image: "casperlabs/buildenv:latest"
+#    when:
+#      branch:
+#        - dev
+#        - release-*
+#        - master
+#      event:
+#        - push
+#        - tag
 
   contract-examples:
     fork: true

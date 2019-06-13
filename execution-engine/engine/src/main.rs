@@ -50,7 +50,7 @@ const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
 const ARG_LOG_LEVEL_HELP: &str = "[ fatal | error | warning | info | debug ]";
 
 // defaults
-const DEFAULT_ADDRESS: &str = "00000000000000000000000000000000";
+const DEFAULT_ADDRESS: &str = "3030303030303030303030303030303030303030303030303030303030303030";
 const DEFAULT_GAS_LIMIT: &str = "18446744073709551615";
 
 // Command line arguments instance
@@ -253,6 +253,7 @@ fn main() {
                 cost,
             }) => {
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
+                properties.insert("effects".to_string(), format!("{:?}", effects.1.clone()));
                 let (log_level, error_message, mut new_properties, new_state_hash) =
                     apply_effects(correlation_id, &engine_state, &state_hash, effects);
 

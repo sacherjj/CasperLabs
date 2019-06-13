@@ -63,6 +63,30 @@ $ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock
 Server is listening on socket: casperlabs-node-data/.caspernode.sock
 ```
 
+#### --loglevel
+
+The execution engine supports an optional `--loglevel` command line argument following the mandatory socket argument,
+which sets the log level for the execution engine. 
+
+```console
+$ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock --loglevel=error
+```
+
+The log levels supported are:
+
+```
+    --loglevel=
+    fatal : critical problems that result in the execution engine crashing
+    error : recoverable errors  
+    warning : unsuccessful but not erroneous activity 
+    info : normal, expected activity
+    metric : execution durations, counts, and similar data points (verbose)
+    debug : developer messages
+```
+
+The execution engine will log messages at the configured log level or above (thus, `error` will log errors and fatals but not warnings and below) to stdout.
+
+If the `--loglevel` argument is not provided, the execution engine defaults to the `info` log level.
 
 ### Setting up keys
 1. `secp256r1` (required) private key encoded in unencrypted `PKCS#8` format and `X.509` certificate. Used for node-to-node interaction.
@@ -124,21 +148,26 @@ Generate private key:
 openssl genpkey -algorithm Ed25519 -out ed25519-validator-private.pem
 ```
 
+If the commands returns the next message `Algorithm Ed25519 not found` it means that you don't have the latest version of OpenSSL installed.
+Generally, if any error occurs firstly make sure if all the [prerequisites](/VALIDATOR.md#prerequisites-openssl) are installed.
+
 Public key:
 ```bash
 openssl pkey -in ed25519-validator-private.pem -pubout -out ed25519-validator-public.pem
 ```
 
-To obtain your validator ID (used in bonds.txt file which contains a list of initially bonded of validators):
+Use the public key to create a bonds.txt file which contains a set of initial validators of a network and their initial bonds:
 ```bash
-openssl pkey -outform DER -pubout -in ed25519-validator-private.pem | tail -c +13 | openssl base64
+VALIDATOR_ID=$(openssl pkey -outform DER -pubout -in ed25519-validator-private.pem | tail -c +13 | openssl base64)
+echo "$VALIDATOR_ID" " 100" > bonds.txt
 ```
 
-Use as:
+Use them as follow:
 ```bash
 ./node/target/universal/stage/bin/casperlabs-node run -s \
     --casper-validator-private-key-path ed25519-validator-private.pem \
-    --casper-validator-public-key-path ed25519-validator-public.pem
+    --casper-validator-public-key-path ed25519-validator-public.pem \
+    --casper-bonds-file bonds.txt
 ```
 
 #### ed25519 dApp Developer
@@ -146,6 +175,9 @@ Generate private key:
 ```bash
 openssl genpkey -algorithm Ed25519 -out ed25519-developer-private.pem
 ```
+
+If the commands returns the next message `Algorithm Ed25519 not found` it means that you don't have the latest version of OpenSSL installed.
+Generally, if any error occurs firstly make sure if all the [prerequisites](/VALIDATOR.md#prerequisites-openssl) are installed.
 
 Public key:
 ```bash

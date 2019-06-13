@@ -253,7 +253,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     for {
       lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
-      rankedEstimates        <- Estimator.tips[F](dag, lastFinalizedBlockHash)
+      rankedEstimates        <- Estimator.tips[F](dag, genesis.blockHash)
     } yield rankedEstimates
 
   /*
@@ -599,7 +599,8 @@ object MultiParentCasperImpl {
                      .empty[ExecEngineUtil.TransformMap, Block]
                      .pure[F]
                  ) { ctx =>
-                   Validate.parents[F](block, ctx.lastFinalizedBlockHash, dag)
+                   Validate
+                     .parents[F](block, ctx.lastFinalizedBlockHash, ctx.genesis.blockHash, dag)
                  }
         preStateHash <- ExecEngineUtil.computePrestate[F](merged)
         blockEffects <- ExecEngineUtil

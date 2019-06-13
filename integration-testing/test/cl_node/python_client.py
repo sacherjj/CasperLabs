@@ -22,14 +22,14 @@ class PythonClient(CasperLabsClient):
         return 'python'
 
     def deploy(self,
-               from_address: str = "00000000000000000000000000000000",
+               from_address: str = "3030303030303030303030303030303030303030303030303030303030303030",
                gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: int = None,
                session_contract: Optional[str] = 'test_helloname.wasm',
                payment_contract: Optional[str] = 'test_helloname.wasm') -> str:
 
-        deploy_nonce = nonce if nonce is not None else NonceRegistry.registry[from_address]
+        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(from_address)
 
         resources_path = self.node.resources_folder
         session_contract_path = str(resources_path / session_contract)
@@ -40,13 +40,14 @@ class PythonClient(CasperLabsClient):
                      f'nonce={deploy_nonce})')
 
         r = self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price, payment_contract, session_contract, deploy_nonce)
-        if nonce is None:
-            NonceRegistry.registry[from_address] += 1
         return r
 
     def propose(self) -> str:
         logging.info(f'PY_CLIENT.propose() for {self.node.container_name}')
         return self.client.propose()
+
+    def queryState(self, blockHash: str, key: str, path: str, keyType: str):
+        return self.client.queryState(blockHash, key, path, keyType)
 
     def show_block(self, block_hash: str) -> str:
         # TODO:
@@ -57,3 +58,4 @@ class PythonClient(CasperLabsClient):
 
     def get_blocks_count(self, depth: int) -> int:
         return len(list(self.show_blocks(depth)))
+

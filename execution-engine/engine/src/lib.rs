@@ -29,11 +29,15 @@ extern crate matches;
 #[cfg(test)]
 extern crate proptest;
 
+#[macro_use]
+extern crate num_derive;
+extern crate num_traits;
+
 pub mod args;
 pub mod byte_size;
 pub mod engine_state;
 pub mod execution;
-pub mod functions;
+pub mod function_index;
 pub mod meter;
 pub mod resolvers;
 pub mod runtime_context;

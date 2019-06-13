@@ -8,7 +8,7 @@ use wasmi::{FuncInstance, MemoryRef, ModuleImportResolver};
 
 use super::error::ResolverError;
 use super::memory_resolver::MemoryResolver;
-use functions::*;
+use function_index::FunctionIndex;
 
 pub struct RuntimeModuleImportResolver {
     memory: RefCell<Option<MemoryRef>>,
@@ -43,83 +43,87 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
         let func_ref = match field_name {
             "read_value" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                READ_FUNC_INDEX,
+                FunctionIndex::ReadFuncIndex.into(),
             ),
             "serialize_function" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                SER_FN_FUNC_INDEX,
+                FunctionIndex::SerFnFuncIndex.into(),
             ),
             "write" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
-                WRITE_FUNC_INDEX,
+                FunctionIndex::WriteFuncIndex.into(),
             ),
             "get_read" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
-                GET_READ_FUNC_INDEX,
+                FunctionIndex::GetReadFuncIndex.into(),
             ),
             "get_function" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
-                GET_FN_FUNC_INDEX,
+                FunctionIndex::GetFnFuncIndex.into(),
             ),
             "add" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
-                ADD_FUNC_INDEX,
+                FunctionIndex::AddFuncIndex.into(),
             ),
             "new_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 3][..], None),
-                NEW_FUNC_INDEX,
+                FunctionIndex::NewFuncIndex.into(),
             ),
             "load_arg" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
-                LOAD_ARG_FUNC_INDEX,
+                FunctionIndex::LoadArgFuncIndex.into(),
             ),
             "get_arg" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
-                GET_ARG_FUNC_INDEX,
+                FunctionIndex::GetArgFuncIndex.into(),
             ),
             "ret" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
-                RET_FUNC_INDEX,
+                FunctionIndex::RetFuncIndex.into(),
             ),
             "call_contract" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
-                CALL_CONTRACT_FUNC_INDEX,
+                FunctionIndex::CallContractFuncIndex.into(),
             ),
             "get_call_result" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
-                GET_CALL_RESULT_FUNC_INDEX,
+                FunctionIndex::GetCallResultFuncIndex.into(),
             ),
             "get_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 3][..], None),
-                GET_UREF_FUNC_INDEX,
+                FunctionIndex::GetURefFuncIndex.into(),
             ),
             "has_uref_name" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                HAS_UREF_FUNC_INDEX,
+                FunctionIndex::HasURefFuncIndex.into(),
             ),
             "add_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
-                ADD_UREF_FUNC_INDEX,
+                FunctionIndex::AddURefFuncIndex.into(),
             ),
             "gas" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
-                GAS_FUNC_INDEX,
+                FunctionIndex::GasFuncIndex.into(),
             ),
             "store_function" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 5][..], None),
-                STORE_FN_INDEX,
+                FunctionIndex::StoreFnIndex.into(),
             ),
             "protocol_version" => FuncInstance::alloc_host(
                 Signature::new(vec![], Some(ValueType::I64)),
-                PROTOCOL_VERSION_FUNC_INDEX,
+                FunctionIndex::ProtocolVersionFuncIndex.into(),
             ),
             "is_valid" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                IS_VALID_FN_INDEX,
+                FunctionIndex::IsValidFnIndex.into(),
             ),
             "seed" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
-                SEED_FN_INDEX,
+                FunctionIndex::SeedFnIndex.into(),
+            ),
+            "revert" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::RevertFuncIndex.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(
