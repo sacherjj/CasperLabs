@@ -7,19 +7,20 @@ import pytest
 import casper_client
 import logging
 
-"""
-aakoshh@af-dp:~/projects/CasperLabs/docker$ ./client.sh node-0 propose
-Response: Success! Block 9d38836598... created and added.
-aakoshh@af-dp:~/projects/CasperLabs/docker$ ./client.sh node-0 query-state --block-hash '"9d"' --key '"a91208047c"' --path file.xxx --type hash
-NOT_FOUND: Cannot find block matching hash "9d"
 
-aakoshh@af-dp:~/projects/CasperLabs/docker$ ./client.sh node-0 query-state --block-hash 9d --key '"a91208047c"' --path file.xxx --type hash
-INVALID_ARGUMENT: Key of type hash must have exactly 32 bytes, 5 =/= 32 provided.
+# Examples of query-state executed with the Scala client that result in errors:
 
-aakoshh@af-dp:~/projects/CasperLabs/docker$ ./client.sh node-0 query-state --block-hash 9d --key 3030303030303030303030303030303030303030303030303030303030303030 --path file.xxx --type hash
-INVALID_ARGUMENT: Value not found: " Hash([48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48])"
-aakoshh@af-dp:~/projects/CasperLabs/docker$
-"""
+# aakoshh@af-dp:~/projects/CasperLabs/docker$ ./client.sh node-0 propose
+# Response: Success! Block 9d38836598... created and added.
+# aakoshh@af-dp:~/projects/CasperLabs/docker$ ./client.sh node-0 query-state --block-hash '"9d"' --key '"a91208047c"' --path file.xxx --type hash
+# NOT_FOUND: Cannot find block matching hash "9d"
+
+# aakoshh@af-dp:~/projects/CasperLabs/docker$ ./client.sh node-0 query-state --block-hash 9d --key '"a91208047c"' --path file.xxx --type hash
+# INVALID_ARGUMENT: Key of type hash must have exactly 32 bytes, 5 =/= 32 provided.
+
+# aakoshh@af-dp:~/projects/CasperLabs/docker$ ./client.sh node-0 query-state --block-hash 9d --key 3030303030303030303030303030303030303030303030303030303030303030 --path file.xxx --type hash
+# INVALID_ARGUMENT: Value not found: " Hash([48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48])"
+
 
 KEY = '30' * 32
 assert KEY == "3030303030303030303030303030303030303030303030303030303030303030"
