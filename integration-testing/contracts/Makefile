@@ -14,6 +14,9 @@ all: $(EXAMPLES)
 clean: down $(shell find . -type f -name "Cargo.toml" | awk '{print $$1"/clean"}')
 	rm -rf .make
 
+copy:
+	$(shell find . -type f -name \*.wasm | grep -v deps | xargs -I % cp % ../resources/)
+
 # Defining rules so each target building a contract only depends on its own source. Needs GNU Make.
 # Building either a call or a define, leaving the WASM files in <contract>/target/wasm32-unknown-unknown/release/
 define CONTRACT_rule

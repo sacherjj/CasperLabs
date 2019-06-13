@@ -8,6 +8,14 @@ if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "test" ]]; then
     PYTEST_ARGS="--maxfail=3"
 fi
 
+# Running locally, build contracts if needed
+if [[ -z $TAG_NAME ]]; then
+    cd contracts
+    make all
+    make copy
+    cd ..
+fi
+
 pipenv sync
 pipenv run client/CasperClient/install.sh
 pipenv run py.test ${PYTEST_ARGS} -rf -v "$@"
