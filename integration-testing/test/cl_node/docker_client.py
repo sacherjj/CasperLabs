@@ -7,6 +7,7 @@ from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
+import docker.errors
 from test.cl_node.nonce_registry import NonceRegistry
 
 from docker.errors import ContainerError
@@ -29,22 +30,33 @@ class DockerClient(CasperLabsClient):
                 'mode': 'ro'
             }
         }
+        command = f'--host {self.node.container_name} {command}'
+        logging.info(f"COMMAND {command}")
+        container = self.docker_client.containers.run(
+            image = f"casperlabs/client:{self.node.docker_tag}",
+            name = f"client-{self.node.config.number}-{random_string(5)}",
+            command = command,
+            network = self.node.network,
+            volumes = volumes,
+            detach = True,
+            stderr = True,
+            stdout = True,
+        )
+        r = container.wait()
+        error, status_code = r['Error'], r['StatusCode']
+        stdout = container.logs(stdout=True, stderr=False).decode('utf-8')
+        stderr = container.logs(stdout=False, stderr=True).decode('utf-8')
+        logging.info(f"EXITED exit_code: {status_code} STDERR: {stderr} STDOUT: {stdout}")
+
         try:
-            command = f'--host {self.node.container_name} {command}'
-            logging.info(f"COMMAND {command}")
-            output = self.docker_client.containers.run(
-                image=f"casperlabs/client:{self.node.docker_tag}",
-                auto_remove=True,
-                name=f"client-{self.node.config.number}-{random_string(5)}",
-                command=command,
-                network=self.node.network,
-                volumes=volumes,
-            ).decode('utf-8')
-            logging.debug(f"OUTPUT {self.node.container_name} {output}")
-            return output
-        except ContainerError as err:
-            logging.warning(f"EXITED code={err.exit_status} command='{err.command}' stderr='{err.stderr}'")
-            raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
+            container.remove()
+        except docker.errors.APIError as e:
+            logging.warning(f"Exception while removing docker client container: {str(e)}")
+
+        if status_code: 
+            raise NonZeroExitCodeError(command=(command, status_code), exit_code=status_code, output=stderr)
+
+        return stdout
 
     def propose(self) -> str:
         return self.invoke_client('propose')
@@ -109,3 +121,21 @@ class DockerClient(CasperLabsClient):
     def vdag(self, depth: int, show_justification_lines: bool = False) -> str:
         just_text = '--show-justification-lines' if show_justification_lines else ''
         return self.invoke_client(f'vdag --depth {depth} {just_text}')
+
+    def queryState(self, blockHash: str, key: str, path: str, keyType: str):
+        """
+        Subcommand: query-state - Query a value in the global state.
+          -b, --block-hash  <arg>   Hash of the block to query the state of
+          -k, --key  <arg>          Base16 encoding of the base key.
+          -p, --path  <arg>         Path to the value to query. Must be of the form
+                                    'key1/key2/.../keyn'
+          -t, --type  <arg>         Type of base key. Must be one of 'hash', 'uref',
+                                    'address'
+          -h, --help                Show help message
+
+        """
+        return self.invoke_client(f'query-state '
+                                  f' --block-hash "{blockHash}"'
+                                  f' --key "{key}"'
+                                  f' --path "{path}"'
+                                  f' --type "{keyType}"')
