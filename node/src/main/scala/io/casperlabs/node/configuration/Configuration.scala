@@ -31,7 +31,7 @@ final case class Configuration(
     tls: Tls,
     casper: CasperConf,
     lmdb: LMDBBlockStore.Config,
-    blockstorage: BlockDagFileStorage.Config,
+    blockstorage: Configuration.BlockStorage,
     metrics: Configuration.Kamon,
     influx: Option[Configuration.Influx]
 )
@@ -89,6 +89,11 @@ object Configuration extends ParserImplicits {
       relayMaxParallelBlocks: Int,
       relayBlockChunkConsumerTimeout: FiniteDuration,
       cleanBlockStorage: Boolean
+  ) extends SubConfig
+
+  case class BlockStorage(
+      latestMessagesLogMaxSizeFactor: Int,
+      cacheMaxSizeBytes: Long
   ) extends SubConfig
 
   case class GrpcServer(
