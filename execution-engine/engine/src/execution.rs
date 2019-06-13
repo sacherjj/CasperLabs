@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt;
 use std::iter::IntoIterator;
 use std::rc::Rc;
@@ -13,7 +13,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use wasmi::{
     Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
-    ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind,
+    ModuleRef, RuntimeArgs, RuntimeValue, Trap,
 };
 
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
@@ -657,7 +657,8 @@ where
             FunctionIndex::AddKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = weight of the key
-                let (public_key_ptr, public_key_size, weight): (u32, u32, u32) = Args::parse(args)?;
+                let (public_key_ptr, public_key_size, weight_value): (u32, u32, u8) =
+                    Args::parse(args)?;
                 let public_key = {
                     // Public key as serialized bytes
                     let source_serialized =
@@ -667,13 +668,7 @@ where
                         deserialize(&source_serialized).map_err(Error::BytesRepr)?;
                     source
                 };
-                // Safely consume a passed weight (u32) and convert it into
-                // weight object (u8 newtype).
-                let weight = weight
-                    .try_into()
-                    .map(Weight::new)
-                    // Raises an invalid conversion to int
-                    .map_err(|_| Trap::new(TrapKind::InvalidConversionToInt))?;
+                let weight = Weight::new(weight_value);
 
                 let value = match self.context.add_associated_key(public_key, weight) {
                     Ok(_) => 0,
@@ -709,13 +704,9 @@ where
             FunctionIndex::SetThresholdFuncIndex => {
                 // args(0) = action type
                 // args(1) = new threshold
-                let (action_type_value, threshold_value): (u32, u32) = Args::parse(args)?;
+                let (action_type_value, threshold_value): (u32, u8) = Args::parse(args)?;
                 let action_type = ActionType::from(action_type_value);
-                let threshold = threshold_value
-                    .try_into()
-                    .map(Weight::new)
-                    // Raises an invalid conversion to int
-                    .map_err(|_| Trap::new(TrapKind::InvalidConversionToInt))?;
+                let threshold = Weight::new(threshold_value);
                 let value = match self.context.set_action_threshold(action_type, threshold) {
                     Ok(_) => 0,
                     Err(e) => e as i32,
