@@ -51,7 +51,7 @@ pub struct ActionThresholds {
 #[derive(Debug, Fail)]
 pub enum SetThresholdFailure {
     #[fail(display = "New threshold should be lower or equal than key management threshold")]
-    KeyManagementError = 1,
+    KeyManagementThresholdError = 1,
     #[fail(display = "New threshold should be lower or equal than deployment threshold")]
     DeploymentThresholdError = 2,
 }
@@ -59,8 +59,8 @@ pub enum SetThresholdFailure {
 impl From<i32> for SetThresholdFailure {
     fn from(value: i32) -> SetThresholdFailure {
         match value {
-            d if d == SetThresholdFailure::KeyManagementError as i32 => {
-                SetThresholdFailure::KeyManagementError
+            d if d == SetThresholdFailure::KeyManagementThresholdError as i32 => {
+                SetThresholdFailure::KeyManagementThresholdError
             }
             d if d == SetThresholdFailure::DeploymentThresholdError as i32 => {
                 SetThresholdFailure::DeploymentThresholdError
@@ -80,7 +80,7 @@ impl ActionThresholds {
         new_threshold: Weight,
     ) -> Result<(), SetThresholdFailure> {
         if new_threshold > self.key_management {
-            Err(SetThresholdFailure::KeyManagementError)
+            Err(SetThresholdFailure::KeyManagementThresholdError)
         } else {
             self.deployment = new_threshold;
             Ok(())
