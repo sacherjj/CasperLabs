@@ -134,7 +134,7 @@ object PrettyPrinter {
     s"Last deploy: ${ac.deploymentLastUsed}, last key management change: ${ac.keyManagementLastUsed}, inactivity period limit: ${ac.inactivityPeriodLimit}"
 
   def buildString(d: consensus.Deploy): String =
-    s"Deploy #${d.getHeader.timestamp}"
+    s"Deploy ${buildStringNoLimit(d.deployHash)} (${buildStringNoLimit(d.getHeader.accountPublicKey)} / ${d.getHeader.nonce})"
 
   def buildString(d: DeployData): String =
     s"Deploy #${d.timestamp}"
