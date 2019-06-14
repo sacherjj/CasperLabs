@@ -22,7 +22,7 @@ def protobufSubDirectoryFilter(subdirs: String*) = {
 
 lazy val projectSettings = Seq(
   organization := "io.casperlabs",
-  scalaVersion := "2.12.7",
+  scalaVersion := "2.12.8",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
