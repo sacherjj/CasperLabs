@@ -472,7 +472,7 @@ class ValidateTest
         b2  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 1)
         b3  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 2)
         b4  <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
-        b5  <- createValidatorBlock[Task](Seq(b3, b1, b2), Seq(b1, b2, b3), 1)
+        b5  <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
         b6  <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
         b7  <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
         b8  <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
