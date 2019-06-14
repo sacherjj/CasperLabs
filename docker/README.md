@@ -180,7 +180,7 @@ google-chrome --new-window \
 
 The node includes a GraphQL console which you can use to explore the schema and build queries with the help of auto-completion. To access it, first make sure the top level docker containers and the bootstrap container are started: `make up node-0/up`. Once that's done you can point your browser at http://localhost:40403
 
-See what's exposed by clicking the _DOCS_ and _SCHEMA_ buttons on the right hand side of the screen. To run a query, start typing "query" into the left hand pane and see what the code completion offers up. You can keep the _DOCS_ open on the right hand side to see what's available; close it when you finished your query and press the "play" button in the middle to see the response.
+See what's exposed by clicking the _DOCS_ and _SCHEMA_ buttons on the right-hand side of the screen. To run a query, start typing "query" or "subscription" into the left-hand pane and see what the code completion offers up. You can keep the _DOCS_ open on the right hand side to see what's available; close it when you finished your query and press the "play" button in the middle to see the response.
 
 For example you can use the following query to see the top 5 ranks of the DAG:
 ```json
