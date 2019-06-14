@@ -10,43 +10,42 @@ object Dependencies {
   val catsVersion    = "1.6.0"
   val catsMtlVersion = "0.5.0"
 
-  // format: off
-  val julToSlf4j             = "org.slf4j"                  % "jul-to-slf4j"                    % "1.7.25"
-  val bitcoinjCore           = "org.bitcoinj"               % "bitcoinj-core"                   % "0.14.6"
-  val bouncyProvCastle           = "org.bouncycastle"           % "bcprov-jdk15on"              % "1.61"
-  val bouncyPkixCastle           = "org.bouncycastle"           % "bcpkix-jdk15on"              % "1.61"
-  val catsCore               = "org.typelevel"              %% "cats-core"                      % catsVersion
-  val catsPar                = "io.chrisdavenport"          %% "cats-par"                       % "0.2.1"
-  val catsLawsTest           = "org.typelevel"              %% "cats-laws"                      % catsVersion % "test"
-  val catsLawsTestkitTest    = "org.typelevel"              %% "cats-testkit"                   % catsVersion % "test"
-  val catsEffect             = "org.typelevel"              %% "cats-effect"                    % "1.3.0"
-  val catsEffectLaws         = "org.typelevel"              %% "cats-effect-laws"               % "1.3.0" % "test"
-  val catsMtl                = "org.typelevel"              %% "cats-mtl-core"                  % catsMtlVersion
-  val catsMtlLawsTest        = "org.typelevel"              %% "cats-mtl-laws"                  % catsMtlVersion % "test"
-  val meowMtl                = "com.olegpy"                 %% "meow-mtl"                       % "0.2.1"
-  val circeCore              = "io.circe"                   %% "circe-core"                     % circeVersion
-  val circeGeneric           = "io.circe"                   %% "circe-generic"                  % circeVersion
-  val circeGenericExtras     = "io.circe"                   %% "circe-generic-extras"           % circeVersion
-  val circeLiteral           = "io.circe"                   %% "circe-literal"                  % circeVersion
-  val circeParser            = "io.circe"                   %% "circe-parser"                   % circeVersion
-  val sangria                = "org.sangria-graphql"        %% "sangria"                        % "1.4.2"
-  val guava                  = "com.google.guava"           % "guava"                           % "24.1.1-jre"
-  val hasher                 = "com.roundeights"            %% "hasher"                         % "1.2.0"
-  val http4sBlazeServer      = "org.http4s"                 %% "http4s-blaze-server"            % http4sVersion
-  val javaWebsocket          = "org.java-websocket"         % "Java-WebSocket"                  % "1.4.0"
-  val http4sCirce            = "org.http4s"                 %% "http4s-circe"                   % http4sVersion
-  val http4sDSL              = "org.http4s"                 %% "http4s-dsl"                     % http4sVersion
-  val jaxb                   = "javax.xml.bind"             % "jaxb-api"                        % "2.3.1"
-  val jline                  = ("org.scala-lang"            % "jline"                           % "2.10.7")
+  val julToSlf4j          = "org.slf4j"           % "jul-to-slf4j"          % "1.7.25"
+  val bitcoinjCore        = "org.bitcoinj"        % "bitcoinj-core"         % "0.14.6"
+  val bouncyProvCastle    = "org.bouncycastle"    % "bcprov-jdk15on"        % "1.61"
+  val bouncyPkixCastle    = "org.bouncycastle"    % "bcpkix-jdk15on"        % "1.61"
+  val catsCore            = "org.typelevel"       %% "cats-core"            % catsVersion
+  val catsPar             = "io.chrisdavenport"   %% "cats-par"             % "0.2.1"
+  val catsLawsTest        = "org.typelevel"       %% "cats-laws"            % catsVersion % "test"
+  val catsLawsTestkitTest = "org.typelevel"       %% "cats-testkit"         % catsVersion % "test"
+  val catsEffect          = "org.typelevel"       %% "cats-effect"          % "1.3.0"
+  val catsEffectLaws      = "org.typelevel"       %% "cats-effect-laws"     % "1.3.0" % "test"
+  val catsMtl             = "org.typelevel"       %% "cats-mtl-core"        % catsMtlVersion
+  val catsMtlLawsTest     = "org.typelevel"       %% "cats-mtl-laws"        % catsMtlVersion % "test"
+  val meowMtl             = "com.olegpy"          %% "meow-mtl"             % "0.2.1"
+  val circeCore           = "io.circe"            %% "circe-core"           % circeVersion
+  val circeGeneric        = "io.circe"            %% "circe-generic"        % circeVersion
+  val circeGenericExtras  = "io.circe"            %% "circe-generic-extras" % circeVersion
+  val circeLiteral        = "io.circe"            %% "circe-literal"        % circeVersion
+  val circeParser         = "io.circe"            %% "circe-parser"         % circeVersion
+  val sangria             = "org.sangria-graphql" %% "sangria"              % "1.4.2"
+  val guava               = "com.google.guava"    % "guava"                 % "24.1.1-jre"
+  val hasher              = "com.roundeights"     %% "hasher"               % "1.2.0"
+  val http4sBlazeServer   = "org.http4s"          %% "http4s-blaze-server"  % http4sVersion
+  val javaWebsocket       = "org.java-websocket"  % "Java-WebSocket"        % "1.4.0"
+  val http4sCirce         = "org.http4s"          %% "http4s-circe"         % http4sVersion
+  val http4sDSL           = "org.http4s"          %% "http4s-dsl"           % http4sVersion
+  val jaxb                = "javax.xml.bind"      % "jaxb-api"              % "2.3.1"
+  val jline = ("org.scala-lang" % "jline" % "2.10.7")
     .exclude("org.fusesource.jansi", "jansi")
   // see https://jitpack.io/#rchain/kalium
-  val kalium                 = "com.github.rchain"          % "kalium"                          % "0.8.1"
-  val kamonCore              = "io.kamon"                   %% "kamon-core"                     % kamonVersion
-  val kamonSystemMetrics     = "io.kamon"                   %% "kamon-system-metrics"           % "1.0.0"
-  val kamonPrometheus        = "io.kamon"                   %% "kamon-prometheus"               % "1.1.1"
-  val kamonInfluxDb          = "io.kamon"                   %% "kamon-influxdb"                 % "1.0.2"
-  val kamonZipkin            = "io.kamon"                   %% "kamon-zipkin"                   % "1.0.0"
-  val lightningj             = ("org.lightningj"             % "lightningj"                     % "0.5.0-Beta-rc2")
+  val kalium             = "com.github.rchain" % "kalium"                % "0.8.1"
+  val kamonCore          = "io.kamon"          %% "kamon-core"           % kamonVersion
+  val kamonSystemMetrics = "io.kamon"          %% "kamon-system-metrics" % "1.0.0"
+  val kamonPrometheus    = "io.kamon"          %% "kamon-prometheus"     % "1.1.1"
+  val kamonInfluxDb      = "io.kamon"          %% "kamon-influxdb"       % "1.0.2"
+  val kamonZipkin        = "io.kamon"          %% "kamon-zipkin"         % "1.0.0"
+  val lightningj = ("org.lightningj" % "lightningj" % "0.5.0-Beta-rc2")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
   val lmdbjava               = "org.lmdbjava"               % "lmdbjava"                        % "0.6.1"
   val logbackClassic         = "ch.qos.logback"             % "logback-classic"                 % "1.2.3"
@@ -58,7 +57,7 @@ object Dependencies {
   val scalacheck             = "org.scalacheck"             %% "scalacheck"                     % "1.13.5" % "test"
   val scalacheckNoTest       = "org.scalacheck"             %% "scalacheck"                     % "1.13.5"
   val scalacheckShapeless    = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13"      % "1.1.8" % "test"
-  val graphvizJava           = "guru.nidi"                  %  "graphviz-java"                  % "0.8.3"
+  val graphvizJava           = "guru.nidi"                  % "graphviz-java"                   % "0.8.3"
   val scalactic              = "org.scalactic"              %% "scalactic"                      % "3.0.5" % "test"
   val scalapbCompiler        = "com.thesamet.scalapb"       %% "compilerplugin"                 % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntime         = "com.thesamet.scalapb"       %% "scalapb-runtime"                % scalapb.compiler.Version.scalapbVersion % "protobuf"
@@ -84,10 +83,9 @@ object Dependencies {
   val gatlingFramework       = "io.gatling"                 % "gatling-test-framework"          % "3.0.3" % "test"
   val gatlingGrpc            = "com.github.phisgr"          %% "gatling-grpc"                   % "0.3.0" % "test"
   // see https://jitpack.io/#rchain/secp256k1-java
-  val secp256k1Java          = "com.github.rchain"          % "secp256k1-java"                  % "0.1"
-  val tomlScala              = "tech.sparse"                %% "toml-scala"                     % "0.1.1"
-  val refinement             = "eu.timepit"                 %% "refined"                        % "0.9.5"
-  // format: on
+  val secp256k1Java = "com.github.rchain" % "secp256k1-java" % "0.1"
+  val tomlScala     = "tech.sparse"       %% "toml-scala"    % "0.1.1"
+  val refinement    = "eu.timepit"        %% "refined"       % "0.9.5"
 
   val overrides = Seq(
     catsCore,
@@ -109,7 +107,8 @@ object Dependencies {
   private val kindProjector    = compilerPlugin("org.spire-math" %% "kind-projector"     % "0.9.8")
   private val betterMonadicFor = compilerPlugin("com.olegpy"     %% "better-monadic-for" % "0.3.0")
   private val macroParadise = compilerPlugin(
-    "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+    "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full
+  )
 
   private val testing = Seq(scalactic, scalatest, scalacheck, scalacheckShapeless)
 
