@@ -105,7 +105,6 @@ make
 make test
 sudo make install
 sudo ldconfig
-sudo ln -s /usr/local/ssh/bin/openssl /usr/local/bin
 ```
 
 #### Prerequisites: sha3sum
