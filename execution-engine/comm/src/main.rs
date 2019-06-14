@@ -11,7 +11,6 @@ extern crate lmdb;
 extern crate parity_wasm;
 extern crate proptest;
 extern crate protobuf;
-extern crate rand;
 extern crate shared;
 extern crate storage;
 extern crate wabt;
