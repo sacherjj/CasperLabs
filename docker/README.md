@@ -18,7 +18,7 @@ Contract examples exist in another repo.  Clone https://github.com/CasperLabs/co
 
 ## Required: OpenSSL 1.1
 
-`openssl` is used to generate keys and certificates. Please verify that [the latest OpenSSL 1.1 version is installed](https://github.com/openssl/openssl).
+`openssl` is used to generate keys and certificates. Please verify that [the latest OpenSSL 1.1 version is installed](https://github.com/openssl/openssl). You can also [follow these steps](https://github.com/CasperLabs/CasperLabs/blob/dev/VALIDATOR.md#setting-up-keys)
 
 ## Required: SHA3SUM
 
@@ -74,7 +74,8 @@ Assuming that you cloned and compiled the [contract-examples](https://github.com
      --from 3030303030303030303030303030303030303030303030303030303030303030 \
      --gas-price 1 \
      --session /data/helloname.wasm \
-     --payment /data/helloname.wasm
+     --payment /data/helloname.wasm \
+     --nonce 1
 ```
 
 After a successful deploy, you should see the following response:
@@ -174,6 +175,25 @@ Alternatively you can even use the browser:
 google-chrome --new-window \
     $(python -c "import urllib; print 'https://dreampuf.github.io/GraphvizOnline/#' + urllib.quote('''$(./client.sh node-0 vdag --show-justification-lines --depth 25)''')")
 ```
+
+## Execute GraphQL Queries
+
+The node includes a GraphQL console which you can use to explore the schema and build queries with the help of auto-completion. To access it, first make sure the top level docker containers and the bootstrap container are started: `make up node-0/up`. Once that's done you can point your browser at http://localhost:40403
+
+See what's exposed by clicking the _DOCS_ and _SCHEMA_ buttons on the right-hand side of the screen. To run a query, start typing "query" or "subscription" into the left-hand pane and see what the code completion offers up. You can keep the _DOCS_ open on the right hand side to see what's available; close it when you finished your query and press the "play" button in the middle to see the response.
+
+For example you can use the following query to see the top 5 ranks of the DAG:
+```json
+query {
+  dagSlice(depth: 5) {
+    blockHash
+    parentHashes
+    deployCount
+  }
+}
+```
+
+You can use the _COPY CURL_ button to see what an equivalent pure HTTP/JSON command would be.
 
 ## Network Effects
 

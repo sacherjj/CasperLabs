@@ -86,7 +86,7 @@ object BlockAPI {
       )
   }
 
-  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: Metrics](
+  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStore: SafetyOracle: Log: Metrics](
       d: Deploy,
       ignoreDeploySignature: Boolean
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
@@ -101,6 +101,10 @@ object BlockAPI {
       _ <- check("Invalid deploy hash.")(Validate.deployHash[F](d))
       _ <- check("Invalid deploy signature.")(Validate.deploySignature[F](d))
             .whenA(!ignoreDeploySignature)
+
+      t = casper.faultToleranceThreshold
+      _ <- ensureNotInDag[F](d, t)
+
       r <- MultiParentCasper[F].deploy(d)
       _ <- r match {
             case Right(_) =>
@@ -112,6 +116,31 @@ object BlockAPI {
           }
     } yield ()
   }
+
+  /** Check that we don't have this deploy already in the finalized part of the DAG. */
+  private def ensureNotInDag[F[_]: MonadThrowable: MultiParentCasperRef: BlockStore: SafetyOracle: Log](
+      d: Deploy,
+      faultToleranceThreshold: Float
+  ): F[Unit] =
+    BlockStore[F]
+      .findBlockHashesWithDeployhash(d.deployHash)
+      .flatMap(
+        _.toList.traverse(blockHash => getBlockInfo[F](Base16.encode(blockHash.toByteArray)))
+      )
+      .flatMap {
+        case Nil =>
+          ().pure[F]
+        case infos =>
+          infos.find(_.getStatus.faultTolerance > faultToleranceThreshold).fold(().pure[F]) {
+            finalized =>
+              MonadThrowable[F].raiseError {
+                AlreadyExists(
+                  s"Block ${PrettyPrinter.buildString(finalized.getSummary.blockHash)} with fault tolerance ${finalized.getStatus.faultTolerance} already contains ${PrettyPrinter
+                    .buildString(d)}"
+                )
+              }
+          }
+      }
 
   @deprecated("To be removed before devnet. Use `propose`.", "0.4")
   def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics](

@@ -56,7 +56,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     genesis: Block,
     chainId: String,
     blockProcessingLock: Semaphore[F],
-    faultToleranceThreshold: Float = 0f
+    val faultToleranceThreshold: Float = 0f
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
@@ -232,7 +232,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
         EitherT(req)
           .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
-          .flatMapF(_ => addDeploy(deploy) map (_.asRight[Throwable]))
+          .flatMapF(_ => addDeploy(deploy))
           .value
       // TODO: Genesis doesn't have payment code; does it come here?
       case (None, _) | (_, None) =>
@@ -245,10 +245,27 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     }
 
   /** Add a deploy to the buffer, to be executed later. */
-  private def addDeploy(deploy: Deploy): F[Unit] =
-    Cell[F, CasperState].modify { s =>
-      s.copy(deployBuffer = s.deployBuffer.add(deploy))
-    } *> Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
+  private def addDeploy(deploy: Deploy): F[Either[Throwable, Unit]] = {
+    def show(d: Deploy) = PrettyPrinter.buildString(d)
+    (for {
+      s <- Cell[F, CasperState].read
+      _ <- s.deployBuffer.processedDeploys.values.find { d =>
+            d.getHeader.accountPublicKey == deploy.getHeader.accountPublicKey &&
+            d.getHeader.nonce >= deploy.getHeader.nonce &&
+            d.deployHash != deploy.deployHash
+          } map { d =>
+            Sync[F].raiseError(
+              new IllegalArgumentException(
+                s"${show(d)} supersedes ${show(deploy)}."
+              )
+            )
+          } getOrElse ().pure[F]
+      _ <- Cell[F, CasperState].modify { s =>
+            s.copy(deployBuffer = s.deployBuffer.add(deploy))
+          }
+      _ <- Log[F].info(s"Received ${show(deploy)}")
+    } yield ()).attempt
+  }
 
   /** Return the list of tips. */
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =

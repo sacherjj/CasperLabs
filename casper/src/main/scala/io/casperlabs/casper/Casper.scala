@@ -76,7 +76,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
   def lastFinalizedBlock: F[Block]
-  def faultToleranceThreshold: Float = 0f
+  def faultToleranceThreshold: Float
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
