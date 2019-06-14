@@ -27,6 +27,8 @@ pub mod mappings;
 #[cfg(test)]
 mod tests;
 
+const EXPECTED_PUBLIC_KEY_LENGTH: usize = 32;
+
 const METRIC_DURATION_COMMIT: &str = "commit_duration";
 const METRIC_DURATION_EXEC: &str = "exec_duration";
 const METRIC_DURATION_QUERY: &str = "query_duration";
@@ -438,14 +440,16 @@ where
             let module_bytes = &session_contract.code;
             let args = &session_contract.args;
             let address = {
-                if deploy.address.len() != 32 {
-                    let err = EngineError::PreprocessingError(
-                        "Public key has to be exactly 32 bytes long.".to_string(),
-                    );
+                let address_len = deploy.address.len();
+                if address_len != EXPECTED_PUBLIC_KEY_LENGTH {
+                    let err = EngineError::InvalidPublicKeyLength {
+                        expected: EXPECTED_PUBLIC_KEY_LENGTH,
+                        actual: address_len,
+                    };
                     let failure = ExecutionResult::precondition_failure(err);
                     return Ok(failure.into());
                 }
-                let mut dest = [0; 32];
+                let mut dest = [0; EXPECTED_PUBLIC_KEY_LENGTH];
                 dest.copy_from_slice(&deploy.address);
                 Key::Account(dest)
             };

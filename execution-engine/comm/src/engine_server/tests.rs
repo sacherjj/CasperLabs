@@ -234,6 +234,13 @@ fn should_run_genesis() {
             ret
         };
 
+        let proof_of_stake_code = {
+            let mut ret = DeployCode::new();
+            let wasm_bytes = test_utils::create_empty_wasm_module_bytes();
+            ret.set_code(wasm_bytes);
+            ret
+        };
+
         let protocol_version = {
             let mut ret = ProtocolVersion::new();
             ret.set_version(1);
@@ -244,6 +251,7 @@ fn should_run_genesis() {
         ret.set_address(genesis_account_addr.to_vec());
         ret.set_initial_tokens(initial_tokens);
         ret.set_mint_code(mint_code);
+        ret.set_proof_of_stake_code(proof_of_stake_code);
         ret.set_protocol_version(protocol_version);
         ret
     };

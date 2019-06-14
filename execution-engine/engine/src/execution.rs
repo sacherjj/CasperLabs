@@ -19,7 +19,7 @@ use wasmi::{
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::uref::AccessRights;
-use common::value::Value;
+use common::value::{account, Value};
 use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
 use storage::global_state::StateReader;
@@ -59,6 +59,7 @@ pub enum Error {
     },
     /// Reverts execution with a provided status
     Revert(u32),
+    AddKeyFailure(common::value::account::AddKeyFailure),
 }
 
 impl fmt::Display for Error {
@@ -100,6 +101,12 @@ impl From<!> for Error {
 impl From<ResolverError> for Error {
     fn from(err: ResolverError) -> Error {
         Error::ResolverError(err)
+    }
+}
+
+impl From<account::AddKeyFailure> for Error {
+    fn from(error: account::AddKeyFailure) -> Self {
+        Error::AddKeyFailure(error)
     }
 }
 
