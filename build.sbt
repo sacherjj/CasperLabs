@@ -296,7 +296,6 @@ lazy val node = (project in file("node"))
     dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
     dockerBaseImage := "openjdk:11-jre-slim",
     dockerCommands := {
-      val daemon = (daemonUser in Docker).value
       Seq(
         Cmd("FROM", dockerBaseImage.value),
         ExecCmd("RUN", "apt", "clean"),
@@ -304,7 +303,7 @@ lazy val node = (project in file("node"))
         ExecCmd("RUN", "apt", "install", "-yq", "openssl", "curl"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
-        Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
+        Cmd("ADD", "opt /opt"),
         Cmd("USER", "root"),
         ExecCmd("ENTRYPOINT", "bin/casperlabs-node"),
         ExecCmd("CMD", "run")
@@ -423,14 +422,11 @@ lazy val client = (project in file("client"))
     dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
     dockerBaseImage := "openjdk:11-jre-slim",
     dockerCommands := {
-      val daemon = (daemonUser in Docker).value
       Seq(
         Cmd("FROM", dockerBaseImage.value),
-        ExecCmd("RUN", "apt", "update"),
-        ExecCmd("RUN", "apt", "install", "-yq", "openssl"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
-        Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
+        Cmd("ADD", "opt /opt"),
         Cmd("USER", "root"),
         ExecCmd("ENTRYPOINT", "bin/casperlabs-client"),
         ExecCmd("CMD", "run")
