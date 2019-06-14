@@ -6,7 +6,7 @@ Pre-packaged binaries are published to http://repo.casperlabs.io/casperlabs/repo
 
 * [OpenJDK](https://openjdk.java.net) Java Development Kit (JDK) or Runtime Environment (JRE), version 11. We recommend using the OpenJDK
 
-```sh
+```console
 dev@dev:~$ sudo add-apt-repository ppa:openjdk-r/ppa
 dev@dev:~$ sudo apt update
 dev@dev:~$ sudo apt install openjdk-11-jdk
@@ -41,7 +41,7 @@ The node consists of an API component running in Java and an execution engine ru
 
 *NOTE: Users will need to update \[VERSION\] with the version the want. See:
 
-```sh
+```console
 dev@dev:~$ curl -sO http://repo.casperlabs.io/casperlabs/repo/master/casperlabs-node_[VERSION]_all.deb
 dev@dev:~$ curl -sO http://repo.casperlabs.io/casperlabs/repo/master/casperlabs-engine-grpc-server_[VERSION]_amd64.deb
 dev@dev:~$ sudo dpkg -i casperlabs-node_[VERSION]_all.deb
@@ -97,7 +97,7 @@ If the `--loglevel` argument is not provided, the execution engine defaults to t
 
 *macOS:*
 Ensure if [Brew](https://brew.sh) is installed:
-```bash
+```console
 dev@dev:~$ brew --version
 Homebrew 2.1.5
 Homebrew/homebrew-core (git revision 8c8ee; last commit 2019-06-13)
@@ -105,12 +105,12 @@ Homebrew/homebrew-cask (git revision 76d0e; last commit 2019-06-13)
 ```
 
 If console prints `dev@dev:~$ bash: command not found` then install it:
-```bash
+```console
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 ```
 
 Install OpenSSL:
-```bash
+```console
 dev@dev:~$ brew update
 dev@dev:~$ brew install openssl@1.1
 ```
@@ -118,21 +118,21 @@ dev@dev:~$ brew install openssl@1.1
 The next step depends on which shell is used on the machine:
 
 `bash`:
-```bash
+```console
 dev@dev:~$ echo "" >> ~/.bashrc
 dev@dev:~$ echo 'export PATH="/usr/local/opt/openssl@1.1/bin:$PATH"' >> ~/.bashrc
 dev@dev:~$ source ~/.bashrc
 ```
 
 `zsh`:
-```bash
+```console
 dev@dev:~$ echo "" >> ~/.bashrc
 dev@dev:~$ echo 'export PATH="/usr/local/opt/openssl@1.1/bin:$PATH"' >> ~/.zshrc
 dev@dev:~$ source ~/.zshrc
 ```
 
 Ensure the latest 1.1 version of OpenSSL is installed:
-```bash
+```console
 dev@dev:~$ openssl version
 OpenSSL 1.1.1c  28 May 2019
 ```
@@ -140,7 +140,7 @@ OpenSSL 1.1.1c  28 May 2019
 *Linux:*
 
 Download and install the latest version of the [openssl 1.1](https://github.com/openssl/openssl/releases).
-```bash
+```console
 dev@dev:~$ cd /tmp
 dev@dev:~$ curl -L https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz -o openssl.tar.gz
 dev@dev:~$ tar -xzf openssl.tar.gz
@@ -160,7 +160,7 @@ Download and install the latest version of the [sha3sum](https://github.com/maan
 
  Build libkeccak:
 
-```bash
+```console
 dev@dev:~$ cd /tmp
 dev@dev:~$ git clone https://github.com/maandree/libkeccak.git
 dev@dev:~$ cd libkeccak
@@ -171,7 +171,7 @@ dev@dev:~$ sudo ldconfig
 
  Build sha3sum:
 
-```bash
+```console
 dev@dev:~$ cd /tmp
 dev@dev:~$ git clone https://github.com/maandree/sha3sum.git
 dev@dev:~$ cd sha3sum
@@ -184,7 +184,7 @@ You may want to use [the script](/docker/gen-keys.sh) which will generate all th
 
 #### ed25519 Validator
 Generate private key:
-```bash
+```console
 dev@dev:~$ openssl genpkey -algorithm Ed25519 -out ed25519-validator-private.pem
 ```
 
@@ -192,18 +192,18 @@ If the commands returns the next message `Algorithm Ed25519 not found` it means 
 Generally, if any error occurs firstly make sure if all the [prerequisites](/VALIDATOR.md#prerequisites-openssl) are installed.
 
 Public key:
-```bash
+```console
 dev@dev:~$ openssl pkey -in ed25519-validator-private.pem -pubout -out ed25519-validator-public.pem
 ```
 
 Use the public key to create a bonds.txt file which contains a set of initial validators of a network and their initial bonds:
-```bash
+```console
 dev@dev:~$ VALIDATOR_ID=$(openssl pkey -outform DER -pubout -in ed25519-validator-private.pem | tail -c +13 | openssl base64)
 dev@dev:~$ echo "$VALIDATOR_ID" " 100" > bonds.txt
 ```
 
 Use them as follow:
-```bash
+```console
 dev@dev:~$ ./node/target/universal/stage/bin/casperlabs-node run -s \
     --casper-validator-private-key-path ed25519-validator-private.pem \
     --casper-validator-public-key-path ed25519-validator-public.pem \
@@ -212,7 +212,7 @@ dev@dev:~$ ./node/target/universal/stage/bin/casperlabs-node run -s \
 
 #### ed25519 dApp Developer
 Generate private key:
-```bash
+```console
 dev@dev:~$ openssl genpkey -algorithm Ed25519 -out ed25519-developer-private.pem
 ```
 
@@ -220,12 +220,12 @@ If the commands returns the next message `Algorithm Ed25519 not found` it means 
 Generally, if any error occurs firstly make sure if all the [prerequisites](/VALIDATOR.md#prerequisites-openssl) are installed.
 
 Public key:
-```bash
+```console
 dev@dev:~$ openssl pkey -in ed25519-developer-private.pem -pubout -out ed25519-developer-public.pem
 ```
 
 Use them sign a deploy as:
-```bash
+```console
 dev@dev:~$ ./client/target/universal/stage/bin/casperlabs-node --host <node hostname> deploy \
     --public-key ed25519-developer-public.pem \
     --private-key ed25519-developer-public.pem \
@@ -239,14 +239,14 @@ dev@dev:~$ ./client/target/universal/stage/bin/casperlabs-node --host <node host
 #### secp256r1
 
 Generate private key:
-```bash
+```console
 dev@dev:~$ openssl ecparam -name secp256r1 -genkey -noout -out secp256r1-private.pem
 dev@dev:~$ openssl pkcs8 -topk8 -nocrypt -in secp256r1-private.pem -out secp256r1-private-pkcs8.pem
 dev@dev:~$ rm secp256r1-private.pem
 ```
 
 Obtain node ID from the private key:
-```bash
+```console
 dev@dev:~$ NODE_ID=$(cat secp256r1-private-pkcs8.pem | \
     openssl ec -text -noout | \
     grep pub -A 5 | \
@@ -266,7 +266,7 @@ casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40
 The address above contains `c0a6c82062461c9b7f9f5c3120f44589393edf31` as a node ID.
 
 Generate certificate from the generated private key. Fill asked questions and enter the above `NODE_ID` as a `Common Name (CN)`
-```bash
+```console
 dev@dev:~$ openssl req \
     -new \
      -x509 \
@@ -276,7 +276,7 @@ dev@dev:~$ openssl req \
 ```
 
 Now you can use them as:
-```bash
+```console
 dev@dev:~$ ./node/target/universal/stage/bin/casperlabs-node run \
     --tls-certificate node.certificate.pem \
     --tls-key secp256r1-private-pkcs8.pem

@@ -342,11 +342,11 @@ In the root of CasperLabs.
 
 [Generate secp256r1 key and X.509 certificate firstly](/VALIDATOR.md#setting-up-keys).
 
-```bash
+```console
 ./node/target/universal/stage/bin/casperlabs-node run -s \
     --tls-certificate node.certificate.pem \
     --tls-key secp256r1-private-pkcs8.pem
-```
+
 
 ### Deploying data
 
