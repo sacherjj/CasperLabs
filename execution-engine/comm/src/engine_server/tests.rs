@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use grpc::RequestOptions;
 use parity_wasm::builder::ModuleBuilder;
 use parity_wasm::elements::{MemorySection, MemoryType, Module, Section, Serialize};
@@ -228,13 +226,6 @@ fn should_run_genesis() {
             ret
         };
 
-        let timestamp = {
-            let since_epoch = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .expect("should get duration");
-            since_epoch.as_secs()
-        };
-
         let mint_code = {
             let mut ret = DeployCode::new();
             let wasm_bytes = get_wasm_bytes();
@@ -251,7 +242,6 @@ fn should_run_genesis() {
         let mut ret = GenesisRequest::new();
         ret.set_address(genesis_account_addr.to_vec());
         ret.set_initial_tokens(initial_tokens);
-        ret.set_timestamp(timestamp);
         ret.set_mint_code(mint_code);
         ret.set_protocol_version(protocol_version);
         ret

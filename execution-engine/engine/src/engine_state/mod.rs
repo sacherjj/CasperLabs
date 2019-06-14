@@ -39,13 +39,12 @@ pub struct EngineState<H> {
 pub fn create_genesis_effects(
     genesis_account_addr: [u8; 32],
     initial_tokens: U512,
-    timestamp: u64,
     mint_code_bytes: &[u8],
     _proof_of_stake_code_bytes: &[u8],
     protocol_version: u64,
 ) -> Result<HashMap<Key, Transform>, Error> {
     let mut ret: HashMap<Key, Value> = HashMap::new();
-    let mut rng = execution::create_rng(genesis_account_addr, timestamp, 0);
+    let mut rng = execution::create_rng(genesis_account_addr, 0, 0);
 
     // Create (public_uref, mint_contract_uref)
 
@@ -161,17 +160,15 @@ where
         correlation_id: CorrelationId,
         genesis_account_addr: [u8; 32],
         initial_tokens: U512,
-        timestamp: u64,
         mint_code_bytes: &[u8],
-        proof_of_state_code_bytes: &[u8],
+        proof_of_stake_code_bytes: &[u8],
         protocol_version: u64,
     ) -> Result<CommitResult, Error> {
         let effects = create_genesis_effects(
             genesis_account_addr,
             initial_tokens,
-            timestamp,
             mint_code_bytes,
-            proof_of_state_code_bytes,
+            proof_of_stake_code_bytes,
             protocol_version,
         )?;
         let mut state_guard = self.state.lock();
@@ -287,7 +284,6 @@ mod tests {
         let effects = create_genesis_effects(
             genesis_account_addr,
             initial_tokens,
-            timestamp,
             mint_code.as_slice(),
             &[],
             protocol_version,

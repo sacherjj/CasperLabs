@@ -2,6 +2,7 @@ pub mod in_memory;
 pub mod lmdb;
 
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::BuildHasher;
 use std::time::Instant;
 
@@ -30,6 +31,19 @@ pub enum CommitResult {
     Success(Blake2bHash),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
+}
+
+impl fmt::Display for CommitResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            CommitResult::RootNotFound => write!(f, "root not found"),
+            CommitResult::Success(hash) => write!(f, "success: {}", hash),
+            CommitResult::KeyNotFound(key) => write!(f, "key not found: {}", key),
+            CommitResult::TypeMismatch(type_mismatch) => {
+                write!(f, "type mismatch: {:?}", type_mismatch)
+            }
+        }
+    }
 }
 
 impl From<transform::Error> for CommitResult {
