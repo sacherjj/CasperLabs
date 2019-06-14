@@ -239,7 +239,7 @@ impl Value {
             Key(_) => String::from("Key"),
             ListString(_) => String::from("List[String]"),
             Unit => String::from("Unit"),
-            UInt64(_) => String::from("U64"),
+            UInt64(_) => String::from("UInt64"),
         }
     }
 }
