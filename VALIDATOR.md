@@ -104,14 +104,9 @@ cd openssl-OpenSSL_1_1_1b
 make
 make test
 sudo make install
-export LD_LIBRARY_PATH=/usr/local/lib
+sudo ldconfig
+sudo ln -s /usr/local/ssh/bin/openssl /usr/local/bin
 ```
-
-To continue to have working lib folder, consider adding last line to bottom of `.bashrc` or relevent file with:
-
-`echo "export LD_LIBRARY_PATH=/usr/local/lib" >> ~/.bashrc`
-
-You might want to add `/usr/local/ssh/bin` to your `/etc/environment` file so that the right executable is found; check it by running `openssl version`.
 
 #### Prerequisites: sha3sum
 Download and install the latest version of the [sha3sum](https://github.com/maandree/sha3sum).
@@ -127,6 +122,7 @@ git clone https://github.com/maandree/libkeccak.git
 cd libkeccak
 make
 sudo make install PREFIX=/usr
+sudo ldconfig
 ```
 
  Build sha3sum:
