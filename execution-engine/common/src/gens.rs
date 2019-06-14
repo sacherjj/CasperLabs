@@ -124,6 +124,27 @@ pub fn u512_arb() -> impl Strategy<Value = U512> {
 }
 
 pub fn value_arb() -> impl Strategy<Value = Value> {
+    // If compiler brings you here it most probably means you've added a variant to `Value` enum
+    // but forgot to add generator for it.
+    let stub: Option<Value> = None;
+    if let Some(v) = stub {
+        match v {
+            Value::Int32(_)
+            | Value::UInt64(_)
+            | Value::UInt128(_)
+            | Value::UInt256(_)
+            | Value::UInt512(_)
+            | Value::ByteArray(_)
+            | Value::String(_)
+            | Value::ListString(_)
+            | Value::ListInt32(_)
+            | Value::Account(_)
+            | Value::Contract(_)
+            | Value::Key(_)
+            | Value::NamedKey(_, _)
+            | Value::Unit => (),
+        }
+    };
     prop_oneof![
         (any::<i32>().prop_map(Value::Int32)),
         (vec(any::<u8>(), 1..1000).prop_map(Value::ByteArray)),
