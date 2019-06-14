@@ -113,9 +113,9 @@ impl Key {
 
     /// Creates an instance of [Key::Hash] variant from the base16 encoded String.
     /// Returns `None` if [addr] is not valid Blake2b hash.
-    pub fn parse_hash(addr: String) -> Option<Key> {
+    pub fn parse_hash<T: AsRef<str>>(addr: T) -> Option<Key> {
         let mut buff = [0u8; 32];
-        let parsed_addr = drop_hex_prefix(&addr);
+        let parsed_addr = drop_hex_prefix(addr.as_ref());
         match binascii::hex2bin(parsed_addr, &mut buff) {
             Ok(_) => Some(Key::Hash(buff)),
             _ => None,
@@ -124,9 +124,9 @@ impl Key {
 
     /// Creates an instance of [Key::URef] variant from the base16 encoded String.
     /// Returns `None` if [addr] is not valid Blake2b hash.
-    pub fn parse_uref(addr: String, access_rights: AccessRights) -> Option<Key> {
+    pub fn parse_uref<T: AsRef<str>>(addr: T, access_rights: AccessRights) -> Option<Key> {
         let mut buff = [0u8; 32];
-        let parsed_addr = drop_hex_prefix(&addr);
+        let parsed_addr = drop_hex_prefix(addr.as_ref());
         match binascii::hex2bin(parsed_addr, &mut buff) {
             Ok(_) => Some(Key::URef(URef::new(buff, access_rights))),
             _ => None,
@@ -135,11 +135,11 @@ impl Key {
 
     /// Creates an instance of [Key::Local] variant from the base16 encoded String.
     /// Returns `None` if either [seed] or [key_hash] is not valid Blake2b hash.
-    pub fn parse_local(seed: String, key_hash: String) -> Option<Key> {
+    pub fn parse_local<T: AsRef<str>>(seed: T, key_hash: T) -> Option<Key> {
         let mut seed_buff = [0u8; 32];
         let mut key_buff = [0u8; 32];
-        let parsed_seed = drop_hex_prefix(&seed);
-        let parsed_key = drop_hex_prefix(&key_hash);
+        let parsed_seed = drop_hex_prefix(seed.as_ref());
+        let parsed_key = drop_hex_prefix(key_hash.as_ref());
         match binascii::hex2bin(parsed_seed, &mut seed_buff)
             .and(binascii::hex2bin(parsed_key, &mut key_buff))
         {
@@ -362,6 +362,11 @@ mod tests {
             let preppended = format!("0x{}", base16_addr.clone());
             assert!(Key::parse_hash(preppended.clone()).is_some());
             assert_eq!(Key::parse_hash(preppended), Key::parse_hash(base16_addr));
+        }
+
+        #[test]
+        fn should_parse_from_slice(base16_addr in base16_str_arb(64)) {
+            assert_eq!(Key::parse_hash(base16_addr.clone()), Key::parse_hash(&base16_addr.clone()))
         }
 
     }
