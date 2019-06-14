@@ -59,10 +59,9 @@ class ExecutionEngineConf[F[_]: Sync: Log: TaskLift](
     val res = for {
       channel <- channelF
       stub    <- Sync[F].delay(IpcGrpcMonix.stub(channel))
-    } yield
-      Resource.make(
-        Sync[F].delay(new GrpcExecutionEngineService[F](addr, maxMessageSize, initBonds, stub))
-      )(_ => stop(channel))
+    } yield Resource.make(
+      Sync[F].delay(new GrpcExecutionEngineService[F](addr, maxMessageSize, initBonds, stub))
+    )(_ => stop(channel))
 
     Resource.suspend(res)
   }
