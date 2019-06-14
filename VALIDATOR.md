@@ -121,7 +121,7 @@ cd /tmp
 git clone https://github.com/maandree/libkeccak.git
 cd libkeccak
 make
-sudo make install PREFIX=/usr
+sudo make install
 sudo ldconfig
 ```
 
