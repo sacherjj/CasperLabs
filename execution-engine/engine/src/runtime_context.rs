@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
@@ -27,7 +28,7 @@ pub struct RuntimeContext<'a, R> {
     uref_lookup: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
     known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
-    account: Account,
+    account: Cow<'a, Account>,
     args: Vec<Vec<u8>>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -50,7 +51,7 @@ where
         uref_lookup: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
-        account: Account,
+        account: Cow<'a, Account>,
         base_key: Key,
         gas_limit: u64,
         gas_counter: u64,
@@ -91,7 +92,7 @@ where
         self.known_urefs.extend(urefs_map);
     }
 
-    pub fn account(&self) -> &Account {
+    pub fn account(&self) -> &Cow<'a, Account> {
         &self.account
     }
 
@@ -380,6 +381,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
     use std::cell::RefCell;
     use std::collections::{BTreeMap, HashMap, HashSet};
     use std::iter::once;
@@ -473,13 +475,13 @@ mod tests {
     }
 
     fn mock_runtime_context<'a>(
-        account: Account,
+        account: Cow<'a, Account>,
         base_key: Key,
         uref_map: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         rng: ChaChaRng,
     ) -> RuntimeContext<'a, InMemoryGlobalState> {
-        let tc = mock_tc(base_key, account.clone());
+        let tc = mock_tc(base_key, account.clone().into_owned());
         RuntimeContext::new(
             Rc::new(RefCell::new(tc)),
             uref_map,
@@ -529,8 +531,13 @@ mod tests {
         let (key, account) = mock_account(base_acc_addr);
         let mut uref_map = BTreeMap::new();
         let chacha_rng = create_rng(&base_acc_addr, 0, 0);
-        let runtime_context =
-            mock_runtime_context(account, key, &mut uref_map, known_urefs, chacha_rng);
+        let runtime_context = mock_runtime_context(
+            Cow::Borrowed(&account),
+            key,
+            &mut uref_map,
+            known_urefs,
+            chacha_rng,
+        );
         query(runtime_context)
     }
 
@@ -675,7 +682,7 @@ mod tests {
                 .expect("Account key is readable.")
                 .expect("Account is found in GS.");
 
-            assert_eq!(result, Value::Account(rc.account.clone()));
+            assert_eq!(result, Value::Account(rc.account.into_owned()));
             Ok(())
         });
 
@@ -769,12 +776,13 @@ mod tests {
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
         let known_urefs = vec_key_rights_to_map(vec![uref]);
         let chacha_rng = create_rng(&base_acc_addr, 0, 0);
+
         let mut runtime_context = RuntimeContext::new(
             Rc::clone(&tc),
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            account,
+            Cow::Borrowed(&account),
             contract_key,
             0,
             0,
@@ -825,7 +833,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            account,
+            Cow::Borrowed(&account),
             other_contract_key,
             0,
             0,
