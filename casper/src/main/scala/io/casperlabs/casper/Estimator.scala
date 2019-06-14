@@ -64,12 +64,15 @@ object Estimator {
       } yield result
 
     for {
-      scores           <- lmdScoring(blockDag, latestMessagesHashes)
-      newMainParent    <- forkChoiceTip(blockDag, lastFinalizedBlockHash, scores)
-      parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
-      sortedParents    = parents.sortBy(b => -scores.getOrElse(b, 0L) -> b.toString())
-      secondaryParents = parents.filter(_ != newMainParent)
-    } yield newMainParent +: secondaryParents
+      scores            <- lmdScoring(blockDag, latestMessagesHashes)
+      newMainParent     <- forkChoiceTip(blockDag, lastFinalizedBlockHash, scores)
+      parents           <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
+      secondaryParents  = parents.filter(_ != newMainParent)
+      secParentsDetails <- secondaryParents.traverse(blockDag.lookup)
+      sortedSecParents = secParentsDetails.flatten
+        .sortBy(b => -scores.getOrElse(b.blockHash, 0L) -> b.rank)
+        .map(_.blockHash)
+    } yield newMainParent +: sortedSecParents
   }
 
   /*
@@ -110,11 +113,16 @@ object Estimator {
           result <- if (reachableMainChildren.isEmpty) {
                      blockHash.pure[F]
                    } else {
-                     forkChoiceTip[F](
-                       blockDag,
-                       reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toString()),
-                       scores
-                     )
+                     for {
+                       blockMetadatas <- reachableMainChildren.traverse(blockDag.lookup)
+                       mainParent = blockMetadatas.flatten
+                         .maxBy(b => scores.getOrElse(b.blockHash, 0L) -> -b.rank)
+                       tip <- forkChoiceTip[F](
+                               blockDag,
+                               mainParent.blockHash,
+                               scores
+                             )
+                     } yield tip
                    }
         } yield result
     }
