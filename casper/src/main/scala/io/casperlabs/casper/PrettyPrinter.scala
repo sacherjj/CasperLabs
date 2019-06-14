@@ -82,12 +82,11 @@ object PrettyPrinter {
       header     <- b.header
       mainParent <- header.parentHashes.headOption
       postState  <- header.state
-    } yield
-      s"Block #${header.rank} (${buildString(b.blockHash)}) " +
-        s"-- Sender ID ${buildString(header.validatorPublicKey)} " +
-        s"-- M Parent Hash ${buildString(mainParent)} " +
-        s"-- Contents ${buildString(postState.postStateHash)}" +
-        s"-- Shard ID ${limit(header.chainId, 10)}"
+    } yield s"Block #${header.rank} (${buildString(b.blockHash)}) " +
+      s"-- Sender ID ${buildString(header.validatorPublicKey)} " +
+      s"-- M Parent Hash ${buildString(mainParent)} " +
+      s"-- Contents ${buildString(postState.postStateHash)}" +
+      s"-- Chain ID ${limit(header.chainId, 10)}"
     blockString match {
       case Some(str) => str
       case None      => s"Block with missing elements (${buildString(b.blockHash)})"
@@ -134,7 +133,7 @@ object PrettyPrinter {
     s"Last deploy: ${ac.deploymentLastUsed}, last key management change: ${ac.keyManagementLastUsed}, inactivity period limit: ${ac.inactivityPeriodLimit}"
 
   def buildString(d: consensus.Deploy): String =
-    s"Deploy #${d.getHeader.timestamp}"
+    s"Deploy ${buildStringNoLimit(d.deployHash)} (${buildStringNoLimit(d.getHeader.accountPublicKey)} / ${d.getHeader.nonce})"
 
   def buildString(d: DeployData): String =
     s"Deploy #${d.timestamp}"

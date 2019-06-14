@@ -104,17 +104,16 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
     for {
       nodes <- networkEff(Vector(sk), genesis, transforms)
       node  = nodes.head
-    } yield
-      new BlockApproverProtocol(
-        node.validatorId,
-        deployTimestamp,
-        bonds,
-        wallets,
-        1L,
-        Long.MaxValue,
-        false,
-        requiredSigs
-      ) -> node
+    } yield new BlockApproverProtocol(
+      node.validatorId,
+      deployTimestamp,
+      bonds,
+      wallets,
+      1L,
+      Long.MaxValue,
+      false,
+      requiredSigs
+    ) -> node
   }
 
 }

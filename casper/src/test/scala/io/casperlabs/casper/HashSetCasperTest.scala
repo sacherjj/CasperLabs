@@ -1204,6 +1204,11 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                 <- node.casperEff.addBlock(block)
 
       // Add a deploy that is not in the future but in the past.
+      // Clear out the other deploy so this invalid one isn't rejected straight away.
+      _ <- node.casperState.modify { s =>
+            s.copy(deployBuffer = s.deployBuffer.remove(Set(deploy1.deployHash)))
+          }
+
       deploy0     <- ProtoUtil.basicDeploy[Effect](0)
       _           <- node.casperEff.deploy(deploy0)
       stateBefore <- node.casperState.read
@@ -1211,7 +1216,38 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _           <- node.casperEff.createBlock shouldBeF NoNewDeploys
       stateAfter  <- node.casperState.read
       _           = stateAfter.deployBuffer.contains(deploy0) shouldBe false
+    } yield ()
+  }
 
+  it should "reject deploys with nonces already processed but still in the buffer" in effectTest {
+    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+
+    for {
+      deployA           <- ProtoUtil.basicDeploy[Effect](1)
+      _                 <- node.casperEff.deploy(deployA)
+      createBlockResult <- node.casperEff.createBlock
+      Created(block)    = createBlockResult
+      _                 <- node.casperEff.addBlock(block)
+
+      deployB <- ProtoUtil.basicDeploy[Effect](1)
+      r       <- node.casperEff.deploy(deployB)
+      _       = r.isLeft shouldBe true
+      _       = r.left.get shouldBe an[IllegalArgumentException]
+      state   <- node.casperState.read
+      _       = state.deployBuffer.contains(deployB) shouldBe false
+    } yield ()
+  }
+
+  it should "accept deploys with nonces already seen but only in the pending buffer" in effectTest {
+    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+
+    for {
+      deployA <- ProtoUtil.basicDeploy[Effect](1)
+      _       <- node.casperEff.deploy(deployA)
+      deployB <- ProtoUtil.basicDeploy[Effect](1)
+      _       <- node.casperEff.deploy(deployB)
+      state   <- node.casperState.read
+      _       = state.deployBuffer.contains(deployB) shouldBe true
     } yield ()
   }
 

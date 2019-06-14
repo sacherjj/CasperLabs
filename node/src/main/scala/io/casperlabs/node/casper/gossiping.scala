@@ -677,7 +677,7 @@ package object gossiping {
   /** The TransportLayer setup prints the number of peers now and then which integration tests
     * may depend upon. We aren't using the `Connect` functionality so have to do it another way. */
   private def makePeerCountPrinter[F[_]: Concurrent: Time: Log: NodeDiscovery]
-    : Resource[F, Unit] = {
+      : Resource[F, Unit] = {
     def loop(prevPeers: Set[Node]): F[Unit] = {
       // Based on Connecttions.removeConn
       val newPeers = for {

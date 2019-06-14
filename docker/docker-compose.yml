@@ -31,3 +31,16 @@ services:
       - ${CL_GRAFANA_PORT}:3000
     networks:
       - casperlabs
+
+  # Expose ports from one of the containers to the host.
+  # https://hub.docker.com/r/marcnuri/port-forward
+  # https://hub.docker.com/r/alpine/socat
+  node-http-proxy:
+    image: alpine/socat
+    container_name: node-http-proxy
+    ports:
+      - ${CL_SERVER_HTTP_PORT}:40403
+    command: "tcp-listen:40403,fork,reuseaddr tcp-connect:node-0:40403"
+    networks:
+      - casperlabs
+

@@ -163,23 +163,22 @@ object RelayingSpec {
                 maxConcurrentRequests.transform(math.max(_, concurrency.get()))
                 concurrency.decrement()
               }
-        } yield
-          new GossipService[Task] {
-            override def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
-              acceptOrFailure(peer).fold(
-                Task.raiseError[NewBlocksResponse](new RuntimeException("Boom"))
-              )(accepted => Task.now(NewBlocksResponse(accepted)))
+        } yield new GossipService[Task] {
+          override def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
+            acceptOrFailure(peer).fold(
+              Task.raiseError[NewBlocksResponse](new RuntimeException("Boom"))
+            )(accepted => Task.now(NewBlocksResponse(accepted)))
 
-            override def streamAncestorBlockSummaries(
-                request: StreamAncestorBlockSummariesRequest
-            ) = ???
-            override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest) =
-              ???
-            override def streamBlockSummaries(request: StreamBlockSummariesRequest) = ???
-            override def getBlockChunked(request: GetBlockChunkedRequest)           = ???
-            override def addApproval(request: AddApprovalRequest)                   = ???
-            override def getGenesisCandidate(request: GetGenesisCandidateRequest)   = ???
-          }
+          override def streamAncestorBlockSummaries(
+              request: StreamAncestorBlockSummariesRequest
+          ) = ???
+          override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest) =
+            ???
+          override def streamBlockSummaries(request: StreamBlockSummariesRequest) = ???
+          override def getBlockChunked(request: GetBlockChunkedRequest)           = ???
+          override def addApproval(request: AddApprovalRequest)                   = ???
+          override def getGenesisCandidate(request: GetGenesisCandidateRequest)   = ???
+        }
 
       val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(
         Sync[Task],
