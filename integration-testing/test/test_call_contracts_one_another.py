@@ -18,6 +18,10 @@ class BlockPropagatedToAllNodesChecker:
 
 @pytest.fixture(scope='module')
 def three_node_network_with_combined_contract(three_node_network_module_scope):
+    """
+    Fixture of a network with deployed combined definitions contract,
+    use later by tests in this module.
+    """
     tnn = three_node_network_module_scope
     bootstrap, node1, node2 = tnn.docker_nodes
 
@@ -35,6 +39,15 @@ def nodes(three_node_network_with_combined_contract):
 
 @pytest.fixture(scope='module')
 def generated_hashes(nodes):
+    """
+    This fixture deploys & proposes test contracts on all nodes.
+    Note, this happens when the combined contract definition is already deployed
+    as part of the fixture three_node_network_with_combined_contract
+    (via nodes)
+
+    Returns dictionary mapping contract names to list of deployed block hashes
+    on all nodes.
+    """
     check_block_propagated = BlockPropagatedToAllNodesChecker(nodes, 2)
 
     def deploy_and_propose(node, contract):
@@ -52,6 +65,7 @@ def docker_client(three_node_network_with_combined_contract):
 
 
 expected_result = count(1)
+
 test_parameters = [
     (COUNTER_CALL, "counter/count", lambda: bytes(f'int_value: {next(expected_result)}\n\n', 'utf-8')),
     (MAILING_LIST_CALL, "mailing/list", lambda: bytes('string_list {\n  values: "CasperLabs"\n}\n\n', 'utf-8')),
