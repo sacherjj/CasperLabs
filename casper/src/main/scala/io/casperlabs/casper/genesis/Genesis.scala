@@ -22,6 +22,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NoStackTrace
 
 object Genesis {
 
@@ -240,7 +241,6 @@ object Genesis {
     }
 
   def getBonds[F[_]: Sync: Log](
-      genesisPath: Path,
       bonds: Path,
       numValidators: Int
   ): F[Map[PublicKey, Long]] =

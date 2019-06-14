@@ -106,7 +106,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       pw.close()
 
       for {
-        _ <- fromBondsFile(genesisPath, badBondsFile)(
+        _ <- fromBondsFile(badBondsFile)(
               executionEngineService,
               log,
               time
@@ -131,7 +131,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       printBonds(bondsFile.toString)
 
       for {
-        genesisWithTransform <- fromBondsFile(genesisPath, bondsFile)(
+        genesisWithTransform <- fromBondsFile(bondsFile)(
                                  executionEngineService,
                                  log,
                                  time
@@ -163,7 +163,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
           implicit val logEff                    = log
           implicit val executionEngineServiceEff = executionEngineService
           for {
-            genesisWithTransform <- fromBondsFile(genesisPath, bondsFile)(
+            genesisWithTransform <- fromBondsFile(bondsFile)(
                                      executionEngineService,
                                      log,
                                      time
@@ -215,16 +215,13 @@ object GenesisTest {
   val numValidators     = 5
   val casperlabsChainId = "casperlabs"
 
-  def fromBondsFile(
-      genesisPath: Path,
-      bondsPath: Path = nonExistentPath
-  )(
+  def fromBondsFile(bondsPath: Path)(
       implicit executionEngineService: ExecutionEngineService[Task],
       log: LogStub[Task],
       time: LogicalTime[Task]
   ): Task[BlockMsgWithTransform] =
     for {
-      bonds <- Genesis.getBonds[Task](genesisPath, bondsPath, numValidators)
+      bonds <- Genesis.getBonds[Task](bondsPath, numValidators)
       _     <- ExecutionEngineService[Task].setBonds(bonds)
       genesis <- Genesis[Task](
                   walletsPath = nonExistentPath,
