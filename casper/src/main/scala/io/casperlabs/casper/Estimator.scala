@@ -64,14 +64,13 @@ object Estimator {
       } yield result
 
     for {
-      scores            <- lmdScoring(blockDag, latestMessagesHashes)
-      newMainParent     <- forkChoiceTip(blockDag, lastFinalizedBlockHash, scores)
-      parents           <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
-      secondaryParents  = parents.filter(_ != newMainParent)
-      secParentsDetails <- secondaryParents.traverse(blockDag.lookup)
-      sortedSecParents = secParentsDetails.flatten
-        .sortBy(b => -scores.getOrElse(b.blockHash, 0L) -> b.rank)
-        .map(_.blockHash)
+      scores           <- lmdScoring(blockDag, latestMessagesHashes)
+      newMainParent    <- forkChoiceTip(blockDag, lastFinalizedBlockHash, scores)
+      parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
+      secondaryParents = parents.filter(_ != newMainParent)
+      sortedSecParents = secondaryParents
+        .sortBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8)
+        .reverse
     } yield newMainParent +: sortedSecParents
   }
 
@@ -113,16 +112,11 @@ object Estimator {
           result <- if (reachableMainChildren.isEmpty) {
                      blockHash.pure[F]
                    } else {
-                     for {
-                       blockMetadatas <- reachableMainChildren.traverse(blockDag.lookup)
-                       mainParent = blockMetadatas.flatten
-                         .maxBy(b => scores.getOrElse(b.blockHash, 0L) -> -b.rank)
-                       tip <- forkChoiceTip[F](
-                               blockDag,
-                               mainParent.blockHash,
-                               scores
-                             )
-                     } yield tip
+                     forkChoiceTip[F](
+                       blockDag,
+                       reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8),
+                       scores
+                     )
                    }
         } yield result
     }
