@@ -6,9 +6,9 @@ from .cl_node.wait import wait_for_blocks_count_at_least
 
 
 class BlockPropagatedToAllNodesChecker:
-    def __init__(self, docker_nodes, number_of_blocks):
+    def __init__(self, docker_nodes, initial_number_of_blocks):
         self.docker_nodes = docker_nodes
-        self.number_of_blocks = number_of_blocks
+        self.number_of_blocks = initial_number_of_blocks
 
     def __call__(self):
         self.number_of_blocks += 1
