@@ -353,9 +353,9 @@ where
             }
         };
 
-        let mint_code_bytes = genesis_request.get_mint_code().get_code().to_vec();
+        let mint_code_bytes = genesis_request.get_mint_code().get_code();
 
-        let proof_of_stake_code_bytes = [];
+        let proof_of_stake_code_bytes = genesis_request.get_proof_of_stake_code().get_code();
 
         let protocol_version = genesis_request.get_protocol_version().version;
 
@@ -363,13 +363,14 @@ where
             correlation_id,
             genesis_account_addr,
             initial_tokens,
-            &mint_code_bytes,
-            &proof_of_stake_code_bytes,
+            mint_code_bytes,
+            proof_of_stake_code_bytes,
             protocol_version,
         ) {
             Ok(CommitResult::Success(post_state_hash)) => {
                 let success_message = format!("run_genesis successful: {}", post_state_hash);
                 log_info(&success_message);
+
                 let mut genesis_response = ipc::GenesisResponse::new();
                 let mut genesis_result = ipc::GenesisResult::new();
                 genesis_result.set_poststate_hash(post_state_hash.to_vec());

@@ -1,20 +1,21 @@
 use grpc::RequestOptions;
-use parity_wasm::builder::ModuleBuilder;
-use parity_wasm::elements::{MemorySection, MemoryType, Module, Section, Serialize};
 
+use shared::init::mocked_account;
+use shared::logging::log_level::LogLevel;
+use shared::logging::log_settings::{self, LogLevelFilter, LogSettings};
+use shared::logging::logger::initialize_buffered_logger;
+use shared::logging::logger::{LogBufferProvider, BUFFERED_LOGGER};
+use shared::newtypes::CorrelationId;
+use shared::test_utils;
+use storage::global_state::in_memory::InMemoryGlobalState;
+
+use engine_server;
 use engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, ExecRequest, GenesisRequest, KeyAddress, ProtocolVersion,
     QueryRequest, RustBigInt, ValidateRequest,
 };
 use engine_server::ipc_grpc::ExecutionEngineService;
-use shared::init::mocked_account;
-use shared::logging::log_level::LogLevel;
-use shared::logging::logger::initialize_buffered_logger;
-use shared::logging::logger::{LogBufferProvider, BUFFERED_LOGGER};
-use shared::newtypes::CorrelationId;
-use storage::global_state::in_memory::InMemoryGlobalState;
-
-use super::super::*;
+use execution_engine::engine_state::EngineState;
 
 #[test]
 fn should_query_with_metrics() {
@@ -175,7 +176,7 @@ fn should_validate_with_metrics() {
 
     let mut validate_request = ValidateRequest::new();
 
-    let wasm_bytes = get_wasm_bytes();
+    let wasm_bytes = test_utils::create_empty_wasm_module_bytes();
 
     validate_request.set_payment_code(wasm_bytes.clone());
     validate_request.set_session_code(wasm_bytes);
@@ -228,7 +229,7 @@ fn should_run_genesis() {
 
         let mint_code = {
             let mut ret = DeployCode::new();
-            let wasm_bytes = get_wasm_bytes();
+            let wasm_bytes = test_utils::create_empty_wasm_module_bytes();
             ret.set_code(wasm_bytes);
             ret
         };
@@ -297,16 +298,7 @@ fn get_mock_deploy() -> Deploy {
     deploy.set_nonce(1);
     deploy.set_timestamp(10);
     let mut deploy_code = DeployCode::new();
-    deploy_code.set_code(get_wasm_bytes());
+    deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
     deploy.set_session(deploy_code);
     deploy
-}
-
-fn get_wasm_bytes() -> Vec<u8> {
-    let mem_section = MemorySection::with_entries(vec![MemoryType::new(16, Some(64))]);
-    let section = Section::Memory(mem_section);
-    let parity_module: Module = ModuleBuilder::new().with_section(section).build();
-    let mut wasm_bytes = vec![];
-    parity_module.serialize(&mut wasm_bytes).unwrap();
-    wasm_bytes
 }

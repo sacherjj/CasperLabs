@@ -11,12 +11,12 @@ use std::sync::Arc;
 
 use parity_wasm::elements::Serialize;
 use parking_lot::Mutex;
+use rand::RngCore;
 
 use common::key::Key;
 use common::uref::{AccessRights, URef};
 use common::value::account::PurseId;
 use common::value::{Contract, Value, U512};
-use rand::RngCore;
 use shared::init;
 use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::Transform;
@@ -67,8 +67,6 @@ pub fn create_genesis_effects(
         Value::Key(Key::URef(mint_contract_uref)),
     );
 
-    // Create (purse_id_local_key, balance) (for mint-local state)
-
     let purse_id_uref = {
         let mut addr = [0u8; 32];
         rng.fill_bytes(&mut addr);
@@ -90,20 +88,34 @@ pub fn create_genesis_effects(
 
     // Initializing and persisting mint
     {
+        // Create (purse_id_local_key, balance_uref) (for mint-local state)
+
         let purse_id_local_key = {
-            // Is this correct?
             let seed = mint_contract_uref.addr();
-            // Is this correct?
             let local_key = purse_id_uref.addr();
             let key_hash = Blake2bHash::new(&local_key).into();
             Key::Local { seed, key_hash }
         };
 
+        let balance_uref = {
+            let mut addr = [0u8; 32];
+            rng.fill_bytes(&mut addr);
+            URef::new(addr, AccessRights::READ_ADD_WRITE)
+        };
+
+        let balance_uref_key = Key::URef(balance_uref);
+
+        // Store (purse_id_local_key, balance_uref_key) in local state
+
+        ret.insert(purse_id_local_key, Value::Key(balance_uref_key));
+
+        // Create balance
+
         let balance: Value = Value::UInt512(initial_tokens);
 
-        // Store (purse_id_local_key, balance) in local state
+        // Store (balance_uref_key, balance) in local state
 
-        ret.insert(purse_id_local_key, balance);
+        ret.insert(balance_uref_key, balance);
 
         // Create mint_contract
 
@@ -117,11 +129,8 @@ pub fn create_genesis_effects(
 
         let mint_known_urefs = {
             let mut ret: BTreeMap<String, Key> = BTreeMap::new();
-            // ret.insert(
-            //     format!("{:?}", initial_tokens_uref.addr()),
-            //     Key::URef(initial_tokens_uref),
-            // );
-            ret.insert(format!("{:?}", public_uref.addr()), Key::URef(public_uref));
+            ret.insert(public_uref.as_string(), Key::URef(public_uref));
+            ret.insert(balance_uref.as_string(), Key::URef(balance_uref));
             ret
         };
 
@@ -148,10 +157,8 @@ where
     H::Error: Into<execution::Error>,
 {
     pub fn new(state: H, nonce_check: bool) -> EngineState<H> {
-        EngineState {
-            state: Arc::new(Mutex::new(state)),
-            nonce_check,
-        }
+        let state = Arc::new(Mutex::new(state));
+        EngineState { state, nonce_check }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -250,19 +257,8 @@ where
 mod tests {
     use common::value::U512;
     use engine_state::create_genesis_effects;
-    use parity_wasm::builder::ModuleBuilder;
-    use parity_wasm::elements::{MemorySection, MemoryType, Module, Section, Serialize};
+    use shared::test_utils;
     use shared::transform::Transform;
-    use std::time::SystemTime;
-
-    fn get_wasm_bytes() -> Vec<u8> {
-        let mem_section = MemorySection::with_entries(vec![MemoryType::new(16, Some(64))]);
-        let section = Section::Memory(mem_section);
-        let parity_module: Module = ModuleBuilder::new().with_section(section).build();
-        let mut wasm_bytes = vec![];
-        parity_module.serialize(&mut wasm_bytes).unwrap();
-        wasm_bytes
-    }
 
     #[test]
     fn create_genesis_effects_creates_expected_effects() {
@@ -270,14 +266,7 @@ mod tests {
 
         let initial_tokens = U512::from_dec_str("1000").expect("should create U512");
 
-        let timestamp = {
-            let since_epoch = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .expect("should get duration");
-            since_epoch.as_secs()
-        };
-
-        let mint_code = get_wasm_bytes();
+        let mint_code = test_utils::create_empty_wasm_module_bytes();
 
         let protocol_version = 1;
 
@@ -290,7 +279,7 @@ mod tests {
         )
         .expect("should create effects");
 
-        assert_eq!(effects.len(), 4);
+        assert_eq!(effects.len(), 5);
 
         assert!(effects
             .iter()
