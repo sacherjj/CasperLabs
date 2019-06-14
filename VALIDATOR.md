@@ -149,14 +149,8 @@ dev@dev:~$ ./config
 dev@dev:~$ make
 dev@dev:~$ make test
 dev@dev:~$ sudo make install
-dev@dev:~$ export LD_LIBRARY_PATH=/usr/local/lib
+dev@dev:~$ sudo ldconfig
 ```
-
-To continue to have working lib folder, consider adding last line to bottom of `.bashrc` or relevent file with:
-
-`dev@dev:~$ echo "export LD_LIBRARY_PATH=/usr/local/lib" >> ~/.bashrc`
-
-You might want to add `/usr/local/ssh/bin` to your `/etc/environment` file so that the right executable is found; check it by running `openssl version`.
 
 #### Prerequisites: sha3sum
 Download and install the latest version of the [sha3sum](https://github.com/maandree/sha3sum).
@@ -171,7 +165,8 @@ dev@dev:~$ cd /tmp
 dev@dev:~$ git clone https://github.com/maandree/libkeccak.git
 dev@dev:~$ cd libkeccak
 dev@dev:~$ make
-dev@dev:~$ sudo make install PREFIX=/usr
+dev@dev:~$ sudo make install
+dev@dev:~$ sudo ldconfig
 ```
 
  Build sha3sum:
