@@ -48,6 +48,7 @@ host = "test"
 socket = "/tmp/test"
 port-external = 1
 port-internal = 1
+use-tls = false
 
 [tls]
 certificate = "/tmp/test"

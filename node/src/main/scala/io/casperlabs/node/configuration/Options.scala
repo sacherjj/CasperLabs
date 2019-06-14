@@ -180,6 +180,10 @@ private[configuration] final case class Options private (
       gen[String]("Externally addressable hostname or IP of node on which gRPC service is running.")
 
     @scallop
+    val grpcUseTls =
+      gen[Boolean]("Enable TLS encryption for public facing gRPC API endpoints.")
+
+    @scallop
     val serverMaxMessageSize =
       gen[Int]("Maximum size of message that can be sent via transport layer.")
 

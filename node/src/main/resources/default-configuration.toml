@@ -147,6 +147,8 @@ port-external = 40401
 # Port used for internal gRPC API, e.g. diagnostics.
 port-internal = 40402
 
+# Whether to enable TLS encryption on the public facing gRPC interfaces (e.g. deployments).
+use-tls = false
 
 # io.casperlabs.comm.transport.Tls
 [tls]

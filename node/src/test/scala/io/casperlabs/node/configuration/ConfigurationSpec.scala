@@ -86,7 +86,8 @@ class ConfigurationSpec
       host = "test",
       socket = Paths.get("/tmp/test"),
       portExternal = 1,
-      portInternal = 1
+      portInternal = 1,
+      useTls = false
     )
     val casper = CasperConf(
       validatorPublicKey = "test".some,

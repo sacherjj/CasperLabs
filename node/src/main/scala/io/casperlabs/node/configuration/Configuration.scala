@@ -100,7 +100,8 @@ object Configuration extends ParserImplicits {
       host: String,
       socket: Path,
       portExternal: Int,
-      portInternal: Int
+      portInternal: Int,
+      useTls: Boolean
   ) extends SubConfig
 
   sealed trait Command extends Product with Serializable
