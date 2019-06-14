@@ -1,3 +1,8 @@
+Version 0.8.0 (2019-06-14)
+==========================
+* [[#598]](https://github.com/CasperLabs/CasperLabs/pull/598) Factors out `URef` from `Key` variant to its own type.
+* [[#599]](https://github.com/CasperLabs/CasperLabs/pull/599) Adds `purseId` object to an `Account`.
+
 Version 0.7.0 (2019-06-09)
 ==========================
 * [[#563]](https://github.com/CasperLabs/CasperLabs/pull/563) Change encoding of URef's access rights to `Option<..>`.
