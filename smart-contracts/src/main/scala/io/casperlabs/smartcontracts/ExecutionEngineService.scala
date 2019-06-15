@@ -1,18 +1,21 @@
 package io.casperlabs.smartcontracts
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
-import cats.effect.{Resource, Sync}
+import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
-import cats.{Applicative, Defer}
+import cats.{Applicative, Defer, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.ipc._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.shared.Log
+import io.casperlabs.shared.{FilesAPI, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
 import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
@@ -34,12 +37,14 @@ import scala.util.Either
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
 
-class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smartcontracts] (
+class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
     addr: Path,
     maxMessageSize: Int,
     initialBonds: Map[Array[Byte], Long],
-    stub: Stub
+    stub: Stub,
+    gasSpentRef: Ref[F, Long]
 ) extends ExecutionEngineService[F] {
+  import GrpcExecutionEngineService.EngineMetricsSource
 
   private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
@@ -69,19 +74,34 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
       deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]] =
-    sendMessage(ExecRequest(prestate, deploys, Some(protocolVersion)), _.exec) {
-      _.result match {
-        case ExecResponse.Result.Success(ExecResult(deployResults)) =>
-          Right(deployResults)
-        //TODO: Capture errors better than just as a string
-        case ExecResponse.Result.Empty =>
-          Left(new SmartContractEngineError("empty response"))
-        case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
-          Left(
-            new SmartContractEngineError(s"Missing states: ${Base16.encode(missing.toByteArray)}")
+    for {
+      result <- sendMessage(ExecRequest(prestate, deploys, Some(protocolVersion)), _.exec) {
+                 _.result match {
+                   case ExecResponse.Result.Success(ExecResult(deployResults)) =>
+                     Right(deployResults)
+                   //TODO: Capture errors better than just as a string
+                   case ExecResponse.Result.Empty =>
+                     Left(new SmartContractEngineError("empty response"))
+                   case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
+                     Left(
+                       new SmartContractEngineError(
+                         s"Missing states: ${Base16.encode(missing.toByteArray)}"
+                       )
+                     )
+                 }
+               }
+      _ <- result.fold(
+            _ => ().pure[F],
+            deployResults => {
+              val gasSpent =
+                deployResults.foldLeft(0L)((a, d) => a + d.value.executionResult.fold(0L)(_.cost))
+              Metrics[F].incrementCounter(
+                "gas_spent",
+                gasSpent
+              ) >> gasSpentRef.update(_ + gasSpent)
+            }
           )
-      }
-    }
+    } yield result
 
   override def commit(
       prestate: ByteString,
@@ -146,13 +166,65 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
 
 object ExecutionEngineService {
   type Stub = IpcGrpcMonix.ExecutionEngineServiceStub
+
 }
 
 object GrpcExecutionEngineService {
-  def apply[F[_]: Sync: Log: TaskLift](
+  private implicit val EngineMetricsSource: Metrics.Source =
+    Metrics.Source(Metrics.BaseSource, "engine")
+
+  private def restoreMetrics[F[_]: Metrics: Monad: FilesAPI](
+      metricsDir: Path,
+      gasSpentRef: Ref[F, Long],
+      lock: Semaphore[F]
+  ): F[Unit] =
+    for {
+      maybePreviousValue <- lock
+                             .withPermit(
+                               FilesAPI[F]
+                                 .readString(
+                                   metricsDir.resolve(EngineMetricsSource + ".gas_spent"),
+                                   StandardCharsets.UTF_8
+                                 )
+                             )
+                             .map(_.map(_.toLong))
+      _ <- maybePreviousValue.fold(Metrics[F].incrementCounter("gas_spent", 0)) { previousValue =>
+            Metrics[F].incrementCounter("gas_spent", previousValue) >> gasSpentRef.set(
+              previousValue
+            )
+          }
+    } yield ()
+
+  private def storeMetrics[F[_]: Monad: FilesAPI](
+      metricsDir: Path,
+      gasSpentRef: Ref[F, Long],
+      lock: Semaphore[F]
+  ): F[Unit] =
+    lock.withPermit(for {
+      gasSpent <- gasSpentRef.get
+      _ <- FilesAPI[F].writeString(
+            metricsDir.resolve(EngineMetricsSource + ".gas_spent"),
+            gasSpent.toString
+          )
+    } yield ())
+
+  def apply[F[_]: Concurrent: Log: TaskLift: Metrics: FilesAPI](
+      dataDir: Path,
       addr: Path,
       maxMessageSize: Int,
       initBonds: Map[Array[Byte], Long]
   ): Resource[F, GrpcExecutionEngineService[F]] =
-    new ExecutionEngineConf[F](addr, maxMessageSize, initBonds).apply
+    for {
+      lock <- Resource.liftF(Semaphore[F](1))
+      gasSpentRef <- Resource.make(Ref.of[F, Long](0))(
+                      ref => storeMetrics(dataDir.resolve("metrics"), ref, lock)
+                    )
+      _ <- Resource.liftF(restoreMetrics(dataDir.resolve("metrics"), gasSpentRef, lock))
+      engine <- new ExecutionEngineConf[F](
+                 gasSpentRef,
+                 addr,
+                 maxMessageSize,
+                 initBonds
+               ).apply
+    } yield engine
 }
