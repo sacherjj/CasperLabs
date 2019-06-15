@@ -114,3 +114,5 @@ openssl req \
 	 -out "$OUTPUT_DIR/node.certificate.pem" \
 	 -days 365 \
 	 -subj "/C=US/ST=CA/L=San-Diego/O=CasperLabs, LLC/OU=IT Department/CN=$NODE_ID"
+
+echo "Generate keys: Success"
