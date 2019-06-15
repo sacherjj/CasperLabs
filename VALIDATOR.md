@@ -206,7 +206,7 @@ sudo make install
 ```
 
 #### Script
-You may want to use [the script](/docker/gen-keys.sh) which will generate all the keys. Make sure the [OpenSSL](/VALIDATOR.md#prerequisites-openssl) and [sha3sum](/VALIDATOR.md#prerequisites-sha3sum) are installed before running the script. The commands below are excerpts from this script.
+You may want to use [the script](/keys-management/gen-keys.sh) which will generate all the keys. Make sure the [OpenSSL](/VALIDATOR.md#prerequisites-openssl) and [sha3sum](/VALIDATOR.md#prerequisites-sha3sum) are installed before running the script. The commands below are excerpts from this script.
 
 #### ed25519 Validator
 Generate private key:
