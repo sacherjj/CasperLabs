@@ -1,6 +1,20 @@
-#!/usr/bin/env bash
+#!/bin/sh
 set -euo pipefail
-trap "echo 'ERROR: Script failed: see failed command above'" ERR
+trap 'handle_exit'  0
+
+VERBOSE=false
+
+handle_exit() {
+    LAST_COMMAND_STATUS=$?
+    if [ "$LAST_COMMAND_STATUS" -ne 0 ]; then
+        if [ "$VERBOSE" == "true" ]; then
+            echo 'ERROR: script failed, see the command above' && exit 1
+        else
+            echo 'ERROR: script failed, you can re-run script with -v option to debug it' && exit 1
+        fi
+    fi
+}
+
 # Generates all necessary key for a node.
 # Usage:
 # ./gen-keys.sh [-v] <directory where to put keys>
@@ -27,8 +41,8 @@ trap "echo 'ERROR: Script failed: see failed command above'" ERR
 #   --casper-validator-private-key-path validator-private.pem
 #   --tls-key node.key.pem
 #   --tls-certificate node.certificate.pem
-
 if [ "$1" == "-v" ]; then
+    VERBOSE=true
     set -v; shift
 fi
 
