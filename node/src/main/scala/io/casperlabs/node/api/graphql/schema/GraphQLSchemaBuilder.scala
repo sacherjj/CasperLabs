@@ -6,7 +6,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.ipc
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils

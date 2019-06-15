@@ -118,7 +118,13 @@ package object types {
       Field(
         "value",
         KeyUnion,
-        resolve = _.value.value
+        resolve = _.value.value match {
+          case state.Key.Value.Local(value)   => value
+          case state.Key.Value.Hash(value)    => value
+          case state.Key.Value.Address(value) => value
+          case state.Key.Value.Uref(value)    => value
+          case state.Key.Value.Empty          => ???
+        }
       )
     )
   )
@@ -269,7 +275,20 @@ package object types {
       Field(
         "value",
         ValueUnion,
-        resolve = _.value.value
+        resolve = _.value.value match {
+          case state.Value.Value.Contract(value)    => value
+          case state.Value.Value.BytesValue(value)  => value
+          case state.Value.Value.BigInt(value)      => value
+          case value: state.Value.Value.StringValue => value
+          case state.Value.Value.Key(value)         => value
+          case state.Value.Value.Unit(value)        => value
+          case value: state.Value.Value.IntValue    => value
+          case state.Value.Value.NamedKey(value)    => value
+          case state.Value.Value.Account(value)     => value
+          case state.Value.Value.StringList(value)  => value
+          case state.Value.Value.IntList(value)     => value
+          case state.Value.Value.Empty              => ???
+        }
       )
     )
   )
