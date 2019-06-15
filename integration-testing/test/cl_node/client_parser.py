@@ -71,6 +71,12 @@ count: 3
 
 """
 
+class MaybeList(list):
+    def __getattr__(self, name):
+        assert len(self) == 1
+        return getattr(self[0], name)
+
+
 class Bag:
     def __init__(self, d):
         self.d = d
@@ -119,7 +125,7 @@ def lexer(s):
 
 
 def parse(tokens):
-    d = defaultdict(list)
+    d = defaultdict(MaybeList)
 
     for token, line_number in tokens:
         if token == '}':

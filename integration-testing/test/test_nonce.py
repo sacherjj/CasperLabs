@@ -80,7 +80,7 @@ def test_deploy_with_higher_nonce(node, contracts: List[str]):
 
 
     # Deploy counts of all blocks except the genesis block.
-    deploy_counts = [b.header[0].deploy_count for b in blocks][:-1]
+    deploy_counts = [b.header.deploy_count for b in blocks][:-1]
 
     assert sum(deploy_counts) == len(contracts)
 
