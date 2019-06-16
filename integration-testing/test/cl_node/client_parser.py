@@ -150,5 +150,7 @@ def parse_show_block(s):
 
 
 if __name__ == '__main__':
-    print(parse_show_block(SAMPLE))
+    b = parse_show_blocks(SAMPLE)
+    print('\n'.join(str(bond) for bond in b.header.state.bonds))
+    print(sum(bond.stake for bond in b.header.state.bonds))
 
