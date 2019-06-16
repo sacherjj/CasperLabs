@@ -7,6 +7,7 @@ from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
+from test.cl_node.client_parser import parse
 import docker.errors
 from test.cl_node.nonce_registry import NonceRegistry
 
@@ -139,3 +140,12 @@ class DockerClient(CasperLabsClient):
                                   f' --key "{key}"'
                                   f' --path "{path}"'
                                   f' --type "{keyType}"')
+
+
+    def show_deploys(self, hash: str):
+        return parse(self.invoke_client(f'show-deploys {hash}'))
+
+
+    def show_deploy(self, hash: str):
+        return parse(self.invoke_client(f'show-deploy {hash}'))
+

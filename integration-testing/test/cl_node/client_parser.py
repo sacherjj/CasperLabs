@@ -37,8 +37,13 @@ def value(s, line_number):
         try:
             return (float(s), line_number)
         except ValueError:
-            assert s[0] == '"' and s[-1] == '"'
-            return (s[1:-1], line_number)
+            if s == 'true':
+                return (True, line_number)
+            elif s == 'false':
+                return (False, line_number)
+            else:
+                assert s[0] == '"' and s[-1] == '"'
+                return (s[1:-1], line_number)
     
 
 def lexer(s):

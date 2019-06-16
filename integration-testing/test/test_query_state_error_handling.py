@@ -4,8 +4,6 @@ from .cl_node.errors import NonZeroExitCodeError
 
 
 import pytest
-import casper_client
-import logging
 
 
 # Examples of query-state executed with the Scala client that result in errors:
