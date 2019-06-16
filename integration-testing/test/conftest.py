@@ -53,6 +53,13 @@ def three_node_network(docker_client_fixture):
         yield tnn
 
 
+@pytest.fixture(scope='module')
+def three_node_network_module_scope(docker_client_fixture):
+    with ThreeNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
 @pytest.fixture()
 def star_network(docker_client_fixture):
     with CustomConnectionNetwork(docker_client_fixture) as ccn:
