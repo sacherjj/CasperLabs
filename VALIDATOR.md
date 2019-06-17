@@ -200,7 +200,7 @@ As you see we have keys and some additional files:
 The address above contains `c0a6c82062461c9b7f9f5c3120f44589393edf31` as a node ID.
 * `validator-id` - Validator ID is used to differentiate validators over a network. 
 We need it because validators can switch machines keeping their identities. 
-Also it's used for initial bonds granting during the genesis procedure of setuping a new network.
+Also it's used for initial bonds granting during the genesis procedure of setting up a new network.
 
 To run a node with the above keys we'll firstly need to create a bonds.txt file as follows:
 ```console
