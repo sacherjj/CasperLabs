@@ -157,9 +157,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 # Make an image for keys generation
 .make/docker-build/keys-generator: \
-	keys-management/Dockerfile \
-	keys-management/gen-keys.sh
-	docker build -f keys-management/Dockerfile -t $(DOCKER_USERNAME)/keys-generator:$(DOCKER_LATEST_TAG) keys-management
+	key-management/Dockerfile \
+	key-management/gen-keys.sh
+	docker build -f key-management/Dockerfile -t $(DOCKER_USERNAME)/keys-generator:$(DOCKER_LATEST_TAG) key-management
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
