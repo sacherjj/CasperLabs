@@ -20,7 +20,6 @@ import io.netty.channel.unix.DomainSocketAddress
 import monix.eval.TaskLift
 
 class ExecutionEngineConf[F[_]: Sync: Log: TaskLift: Metrics](
-    gasSpentRef: Ref[F, Long],
     addr: Path,
     maxMessageSize: Int,
     initBonds: Map[Array[Byte], Long]
@@ -64,7 +63,7 @@ class ExecutionEngineConf[F[_]: Sync: Log: TaskLift: Metrics](
       stub    <- Sync[F].delay(IpcGrpcMonix.stub(channel))
     } yield Resource.make(
       Sync[F].delay(
-        new GrpcExecutionEngineService[F](addr, maxMessageSize, initBonds, stub, gasSpentRef)
+        new GrpcExecutionEngineService[F](addr, maxMessageSize, initBonds, stub)
       )
     )(_ => stop(channel))
 

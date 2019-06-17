@@ -1,7 +1,7 @@
 package io.casperlabs.shared
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, NoSuchFileException, Path, Paths}
 import java.util.UUID
 
 import cats.effect.SyncIO
@@ -42,18 +42,22 @@ class FilesAPISuite extends WordSpec with Matchers with BeforeAndAfterEach {
   "FilesAPI implementation" when {
     "file doesn't exist" should {
 
-      "return None when readBytes" in TestFixture { api =>
+      "throw an NoSuchFileException exception when readBytes" in TestFixture { api =>
         for {
-          maybeData <- api.readBytes(nonExistentFile)
+          either <- api.readBytes(nonExistentFile).attempt
         } yield {
-          maybeData shouldBe None
+          either.isLeft shouldBe true
+          either.left.get shouldBe an[NoSuchFileException]
         }
       }
-      "return None when readString" in TestFixture { api =>
+      "throw an NoSuchFileException exception when read" in TestFixture { api =>
         for {
-          maybeData <- api.readString(nonExistentFile, StandardCharsets.UTF_8)
+          either <- api
+                     .readString(nonExistentFile, StandardCharsets.UTF_8)
+                     .attempt
         } yield {
-          maybeData shouldBe None
+          either.isLeft shouldBe true
+          either.left.get shouldBe an[NoSuchFileException]
         }
       }
       "create file when writeBytes" in TestFixture { api =>
@@ -91,18 +95,18 @@ class FilesAPISuite extends WordSpec with Matchers with BeforeAndAfterEach {
     }
 
     "file exists" should {
-      "return Some when readBytes" in TestFixture { api =>
+      "return data when readBytes" in TestFixture { api =>
         for {
-          maybeData <- api.readBytes(existingFile)
+          either <- api.readBytes(existingFile).attempt
         } yield {
-          maybeData shouldBe an[Some[_]]
+          either.isRight shouldBe true
         }
       }
-      "return Some when readString" in TestFixture { api =>
+      "return data when readString" in TestFixture { api =>
         for {
-          maybeData <- api.readString(existingFile)
+          either <- api.readString(existingFile).attempt
         } yield {
-          maybeData shouldBe an[Some[_]]
+          either.isRight shouldBe true
         }
       }
       "override file when writeBytes if called without additional options" in TestFixture { api =>

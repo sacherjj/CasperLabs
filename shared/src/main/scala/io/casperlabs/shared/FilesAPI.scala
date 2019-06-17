@@ -11,8 +11,10 @@ import io.casperlabs.catscontrib.Catscontrib._
 import simulacrum.typeclass
 
 @typeclass trait FilesAPI[F[_]] {
-  def readBytes(path: Path): F[Option[Array[Byte]]]
-  def readString(path: Path, charset: Charset = Charset.defaultCharset()): F[Option[String]]
+
+  def readBytes(path: Path): F[Array[Byte]]
+
+  def readString(path: Path, charset: Charset = Charset.defaultCharset()): F[String]
 
   /* If `path` doesn't exist then will try to create it with all non-existent parent directories */
   def writeBytes(path: Path, data: Array[Byte], options: List[OpenOption] = Nil): F[Unit]
@@ -31,21 +33,17 @@ object FilesAPI {
 
   def create[F[_]: Sync: Log]: F[FilesAPI[F]] = Sync[F].delay {
     new FilesAPI[F] {
-      override def readBytes(path: Path): F[Option[Array[Byte]]] =
+      override def readBytes(path: Path): F[Array[Byte]] =
         Sync[F]
           .delay {
-            Files.readAllBytes(path).some
-          }
-          .handleErrorWith { e =>
-            Log[F].warn(s"Failed to read a file: $path, ${e.getMessage}") *> none[Array[Byte]]
-              .pure[F]
+            Files.readAllBytes(path)
           }
 
       override def readString(
           path: Path,
           charset: Charset = Charset.defaultCharset()
-      ): F[Option[String]] =
-        readBytes(path).map(_.map(array => new String(array, charset)))
+      ): F[String] =
+        readBytes(path).map(array => new String(array, charset))
 
       override def writeBytes(
           path: Path,
@@ -60,8 +58,9 @@ object FilesAPI {
                 .delay {
                   Files.write(path, data, options: _*)
                 }
-        } yield ()).handleErrorWith { e =>
-          Log[F].error(s"Failed to write data to file: $path", e)
+        } yield ()).onError {
+          case e =>
+            Log[F].error(s"Failed to write data to file: $path", e)
         }
 
       override def writeString(
@@ -75,13 +74,13 @@ object FilesAPI {
 
   implicit def eitherTFilesApi[E, F[_]: Monad: FilesAPI]: FilesAPI[EitherT[F, E, ?]] =
     new FilesAPI[EitherT[F, E, ?]] {
-      override def readBytes(path: Path): EitherT[F, E, Option[Array[Byte]]] =
+      override def readBytes(path: Path): EitherT[F, E, Array[Byte]] =
         FilesAPI[F].readBytes(path).liftM[EitherT[?[_], E, ?]]
 
       override def readString(
           path: Path,
           charset: Charset = Charset.defaultCharset()
-      ): EitherT[F, E, Option[String]] =
+      ): EitherT[F, E, String] =
         FilesAPI[F]
           .readString(
             path,

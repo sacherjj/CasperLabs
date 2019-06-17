@@ -87,11 +87,9 @@ class NodeRuntime private[node] (
       implicit val metricsEff: Metrics[Effect] =
         Metrics.eitherT[CommError, Task](Monad[Task], metrics)
       val resources = for {
-        implicit0(filesApi: FilesAPI[Task]) <- Resource.liftF(FilesAPI.create[Task].toEffect)
         implicit0(executionEngineService: ExecutionEngineService[Effect]) <- GrpcExecutionEngineService[
                                                                               Effect
                                                                             ](
-                                                                              conf.server.dataDir,
                                                                               conf.grpc.socket,
                                                                               conf.server.maxMessageSize,
                                                                               initBonds = Map.empty

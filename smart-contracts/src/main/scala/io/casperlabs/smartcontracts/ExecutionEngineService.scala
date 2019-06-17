@@ -1,12 +1,10 @@
 package io.casperlabs.smartcontracts
 
-import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
-import cats.effect.concurrent.{Ref, Semaphore}
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Resource, Sync}
 import cats.implicits._
-import cats.{Applicative, Defer, Monad}
+import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.crypto.Keys.PublicKey
@@ -15,7 +13,7 @@ import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.shared.{FilesAPI, Log}
+import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
 import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
@@ -41,8 +39,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
     addr: Path,
     maxMessageSize: Int,
     initialBonds: Map[Array[Byte], Long],
-    stub: Stub,
-    gasSpentRef: Ref[F, Long]
+    stub: Stub
 ) extends ExecutionEngineService[F] {
   import GrpcExecutionEngineService.EngineMetricsSource
 
@@ -98,7 +95,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
               Metrics[F].incrementCounter(
                 "gas_spent",
                 gasSpent
-              ) >> gasSpentRef.update(_ + gasSpent)
+              )
             }
           )
     } yield result
@@ -173,58 +170,10 @@ object GrpcExecutionEngineService {
   private implicit val EngineMetricsSource: Metrics.Source =
     Metrics.Source(Metrics.BaseSource, "engine")
 
-  private def restoreMetrics[F[_]: Metrics: Monad: FilesAPI](
-      metricsDir: Path,
-      gasSpentRef: Ref[F, Long],
-      lock: Semaphore[F]
-  ): F[Unit] =
-    for {
-      maybePreviousValue <- lock
-                             .withPermit(
-                               FilesAPI[F]
-                                 .readString(
-                                   metricsDir.resolve(EngineMetricsSource + ".gas_spent"),
-                                   StandardCharsets.UTF_8
-                                 )
-                             )
-                             .map(_.map(_.toLong))
-      _ <- maybePreviousValue.fold(Metrics[F].incrementCounter("gas_spent", 0)) { previousValue =>
-            Metrics[F].incrementCounter("gas_spent", previousValue) >> gasSpentRef.set(
-              previousValue
-            )
-          }
-    } yield ()
-
-  private def storeMetrics[F[_]: Monad: FilesAPI](
-      metricsDir: Path,
-      gasSpentRef: Ref[F, Long],
-      lock: Semaphore[F]
-  ): F[Unit] =
-    lock.withPermit(for {
-      gasSpent <- gasSpentRef.get
-      _ <- FilesAPI[F].writeString(
-            metricsDir.resolve(EngineMetricsSource + ".gas_spent"),
-            gasSpent.toString
-          )
-    } yield ())
-
-  def apply[F[_]: Concurrent: Log: TaskLift: Metrics: FilesAPI](
-      dataDir: Path,
+  def apply[F[_]: Sync: Log: TaskLift: Metrics](
       addr: Path,
       maxMessageSize: Int,
       initBonds: Map[Array[Byte], Long]
   ): Resource[F, GrpcExecutionEngineService[F]] =
-    for {
-      lock <- Resource.liftF(Semaphore[F](1))
-      gasSpentRef <- Resource.make(Ref.of[F, Long](0))(
-                      ref => storeMetrics(dataDir.resolve("metrics"), ref, lock)
-                    )
-      _ <- Resource.liftF(restoreMetrics(dataDir.resolve("metrics"), gasSpentRef, lock))
-      engine <- new ExecutionEngineConf[F](
-                 gasSpentRef,
-                 addr,
-                 maxMessageSize,
-                 initBonds
-               ).apply
-    } yield engine
+    new ExecutionEngineConf[F](addr, maxMessageSize, initBonds).apply
 }
