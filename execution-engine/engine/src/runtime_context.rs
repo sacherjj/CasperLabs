@@ -405,9 +405,9 @@ mod tests {
     use shared::newtypes::{Blake2bHash, CorrelationId};
     use tracking_copy::TrackingCopy;
 
-    fn mock_tc<'a>(
+    fn mock_tc(
         init_key: Key,
-        init_account: Cow<'a, value::Account>,
+        init_account: Cow<value::Account>,
     ) -> TrackingCopy<InMemoryGlobalState> {
         let correlation_id = CorrelationId::new();
         let mut hist = InMemoryGlobalState::empty().unwrap();
