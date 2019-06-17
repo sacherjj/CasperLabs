@@ -56,7 +56,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
     pw.close()
   }
 
-  "Genesis.getBonds" should "generate random validators when no bonds file is given" in withGenResources {
+  it should "throw exception when bonds file does not exist" in withGenResources {
     (
         executionEngineService: ExecutionEngineService[Task],
         genesisPath: Path,
@@ -64,35 +64,23 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         time: LogicalTime[Task]
     ) =>
       for {
-        _      <- fromBondsFile(genesisPath)(executionEngineService, log, time)
-        _      = log.warns.find(_.contains("bonds")) should be(None)
-        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
-      } yield result
-  }
-
-  it should "generate random validators, with a warning, when bonds file does not exist" in withGenResources {
-    (
-        executionEngineService: ExecutionEngineService[Task],
-        genesisPath: Path,
-        log: LogStub[Task],
-        time: LogicalTime[Task]
-    ) =>
-      for {
-        _ <- fromBondsFile(genesisPath)(
+        r <- fromBondsFile(nonExistentPath)(
               executionEngineService,
               log,
               time
-            )
-        _ = log.warns.count(
-          _.contains("does not exist. Falling back on generating random validators.")
+            ).attempt
+      } yield {
+        log.errors.count(
+          _.contains(s"Specified bonds file ${nonExistentPath} does not exist.")
         ) should be(
           1
         )
-        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
-      } yield result
+        r.isLeft shouldBe true
+        r.left.get shouldBe an[IllegalArgumentException]
+      }
   }
 
-  it should "generate random validators, with a warning, when bonds file cannot be parsed" in withGenResources {
+  it should "throw exception when bonds file cannot be parsed" in withGenResources {
     (
         executionEngineService: ExecutionEngineService[Task],
         genesisPath: Path,
@@ -106,18 +94,20 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       pw.close()
 
       for {
-        _ <- fromBondsFile(genesisPath, badBondsFile)(
+        r <- fromBondsFile(badBondsFile)(
               executionEngineService,
               log,
               time
-            )
-        _ = log.warns.count(
-          _.contains("cannot be parsed. Falling back on generating random validators.")
+            ).attempt
+      } yield {
+        log.errors.count(
+          _.contains(s"Bonds file ${badBondsFile} cannot be parsed.")
         ) should be(
           1
         )
-        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
-      } yield result
+        r.isLeft shouldBe true
+        r.left.get shouldBe an[IllegalArgumentException]
+      }
   }
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in withGenResources {
@@ -131,79 +121,54 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       printBonds(bondsFile.toString)
 
       for {
-        genesisWithTransform <- fromBondsFile(genesisPath, bondsFile)(
+        genesisWithTransform <- fromBondsFile(bondsFile)(
                                  executionEngineService,
                                  log,
                                  time
                                )
         BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
         bonds                                   = ProtoUtil.bonds(genesis)
-        _                                       = log.infos.isEmpty should be(true)
-        result = validators
-          .map {
-            case (v, i) => Bond(ByteString.copyFrom(Base64.getDecoder.decode(v)), i.toLong)
-          }
-          .forall(
-            bonds.contains(_)
-          ) should be(true)
-      } yield result
+      } yield {
+        val fromGenesis =
+          bonds.map(
+            b => (Base64.getEncoder().encodeToString(b.validatorPublicKey.toByteArray()), b.stake)
+          )
+        fromGenesis should contain theSameElementsAs validators
+      }
   }
 
   it should "create a valid genesis block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      withGenResources {
-        (
-            executionEngineService: ExecutionEngineService[Task],
-            genesisPath: Path,
-            log: LogStub[Task],
-            time: LogicalTime[Task]
-        ) =>
-          val bondsFile = genesisPath.resolve("bonds.txt")
-          printBonds(bondsFile.toString)
-          implicit val logEff                    = log
-          implicit val executionEngineServiceEff = executionEngineService
-          for {
-            genesisWithTransform <- fromBondsFile(genesisPath, bondsFile)(
-                                     executionEngineService,
-                                     log,
-                                     time
-                                   )
-            BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
-            _ <- BlockStore[Task]
-                  .put(genesis.blockHash, genesis, transforms)
-            dag <- blockDagStorage.getRepresentation
-            maybePostGenesisStateHash <- ExecutionEngineServiceStub
-                                          .validateBlockCheckpoint[Task](
-                                            genesis,
-                                            dag
-                                          )
-          } yield maybePostGenesisStateHash shouldBe 'right
-      }
-  }
-
-  it should "detect an existing bonds file in the default location" in withGenResources {
-    (
-        executionEngineService: ExecutionEngineService[Task],
-        genesisPath: Path,
-        log: LogStub[Task],
-        time: LogicalTime[Task]
-    ) =>
-      val bondsFile = genesisPath.resolve("bonds.txt").toString
-      printBonds(bondsFile)
-
-      for {
-        genesisWithTransform                    <- fromBondsFile(genesisPath)(executionEngineService, log, time)
-        BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
-        bonds                                   = ProtoUtil.bonds(genesis)
-        _                                       = log.infos.length should be(1)
-        result = validators
-          .map {
-            case (v, i) => Bond(ByteString.copyFrom(Base64.getDecoder.decode(v)), i.toLong)
-          }
-          .forall(
-            bonds.contains(_)
-          ) should be(true)
-      } yield result
+      Task.delay(
+        withGenResources {
+          (
+              executionEngineService: ExecutionEngineService[Task],
+              genesisPath: Path,
+              log: LogStub[Task],
+              time: LogicalTime[Task]
+          ) =>
+            val bondsFile = genesisPath.resolve("bonds.txt")
+            printBonds(bondsFile.toString)
+            implicit val logEff                    = log
+            implicit val executionEngineServiceEff = executionEngineService
+            for {
+              genesisWithTransform <- fromBondsFile(bondsFile)(
+                                       executionEngineService,
+                                       log,
+                                       time
+                                     )
+              BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
+              _ <- BlockStore[Task]
+                    .put(genesis.blockHash, genesis, transforms)
+              dag <- blockDagStorage.getRepresentation
+              maybePostGenesisStateHash <- ExecutionEngineServiceStub
+                                            .validateBlockCheckpoint[Task](
+                                              genesis,
+                                              dag
+                                            )
+            } yield maybePostGenesisStateHash shouldBe 'right
+        }
+      )
   }
 }
 
@@ -215,16 +180,13 @@ object GenesisTest {
   val numValidators     = 5
   val casperlabsChainId = "casperlabs"
 
-  def fromBondsFile(
-      genesisPath: Path,
-      bondsPath: Path = nonExistentPath
-  )(
+  def fromBondsFile(bondsPath: Path)(
       implicit executionEngineService: ExecutionEngineService[Task],
       log: LogStub[Task],
       time: LogicalTime[Task]
   ): Task[BlockMsgWithTransform] =
     for {
-      bonds <- Genesis.getBonds[Task](genesisPath, bondsPath, numValidators)
+      bonds <- Genesis.getBonds[Task](bondsPath, numValidators)
       _     <- ExecutionEngineService[Task].setBonds(bonds)
       genesis <- Genesis[Task](
                   walletsPath = nonExistentPath,
@@ -238,17 +200,21 @@ object GenesisTest {
 
   def withGenResources(
       body: (ExecutionEngineService[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
-  ): Task[Unit] = {
+  ): Unit = {
     val storagePath             = mkStoragePath
     val genesisPath             = mkGenesisPath
     val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
     val log                     = new LogStub[Task]
     val time                    = new LogicalTime[Task]
 
-    for {
+    val task = for {
       result <- body(casperSmartContractsApi, genesisPath, log, time)
       _      <- Sync[Task].delay { storagePath.recursivelyDelete() }
       _      <- Sync[Task].delay { genesisPath.recursivelyDelete() }
     } yield result
+    import monix.execution.Scheduler.Implicits.global
+    import monix.execution.schedulers.CanBlock.permit
+    import scala.concurrent.duration._
+    task.runSyncUnsafe(15.seconds)
   }
 }
