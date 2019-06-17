@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
@@ -385,21 +385,21 @@ where
         public_key: PublicKey,
         weight: Weight,
     ) -> Result<(), AddKeyFailure> {
-        // Mutably borrows associated keys of a given account avoiding temporary
-        // account object.
-        let mut associated_keys = RefMut::map(self.account.borrow_mut(), |account| {
-            account.associated_keys_mut()
-        });
-        associated_keys.add_key(public_key, weight)
+        // TODO: Check permissions
+        // Performs clone-on-write if the account wasn't mutated already
+        self.account
+            .to_mut()
+            .associated_keys_mut()
+            .add_key(public_key, weight)
     }
 
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
-        // Mutably borrows associated keys of a given account avoiding temporary
-        // account object.
-        let mut associated_keys = RefMut::map(self.account.borrow_mut(), |account| {
-            account.associated_keys_mut()
-        });
-        associated_keys.remove_key(&public_key)
+        // TODO: Check permissions
+        // Performs clone-on-write if the account wasn't mutated already
+        self.account
+            .to_mut()
+            .associated_keys_mut()
+            .remove_key(&public_key)
     }
 
     pub fn set_action_threshold(
@@ -407,12 +407,12 @@ where
         action_type: ActionType,
         threshold: Weight,
     ) -> Result<(), SetThresholdFailure> {
-        // Mutably borrows associated keys of a given account avoiding temporary
-        // account object.
-        let mut action_thresholds = RefMut::map(self.account.borrow_mut(), |account| {
-            account.action_thresholds_mut()
-        });
-        action_thresholds.set_threshold(action_type, threshold)
+        // TODO: Check permissions
+        // Performs clone-on-write if the account wasn't mutated already
+        self.account
+            .to_mut()
+            .action_thresholds_mut()
+            .set_threshold(action_type, threshold)
     }
 }
 
