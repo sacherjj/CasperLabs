@@ -398,7 +398,11 @@ where
         public_key: PublicKey,
         weight: Weight,
     ) -> Result<(), AddKeyFailure> {
-        // TODO: Check permissions
+        // Check permission to modify associated keys
+        if self.base_key().as_account().unwrap() != self.account().pub_key() {
+            // Exit early with error to avoid mutations
+            return Err(AddKeyFailure::PermissionDenied);
+        }
         // Performs clone-on-write if the account wasn't mutated already
         self.account_dirty
             .to_mut()
@@ -407,7 +411,11 @@ where
     }
 
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
-        // TODO: Check permissions
+        // Check permission to modify associated keys
+        if self.base_key().as_account().unwrap() != self.account().pub_key() {
+            // Exit early with error to avoid mutations
+            return Err(RemoveKeyFailure::PermissionDenied);
+        }
         // Performs clone-on-write if the account wasn't mutated already
         self.account_dirty
             .to_mut()
@@ -420,7 +428,11 @@ where
         action_type: ActionType,
         threshold: Weight,
     ) -> Result<(), SetThresholdFailure> {
-        // TODO: Check permissions
+        // Check permission to modify associated keys
+        if self.base_key().as_account().unwrap() != self.account().pub_key() {
+            // Exit early with error to avoid mutations
+            return Err(SetThresholdFailure::PermissionDeniedError);
+        }
         // Performs clone-on-write if the account wasn't mutated already
         self.account_dirty
             .to_mut()
@@ -449,7 +461,8 @@ mod tests {
 
     use super::{Error, RuntimeContext, URefAddr, Validated};
     use common::value::account::{
-        AccountActivity, ActionType, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+        AccountActivity, ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
+        RemoveKeyFailure, SetThresholdFailure, Weight,
     };
     use execution::{create_rng, vec_key_rights_to_map};
     use shared::newtypes::{Blake2bHash, CorrelationId};
@@ -1137,4 +1150,90 @@ mod tests {
         let _ = test(known_urefs, query);
     }
 
+    #[test]
+    fn should_verify_ownership_before_adding_key() {
+        // Testing a valid case only - successfuly added a key, and successfuly removed,
+        // making sure `account_dirty` mutated
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            // Verify that account didn't mutate before
+            if let Cow::Owned(_) = runtime_context.account_dirty() {
+                panic!("account_dirty mutated before the test");
+            }
+
+            // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+            runtime_context.base_key = Key::Account([1; 32]);
+
+            let err = runtime_context
+                .add_associated_key(PublicKey::new([84; 32]), Weight::new(123))
+                .expect_err("This operation should return error");
+
+            assert_eq!(err, AddKeyFailure::PermissionDenied);
+
+            if let Cow::Owned(_) = runtime_context.account_dirty() {
+                panic!("account_dirty unexpectedly mutated before the test");
+            }
+
+            Ok(())
+        };
+        let _ = test(known_urefs, query);
+    }
+
+    #[test]
+    fn should_verify_ownership_before_removing_a_key() {
+        // Testing a valid case only - successfuly added a key, and successfuly removed,
+        // making sure `account_dirty` mutated
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            // Verify that account didn't mutate before
+            if let Cow::Owned(_) = runtime_context.account_dirty() {
+                panic!("account_dirty mutated before the test");
+            }
+
+            // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+            runtime_context.base_key = Key::Account([1; 32]);
+
+            let err = runtime_context
+                .remove_associated_key(PublicKey::new([84; 32]))
+                .expect_err("This operation should return error");
+
+            assert_eq!(err, RemoveKeyFailure::PermissionDenied);
+
+            if let Cow::Owned(_) = runtime_context.account_dirty() {
+                panic!("account_dirty unexpectedly mutated before the test");
+            }
+
+            Ok(())
+        };
+        let _ = test(known_urefs, query);
+    }
+
+    #[test]
+    fn should_verify_ownership_before_setting_action_threshold() {
+        // Testing a valid case only - successfuly added a key, and successfuly removed,
+        // making sure `account_dirty` mutated
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            // Verify that account didn't mutate before
+            if let Cow::Owned(_) = runtime_context.account_dirty() {
+                panic!("account_dirty mutated before the test");
+            }
+
+            // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+            runtime_context.base_key = Key::Account([1; 32]);
+
+            let err = runtime_context
+                .set_action_threshold(ActionType::Deployment, Weight::new(123))
+                .expect_err("This operation should return error");
+
+            assert_eq!(err, SetThresholdFailure::PermissionDeniedError);
+
+            if let Cow::Owned(_) = runtime_context.account_dirty() {
+                panic!("account_dirty unexpectedly mutated before the test");
+            }
+
+            Ok(())
+        };
+        let _ = test(known_urefs, query);
+    }
 }

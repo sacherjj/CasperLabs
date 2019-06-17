@@ -48,12 +48,14 @@ pub struct ActionThresholds {
 }
 
 #[repr(i32)]
-#[derive(Debug, Fail)]
+#[derive(Debug, Fail, PartialEq, Eq)]
 pub enum SetThresholdFailure {
     #[fail(display = "New threshold should be lower or equal than key management threshold")]
     KeyManagementThresholdError = 1,
     #[fail(display = "New threshold should be lower or equal than deployment threshold")]
     DeploymentThresholdError = 2,
+    #[fail(display = "Unable to set action threshold due to insufficient permissions")]
+    PermissionDeniedError = 3,
 }
 
 impl From<i32> for SetThresholdFailure {
@@ -64,6 +66,9 @@ impl From<i32> for SetThresholdFailure {
             }
             d if d == SetThresholdFailure::DeploymentThresholdError as i32 => {
                 SetThresholdFailure::DeploymentThresholdError
+            }
+            d if d == SetThresholdFailure::PermissionDeniedError as i32 => {
+                SetThresholdFailure::PermissionDeniedError
             }
             _ => unreachable!(),
         }
@@ -232,6 +237,7 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
 pub enum AddKeyFailure {
     MaxKeysLimit = 1,
     DuplicateKey = 2,
+    PermissionDenied = 3,
 }
 
 impl From<i32> for AddKeyFailure {
@@ -242,23 +248,29 @@ impl From<i32> for AddKeyFailure {
         match value {
             d if d == AddKeyFailure::MaxKeysLimit as i32 => AddKeyFailure::MaxKeysLimit,
             d if d == AddKeyFailure::DuplicateKey as i32 => AddKeyFailure::DuplicateKey,
+            d if d == AddKeyFailure::PermissionDenied as i32 => AddKeyFailure::PermissionDenied,
             _ => unreachable!(),
         }
     }
 }
 
-#[derive(Fail, Debug)]
+#[derive(Fail, Debug, Eq, PartialEq)]
 #[repr(i32)]
 pub enum RemoveKeyFailure {
     /// Key does not exist in the list of associated keys.
     #[fail(display = "Unable to remove a key that does not exist")]
     MissingKey = 1,
+    #[fail(display = "Unable to remove associated key due to insufficient permissions")]
+    PermissionDenied = 2,
 }
 
 impl From<i32> for RemoveKeyFailure {
     fn from(value: i32) -> RemoveKeyFailure {
         match value {
             d if d == RemoveKeyFailure::MissingKey as i32 => RemoveKeyFailure::MissingKey,
+            d if d == RemoveKeyFailure::PermissionDenied as i32 => {
+                RemoveKeyFailure::PermissionDenied
+            }
             _ => unreachable!(),
         }
     }
