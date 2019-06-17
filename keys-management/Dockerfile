@@ -3,7 +3,7 @@ RUN apk add --no-cache git make g++; \
     cd /tmp; \
     git clone https://github.com/maandree/libkeccak.git; \
     git clone https://github.com/maandree/sha3sum.git; \
-    cd /tmp/libkeccak; make install; ldconfig; \ 
+    cd /tmp/libkeccak; git checkout 1.2; make install; ldconfig; \
     cd /tmp/sha3sum; make;
 
 FROM alpine
