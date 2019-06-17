@@ -30,6 +30,7 @@ import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 
 import scala.concurrent.ExecutionContext
+import io.netty.handler.ssl.SslContext
 
 object Servers {
 
@@ -40,7 +41,8 @@ object Servers {
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[Effect]
+      blockApiLock: Semaphore[Effect],
+      maybeSslContext: Option[SslContext]
   )(
       implicit
       log: Log[Effect],
@@ -70,7 +72,8 @@ object Servers {
       interceptors = List(
         new MetricsInterceptor(),
         ErrorInterceptor.default
-      )
+      ),
+      sslContext = maybeSslContext
     ) *> Resource.liftF(
       Log[Effect].info(s"Internal gRPC services started on port ${port}.")
     )
@@ -81,7 +84,8 @@ object Servers {
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
       blockApiLock: Semaphore[F],
-      ignoreDeploySignature: Boolean
+      ignoreDeploySignature: Boolean,
+      maybeSslContext: Option[SslContext]
   )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] =
     GrpcServer(
       port = port,
@@ -100,7 +104,8 @@ object Servers {
       interceptors = List(
         new MetricsInterceptor(),
         ErrorInterceptor.default
-      )
+      ),
+      sslContext = maybeSslContext
     ) *>
       Resource.liftF(Log[F].info(s"External gRPC services started on port ${port}."))
 
