@@ -9,12 +9,12 @@ import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.Validate.ValidateErrorWrapper
-import io.casperlabs.casper.consensus._, Block.Justification
+import io.casperlabs.casper.consensus._
+import Block.Justification
+import io.casperlabs.casper.ValidationImpl.ValidateErrorWrapper
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
@@ -46,7 +46,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService](
+class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: Validation](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -61,7 +61,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+  //TODO pull out
+  implicit val functorRaiseInvalidBlock = ValidationImpl.raiseValidateErrorThroughSync[F]
 
   type Validator = ByteString
 
@@ -492,11 +493,11 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: Sync: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService](
+  class StatelessExecutor[F[_]: Sync: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Validation](
       chainId: String
   ) {
-
-    implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+    //TODO pull out
+    implicit val functorRaiseInvalidBlock = ValidationImpl.raiseValidateErrorThroughSync[F]
 
     def validateAndAddBlock(
         maybeContext: Option[StatelessExecutor.Context],
@@ -510,12 +511,12 @@ object MultiParentCasperImpl {
 
       for {
         dag         <- BlockDagStorage[F].getRepresentation
-        validFormat <- Validate.formatOfFields[F](block, treatAsGenesis)
-        validSig    <- if (!treatAsGenesis) Validate.blockSignature[F](block) else true.pure[F]
+        validFormat <- Validation[F].formatOfFields(block, treatAsGenesis)
+        validSig    <- if (!treatAsGenesis) Validation[F].blockSignature(block) else true.pure[F]
         validSender <- maybeContext.map { ctx =>
-                        Validate.blockSender[F](block, ctx.genesis, dag)
-                      } getOrElse (treatAsGenesis).pure[F]
-        validVersion <- Validate.version[F](
+                        Validation[F].blockSender(block, ctx.genesis, dag)
+                      } getOrElse treatAsGenesis.pure[F]
+        validVersion <- Validation[F].version(
                          block,
                          CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
                        )
@@ -543,7 +544,7 @@ object MultiParentCasperImpl {
               s"Attempting to add Block ${PrettyPrinter.buildString(block.blockHash)} to DAG."
             )
         postValidationStatus <- maybeContext map { ctx =>
-                                 Validate.blockSummary[F](
+                                 Validation[F].blockSummary(
                                    block,
                                    ctx.genesis,
                                    dag,
@@ -551,8 +552,8 @@ object MultiParentCasperImpl {
                                    ctx.lastFinalizedBlockHash
                                  )
                                } getOrElse {
-                                 Validate
-                                   .blockSummaryPreGenesis[F](block, dag, chainId)
+                                 Validation[F]
+                                   .blockSummaryPreGenesis(block, dag, chainId)
                                }
         casperState <- Cell[F, CasperState].read
         // Confirm the parents are correct (including checking they commute) and capture
@@ -562,7 +563,7 @@ object MultiParentCasperImpl {
                      .empty[ExecEngineUtil.TransformMap, Block]
                      .pure[F]
                  ) { ctx =>
-                   Validate.parents[F](block, ctx.lastFinalizedBlockHash, dag)
+                   Validation[F].parents(block, ctx.lastFinalizedBlockHash, dag)
                  }
         preStateHash <- ExecEngineUtil.computePrestate[F](merged)
         blockEffects <- ExecEngineUtil
@@ -573,14 +574,14 @@ object MultiParentCasperImpl {
                                .buildString(block)}: $ex", ex) *>
                                FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                          }
-        _ <- Validate.transactions[F](
+        _ <- Validation[F].transactions(
               block,
               dag,
               preStateHash,
               blockEffects
             )
         _ <- maybeContext.fold(().pure[F]) { ctx =>
-              Validate.bondsCache[F](block, ProtoUtil.bonds(ctx.genesis)) >>
+              Validation[F].bondsCache(block, ProtoUtil.bonds(ctx.genesis)) >>
                 EquivocationDetector
                   .checkNeglectedEquivocationsWithUpdate[F](
                     block,
@@ -588,8 +589,8 @@ object MultiParentCasperImpl {
                     ctx.genesis
                   )
             }
-        _ <- Validate
-              .neglectedInvalidBlock[F](
+        _ <- Validation[F]
+              .neglectedInvalidBlock(
                 block,
                 casperState.invalidBlockTracker
               )

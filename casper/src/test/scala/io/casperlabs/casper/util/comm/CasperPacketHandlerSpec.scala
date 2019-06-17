@@ -112,6 +112,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
     }
+    implicit val raiseInvalidBlock = ValidationImpl.raiseValidateErrorThroughSync[Task]
+    implicit val validation        = new ValidationImpl[Task]
   }
 
   "CasperPacketHandler" when {

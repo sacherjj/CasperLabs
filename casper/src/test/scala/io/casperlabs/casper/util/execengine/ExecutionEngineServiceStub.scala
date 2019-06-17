@@ -5,34 +5,43 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper.Validate
+import io.casperlabs.casper.{Validation, ValidationImpl}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.shared.Log
+import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
+import scala.concurrent.duration.FiniteDuration
 import scala.util.Either
 
 object ExecutionEngineServiceStub {
   type Bonds = Map[PublicKey, Long]
 
-  implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
+  implicit def functorRaiseInvalidBlock[F[_]: Sync] =
+    ValidationImpl.raiseValidateErrorThroughSync[F]
 
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
       b: Block,
       dag: BlockDagRepresentation[F]
-  ): F[Either[Throwable, StateHash]] =
+  ): F[Either[Throwable, StateHash]] = {
+    implicit val time = new Time[F] {
+      override def currentMillis: F[Long]                   = 0L.pure[F]
+      override def nanoTime: F[Long]                        = 0L.pure[F]
+      override def sleep(duration: FiniteDuration): F[Unit] = Sync[F].unit
+    }
+    implicit val validation = new ValidationImpl[F]
     (for {
       parents      <- ProtoUtil.unsafeGetParents[F](b)
       merged       <- ExecEngineUtil.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil.computePrestate[F](merged)
       effects      <- ExecEngineUtil.effectsForBlock[F](b, preStateHash, dag)
-      _            <- Validate.transactions[F](b, dag, preStateHash, effects)
+      _            <- Validation[F].transactions(b, dag, preStateHash, effects)
     } yield ProtoUtil.postStateHash(b)).attempt
+  }
 
   def mock[F[_]](
       execFunc: (

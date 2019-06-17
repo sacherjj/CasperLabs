@@ -53,7 +53,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService](
+  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: Validation](
       port: Int,
       conf: Configuration,
       grpcScheduler: Scheduler
@@ -121,14 +121,19 @@ package object gossiping {
       synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval, isInitialRef)
 
       gossipServiceServer <- makeGossipServiceServer(
-                              port,
                               conf,
                               synchronizer,
                               downloadManager,
-                              genesisApprover,
-                              serverSslContext,
-                              grpcScheduler
+                              genesisApprover
                             )
+
+      _ <- startGrpcServer(
+            gossipServiceServer,
+            serverSslContext,
+            conf,
+            port,
+            grpcScheduler
+          )
 
       // Start syncing with the bootstrap in the background.
       _ <- makeInitialSynchronization(conf, gossipServiceServer, connectToGossip, isInitialRef)
@@ -147,7 +152,7 @@ package object gossiping {
     } yield cont
 
   /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
+  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: Validation](
       shardId: String,
       block: Block
   ): F[Unit] =
@@ -264,7 +269,7 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F]
@@ -312,7 +317,7 @@ package object gossiping {
                         )
     } yield downloadManager
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService](
+  def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F]
@@ -438,7 +443,7 @@ package object gossiping {
             publicKey: ByteString,
             signature: Signature
         ): Boolean =
-          Validate.signature(
+          Validation[F].signature(
             blockHash.toByteArray,
             protocol
               .Signature()
@@ -550,16 +555,13 @@ package object gossiping {
     } yield stashing
   }
 
-  /** Create and start the gossip service. */
-  private def makeGossipServiceServer[F[_]: Concurrent: Par: TaskLike: ObservableIterant: Log: Metrics: BlockStore: BlockDagStorage: MultiParentCasperRef](
-      port: Int,
+  /** Create gossip service. */
+  def makeGossipServiceServer[F[_]: Concurrent: Par: Log: Metrics: BlockStore: BlockDagStorage: MultiParentCasperRef](
       conf: Configuration,
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
-      genesisApprover: GenesisApprover[F],
-      serverSslContext: SslContext,
-      grpcScheduler: Scheduler
-  )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, GossipServiceServer[F]] =
+      genesisApprover: GenesisApprover[F]
+  ): Resource[F, GossipServiceServer[F]] =
     for {
       backend <- Resource.pure[F, GossipServiceServer.Backend[F]] {
                   new GossipServiceServer.Backend[F] {
@@ -621,31 +623,6 @@ package object gossiping {
                  )
                }
 
-      // Start the gRPC server.
-      _ <- {
-        implicit val s = grpcScheduler
-        GrpcServer(
-          port,
-          services = List(
-            (scheduler: Scheduler) =>
-              Sync[F].delay {
-                val svc = GrpcGossipService.fromGossipService(
-                  server,
-                  blockChunkConsumerTimeout = conf.server.relayBlockChunkConsumerTimeout
-                )
-                GossipingGrpcMonix.bindService(svc, scheduler)
-              }
-          ),
-          interceptors = List(
-            new AuthInterceptor(),
-            new MetricsInterceptor(),
-            ErrorInterceptor.default
-          ),
-          sslContext = serverSslContext.some,
-          maxMessageSize = conf.server.maxMessageSize.some
-        )
-      }
-
     } yield server
 
   /** Initially sync with the bootstrap node and/or some others. */
@@ -705,7 +682,7 @@ package object gossiping {
       }
     }
 
-  private def show(hash: ByteString) =
+  def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
 
   // Should only be called in non-stand alone mode.
@@ -717,4 +694,35 @@ package object gossiping {
           new java.lang.IllegalStateException("Bootstrap node hasn't been configured.")
         )
     )
+
+  def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
+      server: GossipServiceServer[F],
+      serverSslContext: SslContext,
+      conf: Configuration,
+      port: Int,
+      grpcScheduler: Scheduler
+  )(implicit m: Metrics[Id], l: Log[Id]) = {
+    // Start the gRPC server.
+    implicit val s = grpcScheduler
+    GrpcServer(
+      port,
+      services = List(
+        (scheduler: Scheduler) =>
+          Sync[F].delay {
+            val svc = GrpcGossipService.fromGossipService(
+              server,
+              blockChunkConsumerTimeout = conf.server.relayBlockChunkConsumerTimeout
+            )
+            GossipingGrpcMonix.bindService(svc, scheduler)
+          }
+      ),
+      interceptors = List(
+        new AuthInterceptor(),
+        new MetricsInterceptor(),
+        ErrorInterceptor.default
+      ),
+      sslContext = serverSslContext.some,
+      maxMessageSize = conf.server.maxMessageSize.some
+    )
+  }
 }

@@ -102,7 +102,7 @@ object BlockAPI {
       )
   }
 
-  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: Metrics](
+  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: Metrics: Validation](
       d: Deploy,
       ignoreDeploySignature: Boolean
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
@@ -114,8 +114,8 @@ object BlockAPI {
     for {
       _ <- Metrics[F].incrementCounter("deploys")
       // Doing these here while MultiParentCasper is still using the legacy deploys.
-      _ <- check("Invalid deploy hash.")(Validate.deployHash[F](d))
-      _ <- check("Invalid deploy signature.")(Validate.deploySignature[F](d))
+      _ <- check("Invalid deploy hash.")(Validation[F].deployHash(d))
+      _ <- check("Invalid deploy signature.")(Validation[F].deploySignature(d))
             .whenA(!ignoreDeploySignature)
       r <- MultiParentCasper[F].deploy(d)
       _ <- r match {

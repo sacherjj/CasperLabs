@@ -4,7 +4,7 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref, Semaphore}
-import cats.mtl.MonadState
+import cats.mtl.{FunctorRaise, MonadState}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
@@ -50,9 +50,8 @@ import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
     conf: Configuration,
-    id: NodeIdentifier,
-    scheduler: Scheduler
-)(implicit log: Log[Task]) {
+    id: NodeIdentifier
+)(implicit log: Log[Task], scheduler: Scheduler) {
 
   private[this] val loopScheduler =
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
@@ -83,21 +82,24 @@ class NodeRuntime private[node] (
       conf      <- rpConf[Task](local, bootstrap)
     } yield conf).toEffect
 
-    val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
+    implicit val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
 
-    val logId: Log[Id]         = Log.logId
-    val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
+    implicit val logId: Log[Id]         = Log.logId
+    implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
 
     rpConfState >>= (_.runState { implicit state =>
       val resources = for {
-        executionEngineService <- GrpcExecutionEngineService[Effect](
-                                   conf.grpc.socket,
-                                   conf.server.maxMessageSize,
-                                   initBonds = Map.empty
-                                 )
+        implicit0(executionEngineService: ExecutionEngineService[Effect]) <- GrpcExecutionEngineService[
+                                                                              Effect
+                                                                            ](
+                                                                              conf.grpc.socket,
+                                                                              conf.server.maxMessageSize,
+                                                                              initBonds = Map.empty
+                                                                            )
 
-        metrics                     = diagnostics.effects.metrics[Task]
-        metricsEff: Metrics[Effect] = Metrics.eitherT[CommError, Task](Monad[Task], metrics)
+        metrics = diagnostics.effects.metrics[Task]
+        implicit0(metricsEff: Metrics[Effect]) = Metrics
+          .eitherT[CommError, Task](Monad[Task], metrics)
 
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
@@ -111,16 +113,16 @@ class NodeRuntime private[node] (
                           metrics
                         )
 
-        blockStore <- FileLMDBIndexBlockStore[Effect](
-                       conf.server.dataDir,
-                       blockstorePath,
-                       100L * 1024L * 1024L * 4096L
-                     )(
-                       Concurrent[Effect],
-                       logEff,
-                       raiseIOError,
-                       metricsEff
-                     )
+        implicit0(blockStore: BlockStore[Effect]) <- FileLMDBIndexBlockStore[Effect](
+                                                      conf.server.dataDir,
+                                                      blockstorePath,
+                                                      100L * 1024L * 1024L * 4096L
+                                                    )(
+                                                      Concurrent[Effect],
+                                                      logEff,
+                                                      raiseIOError,
+                                                      metricsEff
+                                                    )
 
         blockDagStorage <- BlockDagFileStorage[Effect](
                             conf.server.dataDir,
@@ -146,14 +148,21 @@ class NodeRuntime private[node] (
         nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
         jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
 
+        implicit0(raise: FunctorRaise[Effect, InvalidBlock]) = ValidationImpl
+          .raiseValidateErrorThroughSync[Effect]
+        implicit0(validationEff: Validation[Effect]) = new ValidationImpl[Effect]
+
         // TODO: Only a loop started with the TransportLayer keeps filling this up,
         // so if we use the GossipService it's going to stay empty. The diagnostics
         // should use NodeDiscovery instead.
         connectionsCell <- Resource.liftF(effects.rpConnections.toEffect)
 
-        multiParentCasperRef <- Resource.liftF(MultiParentCasperRef.of[Effect])
+        implicit0(multiParentCasperRef: MultiParentCasperRef[Effect]) <- Resource.liftF(
+                                                                          MultiParentCasperRef
+                                                                            .of[Effect]
+                                                                        )
 
-        safetyOracle = SafetyOracle
+        implicit0(safetyOracle: SafetyOracle[Effect]) = SafetyOracle
           .cliqueOracle[Effect](Monad[Effect], logEff)
 
         blockApiLock <- Resource.liftF(Semaphore[Effect](1))
@@ -168,7 +177,7 @@ class NodeRuntime private[node] (
               blockApiLock = blockApiLock
             )(
               Concurrent[Effect],
-              Time.eitherTTime(Monad[Task], effects.time),
+              Time[Effect],
               logEff,
               metricsEff,
               multiParentCasperRef
@@ -199,18 +208,6 @@ class NodeRuntime private[node] (
               grpcScheduler,
               blockApiLock,
               conf.casper.ignoreDeploySignature
-            )(
-              Concurrent[Effect],
-              TaskLike[Effect],
-              logEff,
-              multiParentCasperRef,
-              metricsEff,
-              safetyOracle,
-              blockStore,
-              executionEngineService,
-              scheduler,
-              logId,
-              metricsId
             )
 
         _ <- api.Servers.httpServerR(
@@ -236,7 +233,6 @@ class NodeRuntime private[node] (
                 catsConcurrentEffectForEffect(scheduler),
                 logEff,
                 metricsEff,
-                Time.eitherTTime(Monad[Task], effects.time),
                 Timer[Effect],
                 safetyOracle,
                 blockStore,
@@ -245,6 +241,7 @@ class NodeRuntime private[node] (
                 eitherTApplicativeAsk(effects.peerNodeAsk(state)),
                 multiParentCasperRef,
                 executionEngineService,
+                validationEff,
                 scheduler,
                 logId,
                 metricsId
@@ -267,6 +264,7 @@ class NodeRuntime private[node] (
                 state,
                 multiParentCasperRef,
                 executionEngineService,
+                validationEff,
                 scheduler
               )
             }
@@ -394,6 +392,6 @@ object NodeRuntime {
   )(implicit scheduler: Scheduler, log: Log[Task]): Effect[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
-      runtime <- Task.delay(new NodeRuntime(conf, id, scheduler)).toEffect
+      runtime <- Task.delay(new NodeRuntime(conf, id)).toEffect
     } yield runtime
 }

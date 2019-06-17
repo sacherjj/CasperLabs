@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
-import io.casperlabs.casper.{InvalidPostStateHash, InvalidPreStateHash, Validate}
+import io.casperlabs.casper.{InvalidPostStateHash, InvalidPreStateHash, ValidationImpl}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError

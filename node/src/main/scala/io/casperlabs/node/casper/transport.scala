@@ -1,55 +1,44 @@
 package io.casperlabs.node.casper
 
 import cats._
-import cats.data._
-import cats.effect.{Concurrent, Resource, Sync}
-import cats.effect.concurrent.{Ref, Semaphore}
-import cats.mtl.{ApplicativeAsk, MonadState}
+import cats.effect.{Concurrent, Resource}
 import cats.instances.option._
 import cats.instances.unit._
+import cats.mtl.{ApplicativeAsk, MonadState}
 import cats.syntax.applicative._
 import cats.syntax.apply._
-import cats.syntax.flatMap._
-import cats.syntax.functor._
 import cats.syntax.foldable._
-import com.olegpy.meow.effects._
-import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
-  BlockStore,
-  FileLMDBIndexBlockStore
-}
+import cats.syntax.functor._
+import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
+import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
-import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
+import io.casperlabs.catscontrib.effect.implicits.bracketEitherTThrowable
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
-import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
+import io.casperlabs.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.rp._
 import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node._
+import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.p2p.effects._
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import monix.eval.{Task, TaskLike}
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.concurrent.duration._
 
 /** Create the Casper stack using the TransportLayer and CasperPacketHandler. */
 package object transport {
-  implicit def eitherTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
+  def eitherTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
 
   def apply(
@@ -70,6 +59,7 @@ package object transport {
       rpConfState: MonadState[Task, RPConf],
       multiParentCasperRef: MultiParentCasperRef[Effect],
       executionEngineService: ExecutionEngineService[Effect],
+      validation: Validation[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {
     for {
@@ -80,7 +70,7 @@ package object transport {
         (folder.deleteDirectory[Task]().whenA(folder.toFile.exists()) *> folder.pure[Task]).toEffect
       }
 
-      transport = {
+      implicit0(transport: TransportLayer[Task]) = {
         effects.tcpTransportLayer(
           port,
           conf.tls.certificate,
@@ -90,22 +80,25 @@ package object transport {
           commTmpFolder
         )(grpcScheduler, log, metrics, tcpConnections)
       }
-      transportEff = TransportLayer.eitherTTransportLayer(Monad[Task], log, transport)
+      implicit0(transportEff: TransportLayer[Effect]) = TransportLayer
+        .eitherTTransportLayer[Task]
 
-      lab    <- LastApprovedBlock.of[Task].toEffect
-      labEff = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
+      implicit0(lab: LastApprovedBlock[Task]) <- LastApprovedBlock.of[Task].toEffect
 
-      rpConfAsk    = effects.rpConfAsk(rpConfState)
-      rpConfAskEff = eitherTrpConfAsk(rpConfAsk)
-      peerNodeAsk  = effects.peerNodeAsk(rpConfState)
+      implicit0(labEff: LastApprovedBlock[Effect]) = LastApprovedBlock
+        .eitherTLastApprovedBlock[CommError, Task]
 
-      connectionsCellEff: ConnectionsCell[Effect] = Cell.eitherTCell(Monad[Task], connectionsCell)
+      implicit0(rpConfAsk: RPConfAsk[Task]) = effects.rpConfAsk(rpConfState)
 
-      nodeDiscoveryEff: NodeDiscovery[Effect] = NodeDiscovery
-        .eitherTNodeDiscovery(Monad[Task], nodeDiscovery)
+      peerNodeAsk = effects.peerNodeAsk(rpConfState)
 
-      time                  = effects.time
-      timeEff: Time[Effect] = Time.eitherTTime(Monad[Task], time)
+      implicit0(connectionsCellEff: ConnectionsCell[Effect]) = Cell
+        .eitherTCell[CommError, Task, Connections]
+
+      implicit0(nodeDiscoveryEff: NodeDiscovery[Effect]) = NodeDiscovery
+        .eitherTNodeDiscovery[CommError, Task]
+
+      implicit0(timeEff: Time[Effect]) = Time[Effect]
 
       defaultTimeout = conf.server.defaultTimeout.millis
 
@@ -115,46 +108,18 @@ package object transport {
                                 defaultTimeout,
                                 executionEngineService,
                                 _.value
-                              )(
-                                labEff,
-                                metricsEff,
-                                blockStore,
-                                connectionsCellEff,
-                                nodeDiscoveryEff,
-                                transportEff,
-                                ErrorHandler[Effect],
-                                rpConfAskEff,
-                                safetyOracle,
-                                Sync[Effect],
-                                Concurrent[Effect],
-                                timeEff,
-                                logEff,
-                                multiParentCasperRef,
-                                blockDagStorage,
-                                executionEngineService,
-                                scheduler
                               )
 
-      packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
-        Applicative[Effect],
-        Log.eitherTLog(Monad[Task], log),
-        ErrorHandler[Effect]
-      )
+      implicit0(packetHandler: PacketHandler[Effect]) = PacketHandler
+        .pf[Effect](casperPacketHandler.handle)(
+          Applicative[Effect],
+          Log.eitherTLog(Monad[Task], log),
+          ErrorHandler[Effect]
+        )
 
       // Start receiving messages from peers.
       _ <- transportEff.receive(
-            pm =>
-              HandleMessages.handle[Effect](pm, defaultTimeout)(
-                Sync[Effect],
-                logEff,
-                timeEff,
-                metricsEff,
-                transportEff,
-                ErrorHandler[Effect],
-                packetHandler,
-                connectionsCellEff,
-                rpConfAskEff
-              ),
+            pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
       _ <- logEff.info(s"Started transport layer on port $port.")
@@ -172,15 +137,7 @@ package object transport {
                        transport,
                        metrics
                      ).toEffect
-                 _ <- refreshConnections(
-                       timeEff,
-                       logEff,
-                       metricsEff,
-                       connectionsCellEff,
-                       rpConfAskEff,
-                       transportEff,
-                       nodeDiscoveryEff
-                     )
+                 _ <- refreshConnections
                } yield ()).forever
              }
 

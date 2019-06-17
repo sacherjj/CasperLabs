@@ -78,6 +78,9 @@ class TransportLayerCasperTestNode[F[_]](
   implicit val labF =
     LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
 
+  implicit val raiseInvalidBlock = ValidationImpl.raiseValidateErrorThroughSync[F]
+  implicit val validation        = new ValidationImpl[F]
+
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
       new MultiParentCasperImpl.StatelessExecutor(chainId),

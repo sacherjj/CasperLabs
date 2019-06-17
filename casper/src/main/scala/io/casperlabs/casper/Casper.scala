@@ -53,17 +53,14 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  private def init[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: ExecutionEngineService](
+  private def init[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Validation](
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap
   ) =
     for {
-      dag <- BlockDagStorage[F].getRepresentation
-      _ <- {
-        implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
-        Validate.transactions[F](genesis, dag, genesisPreState, genesisEffects)
-      }
+      dag                 <- BlockDagStorage[F].getRepresentation
+      _                   <- Validation[F].transactions(genesis, dag, genesisPreState, genesisEffects)
       blockProcessingLock <- Semaphore[F](1)
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()
@@ -71,7 +68,7 @@ sealed abstract class MultiParentCasperInstances {
 
     } yield (blockProcessingLock, casperState)
 
-  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
+  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService: Validation](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,
@@ -92,7 +89,7 @@ sealed abstract class MultiParentCasperInstances {
     }
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: Validation](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,

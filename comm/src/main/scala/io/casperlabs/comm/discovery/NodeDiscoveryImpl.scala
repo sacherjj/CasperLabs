@@ -42,7 +42,7 @@ object NodeDiscoveryImpl {
   }
 }
 
-private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: KademliaService: Par](
+class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: KademliaService: Par](
     id: NodeIdentifier,
     table: PeerTable[F],
     alpha: Int = 3,

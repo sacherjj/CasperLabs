@@ -6,7 +6,7 @@ import cats.effect.{Concurrent, Resource, Timer}
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.SafetyOracle
+import io.casperlabs.casper.{SafetyOracle, Validation}
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
@@ -75,7 +75,7 @@ object Servers {
     )
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: SafetyOracle: BlockStore: ExecutionEngineService](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: SafetyOracle: BlockStore: ExecutionEngineService: Validation](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,

@@ -28,9 +28,12 @@ import scala.concurrent.duration._
 class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCasperTestNodeFactory {
   import HashSetCasperTest._
   import HashSetCasperTestNode.Effect
+  import DeriveValidation._
 
   private implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
   implicit val metrics                      = new Metrics.MetricsNOP[Task]
+  implicit val raiseValidateErr             = ValidationImpl.raiseValidateErrorThroughSync[Effect]
+  implicit val logEff                       = new LogStub[Effect]
 
   private val (validatorKeys, validators)                      = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                            = createBonds(validators)
@@ -51,7 +54,6 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
       "for(_ <- @1){ @2!(2) }"
     ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
 
-    implicit val logEff = new LogStub[Effect]
     def testProgram(blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
     ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(

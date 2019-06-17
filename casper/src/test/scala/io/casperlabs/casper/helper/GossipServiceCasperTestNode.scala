@@ -63,6 +63,9 @@ class GossipServiceCasperTestNode[F[_]](
     case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
   }
 
+  implicit val raiseInvalidBlock         = ValidationImpl.raiseValidateErrorThroughSync[F]
+  implicit val validation: Validation[F] = new ValidationImpl[F]
+
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it
   // - test tries to give a block created by node A to node B without gossiping

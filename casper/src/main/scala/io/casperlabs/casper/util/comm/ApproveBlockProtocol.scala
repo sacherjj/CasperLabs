@@ -49,7 +49,7 @@ object ApproveBlockProtocol {
   def apply[F[_]](implicit instance: ApproveBlockProtocol[F]): ApproveBlockProtocol[F] = instance
 
   //For usage in tests only
-  def unsafe[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
+  def unsafe[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock: Validation](
       block: BlockMessage,
       transforms: Seq[TransformEntry],
       trustedValidators: Set[ByteString],
@@ -70,7 +70,7 @@ object ApproveBlockProtocol {
       sigsF
     )
 
-  def of[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
+  def of[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock: Validation](
       block: BlockMessage,
       transforms: Seq[TransformEntry],
       trustedValidators: Set[ByteString],
@@ -93,7 +93,7 @@ object ApproveBlockProtocol {
         sigsF
       )
 
-  private class ApproveBlockProtocolImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
+  private class ApproveBlockProtocolImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock: Validation](
       val block: BlockMessage,
       val transforms: Seq[TransformEntry],
       val requiredSigs: Int,
@@ -116,7 +116,7 @@ object ApproveBlockProtocol {
     def addApproval(a: BlockApproval): F[Unit] = {
       val validSig = for {
         c   <- a.candidate if c == this.candidate
-        sig <- a.sig if Validate.signature(sigData, sig)
+        sig <- a.sig if Validation[F].signature(sigData, sig)
       } yield sig
 
       val trustedValidator =
