@@ -31,7 +31,7 @@ import simulacrum.typeclass
 object FilesAPI {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def create[F[_]: Sync: Log]: F[FilesAPI[F]] = Sync[F].delay {
+  def create[F[_]: Sync: Log]: FilesAPI[F] =
     new FilesAPI[F] {
       override def readBytes(path: Path): F[Array[Byte]] =
         Sync[F]
@@ -70,7 +70,6 @@ object FilesAPI {
           options: List[OpenOption] = Nil
       ): F[Unit] = writeBytes(path, data.getBytes(charset), options)
     }
-  }
 
   implicit def eitherTFilesApi[E, F[_]: Monad: FilesAPI]: FilesAPI[EitherT[F, E, ?]] =
     new FilesAPI[EitherT[F, E, ?]] {

@@ -141,6 +141,6 @@ object FilesAPISuite {
 
   object TestFixture {
     def apply(test: FilesAPI[SyncIO] => SyncIO[Unit]): Unit =
-      FilesAPI.create[SyncIO].flatMap(test).unsafeRunSync()
+      test(FilesAPI.create[SyncIO]).unsafeRunSync()
   }
 }
