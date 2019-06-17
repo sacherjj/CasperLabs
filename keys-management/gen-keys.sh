@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 set -euo pipefail
 trap 'handle_exit'  0
 

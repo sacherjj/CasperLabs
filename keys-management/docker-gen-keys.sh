@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 set -euo pipefail
 
 # Generates all necessary keys for a node using Docker image
@@ -11,7 +11,7 @@ else
 	OUTPUT_DIR="$(PWD)/$1"	
 fi
 
-if [ ! -d "$OUTPUT_DIR" ]; then
+if [[ ! -d "$OUTPUT_DIR" ]]; then
     echo "ERROR: output dir doesn't exist"
     echo "usage: ./docker-gen-keys.sh <dir>"
     exit 1
