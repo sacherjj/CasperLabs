@@ -129,6 +129,8 @@ use-tls = false
 # Size factor for squashing block storage latest messages.
 latest-messages-log-max-size-factor = 10
 
+# Maximum size of the in-memory block cache in bytes.
+cache-max-size-bytes = 262144000
 
 # io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]

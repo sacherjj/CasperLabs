@@ -86,4 +86,11 @@ object InMemBlockStore {
   ): F[Ref[F, Map[BlockHash, V]]] =
     Ref[F].of(Map.empty[BlockHash, V])
 
+  def empty[F[_]: Sync: Metrics] =
+    for {
+      blockMapRef      <- Ref[F].of(Map.empty[BlockHash, (BlockMsgWithTransform, BlockSummary)])
+      deployMapRef     <- Ref[F].of(Map.empty[DeployHash, Seq[BlockHash]])
+      approvedBlockRef <- Ref.of[F, Option[ApprovedBlock]](None)
+      store            = create[F](Sync[F], blockMapRef, deployMapRef, approvedBlockRef, Metrics[F])
+    } yield store
 }

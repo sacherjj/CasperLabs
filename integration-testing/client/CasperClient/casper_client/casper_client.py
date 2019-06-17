@@ -16,7 +16,7 @@ from . import CasperMessage_pb2
 from .CasperMessage_pb2_grpc import DeployServiceStub
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
-from . import casper_pb2
+from . import casper_pb2 as casper
 from .casper_pb2_grpc import CasperServiceStub
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
@@ -158,7 +158,7 @@ class CasperClient:
                              header = header,
                              body = body)
 
-        return self.casperService.Deploy(casper_pb2.DeployRequest(deploy = d)), deploy_hash
+        return self.casperService.Deploy(casper.DeployRequest(deploy = d)), deploy_hash
 
 
     @guarded
@@ -222,8 +222,20 @@ class CasperClient:
                                   'address'.
         :return:                  QueryStateResponse object
         """
-        return self.node.queryState(
-            CasperMessage_pb2.QueryStateRequest(block_hash=blockHash, key_bytes=key, key_variant=keyType, path=path))
+        def key_variant(keyType):
+            return {'hash': casper.StateQuery.KeyVariant.HASH,
+                    'uref': casper.StateQuery.KeyVariant.UREF,
+                    'address': casper.StateQuery.KeyVariant.ADDRESS}[keyType]
+
+        def path_segments(path):
+            return path.split('/')
+
+        return self.casperService.GetBlockState(
+            casper.GetBlockStateRequest(block_hash_base16 = blockHash,
+                                        query = casper.StateQuery(
+                                                    key_variant = key_variant(keyType),
+                                                    key_base16 = key,
+                                                    path_segments = path_segments(path))))
 
     @guarded
     def showMainChain(self, depth: int):

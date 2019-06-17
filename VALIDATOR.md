@@ -7,16 +7,16 @@ Pre-packaged binaries are published to http://repo.casperlabs.io/casperlabs/repo
 * [OpenJDK](https://openjdk.java.net) Java Development Kit (JDK) or Runtime Environment (JRE), version 11. We recommend using the OpenJDK
 
 ```sh
-sudo add-apt-repository ppa:openjdk-r/ppa
-sudo apt update
-sudo apt install openjdk-11-jdk
-export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+dev@dev:~$ sudo add-apt-repository ppa:openjdk-r/ppa
+dev@dev:~$ sudo apt update
+dev@dev:~$ sudo apt install openjdk-11-jdk
+dev@dev:~$ export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 ```
 
 Check that you have the right Java version:
 
 ```console
-$ sudo update-alternatives --config java
+dev@dev:~$ sudo update-alternatives --config java
 There are 3 choices for the alternative java (providing /usr/bin/java).
 
   Selection    Path                                            Priority   Status
@@ -28,7 +28,7 @@ There are 3 choices for the alternative java (providing /usr/bin/java).
 
 Press <enter> to keep the current choice[*], or type selection number: 0
 update-alternatives: using /usr/lib/jvm/java-11-openjdk-amd64/bin/java to provide /usr/bin/java (java) in auto mode
-$ java -version
+dev@dev:~$ java -version
 openjdk version "11.0.1" 2018-10-16
 OpenJDK Runtime Environment (build 11.0.1+13-Ubuntu-3ubuntu116.04ppa1)
 OpenJDK 64-Bit Server VM (build 11.0.1+13-Ubuntu-3ubuntu116.04ppa1, mixed mode, sharing)
@@ -42,10 +42,10 @@ The node consists of an API component running in Java and an execution engine ru
 *NOTE: Users will need to update \[VERSION\] with the version the want. See:
 
 ```sh
-curl -sO http://repo.casperlabs.io/casperlabs/repo/master/casperlabs-node_[VERSION]_all.deb
-curl -sO http://repo.casperlabs.io/casperlabs/repo/master/casperlabs-engine-grpc-server_[VERSION]_amd64.deb
-sudo dpkg -i casperlabs-node_[VERSION]_all.deb
-sudo dpkg -i casperlabs-engine-grpc-server_[VERSION]_amd64.deb
+dev@dev:~$ curl -sO http://repo.casperlabs.io/casperlabs/repo/master/casperlabs-node_[VERSION]_all.deb
+dev@dev:~$ curl -sO http://repo.casperlabs.io/casperlabs/repo/master/casperlabs-engine-grpc-server_[VERSION]_amd64.deb
+dev@dev:~$ sudo dpkg -i casperlabs-node_[VERSION]_all.deb
+dev@dev:~$ sudo dpkg -i casperlabs-engine-grpc-server_[VERSION]_amd64.deb
 ```
 
 After these steps you should be able to run `casperlabs-node --help` and `casperlabs-engine-grpc-server --help`.
@@ -58,8 +58,8 @@ The execution engine runs as a separate process and isn't open to the network, i
 The node will want to connect to this socket, so it's best to start the engine up front.
 
 ```console
-$ mkdir casperlabs-node-data
-$ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock
+dev@dev:~$ mkdir casperlabs-node-data
+dev@dev:~$ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock
 Server is listening on socket: casperlabs-node-data/.caspernode.sock
 ```
 
@@ -69,7 +69,7 @@ The execution engine supports an optional `--loglevel` command line argument fol
 which sets the log level for the execution engine. 
 
 ```console
-$ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock --loglevel=error
+dev@dev:~$ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock --loglevel=error
 ```
 
 The log levels supported are:
@@ -94,24 +94,63 @@ If the `--loglevel` argument is not provided, the execution engine defaults to t
 3. `ed25519` (optional) another set of private and public keys used by dApp developers to sign their deploys.
 
 #### Prerequisites: OpenSSL
-Download and install the latest version of the [openssl 1.1](https://github.com/openssl/openssl/releases).
+
+*macOS:*
+Ensure if [Brew](https://brew.sh) is installed:
 ```bash
-cd /tmp
-curl -L https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz -o openssl.tar.gz
-tar -xzf openssl.tar.gz
-cd openssl-OpenSSL_1_1_1b
-./config
-make
-make test
-sudo make install
-export LD_LIBRARY_PATH=/usr/local/lib
+dev@dev:~$ brew --version
+Homebrew 2.1.5
+Homebrew/homebrew-core (git revision 8c8ee; last commit 2019-06-13)
+Homebrew/homebrew-cask (git revision 76d0e; last commit 2019-06-13)
 ```
 
-To continue to have working lib folder, consider adding last line to bottom of `.bashrc` or relevent file with:
+If console prints `dev@dev:~$ bash: command not found` then install it:
+```bash
+/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+```
 
-`echo "export LD_LIBRARY_PATH=/usr/local/lib" >> ~/.bashrc`
+Install OpenSSL:
+```bash
+dev@dev:~$ brew update
+dev@dev:~$ brew install openssl@1.1
+```
 
-You might want to add `/usr/local/ssh/bin` to your `/etc/environment` file so that the right executable is found; check it by running `openssl version`.
+The next step depends on which shell is used on the machine:
+
+`bash`:
+```bash
+dev@dev:~$ echo "" >> ~/.bashrc
+dev@dev:~$ echo 'export PATH="/usr/local/opt/openssl@1.1/bin:$PATH"' >> ~/.bashrc
+dev@dev:~$ source ~/.bashrc
+```
+
+`zsh`:
+```bash
+dev@dev:~$ echo "" >> ~/.bashrc
+dev@dev:~$ echo 'export PATH="/usr/local/opt/openssl@1.1/bin:$PATH"' >> ~/.zshrc
+dev@dev:~$ source ~/.zshrc
+```
+
+Ensure the latest 1.1 version of OpenSSL is installed:
+```bash
+dev@dev:~$ openssl version
+OpenSSL 1.1.1c  28 May 2019
+```
+
+*Linux:*
+
+Download and install the latest version of the [openssl 1.1](https://github.com/openssl/openssl/releases).
+```bash
+dev@dev:~$ cd /tmp
+dev@dev:~$ curl -L https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz -o openssl.tar.gz
+dev@dev:~$ tar -xzf openssl.tar.gz
+dev@dev:~$ cd openssl-OpenSSL_1_1_1b
+dev@dev:~$ ./config
+dev@dev:~$ make
+dev@dev:~$ make test
+dev@dev:~$ sudo make install
+dev@dev:~$ sudo ldconfig
+```
 
 #### Prerequisites: sha3sum
 Download and install the latest version of the [sha3sum](https://github.com/maandree/sha3sum).
@@ -122,21 +161,22 @@ Download and install the latest version of the [sha3sum](https://github.com/maan
  Build libkeccak:
 
 ```bash
-cd /tmp
-git clone https://github.com/maandree/libkeccak.git
-cd libkeccak
-make
-sudo make install PREFIX=/usr
+dev@dev:~$ cd /tmp
+dev@dev:~$ git clone https://github.com/maandree/libkeccak.git
+dev@dev:~$ cd libkeccak
+dev@dev:~$ make
+dev@dev:~$ sudo make install
+dev@dev:~$ sudo ldconfig
 ```
 
  Build sha3sum:
 
 ```bash
-cd /tmp
-git clone https://github.com/maandree/sha3sum.git
-cd sha3sum
-make
-sudo make install
+dev@dev:~$ cd /tmp
+dev@dev:~$ git clone https://github.com/maandree/sha3sum.git
+dev@dev:~$ cd sha3sum
+dev@dev:~$ make
+dev@dev:~$ sudo make install
 ```
 
 #### Script
@@ -145,40 +185,48 @@ You may want to use [the script](/docker/gen-keys.sh) which will generate all th
 #### ed25519 Validator
 Generate private key:
 ```bash
-openssl genpkey -algorithm Ed25519 -out ed25519-validator-private.pem
+dev@dev:~$ openssl genpkey -algorithm Ed25519 -out ed25519-validator-private.pem
 ```
+
+If the commands returns the next message `Algorithm Ed25519 not found` it means that you don't have the latest version of OpenSSL installed.
+Generally, if any error occurs firstly make sure if all the [prerequisites](/VALIDATOR.md#prerequisites-openssl) are installed.
 
 Public key:
 ```bash
-openssl pkey -in ed25519-validator-private.pem -pubout -out ed25519-validator-public.pem
+dev@dev:~$ openssl pkey -in ed25519-validator-private.pem -pubout -out ed25519-validator-public.pem
 ```
 
-To obtain your validator ID (used in bonds.txt file which contains a list of initially bonded of validators):
+Use the public key to create a bonds.txt file which contains a set of initial validators of a network and their initial bonds:
 ```bash
-openssl pkey -outform DER -pubout -in ed25519-validator-private.pem | tail -c +13 | openssl base64
+dev@dev:~$ VALIDATOR_ID=$(openssl pkey -outform DER -pubout -in ed25519-validator-private.pem | tail -c +13 | openssl base64)
+dev@dev:~$ echo "$VALIDATOR_ID" " 100" > bonds.txt
 ```
 
-Use as:
+Use them as follow:
 ```bash
-./node/target/universal/stage/bin/casperlabs-node run -s \
+dev@dev:~$ ./node/target/universal/stage/bin/casperlabs-node run -s \
     --casper-validator-private-key-path ed25519-validator-private.pem \
-    --casper-validator-public-key-path ed25519-validator-public.pem
+    --casper-validator-public-key-path ed25519-validator-public.pem \
+    --casper-bonds-file bonds.txt
 ```
 
 #### ed25519 dApp Developer
 Generate private key:
 ```bash
-openssl genpkey -algorithm Ed25519 -out ed25519-developer-private.pem
+dev@dev:~$ openssl genpkey -algorithm Ed25519 -out ed25519-developer-private.pem
 ```
+
+If the commands returns the next message `Algorithm Ed25519 not found` it means that you don't have the latest version of OpenSSL installed.
+Generally, if any error occurs firstly make sure if all the [prerequisites](/VALIDATOR.md#prerequisites-openssl) are installed.
 
 Public key:
 ```bash
-openssl pkey -in ed25519-developer-private.pem -pubout -out ed25519-developer-public.pem
+dev@dev:~$ openssl pkey -in ed25519-developer-private.pem -pubout -out ed25519-developer-public.pem
 ```
 
 Use them sign a deploy as:
 ```bash
-./client/target/universal/stage/bin/casperlabs-node --host <node hostname> deploy \
+dev@dev:~$ ./client/target/universal/stage/bin/casperlabs-node --host <node hostname> deploy \
     --public-key ed25519-developer-public.pem \
     --private-key ed25519-developer-public.pem \
     --from <purse address that will be used to pay for the deployment> \
@@ -192,14 +240,14 @@ Use them sign a deploy as:
 
 Generate private key:
 ```bash
-openssl ecparam -name secp256r1 -genkey -noout -out secp256r1-private.pem
-openssl pkcs8 -topk8 -nocrypt -in secp256r1-private.pem -out secp256r1-private-pkcs8.pem
-rm secp256r1-private.pem
+dev@dev:~$ openssl ecparam -name secp256r1 -genkey -noout -out secp256r1-private.pem
+dev@dev:~$ openssl pkcs8 -topk8 -nocrypt -in secp256r1-private.pem -out secp256r1-private-pkcs8.pem
+dev@dev:~$ rm secp256r1-private.pem
 ```
 
 Obtain node ID from the private key:
 ```bash
-NODE_ID=$(cat secp256r1-private-pkcs8.pem | \
+dev@dev:~$ NODE_ID=$(cat secp256r1-private-pkcs8.pem | \
     openssl ec -text -noout | \
     grep pub -A 5 | \
     tail -n +2 | \
@@ -219,7 +267,7 @@ The address above contains `c0a6c82062461c9b7f9f5c3120f44589393edf31` as a node 
 
 Generate certificate from the generated private key. Fill asked questions and enter the above `NODE_ID` as a `Common Name (CN)`
 ```bash
-openssl req \
+dev@dev:~$ openssl req \
     -new \
      -x509 \
      -key secp256r1-private-pkcs8.pem \
@@ -229,7 +277,7 @@ openssl req \
 
 Now you can use them as:
 ```bash
-./node/target/universal/stage/bin/casperlabs-node run \
+dev@dev:~$ ./node/target/universal/stage/bin/casperlabs-node run \
     --tls-certificate node.certificate.pem \
     --tls-key secp256r1-private-pkcs8.pem
 ```
@@ -256,7 +304,7 @@ You can start the node in two modes:
 * Without `-s` you have to use the `--server-bootstrap` option and give it the address of another node to get the blocks from and to start discovering other nodes with. The address is in the form of `casperlabs://<bootstrap-node-id>@$<bootstrap-node-ip-address>?protocol=40400&discovery=40404`, but the ports can be different, based on what the operator of the node configured.
 
 ```console
-$ casperlabs-node \
+dev@dev:~$ casperlabs-node \
      --grpc-port 40401 \
      run \
      --server-data-dir casperlabs-node-data \

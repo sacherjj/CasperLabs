@@ -824,15 +824,15 @@ object BlockDagFileStorage {
     )
 
   def apply[F[_]: Concurrent: Log: RaiseIOError: Metrics](
-      dataDir: Path,
       dagStoragePath: Path,
+      latestMessagesLogMaxSizeFactor: Int,
       blockStore: BlockStore[F]
   ): Resource[F, BlockDagStorage[F]] =
     Resource.make {
       for {
-        _         <- fileIO.makeDirectory(dagStoragePath)
-        dagConfig = BlockDagFileStorage.Config(dagStoragePath)
-        storage <- BlockDagFileStorage.create(dagConfig)(
+        _      <- fileIO.makeDirectory(dagStoragePath)
+        config = Config(dagStoragePath, latestMessagesLogMaxSizeFactor)
+        storage <- BlockDagFileStorage.create(config)(
                     Concurrent[F],
                     Log[F],
                     blockStore,

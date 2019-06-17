@@ -67,9 +67,11 @@ object Estimator {
       scores           <- lmdScoring(blockDag, latestMessagesHashes)
       newMainParent    <- forkChoiceTip(blockDag, lastFinalizedBlockHash, scores)
       parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
-      sortedParents    = parents.sortBy(b => -scores.getOrElse(b, 0L) -> b.toString())
       secondaryParents = parents.filter(_ != newMainParent)
-    } yield newMainParent +: secondaryParents
+      sortedSecParents = secondaryParents
+        .sortBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8)
+        .reverse
+    } yield newMainParent +: sortedSecParents
   }
 
   /*
@@ -112,7 +114,7 @@ object Estimator {
                    } else {
                      forkChoiceTip[F](
                        blockDag,
-                       reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toString()),
+                       reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8),
                        scores
                      )
                    }

@@ -67,11 +67,10 @@ object HandleMessages {
     for {
       local               <- RPConfAsk[F].reader(_.local)
       maybeResponsePacket <- PacketHandler[F].handlePacket(remote, packet)
-    } yield
-      maybeResponsePacket
-        .fold(notHandled(noResponseForRequest))(
-          m => handledWithMessage(ProtocolHelper.protocol(local).withPacket(m))
-        )
+    } yield maybeResponsePacket
+      .fold(notHandled(noResponseForRequest))(
+        m => handledWithMessage(ProtocolHelper.protocol(local).withPacket(m))
+      )
 
   def handleProtocolHandshake[F[_]: Monad: Time: TransportLayer: Log: ErrorHandler: ConnectionsCell: RPConfAsk: Metrics](
       peer: Node,

@@ -176,13 +176,12 @@ object GraphQL {
                       .toList
                       .void
                       .start
-          } yield
-            (
-              ProtocolState.Active[F](
-                activeSubscriptions.asInstanceOf[Subscriptions[F]] + (id -> fiber)
-              ),
-              ()
-            )
+          } yield (
+            ProtocolState.Active[F](
+              activeSubscriptions.asInstanceOf[Subscriptions[F]] + (id -> fiber)
+            ),
+            ()
+          )
 
         case (ProtocolState.Active(activeSubscriptions), GraphQLWebSocketMessage.Stop(id)) =>
           for {
@@ -190,8 +189,10 @@ object GraphQL {
                   .asInstanceOf[Subscriptions[F]]
                   .get(id)
                   .fold(().pure[F])(_.cancel)
-          } yield
-            (ProtocolState.Active(activeSubscriptions.asInstanceOf[Subscriptions[F]] - id), ())
+          } yield (
+            ProtocolState.Active(activeSubscriptions.asInstanceOf[Subscriptions[F]] - id),
+            ()
+          )
 
         case (
             ProtocolState.Active(activeSubscriptions),

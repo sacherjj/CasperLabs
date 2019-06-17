@@ -1,5 +1,6 @@
 import os
 import logging
+import threading
 from typing import Callable, Dict, List
 
 import docker
@@ -12,7 +13,7 @@ from test.cl_node.docker_base import DockerConfig
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-from test.cl_node.wait import (
+from test.cl_node.wait import ( 
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
     wait_for_peers_count_at_least,
@@ -37,6 +38,7 @@ class CasperLabsNetwork:
         self.cl_nodes: List[CasperLabsNode] = []
         self._created_networks: List[str] = []
         NonceRegistry.reset()
+        self._lock = threading.RLock()  # protect self.cl_nodes and self._created_networks
 
     @property
     def node_count(self) -> int:
@@ -44,7 +46,8 @@ class CasperLabsNetwork:
 
     @property
     def docker_nodes(self) -> List[DockerNode]:
-        return [cl_node.node for cl_node in self.cl_nodes]
+        with self._lock:
+            return [cl_node.node for cl_node in self.cl_nodes]
 
     def get_key(self):
         key_pair = PREGENERATED_KEYPAIRS[self._next_key_number]
@@ -58,17 +61,19 @@ class CasperLabsNetwork:
         raise NotImplementedError("Must implement '_create_network' in subclass.")
 
     def create_docker_network(self) -> str:
-        tag_name = os.environ.get("TAG_NAME") or 'test'
-        network_name = f'casperlabs_{random_string(5)}_{tag_name}'
-        self._created_networks.append(network_name)
-        self.docker_client.networks.create(network_name, driver="bridge")
-        logging.info(f'Docker network {network_name} created.')
-        return network_name
+        with self._lock:
+            tag_name = os.environ.get("TAG_NAME") or 'test'
+            network_name = f'casperlabs_{random_string(5)}_{tag_name}'
+            self._created_networks.append(network_name)
+            self.docker_client.networks.create(network_name, driver="bridge")
+            logging.info(f'Docker network {network_name} created.')
+            return network_name
 
     def _add_cl_node(self, config: DockerConfig) -> None:
-        config.number = self.node_count
-        cl_node = CasperLabsNode(config)
-        self.cl_nodes.append(cl_node)
+        with self._lock:
+            config.number = self.node_count
+            cl_node = CasperLabsNode(config)
+            self.cl_nodes.append(cl_node)
 
     def add_new_node_to_network(self) -> None:
         kp = self.get_key()
@@ -85,25 +90,30 @@ class CasperLabsNetwork:
         self.wait_method(wait_for_node_started, 0)
 
     def add_cl_node(self, config: DockerConfig, network_with_bootstrap: bool = True) -> None:
-        if self.node_count == 0:
-            raise Exception('Must create bootstrap first')
-        config.bootstrap_address = self.cl_nodes[0].node.address
-        if network_with_bootstrap:
-            config.network = self.cl_nodes[0].node.network
-        self._add_cl_node(config)
+        with self._lock:
+            if self.node_count == 0:
+                raise Exception('Must create bootstrap first')
+            config.bootstrap_address = self.cl_nodes[0].node.address
+            if network_with_bootstrap:
+                config.network = self.cl_nodes[0].node.network
+            self._add_cl_node(config)
 
     def stop_cl_node(self, node_number: int) -> None:
-        self.cl_nodes[node_number].execution_engine.stop()
-        node = self.cl_nodes[node_number].node
+        with self._lock:
+            cl_node = self.cl_nodes[node_number]
+
+        cl_node.execution_engine.stop()
+        node = cl_node.node
         with wait_for_log_watcher(GoodbyeInLogLine(node.container)):
             node.stop()
 
     def start_cl_node(self, node_number: int) -> None:
-        self.cl_nodes[node_number].execution_engine.start()
-        node = self.cl_nodes[node_number].node
-        node.truncate_logs()
-        node.start()
-        wait_for_approved_block_received_handler_state(node, node.config.command_timeout)
+        with self._lock:
+            self.cl_nodes[node_number].execution_engine.start()
+            node = self.cl_nodes[node_number].node
+            node.truncate_logs()
+            node.start()
+            wait_for_approved_block_received_handler_state(node, node.config.command_timeout)
 
     def wait_for_peers(self) -> None:
         if self.node_count < 2:
@@ -129,19 +139,23 @@ class CasperLabsNetwork:
 
     def __exit__(self, exception_type, exception_value, traceback=None):
         if exception_type is not None:
-            logging.error(f'Python Exception Occurred: {exception_type}')
-            logging.error(exception_value)
-        for node in self.cl_nodes:
-            node.cleanup()
-        self.cleanup()
+            import traceback as tb
+            logging.error(f'Python Exception Occurred: {exception_type} {exception_value} {tb.format_exc()}')
+
+        with self._lock:
+            for node in self.cl_nodes:
+                node.cleanup()
+            self.cleanup()
+
         return True
 
     def cleanup(self):
-        for network_name in self._created_networks:
-            try:
-                self.docker_client.networks.get(network_name).remove()
-            except docker.errors.NotFound:
-                pass
+        with self._lock:
+            for network_name in self._created_networks:
+                try:
+                    self.docker_client.networks.get(network_name).remove()
+                except (docker.errors.NotFound, Exception) as e:
+                    logging.warning(f"Exception in cleanup while trying to remove network {network_name}: {str(e)}")
 
 
 class OneNodeNetwork(CasperLabsNetwork):
@@ -259,16 +273,22 @@ class CustomConnectionNetwork(CasperLabsNetwork):
                 wait_for_peers_count_at_least(self.docker_nodes[node_num], peer_count, timeout)
 
     def connect(self, network_members):
-        network_name = self.create_docker_network()
-        self.network_names[tuple(network_members)] = network_name
-        for node_num in network_members:
-            self.docker_nodes[node_num].connect_to_network(network_name)
+        # TODO: We should probably merge CustomConnectionNetwork with CasperLabsNetwork, 
+        # move its functionality into CasperLabsNetwork.
+        with self._lock:
+            network_name = self.create_docker_network()
+
+            if network_name not in self.network_names:
+                self.network_names[tuple(network_members)] = network_name
+                for node_num in network_members:
+                    self.docker_nodes[node_num].connect_to_network(network_name)
 
     def disconnect(self, connection):
-        network_name = self.network_names[tuple(connection)]
-        for node_num in connection:
-            self.docker_nodes[node_num].disconnect_from_network(network_name)
-        del self.network_names[tuple(connection)]
+        with self._lock:
+            network_name = self.network_names[tuple(connection)]
+            for node_num in connection:
+                self.docker_nodes[node_num].disconnect_from_network(network_name)
+            del self.network_names[tuple(connection)]
 
 
 if __name__ == '__main__':

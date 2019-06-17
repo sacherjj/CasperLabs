@@ -10,8 +10,7 @@ import scala.util.Random
 package object gatling {
   def getRandomHexString(numchars: Int) = {
     val sb = new StringBuffer
-    while (sb.length < numchars)
-      sb.append(Integer.toHexString(Random.nextInt))
+    while (sb.length < numchars) sb.append(Integer.toHexString(Random.nextInt))
 
     sb.toString.substring(0, numchars)
   }
@@ -20,14 +19,13 @@ package object gatling {
     def toByteStr = ByteString.copyFromUtf8(str)
   }
 
-  def randomNode: Node = {
+  def randomNode: Node =
     Node(
       id = getRandomHexString(20).toByteStr,
       host = "127.0.0.1",
       protocolPort = 1337,
       discoveryPort = 1337
     )
-  }
 
   def buildValidExpr[A](a: => A): Expression[A] = _ => validation.Success(a)
 }

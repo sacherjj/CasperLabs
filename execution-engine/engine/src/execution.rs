@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
@@ -984,7 +985,7 @@ impl Executor<Module> for WasmiExecutor {
             &mut uref_lookup_local,
             known_urefs,
             arguments,
-            Rc::new(RefCell::new(account)),
+            Cow::Borrowed(&account),
             acct_key,
             gas_limit,
             gas_counter,
