@@ -23,11 +23,7 @@ object Main {
         maybeConf <- Task(Configuration.parse(args))
         _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) {
               case (conn, conf) =>
-                val deployService = new GrpcDeployService(
-                  conn.host,
-                  conn.portExternal,
-                  conn.portInternal
-                )
+                val deployService = new GrpcDeployService(conn)
                 program(conf)(Sync[Task], deployService, Timer[Task])
                   .doOnFinish(_ => Task(deployService.close()))
             }
