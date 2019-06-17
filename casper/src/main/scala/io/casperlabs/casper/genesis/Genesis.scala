@@ -22,6 +22,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NoStackTrace
 
 object Genesis {
 
@@ -240,7 +241,6 @@ object Genesis {
     }
 
   def getBonds[F[_]: Sync: Log](
-      genesisPath: Path,
       bonds: Path,
       numValidators: Int
   ): F[Map[PublicKey, Long]] =
@@ -265,14 +265,17 @@ object Genesis {
                       case Success(bonds) =>
                         bonds.pure[F]
                       case Failure(_) =>
-                        Log[F].warn(s"Bonds file ${file.getPath} cannot be parsed.") *> Map
-                          .empty[PublicKey, Long]
-                          .pure[F]
+                        val message = s"Bonds file ${file.getPath} cannot be parsed."
+                        Log[F].error(message) *> Sync[F].raiseError[Map[PublicKey, Long]](
+                          new IllegalArgumentException(message) with NoStackTrace
+                        )
                     }
                 case None =>
-                  Log[F].warn(s"Specified bonds file $bondsFile does not exist.") *> Map
-                    .empty[PublicKey, Long]
-                    .pure[F]
+                  val message = s"Specified bonds file $bonds does not exist."
+                  Log[F].error(message) *> Sync[F]
+                    .raiseError[Map[PublicKey, Long]](
+                      new IllegalArgumentException(message) with NoStackTrace
+                    )
               }
     } yield bonds
 }
