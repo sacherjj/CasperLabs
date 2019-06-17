@@ -23,7 +23,8 @@ import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
-import io.casperlabs.ipc.{ProtocolVersion, ValidateRequest}
+import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -419,7 +420,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                 justifications = justifications,
                 state = postState,
                 rank = number,
-                protocolVersion = protocolVersion.version,
+                protocolVersion = protocolVersion.value,
                 timestamp = now,
                 chainId = chainId
               )

@@ -5,16 +5,17 @@ import cats.syntax.applicative._
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
+import io.casperlabs.casper.consensus.state
 
 object Utils {
   def toKey[F[_]](keyType: String, keyValue: String)(
       implicit appErr: ApplicativeError[F, Throwable]
-  ): F[ipc.Key] = {
+  ): F[state.Key] = {
     val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))
     keyType.toLowerCase match {
       case "hash" =>
         keyBytes.size match {
-          case 32 => ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes))).pure[F]
+          case 32 => state.Key(state.Key.Value.Hash(state.Key.Hash(keyBytes))).pure[F]
           case n =>
             appErr.raiseError(
               new IllegalArgumentException(
@@ -24,7 +25,7 @@ object Utils {
         }
       case "uref" =>
         keyBytes.size match {
-          case 32 => ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes))).pure[F]
+          case 32 => state.Key(state.Key.Value.Uref(state.Key.URef(keyBytes))).pure[F]
           case n =>
             appErr.raiseError(
               new IllegalArgumentException(
@@ -34,7 +35,7 @@ object Utils {
         }
       case "address" =>
         keyBytes.size match {
-          case 32 => ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes))).pure[F]
+          case 32 => state.Key(state.Key.Value.Address(state.Key.Address(keyBytes))).pure[F]
           case n =>
             appErr.raiseError(
               new IllegalArgumentException(

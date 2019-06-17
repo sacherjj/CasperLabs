@@ -15,6 +15,7 @@ import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
+import io.casperlabs.casper.consensus.state._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -107,7 +108,7 @@ class ExecEngineUtilTest
   def computeSingleProcessedDeploy(
       dag: BlockDagRepresentation[Task],
       deploy: Seq[consensus.Deploy],
-      protocolVersion: ProtocolVersion = ProtocolVersion(1)
+      protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
       implicit blockStore: BlockStore[Task],
       executionEngineService: ExecutionEngineService[Task]
@@ -173,7 +174,7 @@ class ExecEngineUtilTest
             Task.now {
               def getExecutionEffect(deploy: ipc.Deploy) = {
                 val key =
-                  Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
+                  Key(Key.Value.Hash(Key.Hash(ByteString.copyFromUtf8(deploy.toProtoString))))
                 val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
                 val op            = ipc.Op(ipc.Op.OpInstance.Noop(io.casperlabs.ipc.NoOp()))
                 val transforEntry = TransformEntry(Some(key), Some(transform))
