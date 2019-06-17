@@ -109,7 +109,100 @@ If the `--loglevel` argument is not provided, the execution engine defaults to t
 2. `ed25519` (optional) private and public keys. Used as a validator identity. If not provided then a node starts in the read-only mode.
 3. `ed25519` (optional) another set of private and public keys used by dApp developers to sign their deploys.
 
-#### Prerequisites: OpenSSL
+#### Generate keys using Docker
+This is the easiest way to generate the keys. We'll make use of [a Docker image](/hack/key-management/Dockerfile) which will generate the keys. With this way we don't need installing required cryptography libraries on your machine keeping it cleaner. 
+
+If you still want to generate the keys directly on your operating system without Docker then checkout [this guide](#generate-keys-on-host-os).
+
+##### Prerequisites: Docker
+Make sure you have Docker installed:
+```console
+docker version
+```
+
+You should the output similar to:
+```console
+Client: Docker Engine - Community
+ Version:           18.09.2
+ API version:       1.39
+ Go version:        go1.10.8
+ Git commit:        6247962
+ Built:             Sun Feb 10 04:12:39 2019
+ OS/Arch:           darwin/amd64
+ Experimental:      false
+
+Server: Docker Engine - Community
+ Engine:
+  Version:          18.09.2
+  API version:      1.39 (minimum version 1.12)
+  Go version:       go1.10.6
+  Git commit:       6247962
+  Built:            Sun Feb 10 04:13:06 2019
+  OS/Arch:          linux/amd64
+  Experimental:     true
+```
+
+If console returns `command not found` checkout [the official guide for installing Docker](https://docs.docker.com/install/).
+
+When you have Docker installed we can start generating keys. 
+For convenience we provide [a script](/hack/key-management/docker-gen-keys.sh) which will try to download the Docker image with cryptography libraries and create the keys.
+
+Use the script as follow:
+```console
+mkdir keys
+./keys-management/docker-gen-keys.sh keys
+```
+
+In a case of success you'll see the next output:
+```console
+using curve name prime256v1 instead of secp256r1
+read EC key
+Generate keys: Success
+```
+
+We can list the generated keys:
+```
+ls -1 keys
+```
+
+Output:
+```console
+node-id
+node.certificate.pem
+node.key.pem
+validator-id
+validator-private.pem
+validator-public.pem
+```
+
+As you see we have keys and some additional files:
+* `node-id` - Node ID is used for differentiating nodes and used as an ID in casperlabs nodes' addresses:
+`casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40400&discovery=40404`
+The address above contains `c0a6c82062461c9b7f9f5c3120f44589393edf31` as a node ID.
+* `validator-id` - Validator ID is used to differentiate validators over a network. 
+We need it because validators can switch machines keeping their identities. 
+Also it's used for initial bonds granting during the genesis procedure of setting up a new network.
+
+To run a node with the above keys we'll firstly need to create a bonds.txt file as follows:
+```console
+(cat keys/validator-id; echo " 100") >> bonds.txt
+```
+
+Now we can run a node as follows:
+```console
+casperlabs-node run -s \
+    --tls-key keys/node.key.pem  \
+    --tls-certificate keys/node.certificate.pem \
+    --casperl-validator-public-key-path keys/validator-public.pem \
+    --casperl-validator-private-key-path keys/validator-private.pem 
+```
+
+#### Generate keys on host OS
+**NOTE**: This guide is for advanced users, make sure you've read [the previous guide](#generate-keys-using-docker) before following this one.
+
+In this guide keys will be generated on host OS which requires installing cryptography libraries.
+
+##### Prerequisites: OpenSSL
 
 [OpenSSL](https://www.openssl.org) is a general-purpose cryptography library we'll use to generate the keys.
 
@@ -206,7 +299,7 @@ sudo make install
 ```
 
 #### Script
-You may want to use [the script](/docker/gen-keys.sh) which will generate all the keys. Make sure the [OpenSSL](/VALIDATOR.md#prerequisites-openssl) and [sha3sum](/VALIDATOR.md#prerequisites-sha3sum) are installed before running the script. The commands below are excerpts from this script.
+You may want to use [the script](/hack/key-management/gen-keys.sh) which will generate all the keys. Make sure the [OpenSSL](/VALIDATOR.md#prerequisites-openssl) and [sha3sum](/VALIDATOR.md#prerequisites-sha3sum) are installed before running the script. The commands below are excerpts from this script.
 
 #### ed25519 Validator
 Generate private key:
@@ -352,4 +445,4 @@ casperlabs-node \
 
 You can add the `--metrics-prometheus` option in which case the node will collect metrics and make them available at `http://localhost:40403/metrics`. You can override that port with the `--server-http-port` option.
 
-To see how an example of how to configure Prometheus and Grafana you can check out the [docker setup](docker/README.md#monitoring) or the [Prometheus docs](https://prometheus.io/docs/prometheus/latest/getting_started/).
+To see how an example of how to configure Prometheus and Grafana you can check out the [docker setup](hack/docker/README.md#monitoring) or the [Prometheus docs](https://prometheus.io/docs/prometheus/latest/getting_started/).
