@@ -15,10 +15,6 @@ pub extern "C" fn call() {
     // nonce=0, function_counter=0
     let hash = ContractPointer::Hash([164, 102, 153, 51, 236, 214, 169, 167, 126, 44, 250, 247, 179, 214, 203, 229, 239, 69, 145, 25, 5, 153, 113, 55, 255, 188, 176, 201, 7, 4, 42, 100]
 );
-    let arg = "inc";
+    let arg = "dummy";
     let _result: () = call_contract(hash.clone(), &arg, &Vec::new());
-    let _value: i32 = {
-        let arg = "get";
-        call_contract(hash, &arg, &Vec::new())
-    };
 }
