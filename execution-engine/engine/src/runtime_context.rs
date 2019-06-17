@@ -484,7 +484,7 @@ mod tests {
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         rng: ChaChaRng,
     ) -> RuntimeContext<'a, InMemoryGlobalState> {
-        let tc = mock_tc(base_key, account);
+        let tc = mock_tc(base_key, Cow::clone(&account));
         RuntimeContext::new(
             Rc::new(RefCell::new(tc)),
             uref_map,
@@ -768,7 +768,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let contract_key = random_contract_key(&mut rng);
         let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
-        let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
+        let tc = Rc::new(RefCell::new(mock_tc(account_key, Cow::Borrowed(&account))));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut().write(
             Validated::new(contract_key, Validated::valid).unwrap(),
@@ -820,7 +820,7 @@ mod tests {
         let contract_key = random_contract_key(&mut rng);
         let other_contract_key = random_contract_key(&mut rng);
         let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
-        let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
+        let tc = Rc::new(RefCell::new(mock_tc(account_key, Cow::Borrowed(&account))));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut().write(
             Validated::new(contract_key, Validated::valid).unwrap(),
