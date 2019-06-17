@@ -82,7 +82,7 @@ class ConfigurationSpec
       relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       cleanBlockStorage = false
     )
-    val grpcServer = Configuration.GrpcServer(
+    val grpcServer = Configuration.Grpc(
       host = "test",
       socket = Paths.get("/tmp/test"),
       portExternal = 1,

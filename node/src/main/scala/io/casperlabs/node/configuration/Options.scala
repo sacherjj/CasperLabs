@@ -181,7 +181,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val grpcUseTls =
-      gen[Boolean]("Enable TLS encryption for public facing gRPC API endpoints.")
+      gen[Flag]("Enable TLS encryption for public facing gRPC API endpoints.")
 
     @scallop
     val serverMaxMessageSize =

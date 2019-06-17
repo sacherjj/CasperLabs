@@ -27,7 +27,7 @@ import scala.io.Source
   */
 final case class Configuration(
     server: Configuration.Server,
-    grpc: Configuration.GrpcServer,
+    grpc: Configuration.Grpc,
     tls: Tls,
     casper: CasperConf,
     lmdb: LMDBBlockStore.Config,
@@ -96,7 +96,7 @@ object Configuration extends ParserImplicits {
       cacheMaxSizeBytes: Long
   ) extends SubConfig
 
-  case class GrpcServer(
+  case class Grpc(
       host: String,
       socket: Path,
       portExternal: Int,

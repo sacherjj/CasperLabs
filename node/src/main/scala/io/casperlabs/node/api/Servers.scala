@@ -34,6 +34,9 @@ import io.netty.handler.ssl.SslContext
 
 object Servers {
 
+  private def logStarted[F[_]: Log](name: String, port: Int, isSsl: Boolean) =
+    Log[F].info(s"$name gRPC services started on port ${port}${if (isSsl) " using SSL" else ""}.")
+
   /** Start a gRPC server with services meant for the operators.
     * This port shouldn't be exposed to the internet, or some endpoints
     * should be protected by authentication and an SSL channel. */
@@ -75,7 +78,7 @@ object Servers {
       ),
       sslContext = maybeSslContext
     ) *> Resource.liftF(
-      Log[Effect].info(s"Internal gRPC services started on port ${port}.")
+      logStarted[Effect]("Internal", port, maybeSslContext.isDefined)
     )
 
   /** Start a gRPC server with services meant for users and dApp developers. */
@@ -107,7 +110,9 @@ object Servers {
       ),
       sslContext = maybeSslContext
     ) *>
-      Resource.liftF(Log[F].info(s"External gRPC services started on port ${port}."))
+      Resource.liftF(
+        logStarted[F]("External", port, maybeSslContext.isDefined)
+      )
 
   def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: SafetyOracle: BlockStore: ContextShift: FinalizedBlocksStream: ExecutionEngineService](
       port: Int,
