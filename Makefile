@@ -133,8 +133,8 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Make a node that has some extras installed for testing.
 .make/docker-build/test/node: \
 		.make/docker-build/universal/node \
-		docker/test-node.Dockerfile
-	docker build -f docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test docker
+		hack/docker/test-node.Dockerfile
+	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test hack/docker
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test version for the execution engine as well just so we can swith version easily.
@@ -157,9 +157,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 # Make an image for keys generation
 .make/docker-build/keys-generator: \
-	key-management/Dockerfile \
-	key-management/gen-keys.sh
-	docker build -f key-management/Dockerfile -t $(DOCKER_USERNAME)/keys-generator:$(DOCKER_LATEST_TAG) key-management
+	hack/key-management/Dockerfile \
+	hack/key-management/gen-keys.sh
+	docker build -f hack/key-management/Dockerfile -t $(DOCKER_USERNAME)/keys-generator:$(DOCKER_LATEST_TAG) hack/key-management
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.

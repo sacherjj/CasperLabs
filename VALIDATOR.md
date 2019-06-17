@@ -110,7 +110,7 @@ If the `--loglevel` argument is not provided, the execution engine defaults to t
 3. `ed25519` (optional) another set of private and public keys used by dApp developers to sign their deploys.
 
 #### Generate keys using Docker
-This is the easiest way to generate the keys. We'll make use of [a Docker image](/keys-management/Dockerfile) which will generate the keys. With this way we don't need installing required cryptography libraries on your machine keeping it cleaner. 
+This is the easiest way to generate the keys. We'll make use of [a Docker image](/hack/key-management/Dockerfile) which will generate the keys. With this way we don't need installing required cryptography libraries on your machine keeping it cleaner. 
 
 If you still want to generate the keys directly on your operating system without Docker then checkout [this guide](#generate-keys-on-host-os).
 
@@ -145,7 +145,7 @@ Server: Docker Engine - Community
 If console returns `command not found` checkout [the official guide for installing Docker](https://docs.docker.com/install/).
 
 When you have Docker installed we can start generating keys. 
-For convenience we provide [a script](/keys-management/docker-gen-keys.sh) which will try to download the Docker image with cryptography libraries and create the keys.
+For convenience we provide [a script](/hack/key-management/docker-gen-keys.sh) which will try to download the Docker image with cryptography libraries and create the keys.
 
 Use the script as follow:
 ```console
@@ -299,7 +299,7 @@ sudo make install
 ```
 
 #### Script
-You may want to use [the script](/keys-management/gen-keys.sh) which will generate all the keys. Make sure the [OpenSSL](/VALIDATOR.md#prerequisites-openssl) and [sha3sum](/VALIDATOR.md#prerequisites-sha3sum) are installed before running the script. The commands below are excerpts from this script.
+You may want to use [the script](/hack/key-management/gen-keys.sh) which will generate all the keys. Make sure the [OpenSSL](/VALIDATOR.md#prerequisites-openssl) and [sha3sum](/VALIDATOR.md#prerequisites-sha3sum) are installed before running the script. The commands below are excerpts from this script.
 
 #### ed25519 Validator
 Generate private key:
@@ -445,4 +445,4 @@ casperlabs-node \
 
 You can add the `--metrics-prometheus` option in which case the node will collect metrics and make them available at `http://localhost:40403/metrics`. You can override that port with the `--server-http-port` option.
 
-To see how an example of how to configure Prometheus and Grafana you can check out the [docker setup](docker/README.md#monitoring) or the [Prometheus docs](https://prometheus.io/docs/prometheus/latest/getting_started/).
+To see how an example of how to configure Prometheus and Grafana you can check out the [docker setup](hack/docker/README.md#monitoring) or the [Prometheus docs](https://prometheus.io/docs/prometheus/latest/getting_started/).
