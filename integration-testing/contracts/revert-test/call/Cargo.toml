@@ -1,0 +1,11 @@
+[package]
+name = "test-revert-call"
+version = "0.1.0"
+authors = ["Piotr Kuchta <piotr@casperlabs.io>"]
+
+[lib]
+name = "test_revert_call"
+crate-type = ["cdylib"]
+
+[dependencies]
+common = { package = "casperlabs-contract-ffi", path = "../../../../execution-engine/common/" }
