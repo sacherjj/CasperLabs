@@ -23,6 +23,7 @@ use wasm_prep::{Preprocessor, WasmiPreprocessor};
 pub mod ipc;
 pub mod ipc_grpc;
 pub mod mappings;
+pub mod state;
 
 #[cfg(test)]
 mod tests;
@@ -154,7 +155,7 @@ where
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
         // TODO: don't unwrap
-        let wasm_costs = WasmCosts::from_version(protocol_version.version).unwrap();
+        let wasm_costs = WasmCosts::from_version(protocol_version.value).unwrap();
 
         let deploys = exec_request.get_deploys();
 
@@ -359,7 +360,7 @@ where
 
         let proof_of_stake_code_bytes = genesis_request.get_proof_of_stake_code().get_code();
 
-        let protocol_version = genesis_request.get_protocol_version().version;
+        let protocol_version = genesis_request.get_protocol_version().value;
 
         let genesis_response = match self.commit_genesis(
             correlation_id,
@@ -418,7 +419,7 @@ fn run_deploys<A, H, E, P>(
     preprocessor: &P,
     prestate_hash: Blake2bHash,
     deploys: &[ipc::Deploy],
-    protocol_version: &ipc::ProtocolVersion,
+    protocol_version: &state::ProtocolVersion,
     correlation_id: CorrelationId,
 ) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
 where
@@ -457,7 +458,7 @@ where
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
-            let protocol_version = protocol_version.get_version();
+            let protocol_version = protocol_version.value;
             engine_state
                 .run_deploy(
                     module_bytes,

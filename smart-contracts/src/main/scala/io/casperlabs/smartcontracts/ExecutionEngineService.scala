@@ -9,6 +9,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.Log

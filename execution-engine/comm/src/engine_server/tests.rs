@@ -1,5 +1,6 @@
 use grpc::RequestOptions;
 
+use execution_engine::engine_state::EngineState;
 use shared::init::mocked_account;
 use shared::logging::log_level::LogLevel;
 use shared::logging::log_settings::{self, LogLevelFilter, LogSettings};
@@ -9,13 +10,11 @@ use shared::newtypes::CorrelationId;
 use shared::test_utils;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
-use engine_server;
 use engine_server::ipc::{
-    CommitRequest, Deploy, DeployCode, ExecRequest, GenesisRequest, KeyAddress, ProtocolVersion,
-    QueryRequest, RustBigInt, ValidateRequest,
+    CommitRequest, Deploy, DeployCode, ExecRequest, GenesisRequest, QueryRequest, ValidateRequest,
 };
 use engine_server::ipc_grpc::ExecutionEngineService;
-use execution_engine::engine_state::EngineState;
+use engine_server::state::{BigInt, Key, Key_Address, ProtocolVersion};
 
 #[test]
 fn should_query_with_metrics() {
@@ -28,10 +27,10 @@ fn should_query_with_metrics() {
 
     let mut query_request = QueryRequest::new();
     {
-        let mut key = engine_server::ipc::Key::new();
-        let mut key_address = KeyAddress::new();
+        let mut key = Key::new();
+        let mut key_address = Key_Address::new();
         key_address.set_account(MOCKED_ACCOUNT_ADDRESS.to_vec());
-        key.set_account(key_address);
+        key.set_address(key_address);
 
         query_request.set_base_key(key);
         query_request.set_path(vec![].into());
@@ -221,7 +220,7 @@ fn should_run_genesis() {
         let genesis_account_addr = [6u8; 32].to_vec();
 
         let initial_tokens = {
-            let mut ret = RustBigInt::new();
+            let mut ret = BigInt::new();
             ret.set_bit_width(512);
             ret.set_value("1000000".to_string());
             ret
@@ -243,7 +242,7 @@ fn should_run_genesis() {
 
         let protocol_version = {
             let mut ret = ProtocolVersion::new();
-            ret.set_version(1);
+            ret.set_value(1);
             ret
         };
 
@@ -294,7 +293,7 @@ fn get_log_settings(log_level: LogLevel) -> LogSettings {
 
 fn get_protocol_version() -> ProtocolVersion {
     let mut protocol_version: ProtocolVersion = ProtocolVersion::new();
-    protocol_version.set_version(1);
+    protocol_version.set_value(1);
     protocol_version
 }
 
