@@ -76,3 +76,9 @@ def test_revert(client, node):
     r = client.show_deploys(block_hash)
     assert r.is_error
     assert r.error_message == "Exit code: 1"
+
+    block_hash = node.deploy_and_propose(session_contract = 'test_direct_revert_define.wasm',
+                                         payment_contract = 'test_direct_revert_define.wasm')
+    r = client.show_deploys(block_hash)
+    assert r.is_error
+    assert r.error_message == "Exit code: 3"
