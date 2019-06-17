@@ -108,7 +108,7 @@ where
     }
 
     pub fn take_account_dirty(self) -> Cow<'a, Account> {
-        self.account
+        self.account_dirty
     }
 
     pub fn args(&self) -> &Vec<Vec<u8>> {
