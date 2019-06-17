@@ -13,6 +13,11 @@ def client(node):
     return node.d_client
 
 
+# TODO: At the moment it seems EE generates function pointer hash as if nonce was 0.
+# This may be a bug in EE, we need to check it.
+# For now I leave the function_pointer and TABLE_FROM_MICHAL, it should be removed once
+# we address the question if EE calculates the hash correctly.
+
 # pk=3030303030303030303030303030303030303030303030303030303030303030
 def function_pointer(pk = bytes([48]*32), nonce=1, function_counter=0):
     assert nonce <= 255
@@ -24,7 +29,7 @@ def function_pointer(pk = bytes([48]*32), nonce=1, function_counter=0):
     h.update(bytes([function_counter, 0, 0, 0,]))
     return h.digest()
 
-"""
+TABLE_FROM_MICHAL = """
 nonce=0 counter=0 hash=[164, 102, 153, 51, 236, 214, 169, 167, 126, 44, 250, 247, 179, 214, 203, 229, 239, 69, 145, 25, 5, 153, 113, 55, 255, 188, 176, 201, 7, 4, 42, 100]                                       
 nonce=0 counter=1 hash=[201, 123, 219, 72, 220, 218, 196, 8, 153, 155, 66, 213, 0, 56, 26, 117, 58, 115, 205, 209, 96, 73, 89, 3, 7, 155, 124, 250, 90, 64, 33, 161]                                              
 nonce=0 counter=2 hash=[19, 139, 15, 184, 252, 148, 79, 127, 8, 247, 7, 237, 133, 28, 224, 206, 228, 83, 133, 177, 214, 61, 225, 167, 164, 83, 34, 159, 204, 21, 112, 65]                                         
