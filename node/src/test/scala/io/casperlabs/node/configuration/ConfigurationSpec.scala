@@ -83,7 +83,6 @@ class ConfigurationSpec
       cleanBlockStorage = false
     )
     val grpcServer = Configuration.Grpc(
-      host = "test",
       socket = Paths.get("/tmp/test"),
       portExternal = 1,
       portInternal = 1,

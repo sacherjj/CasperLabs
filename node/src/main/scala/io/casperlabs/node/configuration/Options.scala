@@ -154,7 +154,7 @@ private[configuration] final case class Options private (
       gen[Int]("Port used for external gRPC API, e.g. deployments.")
 
     @scallop
-    val grpcHost =
+    val serverHost =
       gen[String]("Externally addressable hostname or IP of node on which gRPC service is running.")
 
     @scallop
@@ -174,10 +174,6 @@ private[configuration] final case class Options private (
     @scallop
     val grpcPortExternal =
       gen[Int]("Port used for external gRPC API, e.g. deployments.")
-
-    @scallop
-    val grpcHost =
-      gen[String]("Externally addressable hostname or IP of node on which gRPC service is running.")
 
     @scallop
     val grpcUseTls =

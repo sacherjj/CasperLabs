@@ -97,7 +97,6 @@ object Configuration extends ParserImplicits {
   ) extends SubConfig
 
   case class Grpc(
-      host: String,
       socket: Path,
       portExternal: Int,
       portInternal: Int,
