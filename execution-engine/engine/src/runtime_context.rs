@@ -30,7 +30,10 @@ pub struct RuntimeContext<'a, R> {
     uref_lookup: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
     known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
+    // Original account for read only tasks taken before execution
     account: Cow<'a, Account>,
+    // Account that is being modified during the execution and reflects current state
+    account_dirty: Cow<'a, Account>,
     args: Vec<Vec<u8>>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -54,6 +57,7 @@ where
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
         account: Cow<'a, Account>,
+        account_dirty: Cow<'a, Account>,
         base_key: Key,
         gas_limit: u64,
         gas_counter: u64,
@@ -68,6 +72,7 @@ where
             known_urefs,
             args,
             account,
+            account_dirty,
             base_key,
             gas_limit,
             gas_counter,
@@ -96,6 +101,14 @@ where
 
     pub fn account(&self) -> &Cow<'a, Account> {
         &self.account
+    }
+
+    pub fn account_dirty(&self) -> &Cow<'a, Account> {
+        &self.account_dirty
+    }
+
+    pub fn take_account_dirty(self) -> Cow<'a, Account> {
+        self.account
     }
 
     pub fn args(&self) -> &Vec<Vec<u8>> {
@@ -387,7 +400,7 @@ where
     ) -> Result<(), AddKeyFailure> {
         // TODO: Check permissions
         // Performs clone-on-write if the account wasn't mutated already
-        self.account
+        self.account_dirty
             .to_mut()
             .associated_keys_mut()
             .add_key(public_key, weight)
@@ -396,7 +409,7 @@ where
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
         // TODO: Check permissions
         // Performs clone-on-write if the account wasn't mutated already
-        self.account
+        self.account_dirty
             .to_mut()
             .associated_keys_mut()
             .remove_key(&public_key)
@@ -409,7 +422,7 @@ where
     ) -> Result<(), SetThresholdFailure> {
         // TODO: Check permissions
         // Performs clone-on-write if the account wasn't mutated already
-        self.account
+        self.account_dirty
             .to_mut()
             .action_thresholds_mut()
             .set_threshold(action_type, threshold)
@@ -527,6 +540,7 @@ mod tests {
             uref_map,
             known_urefs,
             Vec::new(),
+            Cow::clone(&account),
             account,
             base_key,
             0,
@@ -823,6 +837,7 @@ mod tests {
             known_urefs,
             Vec::new(),
             Cow::Borrowed(&account),
+            Cow::Borrowed(&account),
             contract_key,
             0,
             0,
@@ -873,6 +888,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
+            Cow::Borrowed(&account),
             Cow::Borrowed(&account),
             other_contract_key,
             0,

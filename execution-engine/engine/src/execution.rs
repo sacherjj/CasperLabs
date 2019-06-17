@@ -438,6 +438,10 @@ where
     pub fn revert(&mut self, status: u32) -> Trap {
         Error::Revert(status).into()
     }
+
+    pub fn take_context(self) -> RuntimeContext<'a, R> {
+        self.context
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -750,6 +754,7 @@ where
 
     let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
+
     let mut runtime = Runtime {
         memory,
         module: parity_module,
@@ -760,7 +765,14 @@ where
             refs,
             known_urefs,
             args,
-            current_runtime.context.account().clone(),
+            // This passes `account_dirty` twice as both `account` (read) and `account_dirty` (write.
+            // This is done due to the fact that `sub_call` should be able to see the changes made
+            // in parent contract up to the point of a call, but still should be able to mutate it
+            // further, although current implementation forbids changing it from subcontracts.
+            Cow::clone(&current_runtime.context.account()),
+            // This operation is cheap as long as `account_dirty` wasnt mutated before the sub call
+            // happened
+            Cow::clone(&current_runtime.context.account_dirty()),
             key,
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
@@ -934,6 +946,10 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
+        // An instance that will be used for writes, and also is used
+        // to reflect last write on tracking copy to avoid conflicts.
+        let mut account_dirty = account.clone();
+
         if nonce_check {
             // Check the difference of a request nonce and account nonce.
             // Since both nonce and account's nonce are unsigned, so line below performs
@@ -951,12 +967,13 @@ impl Executor<Module> for WasmiExecutor {
                 );
             }
 
-            let mut updated_account = account.clone();
-            updated_account.increment_nonce();
+            // Bump nonce on write-only account instance that reflects last
+            // write of tracking copy that will happen below.
+            account_dirty.increment_nonce();
             // Store updated account with new nonce
             tc.borrow_mut().write(
-                validated_key,
-                Validated::new(updated_account.into(), Validated::valid).unwrap(),
+                validated_key.clone(),
+                Validated::new(account_dirty.clone().into(), Validated::valid).unwrap(),
             );
         }
 
@@ -986,6 +1003,7 @@ impl Executor<Module> for WasmiExecutor {
             known_urefs,
             arguments,
             Cow::Borrowed(&account),
+            Cow::Borrowed(&account_dirty),
             acct_key,
             gas_limit,
             gas_counter,
@@ -1002,10 +1020,30 @@ impl Executor<Module> for WasmiExecutor {
             effects_snapshot
         );
 
-        ExecutionResult::Success {
-            effect: runtime.context.effect(),
-            cost: runtime.context.gas_counter(),
+        // Store updated account with new nonce
+        let context = runtime.take_context(); // Consumes `runtime`
+
+        // Save some properties of the context
+        let cost = context.gas_counter(); // Extract `cost` before consuming `context` below
+
+        // Save an instance of tracking copy with all effects up to date after
+        // the execution.
+        let tc = Rc::clone(&context.state());
+        // Check if `account_dirty` has been mutated, and if so, update tracking copy
+        // therefore synchronising TC state with `account_dirty` state.
+        // TC possibly has `account` already wrote with new `nonce`, so mutating
+        // `account` would overwrite `nonce` with old value but with new properties,
+        // therefore all writes are going to `account_dirty`.
+        if let Cow::Owned(mutated_account) = context.take_account_dirty() {
+            // Persisting `account_dirty` because it was mutated
+            tc.borrow_mut().write(
+                validated_key,
+                Validated::new(mutated_account.into(), Validated::valid).unwrap(),
+            );
         }
+        // Take updated effects and pass it to caller as a successful result
+        let effect = tc.borrow_mut().effect();
+        ExecutionResult::Success { effect, cost }
     }
 }
 
