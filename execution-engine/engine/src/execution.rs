@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
@@ -698,7 +699,7 @@ where
             refs,
             known_urefs,
             args,
-            current_runtime.context.account(),
+            current_runtime.context.account().clone(),
             key,
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
@@ -923,7 +924,7 @@ impl Executor<Module> for WasmiExecutor {
             &mut uref_lookup_local,
             known_urefs,
             arguments,
-            &account,
+            Cow::Borrowed(&account),
             acct_key,
             gas_limit,
             gas_counter,
