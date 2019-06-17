@@ -1,7 +1,6 @@
 use super::alloc::collections::BTreeMap;
-use super::alloc::string::String;
+use super::alloc::string::{String, ToString};
 use super::alloc::vec::Vec;
-use alloc::prelude::ToString;
 use core::fmt::Display;
 use core::mem::{size_of, MaybeUninit};
 
