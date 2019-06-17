@@ -346,7 +346,7 @@ In the root of CasperLabs.
 ./node/target/universal/stage/bin/casperlabs-node run -s \
     --tls-certificate node.certificate.pem \
     --tls-key secp256r1-private-pkcs8.pem
-
+```
 
 ### Deploying data
 
