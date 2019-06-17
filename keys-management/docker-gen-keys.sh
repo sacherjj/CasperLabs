@@ -1,4 +1,5 @@
 #!/bin/sh
+set -euo pipefail
 
 # Generates all necessary keys for a node using Docker image
 # Usage:
@@ -16,10 +17,5 @@ if [ ! -d "$OUTPUT_DIR" ]; then
     exit 1
 fi
 
-$(docker images  | grep -q 'casperlabs/keys-generator')
-if [ $? -eq 0 ]; then
-	docker run --rm -it -v "$OUTPUT_DIR":/keys casperlabs/keys-generator /keys
-else
-	echo "ERROR: 'casperlabs/keys-generator Docker image not found'"
-	exit 1
-fi
+docker pull casperlabs/keys-generator
+docker run --rm -it -v "$OUTPUT_DIR":/keys casperlabs/keys-generator /keys

@@ -144,33 +144,14 @@ Server: Docker Engine - Community
 
 If console returns `command not found` checkout [the official guide for installing Docker](https://docs.docker.com/install/).
 
-When you have Docker installed we can start generating keys:
-
-Firstly, we'll need to build a Docker image which contains required cryptography libraries.
-Run the next command from the root directory of the project:
-```console
-docker build -t casperlabs/keys-generator:latest -f keys-management/Dockerfile keys-management
-```
-
-You'll see the long output. In a case of success the last lines should looks similar to:
-```console
-Step 12/12 : ENTRYPOINT [ "/gen-keys.sh" ]
- ---> Using cache
- ---> c0cc1713bfa3
-Successfully built c0cc1713bfa3
-Successfully tagged casperlabs/keys-generator:latest
-```
-
-Now we can use the built Docker image to generate our keys.
-We could directly invoke `docker run` command to run a container, but for convenience we provide [a wrapper script](/keys-management/docker-gen-keys.sh) which is easier to use.
+When you have Docker installed we can start generating keys. 
+For convenience we provide [a script](/keys-management/docker-gen-keys.sh) which will try to download the Docker image with cryptography libraries and create the keys.
 
 Use the script as follow:
 ```console
 mkdir keys
 ./keys-management/docker-gen-keys.sh keys
 ```
-
-If the script prints `ERROR: 'casperlabs/keys-generator Docker image not found'` then make sure you've built the Docker image as described earlier.
 
 In a case of success you'll see the next output:
 ```console
