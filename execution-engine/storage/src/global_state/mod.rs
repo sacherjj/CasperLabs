@@ -36,11 +36,11 @@ pub enum CommitResult {
 impl fmt::Display for CommitResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            CommitResult::RootNotFound => write!(f, "root not found"),
-            CommitResult::Success(hash) => write!(f, "success: {}", hash),
-            CommitResult::KeyNotFound(key) => write!(f, "key not found: {}", key),
+            CommitResult::RootNotFound => write!(f, "Root not found"),
+            CommitResult::Success(hash) => write!(f, "Success: {}", hash),
+            CommitResult::KeyNotFound(key) => write!(f, "Key not found: {}", key),
             CommitResult::TypeMismatch(type_mismatch) => {
-                write!(f, "type mismatch: {:?}", type_mismatch)
+                write!(f, "Type mismatch: {:?}", type_mismatch)
             }
         }
     }

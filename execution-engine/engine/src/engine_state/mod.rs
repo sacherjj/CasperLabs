@@ -78,7 +78,7 @@ pub fn create_genesis_effects(
 
     let purse_id = PurseId::new(purse_id_uref);
 
-    let genesis_account = init::create_genesis_account(genesis_account_addr, purse_id)?;
+    let genesis_account = init::create_genesis_account(genesis_account_addr, purse_id);
 
     // Store (genesis_account_addr, genesis_account) in global state
 
@@ -88,55 +88,53 @@ pub fn create_genesis_effects(
     );
 
     // Initializing and persisting mint
-    {
-        // Create (purse_id_local_key, balance_uref) (for mint-local state)
 
-        let purse_id_local_key = {
-            let seed = mint_contract_uref.addr();
-            let local_key = purse_id_uref.addr();
-            let key_hash = Blake2bHash::new(&local_key).into();
-            Key::Local { seed, key_hash }
-        };
+    // Create (purse_id_local_key, balance_uref) (for mint-local state)
 
-        let balance_uref = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            URef::new(addr, AccessRights::READ_ADD_WRITE)
-        };
+    let purse_id_local_key = {
+        let seed = mint_contract_uref.addr();
+        let local_key = purse_id_uref.addr();
+        let key_hash = Blake2bHash::new(&local_key).into();
+        Key::Local { seed, key_hash }
+    };
 
-        let balance_uref_key = Key::URef(balance_uref);
+    let balance_uref = {
+        let mut addr = [0u8; 32];
+        rng.fill_bytes(&mut addr);
+        URef::new(addr, AccessRights::READ_ADD_WRITE)
+    };
 
-        // Store (purse_id_local_key, balance_uref_key) in local state
+    let balance_uref_key = Key::URef(balance_uref);
 
-        ret.insert(purse_id_local_key, Value::Key(balance_uref_key));
+    // Store (purse_id_local_key, balance_uref_key) in local state
 
-        // Create balance
+    ret.insert(purse_id_local_key, Value::Key(balance_uref_key));
 
-        let balance: Value = Value::UInt512(initial_tokens);
+    // Create balance
 
-        // Store (balance_uref_key, balance) in local state
+    let balance: Value = Value::UInt512(initial_tokens);
 
-        ret.insert(balance_uref_key, balance);
+    // Store (balance_uref_key, balance) in local state
 
-        // Create mint_contract
+    ret.insert(balance_uref_key, balance);
 
-        let mint_known_urefs = {
-            let mut ret: BTreeMap<String, Key> = BTreeMap::new();
-            ret.insert(public_uref.as_string(), Key::URef(public_uref));
-            ret.insert(balance_uref.as_string(), Key::URef(balance_uref));
-            ret
-        };
+    // Create mint_contract
 
-        let mint_contract: Contract =
-            Contract::new(mint_code_bytes.into(), mint_known_urefs, protocol_version);
+    let mint_known_urefs = {
+        let mut ret: BTreeMap<String, Key> = BTreeMap::new();
+        ret.insert(balance_uref.as_string(), Key::URef(balance_uref));
+        ret
+    };
 
-        // Store (mint_contract_uref, mint_contract) in global state
+    let mint_contract: Contract =
+        Contract::new(mint_code_bytes.into(), mint_known_urefs, protocol_version);
 
-        ret.insert(
-            Key::URef(mint_contract_uref),
-            Value::Contract(mint_contract),
-        );
-    }
+    // Store (mint_contract_uref, mint_contract) in global state
+
+    ret.insert(
+        Key::URef(mint_contract_uref),
+        Value::Contract(mint_contract),
+    );
 
     Ok(ret
         .into_iter()
