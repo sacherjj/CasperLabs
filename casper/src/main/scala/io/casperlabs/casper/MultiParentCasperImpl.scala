@@ -466,12 +466,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     for {
       state   <- Cell[F, CasperState].read
       tracker = state.equivocationsTracker
-    } yield
-      (tracker
-        .map(_.equivocator)
-        .flatMap(weights.get)
-        .sum
-        .toFloat / weightMapTotal(weights))
+    } yield (tracker
+      .map(_.equivocator)
+      .flatMap(weights.get)
+      .sum
+      .toFloat / weightMapTotal(weights))
 
   /** After a block is executed we can try to execute the other blocks in the buffer that dependend on it. */
   private def reAttemptBuffer(

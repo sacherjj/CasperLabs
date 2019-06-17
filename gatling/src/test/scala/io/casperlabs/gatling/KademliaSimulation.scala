@@ -9,8 +9,7 @@ import io.grpc.ManagedChannelBuilder
 import scala.util.Random
 
 class KademliaSimulation extends Simulation {
-  val grpcConf = grpc(ManagedChannelBuilder.forAddress("localhost", 40404).usePlaintext())
-    .shareChannel
+  val grpcConf = grpc(ManagedChannelBuilder.forAddress("localhost", 40404).usePlaintext()).shareChannel
 
   val numberOfKnownNodes = 200
 
@@ -37,22 +36,21 @@ class KademliaSimulation extends Simulation {
   def pingKnown: Expression[Ping] =
     buildValidExpr(Ping(Some(randomKnownNode)))
 
-
   val pingSc = scenario("Kademlia ping")
-      .repeat(1000) {
-        exec(
-          grpc("kademlia-ping-flood")
-            .rpc(KademliaRPCServiceGrpc.METHOD_SEND_PING)
-            .payload(randomPing)
-        ).exitHereIfFailed
-      }
-      .repeat(200) {
-        exec(
-          grpc("kademlia-ping-known")
-            .rpc(KademliaRPCServiceGrpc.METHOD_SEND_PING)
-            .payload(pingKnown)
-        )
-      }
+    .repeat(1000) {
+      exec(
+        grpc("kademlia-ping-flood")
+          .rpc(KademliaRPCServiceGrpc.METHOD_SEND_PING)
+          .payload(randomPing)
+      ).exitHereIfFailed
+    }
+    .repeat(200) {
+      exec(
+        grpc("kademlia-ping-known")
+          .rpc(KademliaRPCServiceGrpc.METHOD_SEND_PING)
+          .payload(pingKnown)
+      )
+    }
 
   val lookupSc = scenario("Kademlia lookup")
     .repeat(1000) {

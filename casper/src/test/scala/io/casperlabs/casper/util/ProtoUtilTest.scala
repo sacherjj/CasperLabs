@@ -31,16 +31,15 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[BlockHash]]
       justifications  <- arbitrary[Seq[Justification]]
-    } yield
-      Block(blockHash = hash)
-        .withHeader(
-          Block
-            .Header()
-            .withParentHashes(parentsHashList)
-            .withJustifications(justifications)
-            .withProtocolVersion(version)
-            .withTimestamp(timestamp)
-        )
+    } yield Block(blockHash = hash)
+      .withHeader(
+        Block
+          .Header()
+          .withParentHashes(parentsHashList)
+          .withJustifications(justifications)
+          .withProtocolVersion(version)
+          .withTimestamp(timestamp)
+      )
 
   implicit val arbitraryBlock: Arbitrary[Block] = Arbitrary(blockElementGen)
 

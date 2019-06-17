@@ -66,12 +66,11 @@ abstract class KademliaServiceRuntime[F[_]: Monad: Timer, E <: Environment] exte
             r <- execute(kademliaLocal, local, remote)
             _ <- kademliaRemote.shutdown()
             _ <- kademliaLocal.shutdown()
-          } yield
-            new TwoNodesResult {
-              def localNode: Node  = local
-              def remoteNode: Node = remote
-              def apply(): A       = r
-            }
+          } yield new TwoNodesResult {
+            def localNode: Node  = local
+            def remoteNode: Node = remote
+            def apply(): A       = r
+          }
         }
       )
 
@@ -99,12 +98,11 @@ abstract class KademliaServiceRuntime[F[_]: Monad: Timer, E <: Environment] exte
                 )
             r <- execute(kademliaLocal, local, remote)
             _ <- kademliaLocal.shutdown()
-          } yield
-            new TwoNodesResult {
-              def localNode: Node  = local
-              def remoteNode: Node = remote
-              def apply(): A       = r
-            }
+          } yield new TwoNodesResult {
+            def localNode: Node  = local
+            def remoteNode: Node = remote
+            def apply(): A       = r
+          }
         }
       )
 

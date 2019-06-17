@@ -126,10 +126,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
                                cliqueOracleEffect,
                                blockStore
                              )
-      } yield
-        blockQueryResponse.status should be(
-          s"Error: Failure to find block with hash ${badTestHashQuery}"
-        )
+      } yield blockQueryResponse.status should be(
+        s"Error: Failure to find block with hash ${badTestHashQuery}"
+      )
   }
 
   "findBlockWithDeploy" should "return successful block info response" in withStorage {
@@ -175,10 +174,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
                                cliqueOracleEffect,
                                blockStore
                              )
-      } yield
-        blockQueryResponse.status should be(
-          s"Error: Failure to find block containing deploy signed by  with timestamp ${timestamp.toString}"
-        )
+      } yield blockQueryResponse.status should be(
+        s"Error: Failure to find block containing deploy signed by  with timestamp ${timestamp.toString}"
+      )
   }
 
   private def effectsForSimpleCasperSetup(

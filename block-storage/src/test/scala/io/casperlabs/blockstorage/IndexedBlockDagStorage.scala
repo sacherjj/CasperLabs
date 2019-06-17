@@ -92,11 +92,10 @@ object IndexedBlockDagStorage {
       semaphore  <- Semaphore[F](1)
       idToBlocks <- Ref.of[F, Map[Long, Block]](Map.empty)
       currentId  <- Ref.of[F, Long](-1L)
-    } yield
-      new IndexedBlockDagStorage[F](
-        semaphore,
-        underlying,
-        idToBlocks,
-        currentId
-      )
+    } yield new IndexedBlockDagStorage[F](
+      semaphore,
+      underlying,
+      idToBlocks,
+      currentId
+    )
 }

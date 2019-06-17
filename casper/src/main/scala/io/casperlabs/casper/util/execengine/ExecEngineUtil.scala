@@ -80,16 +80,15 @@ object ExecEngineUtil {
         .mkString("\n")
       _ <- Log[F]
             .info(s"Block #$number created with effects:\n$msgBody")
-    } yield
-      DeploysCheckpoint(
-        preStateHash,
-        postStateHash,
-        deploysForBlock,
-        invalidDeploys.invalidNonceDeploys,
-        invalidDeploys.preconditionFailures,
-        number,
-        protocolVersion
-      )
+    } yield DeploysCheckpoint(
+      preStateHash,
+      postStateHash,
+      deploysForBlock,
+      invalidDeploys.invalidNonceDeploys,
+      invalidDeploys.preconditionFailures,
+      number,
+      protocolVersion
+    )
 
   def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       prestate: StateHash,
@@ -357,9 +356,8 @@ object ExecEngineUtil {
       }
       // TODO: Aren't these parents already in `candidateParentBlocks`?
       blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
-    } yield
-      merged.transform.fold(MergeResult.empty[TransformMap, Block])(
-        MergeResult.result(blocks.head, _, blocks.tail)
-      )
+    } yield merged.transform.fold(MergeResult.empty[TransformMap, Block])(
+      MergeResult.result(blocks.head, _, blocks.tail)
+    )
   }
 }
