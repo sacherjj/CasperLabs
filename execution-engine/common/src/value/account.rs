@@ -247,9 +247,11 @@ impl From<i32> for AddKeyFailure {
     }
 }
 
+#[derive(Fail, Debug)]
 #[repr(i32)]
 pub enum RemoveKeyFailure {
     /// Key does not exist in the list of associated keys.
+    #[fail(display = "Unable to remove a key that does not exist")]
     MissingKey = 1,
 }
 

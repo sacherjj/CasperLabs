@@ -449,7 +449,7 @@ mod tests {
 
     use super::{Error, RuntimeContext, URefAddr, Validated};
     use common::value::account::{
-        AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+        AccountActivity, ActionType, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
     };
     use execution::{create_rng, vec_key_rights_to_map};
     use shared::newtypes::{Blake2bHash, CorrelationId};
@@ -1042,4 +1042,99 @@ mod tests {
         let query_result = test(known_urefs, query);
         assert!(query_result.is_err())
     }
+
+    #[test]
+    fn manage_associated_keys() {
+        // Testing a valid case only - successfuly added a key, and successfuly removed,
+        // making sure `account_dirty` mutated
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let public_key = PublicKey::new([42; 32]);
+            let weight = Weight::new(255);
+
+            // Verify that account didn't mutate before
+            if let Cow::Owned(_) = runtime_context.account_dirty() {
+                panic!("account_dirty mutated before the test");
+            }
+
+            // Add a key (this doesn't check for all invariants as `add_key`
+            // is already tested in different place)
+            runtime_context
+                .add_associated_key(public_key, weight)
+                .expect("Unable to add key");
+
+            let acct_dirty = Cow::clone(&runtime_context.account_dirty());
+            let mutated_account = match acct_dirty {
+                Cow::Owned(mutated_account) => mutated_account,
+                Cow::Borrowed(_) => panic!("account_dirty didn't mutate during the test"),
+            };
+            let weight = mutated_account
+                .associated_keys()
+                .get(&public_key)
+                .expect("Unable to find added key");
+            assert_eq!(weight.value(), 255);
+
+            // Remove a key that was already added
+            runtime_context
+                .remove_associated_key(public_key)
+                .expect("Unable to remove key");
+
+            // Verify
+            let acct_dirty = Cow::clone(&runtime_context.account_dirty());
+            assert!(acct_dirty.associated_keys().get(&public_key).is_none());
+
+            // Remove a key that was already added
+            runtime_context
+                .remove_associated_key(public_key)
+                .expect_err("A non existing key was unexpectedly removed again");
+
+            Ok(())
+        };
+        let _ = test(known_urefs, query);
+    }
+
+    #[test]
+    fn action_thresholds_management() {
+        // Testing a valid case only - successfuly added a key, and successfuly removed,
+        // making sure `account_dirty` mutated
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            // Verify that account didn't mutate before
+            if let Cow::Owned(_) = runtime_context.account_dirty() {
+                panic!("account_dirty mutated before the test");
+            }
+
+            runtime_context
+                .set_action_threshold(ActionType::KeyManagement, Weight::new(253))
+                .expect("Unable to set action threshold KeyManagement");
+            runtime_context
+                .set_action_threshold(ActionType::Deployment, Weight::new(252))
+                .expect("Unable to set action threshold Deployment");
+
+            // let acct_dirty = Cow::clone(&));
+            let mutated_account = match runtime_context.account_dirty().clone() {
+                Cow::Owned(mutated_account) => mutated_account,
+                Cow::Borrowed(_) => panic!("account_dirty didn't mutate during the test"),
+            };
+
+            assert_eq!(
+                mutated_account.action_thresholds().deployment(),
+                &Weight::new(252)
+            );
+            assert_eq!(
+                mutated_account.action_thresholds().key_management(),
+                &Weight::new(253)
+            );
+
+            runtime_context
+                .set_action_threshold(ActionType::Deployment, Weight::new(255))
+                .expect_err(
+                    "Shouldn't be able to set deployment threshold higher than key management",
+                );
+
+            Ok(())
+        };
+        let _ = test(known_urefs, query);
+    }
+
 }
