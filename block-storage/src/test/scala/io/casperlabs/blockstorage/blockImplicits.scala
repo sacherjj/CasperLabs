@@ -52,18 +52,17 @@ object blockImplicits {
       parentsHashList <- arbitrary[Seq[ByteString]]
       justifications  <- arbitrary[Seq[Justification]]
       deploys         <- arbitrary[Seq[Block.ProcessedDeploy]]
-    } yield
-      Block()
-        .withBlockHash(hash)
-        .withHeader(
-          Block
-            .Header()
-            .withParentHashes(parentsHashList)
-            .withProtocolVersion(version)
-            .withTimestamp(timestamp)
-            .withValidatorPublicKey(validator)
-        )
-        .withBody(Block.Body().withDeploys(deploys))
+    } yield Block()
+      .withBlockHash(hash)
+      .withHeader(
+        Block
+          .Header()
+          .withParentHashes(parentsHashList)
+          .withProtocolVersion(version)
+          .withTimestamp(timestamp)
+          .withValidatorPublicKey(validator)
+      )
+      .withBody(Block.Body().withDeploys(deploys))
 
   val blockMsgWithTransformGen: Gen[BlockMsgWithTransform] =
     for {

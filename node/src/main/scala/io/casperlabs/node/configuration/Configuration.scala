@@ -128,9 +128,8 @@ object Configuration extends ParserImplicits {
         case (k, v) if k.startsWith("CL_") && isSnakeCase(k) => List(SnakeCase(k) -> v)
         case _                                               => Nil
       }
-    } yield
-      parse(options.fieldByName, envSnakeCase, maybeConfigFile, defaultDataDir, defaults)
-        .map(conf => (command, conf))
+    } yield parse(options.fieldByName, envSnakeCase, maybeConfigFile, defaultDataDir, defaults)
+      .map(conf => (command, conf))
     res.fold(_.invalidNel[(Command, Configuration)], identity)
   }
 
@@ -255,9 +254,8 @@ object Configuration extends ParserImplicits {
     for {
       tbl          <- Toml.parse(content)
       dashifiedMap = flatten(tbl.values)
-    } yield
-      dashifiedMap.map {
-        case (k, v) => (dashToCamel(k), v)
-      }
+    } yield dashifiedMap.map {
+      case (k, v) => (dashToCamel(k), v)
+    }
   }
 }

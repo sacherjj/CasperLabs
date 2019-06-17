@@ -56,7 +56,7 @@ class GossipServiceCasperTestNode[F[_]](
       validateNonces
     )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
-  implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
+  implicit val safetyOracleEff: SafetyOracle[F] = SafetyOracle.cliqueOracle[F]
 
   //val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 

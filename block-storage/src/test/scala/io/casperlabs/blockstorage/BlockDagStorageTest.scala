@@ -283,11 +283,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
             thirdStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
             result        <- lookupElements(firstBlockElements ++ secondBlockElements, thirdStorage)
             _             <- thirdStorage.close()
-          } yield
-            testLookupElementsResult(
-              result,
-              (firstBlockElements ++ secondBlockElements).flatMap(_.blockMessage)
-            )
+          } yield testLookupElementsResult(
+            result,
+            (firstBlockElements ++ secondBlockElements).flatMap(_.blockMessage)
+          )
         }
       }
     }
@@ -374,13 +373,12 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
             secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
             result        <- lookupElements(blockElements, secondStorage)
             _             <- secondStorage.close()
-          } yield
-            testLookupElementsResult(
-              result,
-              blockElements
-                .flatMap(_.blockMessage)
-                .toList ++ secondBlockElements ++ thirdBlockElements
-            )
+          } yield testLookupElementsResult(
+            result,
+            blockElements
+              .flatMap(_.blockMessage)
+              .toList ++ secondBlockElements ++ thirdBlockElements
+          )
         }
       }
     }
@@ -408,11 +406,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
           result        <- lookupElements(blockElements, secondStorage)
           _             <- secondStorage.close()
-        } yield
-          testLookupElementsResult(
-            result,
-            blockElements.flatMap(_.blockMessage)
-          )
+        } yield testLookupElementsResult(
+          result,
+          blockElements.flatMap(_.blockMessage)
+        )
       }
     }
   }
@@ -439,16 +436,15 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           _      <- blockStore.clear()
           result <- lookupElements(blockElements, secondStorage)
           _      <- secondStorage.close()
-        } yield
-          result match {
-            case (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) => {
-              list.foreach(_ shouldBe ((None, None, None, None, false)))
-              latestMessageHashes shouldBe Map()
-              latestMessages shouldBe Map()
-              topoSort shouldBe Vector()
-              topoSortTail shouldBe Vector()
-            }
+        } yield result match {
+          case (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) => {
+            list.foreach(_ shouldBe ((None, None, None, None, false)))
+            latestMessageHashes shouldBe Map()
+            latestMessages shouldBe Map()
+            topoSort shouldBe Vector()
+            topoSortTail shouldBe Vector()
           }
+        }
       }
     }
   }

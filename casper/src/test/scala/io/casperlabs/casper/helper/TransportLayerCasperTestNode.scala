@@ -67,8 +67,9 @@ class TransportLayerCasperTestNode[F[_]](
   implicit val logEff: LogStub[F] = new LogStub[F](local.host, printEnabled = false)
   implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
   implicit val transportLayerEff  = tle
-  implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
   implicit val rpConfAsk          = createRPConfAsk[F](local)
+
+  implicit val safetyOracleEff: SafetyOracle[F] = SafetyOracle.cliqueOracle[F]
 
   val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 

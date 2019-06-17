@@ -82,33 +82,36 @@ package object gossiping {
       genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
 
       // Make sure MultiParentCasperRef is set before the synchronizer is resumed.
-      awaitApproval = genesisApprover.awaitApproval >>= { genesisBlockHash =>
-        for {
-          maybeGenesis <- BlockStore[F].get(genesisBlockHash)
-          genesisStore <- MonadThrowable[F].fromOption(
-                           maybeGenesis,
-                           NotFound(s"Cannot retrieve Genesis ${show(genesisBlockHash)}")
-                         )
-          validatorId <- ValidatorIdentity.fromConfig[F](conf.casper)
-          genesis     = genesisStore.getBlockMessage
-          prestate    = ProtoUtil.preStateHash(genesis)
-          transforms  = genesisStore.transformEntry
-          casper <- MultiParentCasper.fromGossipServices(
-                     validatorId,
-                     genesis,
-                     prestate,
-                     transforms,
-                     conf.casper.chainId,
-                     relaying
-                   )
-          _ <- MultiParentCasperRef[F].set(casper)
-          _ <- Log[F].info("Making the transition to block processing.")
-        } yield ()
-      }
+      awaitApproval <- makeFiberResource {
+                        genesisApprover.awaitApproval >>= { genesisBlockHash =>
+                          for {
+                            maybeGenesis <- BlockStore[F].get(genesisBlockHash)
+                            genesisStore <- MonadThrowable[F].fromOption(
+                                             maybeGenesis,
+                                             NotFound(
+                                               s"Cannot retrieve Genesis ${show(genesisBlockHash)}"
+                                             )
+                                           )
+                            validatorId <- ValidatorIdentity.fromConfig[F](conf.casper)
+                            genesis     = genesisStore.getBlockMessage
+                            prestate    = ProtoUtil.preStateHash(genesis)
+                            transforms  = genesisStore.transformEntry
+                            casper <- MultiParentCasper.fromGossipServices(
+                                       validatorId,
+                                       genesis,
+                                       prestate,
+                                       transforms,
+                                       conf.casper.chainId,
+                                       relaying
+                                     )
+                            _ <- MultiParentCasperRef[F].set(casper)
+                            _ <- Log[F].info("Making the transition to block processing.")
+                          } yield ()
+                        }
+                      }
 
-      // The StashingSynchronizer will start a fiber to await on the above.
       isInitialRef <- Resource.liftF(Ref.of[F, Boolean](true))
-      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval, isInitialRef)
+      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval.join, isInitialRef)
 
       gossipServiceServer <- makeGossipServiceServer(
                               port,
@@ -121,7 +124,13 @@ package object gossiping {
                             )
 
       // Start syncing with the bootstrap in the background.
-      _ <- makeInitialSynchronization(conf, gossipServiceServer, connectToGossip, isInitialRef)
+      _ <- makeInitialSynchronization(
+            conf,
+            gossipServiceServer,
+            connectToGossip,
+            awaitApproval.join,
+            isInitialRef
+          )
 
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
       _ <- makePeerCountPrinter
@@ -347,7 +356,6 @@ package object gossiping {
         for {
           _ <- Log[F].info("Taking bonds from file.")
           bonds <- Genesis.getBonds[F](
-                    conf.casper.genesisPath,
                     conf.casper.bondsFile,
                     conf.casper.numValidators
                   )
@@ -644,6 +652,7 @@ package object gossiping {
       conf: Configuration,
       gossipServiceServer: GossipServiceServer[F],
       connectToGossip: GossipService.Connector[F],
+      awaitApproved: F[Unit],
       isInitialRef: Ref[F, Boolean]
   ): Resource[F, Unit] =
     for {
@@ -659,13 +668,15 @@ package object gossiping {
                         connector = connectToGossip
                       )
                     }
-      _ <- makeFiberResource(initialSync.sync() >> isInitialRef.set(false))
+      _ <- makeFiberResource {
+            awaitApproved >> initialSync.sync() >> isInitialRef.set(false)
+          }
     } yield ()
 
   /** The TransportLayer setup prints the number of peers now and then which integration tests
     * may depend upon. We aren't using the `Connect` functionality so have to do it another way. */
   private def makePeerCountPrinter[F[_]: Concurrent: Time: Log: NodeDiscovery]
-    : Resource[F, Unit] = {
+      : Resource[F, Unit] = {
     def loop(prevPeers: Set[Node]): F[Unit] = {
       // Based on Connecttions.removeConn
       val newPeers = for {

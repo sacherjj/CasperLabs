@@ -43,10 +43,9 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
     for {
       n     <- Gen.choose(4, 10)
       peers <- Gen.listOfN(n, genPeerNode)
-    } yield
-      peers.map { peer =>
-        (peer, peers.filterNot(_ == peer))
-      }.toMap
+    } yield peers.map { peer =>
+      (peer, peers.filterNot(_ == peer))
+    }.toMap
 
   /**
     * Target is the last element

@@ -54,6 +54,7 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val logEff: LogStub[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
+  implicit val safetyOracleEff: SafetyOracle[F]
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 

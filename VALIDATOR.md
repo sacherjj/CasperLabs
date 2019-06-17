@@ -6,7 +6,7 @@ Pre-packaged binaries are published to http://repo.casperlabs.io/casperlabs/repo
 
 * [OpenJDK](https://openjdk.java.net) Java Development Kit (JDK) or Runtime Environment (JRE), version 11. We recommend using the OpenJDK
 
-```sh
+```console
 sudo add-apt-repository ppa:openjdk-r/ppa
 sudo apt update
 sudo apt install openjdk-11-jdk
@@ -16,7 +16,11 @@ export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 Check that you have the right Java version:
 
 ```console
-$ sudo update-alternatives --config java
+sudo update-alternatives --config java
+```
+
+You see the next output, we choose the `0th` selection here:
+```console
 There are 3 choices for the alternative java (providing /usr/bin/java).
 
   Selection    Path                                            Priority   Status
@@ -28,7 +32,15 @@ There are 3 choices for the alternative java (providing /usr/bin/java).
 
 Press <enter> to keep the current choice[*], or type selection number: 0
 update-alternatives: using /usr/lib/jvm/java-11-openjdk-amd64/bin/java to provide /usr/bin/java (java) in auto mode
-$ java -version
+```
+
+Print the Java version:
+```console
+java -version
+```
+
+The output should say we use the version 11:
+```console
 openjdk version "11.0.1" 2018-10-16
 OpenJDK Runtime Environment (build 11.0.1+13-Ubuntu-3ubuntu116.04ppa1)
 OpenJDK 64-Bit Server VM (build 11.0.1+13-Ubuntu-3ubuntu116.04ppa1, mixed mode, sharing)
@@ -41,7 +53,7 @@ The node consists of an API component running in Java and an execution engine ru
 
 *NOTE: Users will need to update \[VERSION\] with the version the want. See:
 
-```sh
+```console
 curl -sO http://repo.casperlabs.io/casperlabs/repo/master/casperlabs-node_[VERSION]_all.deb
 curl -sO http://repo.casperlabs.io/casperlabs/repo/master/casperlabs-engine-grpc-server_[VERSION]_amd64.deb
 sudo dpkg -i casperlabs-node_[VERSION]_all.deb
@@ -58,8 +70,12 @@ The execution engine runs as a separate process and isn't open to the network, i
 The node will want to connect to this socket, so it's best to start the engine up front.
 
 ```console
-$ mkdir casperlabs-node-data
-$ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock
+mkdir casperlabs-node-data
+casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock
+```
+
+The next output should be printed:
+```console
 Server is listening on socket: casperlabs-node-data/.caspernode.sock
 ```
 
@@ -69,7 +85,7 @@ The execution engine supports an optional `--loglevel` command line argument fol
 which sets the log level for the execution engine. 
 
 ```console
-$ casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock --loglevel=error
+casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock --loglevel=error
 ```
 
 The log levels supported are:
@@ -94,8 +110,63 @@ If the `--loglevel` argument is not provided, the execution engine defaults to t
 3. `ed25519` (optional) another set of private and public keys used by dApp developers to sign their deploys.
 
 #### Prerequisites: OpenSSL
+
+[OpenSSL](https://www.openssl.org) is a general-purpose cryptography library we'll use to generate the keys.
+
+**macOS:**
+Ensure if [Brew](https://brew.sh) is installed:
+```console
+brew --version
+```
+
+It should print something like below if it's already installed:
+```console
+Homebrew 2.1.5
+Homebrew/homebrew-core (git revision 8c8ee; last commit 2019-06-13)
+Homebrew/homebrew-cask (git revision 76d0e; last commit 2019-06-13)
+```
+
+If console prints `bash: command not found` then install it:
+```console
+/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+```
+
+Install OpenSSL:
+```console
+brew update
+brew install openssl@1.1
+```
+
+The next step depends on which shell is used on the machine:
+
+Most likely you'll have the `bash` shell if you didn't override it with a custom ones:
+```console
+echo "" >> ~/.bashrc
+echo 'export PATH="/usr/local/opt/openssl@1.1/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+`zsh`:
+```console
+echo "" >> ~/.bashrc
+echo 'export PATH="/usr/local/opt/openssl@1.1/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Ensure the latest 1.1 version of OpenSSL is installed:
+```console
+openssl version
+```
+
+The output should say a 1.1 version is used:
+```console
+OpenSSL 1.1.1c  28 May 2019
+```
+
+**Linux:**
+
 Download and install the latest version of the [openssl 1.1](https://github.com/openssl/openssl/releases).
-```bash
+```console
 cd /tmp
 curl -L https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz -o openssl.tar.gz
 tar -xzf openssl.tar.gz
@@ -104,34 +175,29 @@ cd openssl-OpenSSL_1_1_1b
 make
 make test
 sudo make install
-export LD_LIBRARY_PATH=/usr/local/lib
+sudo ldconfig
 ```
 
-To continue to have working lib folder, consider adding last line to bottom of `.bashrc` or relevent file with:
-
-`echo "export LD_LIBRARY_PATH=/usr/local/lib" >> ~/.bashrc`
-
-You might want to add `/usr/local/ssh/bin` to your `/etc/environment` file so that the right executable is found; check it by running `openssl version`.
-
 #### Prerequisites: sha3sum
-Download and install the latest version of the [sha3sum](https://github.com/maandree/sha3sum).
+Download and install the latest version of the [sha3sum](https://github.com/maandree/sha3sum). `sha3sum` is a cryptography library allowing to compute `Keccak`, `SHA-3`, `SHAKE` and `RawSHAKE` hashes.
 
 1. macOS: `brew install sha3sum`
 2. Ubunt 18.04:
 
  Build libkeccak:
 
-```bash
+```console
 cd /tmp
 git clone https://github.com/maandree/libkeccak.git
 cd libkeccak
 make
-sudo make install PREFIX=/usr
+sudo make install
+sudo ldconfig
 ```
 
  Build sha3sum:
 
-```bash
+```console
 cd /tmp
 git clone https://github.com/maandree/sha3sum.git
 cd sha3sum
@@ -140,45 +206,53 @@ sudo make install
 ```
 
 #### Script
-You may want to use [the script](/docker/gen-keys.sh) which will generate all the keys. The commands below are excerpts from this script.
+You may want to use [the script](/docker/gen-keys.sh) which will generate all the keys. Make sure the [OpenSSL](/VALIDATOR.md#prerequisites-openssl) and [sha3sum](/VALIDATOR.md#prerequisites-sha3sum) are installed before running the script. The commands below are excerpts from this script.
 
 #### ed25519 Validator
 Generate private key:
-```bash
+```console
 openssl genpkey -algorithm Ed25519 -out ed25519-validator-private.pem
 ```
 
+If the commands returns the next message `Algorithm Ed25519 not found` it means that you don't have the latest version of OpenSSL installed.
+Generally, if any error occurs firstly make sure if the [OpenSSL](/VALIDATOR.md#prerequisites-openssl) and [sha3sum](/VALIDATOR.md#prerequisites-sha3sum) are installed.
+
 Public key:
-```bash
+```console
 openssl pkey -in ed25519-validator-private.pem -pubout -out ed25519-validator-public.pem
 ```
 
-To obtain your validator ID (used in bonds.txt file which contains a list of initially bonded of validators):
-```bash
-openssl pkey -outform DER -pubout -in ed25519-validator-private.pem | tail -c +13 | openssl base64
+Use the public key to create a bonds.txt file which contains a set of initial validators of a network and their initial bonds:
+```console
+VALIDATOR_ID=$(openssl pkey -outform DER -pubout -in ed25519-validator-private.pem | tail -c +13 | openssl base64)
+echo "$VALIDATOR_ID" " 100" > bonds.txt
 ```
 
-Use as:
-```bash
-./node/target/universal/stage/bin/casperlabs-node run -s \
+Use them as follow:
+```console
+casperlabs-node run -s \
     --casper-validator-private-key-path ed25519-validator-private.pem \
-    --casper-validator-public-key-path ed25519-validator-public.pem
+    --casper-validator-public-key-path ed25519-validator-public.pem \
+    --casper-bonds-file bonds.txt
 ```
 
 #### ed25519 dApp Developer
 Generate private key:
-```bash
+```console
 openssl genpkey -algorithm Ed25519 -out ed25519-developer-private.pem
 ```
 
+If the commands returns the next message `Algorithm Ed25519 not found` it means that you don't have the latest version of OpenSSL installed.
+Generally, if any error occurs firstly make sure if the [OpenSSL](/VALIDATOR.md#prerequisites-openssl) and [sha3sum](/VALIDATOR.md#prerequisites-sha3sum) are installed.
+
 Public key:
-```bash
+```console
 openssl pkey -in ed25519-developer-private.pem -pubout -out ed25519-developer-public.pem
 ```
 
 Use them sign a deploy as:
-```bash
-./client/target/universal/stage/bin/casperlabs-node --host <node hostname> deploy \
+```console
+casperlabs-node --host <node hostname> deploy \
     --public-key ed25519-developer-public.pem \
     --private-key ed25519-developer-public.pem \
     --from <purse address that will be used to pay for the deployment> \
@@ -191,14 +265,14 @@ Use them sign a deploy as:
 #### secp256r1
 
 Generate private key:
-```bash
+```console
 openssl ecparam -name secp256r1 -genkey -noout -out secp256r1-private.pem
 openssl pkcs8 -topk8 -nocrypt -in secp256r1-private.pem -out secp256r1-private-pkcs8.pem
 rm secp256r1-private.pem
 ```
 
 Obtain node ID from the private key:
-```bash
+```console
 NODE_ID=$(cat secp256r1-private-pkcs8.pem | \
     openssl ec -text -noout | \
     grep pub -A 5 | \
@@ -213,12 +287,12 @@ NODE_ID=$(cat secp256r1-private-pkcs8.pem | \
 
 Node ID is used for differentiating different nodes and used as an ID in casperlabs nodes' addresses:
 ```
-casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40400&discovery=40404
+casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE IP OR HOSTNAME ADDRESS>?protocol=40400&discovery=40404
 ```
-The address above contains `c0a6c82062461c9b7f9f5c3120f44589393edf31` as a node ID.
+The above address contains `c0a6c82062461c9b7f9f5c3120f44589393edf31` as a node ID.
 
 Generate certificate from the generated private key. Fill asked questions and enter the above `NODE_ID` as a `Common Name (CN)`
-```bash
+```console
 openssl req \
     -new \
      -x509 \
@@ -228,8 +302,8 @@ openssl req \
 ```
 
 Now you can use them as:
-```bash
-./node/target/universal/stage/bin/casperlabs-node run \
+```console
+casperlabs-node run \
     --tls-certificate node.certificate.pem \
     --tls-key secp256r1-private-pkcs8.pem
 ```
@@ -256,7 +330,7 @@ You can start the node in two modes:
 * Without `-s` you have to use the `--server-bootstrap` option and give it the address of another node to get the blocks from and to start discovering other nodes with. The address is in the form of `casperlabs://<bootstrap-node-id>@$<bootstrap-node-ip-address>?protocol=40400&discovery=40404`, but the ports can be different, based on what the operator of the node configured.
 
 ```console
-$ casperlabs-node \
+casperlabs-node \
      --grpc-port 40401 \
      run \
      --server-data-dir casperlabs-node-data \

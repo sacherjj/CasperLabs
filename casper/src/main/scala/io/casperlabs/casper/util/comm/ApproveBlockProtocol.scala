@@ -34,7 +34,8 @@ trait ApproveBlockProtocol[F[_]] {
 
 abstract class ApproveBlockProtocolInstances {
   implicit def eitherTApproveBlockProtocol[E, F[_]: Monad: ApproveBlockProtocol[?[_]]]
-    : ApproveBlockProtocol[EitherT[F, E, ?]] = ApproveBlockProtocol.forTrans[F, EitherT[?[_], E, ?]]
+      : ApproveBlockProtocol[EitherT[F, E, ?]] =
+    ApproveBlockProtocol.forTrans[F, EitherT[?[_], E, ?]]
 }
 
 object ApproveBlockProtocol {
@@ -81,17 +82,16 @@ object ApproveBlockProtocol {
     for {
       now   <- Time[F].currentMillis
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
-    } yield
-      new ApproveBlockProtocolImpl[F](
-        block,
-        transforms,
-        requiredSigs,
-        trustedValidators,
-        now,
-        duration,
-        interval,
-        sigsF
-      )
+    } yield new ApproveBlockProtocolImpl[F](
+      block,
+      transforms,
+      requiredSigs,
+      trustedValidators,
+      now,
+      duration,
+      interval,
+      sigsF
+    )
 
   private class ApproveBlockProtocolImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       val block: BlockMessage,

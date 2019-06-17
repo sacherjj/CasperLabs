@@ -30,3 +30,7 @@ class CasperLabsClient(ABC):
     @abstractmethod
     def show_blocks(self, depth: int):
         pass
+
+    @abstractmethod
+    def queryState(self, blockHash: str, key: str, path: str, keyType: str):
+        pass

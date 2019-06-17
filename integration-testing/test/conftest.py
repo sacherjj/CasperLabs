@@ -32,6 +32,13 @@ def one_node_network(docker_client_fixture):
         yield onn
 
 
+@pytest.fixture(scope='module')
+def one_node_network_module_scope(docker_client_fixture):
+    with OneNodeNetwork(docker_client_fixture) as onn:
+        onn.create_cl_network()
+        yield onn
+
+
 @pytest.fixture()
 def two_node_network(docker_client_fixture):
     with TwoNodeNetwork(docker_client_fixture) as tnn:
@@ -41,6 +48,13 @@ def two_node_network(docker_client_fixture):
 
 @pytest.fixture()
 def three_node_network(docker_client_fixture):
+    with ThreeNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture(scope='module')
+def three_node_network_module_scope(docker_client_fixture):
     with ThreeNodeNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
