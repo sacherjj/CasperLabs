@@ -405,11 +405,14 @@ mod tests {
     use shared::newtypes::{Blake2bHash, CorrelationId};
     use tracking_copy::TrackingCopy;
 
-    fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemoryGlobalState> {
+    fn mock_tc<'a>(
+        init_key: Key,
+        init_account: Cow<'a, value::Account>,
+    ) -> TrackingCopy<InMemoryGlobalState> {
         let correlation_id = CorrelationId::new();
         let mut hist = InMemoryGlobalState::empty().unwrap();
         let root_hash = hist.root_hash;
-        let transform = Transform::Write(value::Value::Account(init_account));
+        let transform = Transform::Write(value::Value::Account(init_account.clone().into_owned()));
 
         let mut m = HashMap::new();
         m.insert(init_key, transform);
@@ -481,7 +484,7 @@ mod tests {
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         rng: ChaChaRng,
     ) -> RuntimeContext<'a, InMemoryGlobalState> {
-        let tc = mock_tc(base_key, account.clone().into_owned());
+        let tc = mock_tc(base_key, account);
         RuntimeContext::new(
             Rc::new(RefCell::new(tc)),
             uref_map,
