@@ -125,9 +125,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       (status, updatedDag) = attemptResult
       _                    <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       furtherAttempts <- status match {
-                          case MissingBlocks           => List.empty.pure[F]
-                          case IgnorableEquivocation   => List.empty.pure[F]
-                          case InvalidUnslashableBlock => List.empty.pure[F]
+                          case MissingBlocks | IgnorableEquivocation | InvalidUnslashableBlock =>
+                            List.empty.pure[F]
                           case _ =>
                             reAttemptBuffer(updatedDag, lastFinalizedBlockHash) // reAttempt for any status that resulted in the adding of the block into the view
                         }
@@ -319,8 +318,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   def lastFinalizedBlock: F[Block] =
     for {
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
-      Block                  <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
-    } yield Block
+      block                  <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
+    } yield block
 
   // TODO: Optimize for large number of deploys accumulated over history
   /** Get the deploys that are not present in the past of the chosen parents. */
@@ -330,7 +329,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   ): F[Seq[Deploy]] =
     for {
       state <- Cell[F, CasperState].read
-      hist  = state.deployBuffer
       unprocessed <- DagOperations
                       .bfTraverseF[F, Block](parents.toList)(ProtoUtil.unsafeGetParents[F])
                       .foldWhileLeft(state.deployBuffer) {
@@ -720,7 +718,6 @@ object MultiParentCasperImpl {
       for {
         _          <- BlockStore[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
         updatedDag <- BlockDagStorage[F].insert(block)
-        hash       = block.blockHash
       } yield updatedDag
 
     /** Check if the block has dependencies that we don't have in store.

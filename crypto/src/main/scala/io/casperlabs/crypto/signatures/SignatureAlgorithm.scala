@@ -6,6 +6,7 @@ import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey, Signature}
 import io.casperlabs.crypto.codec.Base64
 import org.bouncycastle.openssl.PEMKeyPair
 
+import scala.util.control.NonFatal
 import scala.util.{Random, Try}
 
 /**
@@ -173,7 +174,7 @@ object SignatureAlgorithm {
         val key = new SigningKey(sec)
         Some(PublicKey(key.getVerifyKey.toBytes))
       } catch {
-        case _: Throwable => None
+        case NonFatal(_) => None
       }
 
     /**
@@ -258,7 +259,7 @@ object SignatureAlgorithm {
               }
           }
       } catch {
-        case _: Throwable =>
+        case NonFatal(_) =>
           None
       }
 
@@ -294,7 +295,7 @@ object SignatureAlgorithm {
             )
           }
       } catch {
-        case _: Throwable =>
+        case NonFatal(_) =>
           None
       }
 

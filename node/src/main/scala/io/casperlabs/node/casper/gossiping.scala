@@ -87,7 +87,9 @@ package object gossiping {
 
       relaying <- makeRelaying(conf, connectToGossip)
 
-      downloadManager <- makeDownloadManager(conf, connectToGossip, relaying)
+      validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[F](conf.casper))
+
+      downloadManager <- makeDownloadManager(conf, connectToGossip, relaying, validatorId)
 
       genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
 
@@ -272,11 +274,12 @@ package object gossiping {
   private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      relaying: Relaying[F]
+      relaying: Relaying[F],
+      validatorIdentity: Option[ValidatorIdentity]
   ): Resource[F, DownloadManager[F]] =
     for {
       _           <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
-      validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[F](conf.casper))
+      validatorId <- Resource.pure[F, Option[ValidatorIdentity]](validatorIdentity)
       maybeValidatorPublicKey = validatorId
         .map(x => ByteString.copyFrom(x.publicKey))
         .filterNot(_.isEmpty)

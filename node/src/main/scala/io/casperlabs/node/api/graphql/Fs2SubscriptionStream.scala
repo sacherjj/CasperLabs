@@ -7,6 +7,7 @@ import fs2._
 import sangria.streaming.SubscriptionStream
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 /**
@@ -66,6 +67,6 @@ private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit ec: Executio
 
   override def recover[T](stream: Stream[F, T])(fn: Throwable => T): Stream[F, T] =
     stream.recover {
-      case e: Throwable => fn(e)
+      case NonFatal(e) => fn(e)
     }
 }

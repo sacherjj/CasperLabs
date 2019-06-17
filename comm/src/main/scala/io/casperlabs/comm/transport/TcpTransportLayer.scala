@@ -27,6 +27,7 @@ import monix.reactive._
 
 import scala.concurrent.duration._
 import scala.util._
+import scala.util.control.NonFatal
 
 class TcpTransportLayer(
     port: Int,
@@ -63,7 +64,7 @@ class TcpTransportLayer(
         .clientAuth(ClientAuth.REQUIRE)
         .build()
     } catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         e.printStackTrace()
         throw e
     }
@@ -75,7 +76,7 @@ class TcpTransportLayer(
       builder.keyManager(certInputStream, keyInputStream)
       builder.build
     } catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         println(e.getMessage)
         throw e
     }
