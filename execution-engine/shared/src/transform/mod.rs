@@ -317,7 +317,7 @@ pub mod gens {
 
 #[cfg(test)]
 mod tests {
-    use num::{Bounded, Num};
+    use num::{Bounded, Num, ToPrimitive};
 
     use common::value::{Value, U128, U256, U512};
 
@@ -391,7 +391,6 @@ mod tests {
         uint_overflow_test::<U512>();
     }
 
-    use num::ToPrimitive;
     #[test]
     fn u64_to_i32_addition() {
         let i32_max_as_u64 = i32::max_value().to_u64().unwrap();
