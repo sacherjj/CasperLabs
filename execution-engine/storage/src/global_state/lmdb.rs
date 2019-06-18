@@ -146,6 +146,10 @@ impl History for LmdbGlobalState {
         };
         Ok(commit_result)
     }
+
+    fn current_root(&self) -> Blake2bHash {
+        self.root_hash
+    }
 }
 
 #[cfg(test)]

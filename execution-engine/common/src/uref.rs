@@ -1,5 +1,6 @@
 use bitflags;
 
+use crate::alloc::string::String;
 use crate::alloc::vec::Vec;
 use crate::bytesrepr;
 use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};
@@ -124,6 +125,10 @@ impl URef {
         } else {
             false
         }
+    }
+
+    pub fn as_string(&self) -> String {
+        format!("{:?}", self.0)
     }
 }
 

@@ -728,10 +728,18 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // TODO(mateusz.gorski): Fix error model for the storage errors.
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
+                    error @ EngineError::InvalidPublicKeyLength { .. } => {
+                        precondition_failure(error.to_string())
+                    }
+                    error @ EngineError::WasmPreprocessingError(_) => {
+                        precondition_failure(error.to_string())
+                    }
+                    error @ EngineError::WasmSerializationError(_) => {
+                        precondition_failure(error.to_string())
+                    }
                     EngineError::StorageError(storage_err) => {
                         execution_error(storage_err.to_string(), cost, effect)
                     }
-                    EngineError::PreprocessingError(error_msg) => precondition_failure(error_msg),
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
                             let mut deploy_result = ipc::DeployResult::new();

@@ -41,4 +41,19 @@ impl WasmCosts {
             _ => None,
         }
     }
+
+    pub fn free() -> WasmCosts {
+        WasmCosts {
+            regular: 0,
+            div: 0,
+            mul: 0,
+            mem: 0,
+            initial_mem: 4096,
+            grow_mem: 8192,
+            memcpy: 0,
+            max_stack_height: 64 * 1024,
+            opcodes_mul: 1,
+            opcodes_div: 1,
+        }
+    }
 }
