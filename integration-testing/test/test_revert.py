@@ -51,7 +51,8 @@ nonce=9 counter=2 hash=[105, 12, 118, 161, 38, 130, 56, 203, 24, 145, 213, 69, 1
 
 
 def test_revert(client, node):
-    block_hash = node.deploy_and_propose(session_contract = 'test_revert_define.wasm', payment_contract = 'test_revert_define.wasm')
+    block_hash = node.deploy_and_propose(session_contract = 'test_direct_revert_define.wasm',
+                                         payment_contract = 'test_direct_revert_define.wasm')
 
     r = client.show_deploys(block_hash)[0]
 
@@ -62,16 +63,17 @@ def test_revert(client, node):
     r = client.show_deploy(deploy_hash)
     assert r.deploy.deploy_hash == deploy_hash
 
-    # This contract calls another contract that calls revert(1) 
-    block_hash = node.deploy_and_propose(session_contract = 'test_revert_call.wasm', payment_contract = 'test_revert_call.wasm')
+    # This contract calls revert(1) 
+    block_hash = node.deploy_and_propose(session_contract = 'test_direct_revert_call.wasm',
+                                         payment_contract = 'test_direct_revert_call.wasm')
 
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
     assert r.error_message == "Exit code: 1"
 
-    # This contract calls revert(2) 
-    block_hash = node.deploy_and_propose(session_contract = 'test_direct_revert_define.wasm',
-                                         payment_contract = 'test_direct_revert_define.wasm')
+    # This contract calls another contract that calls revert(2) 
+    block_hash = node.deploy_and_propose(session_contract = 'test_revert_call.wasm',
+                                         payment_contract = 'test_revert_call.wasm')
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
     assert r.error_message == "Exit code: 2"
