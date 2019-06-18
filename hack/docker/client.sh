@@ -24,7 +24,7 @@ DIR=$(dirname $0)
 
 NODE=$1; shift
 CMD=$1; shift
-
+VERSION=${CL_VERSION:-latest}
 # Get the node-id for TLS.
 NODE_ID=$(cat $DIR/.casperlabs/$NODE/node-id)
 
@@ -32,7 +32,7 @@ NODE_ID=$(cat $DIR/.casperlabs/$NODE/node-id)
 function run_default() {
     docker run --rm \
         --network casperlabs \
-        casperlabs/client:latest \
+        casperlabs/client:$VERSION \
         --host $NODE --node-id $NODE_ID $CMD $@
 }
 
@@ -43,7 +43,7 @@ function run_with_vol() {
         --network casperlabs \
         --volume $VOL:/data \
         --volume $PWD/keys:/keys \
-        casperlabs/client:latest \
+        casperlabs/client:$VERSION \
         --host $NODE --node-id $NODE_ID $CMD $@
 }
 
@@ -53,7 +53,7 @@ case "$CMD" in
         # --help doesn't like --host and --port
         docker run --rm \
             --network casperlabs \
-            casperlabs/client:latest \
+            casperlabs/client:$VERSION \
             $CMD
         ;;
 
