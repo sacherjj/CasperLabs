@@ -182,11 +182,26 @@ pipeline:
       - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
       - "make docker-build/execution-engine"
       - "make docker-build/integration-testing"
+      - "make docker-build/key-generator"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - staging
+        - trying
+
+  docker-keys-gen-test-bors:
+    commands:
+      - "mkdir /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+      - "./hack/key-management/docker-gen-keys.sh /tmp/keys-DRONE-${DRONE_BUILD_NUMBER} --test"
+      - "rm -rf /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/tmp:/tmp"
     when:
       branch:
         - staging
@@ -231,6 +246,22 @@ pipeline:
       - "make docker-build/execution-engine"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
+
+  docker-key-gen-merge:
+    commands:
+      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "make docker-build/key-generator"
     image: "casperlabs/buildenv:latest"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -329,16 +360,20 @@ pipeline:
       docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:"$REF"
       docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:"$REF"
       docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:"$REF"
+      docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:"$REF"
       docker push casperlabs/node:"$REF"
       docker push casperlabs/client:"$REF"
       docker push casperlabs/execution-engine:"$REF"
+      docker push casperlabs/key-generator:"$REF"
       if [ "${DRONE_BRANCH}" = "master" ]; then
         docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:latest
         docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:latest
         docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:latest
+        docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:latest
         docker push casperlabs/node:latest
         docker push casperlabs/client:latest
         docker push casperlabs/execution-engine:latest
+        docker push casperlabs/key-generator:latest
       fi
       echo "done"
     image: "casperlabs/buildenv:latest"
