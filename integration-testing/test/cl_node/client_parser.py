@@ -1,4 +1,5 @@
 from collections import defaultdict
+import re
 
 """
 Parser of the gRPC message dump for human reading as produced by scalapb and printed by the Scala CasperLabs client.
@@ -85,9 +86,13 @@ def parse(s):
 
 
 def parse_show_blocks(s):
-    blocks = s.split('-----------------------------------------------------')[:-1]
+    blocks = re.split('^-+$', s)
     return [parse(block) for block in blocks]
-    
+
+
+def parse_show_deploys(s):
+    return parse_show_blocks(s)
+
 
 def parse_show_block(s):
     return parse(s)
