@@ -378,20 +378,12 @@ impl Account {
         &self.associated_keys
     }
 
-    pub fn associated_keys_mut(&mut self) -> &mut AssociatedKeys {
-        &mut self.associated_keys
-    }
-
     pub fn get_associated_keys(&self) -> &AssociatedKeys {
         &self.associated_keys
     }
 
     pub fn action_thresholds(&self) -> &ActionThresholds {
         &self.action_thresholds
-    }
-
-    pub fn action_thresholds_mut(&mut self) -> &mut ActionThresholds {
-        &mut self.action_thresholds
     }
 
     pub fn account_activity(&self) -> &AccountActivity {
@@ -406,6 +398,29 @@ impl Account {
     /// with old contents but with nonce increased by 1.
     pub fn increment_nonce(&mut self) {
         self.nonce += 1;
+    }
+
+    pub fn add_associated_key(
+        &mut self,
+        public_key: PublicKey,
+        weight: Weight,
+    ) -> Result<(), AddKeyFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.associated_keys.add_key(public_key, weight)
+    }
+
+    pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.associated_keys.remove_key(&public_key)
+    }
+
+    pub fn set_action_threshold(
+        &mut self,
+        action_type: ActionType,
+        weight: Weight,
+    ) -> Result<(), SetThresholdFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.action_thresholds.set_threshold(action_type, weight)
     }
 }
 

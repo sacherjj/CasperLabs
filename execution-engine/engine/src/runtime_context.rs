@@ -406,8 +406,7 @@ where
         // Performs clone-on-write if the account wasn't mutated already
         self.account_dirty
             .to_mut()
-            .associated_keys_mut()
-            .add_key(public_key, weight)
+            .add_associated_key(public_key, weight)
     }
 
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
@@ -419,8 +418,7 @@ where
         // Performs clone-on-write if the account wasn't mutated already
         self.account_dirty
             .to_mut()
-            .associated_keys_mut()
-            .remove_key(&public_key)
+            .remove_associated_key(public_key)
     }
 
     pub fn set_action_threshold(
@@ -436,8 +434,7 @@ where
         // Performs clone-on-write if the account wasn't mutated already
         self.account_dirty
             .to_mut()
-            .action_thresholds_mut()
-            .set_threshold(action_type, threshold)
+            .set_action_threshold(action_type, threshold)
     }
 }
 
