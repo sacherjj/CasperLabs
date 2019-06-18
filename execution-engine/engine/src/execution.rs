@@ -442,6 +442,31 @@ where
     pub fn take_context(self) -> RuntimeContext<'a, R> {
         self.context
     }
+
+    pub fn add_associated_key(&mut self, public_key: PublicKey, weight: Weight) -> i32 {
+        match self.context.add_associated_key(public_key, weight) {
+            Ok(_) => 0,
+            // This relies on the fact that `AddKeyFailure` is represented as
+            // i32 and first variant start with number `1`, so all other variants
+            // are greater than the first one, so it's safe to assume `0` is success,
+            // and any error is greater than 0.
+            Err(e) => e as i32,
+        }
+    }
+
+    pub fn remove_associated_key(&mut self, public_key: PublicKey) -> i32 {
+        match self.context.remove_associated_key(public_key) {
+            Ok(_) => 0,
+            Err(e) => e as i32,
+        }
+    }
+
+    pub fn set_action_threshold(&mut self, action_type: ActionType, threshold: Weight) -> i32 {
+        match self.context.set_action_threshold(action_type, threshold) {
+            Ok(_) => 0,
+            Err(e) => e as i32,
+        }
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -675,14 +700,7 @@ where
                 };
                 let weight = Weight::new(weight_value);
 
-                let value = match self.context.add_associated_key(public_key, weight) {
-                    Ok(_) => 0,
-                    // This relies on the fact that `AddKeyFailure` is represented as
-                    // i32 and first variant start with number `1`, so all other variants
-                    // are greater than the first one, so it's safe to assume `0` is success,
-                    // and any error is greater than 0.
-                    Err(e) => e as i32,
-                };
+                let value = self.add_associated_key(public_key, weight);
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
@@ -699,10 +717,7 @@ where
                         deserialize(&source_serialized).map_err(Error::BytesRepr)?;
                     source
                 };
-                let value = match self.context.remove_associated_key(public_key) {
-                    Ok(_) => 0,
-                    Err(e) => e as i32,
-                };
+                let value = self.remove_associated_key(public_key);
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
@@ -712,10 +727,7 @@ where
                 let (action_type_value, threshold_value): (u32, u8) = Args::parse(args)?;
                 let action_type = ActionType::from(action_type_value);
                 let threshold = Weight::new(threshold_value);
-                let value = match self.context.set_action_threshold(action_type, threshold) {
-                    Ok(_) => 0,
-                    Err(e) => e as i32,
-                };
+                let value = self.set_action_threshold(action_type, threshold);
                 Ok(Some(RuntimeValue::I32(value)))
             }
         }
