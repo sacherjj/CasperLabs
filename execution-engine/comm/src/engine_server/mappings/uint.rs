@@ -1,8 +1,11 @@
 //! Mappings for uint types (e.g. common::value::U512, ipc::RustBigInt)
 
-use super::{parse_error, state, ParsingError};
-use common::value::U512;
 use std::convert::TryFrom;
+
+use common::value::U512;
+
+use super::{parse_error, ParsingError};
+use engine_server::state;
 
 /// Map a result into the expected error for this module, while also
 /// converting the type into a Value. Use case: parsing U128, U256,
