@@ -248,6 +248,7 @@ message GenesisRequest {
 
 message GenesisResult {
     bytes poststate_hash = 1;
+    ExecutionEffect effect = 2;
 }
 
 message GenesisDeployError {

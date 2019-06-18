@@ -719,7 +719,11 @@ mod tests {
 
             let named_key_transform = Transform::AddKeys(once((uref_name.clone(), uref)).collect());
 
-            assert_eq!(*rc.effect().1.get(&base_key).unwrap(), named_key_transform);
+            assert_eq!(
+                *rc.effect().transforms.get(&base_key).unwrap(),
+                named_key_transform
+            );
+
             Ok(())
         });
 
@@ -807,7 +811,7 @@ mod tests {
             Contract::new(Vec::new(), once((uref_name, uref)).collect(), 1).into();
 
         assert_eq!(
-            *tc.borrow().effect().1.get(&contract_key).unwrap(),
+            *tc.borrow().effect().transforms.get(&contract_key).unwrap(),
             Transform::Write(updated_contract)
         );
     }
