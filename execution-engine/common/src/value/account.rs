@@ -47,6 +47,18 @@ pub struct ActionThresholds {
     key_management: Weight,
 }
 
+/// Represents an error that occurs during the change of a thresholds on an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in an out
+/// through FFI boundaries as a number.
+///
+/// The explicit numbering of the variants is done on purpose and whenever you plan to add
+/// new variant, you should always extend it, and add a variant that does not exist already.
+/// When adding new variants you should also remember to change
+/// `From<i32> for SetThresholdFailure`.
+///
+/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
+/// reviewed and tested.
 #[repr(i32)]
 #[derive(Debug, Fail, PartialEq, Eq)]
 pub enum SetThresholdFailure {
@@ -232,6 +244,19 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
     }
 }
 
+/// Represents an error that happens when trying to add a new associated key
+/// on an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in an out
+/// through FFI boundaries as a number.
+///
+/// The explicit numbering of the variants is done on purpose and whenever you plan to add
+/// new variant, you should always extend it, and add a variant that does not exist already.
+/// When adding new variants you should also remember to change
+/// `From<i32> for AddKeyFailure`.
+///
+/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
+/// reviewed and tested.
 #[derive(PartialEq, Eq, Debug)]
 #[repr(i32)]
 pub enum AddKeyFailure {
@@ -254,6 +279,19 @@ impl From<i32> for AddKeyFailure {
     }
 }
 
+/// Represents an error that happens when trying to remoev remove an associated key
+/// from an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in an out
+/// through FFI boundaries as a number.
+///
+/// The explicit numbering of the variants is done on purpose and whenever you plan to add
+/// new variant, you should always extend it, and add a variant that does not exist already.
+/// When adding new variants you should also remember to change
+/// `From<i32> for RemoveKeyFailure`.
+///
+/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
+/// reviewed and tested.
 #[derive(Fail, Debug, Eq, PartialEq)]
 #[repr(i32)]
 pub enum RemoveKeyFailure {
