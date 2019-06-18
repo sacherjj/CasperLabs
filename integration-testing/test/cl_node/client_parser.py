@@ -86,7 +86,7 @@ def parse(s):
 
 
 def parse_show_blocks(s):
-    blocks = re.split('^-+$', s)
+    blocks = re.split('^-+$', s, flags=re.MULTILINE)[:-1]
     return [parse(block) for block in blocks]
 
 
