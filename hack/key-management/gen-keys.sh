@@ -9,7 +9,7 @@ VERBOSE=false
 handle_exit() {
     LAST_COMMAND_STATUS=$?
     if [ "$LAST_COMMAND_STATUS" -ne 0 ]; then
-        if [ "$VERBOSE" == "true" ]; then
+        if [ "$VERBOSE" = "true" ]; then
             echo 'ERROR: script failed, see the command above' && exit 1
         else
             echo 'ERROR: script failed, you can re-run script with -v option to debug it' && exit "$LAST_COMMAND_STATUS"
