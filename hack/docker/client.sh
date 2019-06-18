@@ -17,18 +17,23 @@ set -e
 # ./client.sh node-0 propose
 
 if [ $# -lt 2 ]; then
-    echo "usage: ./client.sh <node-id> <command> [OPTION...]" && exit 1
+    echo "usage: ./client.sh <node-container-name> <command> [OPTION...]" && exit 1
 fi
+
+DIR=$(dirname $0)
 
 NODE=$1; shift
 CMD=$1; shift
+
+# Get the node-id for TLS.
+NODE_ID=$(cat $DIR/.casperlabs/$NODE/node-id)
 
 # cmd args
 function run_default() {
     docker run --rm \
         --network casperlabs \
         casperlabs/client:latest \
-        --host $NODE $CMD $@
+        --host $NODE --node-id $NODE_ID $CMD $@
 }
 
 # cmd vol args
@@ -39,7 +44,7 @@ function run_with_vol() {
         --volume $VOL:/data \
         --volume $PWD/keys:/keys \
         casperlabs/client:latest \
-        --host $NODE $CMD $@
+        --host $NODE --node-id $NODE_ID $CMD $@
 }
 
 
