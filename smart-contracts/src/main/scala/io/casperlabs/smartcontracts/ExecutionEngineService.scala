@@ -9,7 +9,9 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.ipc._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
@@ -33,12 +35,13 @@ import scala.util.Either
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
 
-class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smartcontracts] (
+class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
     addr: Path,
     maxMessageSize: Int,
     initialBonds: Map[Array[Byte], Long],
     stub: Stub
 ) extends ExecutionEngineService[F] {
+  import GrpcExecutionEngineService.EngineMetricsSource
 
   private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
@@ -68,19 +71,34 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
       deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]] =
-    sendMessage(ExecRequest(prestate, deploys, Some(protocolVersion)), _.exec) {
-      _.result match {
-        case ExecResponse.Result.Success(ExecResult(deployResults)) =>
-          Right(deployResults)
-        //TODO: Capture errors better than just as a string
-        case ExecResponse.Result.Empty =>
-          Left(new SmartContractEngineError("empty response"))
-        case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
-          Left(
-            new SmartContractEngineError(s"Missing states: ${Base16.encode(missing.toByteArray)}")
+    for {
+      result <- sendMessage(ExecRequest(prestate, deploys, Some(protocolVersion)), _.exec) {
+                 _.result match {
+                   case ExecResponse.Result.Success(ExecResult(deployResults)) =>
+                     Right(deployResults)
+                   //TODO: Capture errors better than just as a string
+                   case ExecResponse.Result.Empty =>
+                     Left(new SmartContractEngineError("empty response"))
+                   case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
+                     Left(
+                       new SmartContractEngineError(
+                         s"Missing states: ${Base16.encode(missing.toByteArray)}"
+                       )
+                     )
+                 }
+               }
+      _ <- result.fold(
+            _ => ().pure[F],
+            deployResults => {
+              val gasSpent =
+                deployResults.foldLeft(0L)((a, d) => a + d.value.executionResult.fold(0L)(_.cost))
+              Metrics[F].incrementCounter(
+                "gas_spent",
+                gasSpent
+              )
+            }
           )
-      }
-    }
+    } yield result
 
   override def commit(
       prestate: ByteString,
@@ -145,10 +163,14 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
 
 object ExecutionEngineService {
   type Stub = IpcGrpcMonix.ExecutionEngineServiceStub
+
 }
 
 object GrpcExecutionEngineService {
-  def apply[F[_]: Sync: Log: TaskLift](
+  private implicit val EngineMetricsSource: Metrics.Source =
+    Metrics.Source(Metrics.BaseSource, "engine")
+
+  def apply[F[_]: Sync: Log: TaskLift: Metrics](
       addr: Path,
       maxMessageSize: Int,
       initBonds: Map[Array[Byte], Long]

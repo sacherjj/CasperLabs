@@ -14,6 +14,8 @@ message Value {
 		NamedKey named_key = 8;
 		BigInt big_int = 9;
 		Key key = 10;
+		Unit unit = 11;
+		uint64 long_value = 12;
 	}
 }
 
@@ -28,7 +30,7 @@ message StringList {
 message BigInt {
 	string value = 1;
 	// Number of bits: 128 | 256 | 512.
-	uint32 big_width = 2;
+	uint32 bit_width = 2;
 }
 
 message Key {
@@ -51,6 +53,8 @@ message Key {
 		bytes uref = 1;
 		AccessRights access_rights = 2;
 
+        // NOTE: Numeric values correspond to values of the domain
+        // AccessRights struct. DO NOT CHANGE.
 		enum AccessRights {
 			UNKNOWN        = 0;
 			READ           = 1;
@@ -77,16 +81,17 @@ message NamedKey {
 message Contract {
 	bytes body = 1;
 	repeated NamedKey known_urefs = 2;
-	uint64 protocol_version = 3;
+    ProtocolVersion protocol_version = 3;
 }
 
 message Account {
 	bytes public_key = 1;
 	uint64 nonce = 2;
-	repeated NamedKey known_urefs = 3;
-	repeated AssociatedKey associated_keys = 4;
-	ActionThresholds action_thresholds = 5;
-	AccountActivity account_activity = 6;
+    Key.URef purse_id = 3;
+	repeated NamedKey known_urefs = 4;
+	repeated AssociatedKey associated_keys = 5;
+	ActionThresholds action_thresholds = 6;
+	AccountActivity account_activity = 7;
 
 	message AssociatedKey {
 		bytes public_key = 1;
@@ -101,4 +106,10 @@ message Account {
 		uint64 deployment_last_used = 2;
 		uint64 inactivity_period_limit = 3;
 	}
+}
+
+message Unit {}
+
+message ProtocolVersion {
+    uint64 value = 1;
 }

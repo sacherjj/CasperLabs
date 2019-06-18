@@ -12,6 +12,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.ipc._
+import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.Log
@@ -306,7 +307,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
           Some(ApprovedBlockCandidate(Some(BlockMessage()), 1)),
           List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
         )
-      val key            = Key(Key.KeyInstance.Hash(KeyHash()))
+      val key            = Key(Key.Value.Hash(Key.Hash()))
       val transform      = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
       val transforEntrys = Seq(TransformEntry(Some(key), Some(transform)))
 

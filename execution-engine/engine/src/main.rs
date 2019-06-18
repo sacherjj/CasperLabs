@@ -4,19 +4,20 @@ extern crate clap;
 extern crate lazy_static;
 
 // internal dependencies
+extern crate binascii;
 extern crate common;
 extern crate execution_engine;
 extern crate shared;
 extern crate storage;
 extern crate wasm_prep;
 
+use clap::{App, Arg, ArgMatches};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter::Iterator;
-
-use clap::{App, Arg, ArgMatches};
+use std::str;
 
 use common::key::Key;
 use execution_engine::engine_state::error::RootNotFound;
@@ -175,13 +176,16 @@ fn main() {
     }
 
     let account_addr = {
-        let mut address = [48u8; 32];
-        matches
-            .value_of("address")
-            .map(str::as_bytes)
-            .map(|bytes| address.copy_from_slice(bytes))
-            .expect("Error when parsing address");
-        Key::Account(address)
+        let address_hex = matches.value_of("address").expect("Unable to get address");
+        if address_hex.len() != 64 {
+            panic!("Provided address should be exactly 64 bytes long");
+        }
+        // Into fixed size array of 32 bytes
+        let mut dest = [0; 32];
+        binascii::hex2bin(address_hex.as_bytes(), &mut dest)
+            .ok()
+            .expect("Unable to parse address");
+        Key::Account(dest)
     };
 
     let gas_limit: u64 = matches

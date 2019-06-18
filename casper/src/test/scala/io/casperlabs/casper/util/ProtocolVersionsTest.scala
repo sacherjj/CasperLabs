@@ -1,7 +1,7 @@
 package io.casperlabs.casper.util
 
 import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
-import io.casperlabs.ipc.ProtocolVersion
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import org.scalatest.{Assertion, Matchers, WordSpec}
 
 class ProtocolVersionsTest extends WordSpec with Matchers {
