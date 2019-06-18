@@ -8,7 +8,7 @@ set -eo pipefail
 if [[ "$1" == /* ]] || [[ "$1" == ~* ]]; then
     OUTPUT_DIR="$1"
 else
-    OUTPUT_DIR="$(PWD)/$1"
+    OUTPUT_DIR="$PWD/$1"
 fi
 
 if [[ ! -d "$OUTPUT_DIR" ]]; then
@@ -19,8 +19,8 @@ fi
 
 shift
 
-docker pull casperlabs/keys-generator:latest || true
-docker run --rm -it -v "$OUTPUT_DIR":/keys casperlabs/keys-generator /keys
+docker pull casperlabs/key-generator:latest || true
+docker run --rm -it -v "$OUTPUT_DIR":/keys casperlabs/key-generator /keys
 
 if [[ "$1" == "--test" ]]; then
     if [[ -f "$OUTPUT_DIR/node-id" ]] && \
