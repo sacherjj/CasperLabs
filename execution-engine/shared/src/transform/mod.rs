@@ -98,15 +98,13 @@ where
     }
 }
 
-fn u64_wrapping_add<T>(i: T, j: u64) -> T
-where
-    T: WrappingAdd + WrappingSub + From<u64>,
-{
-    if j > 0 {
-        let j_unsigned = j.to_u64().unwrap();
-        i.wrapping_add(&j_unsigned.into())
+fn u64_wrapping_addition(i: u64, j: i32) -> i32 {
+    let i32_max_as_u64 = i32::max_value().to_u64().unwrap();
+    if i > i32_max_as_u64 {
+        let remainder = (i % i32_max_as_u64).to_i32().unwrap();
+        j.wrapping_add(remainder)
     } else {
-        i.wrapping_sub(&j.into())
+        j.wrapping_add(i.to_i32().unwrap())
     }
 }
 
@@ -147,7 +145,7 @@ impl Transform {
                 }
             },
             AddUInt64(i) => match v {
-                Value::Int32(j) => Ok(Value::UInt64(i32_wrapping_addition(i, j))),
+                Value::Int32(j) => Ok(Value::Int32(u64_wrapping_addition(i, j))),
                 Value::UInt64(j) => Ok(Value::UInt64(i.wrapping_add(j))),
                 Value::UInt128(_) => wrapping_addition(i, v, "UInt128"),
                 Value::UInt256(_) => wrapping_addition(i, v, "UInt256"),
@@ -251,11 +249,11 @@ impl Add for Transform {
                 ),
             },
             (AddUInt64(i), b) => match b {
-                AddInt32(j) => AddInt32(j.wrapping_add(i.to_i32().unwrap())),
+                AddInt32(j) => AddInt32(u64_wrapping_addition(i, j)),
                 AddUInt64(j) => AddUInt64(i.wrapping_add(j)),
-                AddUInt128(j) => AddUInt128(u64_wrapping_add(j, i)),
-                AddUInt256(j) => AddUInt256(u64_wrapping_add(j, i)),
-                AddUInt512(j) => AddUInt512(u64_wrapping_add(j, i)),
+                AddUInt128(j) => AddUInt128(j.wrapping_add(&i.into())),
+                AddUInt256(j) => AddUInt256(j.wrapping_add(&i.into())),
+                AddUInt512(j) => AddUInt512(j.wrapping_add(&i.into())),
                 other => Failure(
                     TypeMismatch {
                         expected: "AddUInt64".to_owned(),
@@ -391,5 +389,22 @@ mod tests {
     #[test]
     fn u512_overflow() {
         uint_overflow_test::<U512>();
+    }
+
+    use num::ToPrimitive;
+    #[test]
+    fn u64_to_i32_addition() {
+        let i32_max_as_u64 = i32::max_value().to_u64().unwrap();
+        assert_eq!(
+            i32::max_value(),
+            super::u64_wrapping_addition(i32_max_as_u64, 0)
+        );
+
+        // Plus 1 is for "wrapping" the number (going from i32::max to i32::min).
+        let base_u64 = (5 * i32_max_as_u64) + 100 + 1;
+        assert_eq!(
+            i32::min_value() + 100,
+            super::u64_wrapping_addition(base_u64, i32::max_value())
+        )
     }
 }
