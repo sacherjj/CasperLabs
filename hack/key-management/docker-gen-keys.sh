@@ -22,10 +22,10 @@ shift
 
 docker pull casperlabs/key-generator:latest || true
 
-if [[ -z "$DRONE" ]]; then
-    docker run --rm -it -v "$OUTPUT_DIR":/keys casperlabs/key-generator /keys
+if [[ -z "$DRONE_BUILD_NUMBER" ]]; then
+    docker run --rm -it -v "$OUTPUT_DIR":/keys casperlabs/key-generator:latest /keys
 else
-    docker run --rm -v "$OUTPUT_DIR":/keys casperlabs/key-generator /keys
+    docker run --rm -v "$OUTPUT_DIR":/keys casperlabs/key-generator:DRONE-"$DRONE_BUILD_NUMBER" /keys
 fi
 
 
