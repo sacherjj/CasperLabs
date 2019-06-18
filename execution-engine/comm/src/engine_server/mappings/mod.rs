@@ -667,18 +667,20 @@ impl From<(common::key::Key, transform::Transform)> for super::ipc::TransformEnt
 impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
     fn from(ee: ExecutionEffect) -> super::ipc::ExecutionEffect {
         let mut eff = super::ipc::ExecutionEffect::new();
-        let ipc_ops: Vec<super::ipc::OpEntry> =
-            ee.0.iter()
-                .map(|(k, o)| {
-                    let mut op_entry = super::ipc::OpEntry::new();
-                    let ipc_key = k.into();
-                    let ipc_op = o.clone().into();
-                    op_entry.set_key(ipc_key);
-                    op_entry.set_operation(ipc_op);
-                    op_entry
-                })
-                .collect();
-        let ipc_tran: Vec<super::ipc::TransformEntry> = ee.1.into_iter().map(Into::into).collect();
+        let ipc_ops: Vec<super::ipc::OpEntry> = ee
+            .ops
+            .iter()
+            .map(|(k, o)| {
+                let mut op_entry = super::ipc::OpEntry::new();
+                let ipc_key = k.into();
+                let ipc_op = o.clone().into();
+                op_entry.set_key(ipc_key);
+                op_entry.set_operation(ipc_op);
+                op_entry
+            })
+            .collect();
+        let ipc_tran: Vec<super::ipc::TransformEntry> =
+            ee.transforms.into_iter().map(Into::into).collect();
         eff.set_op_map(protobuf::RepeatedField::from_vec(ipc_ops));
         eff.set_transform_map(protobuf::RepeatedField::from_vec(ipc_tran));
         eff
@@ -973,7 +975,7 @@ mod tests {
             tmp_map
         };
         let execution_effect: ExecutionEffect =
-            ExecutionEffect(HashMap::new(), input_transforms.clone());
+            ExecutionEffect::new(HashMap::new(), input_transforms.clone());
         let cost: u64 = 123;
         let execution_result: ExecutionResult = ExecutionResult::Success {
             effect: execution_effect,
