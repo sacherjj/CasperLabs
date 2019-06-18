@@ -20,6 +20,5 @@ pub extern "C" fn call() {
     //create map of references for stored contract
     let revert_test_urefs: BTreeMap<String, Key> = BTreeMap::new();
 
-    let _hash = store_function("revert_test_ext", revert_test_urefs);
-    add_uref("revert_test", &_hash.into());
+    store_function("revert_test_ext", revert_test_urefs);
 }
