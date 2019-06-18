@@ -195,12 +195,13 @@ pipeline:
 
   docker-keys-gen-test-bors:
     commands:
-      - "cd hack/key-management"
-      - "mkdir test"
-      - "./docker-gen-keys.sh test --test"
+      - "mkdir /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+      - "./hack/key-management/docker-gen-keys.sh /tmp/keys-DRONE-${DRONE_BUILD_NUMBER} --test"
+      - "rm -rf /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
     image: "casperlabs/buildenv:latest"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/tmp:/tmp"
     when:
       branch:
         - staging
