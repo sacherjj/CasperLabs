@@ -14,20 +14,7 @@ def client(node):
 
 
 # TODO: At the moment it seems EE generates function pointer hash as if nonce was 0.
-# This may be a bug in EE, we need to check it.
-# For now I leave the function_pointer and TABLE_FROM_MICHAL, it should be removed once
-# we address the question if EE calculates the hash correctly.
-
-# pk=3030303030303030303030303030303030303030303030303030303030303030
-def function_pointer(pk = bytes([48]*32), nonce=1, function_counter=0):
-    assert nonce <= 255
-    assert function_counter <= 255
-
-    h = blake2b(digest_size=32)
-    h.update(pk)
-    h.update(bytes([nonce, 0, 0, 0, 0, 0, 0, 0,]))
-    h.update(bytes([function_counter, 0, 0, 0,]))
-    return h.digest()
+# This is a bug: https://github.com/CasperLabs/CasperLabs/pull/665#discussion_r294411087 
 
 TABLE_FROM_MICHAL = """
 nonce=0 counter=0 hash=[164, 102, 153, 51, 236, 214, 169, 167, 126, 44, 250, 247, 179, 214, 203, 229, 239, 69, 145, 25, 5, 153, 113, 55, 255, 188, 176, 201, 7, 4, 42, 100]                                       
@@ -70,20 +57,21 @@ def test_revert(client, node):
 
     assert not r.is_error
     assert r.error_message == ''
-    assert r.cost == 21540
 
     deploy_hash = r.deploy.deploy_hash
     r = client.show_deploy(deploy_hash)
     assert r.deploy.deploy_hash == deploy_hash
 
+    # This contract calls another contract that calls revert(1) 
     block_hash = node.deploy_and_propose(session_contract = 'test_revert_call.wasm', payment_contract = 'test_revert_call.wasm')
 
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
     assert r.error_message == "Exit code: 1"
 
+    # This contract calls revert(2) 
     block_hash = node.deploy_and_propose(session_contract = 'test_direct_revert_define.wasm',
                                          payment_contract = 'test_direct_revert_define.wasm')
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
-    assert r.error_message == "Exit code: 3"
+    assert r.error_message == "Exit code: 2"
