@@ -6,11 +6,12 @@ Parser of the gRPC message dump for human reading as produced by scalapb and pri
 
 class MaybeList(list):
     def __getattr__(self, name):
-        assert len(self) == 1
+        if len(self) != 1:
+            raise Exception(f"Attempt to access attribute '{name}' of a list of length {len(self)}")
         return getattr(self[0], name)
 
 
-class Bag:
+class PropertyBag:
     def __init__(self, d):
         self.d = d
 
@@ -41,10 +42,11 @@ def value(s, line_number):
                 return (True, line_number)
             elif s == 'false':
                 return (False, line_number)
-            else:
-                assert s[0] == '"' and s[-1] == '"'
+            elif s[0] == '"' and s[-1] == '"':
                 return (s[1:-1], line_number)
-    
+            else:
+                raise Exception(f'Could not parse "{s}" at line {line_number}')
+
 
 def lexer(s):
     for line_number, line in enumerate((l.strip() for l in s.splitlines()), 1):
@@ -67,15 +69,15 @@ def _parse(tokens):
 
     for token, line_number in tokens:
         if token == '}':
-            break
+            return PropertyBag(dict(d))
 
-        v, line_number = next(tokens)
-        if v == '{':
+        next_token, line_number = next(tokens)
+        if next_token == '{':
             d[token].append(_parse(tokens))
         else:
-            d[token] = v
+            d[token] = next_token
 
-    return Bag(dict(d))
+    raise Exception("Missing closing bracket '}'")
 
  
 def parse(s):
@@ -83,8 +85,8 @@ def parse(s):
 
 
 def parse_show_blocks(s):
-    bag = parse(s)
-    return bag.summary
+    blocks = s.split('-----------------------------------------------------')[:-1]
+    return [parse(block) for block in blocks]
     
 
 def parse_show_block(s):
