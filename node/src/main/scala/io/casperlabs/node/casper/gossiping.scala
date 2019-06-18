@@ -356,7 +356,6 @@ package object gossiping {
         for {
           _ <- Log[F].info("Taking bonds from file.")
           bonds <- Genesis.getBonds[F](
-                    conf.casper.genesisPath,
                     conf.casper.bondsFile,
                     conf.casper.numValidators
                   )

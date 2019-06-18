@@ -83,6 +83,9 @@ class NodeRuntime private[node] (
     val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
 
     rpConfState >>= (_.runState { implicit state =>
+      val metrics = diagnostics.effects.metrics[Task]
+      implicit val metricsEff: Metrics[Effect] =
+        Metrics.eitherT[CommError, Task](Monad[Task], metrics)
       val resources = for {
         implicit0(executionEngineService: ExecutionEngineService[Effect]) <- GrpcExecutionEngineService[
                                                                               Effect
@@ -91,9 +94,6 @@ class NodeRuntime private[node] (
                                                                               conf.server.maxMessageSize,
                                                                               initBonds = Map.empty
                                                                             )
-
-        metrics                     = diagnostics.effects.metrics[Task]
-        metricsEff: Metrics[Effect] = Metrics.eitherT[CommError, Task](Monad[Task], metrics)
 
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
