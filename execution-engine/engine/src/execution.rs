@@ -659,7 +659,7 @@ where
                 Err(self.revert(status))
             }
 
-            FunctionIndex::AddKeyFuncIndex => {
+            FunctionIndex::AddAssociatedKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = weight of the key
                 let (public_key_ptr, public_key_size, weight_value): (u32, u32, u8) =
@@ -686,7 +686,7 @@ where
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
-            FunctionIndex::RemoveKeyFuncIndex => {
+            FunctionIndex::RemoveAssociatedKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = size of serialized bytes of public key
                 let (public_key_ptr, public_key_size): (u32, u32) = Args::parse(args)?;
@@ -706,7 +706,7 @@ where
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
-            FunctionIndex::SetThresholdFuncIndex => {
+            FunctionIndex::SetActionThresholdFuncIndex => {
                 // args(0) = action type
                 // args(1) = new threshold
                 let (action_type_value, threshold_value): (u32, u8) = Args::parse(args)?;

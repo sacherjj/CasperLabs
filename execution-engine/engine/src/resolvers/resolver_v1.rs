@@ -125,17 +125,17 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::RevertFuncIndex.into(),
             ),
-            "add_key" => FuncInstance::alloc_host(
+            "add_associated_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
-                FunctionIndex::AddKeyFuncIndex.into(),
+                FunctionIndex::AddAssociatedKeyFuncIndex.into(),
             ),
-            "remove_key" => FuncInstance::alloc_host(
+            "remove_associated_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                FunctionIndex::RemoveKeyFuncIndex.into(),
+                FunctionIndex::RemoveAssociatedKeyFuncIndex.into(),
             ),
-            "set_threshold" => FuncInstance::alloc_host(
+            "set_action_threshold" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                FunctionIndex::SetThresholdFuncIndex.into(),
+                FunctionIndex::SetActionThresholdFuncIndex.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(
