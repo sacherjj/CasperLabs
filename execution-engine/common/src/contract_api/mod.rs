@@ -306,11 +306,9 @@ pub fn is_valid<T: Into<Value>>(t: T) -> bool {
 
 /// Adds a public key with associated weight to an account.
 pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), AddKeyFailure> {
-    let (public_key_ptr, public_key_size, _bytes) = to_ptr(&public_key);
+    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
     // Cast of u8 (weight) into i32 is assumed to be always safe
-    let result = unsafe {
-        ext_ffi::add_associated_key(public_key_ptr, public_key_size, weight.value().into())
-    };
+    let result = unsafe { ext_ffi::add_associated_key(public_key_ptr, weight.value().into()) };
     // Translates FFI
     match result {
         d if d == 0 => Ok(()),
@@ -320,8 +318,8 @@ pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), A
 
 /// Removes a public key from associated keys on an account
 pub fn remove_associated_key(public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
-    let (public_key_ptr, public_key_size, _bytes) = to_ptr(&public_key);
-    let result = unsafe { ext_ffi::remove_associated_key(public_key_ptr, public_key_size) };
+    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
+    let result = unsafe { ext_ffi::remove_associated_key(public_key_ptr) };
     match result {
         d if d == 0 => Ok(()),
         d => Err(RemoveKeyFailure::from(d)),

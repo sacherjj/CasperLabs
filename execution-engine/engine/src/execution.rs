@@ -17,10 +17,10 @@ use wasmi::{
     ModuleRef, RuntimeArgs, RuntimeValue, Trap,
 };
 
-use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
+use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE};
 use common::key::Key;
 use common::uref::AccessRights;
-use common::value::account::{ActionType, PublicKey, Weight};
+use common::value::account::{ActionType, PublicKey, Weight, PUBLIC_KEY_SIZE};
 use common::value::Value;
 use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
@@ -687,12 +687,11 @@ where
             FunctionIndex::AddAssociatedKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = weight of the key
-                let (public_key_ptr, public_key_size, weight_value): (u32, u32, u8) =
-                    Args::parse(args)?;
+                let (public_key_ptr, weight_value): (u32, u8) = Args::parse(args)?;
                 let public_key = {
                     // Public key as serialized bytes
                     let source_serialized =
-                        self.bytes_from_mem(public_key_ptr, public_key_size as usize)?;
+                        self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
                     // Public key deserialized
                     let source: PublicKey =
                         deserialize(&source_serialized).map_err(Error::BytesRepr)?;
@@ -707,11 +706,11 @@ where
             FunctionIndex::RemoveAssociatedKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = size of serialized bytes of public key
-                let (public_key_ptr, public_key_size): (u32, u32) = Args::parse(args)?;
+                let public_key_ptr: u32 = Args::parse(args)?;
                 let public_key = {
                     // Public key as serialized bytes
                     let source_serialized =
-                        self.bytes_from_mem(public_key_ptr, public_key_size as usize)?;
+                        self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
                     // Public key deserialized
                     let source: PublicKey =
                         deserialize(&source_serialized).map_err(Error::BytesRepr)?;
@@ -1056,6 +1055,7 @@ impl Executor<Module> for WasmiExecutor {
         }
         // Take updated effects and pass it to caller as a successful result
         let effect = tc.borrow_mut().effect();
+        println!("Effect {:?}", effect);
         ExecutionResult::Success { effect, cost }
     }
 }
