@@ -3,12 +3,12 @@
 The open-source CasperLabs project is building a decentralized, economic, censorship-resistant, public compute infrastructure and blockchain. It will host and execute programs popularly referred to as “smart contracts”. It will be trustworthy, scalable, concurrent, with proof-of-stake consensus and content delivery.
 
 ## Download
-Check our public repositories with prebuilt binaries: 
+Check our public repositories with prebuilt binaries:
 
   http://repo.casperlabs.io/casperlabs/repo/
-  
+
   https://dl.bintray.com/casperlabs/debian/
-  
+
   https://dl.bintray.com/casperlabs/rpm/
 
 ## Installing from debian repository
@@ -33,7 +33,7 @@ Please refer to the [Developer guide](DEVELOPER.md) for information on running f
 
 ### Running from Docker
 
-Please refer to the [docker guide](docker/README.md) for information on running from docker.
+Please refer to the [docker guide](hack/docker/README.md) for information on running from docker.
 
 ### Running from the tar-ball
 

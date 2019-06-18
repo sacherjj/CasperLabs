@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
-set -euo pipefail
+
+#set -o pipefail
+set -eu
 trap 'handle_exit'  0
 
 VERBOSE=false
@@ -41,7 +43,7 @@ handle_exit() {
 #   --casper-validator-private-key-path validator-private.pem
 #   --tls-key node.key.pem
 #   --tls-certificate node.certificate.pem
-if [ "$1" == "-v" ]; then
+if [ "$1" = "-v" ]; then
     VERBOSE=true
     set -v; shift
 fi
