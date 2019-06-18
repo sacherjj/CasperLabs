@@ -4,6 +4,7 @@ set -eo pipefail
 # Generates all necessary keys for a node using Docker image
 # Usage:
 # ./docker-gen-keys.sh <directory where to put keys> [--test]
+#   --test  tests if all the required keys have been created
 
 if [[ "$1" == /* ]] || [[ "$1" == ~* ]]; then
     OUTPUT_DIR="$1"
@@ -20,7 +21,13 @@ fi
 shift
 
 docker pull casperlabs/key-generator:latest || true
-docker run --rm -it -v "$OUTPUT_DIR":/keys casperlabs/key-generator /keys
+
+if [[ -z "$DRONE" ]]; then
+    docker run --rm -it -v "$OUTPUT_DIR":/keys casperlabs/key-generator /keys
+else
+    docker run --rm -v "$OUTPUT_DIR":/keys casperlabs/key-generator /keys
+fi
+
 
 if [[ "$1" == "--test" ]]; then
     if [[ -f "$OUTPUT_DIR/node-id" ]] && \
