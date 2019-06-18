@@ -50,9 +50,9 @@ pub struct ActionThresholds {
 #[repr(i32)]
 #[derive(Debug, Fail, PartialEq, Eq)]
 pub enum SetThresholdFailure {
-    #[fail(display = "New threshold should be lower or equal than key management threshold")]
-    KeyManagementThresholdError = 1,
     #[fail(display = "New threshold should be lower or equal than deployment threshold")]
+    KeyManagementThresholdError = 1,
+    #[fail(display = "New threshold should be lower or equal than key management threshold")]
     DeploymentThresholdError = 2,
     #[fail(display = "Unable to set action threshold due to insufficient permissions")]
     PermissionDeniedError = 3,
@@ -85,7 +85,7 @@ impl ActionThresholds {
         new_threshold: Weight,
     ) -> Result<(), SetThresholdFailure> {
         if new_threshold > self.key_management {
-            Err(SetThresholdFailure::KeyManagementThresholdError)
+            Err(SetThresholdFailure::DeploymentThresholdError)
         } else {
             self.deployment = new_threshold;
             Ok(())
@@ -98,7 +98,7 @@ impl ActionThresholds {
         new_threshold: Weight,
     ) -> Result<(), SetThresholdFailure> {
         if self.deployment > new_threshold {
-            Err(SetThresholdFailure::DeploymentThresholdError)
+            Err(SetThresholdFailure::KeyManagementThresholdError)
         } else {
             self.key_management = new_threshold;
             Ok(())
