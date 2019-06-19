@@ -32,8 +32,6 @@ pub struct RuntimeContext<'a, R> {
     known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
     // Original account for read only tasks taken before execution
     account: Cow<'a, Account>,
-    // Account that is being modified during the execution and reflects current state
-    account_dirty: Cow<'a, Account>,
     args: Vec<Vec<u8>>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -57,7 +55,6 @@ where
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
         account: Cow<'a, Account>,
-        account_dirty: Cow<'a, Account>,
         base_key: Key,
         gas_limit: u64,
         gas_counter: u64,
@@ -72,7 +69,6 @@ where
             known_urefs,
             args,
             account,
-            account_dirty,
             base_key,
             gas_limit,
             gas_counter,
@@ -99,16 +95,8 @@ where
         self.known_urefs.extend(urefs_map);
     }
 
-    pub fn account(&self) -> &Cow<'a, Account> {
-        &self.account
-    }
-
-    pub fn account_dirty(&self) -> &Cow<'a, Account> {
-        &self.account_dirty
-    }
-
-    pub fn take_account_dirty(self) -> Cow<'a, Account> {
-        self.account_dirty
+    pub fn account(&self) -> Cow<'a, Account> {
+        Cow::clone(&self.account)
     }
 
     pub fn args(&self) -> &Vec<Vec<u8>> {
@@ -393,48 +381,132 @@ where
         }
     }
 
+    // fn update_account<T, E>(key: Key, update_func: impl Fn(&mut Account) -> Result<T, E>) {
+
+    // }
+
     pub fn add_associated_key(
         &mut self,
         public_key: PublicKey,
         weight: Weight,
-    ) -> Result<(), AddKeyFailure> {
+    ) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key().as_account().unwrap() != self.account().pub_key() {
+        if self.base_key().as_account().unwrap() != *self.account().pub_key() {
             // Exit early with error to avoid mutations
-            return Err(AddKeyFailure::PermissionDenied);
+            return Err(AddKeyFailure::PermissionDenied.into());
         }
-        // Performs clone-on-write if the account wasn't mutated already
-        self.account_dirty
-            .to_mut()
+
+        // Converts an account's public key into a URef
+        let key = Key::Account(*self.account().pub_key());
+
+        // Take an account out of the global state
+        let mut account = match self.read_gs(&key)? {
+            None => return Err(Error::KeyNotFound(key)),
+            Some(Value::Account(account)) => account,
+            Some(_) => {
+                return Err(Error::FunctionNotFound(format!(
+                    "Value at {:?} is not an account",
+                    key
+                )))
+            }
+        };
+
+        // Exit early in case of error without updating global state
+        account
             .add_associated_key(public_key, weight)
+            .map_err(Error::from)?;
+
+        let validated_uref = Validated::new(key, Validated::valid)?;
+        let validated_value =
+            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+
+        self.state
+            .borrow_mut()
+            .write(validated_uref, validated_value);
+
+        Ok(())
     }
 
-    pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
+    pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key().as_account().unwrap() != self.account().pub_key() {
+        if self.base_key().as_account().unwrap() != *self.account().pub_key() {
             // Exit early with error to avoid mutations
-            return Err(RemoveKeyFailure::PermissionDenied);
+            return Err(RemoveKeyFailure::PermissionDenied.into());
         }
-        // Performs clone-on-write if the account wasn't mutated already
-        self.account_dirty
-            .to_mut()
+
+        // Converts an account's public key into a URef
+        let key = Key::Account(*self.account().pub_key());
+
+        // Take an account out of the global state
+        let mut account = match self.read_gs(&key)? {
+            None => return Err(Error::KeyNotFound(key)),
+            Some(Value::Account(account)) => account,
+            Some(_) => {
+                return Err(Error::FunctionNotFound(format!(
+                    "Value at {:?} is not an account",
+                    key
+                )))
+            }
+        };
+
+        // Exit early in case of error without updating global state
+        account
             .remove_associated_key(public_key)
+            .map_err(Error::from)?;
+
+        let validated_uref = Validated::new(key, Validated::valid)?;
+        let validated_value =
+            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+
+        self.state
+            .borrow_mut()
+            .write(validated_uref, validated_value);
+
+        Ok(())
+
+        //// Performs clone-on-write if the account wasn't mutated already
     }
 
     pub fn set_action_threshold(
         &mut self,
         action_type: ActionType,
         threshold: Weight,
-    ) -> Result<(), SetThresholdFailure> {
+    ) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key().as_account().unwrap() != self.account().pub_key() {
+        if self.base_key().as_account().unwrap() != *self.account().pub_key() {
             // Exit early with error to avoid mutations
-            return Err(SetThresholdFailure::PermissionDeniedError);
+            return Err(SetThresholdFailure::PermissionDeniedError.into());
         }
-        // Performs clone-on-write if the account wasn't mutated already
-        self.account_dirty
-            .to_mut()
+
+        // Converts an account's public key into a URef
+        let key = Key::Account(*self.account().pub_key());
+
+        // Take an account out of the global state
+        let mut account = match self.read_gs(&key)? {
+            None => return Err(Error::KeyNotFound(key)),
+            Some(Value::Account(account)) => account,
+            Some(_) => {
+                return Err(Error::FunctionNotFound(format!(
+                    "Value at {:?} is not an account",
+                    key
+                )))
+            }
+        };
+
+        // Exit early in case of error without updating global state
+        account
             .set_action_threshold(action_type, threshold)
+            .map_err(Error::from)?;
+
+        let validated_uref = Validated::new(key, Validated::valid)?;
+        let validated_value =
+            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+
+        self.state
+            .borrow_mut()
+            .write(validated_uref, validated_value);
+
+        Ok(())
     }
 }
 
@@ -551,7 +623,6 @@ mod tests {
             known_urefs,
             Vec::new(),
             Cow::clone(&account),
-            account,
             base_key,
             0,
             0,
@@ -847,7 +918,6 @@ mod tests {
             known_urefs,
             Vec::new(),
             Cow::Borrowed(&account),
-            Cow::Borrowed(&account),
             contract_key,
             0,
             0,
@@ -898,7 +968,6 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            Cow::Borrowed(&account),
             Cow::Borrowed(&account),
             other_contract_key,
             0,
@@ -1062,27 +1131,23 @@ mod tests {
             let public_key = PublicKey::new([42; 32]);
             let weight = Weight::new(255);
 
-            // Verify that account didn't mutate before
-            if let Cow::Owned(_) = runtime_context.account_dirty() {
-                panic!("account_dirty mutated before the test");
-            }
-
             // Add a key (this doesn't check for all invariants as `add_key`
             // is already tested in different place)
             runtime_context
                 .add_associated_key(public_key, weight)
                 .expect("Unable to add key");
 
-            let acct_dirty = Cow::clone(&runtime_context.account_dirty());
-            let mutated_account = match acct_dirty {
-                Cow::Owned(mutated_account) => mutated_account,
-                Cow::Borrowed(_) => panic!("account_dirty didn't mutate during the test"),
+            let effect = runtime_context.effect();
+            let transform = effect.1.get(&runtime_context.base_key()).unwrap();
+            let account = match transform {
+                Transform::Write(Value::Account(account)) => account,
+                _ => panic!("Invalid transform operation found"),
             };
-            let weight = mutated_account
+            // println!("account {:?}", account);
+            account
                 .associated_keys()
                 .get(&public_key)
-                .expect("Unable to find added key");
-            assert_eq!(weight.value(), 255);
+                .expect("Public key wasn't added to associated keys");
 
             // Remove a key that was already added
             runtime_context
@@ -1090,10 +1155,16 @@ mod tests {
                 .expect("Unable to remove key");
 
             // Verify
-            let acct_dirty = Cow::clone(&runtime_context.account_dirty());
-            assert!(acct_dirty.associated_keys().get(&public_key).is_none());
+            let effect = runtime_context.effect();
+            let transform = effect.1.get(&runtime_context.base_key()).unwrap();
+            let account = match transform {
+                Transform::Write(Value::Account(account)) => account,
+                _ => panic!("Invalid transform operation found"),
+            };
 
-            // Remove a key that was already added
+            assert!(account.associated_keys().get(&public_key).is_none());
+
+            // Remove a key that was already remoevd
             runtime_context
                 .remove_associated_key(public_key)
                 .expect_err("A non existing key was unexpectedly removed again");
@@ -1109,11 +1180,6 @@ mod tests {
         // making sure `account_dirty` mutated
         let known_urefs = HashMap::new();
         let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
-            // Verify that account didn't mutate before
-            if let Cow::Owned(_) = runtime_context.account_dirty() {
-                panic!("account_dirty mutated before the test");
-            }
-
             runtime_context
                 .set_action_threshold(ActionType::KeyManagement, Weight::new(253))
                 .expect("Unable to set action threshold KeyManagement");
@@ -1121,10 +1187,11 @@ mod tests {
                 .set_action_threshold(ActionType::Deployment, Weight::new(252))
                 .expect("Unable to set action threshold Deployment");
 
-            // let acct_dirty = Cow::clone(&));
-            let mutated_account = match runtime_context.account_dirty().clone() {
-                Cow::Owned(mutated_account) => mutated_account,
-                Cow::Borrowed(_) => panic!("account_dirty didn't mutate during the test"),
+            let effect = runtime_context.effect();
+            let transform = effect.1.get(&runtime_context.base_key()).unwrap();
+            let mutated_account = match transform {
+                Transform::Write(Value::Account(account)) => account,
+                _ => panic!("Invalid transform operation found"),
             };
 
             assert_eq!(
@@ -1153,11 +1220,6 @@ mod tests {
         // making sure `account_dirty` mutated
         let known_urefs = HashMap::new();
         let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
-            // Verify that account didn't mutate before
-            if let Cow::Owned(_) = runtime_context.account_dirty() {
-                panic!("account_dirty mutated before the test");
-            }
-
             // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
             runtime_context.base_key = Key::Account([1; 32]);
 
@@ -1165,10 +1227,9 @@ mod tests {
                 .add_associated_key(PublicKey::new([84; 32]), Weight::new(123))
                 .expect_err("This operation should return error");
 
-            assert_eq!(err, AddKeyFailure::PermissionDenied);
-
-            if let Cow::Owned(_) = runtime_context.account_dirty() {
-                panic!("account_dirty unexpectedly mutated before the test");
+            match err {
+                Error::AddKeyFailure(AddKeyFailure::PermissionDenied) => {}
+                e => panic!("Invalid error variant: {:?}", e),
             }
 
             Ok(())
@@ -1182,11 +1243,6 @@ mod tests {
         // making sure `account_dirty` mutated
         let known_urefs = HashMap::new();
         let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
-            // Verify that account didn't mutate before
-            if let Cow::Owned(_) = runtime_context.account_dirty() {
-                panic!("account_dirty mutated before the test");
-            }
-
             // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
             runtime_context.base_key = Key::Account([1; 32]);
 
@@ -1194,10 +1250,9 @@ mod tests {
                 .remove_associated_key(PublicKey::new([84; 32]))
                 .expect_err("This operation should return error");
 
-            assert_eq!(err, RemoveKeyFailure::PermissionDenied);
-
-            if let Cow::Owned(_) = runtime_context.account_dirty() {
-                panic!("account_dirty unexpectedly mutated before the test");
+            match err {
+                Error::RemoveKeyFailure(RemoveKeyFailure::PermissionDenied) => {}
+                ref e => panic!("Invalid error variant: {:?}", e),
             }
 
             Ok(())
@@ -1211,11 +1266,6 @@ mod tests {
         // making sure `account_dirty` mutated
         let known_urefs = HashMap::new();
         let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
-            // Verify that account didn't mutate before
-            if let Cow::Owned(_) = runtime_context.account_dirty() {
-                panic!("account_dirty mutated before the test");
-            }
-
             // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
             runtime_context.base_key = Key::Account([1; 32]);
 
@@ -1223,10 +1273,9 @@ mod tests {
                 .set_action_threshold(ActionType::Deployment, Weight::new(123))
                 .expect_err("This operation should return error");
 
-            assert_eq!(err, SetThresholdFailure::PermissionDeniedError);
-
-            if let Cow::Owned(_) = runtime_context.account_dirty() {
-                panic!("account_dirty unexpectedly mutated before the test");
+            match err {
+                Error::SetThresholdFailure(SetThresholdFailure::PermissionDeniedError) => {}
+                ref e => panic!("Invalid error variant: {:?}", e),
             }
 
             Ok(())

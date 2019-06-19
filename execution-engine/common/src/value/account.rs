@@ -404,7 +404,7 @@ impl Account {
         self.known_urefs
     }
 
-    pub fn pub_key(&self) -> &[u8] {
+    pub fn pub_key(&self) -> &[u8; 32] {
         &self.public_key
     }
 

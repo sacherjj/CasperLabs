@@ -20,7 +20,10 @@ use wasmi::{
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE};
 use common::key::Key;
 use common::uref::AccessRights;
-use common::value::account::{ActionType, PublicKey, Weight, PUBLIC_KEY_SIZE};
+use common::value::account::{
+    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    PUBLIC_KEY_SIZE,
+};
 use common::value::Value;
 use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
@@ -61,6 +64,9 @@ pub enum Error {
     },
     /// Reverts execution with a provided status
     Revert(u32),
+    AddKeyFailure(AddKeyFailure),
+    RemoveKeyFailure(RemoveKeyFailure),
+    SetThresholdFailure(SetThresholdFailure),
 }
 
 impl fmt::Display for Error {
@@ -102,6 +108,24 @@ impl From<!> for Error {
 impl From<ResolverError> for Error {
     fn from(err: ResolverError) -> Error {
         Error::ResolverError(err)
+    }
+}
+
+impl From<AddKeyFailure> for Error {
+    fn from(err: AddKeyFailure) -> Error {
+        Error::AddKeyFailure(err)
+    }
+}
+
+impl From<RemoveKeyFailure> for Error {
+    fn from(err: RemoveKeyFailure) -> Error {
+        Error::RemoveKeyFailure(err)
+    }
+}
+
+impl From<SetThresholdFailure> for Error {
+    fn from(err: SetThresholdFailure) -> Error {
+        Error::SetThresholdFailure(err)
     }
 }
 
@@ -460,7 +484,9 @@ where
             // i32 and first variant start with number `1`, so all other variants
             // are greater than the first one, so it's safe to assume `0` is success,
             // and any error is greater than 0.
-            Err(e) => Ok(e as i32),
+            Err(Error::AddKeyFailure(e)) => Ok(e as i32),
+            // Any other variant just pass as `Trap`
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -475,7 +501,8 @@ where
         };
         match self.context.remove_associated_key(public_key) {
             Ok(_) => Ok(0),
-            Err(e) => Ok(e as i32),
+            Err(Error::RemoveKeyFailure(e)) => Ok(e as i32),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -488,7 +515,8 @@ where
         let threshold = Weight::new(threshold_value);
         match self.context.set_action_threshold(action_type, threshold) {
             Ok(_) => Ok(0),
-            Err(e) => Ok(e as i32),
+            Err(Error::SetThresholdFailure(e)) => Ok(e as i32),
+            Err(e) => Err(e.into()),
         }
     }
 }
@@ -778,14 +806,7 @@ where
             refs,
             known_urefs,
             args,
-            // This passes `account_dirty` twice as both `account` (read) and `account_dirty` (write.
-            // This is done due to the fact that `sub_call` should be able to see the changes made
-            // in parent contract up to the point of a call, but still should be able to mutate it
-            // further, although current implementation forbids changing it from subcontracts.
             Cow::clone(&current_runtime.context.account()),
-            // This operation is cheap as long as `account_dirty` wasnt mutated before the sub call
-            // happened
-            Cow::clone(&current_runtime.context.account_dirty()),
             key,
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
@@ -1017,7 +1038,6 @@ impl Executor<Module> for WasmiExecutor {
             known_urefs,
             arguments,
             Cow::Borrowed(&account),
-            Cow::Borrowed(&account_dirty),
             acct_key,
             gas_limit,
             gas_counter,
@@ -1048,13 +1068,13 @@ impl Executor<Module> for WasmiExecutor {
         // TC possibly has `account` already wrote with new `nonce`, so mutating
         // `account` would overwrite `nonce` with old value but with new properties,
         // therefore all writes are going to `account_dirty`.
-        if let Cow::Owned(mutated_account) = context.take_account_dirty() {
-            // Persisting `account_dirty` because it was mutated
-            tc.borrow_mut().write(
-                validated_key,
-                Validated::new(mutated_account.into(), Validated::valid).unwrap(),
-            );
-        }
+        //if let Cow::Owned(mutated_account) = context.take_account_dirty() {
+        //    // Persisting `account_dirty` because it was mutated
+        //    tc.borrow_mut().write(
+        //        validated_key,
+        //        Validated::new(mutated_account.into(), Validated::valid).unwrap(),
+        //    );
+        //}
         // Take updated effects and pass it to caller as a successful result
         let effect = tc.borrow_mut().effect();
         println!("Effect {:?}", effect);
