@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
@@ -806,7 +805,7 @@ where
             refs,
             known_urefs,
             args,
-            Cow::clone(&current_runtime.context.account()),
+            &current_runtime.context.account(),
             key,
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
@@ -1037,7 +1036,7 @@ impl Executor<Module> for WasmiExecutor {
             &mut uref_lookup_local,
             known_urefs,
             arguments,
-            Cow::Borrowed(&account),
+            &account,
             acct_key,
             gas_limit,
             gas_counter,
@@ -1054,31 +1053,10 @@ impl Executor<Module> for WasmiExecutor {
             effects_snapshot
         );
 
-        // Store updated account with new nonce
-        let context = runtime.take_context(); // Consumes `runtime`
-
-        // Save some properties of the context
-        let cost = context.gas_counter(); // Extract `cost` before consuming `context` below
-
-        // Save an instance of tracking copy with all effects up to date after
-        // the execution.
-        let tc = Rc::clone(&context.state());
-        // Check if `account_dirty` has been mutated, and if so, update tracking copy
-        // therefore synchronising TC state with `account_dirty` state.
-        // TC possibly has `account` already wrote with new `nonce`, so mutating
-        // `account` would overwrite `nonce` with old value but with new properties,
-        // therefore all writes are going to `account_dirty`.
-        //if let Cow::Owned(mutated_account) = context.take_account_dirty() {
-        //    // Persisting `account_dirty` because it was mutated
-        //    tc.borrow_mut().write(
-        //        validated_key,
-        //        Validated::new(mutated_account.into(), Validated::valid).unwrap(),
-        //    );
-        //}
-        // Take updated effects and pass it to caller as a successful result
-        let effect = tc.borrow_mut().effect();
-        println!("Effect {:?}", effect);
-        ExecutionResult::Success { effect, cost }
+        ExecutionResult::Success {
+            effect: runtime.context.effect(),
+            cost: runtime.context.gas_counter(),
+        }
     }
 }
 
