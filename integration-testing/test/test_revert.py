@@ -72,8 +72,8 @@ def test_revert(client, node):
     assert r.error_message == "Exit code: 1"
 
     # This contract calls another contract that calls revert(2) 
-    block_hash = node.deploy_and_propose(session_contract = 'test_revert_call.wasm',
-                                         payment_contract = 'test_revert_call.wasm')
+    block_hash = node.deploy_and_propose(session_contract = 'test_subcall_revert_call.wasm',
+                                         payment_contract = 'test_subcall_revert_call.wasm')
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
     assert r.error_message == "Exit code: 2"

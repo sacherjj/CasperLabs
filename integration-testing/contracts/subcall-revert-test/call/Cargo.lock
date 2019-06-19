@@ -206,7 +206,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-revert-call"
+name = "test-subcall-revert-call"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.8.0",
