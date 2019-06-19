@@ -6,7 +6,7 @@ use std::fmt;
 use std::iter::IntoIterator;
 use std::rc::Rc;
 
-use blake2::digest::VariableOutput;
+use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 use itertools::Itertools;
 use parity_wasm::elements::{Error as ParityWasmError, Module};
@@ -762,13 +762,13 @@ pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
-/// What is happening here?
 pub fn create_rng(account_addr: [u8; 32], nonce: u64) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
-    let hasher = VarBlake2b::new(32).unwrap();
+    let mut hasher = VarBlake2b::new(32).unwrap();
     data.extend(&account_addr);
     data.extend_from_slice(&nonce.to_le_bytes());
+    hasher.input(data);
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
     ChaChaRng::from_seed(seed)
 }
@@ -982,6 +982,7 @@ mod tests {
     use storage::global_state::StateReader;
     use tracking_copy::TrackingCopy;
     use rand::RngCore;
+    use rand_chacha::ChaChaRng;
 
     fn on_fail_charge_test_helper<T>(
         f: impl Fn() -> Result<T, Error>,
@@ -1127,7 +1128,7 @@ mod tests {
     }
 
     #[test]
-    fn should_generate_different_urefs_for_different_seeds() {
+    fn should_generate_different_numbers_for_different_seeds() {
         let account_addr = [0u8; 32];
         let mut rng_a = create_rng(account_addr, 1);
         let mut rng_b = create_rng(account_addr, 2);
@@ -1135,5 +1136,16 @@ mod tests {
         let random_b = gen_random(&mut rng_b);
 
         assert_ne!(random_a, random_b)
+    }
+
+    #[test]
+    fn should_generate_same_numbers_for_same_seed() {
+        let account_addr = [0u8; 32];
+        let mut rng_a = create_rng(account_addr, 1);
+        let mut rng_b = create_rng(account_addr, 1);
+        let random_a = gen_random(&mut rng_a);
+        let random_b = gen_random(&mut rng_b);
+
+        assert_eq!(random_a, random_b)
     }
 }
