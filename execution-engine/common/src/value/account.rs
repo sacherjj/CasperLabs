@@ -257,11 +257,14 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
 ///
 /// This way we can ensure safety and backwards compatibility. Any changes should be carefully
 /// reviewed and tested.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Fail, Debug)]
 #[repr(i32)]
 pub enum AddKeyFailure {
+    #[fail(display = "Unable to add new associated key because maximum amount of keys is reached")]
     MaxKeysLimit = 1,
+    #[fail(display = "Unable to add new associated key because given key already exists")]
     DuplicateKey = 2,
+    #[fail(display = "Unable to add new associated key due to insufficient permissions")]
     PermissionDenied = 3,
 }
 
