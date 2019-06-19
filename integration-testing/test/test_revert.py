@@ -50,30 +50,35 @@ nonce=9 counter=2 hash=[105, 12, 118, 161, 38, 130, 56, 203, 24, 145, 213, 69, 1
 """
 
 
-def test_revert(client, node):
-    block_hash = node.deploy_and_propose(session_contract = 'test_direct_revert_define.wasm',
-                                         payment_contract = 'test_direct_revert_define.wasm')
+
+def test_revert_subcall(client, node):
+    # This contract calls another contract that calls revert(2) 
+    block_hash = node.deploy_and_propose(session_contract = 'test_subcall_revert_define.wasm',
+                                         payment_contract = 'test_subcall_revert_define.wasm')
 
     r = client.show_deploys(block_hash)[0]
-
     assert not r.is_error
     assert r.error_message == ''
 
     deploy_hash = r.deploy.deploy_hash
+
     r = client.show_deploy(deploy_hash)
     assert r.deploy.deploy_hash == deploy_hash
 
-    # This contract calls revert(1) 
+
+    block_hash = node.deploy_and_propose(session_contract = 'test_subcall_revert_call.wasm',
+                                         payment_contract = 'test_subcall_revert_call.wasm')
+    r = client.show_deploys(block_hash)[0]
+    assert r.is_error
+    assert r.error_message == "Exit code: 2"
+
+
+
+def test_revert_direct(client, node):
+    # This contract calls revert(1) directly
     block_hash = node.deploy_and_propose(session_contract = 'test_direct_revert_call.wasm',
                                          payment_contract = 'test_direct_revert_call.wasm')
 
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
     assert r.error_message == "Exit code: 1"
-
-    # This contract calls another contract that calls revert(2) 
-    block_hash = node.deploy_and_propose(session_contract = 'test_subcall_revert_call.wasm',
-                                         payment_contract = 'test_subcall_revert_call.wasm')
-    r = client.show_deploys(block_hash)[0]
-    assert r.is_error
-    assert r.error_message == "Exit code: 2"
