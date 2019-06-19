@@ -1143,7 +1143,7 @@ mod tests {
 
             assert!(account.associated_keys().get(&public_key).is_none());
 
-            // Remove a key that was already remoevd
+            // Remove a key that was already removed
             runtime_context
                 .remove_associated_key(public_key)
                 .expect_err("A non existing key was unexpectedly removed again");
