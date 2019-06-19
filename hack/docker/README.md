@@ -100,16 +100,17 @@ If you check the log output, each node should get the block and provide some fee
 
 ### Signing Deploys
 
-To sign deploy you'll need to [generate and ed25519 keypair](/VALIDATOR.md#setting-up-keys) and save them into `docker/keys`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments, for example:
+To sign a deploy you'll need to pass two additional arguments to `client.sh`: `--public-key` and `--private-key`. These keys are auto-generated when you run `make node-0` and you can find them in `.casperlabs/<node-#>/`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments, for example:
 
 ```console
 ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --gas-price 1 \
-     --from='00000000000000000000000000000000'
+     --from 3030303030303030303030303030303030303030303030303030303030303030 \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
-     --public-key /keys/public.key \
-     --private-key /keys/private.key
+     --nonce 1 \
+     --public-key /keys/validator-public.pem \
+     --private-key /keys/validator-private.pem
 ```
 
 ## Monitoring
