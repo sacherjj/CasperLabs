@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::convert::{TryFrom, TryInto};
+use std::fmt::Display;
 use std::rc::Rc;
 
 use blake2::digest::{Input, VariableOutput};
@@ -201,6 +203,27 @@ where
             .map_err(Into::into)
     }
 
+    /// This method is a wrapper over `read_gs` in the sense
+    /// that it extracts the type held by a Value stored in the
+    /// global state in a type safe manner.
+    ///
+    /// This is useful if you want to get the exact type
+    /// from global state.
+    pub fn read_gs_typed<T>(&mut self, key: &Key) -> Result<T, Error>
+    where
+        T: TryFrom<Value>,
+        T::Error: Display,
+    {
+        let value = match self.read_gs(&key)? {
+            None => return Err(Error::KeyNotFound(*key)),
+            Some(value) => value,
+        };
+
+        value.try_into().map_err(|s| {
+            Error::FunctionNotFound(format!("Value at {:?} has invalid type: {}", key, s))
+        })
+    }
+
     pub fn write_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
         let validated_key: Validated<Key> = Validated::new(key, |key| {
             self.validate_writeable(&key).and(self.validate_key(&key))
@@ -395,16 +418,7 @@ where
         let key = Key::Account(*self.account().pub_key());
 
         // Take an account out of the global state
-        let mut account = match self.read_gs(&key)? {
-            None => return Err(Error::KeyNotFound(key)),
-            Some(Value::Account(account)) => account,
-            Some(_) => {
-                return Err(Error::FunctionNotFound(format!(
-                    "Value at {:?} is not an account",
-                    key
-                )))
-            }
-        };
+        let mut account: Account = self.read_gs_typed(&key)?;
 
         // Exit early in case of error without updating global state
         account
@@ -433,16 +447,7 @@ where
         let key = Key::Account(*self.account().pub_key());
 
         // Take an account out of the global state
-        let mut account = match self.read_gs(&key)? {
-            None => return Err(Error::KeyNotFound(key)),
-            Some(Value::Account(account)) => account,
-            Some(_) => {
-                return Err(Error::FunctionNotFound(format!(
-                    "Value at {:?} is not an account",
-                    key
-                )))
-            }
-        };
+        let mut account: Account = self.read_gs_typed(&key)?;
 
         // Exit early in case of error without updating global state
         account
@@ -475,16 +480,7 @@ where
         let key = Key::Account(*self.account().pub_key());
 
         // Take an account out of the global state
-        let mut account = match self.read_gs(&key)? {
-            None => return Err(Error::KeyNotFound(key)),
-            Some(Value::Account(account)) => account,
-            Some(_) => {
-                return Err(Error::FunctionNotFound(format!(
-                    "Value at {:?} is not an account",
-                    key
-                )))
-            }
-        };
+        let mut account: Account = self.read_gs_typed(&key)?;
 
         // Exit early in case of error without updating global state
         account
