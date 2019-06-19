@@ -103,11 +103,12 @@ If you check the log output, each node should get the block and provide some fee
 To sign deploy you'll need to [generate and ed25519 keypair](/VALIDATOR.md#setting-up-keys) and save them into `docker/keys`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments, for example:
 
 ```console
-./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
+./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --gas-price 1 \
-     --from='00000000000000000000000000000000'
+     --from 3030303030303030303030303030303030303030303030303030303030303030 \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
+     --nonce 1 \
      --public-key /keys/public.key \
      --private-key /keys/private.key
 ```
