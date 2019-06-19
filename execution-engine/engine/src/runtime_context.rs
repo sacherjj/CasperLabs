@@ -1123,7 +1123,6 @@ mod tests {
                 Transform::Write(Value::Account(account)) => account,
                 _ => panic!("Invalid transform operation found"),
             };
-            // println!("account {:?}", account);
             account
                 .associated_keys()
                 .get(&public_key)
