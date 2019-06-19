@@ -380,10 +380,6 @@ where
         }
     }
 
-    // fn update_account<T, E>(key: Key, update_func: impl Fn(&mut Account) -> Result<T, E>) {
-
-    // }
-
     pub fn add_associated_key(
         &mut self,
         public_key: PublicKey,
@@ -462,8 +458,6 @@ where
             .write(validated_uref, validated_value);
 
         Ok(())
-
-        //// Performs clone-on-write if the account wasn't mutated already
     }
 
     pub fn set_action_threshold(
