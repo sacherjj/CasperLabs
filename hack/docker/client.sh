@@ -42,7 +42,7 @@ function run_with_vol() {
     docker run --rm \
         --network casperlabs \
         --volume $VOL:/data \
-        --volume $PWD/.casperlabs/$NODE/:/keys \
+        --volume $PWD/keys:/keys
         casperlabs/client:$VERSION \
         --host $NODE --node-id $NODE_ID $CMD $@
 }
