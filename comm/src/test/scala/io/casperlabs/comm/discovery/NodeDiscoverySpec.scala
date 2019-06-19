@@ -11,7 +11,7 @@ import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.shared.{Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import monix.execution.atomic.{Atomic, AtomicInt}
+import monix.execution.atomic.Atomic
 import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{Matchers, WordSpecLike}
@@ -72,25 +72,67 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
         .reverse
     } yield ordered.zip(ordered.tail)
 
+  /** A generators .sample.get can sometimes return None, but these examples have no reason to not generate a result,
+    * so defend against that and retry if it does happen.
+    * Borrowed from [[io.casperlabs.comm.gossiping.ArbitraryConsensus]] */
+  def sample[T](g: Gen[T]): T = {
+    def loop(i: Int): T = {
+      assert(i > 0, "Should be able to generate a sample.")
+      g.sample.fold(loop(i - 1))(identity)
+    }
+    loop(10)
+  }
+
   def totalN(peers: Map[Node, List[Node]]): Int =
     peers.toList.flatMap { case (k, vs) => k :: vs }.toSet.size
 
   def totalN(peers: List[(Node, Node)]): Int =
     peers.flatMap { case (l, r) => List(l, r) }.toSet.size
 
+  def chooseRandom(peers: Map[Node, List[Node]]): Node =
+    peers.keys.toList(Random.nextInt(peers.size))
+
+  def chooseRandom(peers: Set[Node], n: Int): Set[Node] =
+    Random.shuffle(peers.toList).take(n).toSet
+
+  def chooseRandom(peers: List[Node]): Node =
+    peers(Random.nextInt(peers.size))
+
+  def toSet(peers: Map[Node, List[Node]]): Set[Node] =
+    peers.toList.flatMap { case (k, vs) => k :: vs }.toSet
+
+  def nextInt(n: Int): Int = Random.nextInt(n)
+
+  /* Generates random int inclusive on both sides */
+  def nextInt(from: Int, to: Int): Int =
+    to - from + 1 match {
+      case 0          => from
+      case n if n < 0 => throw new IllegalArgumentException
+      case n          => nextInt(n) + from
+    }
+
+  def ascendingDistance(peers: Set[Node]): List[Node] = peers.toList.sorted(
+    (x: Node, y: Node) =>
+      Ordering[BigInt].compare(
+        PeerTable.xorDistance(NodeIdentifier(x.id), NodeDiscoverySpec.id),
+        PeerTable.xorDistance(NodeIdentifier(y.id), NodeDiscoverySpec.id)
+      )
+  )
+
+  def ascendingDistance(peers: Map[Node, List[Node]]): List[Node] = ascendingDistance(toSet(peers))
+
   "KademliaNodeDiscovery" when {
     "lookup" should {
       "quit early if asked peer already in peer table" in
         forAll(genFullyConnectedPeers) { peers: Map[Node, List[Node]] =>
-          val target = peers.keys.toList(Random.nextInt(peers.size))
-          TextFixture.prefilledTable(NodeIdentifier(target.id), peers, totalN(peers)) {
-            (kademlia, nd, alpha) =>
-              for {
-                response <- nd.lookup(NodeIdentifier(target.id))
-              } yield {
-                kademlia.totalLookups shouldBe 0
-                response shouldBe Some(target)
-              }
+          val target = chooseRandom(peers)
+          TextFixture.prefilledTable(connections = peers, k = totalN(peers)) { (kademlia, nd, _) =>
+            for {
+              response <- nd.lookup(NodeIdentifier(target.id))
+            } yield {
+              kademlia.totalLookups shouldBe 0
+              response shouldBe Some(target)
+            }
           }
         }
       "converge to the closest node if each peers knows next one and the target peer is the last" in
@@ -98,11 +140,10 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           val target  = peers.last._2
           val initial = peers.head._1
           TextFixture.customInitial(
-            NodeIdentifier(target.id),
-            peers.toMap.mapValues(List(_)),
-            Set(initial),
-            totalN(peers),
-            1
+            connections = peers.toMap.mapValues(List(_)),
+            tableInitial = Set(initial),
+            k = totalN(peers),
+            alpha = 1
           ) { (kademlia, nd, _) =>
             for {
               response <- nd.lookup(NodeIdentifier(target.id))
@@ -121,7 +162,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
         forAll(genFullyConnectedPeers) { peers: Map[Node, List[Node]] =>
           //we need strong ordering
           val asList               = peers.toList
-          val target               = asList.init.map(_._1).apply(Random.nextInt(asList.init.size))
+          val target               = chooseRandom(asList.init.map(_._1))
           val initialAlwaysHealthy = asList.last._1
           //fully parallel requests, so only 1 round with everyone
           val alpha = peers.size
@@ -137,11 +178,10 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
             }
             .toMap
           TextFixture.customInitialWithFailures(
-            NodeIdentifier(target.id),
-            withFailures,
-            Set(initialAlwaysHealthy),
-            totalN(peers),
-            alpha
+            connections = withFailures,
+            tableInitial = Set(initialAlwaysHealthy),
+            k = totalN(peers),
+            alpha = alpha
           ) { (_, nd, _) =>
             for {
               _         <- nd.lookup(NodeIdentifier(target.id))
@@ -153,33 +193,31 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
             }
           }
         }
-      "skip itself" in
-        forAll(genSetPeerNodes) { peers: Set[Node] =>
-          val target              = peers.head
-          val itself              = Node(NodeDiscoverySpec.id, "localhost", 40400, 40404)
-          val allPointingToItself = peers.tail.map(p => (p, List(itself))).toMap
-          TextFixture.prefilledTable(NodeIdentifier(target.id), allPointingToItself, peers.size) {
-            (kademlia, nd, _) =>
-              for {
-                response <- nd.lookup(NodeIdentifier(target.id))
-              } yield {
-                response shouldBe Some(itself)
-                kademlia.lookupsBy(itself) shouldBe 0
-              }
-          }
+      "skip itself" in forAll(genSetPeerNodes) { peers: Set[Node] =>
+        val target              = peers.head
+        val itself              = Node(NodeDiscoverySpec.id, "localhost", 40400, 40404)
+        val allPointingToItself = peers.tail.map(p => (p, List(itself))).toMap
+        TextFixture.prefilledTable(connections = allPointingToItself, k = peers.size) {
+          (kademlia, nd, _) =>
+            for {
+              response <- nd.lookup(NodeIdentifier(target.id))
+            } yield {
+              response shouldBe Some(itself)
+              kademlia.lookupsBy(itself) shouldBe 0
+            }
         }
-      "stop lookup when successfully called 'k' peers" in
-        forAll(genSequentiallyConnectedPeers) { peers: List[(Node, Node)] =>
+      }
+      "stop lookup when successfully called 'k' peers" in forAll(genSequentiallyConnectedPeers) {
+        peers: List[(Node, Node)] =>
           val target  = peers.last._2
           val initial = peers.head._1
           val total   = peers.size
-          val k       = Random.nextInt(total) + 1
+          val k       = nextInt(1, total)
           TextFixture.customInitial(
-            NodeIdentifier(target.id),
-            peers.toMap.mapValues(List(_)),
-            Set(initial),
-            k,
-            1
+            connections = peers.toMap.mapValues(List(_)),
+            tableInitial = Set(initial),
+            k = k,
+            alpha = 1
           ) { (kademlia, nd, _) =>
             for {
               response <- nd.lookup(NodeIdentifier(target.id))
@@ -188,11 +226,11 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
               response shouldBe Some(peers(k - 1)._2)
             }
           }
-        }
-      "stop lookup when no closer node returned in round" in
-        forAll(genSequentiallyConnectedPeers) { peers: List[(Node, Node)] =>
+      }
+      "stop lookup when no closer node returned in round" in forAll(genSequentiallyConnectedPeers) {
+        peers: List[(Node, Node)] =>
           val target          = peers.last._2
-          val indexToSwapWith = Random.nextInt(peers.size - 1)
+          val indexToSwapWith = nextInt(peers.size - 1)
           // Move the closest element to middle of chain
           // 0->1 1->2 2->3 3->4
           // 4 - closest, swapped with 2
@@ -210,11 +248,10 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           }
           val initial = swapped.head._1
           TextFixture.customInitial(
-            NodeIdentifier(target.id),
-            swapped.toMap.mapValues(List(_)),
-            Set(initial),
-            totalN(peers),
-            1
+            connections = swapped.toMap.mapValues(List(_)),
+            tableInitial = Set(initial),
+            k = totalN(peers),
+            alpha = 1
           ) { (kademlia, nd, _) =>
             for {
               response <- nd.lookup(NodeIdentifier(target.id))
@@ -224,23 +261,22 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
               ()
             }
           }
-        }
+      }
       "perform at most 'alpha' concurrent requests" in forAll(genSequentiallyConnectedPeers) {
         peers: List[(Node, Node)] =>
           val target  = peers.last._2
           val initial = peers.head._1
           val alpha   = 2
           TextFixture.customInitial(
-            NodeIdentifier(target.id),
-            peers.toMap.mapValues(List(_)),
-            Set(initial),
-            totalN(peers),
-            alpha
+            connections = peers.toMap.mapValues(List(_)),
+            tableInitial = Set(initial),
+            k = totalN(peers),
+            alpha = alpha
           ) { (kademlia, nd, _) =>
             for {
               _ <- nd.lookup(NodeIdentifier(target.id))
             } yield {
-              kademlia.concurrentRequests should be <= alpha
+              kademlia.concurrentLookups should be <= alpha
             }
           }
       }
@@ -248,11 +284,9 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
     "alivePeersAscendingDistance" should {
       "return only alive peers in ascending distance to itself" in {
         forAll(genFullyConnectedPeers) { peers: Map[Node, List[Node]] =>
-          val target = peers.keys.toList(Random.nextInt(peers.size))
-          val all    = peers.toList.flatMap { case (k, vs) => k :: vs }.toSet
-          val alive  = all.filter(_ => Random.nextBoolean())
+          val all   = peers.toList.flatMap { case (k, vs) => k :: vs }.toSet
+          val alive = all.filter(_ => Random.nextBoolean())
           TextFixture.customInitial(
-            NodeIdentifier(target.id),
             Map.empty,
             all,
             all.size,
@@ -279,22 +313,34 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
 
 object NodeDiscoverySpec {
 
-  class KademliaMock(peers: Map[Node, Option[List[Node]]], alive: Node => Boolean)
+  class KademliaMock(connections: Map[Node, Option[List[Node]]], alive: Node => Boolean)
       extends KademliaService[Task] {
-    private val lookupsByCallee                  = Atomic(Map.empty[Node, Int].withDefaultValue(0))
-    private val maxConcurrentRequests            = AtomicInt(0)
-    private val concurrency                      = AtomicInt(0)
-    def totalLookups: Int                        = lookupsByCallee.get().values.sum
-    def lookupsBy(peer: Node): Int               = lookupsByCallee.get()(peer)
-    def concurrentRequests: Int                  = maxConcurrentRequests.get()
-    override def ping(node: Node): Task[Boolean] = Task.now(alive(node))
+    private val lookupsByCallee      = Atomic(Map.empty[Node, Int].withDefaultValue(0))
+    private val pings                = Atomic(0)
+    private val maxConcurrentPings   = Atomic(0)
+    private val pingsConcurrency     = Atomic(0)
+    private val maxConcurrentLookups = Atomic(0)
+    private val lookupsConcurrency   = Atomic(0)
+    def totalLookups: Int            = lookupsByCallee.get().values.sum
+    def totalPings: Int              = pings.get()
+    def lookupsBy(peer: Node): Int   = lookupsByCallee.get()(peer)
+    def concurrentLookups: Int       = maxConcurrentLookups.get()
+    def concurrentPings: Int         = maxConcurrentPings.get()
+    override def ping(node: Node): Task[Boolean] =
+      Task {
+        pingsConcurrency.increment()
+        maxConcurrentPings.transform(math.max(_, pingsConcurrency.get()))
+        pingsConcurrency.decrement()
+        pings.increment()
+        alive(node)
+      }
     override def lookup(id: NodeIdentifier, peer: Node): Task[Option[Seq[Node]]] =
       Task {
-        concurrency.increment()
-        maxConcurrentRequests.transform(math.max(_, concurrency.get()))
-        concurrency.decrement()
+        lookupsConcurrency.increment()
+        maxConcurrentLookups.transform(math.max(_, lookupsConcurrency.get()))
+        lookupsConcurrency.decrement()
         lookupsByCallee.transform(m => m.updated(peer, m(peer) + 1))
-        peers.getOrElse(peer, None)
+        connections.getOrElse(peer, None)
       }
     override def receive(
         pingHandler: Node => Task[Unit],
@@ -314,48 +360,54 @@ object NodeDiscoverySpec {
 
   object TextFixture {
     def customInitialWithFailures(
-        toLookup: NodeIdentifier,
-        peers: Map[Node, Option[List[Node]]],
-        initial: Set[Node],
+        connections: Map[Node, Option[List[Node]]],
+        tableInitial: Set[Node],
         k: Int,
         alpha: Int = 2,
         pings: Option[Set[Node]] = None
-    )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit =
-      PeerTable[Task](id, k)
-        .flatMap { table =>
-          implicit val K: KademliaMock = new KademliaMock(peers, pings.getOrElse(_ => true))
-          val fillTable = initial.toList
-            .traverse(table.updateLastSeen)
-            .void
-          fillTable
-            .map(_ => (K, new NodeDiscoveryImpl[Task](id, table, alpha, k)))
-        }
-        .flatMap { case (kademlia, nd) => test(kademlia, nd, alpha) }
-        .runSyncUnsafe(5.seconds)
+    )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit = {
+      val effect = for {
+        table <- PeerTable[Task](id, k)
+        implicit0(kademliaMock: KademliaMock) = new KademliaMock(
+          connections,
+          pings.getOrElse(_ => true)
+        )
+        _ <- tableInitial.toList.traverse(table.updateLastSeen)
+        nd = new NodeDiscoveryImpl[Task](
+          id,
+          table,
+          alpha,
+          k
+        )
+        _ <- test(kademliaMock, nd, alpha)
+      } yield ()
+      effect.runSyncUnsafe(5.seconds)
+    }
 
     def customInitial(
-        toLookup: NodeIdentifier,
-        peers: Map[Node, List[Node]],
-        initial: Set[Node],
+        connections: Map[Node, List[Node]],
+        tableInitial: Set[Node],
         k: Int,
         alpha: Int = 2,
         pings: Option[Set[Node]] = None
     )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit =
-      customInitialWithFailures(toLookup, peers.mapValues(Option(_)), initial, k, alpha, pings)(
-        test
-      )
+      customInitialWithFailures(
+        connections.mapValues(Option(_)),
+        tableInitial,
+        k,
+        alpha,
+        pings
+      )(test)
 
     def prefilledTable(
-        toLookup: NodeIdentifier,
-        peers: Map[Node, List[Node]],
+        connections: Map[Node, List[Node]],
         k: Int,
         alpha: Int = 2,
         pings: Option[Set[Node]] = None
     )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit =
       customInitial(
-        toLookup,
-        peers,
-        peers
+        connections,
+        connections
           .flatMap { case (key, values) => key :: values }
           .filterNot(p => p.id.toByteArray sameElements id.key)
           .toSet,
