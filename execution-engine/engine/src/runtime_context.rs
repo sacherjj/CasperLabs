@@ -779,7 +779,7 @@ mod tests {
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
         let known_urefs = vec_key_rights_to_map(vec![uref]);
-        let chacha_rng = create_rng(base_acc_addr,  0);
+        let chacha_rng = create_rng(base_acc_addr, 0);
 
         let mut runtime_context = RuntimeContext::new(
             Rc::clone(&tc),

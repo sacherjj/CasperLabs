@@ -971,9 +971,11 @@ mod tests {
     use common::value::{Account, Value};
     use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
-    use execution::{Executor, WasmiExecutor, create_rng};
+    use execution::{create_rng, Executor, WasmiExecutor};
     use parity_wasm::builder::ModuleBuilder;
     use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
+    use rand::RngCore;
+    use rand_chacha::ChaChaRng;
     use shared::newtypes::CorrelationId;
     use std::cell::RefCell;
     use std::collections::btree_map::BTreeMap;
@@ -981,8 +983,6 @@ mod tests {
     use std::rc::Rc;
     use storage::global_state::StateReader;
     use tracking_copy::TrackingCopy;
-    use rand::RngCore;
-    use rand_chacha::ChaChaRng;
 
     fn on_fail_charge_test_helper<T>(
         f: impl Fn() -> Result<T, Error>,
