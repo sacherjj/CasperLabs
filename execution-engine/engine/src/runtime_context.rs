@@ -409,7 +409,7 @@ where
         weight: Weight,
     ) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key().as_account().unwrap() != *self.account().pub_key() {
+        if self.base_key() != Key::Account(*self.account().pub_key()) {
             // Exit early with error to avoid mutations
             return Err(AddKeyFailure::PermissionDenied.into());
         }
@@ -438,7 +438,7 @@ where
 
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key().as_account().unwrap() != *self.account().pub_key() {
+        if self.base_key() != Key::Account(*self.account().pub_key()) {
             // Exit early with error to avoid mutations
             return Err(RemoveKeyFailure::PermissionDenied.into());
         }
@@ -471,7 +471,7 @@ where
         threshold: Weight,
     ) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key().as_account().unwrap() != *self.account().pub_key() {
+        if self.base_key() != Key::Account(*self.account().pub_key()) {
             // Exit early with error to avoid mutations
             return Err(SetThresholdFailure::PermissionDeniedError.into());
         }
@@ -1201,7 +1201,7 @@ mod tests {
         let known_urefs = HashMap::new();
         let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
             // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
-            runtime_context.base_key = Key::Account([1; 32]);
+            runtime_context.base_key = Key::Hash([1; 32]);
 
             let err = runtime_context
                 .add_associated_key(PublicKey::new([84; 32]), Weight::new(123))
@@ -1224,7 +1224,7 @@ mod tests {
         let known_urefs = HashMap::new();
         let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
             // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
-            runtime_context.base_key = Key::Account([1; 32]);
+            runtime_context.base_key = Key::Hash([1; 32]);
 
             let err = runtime_context
                 .remove_associated_key(PublicKey::new([84; 32]))
@@ -1247,7 +1247,7 @@ mod tests {
         let known_urefs = HashMap::new();
         let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
             // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
-            runtime_context.base_key = Key::Account([1; 32]);
+            runtime_context.base_key = Key::Hash([1; 32]);
 
             let err = runtime_context
                 .set_action_threshold(ActionType::Deployment, Weight::new(123))
