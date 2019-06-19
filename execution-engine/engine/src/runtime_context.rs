@@ -1123,7 +1123,7 @@ mod tests {
                 .expect("Unable to add key");
 
             let effect = runtime_context.effect();
-            let transform = effect.1.get(&runtime_context.base_key()).unwrap();
+            let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
             let account = match transform {
                 Transform::Write(Value::Account(account)) => account,
                 _ => panic!("Invalid transform operation found"),
@@ -1140,7 +1140,7 @@ mod tests {
 
             // Verify
             let effect = runtime_context.effect();
-            let transform = effect.1.get(&runtime_context.base_key()).unwrap();
+            let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
             let account = match transform {
                 Transform::Write(Value::Account(account)) => account,
                 _ => panic!("Invalid transform operation found"),
@@ -1172,7 +1172,7 @@ mod tests {
                 .expect("Unable to set action threshold Deployment");
 
             let effect = runtime_context.effect();
-            let transform = effect.1.get(&runtime_context.base_key()).unwrap();
+            let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
             let mutated_account = match transform {
                 Transform::Write(Value::Account(account)) => account,
                 _ => panic!("Invalid transform operation found"),
