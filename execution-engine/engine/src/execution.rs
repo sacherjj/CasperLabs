@@ -971,7 +971,7 @@ mod tests {
     use common::value::{Account, Value};
     use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
-    use execution::{Executor, WasmiExecutor};
+    use execution::{Executor, WasmiExecutor, create_rng};
     use parity_wasm::builder::ModuleBuilder;
     use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
     use shared::newtypes::CorrelationId;
@@ -981,6 +981,7 @@ mod tests {
     use std::rc::Rc;
     use storage::global_state::StateReader;
     use tracking_copy::TrackingCopy;
+    use rand::RngCore;
 
     fn on_fail_charge_test_helper<T>(
         f: impl Fn() -> Result<T, Error>,
@@ -1117,5 +1118,22 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn gen_random(rng: &mut ChaChaRng) -> [u8; 32] {
+        let mut buff = [0u8; 32];
+        rng.fill_bytes(&mut buff);
+        buff
+    }
+
+    #[test]
+    fn should_generate_different_urefs_for_different_seeds() {
+        let account_addr = [0u8; 32];
+        let mut rng_a = create_rng(account_addr, 1);
+        let mut rng_b = create_rng(account_addr, 2);
+        let random_a = gen_random(&mut rng_a);
+        let random_b = gen_random(&mut rng_b);
+
+        assert_ne!(random_a, random_b)
     }
 }
