@@ -763,12 +763,11 @@ pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
 }
 
 /// What is happening here?
-pub fn create_rng(account_addr: [u8; 32], timestamp: u64, nonce: u64) -> ChaChaRng {
+pub fn create_rng(account_addr: [u8; 32], nonce: u64) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let hasher = VarBlake2b::new(32).unwrap();
     data.extend(&account_addr);
-    data.extend_from_slice(&timestamp.to_le_bytes());
     data.extend_from_slice(&nonce.to_le_bytes());
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
     ChaChaRng::from_seed(seed)
@@ -840,7 +839,7 @@ impl Executor<Module> for WasmiExecutor {
         parity_module: Module,
         args: &[u8],
         acct_key: Key,
-        timestamp: u64,
+        _timestamp: u64,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
@@ -904,7 +903,7 @@ impl Executor<Module> for WasmiExecutor {
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
         let account_bytes = acct_key.as_account().unwrap();
-        let rng = create_rng(account_bytes, timestamp, nonce);
+        let rng = create_rng(account_bytes, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
