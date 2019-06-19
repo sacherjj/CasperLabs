@@ -1020,8 +1020,10 @@ mod tests {
             on_fail_charge!(input, 456, {
                 let mut effect = ExecutionEffect::default();
 
-                effect.0.insert(Key::Hash([42u8; 32]), Op::Read);
-                effect.1.insert(Key::Hash([42u8; 32]), Transform::Identity);
+                effect.ops.insert(Key::Hash([42u8; 32]), Op::Read);
+                effect
+                    .transforms
+                    .insert(Key::Hash([42u8; 32]), Transform::Identity);
 
                 effect
             });
@@ -1035,8 +1037,8 @@ mod tests {
             ExecutionResult::Failure { cost, effect, .. } => {
                 assert_eq!(cost, 456);
                 // Check if the containers are non-empty
-                assert_eq!(effect.0.len(), 1);
-                assert_eq!(effect.1.len(), 1);
+                assert_eq!(effect.ops.len(), 1);
+                assert_eq!(effect.transforms.len(), 1);
             }
         }
     }
@@ -1105,7 +1107,7 @@ mod tests {
                 effect,
                 cost,
             } => {
-                assert_eq!(effect, ExecutionEffect(HashMap::new(), HashMap::new()));
+                assert_eq!(effect, ExecutionEffect::new(HashMap::new(), HashMap::new()));
                 assert_eq!(cost, 0);
                 if let ::engine_state::error::Error::ExecError(Error::InvalidNonce {
                     deploy_nonce,

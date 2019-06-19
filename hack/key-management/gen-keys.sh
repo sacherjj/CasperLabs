@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
-set -euo pipefail
+
+#set -o pipefail
+set -eu
 trap 'handle_exit'  0
 
 VERBOSE=false
@@ -7,7 +9,7 @@ VERBOSE=false
 handle_exit() {
     LAST_COMMAND_STATUS=$?
     if [ "$LAST_COMMAND_STATUS" -ne 0 ]; then
-        if [ "$VERBOSE" == "true" ]; then
+        if [ "$VERBOSE" = "true" ]; then
             echo 'ERROR: script failed, see the command above' && exit 1
         else
             echo 'ERROR: script failed, you can re-run script with -v option to debug it' && exit "$LAST_COMMAND_STATUS"
@@ -41,7 +43,7 @@ handle_exit() {
 #   --casper-validator-private-key-path validator-private.pem
 #   --tls-key node.key.pem
 #   --tls-certificate node.certificate.pem
-if [ "$1" == "-v" ]; then
+if [ "$1" = "-v" ]; then
     VERBOSE=true
     set -v; shift
 fi

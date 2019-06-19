@@ -39,19 +39,19 @@ docker-build-all: \
 	docker-build/client \
 	docker-build/execution-engine \
 	docker-build/integration-testing \
-	docker-build/keys-generator
+	docker-build/key-generator
 
 docker-push-all: \
 	docker-push/node \
 	docker-push/client \
 	docker-push/execution-engine \
-	docker-push/keys-generator
+	docker-push/key-generator
 
 docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
 docker-build/client: .make/docker-build/universal/client .make/docker-build/test/client
 docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
-docker-build/keys-generator: .make/docker-build/keys-generator
+docker-build/key-generator: .make/docker-build/key-generator
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -156,10 +156,10 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	mkdir -p $(dir $@) && touch $@
 
 # Make an image for keys generation
-.make/docker-build/keys-generator: \
+.make/docker-build/key-generator: \
 	hack/key-management/Dockerfile \
 	hack/key-management/gen-keys.sh
-	docker build -f hack/key-management/Dockerfile -t $(DOCKER_USERNAME)/keys-generator:$(DOCKER_LATEST_TAG) hack/key-management
+	docker build -f hack/key-management/Dockerfile -t $(DOCKER_USERNAME)/key-generator:$(DOCKER_LATEST_TAG) hack/key-management
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.

@@ -8,7 +8,7 @@ use common::key::Key;
 use common::value::U512;
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::execution_result::ExecutionResult;
-use execution_engine::engine_state::EngineState;
+use execution_engine::engine_state::{EngineState, GenesisResult};
 use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
 use ipc_grpc::ExecutionEngineService;
@@ -16,7 +16,7 @@ use mappings::*;
 use shared::logging;
 use shared::logging::{log_duration, log_info};
 use shared::newtypes::{Blake2bHash, CorrelationId};
-use storage::global_state::{CommitResult, History};
+use storage::global_state::History;
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
@@ -370,18 +370,22 @@ where
             proof_of_stake_code_bytes,
             protocol_version,
         ) {
-            Ok(CommitResult::Success(post_state_hash)) => {
+            Ok(GenesisResult::Success {
+                post_state_hash,
+                effect,
+            }) => {
                 let success_message = format!("run_genesis successful: {}", post_state_hash);
                 log_info(&success_message);
 
                 let mut genesis_response = ipc::GenesisResponse::new();
                 let mut genesis_result = ipc::GenesisResult::new();
                 genesis_result.set_poststate_hash(post_state_hash.to_vec());
+                genesis_result.set_effect(effect.into());
                 genesis_response.set_success(genesis_result);
                 genesis_response
             }
-            Ok(commit_result) => {
-                let err_msg = commit_result.to_string();
+            Ok(genesis_result) => {
+                let err_msg = genesis_result.to_string();
                 logging::log_error(&err_msg);
 
                 let mut genesis_response = ipc::GenesisResponse::new();

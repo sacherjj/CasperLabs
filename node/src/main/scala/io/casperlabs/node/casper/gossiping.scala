@@ -49,10 +49,11 @@ package object gossiping {
       grpcScheduler: Scheduler
   )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
 
-    val cert = Resources.withResource(Source.fromFile(conf.tls.certificate.toFile))(_.mkString)
-    val key  = Resources.withResource(Source.fromFile(conf.tls.key.toFile))(_.mkString)
+    val (cert, key) = conf.tls.readCertAndKey
 
+    // SSL context to use when connecting to another node.
     val clientSslContext = SslContexts.forClient(cert, key)
+    // SSL context to use when another node connects to us.
     val serverSslContext = SslContexts.forServer(cert, key, ClientAuth.REQUIRE)
 
     // For client stub to GossipService conversions.

@@ -7,6 +7,7 @@ mod utils;
 use std::cell::RefCell;
 use std::collections::btree_map::BTreeMap;
 use std::collections::HashMap;
+use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -19,13 +20,15 @@ use common::value::account::PurseId;
 use common::value::{Contract, Value, U512};
 use shared::init;
 use shared::newtypes::{Blake2bHash, CorrelationId};
-use shared::transform::Transform;
+use shared::transform::{Transform, TypeMismatch};
 use storage::global_state::{CommitResult, History};
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::Preprocessor;
 
 use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;
+use engine_state::execution_effect::ExecutionEffect;
+use engine_state::op::Op;
 use engine_state::utils::WasmiBytes;
 use execution::{self, Executor};
 use tracking_copy::TrackingCopy;
@@ -43,8 +46,8 @@ pub fn create_genesis_effects(
     mint_code_bytes: WasmiBytes,
     _proof_of_stake_code_bytes: WasmiBytes,
     protocol_version: u64,
-) -> Result<HashMap<Key, Transform>, execution::Error> {
-    let mut ret: HashMap<Key, Value> = HashMap::new();
+) -> Result<ExecutionEffect, execution::Error> {
+    let mut tmp: HashMap<Key, Value> = HashMap::new();
     let mut rng = execution::create_rng(genesis_account_addr, 0);
 
     // Create (public_uref, mint_contract_uref)
@@ -63,7 +66,7 @@ pub fn create_genesis_effects(
 
     // Store (public_uref, mint_contract_uref) in global state
 
-    ret.insert(
+    tmp.insert(
         Key::URef(public_uref),
         Value::Key(Key::URef(mint_contract_uref)),
     );
@@ -82,7 +85,7 @@ pub fn create_genesis_effects(
 
     // Store (genesis_account_addr, genesis_account) in global state
 
-    ret.insert(
+    tmp.insert(
         Key::Account(genesis_account_addr),
         Value::Account(genesis_account),
     );
@@ -108,7 +111,7 @@ pub fn create_genesis_effects(
 
     // Store (purse_id_local_key, balance_uref_key) in local state
 
-    ret.insert(purse_id_local_key, Value::Key(balance_uref_key));
+    tmp.insert(purse_id_local_key, Value::Key(balance_uref_key));
 
     // Create balance
 
@@ -116,7 +119,7 @@ pub fn create_genesis_effects(
 
     // Store (balance_uref_key, balance) in local state
 
-    ret.insert(balance_uref_key, balance);
+    tmp.insert(balance_uref_key, balance);
 
     // Create mint_contract
 
@@ -131,15 +134,59 @@ pub fn create_genesis_effects(
 
     // Store (mint_contract_uref, mint_contract) in global state
 
-    ret.insert(
+    tmp.insert(
         Key::URef(mint_contract_uref),
         Value::Contract(mint_contract),
     );
 
-    Ok(ret
-        .into_iter()
-        .map(|(k, v)| (k, Transform::Write(v)))
-        .collect())
+    let mut execution_effect: ExecutionEffect = Default::default();
+
+    for (k, v) in tmp.into_iter() {
+        execution_effect.ops.insert(k, Op::Write);
+        execution_effect.transforms.insert(k, Transform::Write(v));
+    }
+
+    Ok(execution_effect)
+}
+
+pub enum GenesisResult {
+    RootNotFound,
+    KeyNotFound(Key),
+    TypeMismatch(TypeMismatch),
+    Success {
+        post_state_hash: Blake2bHash,
+        effect: ExecutionEffect,
+    },
+}
+
+impl fmt::Display for GenesisResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            GenesisResult::RootNotFound => write!(f, "Root not found"),
+            GenesisResult::KeyNotFound(key) => write!(f, "Key not found: {}", key),
+            GenesisResult::TypeMismatch(type_mismatch) => {
+                write!(f, "Type mismatch: {:?}", type_mismatch)
+            }
+            GenesisResult::Success {
+                post_state_hash,
+                effect,
+            } => write!(f, "Success: {} {:?}", post_state_hash, effect),
+        }
+    }
+}
+
+impl GenesisResult {
+    fn from_commit_result(commit_result: CommitResult, effect: ExecutionEffect) -> Self {
+        match commit_result {
+            CommitResult::RootNotFound => GenesisResult::RootNotFound,
+            CommitResult::KeyNotFound(key) => GenesisResult::KeyNotFound(key),
+            CommitResult::TypeMismatch(type_mismatch) => GenesisResult::TypeMismatch(type_mismatch),
+            CommitResult::Success(post_state_hash) => GenesisResult::Success {
+                post_state_hash,
+                effect,
+            },
+        }
+    }
 }
 
 impl<H> EngineState<H>
@@ -161,7 +208,7 @@ where
         mint_code_bytes: &[u8],
         proof_of_stake_code_bytes: &[u8],
         protocol_version: u64,
-    ) -> Result<CommitResult, Error> {
+    ) -> Result<GenesisResult, Error> {
         let mint_code_bytes = WasmiBytes::new(mint_code_bytes, WasmCosts::free())?;
         let proof_of_stake_code_bytes =
             WasmiBytes::new(proof_of_stake_code_bytes, WasmCosts::free())?;
@@ -174,10 +221,13 @@ where
         )?;
         let mut state_guard = self.state.lock();
         let prestate_hash = state_guard.current_root();
-        let result = state_guard
-            .commit(correlation_id, prestate_hash, effects)
+        let commit_result = state_guard
+            .commit(correlation_id, prestate_hash, effects.transforms.to_owned())
             .map_err(Into::into)?;
-        Ok(result)
+
+        let genesis_result = GenesisResult::from_commit_result(commit_result, effects);
+
+        Ok(genesis_result)
     }
 
     pub fn state(&self) -> Arc<Mutex<H>> {
@@ -286,7 +336,7 @@ mod tests {
         WasmiBytes::new(raw_bytes.as_slice(), WasmCosts::free()).expect("should create wasmi bytes")
     }
 
-    fn get_genesis_effects() -> HashMap<Key, Transform> {
+    fn get_genesis_transforms() -> HashMap<Key, Transform> {
         let initial_tokens = get_initial_tokens(INITIAL_BALANCE);
 
         let mint_code_bytes = get_mint_code_bytes();
@@ -301,6 +351,7 @@ mod tests {
             PROTOCOL_VERSION,
         )
         .expect("should create effects")
+        .transforms
     }
 
     fn is_write(transform: &Transform) -> bool {
@@ -354,11 +405,11 @@ mod tests {
 
     #[test]
     fn create_genesis_effects_creates_expected_effects() {
-        let effects = get_genesis_effects();
+        let transforms = get_genesis_transforms();
 
-        assert_eq!(effects.len(), EXPECTED_GENESIS_TRANSFORM_COUNT);
+        assert_eq!(transforms.len(), EXPECTED_GENESIS_TRANSFORM_COUNT);
 
-        assert!(effects.iter().all(|(_, effect)| is_write(effect)));
+        assert!(transforms.iter().all(|(_, effect)| is_write(effect)));
     }
 
     #[test]
@@ -373,14 +424,14 @@ mod tests {
             Key::URef(URef::new(addr, AccessRights::READ_ADD_WRITE))
         };
 
-        let effects = get_genesis_effects();
+        let transforms = get_genesis_transforms();
 
         assert!(
-            effects.contains_key(&public_uref_key),
+            transforms.contains_key(&public_uref_key),
             "should have expected public_uref"
         );
 
-        let actual = extract_transform_key(effects, &public_uref_key)
+        let actual = extract_transform_key(transforms, &public_uref_key)
             .expect("transform was not a write of a key");
 
         let mint_contract_uref_key = {
@@ -409,9 +460,9 @@ mod tests {
             Key::URef(URef::new(addr, AccessRights::READ))
         };
 
-        let effects = get_genesis_effects();
+        let transforms = get_genesis_transforms();
 
-        let actual = extract_transform_contract_bytes(effects, &mint_contract_uref_key)
+        let actual = extract_transform_contract_bytes(transforms, &mint_contract_uref_key)
             .expect("transform was not a write of a key");
 
         let mint_code_bytes = get_mint_code_bytes();
@@ -469,14 +520,14 @@ mod tests {
             URef::new(addr, AccessRights::READ_ADD_WRITE)
         };
 
-        let effects = get_genesis_effects();
+        let transforms = get_genesis_transforms();
 
         assert!(
-            effects.contains_key(&purse_id_local_key),
-            "effects should contain purse_id_local_key"
+            transforms.contains_key(&purse_id_local_key),
+            "transforms should contain purse_id_local_key"
         );
 
-        let actual = extract_transform_key(effects, &purse_id_local_key)
+        let actual = extract_transform_key(transforms, &purse_id_local_key)
             .expect("transform was not a write of a key");
 
         // the value under the outer mint_contract_uref should be a key value pointing at
@@ -519,16 +570,16 @@ mod tests {
             URef::new(addr, AccessRights::READ_ADD_WRITE)
         };
 
-        let effects = get_genesis_effects();
+        let transforms = get_genesis_transforms();
 
         assert!(
-            effects.contains_key(&purse_id_local_key),
-            "effects should contain purse_id_local_key"
+            transforms.contains_key(&purse_id_local_key),
+            "transforms should contain purse_id_local_key"
         );
 
         let balance_uref_key = Key::URef(balance_uref);
 
-        let actual = extract_transform_u512(effects, &balance_uref_key)
+        let actual = extract_transform_u512(transforms, &balance_uref_key)
             .expect("transform was not a write of a key");
 
         let initial_tokens = get_initial_tokens(INITIAL_BALANCE);
@@ -541,10 +592,10 @@ mod tests {
     fn create_genesis_effects_stores_genesis_account_at_genesis_account_addr() {
         let account_key = Key::Account(GENESIS_ACCOUNT_ADDR);
 
-        let effects = get_genesis_effects();
+        let transforms = get_genesis_transforms();
 
         assert!(
-            effects.contains_key(&account_key),
+            transforms.contains_key(&account_key),
             "should have expected account key"
         );
 
@@ -560,7 +611,8 @@ mod tests {
         };
 
         let genesis_account = init::create_genesis_account(GENESIS_ACCOUNT_ADDR, purse_id);
-        let actual = extract_transform_account(effects, &account_key).expect("should have account");
+        let actual =
+            extract_transform_account(transforms, &account_key).expect("should have account");
 
         assert_eq!(actual, genesis_account, "invalid account indirection");
     }

@@ -489,7 +489,7 @@ Now after you've done some local changes and want to test them, simply run the l
 You will need a virtual machine running the appropriate version of Linux.
 
 1. Install [VirtualBox]( https://www.virtualbox.org/wiki/Downloads)
-2. Install the Linux distribution you need (e.g. [Ubuntu](http://releases.ubuntu.com/16.04/ubuntu-16.04.4-server-amd64.iso))
+2. Install the Linux distribution you need (e.g. [Ubuntu](https://ubuntu.com))
 3. Start VirtualBox and create a new virtual machine in the manager
 4. Boot your virtual machine using the Linux distribution ISO installed in step 2.
 5. Configure your Linux VM as desired. You may need to install additional tools sucah as g++, g++-multilib, make, git, etc.

@@ -82,7 +82,7 @@ Server is listening on socket: casperlabs-node-data/.caspernode.sock
 #### --loglevel
 
 The execution engine supports an optional `--loglevel` command line argument following the mandatory socket argument,
-which sets the log level for the execution engine. 
+which sets the log level for the execution engine.
 
 ```console
 casperlabs-engine-grpc-server casperlabs-node-data/.caspernode.sock --loglevel=error
@@ -93,8 +93,8 @@ The log levels supported are:
 ```
     --loglevel=
     fatal : critical problems that result in the execution engine crashing
-    error : recoverable errors  
-    warning : unsuccessful but not erroneous activity 
+    error : recoverable errors
+    warning : unsuccessful but not erroneous activity
     info : normal, expected activity
     metric : execution durations, counts, and similar data points (verbose)
     debug : developer messages
@@ -408,10 +408,35 @@ With the keys at hand you can start the node again, but this time configure it t
 If you do it manually, you need to find out your externally visible IP address. You'll have to set this using the `--server-host <ip>` option so the node advertises itself at the right address.
 
 The node will listen on multiple ports; the following are the default values, you don't need to specify them, but they're shown with the command line option you can use to override:
-* `--grpc-port 40401`: Port to accept deploys on.
 * `--server-port 40400`: Intra node communication port for consensus.
+* `--grpc-port-external 40401`: Port to accept deploys on.
+* `--grpc-port-internal 40402`: Port reserved for operator, to propose blocks for example.
+* `--server-http-port 40403`: Port to use for HTTP services such as metrics and GraphQL.
 * `--server-kademila-port 40404`: Intra node communication port for node discovery.
 
+Further options include:
+* `--server-use-gossiping`: Turn on more efficient intra-node communications stack.
+* `--grpc-use-tls`: Use TLS encryption on the API endpoints used for sending deploys and proposing blocks.
+
+When the `--grpc-use-tls` option is turned on, the `casperlabs-client` needs the `--node-id` option set to the value of the Keccak256 hash of the public key of the node. This is the same value as `NODE_ID`, so as a validator this information can be given to other nodes as well as dApp developers.
+
+An alternative way to obtain it is to use `openssl` to retrieve it from a remote host. The following script would pull the certificate from the local server and save it to a file:
+
+```console
+openssl s_client -showcerts -connect localhost:40401 </dev/null 2>/dev/null \
+  | openssl x509 -outform PEM \
+  > node.crt
+```
+
+You can run the code snippet that [generated](VALIDATOR.md#secp256r1) the `NODE_ID` on that file to compute the hash.
+
+
+### Configure auto-proposal
+
+It is possible to call the `propose` command to manually trigger block creation but this is best reserved for demonstrational purposes. The recommended way to run a node at the moment is to turn on the simple auto-proposal feature that will try to create a block if a certain number of deploys have accumulated or the oldest has been sitting in the buffer for longer than a threshold:
+* `--auto-propose-enabled true`
+* `--auto-propose-max-interval 5seconds`
+* `--auto-propose-max-count 10`
 
 
 ### Starting the node

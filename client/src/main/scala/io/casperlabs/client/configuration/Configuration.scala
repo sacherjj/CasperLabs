@@ -4,7 +4,8 @@ import java.io.File
 final case class ConnectOptions(
     host: String,
     portExternal: Int,
-    portInternal: Int
+    portInternal: Int,
+    nodeId: Option[String]
 )
 
 sealed trait Configuration
@@ -47,7 +48,12 @@ final case class Query(
 object Configuration {
   def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
     val options = Options(args)
-    val connect = ConnectOptions(options.host(), options.port(), options.portInternal())
+    val connect = ConnectOptions(
+      options.host(),
+      options.port(),
+      options.portInternal(),
+      options.nodeId.toOption
+    )
     val conf = options.subcommand.map {
       case options.deploy =>
         Deploy(
