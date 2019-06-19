@@ -7,7 +7,7 @@ set -e
 
 PORT=${CL_SERVER_HTTP_PORT:-40403}
 HOSTS=$(docker ps --format '{{.Names}}' \
-    | grep node- \
+    | grep -e ^node- \
     | sort \
     | awk -v ORS=', ' '{print "\""$1":'$PORT'\""}' \
     | sed 's/, $//')

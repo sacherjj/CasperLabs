@@ -98,7 +98,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                        // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
                        internalAddBlock(block, dag)
                      }
-          // TODO: Ideally this method would just return the block hashes it created,
+          // This method could just return the block hashes it created,
           // but for now it does gossiping as well. The methods return the full blocks
           // because for missing blocks it's not yet saved to the database.
           _ <- attempts.traverse {
@@ -131,18 +131,27 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                           case _ =>
                             reAttemptBuffer(updatedDag, lastFinalizedBlockHash) // reAttempt for any status that resulted in the adding of the block into the view
                         }
-      tipHashes <- estimator(updatedDag)
-      _ <- Log[F].debug(
-            s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
-          )
-      tipHash                       = tipHashes.head
-      _                             <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
+
+      // Update the last finalized block; remove finalized deploys from the buffer
       lastFinalizedBlockHash        <- LastFinalizedBlockHashContainer[F].get
       updatedLastFinalizedBlockHash <- updateLastFinalizedBlock(updatedDag, lastFinalizedBlockHash)
       _                             <- LastFinalizedBlockHashContainer[F].set(updatedLastFinalizedBlockHash)
       _ <- Log[F].info(
             s"New last finalized block hash is ${PrettyPrinter.buildString(updatedLastFinalizedBlockHash)}."
           )
+
+      tipHashes <- estimator(updatedDag)
+      _ <- Log[F].debug(
+            s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
+          )
+      tipHash = tipHashes.head
+      _       <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
+
+      // Push any unfinalized deploys which are still in the buffer back to pending state
+      // if the blocks they were contained have just become orphans.
+      requeued <- requeueOrphanedDeploys(updatedDag, tipHashes)
+      _        <- Log[F].info(s"Re-queued ${requeued} orphaned deploys.").whenA(requeued > 0)
+
     } yield (block, status) :: furtherAttempts
 
   /** Go from the last finalized block and visit all children that can be finalized now.
@@ -297,7 +306,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
         _ <- Log[F].info(
               s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
-        remaining        <- remainingDeploys(dag, parents)
+        remaining        <- remainingDeploys(parents)
         bondedValidators = bonds(parents.head).map(_.validatorPublicKey).toSet
         //We ensure that only the justifications given in the block are those
         //which are bonded validators in the chosen parent. This is safe because
@@ -341,7 +350,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
   /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploys(
-      dag: BlockDagRepresentation[F],
       parents: Seq[Block]
   ): F[Seq[Deploy]] =
     for {
@@ -367,6 +375,62 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
         }
         .toSeq
     } yield remaining
+
+  /** If another node proposed a block which orphaned something proposed by this node,
+    * and we still have these deploys in the `processedDeploys` buffer then put them
+    * back into the `pendingDeploys` so that the `AutoProposer` can pick them up again.
+    */
+  private def requeueOrphanedDeploys(
+      dag: BlockDagRepresentation[F],
+      tipHashes: IndexedSeq[BlockHash]
+  ): F[Int] =
+    for {
+      casperState <- Cell[F, CasperState].read
+
+      // We actually need the tips which can be merged, the ones which we'd build on if we
+      // attempted to create a new block.
+      tips    <- tipHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
+      merged  <- ExecEngineUtil.merge[F](tips, dag)
+      parents = merged.parents.map(_.blockHash).toSet
+
+      deployToBlocksMap <- casperState.deployBuffer.processedDeploys.values
+                            .map(_.deployHash)
+                            .toList
+                            .traverse { deployHash =>
+                              BlockStore[F]
+                                .findBlockHashesWithDeployhash(deployHash)
+                                .map(deployHash -> _)
+                            }
+                            .map(_.toMap)
+
+      blockHashes = deployToBlocksMap.values.flatten.toList.distinct
+
+      // Find the blocks from which there's no way through the descendants to reach a tip.
+      orphanedBlockHashes <- blockHashes
+                              .traverse { blockHash =>
+                                DagOperations
+                                  .bfTraverseF[F, BlockHash](blockHashes)(
+                                    h => dag.children(h).map(_.toList.flatten)
+                                  )
+                                  .find(parents)
+                                  .map(blockHash -> _.isEmpty)
+                              }
+                              .map {
+                                _.filter(_._2).map(_._1).toSet
+                              }
+
+      orphanedDeployHashes = deployToBlocksMap.collect {
+        case (deployHash, blockHashes) if blockHashes.forall(orphanedBlockHashes) =>
+          deployHash
+      }.toSet
+
+      _ <- Cell[F, CasperState].modify { s =>
+            s.copy(
+              deployBuffer = s.deployBuffer.orphaned(orphanedDeployHashes)
+            )
+          } whenA (orphanedDeployHashes.nonEmpty)
+
+    } yield orphanedDeployHashes.size
 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */

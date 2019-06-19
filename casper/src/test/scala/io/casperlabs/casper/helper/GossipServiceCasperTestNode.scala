@@ -34,6 +34,7 @@ class GossipServiceCasperTestNode[F[_]](
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     validateNonces: Boolean = true,
+    maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainId: String = "casperlabs",
     relaying: Relaying[F],
     gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F],
@@ -53,7 +54,8 @@ class GossipServiceCasperTestNode[F[_]](
       genesis,
       blockDagDir,
       blockStoreDir,
-      validateNonces
+      validateNonces,
+      maybeMakeEE
     )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
   implicit val safetyOracleEff: SafetyOracle[F] = SafetyOracle.cliqueOracle[F]
@@ -163,7 +165,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true
+      validateNonces: Boolean = true,
+      maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
@@ -228,7 +231,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   relaying = relaying,
                   gossipService = gossipService,
                   validatorToNode = validatorToNode,
-                  validateNonces = validateNonces
+                  validateNonces = validateNonces,
+                  maybeMakeEE = maybeMakeEE
                 )(
                   concurrentF,
                   blockStore,

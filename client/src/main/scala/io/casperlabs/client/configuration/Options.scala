@@ -38,6 +38,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
+  val nodeId =
+    opt[String](
+      descr =
+        "Node ID (i.e. the Keccak256 hash of the public key the node uses for TLS) in case secure communication is needed.",
+      required = false
+    )
+
   val hexCheck: String => Boolean = _.matches("[0-9a-fA-F]+")
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile

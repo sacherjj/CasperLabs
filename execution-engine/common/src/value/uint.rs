@@ -60,7 +60,7 @@ macro_rules! ser_and_num_impls {
             }
         }
 
-        // Trait implementations for uinifying U* as numeric types
+        // Trait implementations for unifying U* as numeric types
         impl Zero for $type {
             fn zero() -> Self {
                 $type::zero()

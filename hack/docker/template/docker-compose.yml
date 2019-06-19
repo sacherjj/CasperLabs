@@ -43,11 +43,14 @@ services:
       CL_GRPC_SOCKET: /root/.casperlabs/sockets/.casper-node.sock
       CL_SERVER_USE_GOSSIPING: $CL_SERVER_USE_GOSSIPING
       CL_SERVER_RELAY_FACTOR: 1
+      CL_SERVER_NO_UPNP: "true"
       CL_LOG_LEVEL: $CL_LOG_LEVEL
       CL_CASPER_VALIDATOR_PUBLIC_KEY_PATH: /root/.casperlabs/node/validator-public.pem
       CL_CASPER_VALIDATOR_PRIVATE_KEY_PATH: /root/.casperlabs/node/validator-private.pem
       CL_TLS_CERTIFICATE: /root/.casperlabs/node/node.certificate.pem
       CL_TLS_KEY: /root/.casperlabs/node/node.key.pem
+      CL_GRPC_USE_TLS: "true"
+      CL_METRICS_PROMETHEUS: "true"
     entrypoint:
       - sh
       - -c
