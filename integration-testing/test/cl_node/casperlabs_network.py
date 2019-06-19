@@ -6,6 +6,7 @@ from typing import Callable, Dict, List
 import docker
 import docker.errors
 
+from test.cl_node.docker_execution_engine import  DockerExecutionEngine
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_node import CasperLabsNode
 from test.cl_node.common import random_string
@@ -48,6 +49,11 @@ class CasperLabsNetwork:
     def docker_nodes(self) -> List[DockerNode]:
         with self._lock:
             return [cl_node.node for cl_node in self.cl_nodes]
+
+    @property
+    def execution_engines(self) -> List[DockerExecutionEngine]:
+        with self._lock:
+            return [cl_node.execution_engine for cl_node in self.cl_nodes]
 
     def get_key(self):
         key_pair = PREGENERATED_KEYPAIRS[self._next_key_number]

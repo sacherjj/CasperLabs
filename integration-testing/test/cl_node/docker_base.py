@@ -17,7 +17,7 @@ import docker.errors
 def humanify(line):
     """
     Decode json dump of execution engine's structured log and render a human friendly line,
-    containing, together with prefix rendered by the Python test framewoork, all useful
+    containing, together with prefix rendered by the Python test framework, all useful
     information. The original dictionary in the EE structured log looks like follows:
 
         {'timestamp': '2019-06-08T17:51:35.308Z', 'process_id': 1, 'process_name': 'casperlabs-engine-grpc-server', 'host_name': 'execution-engine-0-mlgtn', 'log_level': 'Info', 'priority': 5, 'message_type': 'ee-structured', 'message_type_version': '1.0.0', 'message_id': '14039567985248808663', 'description': 'starting Execution Engine Server', 'properties': {'message': 'starting Execution Engine Server', 'message_template': '{message}'}}
