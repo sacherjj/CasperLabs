@@ -115,7 +115,10 @@ class NodeRuntime private[node] (
         implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                           id,
                                                           kademliaPort,
-                                                          conf.server.defaultTimeout
+                                                          conf.server.defaultTimeout,
+                                                          conf.server.useGossiping,
+                                                          conf.server.relayFactor,
+                                                          conf.server.relaySaturation
                                                         )(
                                                           maybeBootstrap
                                                         )(

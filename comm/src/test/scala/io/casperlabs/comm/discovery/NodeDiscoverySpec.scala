@@ -473,6 +473,7 @@ object NodeDiscoverySpec {
           recentlyAlivePeersRef,
           alpha,
           k,
+          true,
           alivePeersCacheSize,
           alivePeersCacheMinThreshold,
           alivePeersCacheExpirationPeriod,

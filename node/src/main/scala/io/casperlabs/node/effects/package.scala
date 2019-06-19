@@ -25,7 +25,14 @@ package object effects {
 
   def log: Log[Task] = Log.log
 
-  def nodeDiscovery(id: NodeIdentifier, port: Int, timeout: FiniteDuration)(init: Option[Node])(
+  def nodeDiscovery(
+      id: NodeIdentifier,
+      port: Int,
+      timeout: FiniteDuration,
+      gossipingEnabled: Boolean,
+      gossipingRelayFactor: Int,
+      gossipingRelaySaturation: Int
+  )(init: Option[Node])(
       implicit
       scheduler: Scheduler,
       peerNodeAsk: NodeAsk[Task],
@@ -34,7 +41,14 @@ package object effects {
       metrics: Metrics[Task]
   ): Resource[Effect, NodeDiscovery[Task]] =
     NodeDiscoveryImpl
-      .create[Task](id, port, timeout)(init)
+      .create[Task](
+        id,
+        port,
+        timeout,
+        gossipingEnabled,
+        gossipingRelayFactor,
+        gossipingRelaySaturation
+      )(init)
       .toEffect
 
   def time(implicit timer: Timer[Task]): Time[Task] =

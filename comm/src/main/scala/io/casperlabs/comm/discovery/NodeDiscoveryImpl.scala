@@ -23,7 +23,10 @@ object NodeDiscoveryImpl {
   def create[F[_]: Concurrent: Log: Time: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Par](
       id: NodeIdentifier,
       port: Int,
-      timeout: FiniteDuration
+      timeout: FiniteDuration,
+      gossipingEnabled: Boolean,
+      gossipingRelayFactor: Int,
+      gossipingRelaySaturation: Int
   )(
       init: Option[Node]
   )(implicit scheduler: Scheduler): Resource[F, NodeDiscovery[F]] = {
@@ -42,8 +45,21 @@ object NodeDiscoveryImpl {
       Resource.liftF(for {
         table              <- PeerTable[F](id)
         recentlyAlivePeers <- Ref.of[F, (Set[Node], Millis)]((Set.empty, 0L))
-        knd                <- Sync[F].delay(new NodeDiscoveryImpl[F](id, table, recentlyAlivePeers))
-        _                  <- init.fold(().pure[F])(knd.addNode)
+        knd <- Sync[F].delay {
+                val alivePeersCacheSize = if (gossipingRelaySaturation == 100) {
+                  Int.MaxValue
+                } else {
+                  (gossipingRelayFactor * 100) / (100 - gossipingRelaySaturation)
+                }
+                new NodeDiscoveryImpl[F](
+                  id = id,
+                  table = table,
+                  recentlyAlivePeersRef = recentlyAlivePeers,
+                  gossipingEnabled = gossipingEnabled,
+                  alivePeersCacheSize = alivePeersCacheSize
+                )
+              }
+        _ <- init.fold(().pure[F])(knd.addNode)
       } yield knd)
     }
   }
@@ -55,6 +71,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
     recentlyAlivePeersRef: Ref[F, (Set[Node], Millis)],
     alpha: Int = 3,
     k: Int = PeerTable.Redundancy,
+    gossipingEnabled: Boolean,
     /** Actual size can be greater due to batched parallel pings, but not less.
       * Stops early without pinging all peers if reached required size. */
     alivePeersCacheSize: Int = 20,
@@ -166,25 +183,33 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
   }
 
   override def alivePeersAscendingDistance: F[List[Node]] =
-    for {
-      (recentlyAlivePeers, lastTimeAccess) <- recentlyAlivePeersRef.get
-      currentTime                          <- currentTime
-      oldEnough                            = FiniteDuration(currentTime - lastTimeAccess, MILLISECONDS) > alivePeersCacheExpirationPeriod
-      alivePeers                           <- filterAlive(recentlyAlivePeers.toList)
-      tooFewAlivePeers                     = alivePeers.size < alivePeersCacheMinThreshold
-      newAlivePeers <- if (oldEnough || tooFewAlivePeers)
-                        for {
-                          allKnownPeers <- table.peersAscendingDistance.map(Random.shuffle(_))
-                          notPingedYet = if (oldEnough) allKnownPeers
-                          else allKnownPeers.filterNot(recentlyAlivePeers)
-                          newAlivePeers <- filterAlive(notPingedYet, alivePeersCacheSize)
-                        } yield if (oldEnough) newAlivePeers else newAlivePeers ++ alivePeers
-                      else
-                        alivePeers.pure[F]
-      _ <- recentlyAlivePeersRef.set(
-            (newAlivePeers.toSet, if (oldEnough) currentTime else lastTimeAccess)
-          )
-    } yield PeerTable.sort(newAlivePeers, id)(_.id)
+    if (!gossipingEnabled)
+      // TODO: this is misleading because returned peers won't necessarily be alive.
+      // Though, this is fine because it's only used by
+      // the old legacy communication layer code which should go away eventually
+      // io.casperlabs.comm.rp.Connect#findAndConnect
+      // The old code maintains its own list of alive connections
+      table.peersAscendingDistance
+    else
+      for {
+        (recentlyAlivePeers, lastTimeAccess) <- recentlyAlivePeersRef.get
+        currentTime                          <- currentTime
+        oldEnough                            = FiniteDuration(currentTime - lastTimeAccess, MILLISECONDS) > alivePeersCacheExpirationPeriod
+        alivePeers                           <- filterAlive(recentlyAlivePeers.toList)
+        tooFewAlivePeers                     = alivePeers.size < alivePeersCacheMinThreshold
+        newAlivePeers <- if (oldEnough || tooFewAlivePeers)
+                          for {
+                            allKnownPeers <- table.peersAscendingDistance.map(Random.shuffle(_))
+                            notPingedYet = if (oldEnough) allKnownPeers
+                            else allKnownPeers.filterNot(recentlyAlivePeers)
+                            newAlivePeers <- filterAlive(notPingedYet, alivePeersCacheSize)
+                          } yield if (oldEnough) newAlivePeers else newAlivePeers ++ alivePeers
+                        else
+                          alivePeers.pure[F]
+        _ <- recentlyAlivePeersRef.set(
+              (newAlivePeers.toSet, if (oldEnough) currentTime else lastTimeAccess)
+            )
+      } yield PeerTable.sort(newAlivePeers, id)(_.id)
 
   def filterAlive(peers: List[Node]): F[List[Node]] =
     peers.parFlatTraverse { peer =>
