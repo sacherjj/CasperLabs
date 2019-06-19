@@ -181,7 +181,9 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
                         } yield if (oldEnough) newAlivePeers else newAlivePeers ++ alivePeers
                       else
                         alivePeers.pure[F]
-      _ <- recentlyAlivePeersRef.set((newAlivePeers.toSet, currentTime))
+      _ <- recentlyAlivePeersRef.set(
+            (newAlivePeers.toSet, if (oldEnough) currentTime else lastTimeAccess)
+          )
     } yield PeerTable.sort(newAlivePeers, id)(_.id)
 
   def filterAlive(peers: List[Node]): F[List[Node]] =
