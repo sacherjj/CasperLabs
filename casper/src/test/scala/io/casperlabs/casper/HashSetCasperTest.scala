@@ -1193,6 +1193,38 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     }
   }
 
+  it should "put orphaned deploys back into the pending deploy buffer" in effectTest {
+    // Make a network where we don't validate nonces, I just want the merge conflict.
+    for {
+      nodes <- networkEff(
+                validatorKeys.take(2),
+                genesis,
+                transforms,
+                validateNonces = false,
+                maybeMakeEE =
+                  Some(HashSetCasperTestNode.simpleEEApi[Effect](_, _, generateConflict = true))
+              )
+
+      deployA         <- ProtoUtil.basicDeploy[Effect](1)
+      _               <- nodes(0).casperEff.deploy(deployA)
+      createA         <- nodes(0).casperEff.createBlock
+      Created(blockA) = createA
+      _               <- nodes(0).casperEff.addBlock(blockA) shouldBeF Valid
+      s0              <- nodes(0).casperState.read
+      _               = s0.deployBuffer.processedDeploys should contain key (deployA.deployHash)
+
+      deployB         <- ProtoUtil.basicDeploy[Effect](1)
+      _               <- nodes(1).casperEff.deploy(deployB)
+      createB         <- nodes(1).casperEff.createBlock
+      Created(blockB) = createB
+      // nodes(1) should have more weight then nodes(0) so it should take over
+      _  <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
+      s1 <- nodes(0).casperState.read
+      _  = s1.deployBuffer.pendingDeploys should contain key (deployA.deployHash)
+      _  <- nodes.map(_.tearDown()).toList.sequence
+    } yield ()
+  }
+
   it should "remove deploys with lower than expected nonces from the buffer" in effectTest {
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
 
