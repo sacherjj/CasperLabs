@@ -86,7 +86,7 @@ cargo-publish-all: \
 cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
 
 %/Cargo.toml/clean:
-	cd $* && cargo clean
+	cd $* && ([ -d target ] && cargo clean --target-dir target || cargo clean)
 
 
 # Build the `latest` docker image for local testing. Works with Scala.
@@ -237,22 +237,26 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 # Compile contracts that need to go into the Genesis block.
 package-blessed-contracts: \
-	execution-engine/target/wasm32-unknown-unknown/blessed-contracts.zip
+	execution-engine/target/blessed-contracts.tar.gz
 
 # Compile a blessed contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
 .make/blessed-contracts/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$*)
 	cd execution-engine/blessed-contracts/$(CONTRACT) && \
-	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
+	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown --target-dir target
 	mkdir -p $(dir $@) && touch $@
 
 # Package all blessed contracts that we have to make available for download.
-execution-engine/target/wasm32-unknown-unknown/blessed-contracts.zip: \
+execution-engine/target/blessed-contracts.tar.gz: \
 	.make/blessed-contracts/mint-token
-	$(eval ZIP=$(PWD)/$@)
-	rm -rf $(ZIP)
-	cd execution-engine/target/wasm32-unknown-unknown/release && \
-	tar -cvzf $(ZIP) *.wasm
+	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))
+	rm -rf $(ARCHIVE) $(ARCHIVE).gz
+	mkdir -p $(dir $@)
+	tar -cvf $(ARCHIVE) -T /dev/null
+	find execution-engine/blessed-contracts -wholename *.wasm | grep -v /release/deps/ | while read file; do \
+		cd $$(dirname $$file); tar -rvf $(ARCHIVE) $$(basename $$file); \
+	done
+	gzip $(ARCHIVE)
 
 
 # Build the execution engine executable. NOTE: This is not portable.
