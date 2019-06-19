@@ -14,6 +14,8 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v -e ipc.*\.rs)
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 
+RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
+
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
 # https://stackoverflow.com/questions/5426934/why-this-makefile-removes-my-goal
@@ -66,7 +68,8 @@ docker-push/%: docker-build/%
 
 cargo-package-all: \
 	.make/cargo-package/execution-engine/common \
-	cargo-native-packager/execution-engine/comm
+	cargo-native-packager/execution-engine/comm \
+	package-blessed-contracts
 
 # Drone is already running commands in the `builderenv`, no need to delegate.
 cargo-native-packager/%:
@@ -231,6 +234,27 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		'"
 	mkdir -p $(dir $@) && touch $@
 
+
+# Compile contracts that need to go into the Genesis block.
+package-blessed-contracts: \
+	execution-engine/target/wasm32-unknown-unknown/blessed-contracts.zip
+
+# Compile a blessed contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
+.make/blessed-contracts/%: $(RUST_SRC) .make/rustup-update
+	$(eval CONTRACT=$*)
+	cd execution-engine/blessed-contracts/$(CONTRACT) && \
+	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
+	mkdir -p $(dir $@) && touch $@
+
+# Package all blessed contracts that we have to make available for download.
+execution-engine/target/wasm32-unknown-unknown/blessed-contracts.zip: \
+	.make/blessed-contracts/mint-token
+	$(eval ZIP=$(PWD)/$@)
+	rm -rf $(ZIP)
+	cd execution-engine/target/wasm32-unknown-unknown/release && \
+	tar -cvzf $(ZIP) *.wasm
+
+
 # Build the execution engine executable. NOTE: This is not portable.
 execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
@@ -274,4 +298,11 @@ protobuf/google/api:
 		# You'll need to isntall `rpmbuild` for `cargo rpm` to work. I'm putting this here for reference:
 		sudo apt-get install rpm
 	fi
+	mkdir -p $(dir $@) && touch $@
+
+
+.make/rustup-update: execution-engine/rust-toolchain
+	rustup update $(RUST_TOOLCHAIN)
+	rustup toolchain install $(RUST_TOOLCHAIN)
+	rustup target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@
