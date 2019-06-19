@@ -279,7 +279,7 @@ impl From<i32> for AddKeyFailure {
     }
 }
 
-/// Represents an error that happens when trying to remoev remove an associated key
+/// Represents an error that happens when trying to remove an associated key
 /// from an account.
 ///
 /// It is represented by `i32` to be easily able to transform this value in an out
