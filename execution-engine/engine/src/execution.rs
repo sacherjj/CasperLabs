@@ -980,10 +980,6 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
-        // An instance that will be used for writes, and also is used
-        // to reflect last write on tracking copy to avoid conflicts.
-        let mut account_dirty = account.clone();
-
         if nonce_check {
             // Check the difference of a request nonce and account nonce.
             // Since both nonce and account's nonce are unsigned, so line below performs
@@ -1001,13 +997,12 @@ impl Executor<Module> for WasmiExecutor {
                 );
             }
 
-            // Bump nonce on write-only account instance that reflects last
-            // write of tracking copy that will happen below.
-            account_dirty.increment_nonce();
+            let mut updated_account = account.clone();
+            updated_account.increment_nonce();
             // Store updated account with new nonce
             tc.borrow_mut().write(
-                validated_key.clone(),
-                Validated::new(account_dirty.clone().into(), Validated::valid).unwrap(),
+                validated_key,
+                Validated::new(updated_account.into(), Validated::valid).unwrap(),
             );
         }
 
