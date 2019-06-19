@@ -7,13 +7,19 @@ import cats.temp.par._
 import io.casperlabs.catscontrib._
 import Catscontrib._
 import cats.effect._
+import cats.effect.concurrent.Ref
 import io.casperlabs.comm._
+import io.casperlabs.comm.discovery.NodeDiscoveryImpl.Millis
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval.{TaskLift, TaskLike}
 import monix.execution.Scheduler
 
+import scala.util.Random
+
 object NodeDiscoveryImpl {
+  type Millis = Long
+
   def create[F[_]: Concurrent: Log: Time: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Par](
       id: NodeIdentifier,
       port: Int,
@@ -34,9 +40,10 @@ object NodeDiscoveryImpl {
     )
     kademliaRpcResource.flatMap { implicit kRpc =>
       Resource.liftF(for {
-        table <- PeerTable[F](id)
-        knd   = new NodeDiscoveryImpl[F](id, table)
-        _     <- init.fold(().pure[F])(knd.addNode)
+        table              <- PeerTable[F](id)
+        recentlyAlivePeers <- Ref.of[F, (Set[Node], Millis)]((Set.empty, 0L))
+        knd                <- Sync[F].delay(new NodeDiscoveryImpl[F](id, table, recentlyAlivePeers))
+        _                  <- init.fold(().pure[F])(knd.addNode)
       } yield knd)
     }
   }
@@ -44,9 +51,19 @@ object NodeDiscoveryImpl {
 
 private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: KademliaService: Par](
     id: NodeIdentifier,
-    table: PeerTable[F],
+    val table: PeerTable[F],
+    recentlyAlivePeersRef: Ref[F, (Set[Node], Millis)],
     alpha: Int = 3,
-    k: Int = PeerTable.Redundancy
+    k: Int = PeerTable.Redundancy,
+    /** Actual size can be greater due to batched parallel pings, but not less.
+      * Stops early without pinging all peers if reached required size. */
+    alivePeersCacheSize: Int = 20,
+    /* Threshold to start gradually pinging peers to fill cache */
+    alivePeersCacheMinThreshold: Int = 10,
+    /* Period to re-fill cache */
+    alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
+    /* Batches pinged in parallel */
+    alivePeersCachePingsBatchSize: Int = 10
 ) extends NodeDiscovery[F] {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
@@ -149,9 +166,37 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
   }
 
   override def alivePeersAscendingDistance: F[List[Node]] =
-    table.peersAscendingDistance.flatMap { peers =>
-      peers.parFlatTraverse { peer =>
-        KademliaService[F].ping(peer).map(success => if (success) List(peer) else Nil)
-      }
+    for {
+      (recentlyAlivePeers, lastTimeAccess) <- recentlyAlivePeersRef.get
+      currentTime                          <- currentTime
+      oldEnough                            = FiniteDuration(currentTime - lastTimeAccess, MILLISECONDS) > alivePeersCacheExpirationPeriod
+      alivePeers                           <- filterAlive(recentlyAlivePeers.toList)
+      tooFewAlivePeers                     = alivePeers.size < alivePeersCacheMinThreshold
+      newAlivePeers <- if (oldEnough || tooFewAlivePeers)
+                        for {
+                          allKnownPeers <- table.peersAscendingDistance.map(Random.shuffle(_))
+                          notPingedYet = if (oldEnough) allKnownPeers
+                          else allKnownPeers.filterNot(recentlyAlivePeers)
+                          newAlivePeers <- filterAlive(notPingedYet, alivePeersCacheSize)
+                        } yield if (oldEnough) newAlivePeers else newAlivePeers ++ alivePeers
+                      else
+                        alivePeers.pure[F]
+      _ <- recentlyAlivePeersRef.set((newAlivePeers.toSet, currentTime))
+    } yield PeerTable.sort(newAlivePeers, id)(_.id)
+
+  def filterAlive(peers: List[Node]): F[List[Node]] =
+    peers.parFlatTraverse { peer =>
+      KademliaService[F].ping(peer).map(success => if (success) List(peer) else Nil)
     }
+
+  def filterAlive(peers: List[Node], max: Int): F[List[Node]] = {
+    val batches = peers.grouped(alivePeersCachePingsBatchSize).toList
+    batches.foldLeftM(List.empty[Node]) {
+      case (acc, _) if acc.size >= max   => acc.pure[F]
+      case (acc, batch) if batch.isEmpty => acc.pure[F]
+      case (acc, batch)                  => filterAlive(batch).map(acc ++ _)
+    }
+  }
+
+  def currentTime: F[Millis] = Sync[F].delay(System.currentTimeMillis())
 }

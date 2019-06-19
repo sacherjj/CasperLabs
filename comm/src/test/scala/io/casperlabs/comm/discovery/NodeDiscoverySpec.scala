@@ -1,8 +1,10 @@
 package io.casperlabs.comm.discovery
 
 import cats.effect.Timer
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.comm.discovery.NodeDiscoveryImpl.Millis
 import io.casperlabs.comm.discovery.NodeDiscoverySpec.TextFixture
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.metrics.Metrics
@@ -14,7 +16,7 @@ import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.Atomic
 import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.{Inspectors, Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 import scala.util.Random
@@ -185,7 +187,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           ) { (_, nd, _) =>
             for {
               _         <- nd.lookup(NodeIdentifier(target.id))
-              fromTable <- nd.alivePeersAscendingDistance
+              fromTable <- nd.table.peersAscendingDistance
             } yield {
               fromTable should contain theSameElementsAs withFailures.collect {
                 case (k, Some(_)) => k
@@ -282,30 +284,117 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
       }
     }
     "alivePeersAscendingDistance" should {
-      "return only alive peers in ascending distance to itself" in {
-        forAll(genFullyConnectedPeers) { peers: Map[Node, List[Node]] =>
-          val all   = peers.toList.flatMap { case (k, vs) => k :: vs }.toSet
-          val alive = all.filter(_ => Random.nextBoolean())
-          TextFixture.customInitial(
-            Map.empty,
-            all,
-            all.size,
-            0,
-            Some(alive)
-          ) { (_, nd, _) =>
-            for {
-              response <- nd.alivePeersAscendingDistance
-            } yield {
-              response should contain theSameElementsInOrderAs alive.toList.sorted(
-                (x: Node, y: Node) =>
-                  Ordering[BigInt].compare(
-                    PeerTable.xorDistance(NodeIdentifier(x.id), NodeDiscoverySpec.id),
-                    PeerTable.xorDistance(NodeIdentifier(y.id), NodeDiscoverySpec.id)
-                  )
-              )
+      "start pinging all peers if size(alive peers from cache) < pingAllThreshold" in forAll(
+        genFullyConnectedPeers
+      ) { peers: Map[Node, List[Node]] =>
+        val all              = toSet(peers)
+        val pingAllThreshold = nextInt(1, all.size)
+        val alive            = chooseRandom(all, nextInt(0, pingAllThreshold - 1))
+        TextFixture.customInitial(
+          connections = Map.empty,
+          tableInitial = all,
+          k = totalN(peers),
+          alpha = 0,
+          pings = Some(alive),
+          // To ping all peers
+          alivePeersCacheSize = totalN(peers),
+          alivePeersCacheMinThreshold = pingAllThreshold
+        ) { (kademlia, nd, _) =>
+          for {
+            // fills up cache
+            r1 <- nd.alivePeersAscendingDistance
+            // each request should cause re-pinging all peers
+            // firstly only alive peers from previous request
+            // then rest of all known peers trying to fill up cache
+            n  = nextInt(1, 5)
+            r2 <- nd.alivePeersAscendingDistance.replicateA(n)
+          } yield {
+            kademlia.totalPings shouldBe (totalN(peers) * (n + 1))
+            r1 should contain theSameElementsInOrderAs ascendingDistance(alive)
+            Inspectors.forAll(r2) { r =>
+              r should contain theSameElementsInOrderAs ascendingDistance(alive)
             }
           }
         }
+      }
+
+      "not ping all peers if size(alive peers from cache) >= pingAllThreshold" in forAll(
+        genFullyConnectedPeers
+      ) { peers: Map[Node, List[Node]] =>
+        val all              = toSet(peers)
+        val pingAllThreshold = nextInt(1, all.size)
+        val alive            = chooseRandom(all, nextInt(pingAllThreshold, all.size))
+        TextFixture.customInitial(
+          connections = Map.empty,
+          tableInitial = all,
+          k = totalN(peers),
+          alpha = 0,
+          pings = Some(alive),
+          // To ping all peers
+          alivePeersCacheSize = totalN(peers),
+          alivePeersCacheMinThreshold = pingAllThreshold,
+          // Sequential requests to make cache size deterministic
+          alivePeersCachePingsBatchSize = 1
+        ) { (kademlia, nd, _) =>
+          for {
+            // fills up cache
+            r1 <- nd.alivePeersAscendingDistance
+            // pings alive peers from previous query
+            r2 <- nd.alivePeersAscendingDistance
+          } yield {
+            kademlia.totalPings shouldBe (all.size + alive.size)
+            r1 should contain theSameElementsInOrderAs ascendingDistance(alive)
+            r2 should contain theSameElementsInOrderAs ascendingDistance(alive)
+          }
+        }
+      }
+
+      "cleanup cache if expired" in {
+        val peers: Map[Node, List[Node]] = sample(genFullyConnectedPeers)
+        TextFixture.customInitial(
+          connections = Map.empty,
+          tableInitial = toSet(peers),
+          k = totalN(peers),
+          alpha = 0,
+          Some(toSet(peers)),
+          // To ping all peers
+          alivePeersCacheSize = totalN(peers),
+          // To ignore how much alive peers check
+          alivePeersCacheMinThreshold = 0,
+          alivePeersCacheExpirationPeriod = 50.milliseconds
+        ) { (kademlia, nd, _) =>
+          for {
+            r1 <- nd.alivePeersAscendingDistance
+            _  <- Task.sleep(200.milliseconds)
+            r2 <- nd.alivePeersAscendingDistance
+          } yield {
+            // 1st => to fill up cache
+            // 2nd => to check alive peers from cache
+            // 3rd => to re-fill cache with alive peers
+            kademlia.totalPings shouldBe (peers.size * 3)
+            r1 should contain theSameElementsInOrderAs ascendingDistance(peers)
+            r2 should contain theSameElementsInOrderAs ascendingDistance(peers)
+          }
+        }
+      }
+      "stop pinging if desired cache size is reached" in forAll(genFullyConnectedPeers) {
+        peers: Map[Node, List[Node]] =>
+          TextFixture.customInitial(
+            connections = Map.empty,
+            tableInitial = toSet(peers),
+            k = totalN(peers),
+            alpha = 0,
+            pings = Some(toSet(peers)),
+            alivePeersCacheSize = 1,
+            // Sequential requests
+            alivePeersCachePingsBatchSize = 1
+          ) { (kademlia, nd, _) =>
+            for {
+              _ <- nd.alivePeersAscendingDistance
+            } yield {
+              kademlia.totalPings shouldBe 1
+            }
+          }
       }
     }
   }
@@ -364,10 +453,15 @@ object NodeDiscoverySpec {
         tableInitial: Set[Node],
         k: Int,
         alpha: Int = 2,
-        pings: Option[Set[Node]] = None
+        pings: Option[Set[Node]] = None,
+        alivePeersCacheSize: Int = 20,
+        alivePeersCacheMinThreshold: Int = 10,
+        alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
+        alivePeersCachePingsBatchSize: Int = 10
     )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit = {
       val effect = for {
-        table <- PeerTable[Task](id, k)
+        table                 <- PeerTable[Task](id, k)
+        recentlyAlivePeersRef <- Ref.of[Task, (Set[Node], Millis)]((Set.empty[Node], 0L))
         implicit0(kademliaMock: KademliaMock) = new KademliaMock(
           connections,
           pings.getOrElse(_ => true)
@@ -376,8 +470,13 @@ object NodeDiscoverySpec {
         nd = new NodeDiscoveryImpl[Task](
           id,
           table,
+          recentlyAlivePeersRef,
           alpha,
-          k
+          k,
+          alivePeersCacheSize,
+          alivePeersCacheMinThreshold,
+          alivePeersCacheExpirationPeriod,
+          alivePeersCachePingsBatchSize
         )
         _ <- test(kademliaMock, nd, alpha)
       } yield ()
@@ -389,21 +488,33 @@ object NodeDiscoverySpec {
         tableInitial: Set[Node],
         k: Int,
         alpha: Int = 2,
-        pings: Option[Set[Node]] = None
+        pings: Option[Set[Node]] = None,
+        alivePeersCacheSize: Int = 20,
+        alivePeersCacheMinThreshold: Int = 10,
+        alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
+        alivePeersCachePingsBatchSize: Int = 10
     )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit =
       customInitialWithFailures(
         connections.mapValues(Option(_)),
         tableInitial,
         k,
         alpha,
-        pings
+        pings,
+        alivePeersCacheSize,
+        alivePeersCacheMinThreshold,
+        alivePeersCacheExpirationPeriod,
+        alivePeersCachePingsBatchSize
       )(test)
 
     def prefilledTable(
         connections: Map[Node, List[Node]],
         k: Int,
         alpha: Int = 2,
-        pings: Option[Set[Node]] = None
+        pings: Option[Set[Node]] = None,
+        alivePeersCacheSize: Int = 20,
+        alivePeersCacheMinThreshold: Int = 10,
+        alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
+        alivePeersCachePingsBatchSize: Int = 10
     )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit =
       customInitial(
         connections,
@@ -413,7 +524,11 @@ object NodeDiscoverySpec {
           .toSet,
         k,
         alpha,
-        pings
+        pings,
+        alivePeersCacheSize,
+        alivePeersCacheMinThreshold,
+        alivePeersCacheExpirationPeriod,
+        alivePeersCachePingsBatchSize
       )(test)
   }
 }
