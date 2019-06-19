@@ -4,6 +4,7 @@ import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.CasperConf
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
@@ -22,8 +23,9 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-
+import java.nio.file.Path
 import scala.util.Try
+import io.casperlabs.crypto.Keys
 
 /**
   * Validator side of the protocol defined in
@@ -34,10 +36,7 @@ class BlockApproverProtocol(
     deployTimestamp: Long,
     bonds: Map[PublicKey, Long],
     wallets: Seq[PreWallet],
-    minimumBond: Long,
-    maximumBond: Long,
-    faucet: Boolean,
-    requiredSigs: Int
+    conf: CasperConf
 ) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
@@ -55,13 +54,10 @@ class BlockApproverProtocol(
       BlockApproverProtocol
         .validateCandidate(
           candidate,
-          requiredSigs,
           deployTimestamp,
           wallets,
           _bonds,
-          minimumBond,
-          maximumBond,
-          faucet
+          conf
         )
         .flatMap {
           case Right(_) =>
@@ -101,48 +97,61 @@ object BlockApproverProtocol {
 
   def validateCandidate[F[_]: Concurrent: Log: ExecutionEngineService](
       candidate: ApprovedBlockCandidate,
-      requiredSigs: Int,
       timestamp: Long,
       wallets: Seq[PreWallet],
       bonds: Map[ByteString, Long],
-      minimumBond: Long,
-      maximumBond: Long,
-      faucet: Boolean
+      conf: CasperConf
   ): F[Either[String, Unit]] = {
 
-    def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
+    def validate: EitherT[F, String, (Seq[InternalProcessedDeploy], RChainState)] =
       for {
-        _ <- (candidate.requiredSigs == requiredSigs)
-              .either(())
-              .or("Candidate didn't have required signatures number.")
-        block      <- Either.fromOption(candidate.block, "Candidate block is empty.")
-        body       <- Either.fromOption(block.body, "Body is empty")
-        postState  <- Either.fromOption(body.state, "Post state is empty")
+        _ <- EitherT.fromEither[F](
+              (candidate.requiredSigs == conf.requiredSigs)
+                .either(())
+                .or("Candidate didn't have required signatures number.")
+            )
+        block      <- EitherT.fromOption[F](candidate.block, "Candidate block is empty.")
+        body       <- EitherT.fromOption[F](block.body, "Body is empty")
+        postState  <- EitherT.fromOption[F](body.state, "Post state is empty")
         blockBonds = postState.bonds.map { case Bond(validator, stake) => validator -> stake }.toMap
-        _ <- (blockBonds == bonds)
-              .either(())
-              .or("Block bonds don't match expected.")
+        _ <- EitherT.fromEither[F](
+              (blockBonds == bonds)
+                .either(())
+                .or("Block bonds don't match expected.")
+            )
         validators = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
-        posParams  = ProofOfStakeParams(minimumBond, maximumBond, validators)
-        faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
-        genesisBlessedContracts = Genesis
-          .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
-          .map(LegacyConversions.fromDeploy(_))
-          .toSet
+        posParams  = ProofOfStakeParams(conf.minimumBond, conf.maximumBond, validators)
+        genesisBlessedContracts <- EitherT.liftF(
+                                    Genesis
+                                      .defaultBlessedTerms(
+                                        timestamp,
+                                        conf.genesisAccountPublicKeyPath,
+                                        conf.initialTokens,
+                                        posParams,
+                                        wallets,
+                                        conf.mintCodePath,
+                                        conf.posCodePath
+                                      )
+                                      .map(_.map(LegacyConversions.fromDeploy(_)).toSet)
+                                  )
         blockDeploys = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
-        _ <- blockDeploys
-              .forall(
-                d => genesisBlessedContracts.exists(dd => deployDataEq.eqv(dd, d.deploy))
-              )
-              .either(())
-              .or("Candidate deploys do not match expected deploys.")
-        _ <- (blockDeploys.size == genesisBlessedContracts.size)
-              .either(())
-              .or("Mismatch between number of candidate deploys and expected number of deploys.")
+        _ <- EitherT.fromEither[F](
+              blockDeploys
+                .forall(
+                  d => genesisBlessedContracts.exists(dd => deployDataEq.eqv(dd, d.deploy))
+                )
+                .either(())
+                .or("Candidate deploys do not match expected deploys.")
+            )
+        _ <- EitherT.fromEither[F](
+              (blockDeploys.size == genesisBlessedContracts.size)
+                .either(())
+                .or("Mismatch between number of candidate deploys and expected number of deploys.")
+            )
       } yield (blockDeploys, postState)
 
     (for {
-      result                    <- EitherT(validate.pure[F])
+      result                    <- validate
       (blockDeploys, postState) = result
       deploys                   = blockDeploys.map(pd => LegacyConversions.toDeploy(pd.deploy))
       protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
@@ -192,7 +201,7 @@ object BlockApproverProtocol {
       Try(UnapprovedBlock.parseFrom(msg.content.toByteArray)).toOption
     else None
 
-  val deployDataEq: cats.kernel.Eq[DeployData] = new cats.kernel.Eq[DeployData] {
+  private val deployDataEq: cats.kernel.Eq[DeployData] = new cats.kernel.Eq[DeployData] {
     override def eqv(x: DeployData, y: DeployData): Boolean =
       x.user == y.user &&
         x.timestamp === y.timestamp &&
@@ -201,6 +210,8 @@ object BlockApproverProtocol {
         x.address == y.address &&
         x.gasPrice === y.gasPrice &&
         x.gasLimit === y.gasLimit &&
-        x.nonce === y.nonce
+        x.nonce === y.nonce &&
+        x.getSession.code == y.getSession.code &&
+        x.getSession.args == y.getSession.args
   }
 }

@@ -126,17 +126,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
     for {
-      _     <- Log[F].info("Starting in create genesis mode")
-      bonds <- Genesis.getBonds[F](conf.bondsFile, conf.numValidators)
-      _     <- ExecutionEngineService[F].setBonds(bonds)
-      genesis <- Genesis[F](
-                  conf.walletsFile,
-                  conf.minimumBond,
-                  conf.maximumBond,
-                  conf.hasFaucet,
-                  conf.shardId,
-                  conf.deployTimestamp
-                )
+      _                                                            <- Log[F].info("Starting in create genesis mode")
+      bonds                                                        <- Genesis.getBonds[F](conf.bondsFile, conf.numValidators)
+      _                                                            <- ExecutionEngineService[F].setBonds(bonds)
+      genesis                                                      <- Genesis[F](conf)
       BlockMsgWithTransform(Some(genesisBlock), genesisTransforms) = genesis
       validatorId                                                  <- ValidatorIdentity.fromConfig[F](conf)
       bondedValidators                                             = genesisBlock.getHeader.getState.bonds.map(_.validatorPublicKey).toSet
@@ -185,10 +178,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         timestamp,
         bonds,
         wallets,
-        conf.minimumBond,
-        conf.maximumBond,
-        conf.hasFaucet,
-        conf.requiredSigs
+        conf
       )
       gv <- Ref.of[F, CasperPacketHandlerInternal[F]](
              new GenesisValidatorHandler(

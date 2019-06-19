@@ -1,57 +1,86 @@
 package io.casperlabs.casper.genesis
 
 import java.io.File
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad, MonadError}
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.CasperConf
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, Sorting}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil, Sorting}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.shared.{Log, LogSource, Time}
+import io.casperlabs.ipc
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.shared.{Log, LogSource, Resources, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NoStackTrace
+import io.casperlabs.crypto.Keys
 
 object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  // Todo: there should be some initial contracts like Mint, POS or something else
-  def defaultBlessedTerms(
+  val protocolVersion = 1L
+
+  private def readFile[F[_]: Sync](path: Path) =
+    Sync[F].delay(Files.readAllBytes(path))
+
+  def defaultBlessedTerms[F[_]: Sync: Log](
       timestamp: Long,
+      accountPublicKeyPath: Option[Path],
+      initialTokens: BigInt,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
-      faucetCode: String => String
-  ): List[Deploy] =
-    List()
+      mintCodePath: Option[Path],
+      posCodePath: Option[Path]
+  ): F[List[Deploy]] = {
+    def readCode(maybePath: Option[Path]) =
+      maybePath.fold(none[ipc.DeployCode].pure[F]) { path =>
+        readFile(path) map { bytes =>
+          ipc.DeployCode(ByteString.copyFrom(bytes)).some
+        }
+      }
+    // NOTE: In the future the EE might switch to a different model, buf right now it's asking
+    // for details that have no representation in a block, and it also doesn't actually execute
+    // the deploys we hand over, so for now we're going to pass on the request it needs in a
+    // serialized format to capture everything it wants the way it wants it.
+    for {
+      accountPublicKey <- getAccountPublicKey[F](accountPublicKeyPath)
+      mintCode         <- readCode(mintCodePath)
+      posCode          <- readCode(posCodePath)
+      request = ipc.GenesisRequest(
+        address = ByteString.copyFrom(accountPublicKey),
+        initialTokens =
+          state.BigInt(initialTokens.toString, bitWidth = initialTokens.bitLength).some,
+        timestamp = timestamp,
+        mintCode = mintCode,
+        proofOfStakeCode = posCode,
+        protocolVersion = state.ProtocolVersion(protocolVersion).some
+      )
+      deploy = ProtoUtil.basicDeploy(
+        timestamp,
+        sessionCode = ByteString.copyFrom(request.toByteArray),
+        accountPublicKey = ByteString.copyFrom(accountPublicKey),
+        nonce = 1
+      )
+    } yield List(deploy)
+  }
 
-  def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
-      initial: Block,
-      posParams: ProofOfStakeParams,
-      wallets: Seq[PreWallet],
-      faucetCode: String => String,
-      startHash: StateHash,
-      timestamp: Long
-  ): F[BlockMsgWithTransform] =
-    withContracts(
-      defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
-      initial,
-      startHash
-    )
-
-  def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
+  private def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
       blessedTerms: List[Deploy],
       initial: Block,
       startHash: StateHash
@@ -99,9 +128,8 @@ object Genesis {
       unsignedBlock = unsignedBlockProto(body, header)
     } yield BlockMsgWithTransform(Some(unsignedBlock), transforms.flatten)
 
-  def withoutContracts(
+  private def withoutContracts(
       bonds: Map[PublicKey, Long],
-      version: Long,
       timestamp: Long,
       chainId: String
   ): Block = {
@@ -126,13 +154,28 @@ object Genesis {
       justifications = Nil,
       state = state,
       rank = 0,
-      protocolVersion = version,
+      protocolVersion = protocolVersion,
       timestamp = timestamp,
       chainId = chainId
     )
 
     unsignedBlockProto(body, header)
   }
+
+  def apply[F[_]: Concurrent: Log: Time: ExecutionEngineService](
+      conf: CasperConf
+  ): F[BlockMsgWithTransform] = apply[F](
+    conf.walletsFile,
+    conf.minimumBond,
+    conf.maximumBond,
+    conf.hasFaucet,
+    conf.chainId,
+    conf.deployTimestamp,
+    conf.genesisAccountPublicKeyPath,
+    BigInt(conf.initialTokens),
+    conf.mintCodePath,
+    conf.posCodePath
+  )
 
   //TODO: Decide on version number and shard identifier
   def apply[F[_]: Concurrent: Log: Time: ExecutionEngineService](
@@ -141,7 +184,11 @@ object Genesis {
       maximumBond: Long,
       faucet: Boolean,
       chainId: String,
-      deployTimestamp: Option[Long]
+      deployTimestamp: Option[Long],
+      accountPublicKeyPath: Option[Path],
+      initialTokens: BigInt,
+      mintCodePath: Option[Path],
+      posCodePath: Option[Path]
   ): F[BlockMsgWithTransform] =
     for {
       wallets   <- getWallets[F](walletsPath)
@@ -150,29 +197,52 @@ object Genesis {
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       initial = withoutContracts(
         bonds = bondsMap,
-        timestamp = 1L,
-        version = 1L,
+        timestamp = timestamp,
         chainId = chainId
       )
       validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-      faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
+      blessedContracts <- defaultBlessedTerms(
+                           timestamp = timestamp,
+                           accountPublicKeyPath = accountPublicKeyPath,
+                           initialTokens = initialTokens,
+                           posParams = ProofOfStakeParams(minimumBond, maximumBond, validators),
+                           wallets = wallets,
+                           mintCodePath = mintCodePath,
+                           posCodePath = posCodePath
+                         )
       withContr <- withContracts(
+                    blessedContracts,
                     initial,
-                    ProofOfStakeParams(minimumBond, maximumBond, validators),
-                    wallets,
-                    faucetCode,
-                    ExecutionEngineService[F].emptyStateHash,
-                    timestamp
+                    ExecutionEngineService[F].emptyStateHash
                   )
     } yield withContr
 
-  def toFile[F[_]: Applicative: Log](
+  private def toFile[F[_]: Applicative: Log](
       path: Path
   ): F[Option[File]] = {
     val f = path.toFile
     if (f.exists()) f.some.pure[F]
     else none[File].pure[F]
   }
+
+  private def getAccountPublicKey[F[_]: Sync: Log](
+      maybePath: Option[Path]
+  ): F[Keys.PublicKey] =
+    maybePath match {
+      case None =>
+        Log[F].warn("Using empty account key for genesis.") *>
+          Keys.PublicKey(Array.empty[Byte]).pure[F]
+      case Some(path) =>
+        readFile[F](path)
+          .map(new String(_, StandardCharsets.UTF_8))
+          .map(Ed25519.tryParsePublicKey(_)) flatMap {
+          case Some(key) => key.pure[F]
+          case None =>
+            MonadThrowable[F].raiseError(
+              new IllegalArgumentException(s"Could not parse genesis account key file $path")
+            )
+        }
+    }
 
   def getWallets[F[_]: Sync: Log](
       wallets: Path
