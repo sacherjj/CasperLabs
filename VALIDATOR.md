@@ -171,8 +171,8 @@ node-id
 node.certificate.pem
 node.key.pem
 validator-id
-validator-private.pem
-validator-public.pem
+ed25519-private.pem
+ed25519-public.pem
 ```
 
 As you see we have keys and some additional files:
@@ -193,8 +193,8 @@ Now we can run a node as follows:
 casperlabs-node run -s \
     --tls-key keys/node.key.pem  \
     --tls-certificate keys/node.certificate.pem \
-    --casperl-validator-public-key-path keys/validator-public.pem \
-    --casperl-validator-private-key-path keys/validator-private.pem 
+    --casperl-validator-public-key-path keys/ed25519-public.pem \
+    --casperl-validator-private-key-path keys/ed25519-private.pem
 ```
 
 #### Generate keys on host OS
