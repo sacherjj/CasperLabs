@@ -1,10 +1,6 @@
-from .cl_node.wait import wait_for_blocks_count_at_least
-from .cl_node.casperlabsnode import get_contract_state
 from .cl_node.errors import NonZeroExitCodeError
 
-
 import pytest
-
 
 # Examples of query-state executed with the Scala client that result in errors:
 

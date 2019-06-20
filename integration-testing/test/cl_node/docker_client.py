@@ -135,11 +135,11 @@ class DockerClient(CasperLabsClient):
           -h, --help                Show help message
 
         """
-        return self.invoke_client(f'query-state '
-                                  f' --block-hash "{blockHash}"'
-                                  f' --key "{key}"'
-                                  f' --path "{path}"'
-                                  f' --type "{keyType}"')
+        return parse(self.invoke_client(f'query-state '
+                                        f' --block-hash "{blockHash}"'
+                                        f' --key "{key}"'
+                                        f' --path "{path}"'
+                                        f' --type "{keyType}"'))
 
 
     def show_deploys(self, hash: str):

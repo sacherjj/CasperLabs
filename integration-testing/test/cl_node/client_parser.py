@@ -34,19 +34,20 @@ def attribute_name(s, line_number):
 
 def value(s, line_number):
     try:
-        return (int(s), line_number)
+        return int(s), line_number
     except ValueError:
         try:
-            return (float(s), line_number)
+            return float(s), line_number
         except ValueError:
             if s == 'true':
-                return (True, line_number)
+                return True, line_number
             elif s == 'false':
-                return (False, line_number)
+                return False, line_number
             elif s[0] == '"' and s[-1] == '"':
-                return (s[1:-1], line_number)
+                return s[1:-1], line_number
             else:
-                raise Exception(f'Could not parse "{s}" at line {line_number}')
+                # This must be a const or enum, for example: READ_ADD_WRITE
+                return s, line_number
 
 
 def lexer(s):
