@@ -26,6 +26,9 @@ pub enum FunctionIndex {
     ProtocolVersionFuncIndex = 19,
     IsValidFnIndex = 20,
     RevertFuncIndex = 21,
+    AddAssociatedKeyFuncIndex = 22,
+    RemoveAssociatedKeyFuncIndex = 23,
+    SetActionThresholdFuncIndex = 24,
 }
 
 impl Into<usize> for FunctionIndex {

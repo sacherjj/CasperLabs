@@ -8,6 +8,9 @@ use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
+use crate::value::account::{
+    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+};
 use crate::value::{Contract, Value};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -290,4 +293,39 @@ pub fn is_valid<T: Into<Value>>(t: T) -> bool {
     let (value_ptr, value_size, _bytes) = to_ptr(&value);
     let result = unsafe { ext_ffi::is_valid(value_ptr, value_size) };
     result != 0
+}
+
+/// Adds a public key with associated weight to an account.
+pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), AddKeyFailure> {
+    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
+    // Cast of u8 (weight) into i32 is assumed to be always safe
+    let result = unsafe { ext_ffi::add_associated_key(public_key_ptr, weight.value().into()) };
+    // Translates FFI
+    match result {
+        d if d == 0 => Ok(()),
+        d => Err(AddKeyFailure::from(d)),
+    }
+}
+
+/// Removes a public key from associated keys on an account
+pub fn remove_associated_key(public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
+    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
+    let result = unsafe { ext_ffi::remove_associated_key(public_key_ptr) };
+    match result {
+        d if d == 0 => Ok(()),
+        d => Err(RemoveKeyFailure::from(d)),
+    }
+}
+
+pub fn set_action_threshold(
+    permission_level: ActionType,
+    threshold: Weight,
+) -> Result<(), SetThresholdFailure> {
+    let permission_level = permission_level as u32;
+    let threshold = threshold.value().into();
+    let result = unsafe { ext_ffi::set_action_threshold(permission_level, threshold) };
+    match result {
+        d if d == 0 => Ok(()),
+        d => Err(SetThresholdFailure::from(d)),
+    }
 }

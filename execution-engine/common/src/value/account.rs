@@ -4,6 +4,7 @@ use crate::uref::URef;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use failure::Fail;
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PurseId(URef);
@@ -18,49 +19,101 @@ impl PurseId {
     }
 }
 
+#[repr(u32)]
 pub enum ActionType {
     /// Required by deploy execution.
-    Deployment,
+    Deployment = 0,
     /// Required when adding/removing associated keys, changing threshold levels.
-    KeyManagement,
-    /// Required when recovering inactive account.
-    InactiveAccountRecovery,
+    KeyManagement = 1,
+}
+
+impl From<u32> for ActionType {
+    fn from(value: u32) -> ActionType {
+        // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
+        // that helps to automatically create `from_u32` and `to_u32`. This approach
+        // gives better control over generated code.
+        match value {
+            d if d == ActionType::Deployment as u32 => ActionType::Deployment,
+            d if d == ActionType::KeyManagement as u32 => ActionType::KeyManagement,
+            _ => unreachable!(),
+        }
+    }
 }
 
 /// Thresholds that has to be met when executing an action of certain type.
-/// Note that `InactiveAccountRecovery` doesn't have a threshold defined here.
-/// It's so that accounts don't change that value as it's system-wide set to 0.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionThresholds {
     deployment: Weight,
     key_management: Weight,
 }
 
-impl ActionThresholds {
-    // NOTE: I chose to not provide one method for setting action thresholds b/c `InactiveAccountRecovery`
-    // threshold is 0. If there was a polymorphic method then trying to set threshold for `InactiveAccountRecovery`
-    // would have to return an error.
+/// Represents an error that occurs during the change of a thresholds on an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in an out
+/// through FFI boundaries as a number.
+///
+/// The explicit numbering of the variants is done on purpose and whenever you plan to add
+/// new variant, you should always extend it, and add a variant that does not exist already.
+/// When adding new variants you should also remember to change
+/// `From<i32> for SetThresholdFailure`.
+///
+/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
+/// reviewed and tested.
+#[repr(i32)]
+#[derive(Debug, Fail, PartialEq, Eq)]
+pub enum SetThresholdFailure {
+    #[fail(display = "New threshold should be lower or equal than deployment threshold")]
+    KeyManagementThresholdError = 1,
+    #[fail(display = "New threshold should be lower or equal than key management threshold")]
+    DeploymentThresholdError = 2,
+    #[fail(display = "Unable to set action threshold due to insufficient permissions")]
+    PermissionDeniedError = 3,
+}
 
+impl From<i32> for SetThresholdFailure {
+    fn from(value: i32) -> SetThresholdFailure {
+        match value {
+            d if d == SetThresholdFailure::KeyManagementThresholdError as i32 => {
+                SetThresholdFailure::KeyManagementThresholdError
+            }
+            d if d == SetThresholdFailure::DeploymentThresholdError as i32 => {
+                SetThresholdFailure::DeploymentThresholdError
+            }
+            d if d == SetThresholdFailure::PermissionDeniedError as i32 => {
+                SetThresholdFailure::PermissionDeniedError
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl ActionThresholds {
     /// Sets new threshold for [ActionType::Deployment].
     /// Should return an error if setting new threshold for `action_type` breaks one of the invariants.
     /// Currently, invariant is that `ActionType::Deployment` threshold shouldn't be higher than any other,
     /// which should be checked both when increasing `Deployment` threshold and decreasing the other.
-    pub fn set_deployment_threshold(&mut self, new_threshold: Weight) -> bool {
+    pub fn set_deployment_threshold(
+        &mut self,
+        new_threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
         if new_threshold > self.key_management {
-            false
+            Err(SetThresholdFailure::DeploymentThresholdError)
         } else {
             self.deployment = new_threshold;
-            true
+            Ok(())
         }
     }
 
     /// Sets new threshold for [ActionType::KeyManagement].
-    pub fn set_key_management_threshold(&mut self, new_threshold: Weight) -> bool {
+    pub fn set_key_management_threshold(
+        &mut self,
+        new_threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
         if self.deployment > new_threshold {
-            false
+            Err(SetThresholdFailure::KeyManagementThresholdError)
         } else {
             self.key_management = new_threshold;
-            true
+            Ok(())
         }
     }
 
@@ -70,6 +123,19 @@ impl ActionThresholds {
 
     pub fn key_management(&self) -> &Weight {
         &self.key_management
+    }
+
+    /// Unified function that takes an action type, and changes appropriate
+    /// threshold defined by the [ActionType] variants.
+    pub fn set_threshold(
+        &mut self,
+        action_type: ActionType,
+        new_threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
+        match action_type {
+            ActionType::Deployment => self.set_deployment_threshold(new_threshold),
+            ActionType::KeyManagement => self.set_key_management_threshold(new_threshold),
+        }
     }
 }
 
@@ -178,10 +244,77 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+/// Represents an error that happens when trying to add a new associated key
+/// on an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in an out
+/// through FFI boundaries as a number.
+///
+/// The explicit numbering of the variants is done on purpose and whenever you plan to add
+/// new variant, you should always extend it, and add a variant that does not exist already.
+/// When adding new variants you should also remember to change
+/// `From<i32> for AddKeyFailure`.
+///
+/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
+/// reviewed and tested.
+#[derive(PartialEq, Eq, Fail, Debug)]
+#[repr(i32)]
 pub enum AddKeyFailure {
-    MaxKeysLimit,
-    DuplicateKey,
+    #[fail(display = "Unable to add new associated key because maximum amount of keys is reached")]
+    MaxKeysLimit = 1,
+    #[fail(display = "Unable to add new associated key because given key already exists")]
+    DuplicateKey = 2,
+    #[fail(display = "Unable to add new associated key due to insufficient permissions")]
+    PermissionDenied = 3,
+}
+
+impl From<i32> for AddKeyFailure {
+    fn from(value: i32) -> AddKeyFailure {
+        // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
+        // that helps to automatically create `from_i32` and `to_i32`. This approach
+        // gives better control over generated code.
+        match value {
+            d if d == AddKeyFailure::MaxKeysLimit as i32 => AddKeyFailure::MaxKeysLimit,
+            d if d == AddKeyFailure::DuplicateKey as i32 => AddKeyFailure::DuplicateKey,
+            d if d == AddKeyFailure::PermissionDenied as i32 => AddKeyFailure::PermissionDenied,
+            _ => unreachable!(),
+        }
+    }
+}
+
+/// Represents an error that happens when trying to remove an associated key
+/// from an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in an out
+/// through FFI boundaries as a number.
+///
+/// The explicit numbering of the variants is done on purpose and whenever you plan to add
+/// new variant, you should always extend it, and add a variant that does not exist already.
+/// When adding new variants you should also remember to change
+/// `From<i32> for RemoveKeyFailure`.
+///
+/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
+/// reviewed and tested.
+#[derive(Fail, Debug, Eq, PartialEq)]
+#[repr(i32)]
+pub enum RemoveKeyFailure {
+    /// Key does not exist in the list of associated keys.
+    #[fail(display = "Unable to remove a key that does not exist")]
+    MissingKey = 1,
+    #[fail(display = "Unable to remove associated key due to insufficient permissions")]
+    PermissionDenied = 2,
+}
+
+impl From<i32> for RemoveKeyFailure {
+    fn from(value: i32) -> RemoveKeyFailure {
+        match value {
+            d if d == RemoveKeyFailure::MissingKey as i32 => RemoveKeyFailure::MissingKey,
+            d if d == RemoveKeyFailure::PermissionDenied as i32 => {
+                RemoveKeyFailure::PermissionDenied
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
@@ -214,8 +347,11 @@ impl AssociatedKeys {
 
     /// Removes key from the associated keys set.
     /// Returns true if value was found in the set prior to the removal, false otherwise.
-    pub fn remove_key(&mut self, key: &PublicKey) -> bool {
-        self.0.remove(key).is_some()
+    pub fn remove_key(&mut self, key: &PublicKey) -> Result<(), RemoveKeyFailure> {
+        self.0
+            .remove(key)
+            .map(|_| ())
+            .ok_or(RemoveKeyFailure::MissingKey)
     }
 
     pub fn get(&self, key: &PublicKey) -> Option<&Weight> {
@@ -271,7 +407,7 @@ impl Account {
         self.known_urefs
     }
 
-    pub fn pub_key(&self) -> &[u8] {
+    pub fn pub_key(&self) -> &[u8; 32] {
         &self.public_key
     }
 
@@ -303,6 +439,29 @@ impl Account {
     /// with old contents but with nonce increased by 1.
     pub fn increment_nonce(&mut self) {
         self.nonce += 1;
+    }
+
+    pub fn add_associated_key(
+        &mut self,
+        public_key: PublicKey,
+        weight: Weight,
+    ) -> Result<(), AddKeyFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.associated_keys.add_key(public_key, weight)
+    }
+
+    pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.associated_keys.remove_key(&public_key)
+    }
+
+    pub fn set_action_threshold(
+        &mut self,
+        action_type: ActionType,
+        weight: Weight,
+    ) -> Result<(), SetThresholdFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.action_thresholds.set_threshold(action_type, weight)
     }
 }
 
@@ -390,13 +549,21 @@ impl FromBytes for ActionThresholds {
         let (weight_2, rem4): (Weight, &[u8]) = FromBytes::from_bytes(&rem3)?;
         match (id_1, id_2) {
             (DEPLOYMENT_THRESHOLD_ID, KEY_MANAGEMENT_THRESHOLD_ID) => {
-                action_thresholds.set_key_management_threshold(weight_2);
-                action_thresholds.set_deployment_threshold(weight_1);
+                action_thresholds
+                    .set_key_management_threshold(weight_2)
+                    .map_err(Error::custom)?;
+                action_thresholds
+                    .set_deployment_threshold(weight_1)
+                    .map_err(Error::custom)?;
                 Ok((action_thresholds, rem4))
             }
             (KEY_MANAGEMENT_THRESHOLD_ID, DEPLOYMENT_THRESHOLD_ID) => {
-                action_thresholds.set_key_management_threshold(weight_1);
-                action_thresholds.set_deployment_threshold(weight_2);
+                action_thresholds
+                    .set_key_management_threshold(weight_1)
+                    .map_err(Error::custom)?;
+                action_thresholds
+                    .set_deployment_threshold(weight_2)
+                    .map_err(Error::custom)?;
                 Ok((action_thresholds, rem4))
             }
             _ => Err(Error::FormattingError),
@@ -567,7 +734,7 @@ mod tests {
         let pk = PublicKey([0u8; KEY_SIZE]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
-        assert!(keys.remove_key(&pk));
-        assert!(!keys.remove_key(&PublicKey([1u8; KEY_SIZE])));
+        assert!(keys.remove_key(&pk).is_ok());
+        assert!(keys.remove_key(&PublicKey([1u8; KEY_SIZE])).is_err());
     }
 }

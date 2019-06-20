@@ -1,6 +1,7 @@
 use super::alloc::collections::BTreeMap;
-use super::alloc::string::String;
+use super::alloc::string::{String, ToString};
 use super::alloc::vec::Vec;
+use core::fmt::Display;
 use core::mem::{size_of, MaybeUninit};
 
 use failure::Fail;
@@ -39,6 +40,15 @@ pub enum Error {
 
     #[fail(display = "Serialization error: out of memory")]
     OutOfMemoryError,
+
+    #[fail(display = "Serialization error: {}", _0)]
+    CustomError(String),
+}
+
+impl Error {
+    pub fn custom<T: Display>(msg: T) -> Error {
+        Error::CustomError(msg.to_string())
+    }
 }
 
 pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {

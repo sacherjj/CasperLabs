@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
@@ -17,9 +16,13 @@ use wasmi::{
     ModuleRef, RuntimeArgs, RuntimeValue, Trap,
 };
 
-use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
+use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE};
 use common::key::Key;
 use common::uref::AccessRights;
+use common::value::account::{
+    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    PUBLIC_KEY_SIZE,
+};
 use common::value::Value;
 use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
@@ -60,6 +63,9 @@ pub enum Error {
     },
     /// Reverts execution with a provided status
     Revert(u32),
+    AddKeyFailure(AddKeyFailure),
+    RemoveKeyFailure(RemoveKeyFailure),
+    SetThresholdFailure(SetThresholdFailure),
 }
 
 impl fmt::Display for Error {
@@ -101,6 +107,24 @@ impl From<!> for Error {
 impl From<ResolverError> for Error {
     fn from(err: ResolverError) -> Error {
         Error::ResolverError(err)
+    }
+}
+
+impl From<AddKeyFailure> for Error {
+    fn from(err: AddKeyFailure) -> Error {
+        Error::AddKeyFailure(err)
+    }
+}
+
+impl From<RemoveKeyFailure> for Error {
+    fn from(err: RemoveKeyFailure) -> Error {
+        Error::RemoveKeyFailure(err)
+    }
+}
+
+impl From<SetThresholdFailure> for Error {
+    fn from(err: SetThresholdFailure) -> Error {
+        Error::SetThresholdFailure(err)
     }
 }
 
@@ -450,6 +474,63 @@ where
     pub fn revert(&mut self, status: u32) -> Trap {
         Error::Revert(status).into()
     }
+
+    pub fn take_context(self) -> RuntimeContext<'a, R> {
+        self.context
+    }
+
+    fn add_associated_key(&mut self, public_key_ptr: u32, weight_value: u8) -> Result<i32, Trap> {
+        let public_key = {
+            // Public key as serialized bytes
+            let source_serialized =
+                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            // Public key deserialized
+            let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+            source
+        };
+        let weight = Weight::new(weight_value);
+
+        match self.context.add_associated_key(public_key, weight) {
+            Ok(_) => Ok(0),
+            // This relies on the fact that `AddKeyFailure` is represented as
+            // i32 and first variant start with number `1`, so all other variants
+            // are greater than the first one, so it's safe to assume `0` is success,
+            // and any error is greater than 0.
+            Err(Error::AddKeyFailure(e)) => Ok(e as i32),
+            // Any other variant just pass as `Trap`
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn remove_associated_key(&mut self, public_key_ptr: u32) -> Result<i32, Trap> {
+        let public_key = {
+            // Public key as serialized bytes
+            let source_serialized =
+                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            // Public key deserialized
+            let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+            source
+        };
+        match self.context.remove_associated_key(public_key) {
+            Ok(_) => Ok(0),
+            Err(Error::RemoveKeyFailure(e)) => Ok(e as i32),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn set_action_threshold(
+        &mut self,
+        action_type_value: u32,
+        threshold_value: u8,
+    ) -> Result<i32, Trap> {
+        let action_type = ActionType::from(action_type_value);
+        let threshold = Weight::new(threshold_value);
+        match self.context.set_action_threshold(action_type, threshold) {
+            Ok(_) => Ok(0),
+            Err(Error::SetThresholdFailure(e)) => Ok(e as i32),
+            Err(e) => Err(e.into()),
+        }
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -678,6 +759,30 @@ where
 
                 Err(self.revert(status))
             }
+
+            FunctionIndex::AddAssociatedKeyFuncIndex => {
+                // args(0) = pointer to array of bytes of a public key
+                // args(1) = weight of the key
+                let (public_key_ptr, weight_value): (u32, u8) = Args::parse(args)?;
+                let value = self.add_associated_key(public_key_ptr, weight_value)?;
+                Ok(Some(RuntimeValue::I32(value)))
+            }
+
+            FunctionIndex::RemoveAssociatedKeyFuncIndex => {
+                // args(0) = pointer to array of bytes of a public key
+                // args(1) = size of serialized bytes of public key
+                let public_key_ptr: u32 = Args::parse(args)?;
+                let value = self.remove_associated_key(public_key_ptr)?;
+                Ok(Some(RuntimeValue::I32(value)))
+            }
+
+            FunctionIndex::SetActionThresholdFuncIndex => {
+                // args(0) = action type
+                // args(1) = new threshold
+                let (action_type_value, threshold_value): (u32, u8) = Args::parse(args)?;
+                let value = self.set_action_threshold(action_type_value, threshold_value)?;
+                Ok(Some(RuntimeValue::I32(value)))
+            }
         }
     }
 }
@@ -714,6 +819,7 @@ where
 
     let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
+
     let mut runtime = Runtime {
         memory,
         module: parity_module,
@@ -724,7 +830,7 @@ where
             refs,
             known_urefs,
             args,
-            current_runtime.context.account().clone(),
+            &current_runtime.context.account(),
             key,
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
@@ -949,7 +1055,7 @@ impl Executor<Module> for WasmiExecutor {
             &mut uref_lookup_local,
             known_urefs,
             arguments,
-            Cow::Borrowed(&account),
+            &account,
             acct_key,
             gas_limit,
             gas_counter,
