@@ -9,7 +9,6 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage,
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.genesis.contracts.Faucet
 import io.casperlabs.casper.helper.{
   BlockDagStorageTestFixture,
   HashSetCasperTestNode,
@@ -61,7 +60,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     val requiredSigs               = 1
     val deployTimestamp            = 1L
     val BlockMsgWithTransform(Some(genesis), transforms) =
-      buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
+      buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, 1L)
     val validatorId       = ValidatorIdentity(validatorPk, validatorSk, Ed25519)
     val storageSize: Long = 1024L * 1024
 
@@ -72,10 +71,16 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       deployTimestamp,
       bonds,
       Seq.empty,
-      1L,
-      Long.MaxValue,
-      false,
-      requiredSigs
+      BlockApproverProtocol.GenesisConf(
+        1L,
+        Long.MaxValue,
+        false,
+        requiredSigs,
+        None,
+        0L,
+        None,
+        None
+      )
     )
     val local: Node = peerNode("src", 40400)
     val chainId     = "test-chainId"

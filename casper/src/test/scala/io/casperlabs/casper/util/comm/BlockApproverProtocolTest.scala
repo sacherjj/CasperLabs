@@ -98,7 +98,6 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
       bonds,
       1L,
       Long.MaxValue,
-      Faucet.noopFaucet,
       deployTimestamp
     )
     for {
@@ -109,10 +108,16 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
       deployTimestamp,
       bonds,
       wallets,
-      1L,
-      Long.MaxValue,
-      false,
-      requiredSigs
+      BlockApproverProtocol.GenesisConf(
+        1L,
+        Long.MaxValue,
+        false,
+        requiredSigs,
+        None,
+        0L,
+        None,
+        None
+      )
     ) -> node
   }
 

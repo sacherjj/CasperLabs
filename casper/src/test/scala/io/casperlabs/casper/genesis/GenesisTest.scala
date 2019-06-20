@@ -3,7 +3,8 @@ package io.casperlabs.casper.genesis
 import java.io.PrintWriter
 import java.nio.file.{Files, Path, Paths}
 import java.util.Base64
-
+import cats._
+import cats.implicits._
 import cats.effect.Sync
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
@@ -194,7 +195,11 @@ object GenesisTest {
                   maximumBond = Long.MaxValue,
                   faucet = false,
                   chainId = casperlabsChainId,
-                  deployTimestamp = Some(System.currentTimeMillis)
+                  deployTimestamp = System.currentTimeMillis.some,
+                  accountPublicKeyPath = none[Path],
+                  initialTokens = BigInt(0),
+                  mintCodePath = none[Path],
+                  posCodePath = none[Path]
                 )
     } yield genesis
 

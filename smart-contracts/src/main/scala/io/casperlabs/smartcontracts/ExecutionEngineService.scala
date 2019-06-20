@@ -22,15 +22,15 @@ import io.casperlabs.catscontrib.MonadThrowable
 
 @typeclass trait ExecutionEngineService[F[_]] {
   def emptyStateHash: ByteString
+  def runGenesis(
+      deploys: Seq[Deploy],
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, GenesisResult]]
   def exec(
       prestate: ByteString,
       deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]]
-  def runGenesis(
-      deploys: Seq[Deploy],
-      protocolVersion: ProtocolVersion
-  ): F[Either[Throwable, GenesisResult]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
   def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
   def setBonds(bonds: Map[PublicKey, Long]): F[Unit]

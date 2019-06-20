@@ -178,7 +178,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         timestamp,
         bonds,
         wallets,
-        conf
+        BlockApproverProtocol.GenesisConf.fromCasperConf(conf)
       )
       gv <- Ref.of[F, CasperPacketHandlerInternal[F]](
              new GenesisValidatorHandler(

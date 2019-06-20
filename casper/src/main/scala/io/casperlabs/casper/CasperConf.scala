@@ -33,7 +33,7 @@ final case class CasperConf(
     hasFaucet: Boolean,
     requiredSigs: Int,
     genesisAccountPublicKeyPath: Option[Path],
-    initialTokens: Long,
+    initialTokens: Long, // TODO: Turn into BigInt
     mintCodePath: Option[Path],
     posCodePath: Option[Path],
     shardId: String,

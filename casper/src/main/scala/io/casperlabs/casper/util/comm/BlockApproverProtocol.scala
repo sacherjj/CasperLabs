@@ -36,7 +36,7 @@ class BlockApproverProtocol(
     deployTimestamp: Long,
     bonds: Map[PublicKey, Long],
     wallets: Seq[PreWallet],
-    conf: CasperConf
+    conf: BlockApproverProtocol.GenesisConf
 ) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
@@ -80,6 +80,30 @@ class BlockApproverProtocol(
 }
 
 object BlockApproverProtocol {
+  case class GenesisConf(
+      minimumBond: Long,
+      maximumBond: Long,
+      hasFaucet: Boolean,
+      requiredSigs: Int,
+      genesisAccountPublicKeyPath: Option[Path],
+      initialTokens: Long,
+      mintCodePath: Option[Path],
+      posCodePath: Option[Path]
+  )
+  object GenesisConf {
+    def fromCasperConf(conf: CasperConf) =
+      GenesisConf(
+        conf.minimumBond,
+        conf.maximumBond,
+        conf.hasFaucet,
+        conf.requiredSigs,
+        conf.genesisAccountPublicKeyPath,
+        conf.initialTokens,
+        conf.mintCodePath,
+        conf.posCodePath
+      )
+  }
+
   def getBlockApproval(
       expectedCandidate: ApprovedBlockCandidate,
       validatorId: ValidatorIdentity
@@ -100,7 +124,7 @@ object BlockApproverProtocol {
       timestamp: Long,
       wallets: Seq[PreWallet],
       bonds: Map[ByteString, Long],
-      conf: CasperConf
+      conf: GenesisConf
   ): F[Either[String, Unit]] = {
 
     def validate: EitherT[F, String, (Seq[InternalProcessedDeploy], RChainState)] =

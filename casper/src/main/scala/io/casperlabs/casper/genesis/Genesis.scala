@@ -82,7 +82,7 @@ object Genesis {
   }
 
   /** Run system contracts and add them to the block as processed deploys. */
-  private def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
+  def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
       initial: Block,
       blessedTerms: List[Deploy]
   ): F[BlockMsgWithTransform] =
@@ -124,7 +124,7 @@ object Genesis {
     } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
   /** Fill out the basic fields in the block. */
-  private def withoutContracts(
+  def withoutContracts(
       bonds: Map[PublicKey, Long],
       timestamp: Long,
       chainId: String
