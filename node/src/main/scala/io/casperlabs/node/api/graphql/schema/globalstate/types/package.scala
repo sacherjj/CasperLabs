@@ -90,14 +90,9 @@ package object types {
     "KeyLocal",
     fields[Unit, state.Key.Local](
       Field(
-        "seed",
+        "hash",
         StringType,
-        resolve = c => Base16.encode(c.value.seed.toByteArray)
-      ),
-      Field(
-        "keyHash",
-        StringType,
-        resolve = c => Base16.encode(c.value.keyHash.toByteArray)
+        resolve = c => Base16.encode(c.value.hash.toByteArray)
       )
     )
   )
