@@ -386,13 +386,10 @@ package object gossiping {
 
                                    BlockApproverProtocol.validateCandidate(
                                      candidate,
-                                     conf.casper.requiredSigs,
                                      timestamp,
                                      wallets,
                                      bondsMap,
-                                     conf.casper.minimumBond,
-                                     conf.casper.maximumBond,
-                                     conf.casper.hasFaucet
+                                     BlockApproverProtocol.GenesisConf.fromCasperConf(conf.casper)
                                    ) map {
                                      case Left(msg) =>
                                        Left(InvalidArgument(msg))
@@ -459,16 +456,9 @@ package object gossiping {
                    for {
                      genesis <- Resource.liftF {
                                  for {
-                                   bonds <- readBondsFile
-                                   _     <- Log[F].info("Constructing Genesis candidate...")
-                                   genesis <- Genesis[F](
-                                               conf.casper.walletsFile,
-                                               conf.casper.minimumBond,
-                                               conf.casper.maximumBond,
-                                               conf.casper.hasFaucet,
-                                               conf.casper.chainId,
-                                               conf.casper.deployTimestamp
-                                             ).map(_.getBlockMessage)
+                                   bonds   <- readBondsFile
+                                   _       <- Log[F].info("Constructing Genesis candidate...")
+                                   genesis <- Genesis[F](conf.casper).map(_.getBlockMessage)
                                    // Store it so others can pull it from the bootstrap node.
                                    _ <- Log[F].info(
                                          s"Trying to store generated Genesis candidate ${genesis.blockHash}..."
