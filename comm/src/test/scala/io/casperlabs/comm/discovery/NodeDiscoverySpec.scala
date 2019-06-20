@@ -283,7 +283,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           }
       }
     }
-    "alivePeersAscendingDistance" should {
+    "updateRecentlyAlivePeers" should {
       "start pinging all peers if size(alive peers from cache) < pingAllThreshold" in forAll(
         genFullyConnectedPeers
       ) { peers: Map[Node, List[Node]] =>
@@ -302,12 +302,13 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
         ) { (kademlia, nd, _) =>
           for {
             // fills up cache
+            _  <- nd.updateRecentlyAlivePeers
             r1 <- nd.alivePeersAscendingDistance
             // each request should cause re-pinging all peers
             // firstly only alive peers from previous request
             // then rest of all known peers trying to fill up cache
             n  = nextInt(1, 5)
-            r2 <- nd.alivePeersAscendingDistance.replicateA(n)
+            r2 <- (nd.updateRecentlyAlivePeers >> nd.alivePeersAscendingDistance).replicateA(n)
           } yield {
             kademlia.totalPings shouldBe (totalN(peers) * (n + 1))
             r1 should contain theSameElementsInOrderAs ascendingDistance(alive)
@@ -317,7 +318,6 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           }
         }
       }
-
       "not ping all peers if size(alive peers from cache) >= pingAllThreshold" in forAll(
         genFullyConnectedPeers
       ) { peers: Map[Node, List[Node]] =>
@@ -338,8 +338,10 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
         ) { (kademlia, nd, _) =>
           for {
             // fills up cache
+            _  <- nd.updateRecentlyAlivePeers
             r1 <- nd.alivePeersAscendingDistance
             // pings alive peers from previous query
+            _  <- nd.updateRecentlyAlivePeers
             r2 <- nd.alivePeersAscendingDistance
           } yield {
             kademlia.totalPings shouldBe (all.size + alive.size)
@@ -348,7 +350,6 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           }
         }
       }
-
       "cleanup cache if expired" in {
         val peers: Map[Node, List[Node]] = sample(genFullyConnectedPeers)
         TextFixture.customInitial(
@@ -364,8 +365,10 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           alivePeersCacheExpirationPeriod = 50.milliseconds
         ) { (kademlia, nd, _) =>
           for {
+            _  <- nd.updateRecentlyAlivePeers
             r1 <- nd.alivePeersAscendingDistance
             _  <- Task.sleep(200.milliseconds)
+            _  <- nd.updateRecentlyAlivePeers
             r2 <- nd.alivePeersAscendingDistance
           } yield {
             // 1st => to fill up cache
@@ -390,11 +393,33 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
             alivePeersCachePingsBatchSize = 1
           ) { (kademlia, nd, _) =>
             for {
+              _ <- nd.updateRecentlyAlivePeers
               _ <- nd.alivePeersAscendingDistance
             } yield {
               kademlia.totalPings shouldBe 1
             }
           }
+      }
+      "update cache with specified period" in {
+        val peers: Map[Node, List[Node]] = sample(genFullyConnectedPeers)
+        TextFixture.customInitial(
+          connections = Map.empty,
+          tableInitial = toSet(peers),
+          k = totalN(peers),
+          alpha = 0,
+          pings = Some(toSet(peers)),
+          alivePeersCacheSize = totalN(peers),
+          // To cause update on next cycle
+          alivePeersCacheMinThreshold = totalN(peers) + 1,
+          alivePeersCacheUpdatePeriod = 100.milliseconds
+        ) { (kademlia, nd, _) =>
+          for {
+            _ <- nd.schedulePeriodicRecentlyAlivePeersCacheUpdate.start
+            _ <- Task.sleep(150.millis)
+          } yield {
+            kademlia.totalPings shouldBe (totalN(peers) * 2)
+          }
+        }
       }
     }
   }
@@ -457,6 +482,7 @@ object NodeDiscoverySpec {
         alivePeersCacheSize: Int = 20,
         alivePeersCacheMinThreshold: Int = 10,
         alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
+        alivePeersCacheUpdatePeriod: FiniteDuration = 1.minute,
         alivePeersCachePingsBatchSize: Int = 10
     )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit = {
       val effect = for {
@@ -477,6 +503,7 @@ object NodeDiscoverySpec {
           alivePeersCacheSize,
           alivePeersCacheMinThreshold,
           alivePeersCacheExpirationPeriod,
+          alivePeersCacheUpdatePeriod,
           alivePeersCachePingsBatchSize
         )
         _ <- test(kademliaMock, nd, alpha)
@@ -493,6 +520,7 @@ object NodeDiscoverySpec {
         alivePeersCacheSize: Int = 20,
         alivePeersCacheMinThreshold: Int = 10,
         alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
+        alivePeersCacheUpdatePeriod: FiniteDuration = 1.minute,
         alivePeersCachePingsBatchSize: Int = 10
     )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit =
       customInitialWithFailures(
@@ -504,6 +532,7 @@ object NodeDiscoverySpec {
         alivePeersCacheSize,
         alivePeersCacheMinThreshold,
         alivePeersCacheExpirationPeriod,
+        alivePeersCacheUpdatePeriod,
         alivePeersCachePingsBatchSize
       )(test)
 
@@ -515,6 +544,7 @@ object NodeDiscoverySpec {
         alivePeersCacheSize: Int = 20,
         alivePeersCacheMinThreshold: Int = 10,
         alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
+        alivePeersCacheUpdatePeriod: FiniteDuration = 1.minute,
         alivePeersCachePingsBatchSize: Int = 10
     )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit =
       customInitial(
@@ -529,6 +559,7 @@ object NodeDiscoverySpec {
         alivePeersCacheSize,
         alivePeersCacheMinThreshold,
         alivePeersCacheExpirationPeriod,
+        alivePeersCacheUpdatePeriod,
         alivePeersCachePingsBatchSize
       )(test)
   }

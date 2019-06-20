@@ -3,6 +3,7 @@ package io.casperlabs.comm.discovery
 import scala.collection.mutable
 import scala.concurrent.duration._
 import cats.implicits._
+import cats.effect.implicits._
 import cats.temp.par._
 import io.casperlabs.catscontrib._
 import Catscontrib._
@@ -30,42 +31,74 @@ object NodeDiscoveryImpl {
   )(
       init: Option[Node]
   )(implicit scheduler: Scheduler): Resource[F, NodeDiscovery[F]] = {
-    val kademliaRpcResource = Resource.make(CachedConnections[F, KademliaConnTag].map {
-      implicit cache =>
-        new GrpcKademliaService(port, timeout)
-    })(
-      kRpc =>
-        Concurrent[F]
-          .attempt(kRpc.shutdown())
-          .flatMap(
-            _.fold(ex => Log[F].error("Failed to properly shutdown KademliaRPC", ex), _.pure[F])
+
+    def makeKademliaRpc: Resource[F, GrpcKademliaService[F]] =
+      Resource.make(
+        CachedConnections[
+          F,
+          KademliaConnTag
+        ].map { implicit cache =>
+          new GrpcKademliaService(
+            port,
+            timeout
           )
-    )
-    kademliaRpcResource.flatMap { implicit kRpc =>
+        }
+      )(
+        kRpc =>
+          Concurrent[F]
+            .attempt(kRpc.shutdown())
+            .flatMap(
+              _.fold(
+                ex =>
+                  Log[F].error(
+                    "Failed to properly shutdown KademliaRPC",
+                    ex
+                  ),
+                _.pure[F]
+              )
+            )
+      )
+
+    def makeNodeDiscoveryImpl(
+        implicit K: GrpcKademliaService[F]
+    ): Resource[F, NodeDiscoveryImpl[F]] =
       Resource.liftF(for {
         table              <- PeerTable[F](id)
         recentlyAlivePeers <- Ref.of[F, (Set[Node], Millis)]((Set.empty, 0L))
-        knd <- Sync[F].delay {
-                val alivePeersCacheSize = if (gossipingRelaySaturation == 100) {
-                  Int.MaxValue
-                } else {
-                  (gossipingRelayFactor * 100) / (100 - gossipingRelaySaturation)
-                }
-                new NodeDiscoveryImpl[F](
-                  id = id,
-                  table = table,
-                  recentlyAlivePeersRef = recentlyAlivePeers,
-                  gossipingEnabled = gossipingEnabled,
-                  alivePeersCacheSize = alivePeersCacheSize
-                )
-              }
-        _ <- init.fold(().pure[F])(knd.addNode)
-      } yield knd)
-    }
+        nodeDiscovery <- Sync[F].delay {
+                          val alivePeersCacheSize =
+                            if (gossipingRelaySaturation == 100) {
+                              Int.MaxValue
+                            } else {
+                              (gossipingRelayFactor * 100) / (100 - gossipingRelaySaturation)
+                            }
+                          new NodeDiscoveryImpl[F](
+                            id = id,
+                            table = table,
+                            recentlyAlivePeersRef = recentlyAlivePeers,
+                            gossipingEnabled = gossipingEnabled,
+                            alivePeersCacheSize = alivePeersCacheSize
+                          )
+                        }
+        _ <- init.fold(().pure[F])(nodeDiscovery.addNode)
+      } yield nodeDiscovery)
+
+    def scheduleRecentlyAlivePeersCacheUpdate(implicit N: NodeDiscoveryImpl[F]): Resource[F, Unit] =
+      Resource
+        .make(
+          N.schedulePeriodicRecentlyAlivePeersCacheUpdate.start
+        )(_.cancel.void)
+        .void
+
+    for {
+      implicit0(kademliaRpcResource: GrpcKademliaService[F]) <- makeKademliaRpc
+      implicit0(nodeDiscovery: NodeDiscoveryImpl[F])         <- makeNodeDiscoveryImpl
+      _                                                      <- scheduleRecentlyAlivePeersCacheUpdate
+    } yield nodeDiscovery: NodeDiscovery[F]
   }
 }
 
-private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: KademliaService: Par](
+private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Timer: Metrics: KademliaService: Par](
     id: NodeIdentifier,
     val table: PeerTable[F],
     recentlyAlivePeersRef: Ref[F, (Set[Node], Millis)],
@@ -79,6 +112,8 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
     alivePeersCacheMinThreshold: Int = 10,
     /* Period to re-fill cache */
     alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
+    /* Period to update the cache */
+    alivePeersCacheUpdatePeriod: FiniteDuration = 1.minute,
     /* Batches pinged in parallel */
     alivePeersCachePingsBatchSize: Int = 10
 ) extends NodeDiscovery[F] {
@@ -183,33 +218,42 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
   }
 
   override def alivePeersAscendingDistance: F[List[Node]] =
-    if (!gossipingEnabled)
+    if (gossipingEnabled)
+      recentlyAlivePeersRef.get.map {
+        case (recentlyAlivePeers, _) => PeerTable.sort(recentlyAlivePeers.toList, id)(_.id)
+      } else
       // TODO: this is misleading because returned peers won't necessarily be alive.
       // Though, this is fine because it's only used by
       // the old legacy communication layer code which should go away eventually
       // io.casperlabs.comm.rp.Connect#findAndConnect
       // The old code maintains its own list of alive connections
       table.peersAscendingDistance
-    else
-      for {
-        (recentlyAlivePeers, lastTimeAccess) <- recentlyAlivePeersRef.get
-        currentTime                          <- currentTime
-        oldEnough                            = FiniteDuration(currentTime - lastTimeAccess, MILLISECONDS) > alivePeersCacheExpirationPeriod
-        alivePeers                           <- filterAlive(recentlyAlivePeers.toList)
-        tooFewAlivePeers                     = alivePeers.size < alivePeersCacheMinThreshold
-        newAlivePeers <- if (oldEnough || tooFewAlivePeers)
-                          for {
-                            allKnownPeers <- table.peersAscendingDistance.map(Random.shuffle(_))
-                            notPingedYet = if (oldEnough) allKnownPeers
-                            else allKnownPeers.filterNot(recentlyAlivePeers)
-                            newAlivePeers <- filterAlive(notPingedYet, alivePeersCacheSize)
-                          } yield if (oldEnough) newAlivePeers else newAlivePeers ++ alivePeers
-                        else
-                          alivePeers.pure[F]
-        _ <- recentlyAlivePeersRef.set(
-              (newAlivePeers.toSet, if (oldEnough) currentTime else lastTimeAccess)
-            )
-      } yield PeerTable.sort(newAlivePeers, id)(_.id)
+
+  def schedulePeriodicRecentlyAlivePeersCacheUpdate: F[Unit] =
+    updateRecentlyAlivePeers >>
+      Timer[F].sleep(alivePeersCacheUpdatePeriod) >>
+      schedulePeriodicRecentlyAlivePeersCacheUpdate
+
+  def updateRecentlyAlivePeers: F[Unit] =
+    for {
+      (recentlyAlivePeers, lastTimeAccess) <- recentlyAlivePeersRef.get
+      currentTime                          <- currentTime
+      oldEnough                            = FiniteDuration(currentTime - lastTimeAccess, MILLISECONDS) > alivePeersCacheExpirationPeriod
+      alivePeers                           <- filterAlive(recentlyAlivePeers.toList)
+      tooFewAlivePeers                     = alivePeers.size < alivePeersCacheMinThreshold
+      newAlivePeers <- if (oldEnough || tooFewAlivePeers)
+                        for {
+                          allKnownPeers <- table.peersAscendingDistance.map(Random.shuffle(_))
+                          notPingedYet = if (oldEnough) allKnownPeers
+                          else allKnownPeers.filterNot(recentlyAlivePeers)
+                          newAlivePeers <- filterAlive(notPingedYet, alivePeersCacheSize)
+                        } yield if (oldEnough) newAlivePeers else newAlivePeers ++ alivePeers
+                      else
+                        alivePeers.pure[F]
+      _ <- recentlyAlivePeersRef.set(
+            (newAlivePeers.toSet, if (oldEnough) currentTime else lastTimeAccess)
+          )
+    } yield ()
 
   def filterAlive(peers: List[Node]): F[List[Node]] =
     peers.parFlatTraverse { peer =>
