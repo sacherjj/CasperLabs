@@ -125,6 +125,18 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::RevertFuncIndex.into(),
             ),
+            "add_associated_key" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                FunctionIndex::AddAssociatedKeyFuncIndex.into(),
+            ),
+            "remove_associated_key" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
+                FunctionIndex::RemoveAssociatedKeyFuncIndex.into(),
+            ),
+            "set_action_threshold" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                FunctionIndex::SetActionThresholdFuncIndex.into(),
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",

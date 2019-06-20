@@ -25,6 +25,9 @@ pub enum FunctionIndex {
     SeedFnIndex = 18,
     IsValidFnIndex = 19,
     RevertFuncIndex = 20,
+    AddAssociatedKeyFuncIndex = 21,
+    RemoveAssociatedKeyFuncIndex = 22,
+    SetActionThresholdFuncIndex = 23,
 }
 
 impl Into<usize> for FunctionIndex {
