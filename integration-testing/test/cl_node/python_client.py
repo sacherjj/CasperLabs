@@ -51,7 +51,7 @@ class PythonClient(CasperLabsClient):
 
     def show_block(self, block_hash: str) -> str:
         # TODO:
-        pass
+        raise Exception("Not implemented yet")
 
     def show_blocks(self, depth: int):
         return self.client.showBlocks(depth)
@@ -59,3 +59,8 @@ class PythonClient(CasperLabsClient):
     def get_blocks_count(self, depth: int) -> int:
         return len(list(self.show_blocks(depth)))
 
+    def show_deploys(self, hash: str):
+        raise Exception("Not implemented yet")
+
+    def show_deploy(self, hash: str):
+        raise Exception("Not implemented yet")

@@ -48,7 +48,7 @@ pub fn create_genesis_effects(
     protocol_version: u64,
 ) -> Result<ExecutionEffect, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
-    let mut rng = execution::create_rng(genesis_account_addr, 0, 0);
+    let mut rng = execution::create_rng(genesis_account_addr, 0);
 
     // Create (public_uref, mint_contract_uref)
 
@@ -416,7 +416,7 @@ mod tests {
     fn create_genesis_effects_stores_mint_contract_uref_at_public_uref() {
         // given predictable uref(s) should be able to retrieve values and assert expected
 
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0, 0);
+        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
         let public_uref_key = {
             let mut addr = [0u8; 32];
@@ -450,7 +450,7 @@ mod tests {
 
     #[test]
     fn create_genesis_effects_stores_mint_contract_code_at_mint_contract_uref() {
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0, 0);
+        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
         // this is passing as currently designed, but see bug: EE-380
         let mint_contract_uref_key = {
@@ -491,7 +491,7 @@ mod tests {
 
     #[test]
     fn create_genesis_effects_balance_uref_at_purse_id() {
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0, 0);
+        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
         // this is passing as currently designed, but see bug: EE-380
         let mint_contract_uref = {
@@ -541,7 +541,7 @@ mod tests {
 
     #[test]
     fn create_genesis_effects_balance_at_balance_uref() {
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0, 0);
+        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
         // this is passing as currently designed, but see bug: EE-380
         let mint_contract_uref = {
@@ -599,7 +599,7 @@ mod tests {
             "should have expected account key"
         );
 
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0, 0);
+        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
         // this is passing as currently designed, but see bug: EE-380
         let purse_id = {
