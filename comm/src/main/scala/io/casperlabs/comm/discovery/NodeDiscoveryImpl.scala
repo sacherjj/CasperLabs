@@ -234,6 +234,8 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Timer: Metrics
       Timer[F].sleep(alivePeersCacheUpdatePeriod) >>
       schedulePeriodicRecentlyAlivePeersCacheUpdate
 
+  // TODO: The logic might be too complex here
+  // Possible simplification would be pinging all known peers in some period and cache responded ones
   def updateRecentlyAlivePeers: F[Unit] =
     for {
       (recentlyAlivePeers, lastTimeAccess) <- recentlyAlivePeersRef.get
