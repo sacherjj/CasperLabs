@@ -152,6 +152,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       requeued <- requeueOrphanedDeploys(updatedDag, tipHashes)
       _        <- Log[F].info(s"Re-queued ${requeued} orphaned deploys.").whenA(requeued > 0)
 
+      // Remove any deploys from the buffer which are in finalized blocks.
+      _ <- removeFinalizedDeploys(updatedDag)
+
     } yield (block, status) :: furtherAttempts
 
   /** Go from the last finalized block and visit all children that can be finalized now.
@@ -164,27 +167,48 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       childrenHashes <- dag
                          .children(lastFinalizedBlockHash)
                          .map(_.getOrElse(Set.empty[BlockHash]).toList)
-      // Find all finalized children so that we can get rid of their deploys.
-      finalizedChildren <- ListContrib.filterM(
+      finalizedChildren <- ListContrib.filterM[F, BlockHash](
                             childrenHashes,
-                            (blockHash: BlockHash) =>
-                              isGreaterThanFaultToleranceThreshold(dag, blockHash)
+                            isGreaterThanFaultToleranceThreshold(dag, _)
                           )
       newFinalizedBlock <- if (finalizedChildren.isEmpty) {
                             lastFinalizedBlockHash.pure[F]
                           } else {
-                            finalizedChildren.traverse { childHash =>
-                              for {
-                                removed <- removeDeploysInBlock(childHash)
-                                _ <- Log[F].info(
-                                      s"Removed $removed deploys from deploy history as we finalized block ${PrettyPrinter
-                                        .buildString(childHash)}."
-                                    )
-                                finalizedHash <- updateLastFinalizedBlock(dag, childHash)
-                              } yield finalizedHash
+                            finalizedChildren.traverse {
+                              updateLastFinalizedBlock(dag, _)
                             } map (_.head)
                           }
     } yield newFinalizedBlock
+
+  /** Remove deploys from the buffer which are included in block that are finalized. */
+  private def removeFinalizedDeploys(dag: BlockDagRepresentation[F]): F[Unit] =
+    for {
+      casperState <- Cell[F, CasperState].read
+
+      blockHashes <- casperState.deployBuffer.processedDeploys.values
+                      .map(_.deployHash)
+                      .toList
+                      .traverse { deployHash =>
+                        BlockStore[F]
+                          .findBlockHashesWithDeployhash(deployHash)
+                      }
+                      .map(_.flatten.distinct)
+
+      finalizedBlockHashes <- ListContrib.filterM(
+                               blockHashes,
+                               isGreaterThanFaultToleranceThreshold(dag, _)
+                             )
+      _ <- finalizedBlockHashes.traverse { blockHash =>
+            removeDeploysInBlock(blockHash) flatMap { removed =>
+              Log[F]
+                .info(
+                  s"Removed $removed deploys from deploy history as we finalized block ${PrettyPrinter
+                    .buildString(blockHash)}"
+                )
+                .whenA(removed > 0)
+            }
+          }
+    } yield ()
 
   /** Remove deploys from the history which are included in a just finalised block. */
   private def removeDeploysInBlock(blockHash: BlockHash): F[Int] =
