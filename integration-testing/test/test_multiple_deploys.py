@@ -87,4 +87,4 @@ def test_multiple_deploys_at_once(three_node_network,
     for node in nodes:
         blocks = parse_show_blocks(node.client.show_blocks(len(expected_deploy_counts_in_blocks) * 100))
         n_blocks = len(expected_deploy_counts_in_blocks)
-        assert [b.deploy_count for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, 'Unexpected deploy counts in blocks'
+        assert [b.summary.header.deploy_count for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, 'Unexpected deploy counts in blocks'
