@@ -25,6 +25,7 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import java.nio.file.Path
 import scala.util.Try
+import scala.math.BigInt
 import io.casperlabs.crypto.Keys
 
 /**
@@ -86,7 +87,7 @@ object BlockApproverProtocol {
       hasFaucet: Boolean,
       requiredSigs: Int,
       genesisAccountPublicKeyPath: Option[Path],
-      initialTokens: Long,
+      initialTokens: BigInt,
       mintCodePath: Option[Path],
       posCodePath: Option[Path]
   )

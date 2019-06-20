@@ -168,7 +168,7 @@ object Genesis {
     conf.chainId,
     conf.deployTimestamp,
     conf.genesisAccountPublicKeyPath,
-    BigInt(conf.initialTokens),
+    conf.initialTokens,
     conf.mintCodePath,
     conf.posCodePath
   )
