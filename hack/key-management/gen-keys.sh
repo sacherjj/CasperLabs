@@ -34,13 +34,13 @@ handle_exit() {
 # node.key.pem          # secp256r1 private key
 # validator-id          # validator ID, used to run as a validator for validating transactions, used in bonds.txt file
 #                       # derived from validator.public.pem
-# ed25519-private.pem # ed25519 private key
-# ed25519-public.pem  # ed25519 public key
+# validator-private.pem # ed25519 private key
+# validator-public.pem  # ed25519 public key
 #
 # Use as follows:
 # ./node/target/universal/stage/bin/casperlabs-node run \
-#   --casper-validator-public-key-path ed25519-public.pem
-#   --casper-validator-private-key-path ed25519-private.pem
+#   --casper-validator-public-key-path validator-public.pem
+#   --casper-validator-private-key-path validator-private.pem
 #   --tls-key node.key.pem
 #   --tls-certificate node.certificate.pem
 if [ "$1" = "-v" ]; then
@@ -58,13 +58,13 @@ fi
 
 
 # Generate validator private key
-openssl genpkey -algorithm Ed25519 -out "$OUTPUT_DIR/ed25519-private.pem"
+openssl genpkey -algorithm Ed25519 -out "$OUTPUT_DIR/validator-private.pem"
 
 # Extract validator public key from private
-openssl pkey -in "$OUTPUT_DIR/ed25519-private.pem" -pubout -out "$OUTPUT_DIR/ed25519-public.pem"
+openssl pkey -in "$OUTPUT_DIR/validator-private.pem" -pubout -out "$OUTPUT_DIR/validator-public.pem"
 
 # Extract raw public key from PEM file to serve as a validator ID
-openssl pkey -outform DER -pubout -in "$OUTPUT_DIR/ed25519-private.pem" | tail -c +13 | openssl base64 | tr -d '\n' > "$OUTPUT_DIR/validator-id"
+openssl pkey -outform DER -pubout -in "$OUTPUT_DIR/validator-private.pem" | tail -c +13 | openssl base64 | tr -d '\n' > "$OUTPUT_DIR/validator-id"
 
 # Assert validator-id is 32 bytes long
 VALIDATOR_ID_BASE64=$(cat "$OUTPUT_DIR/validator-id")

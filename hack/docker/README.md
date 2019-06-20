@@ -109,8 +109,8 @@ To sign deploy you'll need to [generate and ed25519 keypair](/VALIDATOR.md#setti
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
      --nonce 1 \
-     --public-key /keys/node-0/ed25519-public.pem \
-     --private-key /keys/node-0/ed25519-private.pem
+     --public-key /keys/account-0/account-public.pem \
+     --private-key /keys/account-0/account-private.pem
 ```
 
 ## Monitoring

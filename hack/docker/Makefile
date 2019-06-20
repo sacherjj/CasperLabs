@@ -97,7 +97,7 @@ slow:
 	mkdir -p .casperlabs/bootstrap
 	mkdir -p .casperlabs/genesis
 	mkdir -p .casperlabs/node-0
-	mkdir -p keys/node-0
+	mkdir -p keys/account-0
 	../key-management/docker-gen-keys.sh .casperlabs/node-0 || \
 		(cd ../..  && \
 		make docker-build/key-generator && \
@@ -105,15 +105,17 @@ slow:
 		../key-management/docker-gen-keys.sh .casperlabs/node-0)
 	cp -r .casperlabs/node-0/node-id .casperlabs/bootstrap/node-id
 	(cat .casperlabs/node-0/validator-id; echo " $(CL_CASPER_NUM_VALIDATORS)") >> .casperlabs/genesis/bonds.txt
-	../key-management/docker-gen-keys.sh keys/node-0
-	(cd keys/node-0 && rm -rf node.certificate.pem  node-id  node.key.pem  validator-id && cd ..)
+	../key-management/docker-gen-keys.sh keys/account-0
+	(cd keys/account-0 && rm -rf node.certificate.pem  node-id  node.key.pem  validator-id)
+	(cd keys/account-0 && mv validator-private.pem account-private.pem && mv validator-public.pem account-public.pem)
 
 	bash -c 'i=1 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
 		mkdir -p .casperlabs/node-$$i ; \
-		mkdir -p keys/node-$$i ; \
+		mkdir -p keys/account-$$i ; \
 		../key-management/docker-gen-keys.sh .casperlabs/node-$$i ; \
-		../key-management/docker-gen-keys.sh keys/node-$$i ; \
-		(cd keys/node-$$i && rm -rf node.certificate.pem  node-id  node.key.pem  validator-id && cd ..); \
+		../key-management/docker-gen-keys.sh keys/account-$$i ; \
+		(cd keys/account-$$i && rm -rf node.certificate.pem  node-id  node.key.pem  validator-id && cd ../..); \
+		(cd keys/account-$$i && mv validator-private.pem account-private.pem && mv validator-public.pem account-public.pem && cd ../..); \
 		BOND=$$(( $(CL_CASPER_NUM_VALIDATORS)+2*$$i )) ; \
 		(cat .casperlabs/node-$$i/validator-id; echo " $$BOND") >> .casperlabs/genesis/bonds.txt ; \
 		((i = i + 1)) ; \

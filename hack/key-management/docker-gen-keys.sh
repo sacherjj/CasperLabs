@@ -39,8 +39,8 @@ if [[ "$1" == "--test" ]]; then
        [[ -f "$OUTPUT_DIR/validator-id" ]] && \
        [[ -f "$OUTPUT_DIR/node.key.pem" ]] && \
        [[ -f "$OUTPUT_DIR/node.certificate.pem" ]] && \
-       [[ -f "$OUTPUT_DIR/ed25519-private.pem" ]] && \
-       [[ -f "$OUTPUT_DIR/ed25519-public.pem" ]]; then
+       [[ -f "$OUTPUT_DIR/validator-private.pem" ]] && \
+       [[ -f "$OUTPUT_DIR/validator-public.pem" ]]; then
         exit "0"
     else
         echo "ERROR: Some of required files haven't created"
