@@ -6,7 +6,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 extern crate common;
-use common::contract_api::{call_contract, new_uref, add_uref};
+use common::contract_api::{call_contract, new_uref};
 use common::contract_api::pointers::ContractPointer;
 use common::value::Value;
 
@@ -22,7 +22,5 @@ pub extern "C" fn call() {
     assert_eq!("Hello, World", result);
 
     //store the result at a uref so it can be seen as an effect on the global state
-    let uref = new_uref(Value::String(result));
-    add_uref("helloworld", &uref.into());
-
+    let _uref = new_uref(Value::String(result));
 }

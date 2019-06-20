@@ -24,6 +24,5 @@ pub extern "C" fn hello_name_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-
     let _hash = store_function("hello_name_ext", BTreeMap::new());
 }
