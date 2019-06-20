@@ -17,17 +17,20 @@ import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
 import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
-
-import scala.util.Either
+import scala.util.{Either, Try}
+import io.casperlabs.catscontrib.MonadThrowable
 
 @typeclass trait ExecutionEngineService[F[_]] {
-  //TODO: should this be effectful?
   def emptyStateHash: ByteString
   def exec(
       prestate: ByteString,
       deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]]
+  def runGenesis(
+      deploys: Seq[Deploy],
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, GenesisResult]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
   def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
   def setBonds(bonds: Map[PublicKey, Long]): F[Unit]
@@ -100,6 +103,38 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
           )
     } yield result
 
+  override def runGenesis(
+      deploys: Seq[Deploy],
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, GenesisResult]] =
+    deploys.length match {
+      case 0 =>
+        GenesisResult()
+          .withPoststateHash(emptyStateHash)
+          .withEffect(ExecutionEffect())
+          .asRight[Throwable]
+          .pure[F]
+      case 1 =>
+        val code = deploys.head.getSession.code
+        for {
+          request <- MonadThrowable[F].fromTry(Try(GenesisRequest.parseFrom(code.toByteArray)))
+          response <- sendMessage(request, _.runGenesis) {
+                       _.result match {
+                         case GenesisResponse.Result.Success(result) =>
+                           Right(result)
+                         case GenesisResponse.Result.FailedDeploy(error) =>
+                           Left(new SmartContractEngineError(error.message))
+                         case GenesisResponse.Result.Empty =>
+                           Left(new SmartContractEngineError("empty response"))
+                       }
+                     }
+        } yield response
+      case _ =>
+        MonadThrowable[F].raiseError(
+          new IllegalArgumentException("Currently only 1 deploy is supported.")
+        )
+    }
+
   override def commit(
       prestate: ByteString,
       effects: Seq[TransformEntry]
@@ -118,7 +153,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
           Left(SmartContractEngineError(s"Key not found in global state: $value"))
         case CommitResponse.Result.TypeMismatch(err) =>
           Left(SmartContractEngineError(err.toString))
-
       }
     }
 
@@ -134,7 +168,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
         case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
       }
     }
-  // Todo
+
   override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
     // FIXME: Implement bonds!
     bonds.pure[F]

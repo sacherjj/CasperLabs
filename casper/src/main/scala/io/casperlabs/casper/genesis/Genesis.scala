@@ -39,6 +39,7 @@ object Genesis {
   private def readFile[F[_]: Sync](path: Path) =
     Sync[F].delay(Files.readAllBytes(path))
 
+  /** Construct deploys that will set up the system contracts. */
   def defaultBlessedTerms[F[_]: Sync: Log](
       timestamp: Long,
       accountPublicKeyPath: Option[Path],
@@ -80,37 +81,31 @@ object Genesis {
     } yield List(deploy)
   }
 
+  /** Run system contracts and add them to the block as processed deploys. */
   private def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
-      blessedTerms: List[Deploy],
       initial: Block,
-      startHash: StateHash
+      blessedTerms: List[Deploy]
   ): F[BlockMsgWithTransform] =
     for {
       _ <- Log[F].debug(s"Processing ${blessedTerms.size} blessed contracts...")
-      processedDeploys <- MonadError[F, Throwable].rethrow(
-                           ExecutionEngineService[F]
-                             .exec(
-                               startHash,
-                               blessedTerms.map(deployDataToEEDeploy),
-                               CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(
-                                 initial
-                               )
-                             )
-                         )
+      genesisResult <- MonadError[F, Throwable].rethrow(
+                        ExecutionEngineService[F]
+                          .runGenesis(
+                            blessedTerms.map(deployDataToEEDeploy),
+                            CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(
+                              initial
+                            )
+                          )
+                      )
       // TODO: We shouldn't need to do any commutivity checking for the genesis block.
       // Either we make it a "SEQ" block (which is not a feature that exists yet)
       // or there should be a single deploy containing all the blessed contracts.
-      deployEffects = ExecEngineUtil.findCommutingEffects(
-        ExecEngineUtil.zipDeploysResults(blessedTerms, processedDeploys)
-      )
-      _                             <- Log[F].debug(s"Selected ${deployEffects.size} non-conflicing blessed contracts.")
-      (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
-      _ <- Log[F].debug(
-            s"Commiting blessed deploy effects onto starting hash ${Base16.encode(startHash.toByteArray)}..."
-          )
-      postStateHash <- MonadError[F, Throwable].rethrow(
-                        ExecutionEngineService[F].commit(startHash, transforms.flatten)
-                      )
+      transforms    = genesisResult.getEffect.transformMap
+      postStateHash = genesisResult.poststateHash
+      deploysForBlock = blessedTerms.map { d =>
+        Block.ProcessedDeploy().withDeploy(d)
+      }
+
       stateWithContracts = initial.getHeader.getState
         .withPreStateHash(ExecutionEngineService[F].emptyStateHash)
         .withPostStateHash(postStateHash)
@@ -126,8 +121,9 @@ object Genesis {
         chainId = initial.getHeader.chainId
       )
       unsignedBlock = unsignedBlockProto(body, header)
-    } yield BlockMsgWithTransform(Some(unsignedBlock), transforms.flatten)
+    } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
+  /** Fill out the basic fields in the block. */
   private def withoutContracts(
       bonds: Map[PublicKey, Long],
       timestamp: Long,
@@ -177,7 +173,6 @@ object Genesis {
     conf.posCodePath
   )
 
-  //TODO: Decide on version number and shard identifier
   def apply[F[_]: Concurrent: Log: Time: ExecutionEngineService](
       walletsPath: Path,
       minimumBond: Long,
@@ -211,9 +206,8 @@ object Genesis {
                            posCodePath = posCodePath
                          )
       withContr <- withContracts(
-                    blessedContracts,
                     initial,
-                    ExecutionEngineService[F].emptyStateHash
+                    blessedContracts
                   )
     } yield withContr
 
