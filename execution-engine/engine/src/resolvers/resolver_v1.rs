@@ -45,6 +45,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::ReadFuncIndex.into(),
             ),
+            "read_value_local" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                FunctionIndex::ReadLocalFuncIndex.into(),
+            ),
             "serialize_function" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::SerFnFuncIndex.into(),
@@ -116,10 +120,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "is_valid" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::IsValidFnIndex.into(),
-            ),
-            "seed" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::SeedFnIndex.into(),
             ),
             "revert" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),

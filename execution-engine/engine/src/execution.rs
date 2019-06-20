@@ -399,6 +399,19 @@ where
         self.context.write_gs(key, value).map_err(Into::into)
     }
 
+    /// Writes `value` under a key derived from `key` in the "local cluster" of GlobalState
+    pub fn write_local(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        value_ptr: u32,
+        value_size: u32,
+    ) -> Result<(), Trap> {
+        let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+        let value = self.value_from_mem(value_ptr, value_size)?;
+        self.context.write_ls(&key_bytes, value).map_err(Into::into)
+    }
+
     /// Adds `value` to the cell that `key` points at.
     pub fn add(
         &mut self,
@@ -424,13 +437,13 @@ where
         Ok(self.host_buf.len())
     }
 
-    /// Writes the seed associated with the [`RuntimeContext`] to the given destination
-    /// in runtime memory.
-    fn write_seed(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        let seed = self.context.seed();
-        self.memory
-            .set(dest_ptr, &seed)
-            .map_err(|e| Error::Interpreter(e).into())
+    /// Similar to `read`, this function is for reading from the "local cluster" of global state
+    pub fn read_local(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
+        let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+        let value: Option<Value> = self.context.read_ls(&key_bytes)?;
+        let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
+        self.host_buf = value_bytes;
+        Ok(self.host_buf.len())
     }
 
     /// Reverts contract execution with a status specified.
@@ -462,6 +475,14 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
+            FunctionIndex::ReadLocalFuncIndex => {
+                // args(0) = pointer to key bytes in Wasm memory
+                // args(1) = size of key bytes in Wasm memory
+                let (key_bytes_ptr, key_bytes_size) = Args::parse(args)?;
+                let size = self.read_local(key_bytes_ptr, key_bytes_size)?;
+                Ok(Some(RuntimeValue::I32(size as i32)))
+            }
+
             FunctionIndex::SerFnFuncIndex => {
                 // args(0) = pointer to name in Wasm memory
                 // args(1) = size of name in Wasm memory
@@ -477,6 +498,16 @@ where
                 // args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
                 self.write(key_ptr, key_size, value_ptr, value_size)?;
+                Ok(None)
+            }
+
+            FunctionIndex::WriteLocalFuncIndex => {
+                // args(0) = pointer to key in Wasm memory
+                // args(1) = size of key
+                // args(2) = pointer to value
+                // args(3) = size of value
+                let (key_bytes_ptr, key_bytes_size, value_ptr, value_size) = Args::parse(args)?;
+                self.write_local(key_bytes_ptr, key_bytes_size, value_ptr, value_size)?;
                 Ok(None)
             }
 
@@ -627,12 +658,6 @@ where
 
             FunctionIndex::ProtocolVersionFuncIndex => {
                 Ok(Some(self.context.protocol_version().into()))
-            }
-
-            FunctionIndex::SeedFnIndex => {
-                let dest_ptr = Args::parse(args)?;
-                self.write_seed(dest_ptr)?;
-                Ok(None)
             }
 
             FunctionIndex::IsValidFnIndex => {

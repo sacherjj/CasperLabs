@@ -68,8 +68,7 @@ message Key {
 	}
 
 	message Local {
-		bytes seed = 1;
-		bytes key_hash = 2;
+		bytes hash = 1;
 	}
 }
 

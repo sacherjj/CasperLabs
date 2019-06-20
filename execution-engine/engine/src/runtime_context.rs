@@ -13,7 +13,7 @@ use common::key::{Key, LOCAL_SEED_SIZE};
 use common::uref::{AccessRights, URef};
 use common::value::account::Account;
 use common::value::Value;
-use shared::newtypes::{Blake2bHash, CorrelationId, Validated};
+use shared::newtypes::{CorrelationId, Validated};
 use storage::global_state::StateReader;
 
 use engine_state::execution_effect::ExecutionEffect;
@@ -133,7 +133,7 @@ where
             Key::Account(bytes) => bytes,
             Key::Hash(bytes) => bytes,
             Key::URef(uref) => uref.addr(),
-            Key::Local { seed, key_hash } => Blake2bHash::new(&[seed, key_hash].concat()).into(),
+            Key::Local(hash) => hash,
         }
     }
 
@@ -186,6 +186,27 @@ where
         self.add_gs(base_key, Value::NamedKey(name.clone(), key))?;
         let validated_key = Validated::new(key, Validated::valid)?;
         self.insert_named_uref(name, validated_key);
+        Ok(())
+    }
+
+    pub fn read_ls(&mut self, key: &[u8]) -> Result<Option<Value>, Error> {
+        let seed = self.seed();
+        let key = Key::local(seed, key);
+        let validated_key = Validated::new(key, Validated::valid)?;
+        self.state
+            .borrow_mut()
+            .read(self.correlation_id, &validated_key)
+            .map_err(Into::into)
+    }
+
+    pub fn write_ls(&mut self, key_bytes: &[u8], value: Value) -> Result<(), Error> {
+        let seed = self.seed();
+        let key = Key::local(seed, key_bytes);
+        let validated_key = Validated::new(key, Validated::valid)?;
+        let validated_value = Validated::new(value, Validated::valid)?;
+        self.state
+            .borrow_mut()
+            .write(validated_key, validated_value);
         Ok(())
     }
 
@@ -336,7 +357,7 @@ where
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
             Key::URef(uref) => uref.is_readable(),
-            Key::Local { seed, .. } => &self.seed() == seed,
+            Key::Local(_) => false,
         }
     }
 
@@ -345,7 +366,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
             Key::URef(uref) => uref.is_addable(),
-            Key::Local { seed, .. } => &self.seed() == seed,
+            Key::Local(_) => false,
         }
     }
 
@@ -354,7 +375,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => false,
             Key::URef(uref) => uref.is_writeable(),
-            Key::Local { seed, .. } => &self.seed() == seed,
+            Key::Local(_) => false,
         }
     }
 
@@ -403,7 +424,7 @@ mod tests {
         AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
     };
     use execution::{create_rng, vec_key_rights_to_map};
-    use shared::newtypes::{Blake2bHash, CorrelationId};
+    use shared::newtypes::CorrelationId;
     use tracking_copy::TrackingCopy;
 
     fn mock_tc(
@@ -474,8 +495,7 @@ mod tests {
     fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SIZE]) -> Key {
         let mut key = [0u8; 64];
         entropy_source.fill_bytes(&mut key);
-        let key_hash = Blake2bHash::new(&key).into();
-        Key::Local { seed, key_hash }
+        Key::local(seed, &key)
     }
 
     fn mock_runtime_context<'a>(
@@ -927,7 +947,7 @@ mod tests {
             runtime_context.validate_writeable(&key)
         };
         let query_result = test(known_urefs, query);
-        assert!(query_result.is_ok())
+        assert!(query_result.is_err())
     }
 
     #[test]
@@ -953,7 +973,7 @@ mod tests {
             runtime_context.validate_readable(&key)
         };
         let query_result = test(known_urefs, query);
-        assert!(query_result.is_ok())
+        assert!(query_result.is_err())
     }
 
     #[test]
@@ -979,7 +999,7 @@ mod tests {
             runtime_context.validate_addable(&key)
         };
         let query_result = test(known_urefs, query);
-        assert!(query_result.is_ok())
+        assert!(query_result.is_err())
     }
 
     #[test]
@@ -993,5 +1013,24 @@ mod tests {
         };
         let query_result = test(known_urefs, query);
         assert!(query_result.is_err())
+    }
+
+    #[test]
+    fn can_roundtrip_key_value_pairs_into_local_state() {
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let test_key = b"test_key";
+            let test_value = Value::String("test_value".to_string());
+
+            runtime_context
+                .write_ls(test_key, test_value.to_owned())
+                .expect("should write_ls");
+
+            let result = runtime_context.read_ls(test_key).expect("should read_ls");
+
+            Ok(result == Some(test_value))
+        };
+        let query_result = test(known_urefs, query).expect("should be ok");
+        assert!(query_result)
     }
 }

@@ -27,6 +27,7 @@ use wasm_prep::Preprocessor;
 
 use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;
+use common::bytesrepr::ToBytes;
 use engine_state::execution_effect::ExecutionEffect;
 use engine_state::op::Op;
 use engine_state::utils::WasmiBytes;
@@ -97,8 +98,8 @@ pub fn create_genesis_effects(
     let purse_id_local_key = {
         let seed = mint_contract_uref.addr();
         let local_key = purse_id_uref.addr();
-        let key_hash = Blake2bHash::new(&local_key).into();
-        Key::Local { seed, key_hash }
+        let local_key_bytes = &local_key.to_bytes()?;
+        Key::local(seed, local_key_bytes)
     };
 
     let balance_uref = {
@@ -304,12 +305,12 @@ mod tests {
 
     use rand::RngCore;
 
+    use common::bytesrepr::ToBytes;
     use common::key::Key;
     use common::uref::{AccessRights, URef};
     use common::value::account::PurseId;
     use common::value::{Account, Contract, Value, U512};
     use execution;
-    use shared::newtypes::Blake2bHash;
     use shared::transform::Transform;
     use shared::{init, test_utils};
     use wasm_prep::wasm_costs::WasmCosts;
@@ -510,8 +511,8 @@ mod tests {
         let purse_id_local_key = {
             let seed = mint_contract_uref.addr();
             let local_key = purse_id_uref.addr();
-            let key_hash = Blake2bHash::new(&local_key).into();
-            Key::Local { seed, key_hash }
+            let local_key_bytes = &local_key.to_bytes().expect("should serialize");
+            Key::local(seed, local_key_bytes)
         };
 
         let balance_uref = {
@@ -560,8 +561,8 @@ mod tests {
         let purse_id_local_key = {
             let seed = mint_contract_uref.addr();
             let local_key = purse_id_uref.addr();
-            let key_hash = Blake2bHash::new(&local_key).into();
-            Key::Local { seed, key_hash }
+            let local_key_bytes = &local_key.to_bytes().expect("should serialize");
+            Key::local(seed, local_key_bytes)
         };
 
         let balance_uref = {
