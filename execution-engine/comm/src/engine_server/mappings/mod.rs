@@ -514,10 +514,9 @@ impl From<&common::key::Key> for super::state::Key {
                 let uref: super::state::Key_URef = (*uref).into();
                 k.set_uref(uref);
             }
-            common::key::Key::Local { seed, key_hash } => {
+            common::key::Key::Local(hash) => {
                 let mut key_local = super::state::Key_Local::new();
-                key_local.set_seed(seed.to_vec());
-                key_local.set_key_hash(key_hash.to_vec());
+                key_local.set_hash(hash.to_vec());
                 k.set_local(key_local);
             }
         }
@@ -556,17 +555,12 @@ impl TryFrom<&super::state::Key> for common::key::Key {
             Ok(common::key::Key::URef(uref))
         } else if ipc_key.has_local() {
             let ipc_local_key = ipc_key.get_local();
-            if !(ipc_local_key.seed.len() == 32 && ipc_local_key.key_hash.len() == 32) {
-                parse_error("Seed and key hash of local key have to be 32 bytes long.".to_string())
+            if ipc_local_key.hash.len() != 32 {
+                parse_error("Hash of local key have to be 32 bytes long.".to_string())
             } else {
-                let mut seed_buff = [0u8; 32];
                 let mut hash_buff = [0u8; 32];
-                seed_buff.copy_from_slice(&ipc_local_key.seed);
-                hash_buff.copy_from_slice(&ipc_local_key.key_hash);
-                Ok(common::key::Key::Local {
-                    seed: seed_buff,
-                    key_hash: hash_buff,
-                })
+                hash_buff.copy_from_slice(&ipc_local_key.hash);
+                Ok(common::key::Key::Local(hash_buff))
             }
         } else {
             parse_error(format!(

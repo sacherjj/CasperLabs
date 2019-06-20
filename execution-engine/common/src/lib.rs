@@ -38,8 +38,15 @@ pub mod value;
 mod ext_ffi {
     extern "C" {
         pub fn read_value(key_ptr: *const u8, key_size: usize) -> usize;
-        pub fn get_read(value_ptr: *mut u8); //can only be called after `read_value`
+        pub fn read_value_local(key_ptr: *const u8, key_size: usize) -> usize;
+        pub fn get_read(value_ptr: *mut u8); //can only be called after `read_value` or `read_value_local`
         pub fn write(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
+        pub fn write_local(
+            key_ptr: *const u8,
+            key_size: usize,
+            value_ptr: *const u8,
+            value_size: usize,
+        );
         pub fn add(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
         pub fn new_uref(key_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
         pub fn serialize_function(name_ptr: *const u8, name_size: usize) -> usize;
@@ -74,7 +81,6 @@ mod ext_ffi {
         pub fn has_uref_name(name_ptr: *const u8, name_size: usize) -> i32;
         pub fn add_uref(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);
         pub fn protocol_version() -> u64;
-        pub fn seed(dest: *mut u8);
         pub fn revert(status: u32) -> !;
         pub fn is_valid(value_ptr: *const u8, value_size: usize) -> i32;
         pub fn add_associated_key(public_key_ptr: *const u8, weight: i32) -> i32;

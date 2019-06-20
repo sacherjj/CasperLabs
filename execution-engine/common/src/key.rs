@@ -1,5 +1,8 @@
 use core::fmt::Write;
 
+use blake2::digest::{Input, VariableOutput};
+use blake2::VarBlake2b;
+
 use crate::alloc::vec::Vec;
 use crate::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
 use crate::contract_api::pointers::*;
@@ -10,14 +13,24 @@ const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
 const LOCAL_ID: u8 = 3;
 
+pub const LOCAL_KEY_SIZE: usize = 32;
 pub const LOCAL_SEED_SIZE: usize = 32;
-pub const LOCAL_KEY_HASH_SIZE: usize = 32;
 
 const KEY_ID_SIZE: usize = 1; // u8 used to determine the ID
 const ACCOUNT_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
 const HASH_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
 pub const UREF_SIZE: usize = KEY_ID_SIZE + UREF_SIZE_SERIALIZED;
-const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_SEED_SIZE + U32_SIZE + LOCAL_KEY_HASH_SIZE;
+const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_KEY_SIZE;
+
+/// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
+fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_SIZE] {
+    let mut ret = [0u8; LOCAL_KEY_SIZE];
+    // Safe to unwrap here because our digest length is constant and valid
+    let mut hasher = VarBlake2b::new(LOCAL_KEY_SIZE).unwrap();
+    hasher.input(bytes);
+    hasher.variable_result(|hash| ret.clone_from_slice(hash));
+    ret
+}
 
 #[repr(C)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
@@ -25,10 +38,15 @@ pub enum Key {
     Account([u8; 32]),
     Hash([u8; 32]),
     URef(URef),
-    Local {
-        seed: [u8; LOCAL_SEED_SIZE],
-        key_hash: [u8; LOCAL_KEY_HASH_SIZE],
-    },
+    Local([u8; LOCAL_KEY_SIZE]),
+}
+
+impl Key {
+    pub fn local(seed: [u8; LOCAL_SEED_SIZE], key_bytes: &[u8]) -> Self {
+        let bytes_to_hash: Vec<u8> = seed.iter().chain(key_bytes.iter()).cloned().collect();
+        let hash: [u8; LOCAL_KEY_SIZE] = hash(&bytes_to_hash);
+        Key::Local(hash)
+    }
 }
 
 // There is no impl LowerHex for neither [u8; 32] nor &[u8] in std.
@@ -55,9 +73,7 @@ impl core::fmt::Display for Key {
                     write!(f, "URef({}, None)", addr_to_hex(&addr))
                 }
             }
-            Key::Local { seed, key_hash } => {
-                write!(f, "Local({}, {})", addr_to_hex(seed), addr_to_hex(key_hash))
-            }
+            Key::Local(hash) => write!(f, "Local({})", addr_to_hex(hash)),
         }
     }
 }
@@ -124,11 +140,10 @@ impl ToBytes for Key {
                 result.append(&mut uref.to_bytes()?);
                 Ok(result)
             }
-            Key::Local { seed, key_hash } => {
+            Key::Local(hash) => {
                 let mut result = Vec::with_capacity(LOCAL_SIZE);
                 result.push(LOCAL_ID);
-                result.append(&mut seed.to_bytes()?);
-                result.append(&mut key_hash.to_bytes()?);
+                result.append(&mut hash.to_bytes()?);
                 Ok(result)
             }
         }
@@ -152,9 +167,8 @@ impl FromBytes for Key {
                 Ok((Key::URef(uref), rem))
             }
             LOCAL_ID => {
-                let (seed, rest): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
-                let (key_hash, rest): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
-                Ok((Key::Local { seed, key_hash }, rest))
+                let (hash, rest): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Key::Local(hash), rest))
             }
             _ => Err(Error::FormattingError),
         }
@@ -259,13 +273,10 @@ mod tests {
         );
         let hash_key = Key::Hash(addr_array);
         assert_eq!(format!("{}", hash_key), format!("Hash({})", expected_hash));
-        let local_key = Key::Local {
-            seed: addr_array,
-            key_hash: addr_array,
-        };
+        let local_key = Key::Local(addr_array);
         assert_eq!(
             format!("{}", local_key),
-            format!("Local({}, {})", expected_hash, expected_hash)
+            format!("Local({})", expected_hash)
         );
     }
 }

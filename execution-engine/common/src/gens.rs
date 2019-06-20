@@ -48,7 +48,7 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
         u8_slice_32().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
         uref_arb().prop_map(Key::URef),
-        (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key_hash)| Key::Local { seed, key_hash })
+        (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key)| Key::local(seed, &key))
     ]
 }
 

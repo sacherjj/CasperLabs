@@ -6,7 +6,7 @@ use self::alloc_util::*;
 use self::pointers::*;
 use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::ext_ffi;
-use crate::key::{Key, LOCAL_KEY_HASH_SIZE, LOCAL_SEED_SIZE, UREF_SIZE};
+use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 use crate::value::account::{
     ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
@@ -16,19 +16,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
 use core::convert::{TryFrom, TryInto};
-
-/// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
-fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_HASH_SIZE] {
-    let mut ret = [0u8; LOCAL_KEY_HASH_SIZE];
-    // Safe to unwrap here because our digest length is constant and valid
-    let mut hasher = VarBlake2b::new(LOCAL_KEY_HASH_SIZE).unwrap();
-    hasher.input(bytes);
-    hasher.variable_result(|hash| ret.clone_from_slice(hash));
-    ret
-}
 
 /// Read value under the key in the global state
 pub fn read<T>(u_ptr: UPointer<T>) -> T
@@ -44,35 +32,38 @@ where
         .unwrap()
 }
 
-/// Reads the value at the given key in the context-local partition of global state
-pub fn read_local<K, V>(key: K) -> Option<V>
-where
-    K: ToBytes,
-    V: TryFrom<Value>,
-{
-    let seed: [u8; LOCAL_SEED_SIZE] = {
-        let mut ret = [0u8; LOCAL_SEED_SIZE];
-        unsafe { ext_ffi::seed(ret.as_mut_ptr()) };
-        ret
-    };
-    let key_hash: [u8; LOCAL_KEY_HASH_SIZE] = {
-        let key_bytes = key.to_bytes().unwrap();
-        hash(&key_bytes)
-    };
-    let key = Key::Local { seed, key_hash };
-    read_untyped(&key).map(|v| {
-        v.try_into()
-            .map_err(|_| "T could not be derived from Value")
-            .unwrap()
-    })
-}
-
 fn read_untyped(key: &Key) -> Option<Value> {
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
     //      dropped then key_ptr becomes invalid.
 
     let (key_ptr, key_size, _bytes) = to_ptr(key);
     let value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
+    let value_ptr = alloc_bytes(value_size);
+    let value_bytes = unsafe {
+        ext_ffi::get_read(value_ptr);
+        Vec::from_raw_parts(value_ptr, value_size, value_size)
+    };
+    deserialize(&value_bytes).unwrap()
+}
+
+/// Reads the value at the given key in the context-local partition of global state
+pub fn read_local<K, V>(key: K) -> Option<V>
+where
+    K: ToBytes,
+    V: TryFrom<Value>,
+{
+    let key_bytes = key.to_bytes().unwrap();
+    read_untyped_local(&key_bytes).map(|v| {
+        v.try_into()
+            .map_err(|_| "T could not be derived from Value")
+            .unwrap()
+    })
+}
+
+fn read_untyped_local(key_bytes: &[u8]) -> Option<Value> {
+    let key_bytes_ptr = key_bytes.as_ptr();
+    let key_bytes_size = key_bytes.len();
+    let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
     let value_ptr = alloc_bytes(value_size);
     let value_bytes = unsafe {
         ext_ffi::get_read(value_ptr);
@@ -91,30 +82,30 @@ where
     write_untyped(&key, &value)
 }
 
+fn write_untyped(key: &Key, value: &Value) {
+    let (key_ptr, key_size, _bytes) = to_ptr(key);
+    let (value_ptr, value_size, _bytes2) = to_ptr(value);
+    unsafe {
+        ext_ffi::write(key_ptr, key_size, value_ptr, value_size);
+    }
+}
+
 /// Writes the given value at the given key in the context-local partition of global state
 pub fn write_local<K, V>(key: K, value: V)
 where
     K: ToBytes,
     V: Into<Value>,
 {
-    let seed: [u8; LOCAL_SEED_SIZE] = {
-        let mut ret = [0u8; LOCAL_SEED_SIZE];
-        unsafe { ext_ffi::seed(ret.as_mut_ptr()) };
-        ret
-    };
-    let key_hash: [u8; LOCAL_KEY_HASH_SIZE] = {
-        let key_bytes = key.to_bytes().unwrap();
-        hash(&key_bytes)
-    };
-    let key = Key::Local { seed, key_hash };
-    write_untyped(&key, &value.into());
+    let key_bytes = key.to_bytes().unwrap();
+    write_untyped_local(&key_bytes, &value.into());
 }
 
-fn write_untyped(key: &Key, value: &Value) {
-    let (key_ptr, key_size, _bytes) = to_ptr(key);
+fn write_untyped_local(key_bytes: &[u8], value: &Value) {
+    let key_bytes_ptr = key_bytes.as_ptr();
+    let key_bytes_size = key_bytes.len();
     let (value_ptr, value_size, _bytes2) = to_ptr(value);
     unsafe {
-        ext_ffi::write(key_ptr, key_size, value_ptr, value_size);
+        ext_ffi::write_local(key_bytes_ptr, key_bytes_size, value_ptr, value_size);
     }
 }
 
