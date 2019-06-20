@@ -57,6 +57,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::WriteFuncIndex.into(),
             ),
+            "write_local" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 4][..], None),
+                FunctionIndex::WriteLocalFuncIndex.into(),
+            ),
             "get_read" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GetReadFuncIndex.into(),
