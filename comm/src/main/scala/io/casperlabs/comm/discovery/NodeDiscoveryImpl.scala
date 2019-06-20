@@ -217,7 +217,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Timer: Metrics
     } yield closestNode
   }
 
-  override def alivePeersAscendingDistance: F[List[Node]] =
+  override def recentlyAlivePeersAscendingDistance: F[List[Node]] =
     if (gossipingEnabled)
       recentlyAlivePeersRef.get.map {
         case (recentlyAlivePeers, _) => PeerTable.sort(recentlyAlivePeers.toList, id)(_.id)

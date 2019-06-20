@@ -303,12 +303,13 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           for {
             // fills up cache
             _  <- nd.updateRecentlyAlivePeers
-            r1 <- nd.alivePeersAscendingDistance
+            r1 <- nd.recentlyAlivePeersAscendingDistance
             // each request should cause re-pinging all peers
             // firstly only alive peers from previous request
             // then rest of all known peers trying to fill up cache
-            n  = nextInt(1, 5)
-            r2 <- (nd.updateRecentlyAlivePeers >> nd.alivePeersAscendingDistance).replicateA(n)
+            n = nextInt(1, 5)
+            r2 <- (nd.updateRecentlyAlivePeers >> nd.recentlyAlivePeersAscendingDistance)
+                   .replicateA(n)
           } yield {
             kademlia.totalPings shouldBe (totalN(peers) * (n + 1))
             r1 should contain theSameElementsInOrderAs ascendingDistance(alive)
@@ -339,10 +340,10 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           for {
             // fills up cache
             _  <- nd.updateRecentlyAlivePeers
-            r1 <- nd.alivePeersAscendingDistance
+            r1 <- nd.recentlyAlivePeersAscendingDistance
             // pings alive peers from previous query
             _  <- nd.updateRecentlyAlivePeers
-            r2 <- nd.alivePeersAscendingDistance
+            r2 <- nd.recentlyAlivePeersAscendingDistance
           } yield {
             kademlia.totalPings shouldBe (all.size + alive.size)
             r1 should contain theSameElementsInOrderAs ascendingDistance(alive)
@@ -366,10 +367,10 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
         ) { (kademlia, nd, _) =>
           for {
             _  <- nd.updateRecentlyAlivePeers
-            r1 <- nd.alivePeersAscendingDistance
+            r1 <- nd.recentlyAlivePeersAscendingDistance
             _  <- Task.sleep(200.milliseconds)
             _  <- nd.updateRecentlyAlivePeers
-            r2 <- nd.alivePeersAscendingDistance
+            r2 <- nd.recentlyAlivePeersAscendingDistance
           } yield {
             // 1st => to fill up cache
             // 2nd => to check alive peers from cache
@@ -394,7 +395,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           ) { (kademlia, nd, _) =>
             for {
               _ <- nd.updateRecentlyAlivePeers
-              _ <- nd.alivePeersAscendingDistance
+              _ <- nd.recentlyAlivePeersAscendingDistance
             } yield {
               kademlia.totalPings shouldBe 1
             }

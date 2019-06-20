@@ -143,9 +143,9 @@ object RelayingSpec {
         log: Log[Task] = noOpLog
     )(test: (Relaying[Task], AtomicInt, AtomicInt) => Task[Unit]): Unit = {
       val nd = new NodeDiscovery[Task] {
-        override def discover: Task[Unit]                           = ???
-        override def lookup(id: NodeIdentifier): Task[Option[Node]] = ???
-        override def alivePeersAscendingDistance: Task[List[Node]]  = Task.now(peers)
+        override def discover: Task[Unit]                                  = ???
+        override def lookup(id: NodeIdentifier): Task[Option[Node]]        = ???
+        override def recentlyAlivePeersAscendingDistance: Task[List[Node]] = Task.now(peers)
       }
       val asked                 = AtomicInt(0)
       val concurrency           = AtomicInt(0)

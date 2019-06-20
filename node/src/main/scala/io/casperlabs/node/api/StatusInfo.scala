@@ -20,7 +20,7 @@ object StatusInfo {
     for {
       version <- Sync[F].delay(VersionInfo.get)
       peers   <- ConnectionsCell[F].read
-      nodes   <- NodeDiscovery[F].alivePeersAscendingDistance
+      nodes   <- NodeDiscovery[F].recentlyAlivePeersAscendingDistance
     } yield Status(version, peers.length, nodes.length)
 
   def service[F[_]: Sync: ConnectionsCell: NodeDiscovery]: HttpRoutes[F] = {

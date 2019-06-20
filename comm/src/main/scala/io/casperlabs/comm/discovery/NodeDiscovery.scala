@@ -13,8 +13,8 @@ trait NodeDiscovery[F[_]] {
   /** Iteratively try to find a peer. */
   def lookup(id: NodeIdentifier): F[Option[Node]]
 
-  /** Return the currently active peers. */
-  def alivePeersAscendingDistance: F[List[Node]]
+  /** Return the recently active peers. */
+  def recentlyAlivePeersAscendingDistance: F[List[Node]]
 }
 
 object NodeDiscovery extends NodeDiscoveryInstances {
@@ -26,7 +26,8 @@ object NodeDiscovery extends NodeDiscoveryInstances {
     new NodeDiscovery[T[F, ?]] {
       def discover: T[F, Unit]                           = C.discover.liftM[T]
       def lookup(id: NodeIdentifier): T[F, Option[Node]] = C.lookup(id).liftM[T]
-      def alivePeersAscendingDistance: T[F, List[Node]]  = C.alivePeersAscendingDistance.liftM[T]
+      def recentlyAlivePeersAscendingDistance: T[F, List[Node]] =
+        C.recentlyAlivePeersAscendingDistance.liftM[T]
     }
 }
 

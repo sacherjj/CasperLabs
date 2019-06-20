@@ -261,9 +261,9 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
 object GossipServiceCasperTestNodeFactory {
   class TestNodeDiscovery[F[_]: Applicative](peers: List[Node]) extends NodeDiscovery[F] {
-    def discover: F[Unit]                           = ???
-    def lookup(id: NodeIdentifier): F[Option[Node]] = ???
-    def alivePeersAscendingDistance: F[List[Node]]  = peers.pure[F]
+    def discover: F[Unit]                                  = ???
+    def lookup(id: NodeIdentifier): F[Option[Node]]        = ???
+    def recentlyAlivePeersAscendingDistance: F[List[Node]] = peers.pure[F]
   }
 
   def makeNodeAsk[F[_]](node: Node)(implicit ev: Applicative[F]) =

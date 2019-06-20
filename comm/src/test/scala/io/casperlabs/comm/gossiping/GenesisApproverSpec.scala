@@ -471,9 +471,9 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     .withApproverPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
 
   class MockNodeDiscovery(peers: List[Node]) extends NodeDiscovery[Task] {
-    override def discover                    = ???
-    override def lookup(id: NodeIdentifier)  = ???
-    override def alivePeersAscendingDistance = Task.now(peers)
+    override def discover                            = ???
+    override def lookup(id: NodeIdentifier)          = ???
+    override def recentlyAlivePeersAscendingDistance = Task.now(peers)
   }
 
   class MockGossipService extends GossipService[Task] {
