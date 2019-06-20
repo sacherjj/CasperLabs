@@ -2,7 +2,7 @@ pub mod error;
 pub mod execution_effect;
 pub mod execution_result;
 pub mod op;
-mod utils;
+pub mod utils;
 
 use std::cell::RefCell;
 use std::collections::btree_map::BTreeMap;

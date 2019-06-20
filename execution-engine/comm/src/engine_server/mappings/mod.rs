@@ -3,6 +3,8 @@ mod uint;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
 
+use protobuf::ProtobufEnum;
+
 use common::uref::URef;
 use common::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
@@ -13,16 +15,15 @@ use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::op::Op;
 use execution_engine::execution::Error as ExecutionError;
 use execution_engine::utils;
-use ipc;
-use protobuf::ProtobufEnum;
 use shared::logging;
 use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;
 use shared::transform::{self, TypeMismatch};
-use state;
 use std::fmt::Display;
 use std::string::ToString;
 use storage::global_state::{CommitResult, History};
+
+use engine_server::{ipc, state};
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {

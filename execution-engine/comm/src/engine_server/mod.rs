@@ -1,3 +1,8 @@
+pub mod ipc;
+pub mod ipc_grpc;
+pub mod mappings;
+pub mod state;
+
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::ErrorKind;
@@ -11,8 +16,6 @@ use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::{EngineState, GenesisResult};
 use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
-use ipc_grpc::ExecutionEngineService;
-use mappings::*;
 use shared::logging;
 use shared::logging::{log_duration, log_info};
 use shared::newtypes::{Blake2bHash, CorrelationId};
@@ -20,13 +23,8 @@ use storage::global_state::History;
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
-pub mod ipc;
-pub mod ipc_grpc;
-pub mod mappings;
-pub mod state;
-
-#[cfg(test)]
-mod tests;
+use self::ipc_grpc::ExecutionEngineService;
+use self::mappings::*;
 
 const EXPECTED_PUBLIC_KEY_LENGTH: usize = 32;
 

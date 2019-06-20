@@ -1,22 +1,15 @@
 extern crate clap;
-extern crate common;
 extern crate ctrlc;
 extern crate dirs;
-extern crate execution_engine;
 extern crate grpc;
 #[macro_use]
 extern crate lazy_static;
 extern crate lmdb;
-#[cfg(test)]
-extern crate parity_wasm;
-extern crate proptest;
-extern crate protobuf;
+
+extern crate casperlabs_engine_grpc_server;
+extern crate execution_engine;
 extern crate shared;
 extern crate storage;
-extern crate wabt;
-extern crate wasm_prep;
-
-pub mod engine_server;
 
 use std::collections::btree_map::BTreeMap;
 use std::fs;
@@ -28,7 +21,6 @@ use std::time::Duration;
 
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
-use engine_server::*;
 use execution_engine::engine_state::EngineState;
 use lmdb::DatabaseFlags;
 
@@ -39,6 +31,8 @@ use shared::os::get_page_size;
 use shared::{init, logging, socket};
 use storage::global_state::lmdb::LmdbGlobalState;
 use storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+
+use casperlabs_engine_grpc_server::engine_server;
 
 // exe / proc
 const PROC_NAME: &str = "casperlabs-engine-grpc-server";
