@@ -27,6 +27,7 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 
@@ -49,7 +50,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+class MultiParentCasperImpl[F[_]: Sync: Log: Time: Metrics: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -155,6 +156,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       // Remove any deploys from the buffer which are in finalized blocks.
       _ <- removeFinalizedDeploys(updatedDag)
 
+      _ <- updateDeployBufferMetrics()
+
     } yield (block, status) :: furtherAttempts
 
   /** Go from the last finalized block and visit all children that can be finalized now.
@@ -256,6 +259,13 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   override def bufferedDeploys: F[DeployBuffer] =
     Cell[F, CasperState].read.map(_.deployBuffer)
 
+  private def updateDeployBufferMetrics(): F[Unit] =
+    for {
+      buffer <- bufferedDeploys
+      _      <- Metrics[F].setGauge("pending_deploys", buffer.pendingDeploys.size)
+      _      <- Metrics[F].setGauge("processed_deploys", buffer.processedDeploys.size)
+    } yield ()
+
   /** Add a deploy to the buffer, if the code passes basic validation. */
   def deploy(deploy: Deploy): F[Either[Throwable, Unit]] =
     (deploy.getBody.session, deploy.getBody.payment) match {
@@ -297,6 +307,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
             s.copy(deployBuffer = s.deployBuffer.add(deploy))
           }
       _ <- Log[F].info(s"Received ${show(deploy)}")
+      _ <- updateDeployBufferMetrics()
     } yield ()).attempt
   }
 
@@ -645,7 +656,17 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Cell[
+  implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CasperMetricsSource, "MultiParentCasper")
+
+  /** Export base 0 values so we have non-empty series for charts. */
+  def establishMetrics[F[_]: Monad: Metrics] =
+    for {
+      _ <- Metrics[F].incrementGauge("pending_deploys", 0)
+      _ <- Metrics[F].incrementGauge("processed_deploys", 0)
+    } yield ()
+
+  def create[F[_]: Sync: Log: Time: Metrics: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Cell[
     ?[_],
     CasperState
   ]](
@@ -657,17 +678,19 @@ object MultiParentCasperImpl {
       blockProcessingLock: Semaphore[F],
       faultToleranceThreshold: Float = 0f
   ): F[MultiParentCasper[F]] =
-    LastFinalizedBlockHashContainer[F].set(genesis.blockHash) >> Sync[F].delay(
-      new MultiParentCasperImpl[F](
-        statelessExecutor,
-        broadcaster,
-        validatorId,
-        genesis,
-        chainId,
-        blockProcessingLock,
-        faultToleranceThreshold
+    LastFinalizedBlockHashContainer[F].set(genesis.blockHash) >>
+      establishMetrics[F] >>
+      Sync[F].delay(
+        new MultiParentCasperImpl[F](
+          statelessExecutor,
+          broadcaster,
+          validatorId,
+          genesis,
+          chainId,
+          blockProcessingLock,
+          faultToleranceThreshold
+        )
       )
-    )
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
