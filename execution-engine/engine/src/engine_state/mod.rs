@@ -45,7 +45,6 @@ pub fn create_genesis_effects(
     genesis_account_addr: [u8; 32],
     initial_tokens: U512,
     mint_code_bytes: WasmiBytes,
-    _proof_of_stake_code_bytes: WasmiBytes,
     protocol_version: u64,
 ) -> Result<ExecutionEffect, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
@@ -207,17 +206,14 @@ where
         genesis_account_addr: [u8; 32],
         initial_tokens: U512,
         mint_code_bytes: &[u8],
-        proof_of_stake_code_bytes: &[u8],
+        _proof_of_stake_code_bytes: &[u8],
         protocol_version: u64,
     ) -> Result<GenesisResult, Error> {
         let mint_code_bytes = WasmiBytes::new(mint_code_bytes, WasmCosts::free())?;
-        let proof_of_stake_code_bytes =
-            WasmiBytes::new(proof_of_stake_code_bytes, WasmCosts::free())?;
         let effects = create_genesis_effects(
             genesis_account_addr,
             initial_tokens,
             mint_code_bytes,
-            proof_of_stake_code_bytes,
             protocol_version,
         )?;
         let mut state_guard = self.state.lock();
@@ -332,23 +328,15 @@ mod tests {
         WasmiBytes::new(raw_bytes.as_slice(), WasmCosts::free()).expect("should create wasmi bytes")
     }
 
-    fn get_proof_of_stake_code_bytes() -> WasmiBytes {
-        let raw_bytes = test_utils::create_empty_wasm_module_bytes();
-        WasmiBytes::new(raw_bytes.as_slice(), WasmCosts::free()).expect("should create wasmi bytes")
-    }
-
     fn get_genesis_transforms() -> HashMap<Key, Transform> {
         let initial_tokens = get_initial_tokens(INITIAL_BALANCE);
 
         let mint_code_bytes = get_mint_code_bytes();
 
-        let proof_of_stake_bytes = get_proof_of_stake_code_bytes();
-
         create_genesis_effects(
             GENESIS_ACCOUNT_ADDR,
             initial_tokens,
             mint_code_bytes,
-            proof_of_stake_bytes,
             PROTOCOL_VERSION,
         )
         .expect("should create effects")

@@ -130,7 +130,9 @@ class DockerNode(LoggingDockerBase):
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
             env['_JAVA_OPTIONS'] = java_options
-
+        # Eliminate UPnP for docker, to not have delay
+        if self.is_in_docker:
+            env['CL_SERVER_NO_UPNP'] = 'true'
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix='deploy_')
         self.create_resources_dir()
 

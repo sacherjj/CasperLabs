@@ -29,7 +29,7 @@ Contract examples exist in another repo.  Clone https://github.com/CasperLabs/co
 
 We will create multiple nodes in docker with names such as `node-0`, `node-1` etc. Each will have a corresponding container running the Execution Engine.
 
-The setup process will establish validator keys in `.casperlabs/node-*` and bonds in `.casperlabs/genesis` by executing [docker-gen-keys.sh](/hack/key-management/docker-gen-keys.sh). By default 5 nodes' keys are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
+The setup process will establish validator keys in `.casperlabs/node-*` and bonds in `.casperlabs/genesis` by executing [docker-gen-keys.sh](/hack/key-management/docker-gen-keys.sh). By default 3 nodes' keys are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
 
 `node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first.
 
@@ -109,8 +109,8 @@ To sign deploy you'll need to [generate and ed25519 keypair](/VALIDATOR.md#setti
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
      --nonce 1 \
-     --public-key /keys/public.key \
-     --private-key /keys/private.key
+     --public-key /keys/account-0/account-public.pem \
+     --private-key /keys/account-0/account-private.pem
 ```
 
 ## Monitoring
