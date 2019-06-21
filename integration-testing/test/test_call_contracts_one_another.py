@@ -80,8 +80,7 @@ def test_call_contracts_one_another(nodes, docker_client, generated_hashes, cont
     """
 
     def state(node, path, block_hash):
-        return node.d_client.query_state(block_hash = block_hash, key_type = "address", path = path,
-                                         key = 3030303030303030303030303030303030303030303030303030303030303030)
+        return node.d_client.query_state(block_hash = block_hash, key = nodes[0].from_address(), key_type = "address", path = path)
 
     for node, block_hash in zip(nodes, generated_hashes[contract]):
         assert expected(state(node, path, block_hash))
