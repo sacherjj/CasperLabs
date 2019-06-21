@@ -300,6 +300,7 @@ pipeline:
     commands:
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "make cargo-package-all"
+      - "cp execution-engine/target/blessed-contracts.tar.gz artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm artifacts/${DRONE_BRANCH}"
       - "WORKING_DIR=$(pwd) ; cd execution-engine/target/release/rpmbuild/SOURCES ; OS=$(uname -s | tr '[:upper:]' '[:lower:]') ; ARCH=$(uname -p) ; SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed \"s/.tar.gz//\") ; TARGET=$(ls $SOURCE*.tar.gz | sed \"s/.tar.gz/_\"$OS\"_\"$ARCH\".tar.gz/\") ; tar -xzf $SOURCE.tar.gz ; tar -czf $TARGET -C $SOURCE/usr/bin/ . && cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}"
@@ -443,7 +444,7 @@ pipeline:
       - slack_webhook
     template: |
       *{{ uppercasefirst build.status }}*
-        Author: {{ build.author }} 
+        Author: {{ build.author }}
         Drone Build: <{{ build.link }}|#{{ build.number }}>
         Commit Link: <https://github.com/{{repo.owner}}/{{repo.name}}/commit/{{build.commit}}|{{ truncate build.commit 10 }}>
     when:
