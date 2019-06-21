@@ -34,6 +34,7 @@ handle_exit() {
 # node.key.pem          # secp256r1 private key
 # validator-id          # validator ID, used to run as a validator for validating transactions, used in bonds.txt file
 #                       # derived from validator.public.pem
+# validator-id-hex      # validator ID in hex, derived from validator.public.pem
 # validator-private.pem # ed25519 private key
 # validator-public.pem  # ed25519 public key
 #
