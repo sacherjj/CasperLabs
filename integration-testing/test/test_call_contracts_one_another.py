@@ -14,7 +14,7 @@ class BlockPropagatedToAllNodesChecker:
         self.number_of_blocks += 1
         for n in self.docker_nodes:
             wait_for_blocks_count_at_least(n, self.number_of_blocks, self.number_of_blocks, n.timeout)
-        
+
 
 @pytest.fixture(scope='module')
 def three_node_network_with_combined_contract(three_node_network_module_scope):

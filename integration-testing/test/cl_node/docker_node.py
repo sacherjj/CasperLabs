@@ -187,6 +187,9 @@ class DockerNode(LoggingDockerBase):
         if os.path.exists(self.deploy_dir):
             shutil.rmtree(self.deploy_dir)
 
+    def from_account(self):
+        return '30' * 32
+
     @property
     def volumes(self) -> dict:
         if self.config.volumes is not None:

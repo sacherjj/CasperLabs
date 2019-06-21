@@ -86,7 +86,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
                     raise ex
 
     def deploy(self,
-               from_address: str = "3030303030303030303030303030303030303030303030303030303030303030",
+               from_address: str = None,
                gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: Optional[int] = None,
@@ -95,9 +95,10 @@ class DockerClient(CasperLabsClient, LoggingMixin):
                private_key: Optional[str] = None,
                public_key: Optional[str] = None) -> str:
 
-        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(from_address)
+        address  = from_address or node.from_address()
+        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
 
-        command = (f"deploy --from {from_address}"
+        command = (f"deploy --from {address}"
                    f" --gas-limit {gas_limit}"
                    f" --gas-price {gas_price}"
                    f" --session=/data/{session_contract}"
