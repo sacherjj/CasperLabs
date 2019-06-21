@@ -1,26 +1,23 @@
-import os
 import logging
+import os
 import threading
-from typing import Callable, Dict, List
-
-import docker
-import docker.errors
-
-from test.cl_node.docker_execution_engine import  DockerExecutionEngine
-from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_node import CasperLabsNode
 from test.cl_node.common import random_string
 from test.cl_node.docker_base import DockerConfig
+from test.cl_node.docker_execution_engine import DockerExecutionEngine
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
+from test.cl_node.nonce_registry import NonceRegistry
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-from test.cl_node.wait import ( 
+from test.cl_node.wait import (
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
     wait_for_peers_count_at_least,
 )
-from test.cl_node.nonce_registry import NonceRegistry
+from typing import Callable, Dict, List
 
+import docker
+import docker.errors
 
 
 class CasperLabsNetwork:

@@ -1,8 +1,11 @@
-from typing import List
-import pytest
 from test.cl_node.client_parser import parse_show_blocks
-from .cl_node.wait import wait_for_blocks_count_at_least
 from test.cl_node.errors import NonZeroExitCodeError
+from typing import List
+
+import pytest
+
+from .cl_node.wait import wait_for_blocks_count_at_least
+
 
 """
 Feature file: ~/CasperLabs/integration-testing/features/deploy.feature

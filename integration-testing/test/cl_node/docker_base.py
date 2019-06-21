@@ -1,17 +1,16 @@
-import logging
 import json
+import logging
 import os
 import threading
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from queue import Empty
-from typing import Any, Dict, Optional, Tuple, Union
-
 from test.cl_node.common import random_string
 from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
+from typing import Any, Dict, Optional, Tuple, Union
 
-from docker import DockerClient
 import docker.errors
+from docker import DockerClient
 
 
 def humanify(line):
