@@ -201,7 +201,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       logEff             = new LogStub[Task]()
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
+      cliqueOracleEffect = new SafetyOracleInstancesImpl[Task]()(Sync[Task], logEff)
     } yield (logEff, casperRef, cliqueOracleEffect)
 
   private def emptyEffects(
@@ -224,6 +224,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       logEff             = new LogStub[Task]()
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
+      cliqueOracleEffect = new SafetyOracleInstancesImpl[Task]()(Sync[Task], logEff)
     } yield (logEff, casperRef, cliqueOracleEffect)
 }

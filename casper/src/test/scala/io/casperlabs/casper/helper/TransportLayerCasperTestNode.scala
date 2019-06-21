@@ -69,7 +69,7 @@ class TransportLayerCasperTestNode[F[_]](
   implicit val transportLayerEff  = tle
   implicit val rpConfAsk          = createRPConfAsk[F](local)
 
-  implicit val safetyOracleEff: SafetyOracle[F] = SafetyOracle.cliqueOracle[F]
+  implicit val safetyOracleEff: SafetyOracle[F] = new SafetyOracleInstancesImpl[F]
 
   val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 

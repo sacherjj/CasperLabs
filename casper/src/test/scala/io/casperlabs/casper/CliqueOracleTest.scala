@@ -6,6 +6,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.SafetyOracle.Committee
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 
@@ -21,70 +22,89 @@ class CliqueOracleTest
 
   implicit val logEff = new LogStub[Task]
 
-  // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   it should "detect finality as appropriate" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("Validator One")
       val v2     = generateValidator("Validator Two")
-      val v1Bond = Bond(v1, 2)
-      val v2Bond = Bond(v2, 3)
+      val v1Bond = Bond(v1, 1)
+      val v2Bond = Bond(v2, 1)
       val bonds  = Seq(v1Bond, v2Bond)
 
-      implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
+      implicit val cliqueOracleEffect = new SafetyOracleInstancesImpl[Task]
 
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b1      <- createBlock[Task](Seq(genesis.blockHash), v1, bonds, HashMap(v1 -> genesis.blockHash))
         b2 <- createBlock[Task](
-               Seq(genesis.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
+               Seq(b1.blockHash),
+               v1,
+               bonds
              )
         b3 <- createBlock[Task](
-               Seq(genesis.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
+               Seq(b1.blockHash),
+               v2,
+               bonds
              )
         b4 <- createBlock[Task](
                Seq(b2.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
-             )
-        b5 <- createBlock[Task](
-               Seq(b2.blockHash),
                v1,
                bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
+               HashMap(v1 -> b2.blockHash, v2 -> b3.blockHash)
+             )
+        b5 <- createBlock[Task](
+               Seq(b3.blockHash),
+               v2,
+               bonds,
+               HashMap(v2 -> b3.blockHash)
              )
         b6 <- createBlock[Task](
                Seq(b4.blockHash),
-               v2,
+               v1,
                bonds,
-               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+               HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
              )
         b7 <- createBlock[Task](
-               Seq(b4.blockHash),
-               v1,
+               Seq(b5.blockHash),
+               v2,
                bonds,
-               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+               HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
              )
         b8 <- createBlock[Task](
-               Seq(b7.blockHash),
+               Seq(b6.blockHash),
                v1,
                bonds,
-               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
+               HashMap(v1 -> b6.blockHash, v2 -> b7.blockHash)
              )
-        dag                   <- blockDagStorage.getRepresentation
-        genesisFaultTolerance <- SafetyOracle[Task].normalizedFaultTolerance(dag, genesis.blockHash)
-        _                     = assert(genesisFaultTolerance === 1f +- 0.01f)
-        b2FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b2.blockHash)
-        _                     = assert(b2FaultTolerance === 1f +- 0.01f)
-        b3FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b3.blockHash)
-        _                     = assert(b3FaultTolerance === -1f +- 0.01f)
-        b4FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b4.blockHash)
-        result                = assert(b4FaultTolerance === 0.2f +- 0.01f)
+        dag           <- blockDagStorage.getRepresentation
+        levelZeroMsgs <- cliqueOracleEffect.levelZeroMsgs(dag, b1.blockHash, List(v1, v2))
+        lowestLevelZeroMsgs = levelZeroMsgs.flatMap {
+          case (bh, msgs) => msgs.lastOption.map(_.blockHash)
+        }.toSet
+        _    = lowestLevelZeroMsgs shouldBe Set(b2.blockHash, b3.blockHash)
+        jDag = cliqueOracleEffect.constructJDagFromLevelZeroMsgs(levelZeroMsgs)
+        _    = jDag.parentToChildAdjacencyList(b2.blockHash) shouldBe Set(b4.blockHash)
+        _    = jDag.parentToChildAdjacencyList(b3.blockHash) shouldBe Set(b4.blockHash, b5.blockHash)
+        _    = jDag.parentToChildAdjacencyList(b4.blockHash) shouldBe Set(b6.blockHash, b7.blockHash)
+        sweepResult <- cliqueOracleEffect.sweep(
+                        dag,
+                        jDag,
+                        Set(v1, v2),
+                        levelZeroMsgs,
+                        2,
+                        HashMap(v1 -> 1, v2 -> 1)
+                      )
+        (blockLevels, validatorLevels) = sweepResult
+        _                              = BlockScoreAccumulator.ownLevel(blockLevels(b2.blockHash)) shouldBe (0)
+        _                              = BlockScoreAccumulator.ownLevel(blockLevels(b3.blockHash)) shouldBe (0)
+        _                              = BlockScoreAccumulator.ownLevel(blockLevels(b4.blockHash)) shouldBe (1)
+        _                              = BlockScoreAccumulator.ownLevel(blockLevels(b5.blockHash)) shouldBe (0)
+        _                              = BlockScoreAccumulator.ownLevel(blockLevels(b6.blockHash)) shouldBe (1)
+        _                              = BlockScoreAccumulator.ownLevel(blockLevels(b7.blockHash)) shouldBe (1)
+        _                              = BlockScoreAccumulator.ownLevel(blockLevels(b8.blockHash)) shouldBe (2)
+        _                              = validatorLevels(v1) shouldBe (2)
+        result                         = validatorLevels(v2) shouldBe (1)
+        committee                      <- SafetyOracle[Task].findBestCommittee(dag, b1.blockHash)
+        _                              = committee shouldBe Some(Committee(Set(v1, v2), 2))
       } yield result
   }
 
@@ -99,7 +119,7 @@ class CliqueOracleTest
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-      implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
+      implicit val cliqueOracleEffect = new SafetyOracleInstancesImpl[Task]
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](

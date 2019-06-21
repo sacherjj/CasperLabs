@@ -80,7 +80,7 @@ class ManyValidatorsTest
       logEff             = new LogStub[Task]
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
+      cliqueOracleEffect = new SafetyOracleInstancesImpl[Task]
       result <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                  MonadThrowable[Task],
                  casperRef,
