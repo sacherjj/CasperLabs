@@ -77,7 +77,12 @@ def _parse(tokens):
         if next_token == '{':
             d[token].append(_parse(tokens))
         else:
-            d[token] = next_token
+            if token not in d:
+                d[token] = next_token
+            elif isinstance(d[token], list):
+                d[token].append(next_token)
+            else:
+                d[token] = [d[token], next_token]
 
     raise Exception("Missing closing bracket '}'")
 
