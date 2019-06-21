@@ -458,7 +458,7 @@ package object gossiping {
                                    genesis <- Genesis[F](conf.casper).map(_.getBlockMessage)
                                    // Store it so others can pull it from the bootstrap node.
                                    _ <- Log[F].info(
-                                         s"Trying to store generated Genesis candidate ${genesis.blockHash}..."
+                                         s"Trying to store generated Genesis candidate ${show(genesis.blockHash)}"
                                        )
                                    _ <- validateAndAddBlock(conf.casper.chainId, genesis)
                                  } yield genesis
