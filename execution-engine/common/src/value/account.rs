@@ -226,6 +226,11 @@ pub const WEIGHT_SIZE: usize = U8_SIZE;
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct PublicKey([u8; KEY_SIZE]);
 
+// TODO: This needs to be updated, `PUBLIC_KEY_SIZE` is not 32 bytes as KEY_SIZE * U8_SIZE.
+// I am not changing that as I don't want to deal with ripple effect.
+
+// Public key is encoded as its underlying [u8; 32] array, which in turn
+// is serialized as u8 + [u8; 32], u8 represents the length and then 32 element array.
 pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
 
 impl PublicKey {
@@ -407,8 +412,8 @@ impl Account {
         &mut self.known_urefs
     }
 
-    pub fn pub_key(&self) -> &[u8; 32] {
-        &self.public_key
+    pub fn pub_key(&self) -> [u8; 32] {
+        self.public_key
     }
 
     pub fn purse_id(&self) -> PurseId {

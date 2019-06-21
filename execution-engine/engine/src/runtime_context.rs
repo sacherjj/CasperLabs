@@ -34,6 +34,8 @@ pub struct RuntimeContext<'a, R> {
     // Original account for read only tasks taken before execution
     account: &'a Account,
     args: Vec<Vec<u8>>,
+    // Key of the caller.
+    caller_key: Option<PublicKey>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
@@ -56,6 +58,7 @@ where
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
         account: &'a Account,
+        caller_key: Option<PublicKey>,
         base_key: Key,
         gas_limit: u64,
         gas_counter: u64,
@@ -69,6 +72,7 @@ where
             uref_lookup,
             known_urefs,
             args,
+            caller_key,
             account,
             base_key,
             gas_limit,
@@ -152,6 +156,10 @@ where
         }
     }
 
+    pub fn get_caller(&self) -> Option<PublicKey> {
+        self.caller_key
+    }
+
     pub fn add_urefs(&mut self, urefs_map: HashMap<URefAddr, HashSet<AccessRights>>) {
         self.known_urefs.extend(urefs_map);
     }
@@ -218,7 +226,7 @@ where
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
         {
             let account = self.account();
-            pre_hash_bytes.extend_from_slice(account.pub_key());
+            pre_hash_bytes.extend_from_slice(&account.pub_key());
             pre_hash_bytes.append(&mut account.nonce().to_bytes()?);
             pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
         }
@@ -491,13 +499,13 @@ where
         weight: Weight,
     ) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key() != Key::Account(*self.account().pub_key()) {
+        if self.base_key() != Key::Account(self.account().pub_key()) {
             // Exit early with error to avoid mutations
             return Err(AddKeyFailure::PermissionDenied.into());
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(*self.account().pub_key());
+        let key = Key::Account(self.account().pub_key());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
@@ -520,13 +528,13 @@ where
 
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key() != Key::Account(*self.account().pub_key()) {
+        if self.base_key() != Key::Account(self.account().pub_key()) {
             // Exit early with error to avoid mutations
             return Err(RemoveKeyFailure::PermissionDenied.into());
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(*self.account().pub_key());
+        let key = Key::Account(self.account().pub_key());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
@@ -553,13 +561,13 @@ where
         threshold: Weight,
     ) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key() != Key::Account(*self.account().pub_key()) {
+        if self.base_key() != Key::Account(self.account().pub_key()) {
             // Exit early with error to avoid mutations
             return Err(SetThresholdFailure::PermissionDeniedError.into());
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(*self.account().pub_key());
+        let key = Key::Account(self.account().pub_key());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
@@ -689,6 +697,7 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
+            None,
             base_key,
             0,
             0,
@@ -983,6 +992,7 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
+            None,
             contract_key,
             0,
             0,
@@ -1034,6 +1044,7 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
+            None,
             other_contract_key,
             0,
             0,
