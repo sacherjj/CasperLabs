@@ -30,11 +30,11 @@ class CliqueOracleTest
          *   b8
          *   |  \
          *   |   \
-         *   b6    b7
-         *   |  x  /
-         *   b4  b5
-         *   | \ |
-         *   b2 b3
+         *   b6   b7
+         *   |  x |
+         *   b4   b5
+         *   |  \ |
+         *   b2  b3
          *    \ /
          *    b1
          *      \
