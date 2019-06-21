@@ -34,20 +34,20 @@ def block_hash(node):
     return node.deploy_and_propose()
 
 block_hash_queries = [
-    ({'blockHash': "9d", 'key': "a91208047c", 'path': "file.xxx", 'keyType': "hash"},
+    ({'block_hash': "9d", 'key': "a91208047c", 'path': "file.xxx", 'key_type': "hash"},
      "NOT_FOUND: Cannot find block matching"),
 
-    ({                   'key': "a91208047c", 'path': "file.xxx", 'keyType': "hash"},
+    ({                   'key': "a91208047c", 'path': "file.xxx", 'key_type': "hash"},
      "INVALID_ARGUMENT: Key of type hash must have exactly 32 bytes"),
 
-    ({                   'key': KEY,          'path': "file.xxx", 'keyType': "hash"},
+    ({                   'key': KEY,          'path': "file.xxx", 'key_type': "hash"},
      "INVALID_ARGUMENT: Value not found"),
 ]
 
 @pytest.mark.parametrize("query, expected", block_hash_queries)
 def test_query_state_error(client, block_hash, query, expected):
-    if not 'blockHash' in query:
-        query['blockHash'] = block_hash
+    if not 'block_hash' in query:
+        query['block_hash'] = block_hash
 
     with pytest.raises(NonZeroExitCodeError) as excinfo:
         response = client.queryState(**query)

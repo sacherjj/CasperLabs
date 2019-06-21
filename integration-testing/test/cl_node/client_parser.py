@@ -46,7 +46,7 @@ def value(s, line_number):
             elif s[0] == '"' and s[-1] == '"':
                 return s[1:-1], line_number
             else:
-                # This must be a const or enum, for example: READ_ADD_WRITE
+                # This must be an enum, for example: READ_ADD_WRITE
                 return s, line_number
 
 

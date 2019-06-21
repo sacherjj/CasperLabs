@@ -43,7 +43,7 @@ def node(one_node_network_module_scope):
 def test_account_state(node):
 
     def account_state(block_hash):
-        return node.d_client.queryState(blockHash = block_hash, keyType = 'address', key = ACCOUNT, path = '')
+        return node.d_client.query_state(block_hash = block_hash, key_type = 'address', key = ACCOUNT, path = '')
     
     blocks = parse_show_blocks(node.d_client.show_blocks(1000)) 
     assert len(blocks) == 1  # There should be only one block, the genesis block
