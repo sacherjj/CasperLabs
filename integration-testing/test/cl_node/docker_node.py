@@ -26,6 +26,9 @@ class DockerNode(LoggingDockerBase):
     CL_SOCKETS_DIR = f'{CL_NODE_DIRECTORY}/sockets'
     CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
     CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
+    CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_GENESIS_DIR}/system-account/account-public.key"
+
+    NUMBER_OF_BONDS = 10
 
     NETWORK_PORT = 40400
     GRPC_EXTERNAL_PORT = 40401
@@ -125,7 +128,10 @@ class DockerNode(LoggingDockerBase):
             'RUST_BACKTRACE': 'full',
             'CL_LOG_LEVEL': os.environ.get('CL_LOG_LEVEL', 'INFO'),
             'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'true',
-            'CL_SERVER_NO_UPNP': 'true'
+            'CL_SERVER_NO_UPNP': 'true',
+
+            'CL_VERSION': 'test',
+            'CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH': self.CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH,
         }
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
@@ -170,13 +176,25 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.host_mount_dir)
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
         self.create_bonds_file()
+        self.create_genesis_account_public_key_file()
+
+    def genesis_account_key(self):
+        # Take one not used by bonds
+        return PREGENERATED_KEYPAIRS[self.NUMBER_OF_BONDS]
+
+    def create_genesis_account_public_key_file(self, pair=None):
+        pair = pair or self.genesis_account_key()
+        path = f'{self.host_genesis_dir}/system-account/account-public.key'
+        os.makedirs(os.path.dirname(path))
+        with open(path, 'w') as f:
+            f.write(f'{pair.public_key}')
 
     def create_bonds_file(self) -> None:
-        N = len(PREGENERATED_KEYPAIRS)
+        N = self.NUMBER_OF_BONDS
         path = f'{self.host_genesis_dir}/bonds.txt'
         os.makedirs(os.path.dirname(path))
         with open(path, 'a') as f:
-            for i, pair in enumerate(PREGENERATED_KEYPAIRS):
+            for i, pair in enumerate(PREGENERATED_KEYPAIRS[:N]):
                 bond = N + 2 * i
                 f.write(f'{pair.public_key} {bond}\n')
 
@@ -187,8 +205,9 @@ class DockerNode(LoggingDockerBase):
         if os.path.exists(self.deploy_dir):
             shutil.rmtree(self.deploy_dir)
 
-    def from_account(self):
+    def from_address(self):
         return '30' * 32
+        return self.genesis_account_key().public_key
 
     @property
     def volumes(self) -> dict:

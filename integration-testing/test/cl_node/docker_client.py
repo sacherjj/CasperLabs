@@ -95,7 +95,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
                private_key: Optional[str] = None,
                public_key: Optional[str] = None) -> str:
 
-        address  = from_address or node.from_address()
+        address  = from_address or self.node.from_address()
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
 
         command = (f"deploy --from {address}"

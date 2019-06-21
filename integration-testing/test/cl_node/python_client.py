@@ -29,7 +29,7 @@ class PythonClient(CasperLabsClient):
                session_contract: Optional[str] = 'test_helloname.wasm',
                payment_contract: Optional[str] = 'test_helloname.wasm') -> str:
 
-        address  = from_address or node.from_address()
+        address  = from_address or self.node.from_address()
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
 
         resources_path = self.node.resources_folder
