@@ -50,6 +50,6 @@ def test_query_state_error(client, block_hash, query, expected):
         query['block_hash'] = block_hash
 
     with pytest.raises(NonZeroExitCodeError) as excinfo:
-        response = client.queryState(**query)
+        response = client.query_state(**query)
     assert expected in excinfo.value.output
 
