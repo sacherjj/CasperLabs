@@ -114,6 +114,11 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           blockDag: BlockDagRepresentation[Task],
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
+
+      override def findBestCommittee(
+          blockDag: BlockDagRepresentation[Task],
+          candidateBlockHash: BlockHash
+      ): Task[Option[SafetyOracle.Committee]] = Task.pure(None)
     }
   }
 

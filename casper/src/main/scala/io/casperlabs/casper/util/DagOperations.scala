@@ -6,6 +6,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockS
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.util.MapHelper.updatedWith
+import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
 import io.casperlabs.catscontrib.{ListContrib, MonadThrowable}
 import io.casperlabs.shared.StreamT
 
@@ -30,6 +31,33 @@ object DagOperations {
       }
 
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[A])))
+  }
+
+  def bfToposortTraverseF[F[_]: Monad](
+      start: List[BlockMetadata]
+  )(neighbours: BlockMetadata => F[List[BlockMetadata]]): StreamT[F, BlockMetadata] = {
+    def build(
+        q: mutable.PriorityQueue[BlockMetadata],
+        prevVisited: HashSet[BlockHash]
+    ): F[StreamT[F, BlockMetadata]] =
+      if (q.isEmpty) StreamT.empty[F, BlockMetadata].pure[F]
+      else {
+        val curr = q.dequeue
+        if (prevVisited(curr.blockHash)) build(q, prevVisited)
+        else
+          for {
+            ns      <- neighbours(curr)
+            visited = prevVisited + curr.blockHash
+            newQ    = q ++ ns.filterNot(b => visited(b.blockHash))
+          } yield StreamT.cons(curr, Eval.always(build(newQ, visited)))
+      }
+
+    implicit val blockTopoOrdering: Ordering[BlockMetadata] =
+      Ordering.by[BlockMetadata, Long](_.rank).reverse
+
+    StreamT.delay(
+      Eval.now(build(mutable.PriorityQueue.empty[BlockMetadata] ++ start, HashSet.empty[BlockHash]))
+    )
   }
 
   /**
