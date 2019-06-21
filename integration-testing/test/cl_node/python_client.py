@@ -46,8 +46,8 @@ class PythonClient(CasperLabsClient):
         logging.info(f'PY_CLIENT.propose() for {self.node.container_name}')
         return self.client.propose()
 
-    def queryState(self, blockHash: str, key: str, path: str, keyType: str):
-        return self.client.queryState(blockHash, key, path, keyType)
+    def query_state(self, block_hash: str, key: str, path: str, key_type: str):
+        return self.client.queryState(block_hash, key, path, key_type)
 
     def show_block(self, block_hash: str) -> str:
         # TODO:
