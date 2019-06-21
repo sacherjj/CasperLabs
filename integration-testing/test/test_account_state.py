@@ -1,4 +1,5 @@
 import pytest
+from .cl_node.wait import wait_for_blocks_count_at_least
 
 """
 Test account state retrieval with query-state.
@@ -32,13 +33,20 @@ account {
 ACCOUNT = '30' * 32
 assert ACCOUNT == "3030303030303030303030303030303030303030303030303030303030303030"
 
+# Note: calls to wait_for_blocks_count_at_least should not really be needed in this test.
+# The test network is just one node, we deploy and propose to this single node.
+# Also, passing nonce explicitly is not really needed, as the test framework would pass a correct
+# nonce for us, it's just to make it totally clear what's happenning.
+
 
 @pytest.fixture(scope='module')
 def node(one_node_network_module_scope):
-    return one_node_network_module_scope.docker_nodes[0]
+    n = one_node_network_module_scope.docker_nodes[0]
+    wait_for_blocks_count_at_least(n, 1, 1, n.timeout)
+    return n
 
 
-def test_query_state_account(node):
+def test_account_state(node):
     def account_state():
         return node.d_client.queryState(blockHash = '', keyType = 'address', key = ACCOUNT, path = '')
 
@@ -46,8 +54,13 @@ def test_query_state_account(node):
     assert response.account.public_key == ACCOUNT
     assert response.account.nonce == 0
 
-    node.deploy_and_propose()
-
+    node.deploy_and_propose(session_contract="test_counterdefine.wasm", nonce = 1)
     response = account_state()
     assert response.account.nonce == 1
+
+    for nonce in range(2,10):
+        node.deploy_and_propose(session_contract="test_countercall.wasm", nonce = nonce)
+        wait_for_blocks_count_at_least(node, nonce + 1, nonce + 1, node.timeout)
+        response = account_state()
+        assert response.account.nonce == nonce
 
