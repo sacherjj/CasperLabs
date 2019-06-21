@@ -355,12 +355,9 @@ package object gossiping {
       // Function to read and set the bonds.txt in modes which generate the Genesis locally.
       readBondsFile = {
         for {
-          _ <- Log[F].info("Taking bonds from file.")
-          bonds <- Genesis.getBonds[F](
-                    conf.casper.bondsFile,
-                    conf.casper.numValidators
-                  )
-          _ <- ExecutionEngineService[F].setBonds(bonds)
+          _     <- Log[F].info("Taking bonds from file.")
+          bonds <- Genesis.getBonds[F](conf.casper.bondsFile)
+          _     <- ExecutionEngineService[F].setBonds(bonds)
         } yield bonds
       }
 

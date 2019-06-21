@@ -224,18 +224,19 @@ object Genesis {
   ): F[Keys.PublicKey] =
     maybePath match {
       case None =>
-        Log[F].warn("Using empty account key for genesis.") *>
-          Keys.PublicKey(Array.empty[Byte]).pure[F]
+        Log[F].debug("Using empty account key for genesis.") *>
+          Keys.PublicKey(Array.fill(32)(0.toByte)).pure[F]
       case Some(path) =>
         readFile[F](path)
           .map(new String(_, StandardCharsets.UTF_8))
-          .map(Ed25519.tryParsePublicKey(_)) flatMap {
-          case Some(key) => key.pure[F]
-          case None =>
-            MonadThrowable[F].raiseError(
-              new IllegalArgumentException(s"Could not parse genesis account key file $path")
-            )
-        }
+          .map(Ed25519.tryParsePublicKey(_))
+          .flatMap {
+            case Some(key) => key.pure[F]
+            case None =>
+              MonadThrowable[F].raiseError(
+                new IllegalArgumentException(s"Could not parse genesis account key file $path")
+              )
+          }
     }
 
   def getWallets[F[_]: Sync: Log](
@@ -305,8 +306,7 @@ object Genesis {
     }
 
   def getBonds[F[_]: Sync: Log](
-      bonds: Path,
-      numValidators: Int
+      bonds: Path
   ): F[Map[PublicKey, Long]] =
     for {
       bondsFile <- toFile[F](bonds)

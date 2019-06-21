@@ -60,7 +60,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     val requiredSigs               = 1
     val deployTimestamp            = 1L
     val BlockMsgWithTransform(Some(genesis), transforms) =
-      buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, 1L)
+      buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, deployTimestamp)
     val validatorId       = ValidatorIdentity(validatorPk, validatorSk, Ed25519)
     val storageSize: Long = 1024L * 1024
 
@@ -72,14 +72,14 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       bonds,
       Seq.empty,
       BlockApproverProtocol.GenesisConf(
-        1L,
-        Long.MaxValue,
-        false,
-        requiredSigs,
-        None,
-        0L,
-        None,
-        None
+        minimumBond = 1L,
+        maximumBond = Long.MaxValue,
+        hasFaucet = false,
+        requiredSigs = requiredSigs,
+        genesisAccountPublicKeyPath = None,
+        initialTokens = 0L,
+        mintCodePath = None,
+        posCodePath = None
       )
     )
     val local: Node = peerNode("src", 40400)

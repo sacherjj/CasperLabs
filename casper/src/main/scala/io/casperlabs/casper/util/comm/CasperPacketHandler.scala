@@ -100,7 +100,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     for {
       _ <- Log[F].info("Starting in default mode")
       // FIXME: The bonds should probably be taken from the approved block, but that's not implemented.
-      bonds       <- Genesis.getBonds[F](conf.bondsFile, conf.numValidators)
+      bonds       <- Genesis.getBonds[F](conf.bondsFile)
       validators  <- CasperConf.parseValidatorsFile[F](conf.knownValidatorsFile)
       validatorId <- ValidatorIdentity.fromConfig[F](conf)
       _           <- ExecutionEngineService[F].setBonds(bonds)
@@ -127,7 +127,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
     for {
       _                                                            <- Log[F].info("Starting in create genesis mode")
-      bonds                                                        <- Genesis.getBonds[F](conf.bondsFile, conf.numValidators)
+      bonds                                                        <- Genesis.getBonds[F](conf.bondsFile)
       _                                                            <- ExecutionEngineService[F].setBonds(bonds)
       genesis                                                      <- Genesis[F](conf)
       BlockMsgWithTransform(Some(genesisBlock), genesisTransforms) = genesis
@@ -170,7 +170,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       _           <- Log[F].info("Starting in approve genesis mode")
       timestamp   <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       wallets     <- Genesis.getWallets[F](conf.walletsFile)
-      bonds       <- Genesis.getBonds[F](conf.bondsFile, conf.numValidators)
+      bonds       <- Genesis.getBonds[F](conf.bondsFile)
       _           <- ExecutionEngineService[F].setBonds(bonds)
       validatorId <- ValidatorIdentity.fromConfig[F](conf)
       bap = new BlockApproverProtocol(
@@ -198,7 +198,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     val genesis = LegacyConversions.toBlock(approvedBlock.candidate.flatMap(_.block).get)
     for {
       // FIXME: The bonds should probably be taken from the approved block, but that's not implemented.
-      bonds       <- Genesis.getBonds[F](conf.bondsFile, conf.numValidators)
+      bonds       <- Genesis.getBonds[F](conf.bondsFile)
       _           <- ExecutionEngineService[F].setBonds(bonds)
       validatorId <- ValidatorIdentity.fromConfig[F](conf)
       casper <- MultiParentCasper.fromTransportLayer(

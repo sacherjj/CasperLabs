@@ -237,6 +237,8 @@ object BlockApproverProtocol {
         x.gasLimit === y.gasLimit &&
         x.nonce === y.nonce &&
         x.getSession.code == y.getSession.code &&
-        x.getSession.args == y.getSession.args
+        x.getSession.args == y.getSession.args &&
+        x.getPayment.code == y.getPayment.code &&
+        x.getPayment.args == y.getPayment.args
   }
 }
