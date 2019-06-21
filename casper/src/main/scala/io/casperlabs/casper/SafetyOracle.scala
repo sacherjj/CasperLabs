@@ -309,7 +309,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                     val levelKBlocks = blockLevelTags
                       .filter {
                         case (_, blockLevelTag) =>
-                          BlockScoreAccumulator.ownLevel(blockLevelTag) >= k
+                          blockLevelTag.blockLevel >= k
                       }
                     val minEstimateLevelKTag = levelKBlocks.minBy {
                       case (_, blockScoreTag) => blockScoreTag.estimateQ
@@ -416,7 +416,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
             vid                      = b.validatorPublicKey
             latestMessageOfValidator <- blockDag.latestMessage(vid).map(_.get)
             updatedValidatorLevel = if (committeeApproximation.contains(vid) && latestMessageOfValidator.blockHash == b.blockHash)
-              validatorLevel + (vid -> BlockScoreAccumulator.ownLevel(updatedBlockScore))
+              validatorLevel + (vid -> updatedBlockScore.blockLevel)
             else validatorLevel
           } yield (updatedBlockLevelTags, updatedValidatorLevel)
       }
@@ -485,7 +485,7 @@ case class BlockScoreAccumulator(
     block: BlockMetadata,
     highestLevelBySeenBlocks: Map[Validator, Int],
     estimateQ: Long,
-    selfLevel: Int,
+    blockLevel: Int,
     highestLevelSoFar: Int = 0
 )
 object BlockScoreAccumulator {
@@ -509,15 +509,15 @@ object BlockScoreAccumulator {
             math.max(highestLevel, level) -> newAcc
         }
     val addParentSelf =
-      if (highestLevelBySeenBlocks.getOrElse(parent.block.validatorPublicKey, -1) < parent.selfLevel)
-        highestLevelBySeenBlocks.updated(parent.block.validatorPublicKey, parent.selfLevel)
+      if (highestLevelBySeenBlocks.getOrElse(parent.block.validatorPublicKey, -1) < parent.blockLevel)
+        highestLevelBySeenBlocks.updated(parent.block.validatorPublicKey, parent.blockLevel)
       else
         highestLevelBySeenBlocks
     BlockScoreAccumulator(
       self.block,
       addParentSelf,
       self.estimateQ,
-      self.selfLevel,
+      self.blockLevel,
       highestLevelSoFar
     )
   }
@@ -544,9 +544,6 @@ object BlockScoreAccumulator {
       }
       .getOrElse(self)
   }
-
-  def ownLevel(self: BlockScoreAccumulator): Int =
-    self.selfLevel
 
   // Though we only want to find best level 1 committee, this algorithm can calculate level k in one pass
   private def calculateLevelAndQ(
