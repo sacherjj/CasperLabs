@@ -4,6 +4,7 @@ set -o errexit
 
 CONTRACTS=(
     "mint-token"
+    "transfer-to-account"
 )
 
 for CONTRACT in "${CONTRACTS[@]}"; do

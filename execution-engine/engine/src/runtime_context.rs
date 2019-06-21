@@ -324,6 +324,35 @@ where
         Ok(())
     }
 
+    pub fn read_account(&mut self, key: &Key) -> Result<Option<Value>, Error> {
+        if let Key::Account(_) = key {
+            let validated_key = Validated::new(*key, |key| self.validate_key(&key))?;
+            self.state
+                .borrow_mut()
+                .read(self.correlation_id, &validated_key)
+                .map_err(Into::into)
+        } else {
+            panic!("Do not use this function for reading from non-account keys")
+        }
+    }
+
+    pub fn write_account(&mut self, key: Key, value: Value) -> Result<(), Error> {
+        match (&key, &value) {
+            (Key::Account(_), Value::Account(_)) => {
+                let validated_key = Validated::new(key, |key| self.validate_key(&key))?;
+                let validated_value = Validated::new(value, |value| self.validate_keys(&value))?;
+                self.state
+                    .borrow_mut()
+                    .write(validated_key, validated_value);
+                Ok(())
+            }
+            (Key::Account(_), _) => {
+                panic!("Do not use this function for writing non-account values")
+            }
+            (_, _) => panic!("Do not use this function for writing non-account keys"),
+        }
+    }
+
     pub fn store_contract(&mut self, contract: Value) -> Result<[u8; 32], Error> {
         let new_hash = self.new_function_address()?;
         let validated_value = Validated::new(contract, |cntr| self.validate_keys(&cntr))?;

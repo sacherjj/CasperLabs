@@ -61,7 +61,7 @@ pub fn create_genesis_effects(
     let mint_contract_uref = {
         let mut addr = [0u8; 32];
         rng.fill_bytes(&mut addr);
-        URef::new(addr, AccessRights::READ)
+        URef::new(addr, AccessRights::READ_ADD_WRITE)
     };
 
     // Store (public_uref, mint_contract_uref) in global state
@@ -79,9 +79,19 @@ pub fn create_genesis_effects(
 
     // Create genesis genesis_account
 
+    // All blessed / system contract public urefs MUST be added to the genesis account's known_urefs
+    // TODO: do we need to deal with NamedKey ???
+    let known_urefs = &[
+        (String::from("mint"), Key::URef(public_uref)),
+        (
+            mint_contract_uref.as_string(),
+            Key::URef(mint_contract_uref),
+        ),
+    ];
+
     let purse_id = PurseId::new(purse_id_uref);
 
-    let genesis_account = init::create_genesis_account(genesis_account_addr, purse_id);
+    let genesis_account = init::create_genesis_account(genesis_account_addr, purse_id, known_urefs);
 
     // Store (genesis_account_addr, genesis_account) in global state
 
@@ -126,6 +136,10 @@ pub fn create_genesis_effects(
     let mint_known_urefs = {
         let mut ret: BTreeMap<String, Key> = BTreeMap::new();
         ret.insert(balance_uref.as_string(), balance_uref_key);
+        ret.insert(
+            mint_contract_uref.as_string(),
+            Key::URef(mint_contract_uref),
+        );
         ret
     };
 
@@ -142,6 +156,11 @@ pub fn create_genesis_effects(
     let mut execution_effect: ExecutionEffect = Default::default();
 
     for (k, v) in tmp.into_iter() {
+        let k = if let Key::URef(_) = k {
+            k.normalize()
+        } else {
+            k
+        };
         execution_effect.ops.insert(k, Op::Write);
         execution_effect.transforms.insert(k, Transform::Write(v));
     }
@@ -599,7 +618,7 @@ mod tests {
             PurseId::new(URef::new(bytes, AccessRights::READ_ADD_WRITE))
         };
 
-        let genesis_account = init::create_genesis_account(GENESIS_ACCOUNT_ADDR, purse_id);
+        let genesis_account = init::create_genesis_account(GENESIS_ACCOUNT_ADDR, purse_id, &[]);
         let actual =
             extract_transform_account(transforms, &account_key).expect("should have account");
 
