@@ -182,12 +182,11 @@ class DockerNode(LoggingDockerBase):
         # Take one not used by bonds
         return PREGENERATED_KEYPAIRS[self.NUMBER_OF_BONDS]
 
-    def create_genesis_account_public_key_file(self, pair=None):
-        pair = pair or self.genesis_account_key()
+    def create_genesis_account_public_key_file(self):
         path = f'{self.host_genesis_dir}/system-account/account-public.key'
         os.makedirs(os.path.dirname(path))
         with open(path, 'w') as f:
-            f.write(f'{pair.public_key}')
+            f.write(f'{self.from_address()}')
 
     def create_bonds_file(self) -> None:
         N = self.NUMBER_OF_BONDS
@@ -206,8 +205,12 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.deploy_dir)
 
     def from_address(self):
+        return base64.b64decode(self.genesis_account_key().public_key + '===').hex()
         return '30' * 32
+<<<<<<< HEAD
         return self.genesis_account_key().public_key
+=======
+>>>>>>> d858e3f... OP-344: Convert base64 pregenerated keys to hex
 
     @property
     def volumes(self) -> dict:
