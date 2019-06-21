@@ -53,6 +53,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::SerFnFuncIndex.into(),
             ),
+            "serialize_known_urefs" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 0][..], Some(ValueType::I32)),
+                FunctionIndex::SerKnownURefs.into(),
+            ),
             "write" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::WriteFuncIndex.into(),
@@ -140,6 +144,14 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "set_action_threshold" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::SetActionThresholdFuncIndex.into(),
+            ),
+            "list_known_urefs" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::ListKnownURefsIndex.into(),
+            ),
+            "remove_uref" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], None),
+                FunctionIndex::RemoveURef.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

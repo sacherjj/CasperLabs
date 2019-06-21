@@ -291,8 +291,8 @@ impl From<common::value::account::Account> for super::state::Account {
             tmp.set_inactivity_period_limit(account.account_activity().inactivity_period_limit().0);
             tmp
         };
-        let account_urefs = account.get_urefs_lookup();
-        let account_urefs_lookup = URefMap(account_urefs);
+        let account_urefs = account.urefs_lookup();
+        let account_urefs_lookup = URefMap(account_urefs.clone());
         let ipc_urefs: Vec<super::state::NamedKey> = account_urefs_lookup.into();
         ipc_account.set_known_urefs(ipc_urefs.into());
         ipc_account.set_associated_keys(associated_keys.into());

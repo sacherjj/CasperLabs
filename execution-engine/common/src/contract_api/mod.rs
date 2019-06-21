@@ -159,6 +159,16 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
     }
 }
 
+pub fn list_known_urefs() -> BTreeMap<String, Key> {
+    let bytes_size = unsafe { ext_ffi::serialize_known_urefs() };
+    let dest_ptr = alloc_bytes(bytes_size);
+    let bytes = unsafe {
+        ext_ffi::list_known_urefs(dest_ptr);
+        Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
+    };
+    deserialize(&bytes).unwrap()
+}
+
 // TODO: fn_by_name, fn_bytes_by_name and ext_ffi::serialize_function should be removed.
 // Functions shouldn't be serialized and returned back to the contract because they're never used there.
 // Host should read the function pointer (and correct number of bytes) and persist it on the host side.
@@ -233,6 +243,12 @@ pub fn add_uref(name: &str, key: &Key) {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
     let (key_ptr, key_size, _bytes2) = to_ptr(key);
     unsafe { ext_ffi::add_uref(name_ptr, name_size, key_ptr, key_size) };
+}
+
+/// Removes Key persisted under [name] in the current context's map.
+pub fn remove_uref(name: &str) {
+    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    unsafe { ext_ffi::remove_uref(name_ptr, name_size) }
 }
 
 /// Return `t` to the host, terminating the currently running module.

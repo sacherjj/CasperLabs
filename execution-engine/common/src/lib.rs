@@ -58,6 +58,9 @@ mod ext_ffi {
             extra_urefs_size: usize,
             hash_ptr: *const u8,
         );
+        pub fn serialize_known_urefs() -> usize;
+        // Can only be called after `serialize_known_urefs`.
+        pub fn list_known_urefs(dest_ptr: *mut u8);
         pub fn load_arg(i: u32) -> usize;
         pub fn get_arg(dest: *mut u8); //can only be called after `load_arg`
         pub fn ret(
@@ -86,6 +89,7 @@ mod ext_ffi {
         pub fn add_associated_key(public_key_ptr: *const u8, weight: i32) -> i32;
         pub fn remove_associated_key(public_key_ptr: *const u8) -> i32;
         pub fn set_action_threshold(permission_level: u32, threshold: i32) -> i32;
+        pub fn remove_uref(name_ptr: *const u8, name_size: usize);
     }
 }
 

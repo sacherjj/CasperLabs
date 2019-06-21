@@ -290,6 +290,20 @@ where
         self.context.add_uref(name, key).map_err(Into::into)
     }
 
+    /// Writes current [self.host_buf] into [dest_ptr] location in Wasm memory
+    /// for the contract to read.
+    pub fn list_known_urefs(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        self.memory
+            .set(dest_ptr, &self.host_buf)
+            .map_err(|e| Error::Interpreter(e).into())
+    }
+
+    fn remove_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<(), Trap> {
+        let name = self.string_from_mem(name_ptr, name_size)?;
+        self.context.remove_uref(&name)?;
+        Ok(())
+    }
+
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &self.host_buf)
@@ -376,6 +390,17 @@ where
         let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
         self.host_buf = fn_bytes;
         Ok(self.host_buf.len())
+    }
+
+    fn serialize_known_urefs(&mut self) -> Result<usize, Trap> {
+        let bytes: Vec<u8> = self
+            .context
+            .list_known_urefs()
+            .to_bytes()
+            .map_err(Error::BytesRepr)?;
+        let length = bytes.len();
+        self.host_buf = bytes;
+        Ok(length)
     }
 
     /// Tries to store a function, represented as bytes from the Wasm memory, into the GlobalState
@@ -572,6 +597,12 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
+            FunctionIndex::SerKnownURefs => {
+                // No args, returns byte size of the known URefs.
+                let size = self.serialize_known_urefs()?;
+                Ok(Some(RuntimeValue::I32(size as i32)))
+            }
+
             FunctionIndex::WriteFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key
@@ -707,6 +738,21 @@ where
                 // args(2) = pointer to destination in Wasm memory
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
                 self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
+                Ok(None)
+            }
+
+            FunctionIndex::ListKnownURefsIndex => {
+                // args(0) = pointer to destination in Wasm memory
+                let ptr = Args::parse(args)?;
+                self.list_known_urefs(ptr)?;
+                Ok(None)
+            }
+
+            FunctionIndex::RemoveURef => {
+                // args(0) = pointer to uref name in Wasm memory
+                // args(1) = size of uref name
+                let (name_ptr, name_size) = Args::parse(args)?;
+                self.remove_uref(name_ptr, name_size)?;
                 Ok(None)
             }
 
