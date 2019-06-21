@@ -232,7 +232,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
                 genesis.getBody.deploys.head.getDeploy.getBody.getSession.code.toByteArray
               )
             } yield {
-              request.initialTokens.get shouldBe state.BigInt("123", 7)
+              request.initialTokens.get shouldBe state.BigInt("123", 512)
               request.mintCode.get.code.toByteArray shouldBe ("mint code".getBytes)
               request.proofOfStakeCode.get.code.toByteArray shouldBe ("proof of stake code".getBytes)
               request.protocolVersion.get.value shouldBe 1L

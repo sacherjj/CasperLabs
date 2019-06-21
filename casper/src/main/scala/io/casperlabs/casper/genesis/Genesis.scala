@@ -4,7 +4,7 @@ import java.io.File
 import java.nio.file.{Files, Path}
 import java.nio.charset.StandardCharsets
 import java.util.Base64
-
+import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad, MonadError}
@@ -51,7 +51,8 @@ object Genesis {
   ): F[List[Deploy]] = {
     def readCode(maybePath: Option[Path]) =
       maybePath.fold(none[ipc.DeployCode].pure[F]) { path =>
-        readFile(path) map { bytes =>
+        Log[F].info(s"Reading Wasm code from $path") *>
+          readFile(path) map { bytes =>
           ipc.DeployCode(ByteString.copyFrom(bytes)).some
         }
       }
@@ -59,26 +60,44 @@ object Genesis {
     // for details that have no representation in a block, and it also doesn't actually execute
     // the deploys we hand over, so for now we're going to pass on the request it needs in a
     // serialized format to capture everything it wants the way it wants it.
-    for {
-      accountPublicKey <- getAccountPublicKey[F](accountPublicKeyPath)
-      mintCode         <- readCode(mintCodePath)
-      posCode          <- readCode(posCodePath)
+    def read[A](a: F[Option[A]], ifNone: String) =
+      EitherT.fromOptionF[F, String, A](a, ifNone)
+
+    val maybeDeploy = for {
+      accountPublicKey <- read(
+                           readAccountPublicKey[F](accountPublicKeyPath),
+                           "Genesis account key is missing."
+                         )
+      mintCode <- read(readCode(mintCodePath), "Mint code is missing.")
+      posCode  <- read(readCode(posCodePath), "PoS code is missing.")
+
       request = ipc.GenesisRequest(
         address = ByteString.copyFrom(accountPublicKey),
-        initialTokens =
-          state.BigInt(initialTokens.toString, bitWidth = initialTokens.bitLength).some,
+        initialTokens = state
+          .BigInt(
+            initialTokens.toString,
+            bitWidth = 512 // We could use `initialTokens.bitLength` to map to the closest of 128, 256 or 512 but this is what EE expects.
+          )
+          .some,
         timestamp = timestamp,
-        mintCode = mintCode,
-        proofOfStakeCode = posCode,
+        mintCode = mintCode.some,
+        proofOfStakeCode = posCode.some,
         protocolVersion = state.ProtocolVersion(protocolVersion).some
       )
+
       deploy = ProtoUtil.basicDeploy(
         timestamp,
         sessionCode = ByteString.copyFrom(request.toByteArray),
         accountPublicKey = ByteString.copyFrom(accountPublicKey),
         nonce = 1
       )
-    } yield List(deploy)
+    } yield deploy
+
+    maybeDeploy.value flatMap {
+      case Left(error) =>
+        Log[F].warn(s"Unable to construct blessed terms: $error") *> List.empty[Deploy].pure[F]
+      case Right(deploy) => List(deploy).pure[F]
+    }
   }
 
   /** Run system contracts and add them to the block as processed deploys. */
@@ -219,23 +238,23 @@ object Genesis {
     else none[File].pure[F]
   }
 
-  private def getAccountPublicKey[F[_]: Sync: Log](
+  private def readAccountPublicKey[F[_]: Sync: Log](
       maybePath: Option[Path]
-  ): F[Keys.PublicKey] =
+  ): F[Option[Keys.PublicKey]] =
     maybePath match {
       case None =>
-        Log[F].debug("Using empty account key for genesis.") *>
-          Keys.PublicKey(Array.fill(32)(0.toByte)).pure[F]
+        Log[F].info("Genesis account public key is missing.") *>
+          none.pure[F]
       case Some(path) =>
         readFile[F](path)
           .map(new String(_, StandardCharsets.UTF_8))
           .map(Ed25519.tryParsePublicKey(_))
           .flatMap {
-            case Some(key) => key.pure[F]
             case None =>
               MonadThrowable[F].raiseError(
                 new IllegalArgumentException(s"Could not parse genesis account key file $path")
               )
+            case key => key.pure[F]
           }
     }
 
