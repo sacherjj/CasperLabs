@@ -2,3 +2,4 @@ node-*
 .make
 .casperlabs
 monitoring/prometheus/targets.yml
+keys
