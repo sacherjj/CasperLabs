@@ -171,6 +171,7 @@ node-id
 node.certificate.pem
 node.key.pem
 validator-id
+validator-id-hex
 validator-private.pem
 validator-public.pem
 ```
@@ -182,6 +183,7 @@ The address above contains `c0a6c82062461c9b7f9f5c3120f44589393edf31` as a node 
 * `validator-id` - Validator ID is used to differentiate validators over a network. 
 We need it because validators can switch machines keeping their identities. 
 Also it's used for initial bonds granting during the genesis procedure of setting up a new network.
+* `validator-id-hex` - Same as the `validator-id` encoded to hex. Note: This is in prep and not yet used.
 
 To run a node with the above keys we'll firstly need to create a bonds.txt file as follows:
 ```console
@@ -193,8 +195,8 @@ Now we can run a node as follows:
 casperlabs-node run -s \
     --tls-key keys/node.key.pem  \
     --tls-certificate keys/node.certificate.pem \
-    --casperl-validator-public-key-path keys/validator-public.pem \
-    --casperl-validator-private-key-path keys/validator-private.pem 
+    --casper-validator-public-key-path keys/validator-public.pem \
+    --casper-validator-private-key-path keys/validator-private.pem
 ```
 
 #### Generate keys on host OS
