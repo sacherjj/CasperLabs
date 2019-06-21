@@ -32,6 +32,9 @@ trait SafetyOracle[F[_]] {
       candidateBlockHash: BlockHash
   ): F[Float]
 
+  /*
+   * finding the best level 1 committee for a given candidate block
+   */
   def findBestCommittee(
       blockDag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash
@@ -56,56 +59,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
       blockDag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash
   ): F[Float] =
-    for {
-      totalWeight <- computeTotalWeight(blockDag, candidateBlockHash)
-      agreeingValidatorToWeight <- computeAgreeingValidatorToWeight(
-                                    blockDag,
-                                    candidateBlockHash
-                                  )
-      maxCliqueWeight <- if (2L * agreeingValidatorToWeight.values.sum < totalWeight) {
-                          0L.pure[F]
-                        } else {
-                          agreementGraphMaxCliqueWeight(
-                            blockDag,
-                            candidateBlockHash,
-                            agreeingValidatorToWeight
-                          )
-                        }
-      faultTolerance = 2 * maxCliqueWeight - totalWeight
-    } yield faultTolerance.toFloat / totalWeight
-
-  private def computeTotalWeight(
-      blockDag: BlockDagRepresentation[F],
-      candidateBlockHash: BlockHash
-  ): F[Long] =
-    computeMainParentWeightMap(blockDag, candidateBlockHash).map(weightMapTotal)
-
-  private def computeAgreeingValidatorToWeight(
-      blockDag: BlockDagRepresentation[F],
-      candidateBlockHash: BlockHash
-  ): F[Map[Validator, Long]] =
-    for {
-      weights <- computeMainParentWeightMap(blockDag, candidateBlockHash)
-      agreeingWeights <- weights.toList.traverse {
-                          case (validator, stake) =>
-                            blockDag.latestMessageHash(validator).flatMap {
-                              case Some(latestMessageHash) =>
-                                computeCompatibility(
-                                  blockDag,
-                                  candidateBlockHash,
-                                  latestMessageHash
-                                ).map { isCompatible =>
-                                  if (isCompatible) {
-                                    Some((validator, stake))
-                                  } else {
-                                    none[(Validator, Long)]
-                                  }
-                                }
-                              case None =>
-                                none[(Validator, Long)].pure[F]
-                            }
-                        }
-    } yield agreeingWeights.flatten.toMap
+    ???
 
   private def computeMainParentWeightMap(
       blockDag: BlockDagRepresentation[F],
@@ -117,73 +71,6 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
         case None         => blockDag.lookup(candidateBlockHash).map(_.get.weightMap)
       }
     }
-
-  private def agreementGraphMaxCliqueWeight(
-      blockDag: BlockDagRepresentation[F],
-      candidateBlockHash: BlockHash,
-      agreeingValidatorToWeight: Map[Validator, Long]
-  ): F[Long] = {
-    def filterChildren(block: BlockMetadata, validator: Validator): F[StreamT[F, BlockHash]] =
-      blockDag.latestMessageHash(validator).flatMap {
-        case Some(latestByValidatorHash) =>
-          val creatorJustificationOrGenesis = block.justifications
-            .find(_.validatorPublicKey == block.validatorPublicKey)
-            .fold(block.blockHash)(_.latestBlockHash)
-          DagOperations
-            .bfTraverseF[F, BlockHash](List(latestByValidatorHash)) { blockHash =>
-              ProtoUtil.getCreatorJustificationAsListUntilGoalInMemory(
-                blockDag,
-                blockHash,
-                validator,
-                b => b == creatorJustificationOrGenesis
-              )
-            }
-            .pure[F]
-        case None => StreamT.empty[F, BlockHash].pure[F]
-      }
-
-    def neverEventuallySeeDisagreement(
-        first: Validator,
-        second: Validator
-    ): F[Boolean] =
-      (for {
-        firstLatestBlock <- OptionT(blockDag.latestMessage(first))
-        secondLatestOfFirstLatestHash <- OptionT.fromOption[F](
-                                          firstLatestBlock.justifications
-                                            .find {
-                                              case Justification(validator, _) =>
-                                                validator == second
-                                            }
-                                            .map(_.latestBlockHash)
-                                        )
-        secondLatestOfFirstLatest <- OptionT(blockDag.lookup(secondLatestOfFirstLatestHash))
-        potentialDisagreements <- OptionT.liftF(
-                                   filterChildren(secondLatestOfFirstLatest, second)
-                                 )
-        // TODO: Implement forallM on StreamT
-        result <- OptionT.liftF(potentialDisagreements.toList.flatMap(_.forallM {
-                   potentialDisagreement =>
-                     computeCompatibility(blockDag, candidateBlockHash, potentialDisagreement)
-                 }))
-      } yield result).fold(false)(id)
-
-    def computeAgreementGraphEdges: F[List[(Validator, Validator)]] =
-      (for {
-        x <- agreeingValidatorToWeight.keys
-        y <- agreeingValidatorToWeight.keys
-        if x.toString > y.toString // TODO: Order ByteString
-      } yield (x, y)).toList.filterA {
-        case (first: Validator, second: Validator) =>
-          neverEventuallySeeDisagreement(first, second) &&^ neverEventuallySeeDisagreement(
-            second,
-            first
-          )
-      }
-
-    computeAgreementGraphEdges.map { edges =>
-      Clique.findMaximumCliqueByWeight[Validator](edges, agreeingValidatorToWeight)
-    }
-  }
 
   // If targetBlockHash is main descendant of candidateBlockHash, then
   // it means targetBlockHash vote candidateBlockHash.
@@ -356,6 +243,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                   }
     } yield committee
 
+  // Tag level information for each block in one-pass
   def sweep(
       blockDag: BlockDagRepresentation[F],
       jDag: DoublyLinkedDag[BlockHash],
