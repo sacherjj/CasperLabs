@@ -1,3 +1,7 @@
+# Do not support:
+#   * Nested tables
+#   * Arrays
+
 # io.casperlabs.node.configuration.Configuration.Server
 [server]
 

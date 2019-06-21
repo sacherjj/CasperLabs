@@ -2,6 +2,7 @@ package io.casperlabs.node.configuration
 
 import java.nio.file.{Files, Path, Paths, StandardOpenOption}
 import java.util.concurrent.TimeUnit
+
 import cats.data.Validated.Valid
 import cats.syntax.option._
 import cats.syntax.show._
@@ -169,8 +170,6 @@ class ConfigurationSpec
         |'customCertificateLocation' and 'customKeyLocation'
         |if certificate and key are custom""".stripMargin) {
     forAll { (maybeDataDir: Option[Path], maybeCert: Option[Path], maybeKey: Option[Path]) =>
-      import cats.instances.either._
-      import cats.syntax.flatMap._
       import shapeless._
 
       /*_*/
@@ -184,7 +183,7 @@ class ConfigurationSpec
         maybeKey.fold(confUpdatedCert)(lens[Configuration].tls.key.set(confUpdatedCert))
       /*_*/
 
-      val Right(defaults) = readFile(Source.fromResource("default-configuration.toml")) >>= Configuration.parseToml
+      val Right(defaults) = readFile(Source.fromResource("default-configuration.toml")) map Configuration.parseToml
       val Right(res) = Configuration
         .updateTls(Configuration.updatePaths(confUpdatedKey, defaultConf.server.dataDir), defaults)
       val Right(defaultCert) =
