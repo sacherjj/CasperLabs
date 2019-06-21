@@ -15,6 +15,7 @@ import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.gossiping
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
@@ -117,7 +118,7 @@ sealed abstract class MultiParentCasperInstances {
                     )
     } yield (blockProcessingLock, casperState)
 
-  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: Metrics: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,
@@ -138,7 +139,7 @@ sealed abstract class MultiParentCasperInstances {
     }
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,
