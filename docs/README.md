@@ -6,7 +6,7 @@
 - [Validator Guide](../VALIDATOR.md)
 - [Generating Keys](../VALIDATOR.md#setting-up-keys)
 - [Docker - Local Network Simulation](../hack/docker/README.md)
-- [Contributing] (../CONTRIBUTING.md)
+- [Contributing](../CONTRIBUTING.md)
 
 ## Getting Help
 
