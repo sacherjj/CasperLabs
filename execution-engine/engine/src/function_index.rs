@@ -29,6 +29,8 @@ pub enum FunctionIndex {
     AddAssociatedKeyFuncIndex = 22,
     RemoveAssociatedKeyFuncIndex = 23,
     SetActionThresholdFuncIndex = 24,
+    SerKnownURefs = 25,
+    ListKnownURefsIndex = 26,
 }
 
 impl Into<usize> for FunctionIndex {

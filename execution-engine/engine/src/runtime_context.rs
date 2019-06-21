@@ -84,6 +84,10 @@ where
         self.uref_lookup.get(name)
     }
 
+    pub fn list_known_urefs(&self) -> &BTreeMap<String, Key> {
+        &self.uref_lookup
+    }
+
     pub fn fn_store_id(&self) -> u32 {
         self.fn_store_id
     }
