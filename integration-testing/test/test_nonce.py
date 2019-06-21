@@ -1,28 +1,21 @@
-import threading
-from typing import List
-import pytest
 from test.cl_node.client_parser import parse_show_blocks
-from test.cl_node.docker_node import DockerNode
-from .cl_node.wait import wait_for_blocks_count_at_least
 from test.cl_node.errors import NonZeroExitCodeError
+from typing import List
+
+import pytest
+
+from .cl_node.wait import wait_for_blocks_count_at_least
+
 
 """
 Feature file: ~/CasperLabs/integration-testing/features/deploy.feature
 """
 
-@pytest.fixture()
-def node(one_node_network):
-    with one_node_network as network:
-        # Wait for the genesis block reaching each node.
-        for node in network.docker_nodes:
-            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
-        yield network.docker_nodes[0]
-
 
 def deploy_and_propose(node, contract, nonce):
-    node.client.deploy(session_contract = contract,
-                       payment_contract = contract,
-                       nonce = nonce)
+    node.client.deploy(session_contract=contract,
+                       payment_contract=contract,
+                       nonce=nonce)
     node.client.propose()
 
 
@@ -78,9 +71,7 @@ def test_deploy_with_higher_nonce(node, contracts: List[str]):
 
     blocks = parse_show_blocks(node.client.show_blocks(100))
 
-
     # Deploy counts of all blocks except the genesis block.
     deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
 
     assert sum(deploy_counts) == len(contracts)
-
