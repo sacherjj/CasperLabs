@@ -8,7 +8,11 @@ if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "test" ]]; then
     PYTEST_ARGS="--maxfail=3"
 fi
 
+if [[ "$TEST_RUN_ARGS" == "" ]]; then
+    TEST_RUN_ARGS=$@
+fi
+
 pipenv sync
 pipenv run client/CasperClient/install.sh
-pipenv run py.test ${PYTEST_ARGS} -rf -v "$@"
+pipenv run py.test ${PYTEST_ARGS} -v "$TEST_RUN_ARGS"
 pipenv run python3 ./docker_cleanup_assurance.py
