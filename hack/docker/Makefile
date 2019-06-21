@@ -1,4 +1,4 @@
-CL_CASPER_NUM_VALIDATORS ?= 10
+CL_CASPER_NUM_VALIDATORS ?= 5
 CL_SERVER_HTTP_PORT ?= 40403
 CL_VERSION ?= latest
 
@@ -95,8 +95,13 @@ slow:
 # Generate keys and bonds.
 .casperlabs:
 	mkdir -p .casperlabs/bootstrap
-	mkdir -p .casperlabs/genesis
+	mkdir -p .casperlabs/genesis/system-account
 	mkdir -p .casperlabs/node-0
+
+	@# TODO: When we start publishing blessed-contracts.tar.gz download it make it available.
+
+	../key-management/docker-gen-account-keys.sh .casperlabs/genesis/system-account
+
 	../key-management/docker-gen-keys.sh .casperlabs/node-0 || \
 		(cd ../..  && \
 		make docker-build/key-generator && \
