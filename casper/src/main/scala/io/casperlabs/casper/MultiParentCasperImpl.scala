@@ -1,32 +1,38 @@
 package io.casperlabs.casper
 
-import cats.{Applicative, Monad}
 import cats.data.EitherT
 import cats.effect.Sync
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl.FunctorRaise
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
 import Block.Justification
-import io.casperlabs.casper.ValidationImpl.ValidateErrorWrapper
+import io.casperlabs.casper.ValidationImpl.{DropErrorWrapper, ValidateErrorWrapper}
+import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
+import io.casperlabs.comm.gossiping
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
-import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
-import io.casperlabs.ipc.{ProtocolVersion, ValidateRequest}
+import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.ipc.ValidateRequest
+import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
+
 import scala.util.control.NonFatal
 
 /**
@@ -39,21 +45,21 @@ import scala.util.control.NonFatal
   * @param equivocationsTracker : Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
   */
 final case class CasperState(
-    blockBuffer: Set[Block] = Set.empty[Block],
-    deployBuffer: Set[Deploy] = Set.empty[Deploy],
+    blockBuffer: Map[ByteString, Block] = Map.empty,
+    deployBuffer: DeployBuffer = DeployBuffer.empty,
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: Validation](
+class MultiParentCasperImpl[F[_]: Sync: Log: Time: Metrics: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Validation](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
     genesis: Block,
     chainId: String,
     blockProcessingLock: Semaphore[F],
-    faultToleranceThreshold: Float = 0f
+    val faultToleranceThreshold: Float = 0f
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
@@ -66,8 +72,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
   type Validator = ByteString
 
-  private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
-
   /** Add a block if it hasn't been added yet. */
   def addBlock(
       block: Block
@@ -79,7 +83,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
           blockHash   = block.blockHash
           inDag       <- dag.contains(blockHash)
           casperState <- Cell[F, CasperState].read
-          inBuffer    = casperState.blockBuffer.exists(_.blockHash == blockHash)
+          inBuffer    = casperState.blockBuffer.contains(blockHash)
           attempts <- if (inDag) {
                        Log[F]
                          .info(
@@ -98,7 +102,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                        // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
                        internalAddBlock(block, dag)
                      }
-          // TODO: Ideally this method would just return the block hashes it created,
+          // This method could just return the block hashes it created,
           // but for now it does gossiping as well. The methods return the full blocks
           // because for missing blocks it's not yet saved to the database.
           _ <- attempts.traverse {
@@ -116,7 +120,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       dag: BlockDagRepresentation[F]
   ): F[List[(Block, BlockStatus)]] =
     for {
-      lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
+      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
       attemptResult <- statelessExecutor.validateAndAddBlock(
                         StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
                         dag,
@@ -130,18 +134,32 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                           case _ =>
                             reAttemptBuffer(updatedDag, lastFinalizedBlockHash) // reAttempt for any status that resulted in the adding of the block into the view
                         }
+
+      // Update the last finalized block; remove finalized deploys from the buffer
+      lastFinalizedBlockHash        <- LastFinalizedBlockHashContainer[F].get
+      updatedLastFinalizedBlockHash <- updateLastFinalizedBlock(updatedDag, lastFinalizedBlockHash)
+      _                             <- LastFinalizedBlockHashContainer[F].set(updatedLastFinalizedBlockHash)
+      _ <- Log[F].info(
+            s"New last finalized block hash is ${PrettyPrinter.buildString(updatedLastFinalizedBlockHash)}."
+          )
+
       tipHashes <- estimator(updatedDag)
       _ <- Log[F].debug(
             s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
           )
-      tipHash                       = tipHashes.head
-      _                             <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
-      lastFinalizedBlockHash        <- lastFinalizedBlockHashContainer.get
-      updatedLastFinalizedBlockHash <- updateLastFinalizedBlock(updatedDag, lastFinalizedBlockHash)
-      _                             <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
-      _ <- Log[F].info(
-            s"New last finalized block hash is ${PrettyPrinter.buildString(updatedLastFinalizedBlockHash)}."
-          )
+      tipHash = tipHashes.head
+      _       <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
+
+      // Push any unfinalized deploys which are still in the buffer back to pending state
+      // if the blocks they were contained have just become orphans.
+      requeued <- requeueOrphanedDeploys(updatedDag, tipHashes)
+      _        <- Log[F].info(s"Re-queued ${requeued} orphaned deploys.").whenA(requeued > 0)
+
+      // Remove any deploys from the buffer which are in finalized blocks.
+      _ <- removeFinalizedDeploys(updatedDag)
+
+      _ <- updateDeployBufferMetrics()
+
     } yield (block, status) :: furtherAttempts
 
   /** Go from the last finalized block and visit all children that can be finalized now.
@@ -154,37 +172,58 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       childrenHashes <- dag
                          .children(lastFinalizedBlockHash)
                          .map(_.getOrElse(Set.empty[BlockHash]).toList)
-      // Find all finalized children so that we can get rid of their deploys.
-      finalizedChildren <- ListContrib.filterM(
+      finalizedChildren <- ListContrib.filterM[F, BlockHash](
                             childrenHashes,
-                            (blockHash: BlockHash) =>
-                              isGreaterThanFaultToleranceThreshold(dag, blockHash)
+                            isGreaterThanFaultToleranceThreshold(dag, _)
                           )
       newFinalizedBlock <- if (finalizedChildren.isEmpty) {
                             lastFinalizedBlockHash.pure[F]
                           } else {
-                            finalizedChildren.traverse { childHash =>
-                              for {
-                                removed <- removeDeploysInBlock(childHash)
-                                _ <- Log[F].info(
-                                      s"Removed $removed deploys from deploy history as we finalized block ${PrettyPrinter
-                                        .buildString(childHash)}."
-                                    )
-                                finalizedHash <- updateLastFinalizedBlock(dag, childHash)
-                              } yield finalizedHash
+                            finalizedChildren.traverse {
+                              updateLastFinalizedBlock(dag, _)
                             } map (_.head)
                           }
     } yield newFinalizedBlock
+
+  /** Remove deploys from the buffer which are included in block that are finalized. */
+  private def removeFinalizedDeploys(dag: BlockDagRepresentation[F]): F[Unit] =
+    for {
+      casperState <- Cell[F, CasperState].read
+
+      blockHashes <- casperState.deployBuffer.processedDeploys.values
+                      .map(_.deployHash)
+                      .toList
+                      .traverse { deployHash =>
+                        BlockStore[F]
+                          .findBlockHashesWithDeployhash(deployHash)
+                      }
+                      .map(_.flatten.distinct)
+
+      finalizedBlockHashes <- ListContrib.filterM(
+                               blockHashes,
+                               isGreaterThanFaultToleranceThreshold(dag, _)
+                             )
+      _ <- finalizedBlockHashes.traverse { blockHash =>
+            removeDeploysInBlock(blockHash) flatMap { removed =>
+              Log[F]
+                .info(
+                  s"Removed $removed deploys from deploy history as we finalized block ${PrettyPrinter
+                    .buildString(blockHash)}"
+                )
+                .whenA(removed > 0)
+            }
+          }
+    } yield ()
 
   /** Remove deploys from the history which are included in a just finalised block. */
   private def removeDeploysInBlock(blockHash: BlockHash): F[Int] =
     for {
       block              <- ProtoUtil.unsafeGetBlock[F](blockHash)
-      deploysToRemove    = block.body.get.deploys.map(_.deploy.get).toSet
+      deploysToRemove    = block.body.get.deploys.map(_.deploy.get.deployHash).toSet
       stateBefore        <- Cell[F, CasperState].read
       initialHistorySize = stateBefore.deployBuffer.size
       _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployBuffer = s.deployBuffer.filterNot(deploysToRemove))
+            s.copy(deployBuffer = s.deployBuffer.remove(deploysToRemove))
           }
       stateAfter     <- Cell[F, CasperState].read
       deploysRemoved = initialHistorySize - stateAfter.deployBuffer.size
@@ -213,14 +252,21 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       block: Block
   ): F[Boolean] =
     Cell[F, CasperState].read
-      .map(_.blockBuffer.exists(_.blockHash == block.blockHash))
+      .map(_.blockBuffer.contains(block.blockHash))
       .ifM(
         true.pure[F],
         BlockStore[F].contains(block.blockHash)
       )
 
-  override def bufferedDeploys: F[Set[Deploy]] =
+  override def bufferedDeploys: F[DeployBuffer] =
     Cell[F, CasperState].read.map(_.deployBuffer)
+
+  private def updateDeployBufferMetrics(): F[Unit] =
+    for {
+      buffer <- bufferedDeploys
+      _      <- Metrics[F].setGauge("pending_deploys", buffer.pendingDeploys.size.toLong)
+      _      <- Metrics[F].setGauge("processed_deploys", buffer.processedDeploys.size.toLong)
+    } yield ()
 
   /** Add a deploy to the buffer, if the code passes basic validation. */
   def deploy(deploy: Deploy): F[Either[Throwable, Unit]] =
@@ -231,7 +277,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
         EitherT(req)
           .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
-          .flatMapF(_ => addDeploy(deploy) map (_.asRight[Throwable]))
+          .flatMapF(_ => addDeploy(deploy))
           .value
       // TODO: Genesis doesn't have payment code; does it come here?
       case (None, _) | (_, None) =>
@@ -244,16 +290,34 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     }
 
   /** Add a deploy to the buffer, to be executed later. */
-  private def addDeploy(deploy: Deploy): F[Unit] =
-    Cell[F, CasperState].modify { s =>
-      s.copy(deployBuffer = s.deployBuffer + deploy)
-    } *> Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
+  private def addDeploy(deploy: Deploy): F[Either[Throwable, Unit]] = {
+    def show(d: Deploy) = PrettyPrinter.buildString(d)
+    (for {
+      s <- Cell[F, CasperState].read
+      _ <- s.deployBuffer.processedDeploys.values.find { d =>
+            d.getHeader.accountPublicKey == deploy.getHeader.accountPublicKey &&
+            d.getHeader.nonce >= deploy.getHeader.nonce &&
+            d.deployHash != deploy.deployHash
+          } map { d =>
+            Sync[F].raiseError(
+              new IllegalArgumentException(
+                s"${show(d)} supersedes ${show(deploy)}."
+              )
+            )
+          } getOrElse ().pure[F]
+      _ <- Cell[F, CasperState].modify { s =>
+            s.copy(deployBuffer = s.deployBuffer.add(deploy))
+          }
+      _ <- Log[F].info(s"Received ${show(deploy)}")
+      _ <- updateDeployBufferMetrics()
+    } yield ()).attempt
+  }
 
   /** Return the list of tips. */
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     for {
-      lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
-      rankedEstimates        <- Estimator.tips[F](dag, lastFinalizedBlockHash)
+      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
+      rankedEstimates        <- Estimator.tips[F](dag, genesis.blockHash)
     } yield rankedEstimates
 
   /*
@@ -317,27 +381,103 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
   def lastFinalizedBlock: F[Block] =
     for {
-      lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
+      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
       block                  <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
     } yield block
 
-  // TODO: Optimize for large number of deploys accumulated over history
   /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploys(
       dag: BlockDagRepresentation[F],
       parents: Seq[Block]
   ): F[Seq[Deploy]] =
     for {
-      state <- Cell[F, CasperState].read
-      unprocessed <- DagOperations
-                      .bfTraverseF[F, Block](parents.toList)(ProtoUtil.unsafeGetParents[F])
-                      .foldWhileLeft(state.deployBuffer) {
-                        case (deployPool, block) =>
-                          val processedDeploys = block.getBody.deploys.flatMap(_.deploy)
-                          val remDeploys       = deployPool -- processedDeploys
-                          if (remDeploys.nonEmpty) Left(remDeploys) else Right(Set.empty)
-                      }
-    } yield unprocessed.toSeq
+      orphanedDeploys <- findOrphanedDeploys(dag, parents)
+      pendingDeploys  <- Cell[F, CasperState].read.map(_.deployBuffer.pendingDeploys.values)
+
+      // Pending deploys are most likely not in the past, or we'd have to go back indefinitely to
+      // prove they aren't. The EE will ignore them if the nonce is less than the expected,
+      // so it should be fine to include and see what happens.
+      candidates = orphanedDeploys ++ pendingDeploys
+
+      // Only send the next nonce per account.
+      remaining = candidates
+        .groupBy(_.getHeader.accountPublicKey)
+        .map {
+          case (_, deploys) => deploys.minBy(_.getHeader.nonce)
+        }
+        .toSeq
+    } yield remaining
+
+  /** If another node proposed a block which orphaned something proposed by this node,
+    * and we still have these deploys in the `processedDeploys` buffer then put them
+    * back into the `pendingDeploys` so that the `AutoProposer` can pick them up again.
+    */
+  private def requeueOrphanedDeploys(
+      dag: BlockDagRepresentation[F],
+      tipHashes: IndexedSeq[BlockHash]
+  ): F[Int] =
+    for {
+      casperState <- Cell[F, CasperState].read
+
+      // We actually need the tips which can be merged, the ones which we'd build on if we
+      // attempted to create a new block.
+      tips    <- tipHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
+      merged  <- ExecEngineUtil.merge[F](tips, dag)
+      parents = merged.parents
+
+      orphanedDeploys <- findOrphanedDeploys(dag, parents)
+
+      orphanedDeployHashes = orphanedDeploys.map(_.deployHash).toSet
+
+      _ <- Cell[F, CasperState].modify { s =>
+            s.copy(
+              deployBuffer = s.deployBuffer.orphaned(orphanedDeployHashes)
+            )
+          } whenA (orphanedDeployHashes.nonEmpty)
+
+    } yield orphanedDeployHashes.size
+
+  /** Find orphaned deploys in the processed buffer. */
+  private def findOrphanedDeploys(
+      dag: BlockDagRepresentation[F],
+      parents: Seq[Block]
+  ): F[Seq[Deploy]] =
+    for {
+      casperState <- Cell[F, CasperState].read
+      parentSet   = parents.map(_.blockHash).toSet
+
+      deployToBlocksMap <- casperState.deployBuffer.processedDeploys.values
+                            .map(_.deployHash)
+                            .toList
+                            .traverse { deployHash =>
+                              BlockStore[F]
+                                .findBlockHashesWithDeployhash(deployHash)
+                                .map(deployHash -> _)
+                            }
+                            .map(_.toMap)
+
+      blockHashes = deployToBlocksMap.values.flatten.toList.distinct
+
+      // Find the blocks from which there's no way through the descendants to reach a tip.
+      orphanedBlockHashes <- blockHashes
+                              .traverse { blockHash =>
+                                DagOperations
+                                  .bfTraverseF[F, BlockHash](blockHashes)(
+                                    h => dag.children(h).map(_.toList.flatten)
+                                  )
+                                  .find(parentSet)
+                                  .map(blockHash -> _.isEmpty)
+                              }
+                              .map {
+                                _.filter(_._2).map(_._1).toSet
+                              }
+
+      orphanedDeploys = deployToBlocksMap.collect {
+        case (deployHash, blockHashes) if blockHashes.forall(orphanedBlockHashes) =>
+          casperState.deployBuffer.processedDeploys(deployHash)
+      }.toSeq
+
+    } yield orphanedDeploys
 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
@@ -349,48 +489,85 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       justifications: Seq[Justification],
       protocolVersion: ProtocolVersion
   ): F[CreateBlockStatus] =
-    (for {
-      now <- Time[F].currentMillis
-      s   <- Cell[F, CasperState].read
-      stateResult <- ExecEngineUtil
-                      .computeDeploysCheckpoint[F](
-                        merged,
-                        deploys,
-                        protocolVersion
-                      )
-      DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number, protocolVersion) = stateResult
-      //TODO: compute bonds properly
-      newBonds = ProtoUtil.bonds(parents.head)
-
-      postState = Block
-        .GlobalState()
-        .withPreStateHash(preStateHash)
-        .withPostStateHash(postStateHash)
-        .withBonds(newBonds)
-
-      body = Block
-        .Body()
-        .withDeploys(deploysForBlock)
-
-      header = blockHeader(
-        body,
-        parentHashes = parents.map(_.blockHash),
-        justifications = justifications,
-        state = postState,
-        rank = number,
-        protocolVersion = protocolVersion.version,
-        timestamp = now,
-        chainId = chainId
+    ExecEngineUtil
+      .computeDeploysCheckpoint[F](
+        merged,
+        deploys,
+        protocolVersion
       )
-      block = unsignedBlockProto(body, header)
-    } yield CreateBlockStatus.created(block)).handleErrorWith(
-      ex =>
-        Log[F]
-          .error(
-            s"Critical error encountered while processing deploys: ${ex.getMessage}"
-          )
-          .map(_ => CreateBlockStatus.internalDeployError(ex))
-    )
+      .flatMap {
+        case DeploysCheckpoint(
+            preStateHash,
+            postStateHash,
+            deploysForBlock,
+            // We don't have to put InvalidNonce deploys back to the buffer,
+            // as by default buffer is cleared when deploy gets included in
+            // the finalized block. If that strategy ever changes, we will have to
+            // put them back into the buffer explicitly.
+            invalidNonceDeploys,
+            deploysToDiscard,
+            number,
+            protocolVersion
+            ) =>
+          val status = if (deploysForBlock.isEmpty) {
+            CreateBlockStatus.noNewDeploys.pure[F]
+          } else {
+            Time[F].currentMillis map { now =>
+              val newBonds = ProtoUtil.bonds(parents.head)
+
+              val postState = Block
+                .GlobalState()
+                .withPreStateHash(preStateHash)
+                .withPostStateHash(postStateHash)
+                .withBonds(newBonds)
+
+              val body = Block
+                .Body()
+                .withDeploys(deploysForBlock)
+
+              val header = blockHeader(
+                body,
+                parentHashes = parents.map(_.blockHash),
+                justifications = justifications,
+                state = postState,
+                rank = number,
+                protocolVersion = protocolVersion.value,
+                timestamp = now,
+                chainId = chainId
+              )
+              val block = unsignedBlockProto(body, header)
+
+              CreateBlockStatus.created(block)
+            }
+          }
+
+          // Discard deploys that will never be included because they failed some precondition.
+          // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included
+          // in the past of the new fork, it wouldn't hit this as the nonce would be what we expect.
+          // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
+          // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
+          // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
+          val discardDeploys = Cell[F, CasperState]
+            .modify { s =>
+              s.copy(
+                deployBuffer =
+                  s.deployBuffer.remove(deploysToDiscard.map(_.deploy.deployHash).toSet)
+              )
+            }
+            .whenA(deploysToDiscard.nonEmpty)
+
+          discardDeploys *> status
+      }
+      .handleErrorWith {
+        case ex @ SmartContractEngineError(error_msg) =>
+          Log[F]
+            .error(s"Execution Engine returned an error while processing deploys: $error_msg")
+            .as(CreateBlockStatus.internalDeployError(ex))
+        case NonFatal(ex) =>
+          Log[F]
+            .error(s"Critical error encountered while processing deploys: ${ex.getMessage}", ex)
+            .as(CreateBlockStatus.internalDeployError(ex))
+      }
 
   // MultiParentCasper Exposes the block DAG to those who need it.
   def blockDag: F[BlockDagRepresentation[F]] =
@@ -400,12 +577,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     for {
       state   <- Cell[F, CasperState].read
       tracker = state.equivocationsTracker
-    } yield
-      (tracker
-        .map(_.equivocator)
-        .flatMap(weights.get)
-        .sum
-        .toFloat / weightMapTotal(weights))
+    } yield (tracker
+      .map(_.equivocator)
+      .flatMap(weights.get)
+      .sum
+      .toFloat / weightMapTotal(weights))
 
   /** After a block is executed we can try to execute the other blocks in the buffer that dependend on it. */
   private def reAttemptBuffer(
@@ -415,7 +591,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     for {
       casperState    <- Cell[F, CasperState].read
       dependencyFree = casperState.dependencyDag.dependencyFree
-      dependencyFreeBlocks = casperState.blockBuffer
+      dependencyFreeBlocks = casperState.blockBuffer.values
         .filter(block => dependencyFree.contains(block.blockHash))
         .toList
       dependencyFreeAttempts <- dependencyFreeBlocks.foldM(
@@ -426,13 +602,12 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                                ) {
                                  case ((attempts, updatedDag), block) =>
                                    for {
-                                     attempt <- statelessExecutor.attemptAdd(
+                                     attempt <- statelessExecutor.validateAndAddBlock(
                                                  StatelessExecutor
                                                    .Context(genesis, lastFinalizedBlockHash)
                                                    .some,
                                                  updatedDag,
-                                                 block,
-                                                 treatAsGenesis = false
+                                                 block
                                                )
                                      (status, updatedDag) = attempt
                                    } yield ((block, status) :: attempts, updatedDag)
@@ -450,16 +625,23 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       attempts: List[(Block, BlockStatus)],
       canRemove: BlockStatus => Boolean
   ): F[Unit] = {
-    val addedBlockHashes = attempts.collect {
-      case (block, status) if canRemove(status) => block.blockHash
+    val addedBlocks = attempts.collect {
+      case (block, status) if canRemove(status) => block
     }.toSet
+
+    val addedBlockHashes = addedBlocks.map(_.blockHash)
+
+    // Mark deploys we have observed in blocks as processed.
+    val processedDeployHashes = addedBlocks
+      .flatMap(_.getBody.deploys.map(_.getDeploy.deployHash))
 
     Cell[F, CasperState].modify { s =>
       s.copy(
-        blockBuffer = s.blockBuffer.filterNot(addedBlockHashes contains _.blockHash),
-        dependencyDag = addedBlockHashes.foldLeft(s.dependencyDag) {
-          case (dag, blockHash) =>
-            DoublyLinkedDagOperations.remove(dag, blockHash)
+        blockBuffer = s.blockBuffer.filterKeys(h => !addedBlockHashes(h)),
+        deployBuffer = s.deployBuffer.processed(processedDeployHashes),
+        dependencyDag = addedBlocks.foldLeft(s.dependencyDag) {
+          case (dag, block) =>
+            DoublyLinkedDagOperations.remove(dag, block.blockHash)
         }
       )
     }
@@ -486,8 +668,41 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
 object MultiParentCasperImpl {
 
-  // TODO: Mateusz will move this to its own place.
-  val version = 1L
+  implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CasperMetricsSource, "MultiParentCasper")
+
+  /** Export base 0 values so we have non-empty series for charts. */
+  def establishMetrics[F[_]: Monad: Metrics] =
+    for {
+      _ <- Metrics[F].incrementGauge("pending_deploys", 0)
+      _ <- Metrics[F].incrementGauge("processed_deploys", 0)
+    } yield ()
+
+  def create[F[_]: Sync: Log: Time: Metrics: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Validation: Cell[
+    ?[_],
+    CasperState
+  ]](
+      statelessExecutor: StatelessExecutor[F],
+      broadcaster: Broadcaster[F],
+      validatorId: Option[ValidatorIdentity],
+      genesis: Block,
+      chainId: String,
+      blockProcessingLock: Semaphore[F],
+      faultToleranceThreshold: Float = 0f
+  ): F[MultiParentCasper[F]] =
+    LastFinalizedBlockHashContainer[F].set(genesis.blockHash) >>
+      establishMetrics[F] >>
+      Sync[F].delay(
+        new MultiParentCasperImpl[F](
+          statelessExecutor,
+          broadcaster,
+          validatorId,
+          genesis,
+          chainId,
+          blockProcessingLock,
+          faultToleranceThreshold
+        )
+      )
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
@@ -497,62 +712,25 @@ object MultiParentCasperImpl {
     //TODO pull out
     implicit val functorRaiseInvalidBlock = ValidationImpl.raiseValidateErrorThroughSync[F]
 
+    /* Execute the block to get the effects then do some more validation.
+     * Save the block if everything checks out.
+     * We want to catch equivocations only after we confirm that the block completing
+     * the equivocation is otherwise valid. */
     def validateAndAddBlock(
         maybeContext: Option[StatelessExecutor.Context],
         dag: BlockDagRepresentation[F],
         block: Block
     )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] = {
-      val treatAsGenesis =
-        block.getHeader.parentHashes.isEmpty &&
-          block.getHeader.validatorPublicKey.isEmpty &&
-          block.getSignature.sig.isEmpty
-
-      for {
-        dag         <- BlockDagStorage[F].getRepresentation
-        validFormat <- Validation[F].formatOfFields(block, treatAsGenesis)
-        validSig    <- if (!treatAsGenesis) Validation[F].blockSignature(block) else true.pure[F]
-        validSender <- maybeContext.map { ctx =>
-                        Validation[F].blockSender(block, ctx.genesis, dag)
-                      } getOrElse treatAsGenesis.pure[F]
-        validVersion <- Validation[F].version(
-                         block,
-                         CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
-                       )
-        attemptResult <- if (!validFormat) (InvalidUnslashableBlock, dag).pure[F]
-                        else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
-                        else if (!validSender) (InvalidUnslashableBlock, dag).pure[F]
-                        else if (!validVersion) (InvalidUnslashableBlock, dag).pure[F]
-                        else attemptAdd(maybeContext, dag, block, treatAsGenesis)
-        (status, updatedDag) = attemptResult
-      } yield (status, updatedDag)
-    }
-
-    /* Execute the block to get the effects then do some more validation.
-     * Save the block if everything checks out.
-     * We want to catch equivocations only after we confirm that the block completing
-     * the equivocation is otherwise valid. */
-    def attemptAdd(
-        maybeContext: Option[StatelessExecutor.Context],
-        dag: BlockDagRepresentation[F],
-        block: Block,
-        treatAsGenesis: Boolean
-    )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] = {
       val validationStatus = (for {
         _ <- Log[F].info(
               s"Attempting to add Block ${PrettyPrinter.buildString(block.blockHash)} to DAG."
             )
-        postValidationStatus <- maybeContext map { ctx =>
-                                 Validation[F].blockSummary(
-                                   block,
-                                   ctx.genesis,
-                                   dag,
-                                   chainId,
-                                   ctx.lastFinalizedBlockHash
-                                 )
-                               } getOrElse {
-                                 Validation[F]
-                                   .blockSummaryPreGenesis(block, dag, chainId)
-                               }
+        _ <- Validation[F].blockFull(
+              block,
+              dag,
+              chainId,
+              maybeContext.map(_.genesis)
+            )
         casperState <- Cell[F, CasperState].read
         // Confirm the parents are correct (including checking they commute) and capture
         // the effect needed to compute the correct pre-state as well.
@@ -561,7 +739,8 @@ object MultiParentCasperImpl {
                      .empty[ExecEngineUtil.TransformMap, Block]
                      .pure[F]
                  ) { ctx =>
-                   Validation[F].parents(block, ctx.lastFinalizedBlockHash, dag)
+                   Validation[F]
+                     .parents(block, ctx.lastFinalizedBlockHash, ctx.genesis.blockHash, dag)
                  }
         preStateHash <- ExecEngineUtil.computePrestate[F](merged)
         blockEffects <- ExecEngineUtil
@@ -598,6 +777,11 @@ object MultiParentCasperImpl {
       validationStatus.flatMap {
         case Right(effects) =>
           addEffects(Valid, block, effects, dag).tupleLeft(Valid)
+
+        case Left(DropErrorWrapper(invalid)) =>
+          // These exceptions are coming from the validation checks that used to happen outside attemptAdd,
+          // the ones that returned boolean values.
+          (invalid: BlockStatus, dag).pure[F]
 
         case Left(ValidateErrorWrapper(invalid)) =>
           addEffects(invalid, block, Seq.empty, dag)
@@ -636,7 +820,7 @@ object MultiParentCasperImpl {
 
         case MissingBlocks =>
           Cell[F, CasperState].modify { s =>
-            s.copy(blockBuffer = s.blockBuffer + block)
+            s.copy(blockBuffer = s.blockBuffer + (block.blockHash -> block))
           } *>
             addMissingDependencies(block, dag) *>
             dag.pure[F]

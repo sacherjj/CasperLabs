@@ -47,7 +47,7 @@ class ConfigurationSpec
       kademliaPort = 1,
       dynamicHostAddress = false,
       noUpnp = false,
-      defaultTimeout = 1,
+      defaultTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       bootstrap = Node(
         NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
         "52.119.8.109",
@@ -82,11 +82,11 @@ class ConfigurationSpec
       relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       cleanBlockStorage = false
     )
-    val grpcServer = Configuration.GrpcServer(
-      host = "test",
+    val grpcServer = Configuration.Grpc(
       socket = Paths.get("/tmp/test"),
       portExternal = 1,
-      portInternal = 1
+      portInternal = 1,
+      useTls = false
     )
     val casper = CasperConf(
       validatorPublicKey = "test".some,
@@ -127,9 +127,9 @@ class ConfigurationSpec
       maxReaders = 1,
       useTls = false
     )
-    val blockStorage = BlockDagFileStorage.Config(
+    val blockStorage = Configuration.BlockStorage(
       latestMessagesLogMaxSizeFactor = 1,
-      dir = Paths.get("/tmp/block-dag-file-storage")
+      cacheMaxSizeBytes = 1
     )
     val kamonSettings = Configuration.Kamon(
       prometheus = false,

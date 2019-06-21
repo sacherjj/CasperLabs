@@ -52,7 +52,7 @@ object Main {
   ): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
-        conf.grpc.host,
+        conf.server.host.getOrElse("localhost"),
         conf.grpc.portInternal,
         conf.server.maxMessageSize
       )

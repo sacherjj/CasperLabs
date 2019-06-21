@@ -5,13 +5,14 @@ import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStore.{BlockHash, DeployHash}
 import io.casperlabs.blockstorage.InMemBlockStore.emptyMapRef
 import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.ipc._
+import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.Log
@@ -131,7 +132,44 @@ trait BlockStoreTest
       }
     }
 
-  it should "rollback the transaction on error" in {
+  it should "be able to get blocks containing the specific deploy" in {
+    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+      val deployHashToBlockHashes =
+        blockStoreElements
+          .flatMap(
+            b =>
+              b.getBlockMessage.getBody.deploys
+                .map(
+                  _.getDeploy.deployHash -> b.getBlockMessage.blockHash
+                )
+                .toSet
+          )
+          .groupBy(_._1)
+          .mapValues(_.map(_._2))
+
+      withStore { store =>
+        val items = blockStoreElements
+        for {
+          _ <- items.traverse_(store.put)
+          _ <- items.traverse[Task, Seq[Assertion]] { block =>
+                block.getBlockMessage.getBody.deploys.toList.traverse { deploy =>
+                  store
+                    .findBlockHashesWithDeployhash(deploy.getDeploy.deployHash)
+                    .map(
+                      _ should contain theSameElementsAs (
+                        deployHashToBlockHashes(deploy.getDeploy.deployHash)
+                      )
+                    )
+                }
+              }
+        } yield ()
+      }
+    }
+  }
+
+  //TODO: update this test to properly test rollback feature.
+  //https://casperlabs.atlassian.net/browse/STOR-95
+  it should "rollback the transaction on error" ignore {
     withStore { store =>
       val exception = new RuntimeException("msg")
 
@@ -139,10 +177,11 @@ trait BlockStoreTest
         throw exception
 
       for {
-        _          <- store.findBlockHash(_ => true).map(_ shouldBe empty)
-        putAttempt <- store.put { elem }.attempt
-        _          = putAttempt.left.value shouldBe exception
-        result     <- store.findBlockHash(_ => true).map(_ shouldBe empty)
+        _                  <- store.findBlockHash(_ => true).map(_ shouldBe empty)
+        (blockHash, block) = elem
+        putAttempt         <- store.put(blockHash, block).attempt
+        _                  = putAttempt.left.value shouldBe exception
+        result             <- store.findBlockHash(_ => true).map(_ shouldBe empty)
       } yield result
     }
   }
@@ -151,12 +190,13 @@ trait BlockStoreTest
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
-      refTask          <- emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)]
-      approvedBlockRef <- Ref[Task].of(none[ApprovedBlock])
-      metrics          = new MetricsNOP[Task]()
-      lock             <- Semaphore[Task](1)
+      refTask             <- emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)]
+      deployHashesRefTask <- emptyMapRef[Task, Seq[BlockHash]]
+      approvedBlockRef    <- Ref[Task].of(none[ApprovedBlock])
+      metrics             = new MetricsNOP[Task]()
+      lock                <- Semaphore[Task](1)
       store = InMemBlockStore
-        .create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
+        .create[Task](Monad[Task], refTask, deployHashesRefTask, approvedBlockRef, metrics)
       _      <- store.findBlockHash(_ => true).map(x => assert(x.isEmpty))
       result <- f(store)
     } yield result
@@ -267,7 +307,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
           Some(ApprovedBlockCandidate(Some(BlockMessage()), 1)),
           List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
         )
-      val key            = Key(Key.KeyInstance.Hash(KeyHash()))
+      val key            = Key(Key.Value.Hash(Key.Hash()))
       val transform      = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
       val transforEntrys = Seq(TransformEntry(Some(key), Some(transform)))
 

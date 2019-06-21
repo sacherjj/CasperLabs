@@ -20,6 +20,9 @@ shared = { path = "../shared" }
 storage = { path = "../storage" }
 wasmi = "0.4.2"
 wasm-prep = { path = "../wasm-prep" }
+num-derive = "0.2.5"
+num-traits = "0.2.8"
+binascii = "0.1.2"
 
 [dev-dependencies]
 matches = "0.1.8"

@@ -8,9 +8,10 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.ApprovedBlock
-import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
 import Block.Justification
 import io.casperlabs.casper.util.ProtoUtil.bonds
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
@@ -19,6 +20,9 @@ import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
+import io.casperlabs.casper.consensus.state
+import io.casperlabs.blockstorage.BlockMetadata
+import io.casperlabs.casper.ValidationImpl.DropErrorWrapper
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
@@ -34,6 +38,11 @@ object ValidationImpl {
         Sync[F].raiseError(ValidateErrorWrapper(e))
     }
 
+  val DRIFT = 15000 // 15 seconds
+
+  // Wrapper for the tests that were originally outside the `attemptAdd` method
+  // and meant the block was not getting saved.
+  final case class DropErrorWrapper(status: InvalidBlock)     extends Exception
   final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception(status.toString)
 
   def apply[F[_]](implicit ev: ValidationImpl[F]) = ev
@@ -41,11 +50,29 @@ object ValidationImpl {
 
 class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: ExecutionEngineService: Time]
     extends Validation[F] {
+  import ValidationImpl.DRIFT
+
   type Data        = Array[Byte]
   type BlockHeight = Long
 
-  val DRIFT                                 = 15000 // 15 seconds
+  implicit class BlockSummaryOps(summary: BlockSummary) {
+    def isGenesisLike =
+      summary.getHeader.parentHashes.isEmpty &&
+        summary.getHeader.validatorPublicKey.isEmpty &&
+        summary.getSignature.sig.isEmpty
+  }
+
   private implicit val logSource: LogSource = LogSource(this.getClass)
+
+  private def checkDroppable[F[_]: MonadThrowable](checks: F[Boolean]*): F[Unit] =
+    checks.toList
+      .traverse(identity)
+      .map(_.forall(identity))
+      .ifM(
+        ().pure[F],
+        MonadThrowable[F]
+          .raiseError[Unit](DropErrorWrapper(InvalidUnslashableBlock))
+      )
 
   def signatureVerifiers(sigAlgorithm: String): Option[(Data, Signature, PublicKey) => Boolean] =
     sigAlgorithm match {
@@ -58,8 +85,14 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
       verify(d, Signature(sig.sig.toByteArray), PublicKey(sig.publicKey.toByteArray))
     }
 
-  def ignore(b: Block, reason: String): String =
-    s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
+  def ignore(block: Block, reason: String): String =
+    ignore(block.blockHash, reason)
+
+  def ignore(block: BlockSummary, reason: String): String =
+    ignore(block.blockHash, reason)
+
+  def ignore(blockHash: ByteString, reason: String): String =
+    s"Ignoring block ${PrettyPrinter.buildString(blockHash)} because $reason"
 
   def approvedBlock(
       a: ApprovedBlock,
@@ -96,23 +129,79 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
     }
   }
 
-  def blockSignature(b: Block): F[Boolean] =
-    signatureVerifiers(b.getSignature.sigAlgorithm)
-      .map(verify => {
-        Try(
-          verify(
-            b.blockHash.toByteArray,
-            Signature(b.getSignature.sig.toByteArray),
-            PublicKey(b.getHeader.validatorPublicKey.toByteArray)
+  /** Validate just the BlockSummary, assuming we don't have the block yet, or all its dependencies.
+    * We can check that all the fields are present, the signature is fine, etc.
+    * We'll need the full body to validate the block properly but this preliminary check can prevent
+    * obviously corrupt data from being downloaded. */
+  def blockSummary(
+      summary: BlockSummary,
+      chainId: String
+  ): F[Unit] = {
+    val treatAsGenesis = summary.isGenesisLike
+    for {
+      _ <- checkDroppable(
+            formatOfFields(summary, treatAsGenesis),
+            version(
+              summary,
+              CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
+            ),
+            if (!treatAsGenesis) blockSignature(summary) else true.pure[F]
           )
-        ) match {
-          case Success(true) => true.pure[F]
-          case _             => Log[F].warn(ignore(b, "signature is invalid.")).map(_ => false)
-        }
-      }) getOrElse {
+      _ <- summaryHash(summary)
+      _ <- chainIdentifier(summary, chainId)
+    } yield ()
+  }
+
+  /** Check the block without executing deploys. */
+  def blockFull(
+      block: Block,
+      dag: BlockDagRepresentation[F],
+      chainId: String,
+      maybeGenesis: Option[Block]
+  ): F[Unit] = {
+    val summary = BlockSummary(block.blockHash, block.header, block.signature)
+    for {
+      _ <- checkDroppable(
+            if (block.body.isEmpty)
+              Log[F].warn(ignore(block, s"block body is missing.")) *> false.pure[F]
+            else true.pure[F],
+            // Validate that the sender is a bonded validator.
+            maybeGenesis.fold(summary.isGenesisLike.pure[F]) { _ =>
+              blockSender(summary)
+            }
+          )
+      _ <- blockSummary(summary, chainId)
+      // Checks that need dependencies.
+      _ <- missingBlocks(summary, dag)
+      _ <- timestamp(summary, dag)
+      _ <- blockNumber(summary, dag)
+      _ <- sequenceNumber(summary, dag)
+      _ <- maybeGenesis.filterNot(_.blockHash == summary.blockHash).fold(().pure[F]) { genesis =>
+            justificationFollows(summary, genesis, dag) *>
+              justificationRegressions(summary, genesis, dag)
+          }
+      // Checks that need the body.
+      _ <- blockHash(block)
+      _ <- deployCount(block)
+    } yield ()
+  }
+
+  def blockSignature(b: BlockSummary): F[Boolean] =
+    signatureVerifiers(b.getSignature.sigAlgorithm) map { verify =>
+      Try(
+        verify(
+          b.blockHash.toByteArray,
+          Signature(b.getSignature.sig.toByteArray),
+          PublicKey(b.getHeader.validatorPublicKey.toByteArray)
+        )
+      ) match {
+        case Success(true) => true.pure[F]
+        case _             => Log[F].warn(ignore(b, "signature is invalid.")).map(_ => false)
+      }
+    } getOrElse {
       for {
         _ <- Log[F].warn(
-              ignore(b, s"signature algorithm ${b.getSignature.sigAlgorithm} is unsupported.")
+              ignore(b, s"signature algorithm '${b.getSignature.sigAlgorithm}' is unsupported.")
             )
       } yield false
     }
@@ -151,31 +240,23 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
       }
     }
 
-  def blockSender(
-      b: Block,
-      genesis: Block,
-      dag: BlockDagRepresentation[F]
-  ): F[Boolean] =
-    if (b == genesis) {
-      true.pure[F] //genesis block has a valid sender
-    } else {
-      for {
-        weight <- ProtoUtil.weightFromSender[F](b)
-        result <- if (weight > 0) true.pure[F]
-                 else
-                   for {
-                     _ <- Log[F].warn(
-                           ignore(
-                             b,
-                             s"block creator ${PrettyPrinter.buildString(b.getHeader.validatorPublicKey)} has 0 weight."
-                           )
+  def blockSender(block: BlockSummary): F[Boolean] =
+    for {
+      weight <- ProtoUtil.weightFromSender[F](block.getHeader)
+      result <- if (weight > 0) true.pure[F]
+               else
+                 for {
+                   _ <- Log[F].warn(
+                         ignore(
+                           block,
+                           s"block creator ${PrettyPrinter.buildString(block.getHeader.validatorPublicKey)} has 0 weight."
                          )
-                   } yield false
-      } yield result
-    }
+                       )
+                 } yield false
+    } yield result
 
   def formatOfFields(
-      b: Block,
+      b: BlockSummary,
       treatAsGenesis: Boolean = false
   ): F[Boolean] =
     if (b.blockHash.isEmpty) {
@@ -185,10 +266,6 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
     } else if (b.header.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block header is missing."))
-      } yield false
-    } else if (b.body.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block body is missing."))
       } yield false
     } else if (b.getSignature.sig.isEmpty && !treatAsGenesis) {
       for {
@@ -224,12 +301,12 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
 
   // Validates whether block was built using correct protocol version.
   def version(
-      b: Block,
-      m: BlockHeight => ipc.ProtocolVersion
+      b: BlockSummary,
+      m: BlockHeight => state.ProtocolVersion
   ): F[Boolean] = {
     val blockVersion = b.getHeader.protocolVersion
     val blockHeight  = b.getHeader.rank
-    val version      = m(blockHeight).version
+    val version      = m(blockHeight).value
     if (blockVersion == version) {
       true.pure[F]
     } else {
@@ -242,122 +319,35 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
     }
   }
 
-  /*
-   * TODO: Double check ordering of validity checks
-   */
-  def blockSummary(
-      block: Block,
-      genesis: Block,
-      dag: BlockDagRepresentation[F],
-      shardId: String,
-      lastFinalizedBlockHash: BlockHash
-  ): F[Unit] =
-    for {
-      _ <- blockSummaryPreGenesis(block, dag, shardId)
-      _ <- justificationFollows(block, genesis, dag)
-      _ <- justificationRegressions(block, genesis, dag)
-    } yield ()
-
-  /** Validations we can run even without an approved Genesis, i.e. on Genesis itself. */
-  def blockSummaryPreGenesis(
-      block: Block,
-      dag: BlockDagRepresentation[F],
-      chainId: String
-  ): F[Unit] =
-    for {
-      _ <- blockHash(block)
-      _ <- deployCount(block)
-      _ <- missingBlocks(block, dag)
-      _ <- timestamp(block, dag)
-      _ <- repeatDeploy(block, dag)
-      _ <- blockNumber(block, dag)
-      _ <- sequenceNumber(block, dag)
-      _ <- chainIdentifier(block, chainId)
-    } yield ()
-
   /**
     * Works with either efficient justifications or full explicit justifications
     */
   def missingBlocks(
-      block: Block,
+      block: BlockSummary,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
-      parentsPresent <- ProtoUtil.parentHashes(block).toList.forallM(p => BlockStore[F].contains(p))
+      parentsPresent <- block.getHeader.parentHashes.toList.forallM(p => BlockStore[F].contains(p))
       justificationsPresent <- block.getHeader.justifications.toList
                                 .forallM(j => BlockStore[F].contains(j.latestBlockHash))
-      result <- if (parentsPresent && justificationsPresent) {
-                 Applicative[F].unit
-               } else {
-                 for {
-                   _ <- Log[F].debug(
-                         s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}."
-                       )
-                   _ <- FunctorRaise[F, InvalidBlock].raise[Unit](MissingBlocks)
-                 } yield ()
-               }
-    } yield result
-
-  /**
-    * Validate no deploy by the same (user, millisecond timestamp)
-    * has been produced in the chain
-    *
-    * Agnostic of non-parent justifications
-    */
-  def repeatDeploy(
-      block: Block,
-      dag: BlockDagRepresentation[F]
-  ): F[Unit] = {
-    val deployKeySet = block.getBody.deploys
-      .map(_.getDeploy.getHeader)
-      .map { h =>
-        (h.accountPublicKey, h.timestamp)
-      }
-      .toSet
-
-    for {
-      initParents <- ProtoUtil.unsafeGetParents[F](block)
-      duplicatedBlock <- DagOperations
-                          .bfTraverseF[F, Block](initParents)(ProtoUtil.unsafeGetParents[F])
-                          .find(
-                            _.body.exists(
-                              _.deploys
-                                .map(_.getDeploy.getHeader)
-                                .exists(
-                                  h => deployKeySet.contains((h.accountPublicKey, h.timestamp))
-                                )
-                            )
-                          )
-      _ <- duplicatedBlock match {
-            case Some(b) =>
-              for {
-                _ <- Log[F].warn(
-                      ignore(
-                        block,
-                        s"found deploy by the same (user, millisecond timestamp) produced in the block ${PrettyPrinter
-                          .buildString(b.blockHash)}"
-                      )
-                    )
-                _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidRepeatDeploy)
-              } yield ()
-            case None => Applicative[F].unit
-          }
+      _ <- FunctorRaise[F, InvalidBlock]
+            .raise[Unit](MissingBlocks)
+            .whenA(!parentsPresent || !justificationsPresent)
     } yield ()
-  }
 
   // This is not a slashable offence
   def timestamp(
-      b: Block,
+      b: BlockSummary,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
       currentTime  <- Time[F].currentMillis
       timestamp    = b.getHeader.timestamp
-      beforeFuture = currentTime + DRIFT >= timestamp
-      latestParentTimestamp <- ProtoUtil.parentHashes(b).toList.foldM(0L) {
+      beforeFuture = currentTime + ValidationImpl.DRIFT >= timestamp
+      latestParentTimestamp <- b.getHeader.parentHashes.toList.foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
                                   ProtoUtil
-                                    .unsafeGetBlock[F](parentHash)
+                                    .unsafeGetBlockSummary[F](parentHash)
                                     .map(parent => {
                                       val timestamp =
                                         parent.header.fold(latestTimestamp)(_.timestamp)
@@ -365,28 +355,28 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
                                     })
                               }
       afterLatestParent = timestamp >= latestParentTimestamp
-      result <- if (beforeFuture && afterLatestParent) {
-                 Applicative[F].unit
-               } else {
-                 for {
-                   _ <- Log[F].warn(
-                         ignore(
-                           b,
-                           s"block timestamp $timestamp is not between latest parent block time and current time."
-                         )
-                       )
-                   _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidUnslashableBlock)
-                 } yield ()
-               }
-    } yield result
+      _ <- if (beforeFuture && afterLatestParent) {
+            Applicative[F].unit
+          } else {
+            for {
+              _ <- Log[F].warn(
+                    ignore(
+                      b,
+                      s"block timestamp $timestamp is not between latest parent block time and current time."
+                    )
+                  )
+              _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidUnslashableBlock)
+            } yield ()
+          }
+    } yield ()
 
   // Agnostic of non-parent justifications
   def blockNumber(
-      b: Block,
+      b: BlockSummary,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
-      parents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
+      parents <- b.getHeader.parentHashes.toList.traverse { parentHash =>
                   dag.lookup(parentHash).flatMap {
                     MonadThrowable[F].fromOption(
                       _,
@@ -399,7 +389,7 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
       maxBlockNumber = parents.foldLeft(-1L) {
         case (acc, p) => math.max(acc, p.rank)
       }
-      number = ProtoUtil.blockNumber(b)
+      number = b.getHeader.rank
       result = maxBlockNumber + 1 == number
       _ <- if (result) {
             Applicative[F].unit
@@ -423,11 +413,11 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
     * B's creator justification is the genesis block.
     */
   def sequenceNumber(
-      b: Block,
+      b: BlockSummary,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
-      creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
+      creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b.getHeader).foldM(-1) {
                                         case (_, Justification(_, latestBlockHash)) =>
                                           dag.lookup(latestBlockHash).flatMap {
                                             case Some(meta) =>
@@ -442,21 +432,25 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
                                           }
                                       }
       number = b.getHeader.validatorBlockSeqNum
-      result = creatorJustificationSeqNumber + 1 == number
-      _ <- (for {
-            _ <- Log[F].warn(
-                  ignore(
-                    b,
-                    s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
+      ok     = creatorJustificationSeqNumber + 1 == number
+      _ <- if (ok) {
+            Applicative[F].unit
+          } else {
+            for {
+              _ <- Log[F].warn(
+                    ignore(
+                      b,
+                      s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
+                    )
                   )
-                )
-            _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidSequenceNumber)
-          } yield ()).whenA(!result)
+              _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidSequenceNumber)
+            } yield ()
+          }
     } yield ()
 
   // Agnostic of justifications
   def chainIdentifier(
-      b: Block,
+      b: BlockSummary,
       chainId: String
   ): F[Unit] =
     if (b.getHeader.chainId == chainId) {
@@ -506,6 +500,15 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
     }
   }
 
+  def summaryHash(
+      b: BlockSummary
+  ): F[Unit] = {
+    val blockHashComputed = ProtoUtil.protoHash(b.getHeader)
+    val ok                = b.blockHash == blockHashComputed
+    (Log[F].warn(s"Invalid block hash ${PrettyPrinter.buildString(b.blockHash)}") *>
+      FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBlockHash)).whenA(!ok)
+  }
+
   def deployCount(
       b: Block
   ): F[Unit] =
@@ -531,6 +534,7 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
   def parents(
       b: Block,
       lastFinalizedBlockHash: BlockHash,
+      genesisBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
@@ -544,12 +548,15 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.getHeader.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
+      tipHashes            <- Estimator.tips[F](dag, genesisBlockHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
       computedParentHashes = merged.parents.map(_.blockHash)
-      _ <- if (parentHashes == computedParentHashes)
+      parentHashes         = ProtoUtil.parentHashes(b)
+      _ <- if (parentHashes.isEmpty)
+            FunctorRaise[F, InvalidBlock].raise[Unit](InvalidParents)
+          else if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {
             val parentsString =
@@ -578,15 +585,19 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
    * This check must come before Validate.parents
    */
   def justificationFollows(
-      b: Block,
+      b: BlockSummary,
       genesis: Block,
       dag: BlockDagRepresentation[F]
   ): F[Unit] = {
-    val justifiedValidators = b.getHeader.justifications.map(_.validatorPublicKey).toSet
-    val mainParentHash      = ProtoUtil.parentHashes(b).head
+    val raiseNoParent =
+      Log[F].warn(ignore(b, s"doesn't have a parent.")) *>
+        FunctorRaise[F, InvalidBlock].raise[Unit](InvalidFollows)
     for {
-      mainParent       <- ProtoUtil.unsafeGetBlock[F](mainParentHash)
-      bondedValidators = ProtoUtil.bonds(mainParent).map(_.validatorPublicKey).toSet
+      _                   <- raiseNoParent.whenA(b.getHeader.parentHashes.isEmpty)
+      justifiedValidators = b.getHeader.justifications.map(_.validatorPublicKey).toSet
+      mainParentHash      = b.getHeader.parentHashes.head
+      mainParent          <- ProtoUtil.unsafeGetBlockSummary[F](mainParentHash)
+      bondedValidators    = ProtoUtil.bonds(mainParent).map(_.validatorPublicKey).toSet
       status <- if (bondedValidators == justifiedValidators) {
                  Applicative[F].unit
                } else {
@@ -613,7 +624,7 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
    * let checkEquivocations handle it instead.
    */
   def justificationRegressions(
-      b: Block,
+      b: BlockSummary,
       genesis: Block,
       dag: BlockDagRepresentation[F]
   ): F[Unit] = {
@@ -638,8 +649,8 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
     } yield result
   }
 
-  private def justificationRegressionsAux(
-      b: Block,
+  def justificationRegressionsAux(
+      b: BlockSummary,
       latestMessagesOfBlock: Map[Validator, BlockHash],
       latestMessagesFromSenderView: Map[Validator, BlockHash],
       genesis: Block
@@ -648,7 +659,7 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
       containsJustificationRegression <- latestMessagesOfBlock.toList.existsM {
                                           case (validator, currentBlockJustificationHash) =>
                                             if (validator == b.getHeader.validatorPublicKey) {
-                                              // We let checkEquivocations handle this case
+                                              // W`e let checkEquivocations handle this case
                                               false.pure[F]
                                             } else {
                                               val previousBlockJustificationHash =
@@ -672,15 +683,15 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
           }
     } yield ()
 
-  private def isJustificationRegression(
+  def isJustificationRegression(
       currentBlockJustificationHash: BlockHash,
       previousBlockJustificationHash: BlockHash
   ): F[Boolean] =
     for {
       currentBlockJustification <- ProtoUtil
-                                    .unsafeGetBlock[F](currentBlockJustificationHash)
+                                    .unsafeGetBlockSummary[F](currentBlockJustificationHash)
       previousBlockJustification <- ProtoUtil
-                                     .unsafeGetBlock[F](previousBlockJustificationHash)
+                                     .unsafeGetBlockSummary[F](previousBlockJustificationHash)
     } yield
       if (currentBlockJustification.getHeader.validatorBlockSeqNum < previousBlockJustification.getHeader.validatorBlockSeqNum) {
         true

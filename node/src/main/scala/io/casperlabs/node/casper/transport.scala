@@ -1,7 +1,7 @@
 package io.casperlabs.node.casper
 
 import cats._
-import cats.effect.{Concurrent, Resource}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.instances.option._
 import cats.instances.unit._
 import cats.mtl.{ApplicativeAsk, MonadState}
@@ -16,7 +16,6 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits.bracketEitherTThrowable
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
@@ -59,6 +58,7 @@ package object transport {
       rpConfState: MonadState[Task, RPConf],
       multiParentCasperRef: MultiParentCasperRef[Effect],
       executionEngineService: ExecutionEngineService[Effect],
+      finalizationHandler: LastFinalizedBlockHashContainer[Effect],
       validation: Validation[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {
@@ -100,7 +100,7 @@ package object transport {
 
       implicit0(timeEff: Time[Effect]) = Time[Effect]
 
-      defaultTimeout = conf.server.defaultTimeout.millis
+      defaultTimeout = conf.server.defaultTimeout
 
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](

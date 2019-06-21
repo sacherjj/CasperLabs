@@ -16,7 +16,7 @@ from . import CasperMessage_pb2
 from .CasperMessage_pb2_grpc import DeployServiceStub
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
-from . import casper_pb2
+from . import casper_pb2 as casper
 from .casper_pb2_grpc import CasperServiceStub
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
@@ -132,11 +132,11 @@ class CasperClient:
         def read_code(file_name: str):
             return consensus.Deploy.Code(code = read_binary(file_name))
 
-        signing_key = ed25519.SigningKey(read_binary(private_key))
 
         def sign(data: bytes):
-            return consensus.Signature(sig_algorithm = 'ed25519',
-                                       sig = signing_key.sign(data, encoding='base16'))
+            return (private_key
+                    and consensus.Signature(sig_algorithm = 'ed25519',
+                                            sig = ed25519.SigningKey(read_binary(private_key)).sign(data, encoding='base16')))
 
         def serialize(o) -> bytes:
             return o.SerializeToString()
@@ -144,7 +144,7 @@ class CasperClient:
         body = consensus.Deploy.Body(session = read_code(session),
                                      payment = read_code(payment))
 
-        account_public_key = read_binary(public_key)
+        account_public_key = public_key and read_binary(public_key)
         header = consensus.Deploy.Header(account_public_key = account_public_key, 
                                          nonce = nonce,
                                          timestamp = int(time.time()),
@@ -153,12 +153,12 @@ class CasperClient:
 
         deploy_hash = hash(serialize(header))
         d = consensus.Deploy(deploy_hash = deploy_hash,
-                             approvals = [consensus.Approval(approver_public_key = account_public_key, signature = sign(deploy_hash))],
+                             approvals = [consensus.Approval(approver_public_key = account_public_key, signature = sign(deploy_hash))]
+                                         if account_public_key else [],
                              header = header,
                              body = body)
 
-        # TODO: we may want to return deploy_hash base16 encoded
-        return self.casperService.Deploy(casper_pb2.DeployRequest(deploy = d)), deploy_hash
+        return self.casperService.Deploy(casper.DeployRequest(deploy = d)), deploy_hash
 
 
     @guarded
@@ -222,8 +222,20 @@ class CasperClient:
                                   'address'.
         :return:                  QueryStateResponse object
         """
-        return self.node.queryState(
-            CasperMessage_pb2.QueryStateRequest(block_hash=blockHash, key_bytes=key, key_variant=keyType, path=path))
+        def key_variant(keyType):
+            return {'hash': casper.StateQuery.KeyVariant.HASH,
+                    'uref': casper.StateQuery.KeyVariant.UREF,
+                    'address': casper.StateQuery.KeyVariant.ADDRESS}[keyType]
+
+        def path_segments(path):
+            return path.split('/')
+
+        return self.casperService.GetBlockState(
+            casper.GetBlockStateRequest(block_hash_base16 = blockHash,
+                                        query = casper.StateQuery(
+                                                    key_variant = key_variant(keyType),
+                                                    key_base16 = key,
+                                                    path_segments = path_segments(path))))
 
     @guarded
     def showMainChain(self, depth: int):

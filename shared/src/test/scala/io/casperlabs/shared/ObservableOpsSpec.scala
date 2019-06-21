@@ -21,14 +21,14 @@ class ObservableOpsSpec extends WordSpec with Matchers {
           .range(0, 100, 1)
           .doOnNext(_ => Task.delay(cnt += 1))
           .withConsumerTimeout(100.millis)
-          .mapEval(x => Task.pure(x).delayResult(250.millis))
+          .mapEval(x => Task.pure(x).delayResult(1.second))
           .toListL
           .attempt
 
-        val res = list.runSyncUnsafe(2.seconds)
+        val res = list.runSyncUnsafe(5.seconds)
         res.isLeft shouldBe true
         res.left.get.getMessage shouldBe "Stream item not consumed within 100 milliseconds."
-        cnt shouldBe 1
+        cnt should be <= 2
       }
     }
 

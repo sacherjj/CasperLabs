@@ -27,11 +27,11 @@ import scala.io.Source
   */
 final case class Configuration(
     server: Configuration.Server,
-    grpc: Configuration.GrpcServer,
+    grpc: Configuration.Grpc,
     tls: Tls,
     casper: CasperConf,
     lmdb: LMDBBlockStore.Config,
-    blockstorage: BlockDagFileStorage.Config,
+    blockstorage: Configuration.BlockStorage,
     metrics: Configuration.Kamon,
     influx: Option[Configuration.Influx]
 )
@@ -60,7 +60,7 @@ object Configuration extends ParserImplicits {
       kademliaPort: Int,
       dynamicHostAddress: Boolean,
       noUpnp: Boolean,
-      defaultTimeout: Int,
+      defaultTimeout: FiniteDuration,
       bootstrap: Option[Node],
       dataDir: Path,
       storeType: StoreType,
@@ -91,11 +91,16 @@ object Configuration extends ParserImplicits {
       cleanBlockStorage: Boolean
   ) extends SubConfig
 
-  case class GrpcServer(
-      host: String,
+  case class BlockStorage(
+      latestMessagesLogMaxSizeFactor: Int,
+      cacheMaxSizeBytes: Long
+  ) extends SubConfig
+
+  case class Grpc(
       socket: Path,
       portExternal: Int,
-      portInternal: Int
+      portInternal: Int,
+      useTls: Boolean
   ) extends SubConfig
 
   sealed trait Command extends Product with Serializable
@@ -123,9 +128,8 @@ object Configuration extends ParserImplicits {
         case (k, v) if k.startsWith("CL_") && isSnakeCase(k) => List(SnakeCase(k) -> v)
         case _                                               => Nil
       }
-    } yield
-      parse(options.fieldByName, envSnakeCase, maybeConfigFile, defaultDataDir, defaults)
-        .map(conf => (command, conf))
+    } yield parse(options.fieldByName, envSnakeCase, maybeConfigFile, defaultDataDir, defaults)
+      .map(conf => (command, conf))
     res.fold(_.invalidNel[(Command, Configuration)], identity)
   }
 
@@ -250,9 +254,8 @@ object Configuration extends ParserImplicits {
     for {
       tbl          <- Toml.parse(content)
       dashifiedMap = flatten(tbl.values)
-    } yield
-      dashifiedMap.map {
-        case (k, v) => (dashToCamel(k), v)
-      }
+    } yield dashifiedMap.map {
+      case (k, v) => (dashToCamel(k), v)
+    }
   }
 }

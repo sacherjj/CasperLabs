@@ -4,18 +4,12 @@ import cats.MonadError
 import cats.mtl.FunctorRaise
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.{BlockSummary, Bond}
+import io.casperlabs.casper.consensus.state.Value
+import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion}
+import io.casperlabs.casper.consensus.{state, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.crypto.Keys.PublicKey
-import io.casperlabs.ipc.{
-  Deploy,
-  DeployResult,
-  Key,
-  ProtocolVersion,
-  TransformEntry,
-  ValidateRequest,
-  Value
-}
+import io.casperlabs.ipc.{Deploy, DeployResult, TransformEntry, ValidateRequest}
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -24,36 +18,37 @@ import monix.eval.Task
 trait DeriveValidationLowPriority2 {
   //Should not reach these implementations
   def emptyEE[F[_]] = new ExecutionEngineService[F] {
-    override def emptyStateHash: BlockHash = ???
+    override def emptyStateHash: DeployHash = ???
     override def exec(
-        prestate: BlockHash,
+        prestate: DeployHash,
         deploys: Seq[Deploy],
         protocolVersion: ProtocolVersion
-    ): F[Either[Throwable, Seq[DeployResult]]] =
-      ???
+    ): F[Either[Throwable, Seq[DeployResult]]] = ???
     override def commit(
-        prestate: BlockHash,
+        prestate: DeployHash,
         effects: Seq[TransformEntry]
-    ): F[Either[Throwable, BlockHash]]                                             = ???
-    override def computeBonds(hash: BlockHash)(implicit log: Log[F]): F[Seq[Bond]] = ???
-    override def setBonds(bonds: Map[PublicKey, Long]): F[Unit]                    = ???
+    ): F[Either[Throwable, DeployHash]]                                             = ???
+    override def computeBonds(hash: DeployHash)(implicit log: Log[F]): F[Seq[Bond]] = ???
+    override def setBonds(bonds: Map[PublicKey, Long]): F[Unit]                     = ???
     override def query(
-        state: BlockHash,
+        state: DeployHash,
         baseKey: Key,
         path: Seq[String]
     ): F[Either[Throwable, Value]]                                               = ???
     override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] = ???
   }
   def emptyBS[F[_]] = new BlockStore[F] {
-    override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]    = ???
-    override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]]   = ???
-    override def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit]         = ???
-    override def getApprovedBlock(): F[Option[ApprovedBlock]]                   = ???
-    override def putApprovedBlock(block: ApprovedBlock): F[Unit]                = ???
-    override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] = ???
-    override def checkpoint(): F[Unit]                                          = ???
-    override def clear(): F[Unit]                                               = ???
-    override def close(): F[Unit]                                               = ???
+    override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]  = ???
+    override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] = ???
+    override def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
+      ???
+    override def getApprovedBlock(): F[Option[ApprovedBlock]]                             = ???
+    override def putApprovedBlock(block: ApprovedBlock): F[Unit]                          = ???
+    override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]]           = ???
+    override def findBlockHashesWithDeployhash(deployHash: DeployHash): F[Seq[BlockHash]] = ???
+    override def checkpoint(): F[Unit]                                                    = ???
+    override def clear(): F[Unit]                                                         = ???
+    override def close(): F[Unit]                                                         = ???
   }
 
   implicit def deriveValidationImplWithoutEEAndBS[F[_]](

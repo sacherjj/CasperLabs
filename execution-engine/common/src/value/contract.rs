@@ -28,6 +28,10 @@ impl Contract {
         &self.known_urefs
     }
 
+    pub fn get_urefs_lookup_mut(&mut self) -> &mut BTreeMap<String, Key> {
+        &mut self.known_urefs
+    }
+
     pub fn destructure(self) -> (Vec<u8>, BTreeMap<String, Key>, u64) {
         (self.bytes, self.known_urefs, self.protocol_version)
     }

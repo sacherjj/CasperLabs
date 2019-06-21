@@ -11,6 +11,7 @@ import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
+import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService

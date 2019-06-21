@@ -1,27 +1,26 @@
 package io.casperlabs.casper.util.execengine
 
-import cats.implicits._
 import cats.Id
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
-import io.casperlabs.casper.consensus
-import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtilTest._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
-import io.casperlabs.casper.{InvalidPostStateHash, InvalidPreStateHash, ValidationImpl}
+import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
+import io.casperlabs.casper.consensus.state._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
-
-import Op.OpMap
-
-import ExecEngineUtilTest._
 
 class ExecEngineUtilTest
     extends FlatSpec
@@ -109,7 +108,7 @@ class ExecEngineUtilTest
   def computeSingleProcessedDeploy(
       dag: BlockDagRepresentation[Task],
       deploy: Seq[consensus.Deploy],
-      protocolVersion: ProtocolVersion = ProtocolVersion(1)
+      protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
       implicit blockStore: BlockStore[Task],
       executionEngineService: ExecutionEngineService[Task]
@@ -121,7 +120,7 @@ class ExecEngineUtilTest
                           deploy,
                           protocolVersion
                         )
-      DeploysCheckpoint(_, _, result, _, _) = computeResult
+      DeploysCheckpoint(_, _, result, _, _, _, _) = computeResult
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
@@ -157,31 +156,6 @@ class ExecEngineUtilTest
         } yield batchResult should contain theSameElementsAs singleResults
   }
 
-  it should "keep track of different deploys with identical effects (NODE-376)" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
-        // Create multiple identical deploys.
-        val startTime = System.currentTimeMillis
-        val deploys = List.range(0, 10).map { i =>
-          ProtoUtil.sourceDeploy(
-            ByteString.copyFromUtf8("Doesn't matter what this is."),
-            startTime + i,
-            Integer.MAX_VALUE
-          )
-        }
-        for {
-          dag <- blockDagStorage.getRepresentation
-          checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
-                         merged = ExecEngineUtil.MergeResult.empty,
-                         deploys = deploys,
-                         ProtocolVersion(1)
-                       )
-        } yield {
-          val processedDeploys = checkpoint.deploysForBlock.map(_.getDeploy)
-          processedDeploys should contain theSameElementsInOrderAs deploys
-      }
-  }
-
   "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val failedExecEEService: ExecutionEngineService[Task] =
@@ -200,7 +174,7 @@ class ExecEngineUtilTest
             Task.now {
               def getExecutionEffect(deploy: ipc.Deploy) = {
                 val key =
-                  Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
+                  Key(Key.Value.Hash(Key.Hash(ByteString.copyFromUtf8(deploy.toProtoString))))
                 val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
                 val op            = ipc.Op(ipc.Op.OpInstance.Noop(io.casperlabs.ipc.NoOp()))
                 val transforEntry = TransformEntry(Some(key), Some(transform))
@@ -208,7 +182,14 @@ class ExecEngineUtilTest
                 ExecutionEffect(Seq(opEntry), Seq(transforEntry))
               }
               deploys
-                .map(d => DeployResult(10, DeployResult.Result.Effects(getExecutionEffect(d))))
+                .map(
+                  d =>
+                    DeployResult(
+                      DeployResult.Value.ExecutionResult(
+                        DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
+                      )
+                    )
+                )
                 .asRight[Throwable]
             },
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],

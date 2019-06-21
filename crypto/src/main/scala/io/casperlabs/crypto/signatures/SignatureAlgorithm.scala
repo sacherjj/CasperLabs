@@ -259,8 +259,7 @@ object SignatureAlgorithm {
               }
           }
       } catch {
-        case NonFatal(_) =>
-          None
+        case NonFatal(_) => None
       }
 
     /**
@@ -295,8 +294,7 @@ object SignatureAlgorithm {
             )
           }
       } catch {
-        case NonFatal(_) =>
-          None
+        case NonFatal(_) => None
       }
 
     override def newKeyPair: (PrivateKey, PublicKey) = {

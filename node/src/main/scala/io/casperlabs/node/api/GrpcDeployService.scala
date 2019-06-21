@@ -3,19 +3,18 @@ package io.casperlabs.node.api
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.{ApplicativeError, Id}
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
-import io.casperlabs.casper.api.{BlockAPI}
-import io.casperlabs.casper.protocol.{DeployData, DeployServiceResponse, _}
+import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.protocol._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.comm.ServiceError.Unimplemented
-import io.casperlabs.ipc
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.node.api.Utils.toKey
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.{Task, TaskLike}
@@ -23,49 +22,6 @@ import monix.execution.Scheduler
 import monix.reactive.Observable
 
 object GrpcDeployService {
-  def toKey[F[_]](keyType: String, keyValue: String)(
-      implicit appErr: ApplicativeError[F, Throwable]
-  ): F[ipc.Key] = {
-    val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))
-    keyType.toLowerCase match {
-      case "hash" =>
-        keyBytes.size match {
-          case 32 => ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes))).pure[F]
-          case n =>
-            appErr.raiseError(
-              new Exception(
-                s"Key of type hash must have exactly 32 bytes, $n =/= 32 provided."
-              )
-            )
-        }
-      case "uref" =>
-        keyBytes.size match {
-          case 32 => ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes))).pure[F]
-          case n =>
-            appErr.raiseError(
-              new Exception(
-                s"Key of type uref must have exactly 32 bytes, $n =/= 32 provided."
-              )
-            )
-        }
-      case "address" =>
-        keyBytes.size match {
-          case 32 => ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes))).pure[F]
-          case n =>
-            appErr.raiseError(
-              new Exception(
-                s"Key of type address must have exactly 32 bytes, $n =/= 32 provided."
-              )
-            )
-        }
-      case _ =>
-        appErr.raiseError(
-          new Exception(
-            s"Key variant $keyType not valid. Must be one of hash, uref, address."
-          )
-        )
-    }
-  }
 
   def splitPath(path: String): Seq[String] =
     path.split("/").filter(_.nonEmpty)

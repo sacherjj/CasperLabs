@@ -1,10 +1,12 @@
 package io.casperlabs.blockstorage
 
+import cats.implicits._
+import cats.Monad
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.metrics.{Metered, Metrics}
+import io.casperlabs.metrics.Metered
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
@@ -51,4 +53,27 @@ trait BlockDagRepresentation[F[_]] {
 
 object BlockDagRepresentation {
   type Validator = ByteString
+
+  implicit class BlockDagRepresentationRich[F[_]](
+      blockDagRepresentation: BlockDagRepresentation[F]
+  ) {
+    def getMainChildren(
+        blockHash: BlockHash
+    )(implicit monad: Monad[F]): F[Option[List[BlockHash]]] =
+      blockDagRepresentation.children(blockHash).flatMap {
+        case Some(children) =>
+          for {
+            mainChildren <- children.toList.filterA { child =>
+                             blockDagRepresentation.lookup(child).map {
+                               // make sure child's main parent's hash equal to `blockHash`
+                               case Some(blockMetadata) => blockMetadata.parents.head == blockHash
+                               case None                => false
+                             }
+                           }
+          } yield Some(mainChildren)
+        case None => none[List[BlockHash]].pure[F]
+      }
+  }
+
+  def apply[F[_]](implicit ev: BlockDagRepresentation[F]): BlockDagRepresentation[F] = ev
 }

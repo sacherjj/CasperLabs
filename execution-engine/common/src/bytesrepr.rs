@@ -1,6 +1,7 @@
 use super::alloc::collections::BTreeMap;
-use super::alloc::string::String;
+use super::alloc::string::{String, ToString};
 use super::alloc::vec::Vec;
+use core::fmt::Display;
 use core::mem::{size_of, MaybeUninit};
 
 use failure::Fail;
@@ -13,6 +14,7 @@ pub const U64_SIZE: usize = size_of::<u64>();
 pub const U128_SIZE: usize = size_of::<u128>();
 pub const U256_SIZE: usize = U128_SIZE * 2;
 pub const U512_SIZE: usize = U256_SIZE * 2;
+pub const OPTION_SIZE: usize = 1;
 
 pub const N32: usize = 32;
 const N256: usize = 256;
@@ -38,6 +40,15 @@ pub enum Error {
 
     #[fail(display = "Serialization error: out of memory")]
     OutOfMemoryError,
+
+    #[fail(display = "Serialization error: {}", _0)]
+    CustomError(String),
+}
+
+impl Error {
+    pub fn custom<T: Display>(msg: T) -> Error {
+        Error::CustomError(msg.to_string())
+    }
 }
 
 pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
@@ -165,24 +176,24 @@ impl<T: ToBytes> ToBytes for Option<T> {
         match self {
             Some(v) => {
                 let mut value = v.to_bytes()?;
-                if value.len() >= u32::max_value() as usize - U32_SIZE {
+                if value.len() >= u32::max_value() as usize - U8_SIZE {
                     return Err(Error::OutOfMemoryError);
                 }
-                let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + value.len());
-                result.append(&mut 1u32.to_bytes()?);
+                let mut result: Vec<u8> = Vec::with_capacity(U8_SIZE + value.len());
+                result.append(&mut 1u8.to_bytes()?);
                 result.append(&mut value);
                 Ok(result)
             }
             // In the case of None there is no value to serialize, but we still
             // need to write out a tag to indicate which variant we are using
-            None => Ok(0u32.to_bytes()?),
+            None => Ok(0u8.to_bytes()?),
         }
     }
 }
 
 impl<T: FromBytes> FromBytes for Option<T> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (tag, rem): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (tag, rem): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         match tag {
             0 => Ok((None, rem)),
             1 => {

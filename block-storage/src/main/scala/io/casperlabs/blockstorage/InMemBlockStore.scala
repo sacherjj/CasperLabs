@@ -1,10 +1,10 @@
 package io.casperlabs.blockstorage
 
-import cats._
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
+import cats.{Apply, Monad}
+import io.casperlabs.blockstorage.BlockStore.{BlockHash, DeployHash, MeteredBlockStore}
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
@@ -17,6 +17,7 @@ class InMemBlockStore[F[_]] private (
     implicit
     monadF: Monad[F],
     refF: Ref[F, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]],
+    reverseIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]],
     approvedBlockRef: Ref[F, Option[ApprovedBlock]]
 ) extends BlockStore[F] {
 
@@ -26,10 +27,22 @@ class InMemBlockStore[F[_]] private (
   override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
     refF.get.map(_.keys.find(p))
 
-  def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
-    refF.update(
-      _ + (f._1 -> (f._2, f._2.toBlockSummary))
-    )
+  def put(
+      blockHash: BlockHash,
+      blockMsgWithTransform: BlockMsgWithTransform
+  ): F[Unit] =
+    refF
+      .update(
+        _ + (blockHash -> (blockMsgWithTransform, blockMsgWithTransform.toBlockSummary))
+      ) *>
+      reverseIdxRefF.update { m =>
+        blockMsgWithTransform.getBlockMessage.getBody.deploys.foldLeft(m) { (m, d) =>
+          m.updated(
+            d.getDeploy.deployHash,
+            m.getOrElse(d.getDeploy.deployHash, Seq.empty[BlockHash]) :+ blockHash
+          )
+        }
+      }
 
   def getApprovedBlock(): F[Option[ApprovedBlock]] =
     approvedBlockRef.get
@@ -39,6 +52,9 @@ class InMemBlockStore[F[_]] private (
 
   override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
     refF.get.map(_.get(blockHash).map(_._2))
+
+  override def findBlockHashesWithDeployhash(deployHash: BlockHash): F[Seq[BlockHash]] =
+    reverseIdxRefF.get.map(_.getOrElse(deployHash, Seq.empty[BlockHash]).distinct)
 
   def checkpoint(): F[Unit] =
     ().pure[F]
@@ -55,6 +71,7 @@ object InMemBlockStore {
       implicit
       monadF: Monad[F],
       refF: Ref[F, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]],
+      reverseIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]],
       approvedBlockRef: Ref[F, Option[ApprovedBlock]],
       metricsF: Metrics[F]
   ): BlockStore[F] =
@@ -69,4 +86,11 @@ object InMemBlockStore {
   ): F[Ref[F, Map[BlockHash, V]]] =
     Ref[F].of(Map.empty[BlockHash, V])
 
+  def empty[F[_]: Sync: Metrics] =
+    for {
+      blockMapRef      <- Ref[F].of(Map.empty[BlockHash, (BlockMsgWithTransform, BlockSummary)])
+      deployMapRef     <- Ref[F].of(Map.empty[DeployHash, Seq[BlockHash]])
+      approvedBlockRef <- Ref.of[F, Option[ApprovedBlock]](None)
+      store            = create[F](Sync[F], blockMapRef, deployMapRef, approvedBlockRef, Metrics[F])
+    } yield store
 }

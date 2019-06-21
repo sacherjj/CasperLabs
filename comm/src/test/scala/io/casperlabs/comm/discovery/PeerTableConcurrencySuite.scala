@@ -64,7 +64,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
         bucket    <- peerTable.tableRef.get.map(_(distance).map(_.node))
       } yield bucket
 
-      addNodesParallel.runSyncUnsafe() should contain theSameElementsAs unique
+      addNodesParallel.runSyncUnsafe(5.seconds) should contain theSameElementsAs unique
       pingCounter shouldBe 0
     }
   }
@@ -86,11 +86,10 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
       fillBucket.runSyncUnsafe()
       hangUp.runAsyncAndForget
 
-      Task
-        .race(Task.sleep(1.second), peerTable.peersAscendingDistance)
-        .runSyncUnsafe()
-        .right
-        .get should contain theSameElementsAs initial
+      val peers = peerTable.peersAscendingDistance
+        .runSyncUnsafe(5.seconds)
+
+      peers should contain theSameElementsAs initial
     }
   }
 
@@ -115,7 +114,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
         peers     <- peerTable.peersAscendingDistance
       } yield peers
 
-      addNodesParallel.runSyncUnsafe() should contain theSameElementsAs initial
+      addNodesParallel.runSyncUnsafe(15.seconds) should contain theSameElementsAs initial
       pingsCounter.get() shouldBe restReplicated.size
     }
   }

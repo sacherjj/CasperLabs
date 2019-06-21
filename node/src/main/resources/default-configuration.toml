@@ -20,7 +20,7 @@ dynamic-host-address = false
 no-upnp = false
 
 # Default timeout for roundtrip connections.
-default-timeout = 2000
+default-timeout = "5second"
 
 # Bootstrap casperlabs node address for initial seed.
 # bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
@@ -129,6 +129,8 @@ use-tls = false
 # Size factor for squashing block storage latest messages.
 latest-messages-log-max-size-factor = 10
 
+# Maximum size of the in-memory block cache in bytes.
+cache-max-size-bytes = 262144000
 
 # io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]
@@ -142,9 +144,11 @@ socket = "$HOME/.casperlabs/.casper-node.sock"
 # Port used for external gRPC API, e.g. deployments.
 port-external = 40401
 
-# Port used for internal gRPC API, e.g. diagnostics.
+# Port used for internal gRPC API, e.g. proposing blocks, diagnostics.
 port-internal = 40402
 
+# Whether to enable TLS encryption on the public facing gRPC interfaces (e.g. deployments).
+use-tls = false
 
 # io.casperlabs.comm.transport.Tls
 [tls]

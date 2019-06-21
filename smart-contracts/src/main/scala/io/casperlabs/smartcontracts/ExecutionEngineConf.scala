@@ -3,12 +3,14 @@ package io.casperlabs.smartcontracts
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
+import cats.effect.concurrent.Ref
 import cats.effect.{Resource, Sync}
 import cats.syntax.applicative._
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import cats.syntax.apply._
 import io.casperlabs.ipc.IpcGrpcMonix
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.grpc.ManagedChannel
 import io.grpc.netty.NettyChannelBuilder
@@ -17,7 +19,7 @@ import io.netty.channel.kqueue.{KQueueDomainSocketChannel, KQueueEventLoopGroup}
 import io.netty.channel.unix.DomainSocketAddress
 import monix.eval.TaskLift
 
-class ExecutionEngineConf[F[_]: Sync: Log: TaskLift](
+class ExecutionEngineConf[F[_]: Sync: Log: TaskLift: Metrics](
     addr: Path,
     maxMessageSize: Int,
     initBonds: Map[Array[Byte], Long]
@@ -59,10 +61,11 @@ class ExecutionEngineConf[F[_]: Sync: Log: TaskLift](
     val res = for {
       channel <- channelF
       stub    <- Sync[F].delay(IpcGrpcMonix.stub(channel))
-    } yield
-      Resource.make(
-        Sync[F].delay(new GrpcExecutionEngineService[F](addr, maxMessageSize, initBonds, stub))
-      )(_ => stop(channel))
+    } yield Resource.make(
+      Sync[F].delay(
+        new GrpcExecutionEngineService[F](addr, maxMessageSize, initBonds, stub)
+      )
+    )(_ => stop(channel))
 
     Resource.suspend(res)
   }

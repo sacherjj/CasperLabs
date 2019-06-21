@@ -2,43 +2,65 @@ from typing import Optional
 import logging
 
 from test.cl_node.client_base import CasperLabsClient
-#from casper_client import CasperClient
+from test.cl_node.nonce_registry import NonceRegistry
+from casper_client import CasperClient
 
 
 class PythonClient(CasperLabsClient):
 
     def __init__(self, node: 'DockerNode'):
         self.node = node
-        self.client = None #CasperClient(host=self.node.container_name)
+        self.client = CasperClient(host=self.node.container_name,
+                                   internal_port=self.node.grpc_internal_docker_port,
+                                   port=self.node.grpc_external_docker_port)
+        logging.info(f'PythonClient(host={self.node.container_name}, '
+                     f'port={self.node.grpc_external_docker_port}, '
+                     f'internal_port={self.node.grpc_internal_docker_port})')
 
     @property
     def client_type(self) -> str:
         return 'python'
 
     def deploy(self,
-               from_address: str = "00000000000000000000000000000000",
+               from_address: str = "3030303030303030303030303030303030303030303030303030303030303030",
                gas_limit: int = 1000000,
                gas_price: int = 1,
-               nonce: int = 0,
+               nonce: int = None,
                session_contract: Optional[str] = 'test_helloname.wasm',
                payment_contract: Optional[str] = 'test_helloname.wasm') -> str:
-        # TODO: Will need actual path to local contracts.
+
+        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(from_address)
+
+        resources_path = self.node.resources_folder
+        session_contract_path = str(resources_path / session_contract)
+        payment_contract_path = str(resources_path / payment_contract)
+
         logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
-                     f'payment_contract={payment_contract}, session_contract={session_contract}, '
-                     f'nonce={nonce})')
-        return self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price,
-                                  payment_contract, session_contract, nonce)
+                     f'payment_contract={payment_contract_path}, session_contract={session_contract_path}, '
+                     f'nonce={deploy_nonce})')
+
+        r = self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price, payment_contract, session_contract, deploy_nonce)
+        return r
 
     def propose(self) -> str:
         logging.info(f'PY_CLIENT.propose() for {self.node.container_name}')
         return self.client.propose()
 
+    def queryState(self, blockHash: str, key: str, path: str, keyType: str):
+        return self.client.queryState(blockHash, key, path, keyType)
+
     def show_block(self, block_hash: str) -> str:
-        pass
+        # TODO:
+        raise Exception("Not implemented yet")
 
     def show_blocks(self, depth: int):
         return self.client.showBlocks(depth)
 
     def get_blocks_count(self, depth: int) -> int:
-        block_count = sum([1 for _ in self.show_blocks(depth)])
-        return block_count
+        return len(list(self.show_blocks(depth)))
+
+    def show_deploys(self, hash: str):
+        raise Exception("Not implemented yet")
+
+    def show_deploy(self, hash: str):
+        raise Exception("Not implemented yet")

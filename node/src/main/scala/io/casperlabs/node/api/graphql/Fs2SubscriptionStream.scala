@@ -17,7 +17,7 @@ import scala.util.{Failure, Success}
   *
   * Needed because http4s uses [[fs2.Stream]].
   */
-private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit ec: ExecutionContext)
+private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit val ec: ExecutionContext)
     extends SubscriptionStream[Stream[F, ?]] {
 
   override def supported[T[_]](other: SubscriptionStream[T]): Boolean =
@@ -37,8 +37,10 @@ private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit ec: Executio
   override def first[T](s: Stream[F, T]): Future[T] =
     s.head.compile.toList.toIO.unsafeToFuture().map(_.head)
 
-  override def failed[T](e: Throwable): Stream[F, T] =
-    Stream.raiseError[F](e)
+  override def failed[T](t: Throwable): Stream[F, T] =
+    t match {
+      case NonFatal(e) => Stream.raiseError[F](e)
+    }
 
   override def onComplete[Ctx, Res](result: Stream[F, Res])(op: => Unit): Stream[F, Res] =
     result.onFinalize(Sync[F].delay(op))
@@ -69,4 +71,11 @@ private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit ec: Executio
     stream.recover {
       case NonFatal(e) => fn(e)
     }
+}
+
+private[graphql] object Fs2SubscriptionStream {
+  def apply[F[_]](
+      implicit fs2SubscriptionStream: Fs2SubscriptionStream[F]
+  ): Fs2SubscriptionStream[F] =
+    fs2SubscriptionStream
 }

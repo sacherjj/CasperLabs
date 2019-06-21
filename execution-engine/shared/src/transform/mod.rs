@@ -41,6 +41,7 @@ pub enum Transform {
     Identity,
     Write(Value),
     AddInt32(i32),
+    AddUInt64(u64),
     AddUInt128(U128),
     AddUInt256(U256),
     AddUInt512(U512),
@@ -73,6 +74,7 @@ use self::Transform::*;
 
 from_try_from_impl!(Value, Write);
 from_try_from_impl!(i32, AddInt32);
+from_try_from_impl!(u64, AddUInt64);
 from_try_from_impl!(U128, AddUInt128);
 from_try_from_impl!(U256, AddUInt256);
 from_try_from_impl!(U512, AddUInt512);
@@ -93,6 +95,16 @@ where
         // greater than 0.
         let j_abs = j.abs().to_u32().unwrap();
         i.wrapping_sub(&j_abs.into())
+    }
+}
+
+fn u64_wrapping_addition(i: u64, j: i32) -> i32 {
+    let i32_max_as_u64 = i32::max_value().to_u64().unwrap();
+    if i > i32_max_as_u64 {
+        let remainder = (i % i32_max_as_u64).to_i32().unwrap();
+        j.wrapping_add(remainder)
+    } else {
+        j.wrapping_add(i.to_i32().unwrap())
     }
 }
 
@@ -119,11 +131,27 @@ impl Transform {
             Write(w) => Ok(w),
             AddInt32(i) => match v {
                 Value::Int32(j) => Ok(Value::Int32(j.wrapping_add(i))),
+                Value::UInt64(j) => Ok(Value::UInt64(i32_wrapping_addition(j, i))),
                 Value::UInt128(j) => Ok(Value::UInt128(i32_wrapping_addition(j, i))),
                 Value::UInt256(j) => Ok(Value::UInt256(i32_wrapping_addition(j, i))),
                 Value::UInt512(j) => Ok(Value::UInt512(i32_wrapping_addition(j, i))),
                 other => {
                     let expected = String::from("Int32");
+                    Err(TypeMismatch {
+                        expected,
+                        found: other.type_string(),
+                    }
+                    .into())
+                }
+            },
+            AddUInt64(i) => match v {
+                Value::Int32(j) => Ok(Value::Int32(u64_wrapping_addition(i, j))),
+                Value::UInt64(j) => Ok(Value::UInt64(i.wrapping_add(j))),
+                Value::UInt128(_) => wrapping_addition(i, v, "UInt128"),
+                Value::UInt256(_) => wrapping_addition(i, v, "UInt256"),
+                Value::UInt512(_) => wrapping_addition(i, v, "UInt512"),
+                other => {
+                    let expected = String::from("UInt64");
                     Err(TypeMismatch {
                         expected,
                         found: other.type_string(),
@@ -163,10 +191,17 @@ impl Transform {
 /// again.
 fn wrapped_transform_addition<T>(i: T, b: Transform, expected: &str) -> Transform
 where
-    T: WrappingAdd + WrappingSub + From<u32> + Into<Transform> + TryFrom<Transform, Error = String>,
+    T: WrappingAdd
+        + WrappingSub
+        + From<u32>
+        + From<u64>
+        + Into<Transform>
+        + TryFrom<Transform, Error = String>,
 {
     if let Transform::AddInt32(j) = b {
         i32_wrapping_addition(i, j).into()
+    } else if let Transform::AddUInt64(j) = b {
+        i.wrapping_add(&j.into()).into()
     } else {
         match T::try_from(b) {
             Err(b_type) => Failure(
@@ -201,11 +236,27 @@ impl Add for Transform {
             }
             (AddInt32(i), b) => match b {
                 AddInt32(j) => AddInt32(i.wrapping_add(j)),
+                AddUInt64(j) => AddUInt64(i32_wrapping_addition(j, i)),
+                AddUInt128(j) => AddUInt128(i32_wrapping_addition(j, i)),
                 AddUInt256(j) => AddUInt256(i32_wrapping_addition(j, i)),
                 AddUInt512(j) => AddUInt512(i32_wrapping_addition(j, i)),
                 other => Failure(
                     TypeMismatch {
                         expected: "AddInt32".to_owned(),
+                        found: format!("{:?}", other),
+                    }
+                    .into(),
+                ),
+            },
+            (AddUInt64(i), b) => match b {
+                AddInt32(j) => AddInt32(u64_wrapping_addition(i, j)),
+                AddUInt64(j) => AddUInt64(i.wrapping_add(j)),
+                AddUInt128(j) => AddUInt128(j.wrapping_add(&i.into())),
+                AddUInt256(j) => AddUInt256(j.wrapping_add(&i.into())),
+                AddUInt512(j) => AddUInt512(j.wrapping_add(&i.into())),
+                other => Failure(
+                    TypeMismatch {
+                        expected: "AddUInt64".to_owned(),
                         found: format!("{:?}", other),
                     }
                     .into(),
@@ -237,9 +288,36 @@ impl fmt::Display for Transform {
     }
 }
 
+pub mod gens {
+    use super::Transform;
+    use common::gens::value_arb;
+    use proptest::collection::vec;
+    use proptest::prelude::*;
+
+    pub fn transform_arb() -> impl Strategy<Value = Transform> {
+        prop_oneof![
+            Just(Transform::Identity),
+            value_arb().prop_map(Transform::Write),
+            any::<i32>().prop_map(Transform::AddInt32),
+            any::<u64>().prop_map(Transform::AddUInt64),
+            any::<u128>().prop_map(|u| Transform::AddUInt128(u.into())),
+            vec(any::<u8>(), 32).prop_map(|u| {
+                let mut buf: [u8; 32] = [0u8; 32];
+                buf.copy_from_slice(&u);
+                Transform::AddUInt256(buf.into())
+            }),
+            vec(any::<u8>(), 64).prop_map(|u| {
+                let mut buf: [u8; 64] = [0u8; 64];
+                buf.copy_from_slice(&u);
+                Transform::AddUInt512(buf.into())
+            }),
+        ]
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use num::{Bounded, Num};
+    use num::{Bounded, Num, ToPrimitive};
 
     use common::value::{Value, U128, U256, U512};
 
@@ -311,5 +389,21 @@ mod tests {
     #[test]
     fn u512_overflow() {
         uint_overflow_test::<U512>();
+    }
+
+    #[test]
+    fn u64_to_i32_addition() {
+        let i32_max_as_u64 = i32::max_value().to_u64().unwrap();
+        assert_eq!(
+            i32::max_value(),
+            super::u64_wrapping_addition(i32_max_as_u64, 0)
+        );
+
+        // Plus 1 is for "wrapping" the number (going from i32::max to i32::min).
+        let base_u64 = (5 * i32_max_as_u64) + 100 + 1;
+        assert_eq!(
+            i32::min_value() + 100,
+            super::u64_wrapping_addition(base_u64, i32::max_value())
+        )
     }
 }

@@ -124,6 +124,7 @@ object ServiceError {
   // NOTE: See https://github.com/grpc/grpc/blob/master/doc/statuscodes.md about when to use which one.
 
   object Aborted            extends StatusError(Status.ABORTED)
+  object AlreadyExists      extends StatusError(Status.ALREADY_EXISTS)
   object DeadlineExceeded   extends StatusError(Status.DEADLINE_EXCEEDED)
   object FailedPrecondition extends StatusError(Status.FAILED_PRECONDITION)
   object Internal           extends StatusError(Status.INTERNAL)

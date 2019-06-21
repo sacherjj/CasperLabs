@@ -1,3 +1,13 @@
+Version 0.8.0 (2019-06-14)
+==========================
+* [[#598]](https://github.com/CasperLabs/CasperLabs/pull/598) Factors out `URef` from `Key` variant to its own type.
+* [[#599]](https://github.com/CasperLabs/CasperLabs/pull/599) Adds `purseId` object to an `Account`.
+
+Version 0.7.0 (2019-06-09)
+==========================
+* [[#563]](https://github.com/CasperLabs/CasperLabs/pull/563) Change encoding of URef's access rights to `Option<..>`.
+* [[#604]](https://github.com/CasperLabs/CasperLabs/pull/604) Fixed serialization bug in URef's access rights encoding.
+
 Version 0.6.0 (2019-05-28)
 ==========================
 * `read_local` and `write_local` functions are defined for interacting with the new "context-local partitions of global state".

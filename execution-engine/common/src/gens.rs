@@ -1,11 +1,15 @@
 use crate::key::*;
-use crate::value::account::{AssociatedKeys, PublicKey, Weight, MAX_KEYS};
+use crate::uref::{AccessRights, URef};
+use crate::value::account::{
+    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+    MAX_KEYS,
+};
 use crate::value::*;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use proptest::collection::{btree_map, vec};
-use proptest::option;
 use proptest::prelude::*;
+use proptest::{array, bits, option};
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
     vec(any::<u8>(), 32).prop_map(|b| {
@@ -31,13 +35,20 @@ pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
     ]
 }
 
+pub fn uref_arb() -> impl Strategy<Value = URef> {
+    (
+        array::uniform32(bits::u8::ANY),
+        option::weighted(option::Probability::new(0.8), access_rights_arb()),
+    )
+        .prop_map(|(id, maybe_access_rights)| URef::unsafe_new(id, maybe_access_rights))
+}
+
 pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
         u8_slice_32().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
-        option::of(access_rights_arb())
-            .prop_flat_map(|right| { u8_slice_32().prop_map(move |addr| Key::URef(addr, right)) }),
-        (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key_hash)| Key::Local { seed, key_hash })
+        uref_arb().prop_map(Key::URef),
+        (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key)| Key::local(seed, &key))
     ]
 }
 
@@ -59,16 +70,36 @@ pub fn associated_keys_arb(size: usize) -> impl Strategy<Value = AssociatedKeys>
     })
 }
 
-pub fn account_arb() -> impl Strategy<Value = Account> {
-    u8_slice_32().prop_flat_map(|b| {
-        any::<u64>().prop_flat_map(move |u64arb| {
-            associated_keys_arb(MAX_KEYS - 1).prop_flat_map(move |mut associated_keys| {
-                associated_keys.add_key(b.into(), Weight::new(1)).unwrap();
-                uref_map_arb(3)
-                    .prop_map(move |urefs| Account::new(b, u64arb, urefs, associated_keys.clone()))
-            })
-        })
-    })
+pub fn action_threshold_arb() -> impl Strategy<Value = ActionThresholds> {
+    Just(Default::default())
+}
+
+pub fn account_activity_arb() -> impl Strategy<Value = AccountActivity> {
+    Just(AccountActivity::new(BlockTime(1), BlockTime(1000)))
+}
+
+prop_compose! {
+    pub fn account_arb()(
+        pub_key in u8_slice_32(),
+        nonce in any::<u64>(),
+        urefs in uref_map_arb(3),
+        purse_id in uref_arb(),
+        thresholds in action_threshold_arb(),
+        account_activity in account_activity_arb(),
+        mut associated_keys in associated_keys_arb(MAX_KEYS - 1),
+    ) -> Account {
+            let purse_id = PurseId::new(purse_id);
+            associated_keys.add_key(pub_key.into(), Weight::new(1)).unwrap();
+            Account::new(
+                pub_key,
+                nonce,
+                urefs,
+                purse_id,
+                associated_keys.clone(),
+                thresholds.clone(),
+                account_activity.clone(),
+            )
+    }
 }
 
 pub fn contract_arb() -> impl Strategy<Value = Contract> {
@@ -93,6 +124,27 @@ pub fn u512_arb() -> impl Strategy<Value = U512> {
 }
 
 pub fn value_arb() -> impl Strategy<Value = Value> {
+    // If compiler brings you here it most probably means you've added a variant to `Value` enum
+    // but forgot to add generator for it.
+    let stub: Option<Value> = None;
+    if let Some(v) = stub {
+        match v {
+            Value::Int32(_)
+            | Value::UInt64(_)
+            | Value::UInt128(_)
+            | Value::UInt256(_)
+            | Value::UInt512(_)
+            | Value::ByteArray(_)
+            | Value::String(_)
+            | Value::ListString(_)
+            | Value::ListInt32(_)
+            | Value::Account(_)
+            | Value::Contract(_)
+            | Value::Key(_)
+            | Value::NamedKey(_, _)
+            | Value::Unit => (),
+        }
+    };
     prop_oneof![
         (any::<i32>().prop_map(Value::Int32)),
         (vec(any::<u8>(), 1..1000).prop_map(Value::ByteArray)),
@@ -105,6 +157,8 @@ pub fn value_arb() -> impl Strategy<Value = Value> {
         contract_arb().prop_map(Value::Contract),
         u128_arb().prop_map(Value::UInt128),
         u256_arb().prop_map(Value::UInt256),
-        u512_arb().prop_map(Value::UInt512)
+        u512_arb().prop_map(Value::UInt512),
+        Just(Value::Unit),
+        (any::<u64>().prop_map(Value::UInt64)),
     ]
 }

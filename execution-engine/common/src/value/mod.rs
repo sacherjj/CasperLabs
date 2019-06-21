@@ -3,9 +3,10 @@ pub mod contract;
 pub mod uint;
 
 use crate::bytesrepr::{
-    Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U8_SIZE,
+    Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U64_SIZE, U8_SIZE,
 };
 use crate::key::{self, UREF_SIZE};
+use crate::uref::URef;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
@@ -19,6 +20,7 @@ pub use self::uint::{U128, U256, U512};
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Value {
     Int32(i32),
+    UInt64(u64),
     UInt128(U128),
     UInt256(U256),
     UInt512(U512),
@@ -30,6 +32,7 @@ pub enum Value {
     Key(key::Key),
     Account(account::Account),
     Contract(contract::Contract),
+    Unit,
 }
 
 const INT32_ID: u8 = 0;
@@ -44,6 +47,8 @@ const U128_ID: u8 = 8;
 const U256_ID: u8 = 9;
 const U512_ID: u8 = 10;
 const KEY_ID: u8 = 11;
+const UNIT_ID: u8 = 12;
+const U64_ID: u8 = 13;
 
 use self::Value::*;
 
@@ -145,6 +150,13 @@ impl ToBytes for Value {
                 result.append(&mut arr.to_bytes()?);
                 Ok(result)
             }
+            Unit => Ok(vec![UNIT_ID]),
+            UInt64(num) => {
+                let mut result = Vec::with_capacity(U8_SIZE + U64_SIZE);
+                result.push(U64_ID);
+                result.append(&mut num.to_bytes()?);
+                Ok(result)
+            }
         }
     }
 }
@@ -201,6 +213,11 @@ impl FromBytes for Value {
                 let (arr, rem): (Vec<String>, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((ListString(arr), rem))
             }
+            UNIT_ID => Ok((Unit, rest)),
+            U64_ID => {
+                let (num, rem): (u64, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((UInt64(num), rem))
+            }
             _ => Err(Error::FormattingError),
         }
     }
@@ -221,13 +238,8 @@ impl Value {
             NamedKey(_, _) => String::from("NamedKey"),
             Key(_) => String::from("Key"),
             ListString(_) => String::from("List[String]"),
-        }
-    }
-
-    pub fn as_account(&self) -> &account::Account {
-        match self {
-            Account(a) => a,
-            _ => panic!("Not an account: {:?}", self),
+            Unit => String::from("Unit"),
+            UInt64(_) => String::from("UInt64"),
         }
     }
 }
@@ -255,6 +267,7 @@ macro_rules! from_try_from_impl {
 }
 
 from_try_from_impl!(i32, Int32);
+from_try_from_impl!(u64, UInt64);
 from_try_from_impl!(U128, UInt128);
 from_try_from_impl!(U256, UInt256);
 from_try_from_impl!(U512, UInt512);
@@ -265,6 +278,12 @@ from_try_from_impl!(String, String);
 from_try_from_impl!(key::Key, Key);
 from_try_from_impl!(account::Account, Account);
 from_try_from_impl!(contract::Contract, Contract);
+
+impl From<URef> for Value {
+    fn from(uref: URef) -> Self {
+        Key(key::Key::URef(uref))
+    }
+}
 
 impl From<(String, key::Key)> for Value {
     fn from(tuple: (String, key::Key)) -> Self {
@@ -278,6 +297,24 @@ impl TryFrom<Value> for (String, key::Key) {
     fn try_from(v: Value) -> Result<(String, key::Key), ()> {
         if let Value::NamedKey(name, key) = v {
             Ok((name, key))
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl From<()> for Value {
+    fn from(_unit: ()) -> Self {
+        Value::Unit
+    }
+}
+
+impl TryFrom<Value> for () {
+    type Error = ();
+
+    fn try_from(v: Value) -> Result<(), ()> {
+        if let Value::Unit = v {
+            Ok(())
         } else {
             Err(())
         }

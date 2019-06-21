@@ -2,7 +2,7 @@ package io.casperlabs.node.api
 
 import cats.Id
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Resource, Timer}
+import cats.effect.{Effect => _, _}
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -17,7 +17,7 @@ import io.casperlabs.node._
 import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.node.api.control.ControlGrpcMonix
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
-import io.casperlabs.node.api.graphql.GraphQL
+import io.casperlabs.node.api.graphql.{FinalizedBlocksStream, GraphQL}
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics.effects.diagnosticsService
 import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
@@ -30,7 +30,13 @@ import org.http4s.implicits._
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 
+import scala.concurrent.ExecutionContext
+import io.netty.handler.ssl.SslContext
+
 object Servers {
+
+  private def logStarted[F[_]: Log](name: String, port: Int, isSsl: Boolean) =
+    Log[F].info(s"$name gRPC services started on port ${port}${if (isSsl) " using SSL" else ""}.")
 
   /** Start a gRPC server with services meant for the operators.
     * This port shouldn't be exposed to the internet, or some endpoints
@@ -39,7 +45,8 @@ object Servers {
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[Effect]
+      blockApiLock: Semaphore[Effect],
+      maybeSslContext: Option[SslContext]
   )(
       implicit
       log: Log[Effect],
@@ -69,9 +76,10 @@ object Servers {
       interceptors = List(
         new MetricsInterceptor(),
         ErrorInterceptor.default
-      )
+      ),
+      sslContext = maybeSslContext
     ) *> Resource.liftF(
-      Log[Effect].info(s"Internal gRPC services started on port ${port}.")
+      logStarted[Effect]("Internal", port, maybeSslContext.isDefined)
     )
 
   /** Start a gRPC server with services meant for users and dApp developers. */
@@ -80,7 +88,8 @@ object Servers {
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
       blockApiLock: Semaphore[F],
-      ignoreDeploySignature: Boolean
+      ignoreDeploySignature: Boolean,
+      maybeSslContext: Option[SslContext]
   )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] =
     GrpcServer(
       port = port,
@@ -99,35 +108,31 @@ object Servers {
       interceptors = List(
         new MetricsInterceptor(),
         ErrorInterceptor.default
-      )
+      ),
+      sslContext = maybeSslContext
     ) *>
-      Resource.liftF(Log[F].info(s"External gRPC services started on port ${port}."))
+      Resource.liftF(
+        logStarted[F]("External", port, maybeSslContext.isDefined)
+      )
 
-  def httpServerR(
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: SafetyOracle: BlockStore: ContextShift: FinalizedBlocksStream: ExecutionEngineService](
       port: Int,
       conf: Configuration,
-      id: NodeIdentifier
-  )(
-      implicit
-      log: Log[Task],
-      nodeDiscovery: NodeDiscovery[Task],
-      connectionsCell: ConnectionsCell[Task],
-      scheduler: Scheduler,
-      T: Timer[Task],
-      C: cats.effect.ConcurrentEffect[Task]
-  ): Resource[Effect, Unit] = {
+      id: NodeIdentifier,
+      ec: ExecutionContext
+  ): Resource[F, Unit] = {
 
     val prometheusReporter = new NewPrometheusReporter()
-    val prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
-    val metricsRuntime     = new MetricsRuntime[Task](conf, id)
+    val prometheusService  = NewPrometheusReporter.service[F](prometheusReporter)
+    val metricsRuntime     = new MetricsRuntime[F](conf, id)
 
-    (for {
+    for {
       _ <- Resource.make {
             metricsRuntime.setupMetrics(prometheusReporter)
           } { _ =>
-            Task.delay(Kamon.stopAllReporters())
+            Sync[F].delay(Kamon.stopAllReporters())
           }
-      _ <- BlazeServerBuilder[Task]
+      _ <- BlazeServerBuilder[F]
             .bindHttp(port, "0.0.0.0")
             .withNio2(true)
             .withHttpApp(
@@ -135,13 +140,13 @@ object Servers {
                 "/metrics" -> prometheusService,
                 "/version" -> VersionInfo.service,
                 "/status"  -> StatusInfo.service,
-                "/graphql" -> GraphQL.service
+                "/graphql" -> GraphQL.service[F](ec)
               ).orNotFound
             )
             .resource
       _ <- Resource.liftF(
-            Log[Task].info(s"HTTP server started on port ${port}.")
+            Log[F].info(s"HTTP server started on port ${port}.")
           )
-    } yield ()).toEffect
+    } yield ()
   }
 }

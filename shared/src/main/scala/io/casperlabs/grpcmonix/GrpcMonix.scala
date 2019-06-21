@@ -64,8 +64,8 @@ object GrpcMonix {
           observer.onNext(value)
           Continue
         } catch {
-          case NonFatal(t) =>
-            observer.onError(t)
+          case NonFatal(e) =>
+            observer.onError(e)
             Stop
         }
     }

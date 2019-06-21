@@ -14,6 +14,8 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v -e ipc.*\.rs)
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 
+RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
+
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
 # https://stackoverflow.com/questions/5426934/why-this-makefile-removes-my-goal
@@ -38,17 +40,20 @@ docker-build-all: \
 	docker-build/node \
 	docker-build/client \
 	docker-build/execution-engine \
-	docker-build/integration-testing
+	docker-build/integration-testing \
+	docker-build/key-generator
 
 docker-push-all: \
 	docker-push/node \
 	docker-push/client \
-	docker-push/execution-engine
+	docker-push/execution-engine \
+	docker-push/key-generator
 
 docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
 docker-build/client: .make/docker-build/universal/client .make/docker-build/test/client
 docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
+docker-build/key-generator: .make/docker-build/key-generator
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -63,7 +68,8 @@ docker-push/%: docker-build/%
 
 cargo-package-all: \
 	.make/cargo-package/execution-engine/common \
-	cargo-native-packager/execution-engine/comm
+	cargo-native-packager/execution-engine/comm \
+	package-blessed-contracts
 
 # Drone is already running commands in the `builderenv`, no need to delegate.
 cargo-native-packager/%:
@@ -80,7 +86,7 @@ cargo-publish-all: \
 cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
 
 %/Cargo.toml/clean:
-	cd $* && cargo clean
+	cd $* && ([ -d target ] && cargo clean --target-dir target || cargo clean)
 
 
 # Build the `latest` docker image for local testing. Works with Scala.
@@ -130,8 +136,8 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Make a node that has some extras installed for testing.
 .make/docker-build/test/node: \
 		.make/docker-build/universal/node \
-		docker/test-node.Dockerfile
-	docker build -f docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test docker
+		hack/docker/test-node.Dockerfile
+	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test hack/docker
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test version for the execution engine as well just so we can swith version easily.
@@ -140,16 +146,23 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:test
 	mkdir -p $(dir $@) && touch $@
 
-# Make a test tagged version of client so all tags exist for integration-testing
+# Make a test tagged version of client so all tags exist for integration-testing.
 .make/docker-build/test/client: \
 		.make/docker-build/universal/client
 	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:test
 	mkdir -p $(dir $@) && touch $@
 
-# Make a test tagged version of client so all tags exist for integration-testing
+# Make an image to run Python tests under integration-testing.
 .make/docker-build/test/integration-testing: \
 		.make/docker-build/integration-testing
 	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:test
+	mkdir -p $(dir $@) && touch $@
+
+# Make an image for keys generation
+.make/docker-build/key-generator: \
+	hack/key-management/Dockerfile \
+	hack/key-management/gen-keys.sh
+	docker build -f hack/key-management/Dockerfile -t $(DOCKER_USERNAME)/key-generator:$(DOCKER_LATEST_TAG) hack/key-management
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
@@ -221,6 +234,31 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		'"
 	mkdir -p $(dir $@) && touch $@
 
+
+# Compile contracts that need to go into the Genesis block.
+package-blessed-contracts: \
+	execution-engine/target/blessed-contracts.tar.gz
+
+# Compile a blessed contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
+.make/blessed-contracts/%: $(RUST_SRC) .make/rustup-update
+	$(eval CONTRACT=$*)
+	cd execution-engine/blessed-contracts/$(CONTRACT) && \
+	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown --target-dir target
+	mkdir -p $(dir $@) && touch $@
+
+# Package all blessed contracts that we have to make available for download.
+execution-engine/target/blessed-contracts.tar.gz: \
+	.make/blessed-contracts/mint-token
+	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))
+	rm -rf $(ARCHIVE) $(ARCHIVE).gz
+	mkdir -p $(dir $@)
+	tar -cvf $(ARCHIVE) -T /dev/null
+	find execution-engine/blessed-contracts -wholename *.wasm | grep -v /release/deps/ | while read file; do \
+		cd $$(dirname $$file); tar -rvf $(ARCHIVE) $$(basename $$file); \
+	done
+	gzip $(ARCHIVE)
+
+
 # Build the execution engine executable. NOTE: This is not portable.
 execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
@@ -264,4 +302,11 @@ protobuf/google/api:
 		# You'll need to isntall `rpmbuild` for `cargo rpm` to work. I'm putting this here for reference:
 		sudo apt-get install rpm
 	fi
+	mkdir -p $(dir $@) && touch $@
+
+
+.make/rustup-update: execution-engine/rust-toolchain
+	rustup update $(RUST_TOOLCHAIN)
+	rustup toolchain install $(RUST_TOOLCHAIN)
+	rustup target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@

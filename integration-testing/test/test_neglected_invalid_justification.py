@@ -1,6 +1,7 @@
-from threading import Thread
-from time import time, sleep
 import logging
+from threading import Thread
+from time import sleep, time
+
 
 CONTRACT_1 = 'helloname_invalid_just_1.wasm'
 CONTRACT_2 = 'helloname_invalid_just_2.wasm'
@@ -52,9 +53,21 @@ def test_neglected_invalid_block(three_node_network):
         logging.info(f'DEPLOY_PROPOSE CYCLE COUNT: {cycle_count + 1}')
         start_time = time() + 1
 
-        boot_deploy = DeployTimedTread(bootstrap, {'session_contract': CONTRACT_1}, start_time)
-        node1_deploy = DeployTimedTread(node1, {'session_contract': CONTRACT_2}, start_time)
-        node2_deploy = DeployTimedTread(node2, {'session_contract': CONTRACT_2}, start_time)
+        boot_deploy = DeployTimedTread(bootstrap,
+                                       {'session_contract': CONTRACT_1,
+                                        'private_key': 'validator-0-private.pem',
+                                        'public_key': 'validator-0-public.pem'},
+                                       start_time)
+        node1_deploy = DeployTimedTread(node1,
+                                        {'session_contract': CONTRACT_2,
+                                         'private_key': 'validator-0-private.pem',
+                                         'public_key': 'validator-0-public.pem'},
+                                        start_time)
+        node2_deploy = DeployTimedTread(node2,
+                                        {'session_contract': CONTRACT_2,
+                                         'private_key': 'validator-0-private.pem',
+                                         'public_key': 'validator-0-public.pem'},
+                                        start_time)
 
         # Simultaneous Deploy
         node1_deploy.start()

@@ -1,6 +1,7 @@
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.docker_execution_engine import DockerExecutionEngine
 from test.cl_node.common import random_string
+import docker.errors
 
 
 class CasperLabsNode:
@@ -24,4 +25,7 @@ class CasperLabsNode:
     def cleanup(self):
         self.node.cleanup()
         self.execution_engine.cleanup()
-        self.config.docker_client.volumes.get(self.socket_volume).remove(force=True)
+        try:
+            self.config.docker_client.volumes.get(self.socket_volume).remove(force=True)
+        except docker.errors.NotFound:
+            pass

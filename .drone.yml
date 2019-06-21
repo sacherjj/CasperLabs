@@ -3,18 +3,18 @@
 #NOTE: Leaving these here to try again eventually. The Yaml library drone 1.1.0
 # uses has a bug with how it handles these anchors. Workaround is to be more
 # verbose in the steps.
-
-__buildenv:
-  image: "casperlabs/buildenv:latest"
-
-__sbtenv:
-  environment:
-    - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
-  image: "casperlabs/buildenv:latest"
-  volumes:
-    - "/var/cache/cl-build/.sbt:/root/.sbt"
-    - "/var/cache/cl-build/.ivy2:/root/.ivy2"
-
+#
+#__buildenv:
+#  image: "casperlabs/buildenv:latest"
+#
+#__sbtenv:
+#  environment:
+#    - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+#  image: "casperlabs/buildenv:latest"
+#  volumes:
+#    - "/var/cache/cl-build/.sbt:/root/.sbt"
+#    - "/var/cache/cl-build/.ivy2:/root/.ivy2"
+#
 branches:
   - dev
   - master
@@ -44,49 +44,120 @@ clone:
 # exactly the same.
 pipeline:
 
-  sbt-compile-test:
+# Below is for pull_request webhooks only
+  sbt-compile-test-pr:
     commands:
       - "sbt test"
     environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
+      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
-  git-status-post-scala-compile:
+  git-status-post-scala-compile-pr:
     commands: |
       STATUS_CHECK=$(git status)
       if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK"; exit 1; fi
     image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
-  rust-compile-test:
+  rust-compile-test-pr:
     commands:
       - "cd execution-engine/"
       - "~/.cargo/bin/cargo update"
       - "~/.cargo/bin/cargo build"
       - "~/.cargo/bin/cargo test"
     image: "casperlabs/buildenv:latest"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
-  run-cargo-fmt:
+  run-cargo-fmt-pr:
     commands:
       - "cd execution-engine"
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
       - "~/.cargo/bin/cargo fmt --all -- --check"
     image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
-  run-rust-lints:
+  run-rust-lints-pr:
     commands:
       - "cd execution-engine"
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
       - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
     image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
-# This section of the Pipeline is variable and not always run in all situations.
+# This section is for bors' branches only
+  sbt-test-docker-bors:
+    commands:
+      - "sbt test node/docker:publishLocal client/docker:publishLocal"
+    environment:
+      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - staging
+        - trying
 
-  try-cargo-publish:
+  git-status-post-scala-compile-bors:
+    commands: |
+      STATUS_CHECK=$(git status)
+      if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK"; exit 1; fi
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - staging
+        - trying
+
+  rust-compile-test-bors:
+    commands:
+      - "cd execution-engine/"
+      - "~/.cargo/bin/cargo update"
+      - "~/.cargo/bin/cargo build"
+      - "~/.cargo/bin/cargo test"
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - staging
+        - trying
+
+  run-cargo-fmt-bors:
+    commands:
+      - "cd execution-engine"
+      - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
+      - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
+      - "~/.cargo/bin/cargo fmt --all -- --check"
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - staging
+        - trying
+
+  run-rust-lints-bors:
+    commands:
+      - "cd execution-engine"
+      - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
+      - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
+      - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - staging
+        - trying
+
+  try-cargo-publish-bors:
     commands:
       - "cd execution-engine/common"
       - "~/.cargo/bin/cargo publish --dry-run"
@@ -96,7 +167,7 @@ pipeline:
         - staging
         - trying
 
-  run-rust-benchmarks:
+  run-rust-benchmarks-bors:
     commands:
       - "cd execution-engine/"
       - "~/.cargo/bin/cargo bench"
@@ -106,14 +177,14 @@ pipeline:
         - staging
         - trying
 
-  docker-build-artifacts-bors:
+  docker-build-ee-int-bors:
     commands:
-      - "sbt node/docker:publishLocal client/docker:publishLocal"
       - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
       - "make docker-build/execution-engine"
       - "make docker-build/integration-testing"
+      - "make docker-build/key-generator"
     environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
+      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -122,14 +193,59 @@ pipeline:
         - staging
         - trying
 
-  docker-build-artifacts-merge:
+  docker-keys-gen-test-bors:
     commands:
-      - "sbt node/docker:publishLocal client/docker:publishLocal"
+      - "mkdir /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+      - "./hack/key-management/docker-gen-keys.sh /tmp/keys-DRONE-${DRONE_BUILD_NUMBER} --test"
+      - "rm -rf /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/tmp:/tmp"
+    when:
+      branch:
+        - staging
+        - trying
+
+  run-integration-tests:
+    commands:
+      - "apt-get update && apt-get -y install gcc"
+      - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2"
+      - "cd integration-testing"
+      - ./docker_run_tests.sh
+    environment:
+      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/tmp:/tmp"
+    when:
+      branch:
+        - staging
+        - trying
+
+# The below section is for post-bors push webhooks
+  rust-compile-for-make:
+    commands:
+      - "cd execution-engine/"
+      - "~/.cargo/bin/cargo update"
+      - "~/.cargo/bin/cargo build"
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
+
+  docker-build-ee-merge:
+    commands:
       - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
       - "make docker-build/execution-engine"
-      - "make docker-build/integration-testing"
     environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
+      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -142,32 +258,32 @@ pipeline:
         - push
         - tag
 
-  run-integration-tests:
+  docker-key-gen-merge:
     commands:
-      - "python3 -m pip install pipenv dataclasses typing_extensions"
-      - "cd integration-testing"
-      - ./docker_run_tests.sh
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
+      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "make docker-build/key-generator"
     image: "casperlabs/buildenv:latest"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "/tmp:/tmp"
     when:
       branch:
-        - staging
-        - trying
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
 
-  package-sbt-artifacts:
+  package-sbt-artifacts-merge:
     commands:
-      - "sbt update compile client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
+      - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin node/docker:publishLocal client/docker:publishLocal"
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
       - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
       - "cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
       - "cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm artifacts/${DRONE_BRANCH}"
     environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
+      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -184,6 +300,7 @@ pipeline:
     commands:
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "make cargo-package-all"
+      - "cp execution-engine/target/blessed-contracts.tar.gz artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm artifacts/${DRONE_BRANCH}"
       - "WORKING_DIR=$(pwd) ; cd execution-engine/target/release/rpmbuild/SOURCES ; OS=$(uname -s | tr '[:upper:]' '[:lower:]') ; ARCH=$(uname -p) ; SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed \"s/.tar.gz//\") ; TARGET=$(ls $SOURCE*.tar.gz | sed \"s/.tar.gz/_\"$OS\"_\"$ARCH\".tar.gz/\") ; tar -xzf $SOURCE.tar.gz ; tar -czf $TARGET -C $SOURCE/usr/bin/ . && cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}"
@@ -244,16 +361,20 @@ pipeline:
       docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:"$REF"
       docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:"$REF"
       docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:"$REF"
+      docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:"$REF"
       docker push casperlabs/node:"$REF"
       docker push casperlabs/client:"$REF"
       docker push casperlabs/execution-engine:"$REF"
+      docker push casperlabs/key-generator:"$REF"
       if [ "${DRONE_BRANCH}" = "master" ]; then
         docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:latest
         docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:latest
         docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:latest
+        docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:latest
         docker push casperlabs/node:latest
         docker push casperlabs/client:latest
         docker push casperlabs/execution-engine:latest
+        docker push casperlabs/key-generator:latest
       fi
       echo "done"
     image: "casperlabs/buildenv:latest"
@@ -270,6 +391,20 @@ pipeline:
       event:
         - push
         - tag
+
+#  push-codecov:
+#    secrets: [ codecov_token ]
+#    commands:
+#      - "codecov -t $CODECOV_TOKEN"
+#    image: "casperlabs/buildenv:latest"
+#    when:
+#      branch:
+#        - dev
+#        - release-*
+#        - master
+#      event:
+#        - push
+#        - tag
 
   contract-examples:
     fork: true
@@ -293,7 +428,7 @@ pipeline:
       - "docker images --filter \"dangling=true\" -q --no-trunc | xargs --no-run-if-empty docker rmi -f || true"
       - "docker images | grep \"DRONE-${DRONE_BUILD_NUMBER}\" | awk '{print $3}' | xargs --no-run-if-empty docker rmi -f || true"
     environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
+      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -309,7 +444,7 @@ pipeline:
       - slack_webhook
     template: |
       *{{ uppercasefirst build.status }}*
-        Author: {{ build.author }} 
+        Author: {{ build.author }}
         Drone Build: <{{ build.link }}|#{{ build.number }}>
         Commit Link: <https://github.com/{{repo.owner}}/{{repo.name}}/commit/{{build.commit}}|{{ truncate build.commit 10 }}>
     when:

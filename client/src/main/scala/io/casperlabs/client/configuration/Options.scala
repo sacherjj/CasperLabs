@@ -38,6 +38,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
+  val nodeId =
+    opt[String](
+      descr =
+        "Node ID (i.e. the Keccak256 hash of the public key the node uses for TLS) in case secure communication is needed.",
+      required = false
+    )
+
   val hexCheck: String => Boolean = _.matches("[0-9a-fA-F]+")
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
@@ -50,8 +57,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val from = opt[String](
-      descr = "Purse address that will be used to pay for the deployment.",
-      default = Option("00")
+      descr =
+        "The public key of the account which is the context of this deployment, base16 encoded.",
+      required = false
     )
 
     val gasLimit =
@@ -70,7 +78,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val nonce = opt[Long](
       descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
-      default = Option(0L)
+      validate = _ > 0,
+      required = true
     )
 
     val session =
@@ -111,10 +120,38 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       trailArg[String](
         name = "hash",
         required = true,
-        descr = "Value of the block hash, full, base16 encoded."
+        descr = "Value of the block hash, base16 encoded."
       )
   }
   addSubcommand(showBlock)
+
+  val showDeploys = new Subcommand("show-deploys") {
+    descr(
+      "View deploys included in a block."
+    )
+
+    val hash =
+      trailArg[String](
+        name = "hash",
+        required = true,
+        descr = "Value of the block hash, base16 encoded."
+      )
+  }
+  addSubcommand(showDeploys)
+
+  val showDeploy = new Subcommand("show-deploy") {
+    descr(
+      "View properties of a deploy known by Casper on an existing running node."
+    )
+
+    val hash =
+      trailArg[String](
+        name = "hash",
+        required = true,
+        descr = "Value of the deploy hash, base16 encoded."
+      )
+  }
+  addSubcommand(showDeploy)
 
   val showBlocks = new Subcommand("show-blocks") {
     descr(

@@ -11,8 +11,7 @@ import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.blockstorage._
-import io.casperlabs.casper.consensus
-import io.casperlabs.casper._
+import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
@@ -23,8 +22,8 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, Time}
 import monix.tail.Iterant
-
 import scala.collection.immutable.Queue
+import scala.util.control.NonFatal
 
 class GossipServiceCasperTestNode[F[_]](
     local: Node,
@@ -34,6 +33,8 @@ class GossipServiceCasperTestNode[F[_]](
     blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
+    validateNonces: Boolean = true,
+    maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainId: String = "casperlabs",
     relaying: Relaying[F],
     gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F],
@@ -52,10 +53,12 @@ class GossipServiceCasperTestNode[F[_]](
       sk,
       genesis,
       blockDagDir,
-      blockStoreDir
+      blockStoreDir,
+      validateNonces,
+      maybeMakeEE
     )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
-  implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
+  implicit val safetyOracleEff: SafetyOracle[F] = SafetyOracle.cliqueOracle[F]
 
   //val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 
@@ -65,6 +68,9 @@ class GossipServiceCasperTestNode[F[_]](
 
   implicit val raiseInvalidBlock         = ValidationImpl.raiseValidateErrorThroughSync[F]
   implicit val validation: Validation[F] = new ValidationImpl[F]
+
+  implicit val lastFinalizedBlockHashContainer =
+    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
 
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it
@@ -92,6 +98,7 @@ class GossipServiceCasperTestNode[F[_]](
 }
 
 trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
+  import DeriveValidation._
 
   type TestNode[F[_]] = GossipServiceCasperTestNode[F]
 
@@ -111,12 +118,13 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       parF: Par[F],
       timerF: Timer[F]
   ): F[GossipServiceCasperTestNode[F]] = {
-    val name               = "standalone"
-    val identity           = peerNode(name, 40400)
-    val logicalTime        = new LogicalTime[F]
-    implicit val log       = new LogStub[F](printEnabled = false)
-    implicit val metricEff = new Metrics.MetricsNOP[F]
-    implicit val nodeAsk   = makeNodeAsk(identity)(concurrentF)
+    val name                              = "standalone"
+    val identity                          = peerNode(name, 40400)
+    implicit val timeEff                  = new LogicalTime[F]
+    implicit val log                      = new LogStub[F](printEnabled = false)
+    implicit val metricEff                = new Metrics.MetricsNOP[F]
+    implicit val nodeAsk                  = makeNodeAsk(identity)(concurrentF)
+    implicit val functorRaiseInvalidBlock = ValidationImpl.raiseValidateErrorThroughSync
 
     // Standalone, so nobody to relay to.
     val relaying = RelayingImpl(
@@ -146,7 +154,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             concurrentF,
             blockStore,
             blockDagStorage,
-            logicalTime,
+            timeEff,
             metricEff,
             casperState,
             log
@@ -161,7 +169,9 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       genesis: consensus.Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Float = 0f,
+      validateNonces: Boolean = true,
+      maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
@@ -187,10 +197,11 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       .toList
       .traverse {
         case (peer, sk) =>
-          val logicalTime        = new LogicalTime[F]
-          implicit val log       = new LogStub[F](peer.host, printEnabled = false)
-          implicit val metricEff = new Metrics.MetricsNOP[F]
-          implicit val nodeAsk   = makeNodeAsk(peer)(concurrentF)
+          implicit val timeEff                  = new LogicalTime[F]
+          implicit val log                      = new LogStub[F](peer.host, printEnabled = false)
+          implicit val metricEff                = new Metrics.MetricsNOP[F]
+          implicit val nodeAsk                  = makeNodeAsk(peer)(concurrentF)
+          implicit val functorRaiseInvalidBlock = ValidationImpl.raiseValidateErrorThroughSync
 
           val gossipService = new TestGossipService[F](peer.host)
           gossipServices += peer -> gossipService
@@ -225,12 +236,14 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
-                  validatorToNode = validatorToNode
+                  validatorToNode = validatorToNode,
+                  validateNonces = validateNonces,
+                  maybeMakeEE = maybeMakeEE
                 )(
                   concurrentF,
                   blockStore,
                   blockDagStorage,
-                  logicalTime,
+                  timeEff,
                   metricEff,
                   casperState,
                   log
@@ -266,7 +279,7 @@ object GossipServiceCasperTestNodeFactory {
     }
 
   /** Accumulate messages until receive is called by the test. */
-  class TestGossipService[F[_]: Concurrent: Timer: Par: Log](host: String)
+  class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log: Validation](host: String)
       extends GossipService[F] {
 
     implicit val metrics = new Metrics.MetricsNOP[F]
@@ -355,10 +368,16 @@ object GossipServiceCasperTestNodeFactory {
               } yield latest.values.toList
 
             override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
-              // TODO: Presently the Validation only works on full blocks.
-              Log[F].debug(
-                s"Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
-              )
+              for {
+                dag <- casper.blockDag
+                _ <- Log[F].debug(
+                      s"Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
+                    )
+                _ <- Validation[F].blockSummary(
+                      blockSummary,
+                      "casperlabs"
+                    )
+              } yield ()
 
             override def notInDag(blockHash: ByteString): F[Boolean] =
               isInDag(blockHash).map(!_)

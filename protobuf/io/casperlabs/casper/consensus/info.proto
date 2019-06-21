@@ -4,8 +4,16 @@ package io.casperlabs.casper.consensus.info;
 import "io/casperlabs/casper/consensus/consensus.proto";
 
 message BlockInfo {
-	BlockSummary summary = 1;
+	io.casperlabs.casper.consensus.BlockSummary summary = 1;
 	BlockStatus status = 2;
+
+	enum View {
+    	// Only includes information which is based on the header.
+    	BASIC = 0;
+    	// Includes extra information that requires the full block,
+    	// for example the size, number of errors in deploys, etc.
+    	FULL = 1;
+    }
 }
 
 message BlockStatus {
@@ -17,4 +25,23 @@ message BlockStatus {
 		uint32 block_size_bytes = 1;
 		uint32 deploy_error_count = 2;
 	}
+}
+
+message DeployInfo {
+	io.casperlabs.casper.consensus.Deploy deploy = 1;
+	repeated ProcessingResult processing_results = 2;
+
+	message ProcessingResult {
+		BlockInfo block_info = 1;
+		uint64 cost = 2;
+        bool is_error = 3;
+        string error_message = 4;
+	}
+
+    enum View {
+        // Only includes the header of the deploys, not the body with the code.
+        BASIC = 0;
+        // Includes the body with the code.
+        FULL = 1;
+    }
 }

@@ -14,7 +14,7 @@ use common::bytesrepr::{self, FromBytes, ToBytes};
 const BLAKE2B_DIGEST_LENGTH: usize = 32;
 
 /// Represents a 32-byte BLAKE2b hash digest
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Blake2bHash([u8; BLAKE2B_DIGEST_LENGTH]);
 
 impl Blake2bHash {
@@ -31,6 +31,32 @@ impl Blake2bHash {
     /// Converts the underlying BLAKE2b hash digest array to a `Vec`
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
+    }
+}
+
+impl core::fmt::LowerHex for Blake2bHash {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let hex_string = base16::encode_lower(&self.to_vec());
+        write!(f, "{}", hex_string)
+    }
+}
+
+impl core::fmt::UpperHex for Blake2bHash {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let hex_string = base16::encode_upper(&self.to_vec());
+        write!(f, "{}", hex_string)
+    }
+}
+
+impl core::fmt::Display for Blake2bHash {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "Blake2bHash({:x})", self)
+    }
+}
+
+impl core::fmt::Debug for Blake2bHash {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -117,14 +143,14 @@ impl CorrelationId {
 
 impl fmt::Display for CorrelationId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{:?}", self.0)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::logging;
-    use crate::newtypes::CorrelationId;
+    use crate::newtypes::{Blake2bHash, CorrelationId};
+    use crate::utils;
     use std::hash::{Hash, Hasher};
 
     #[test]
@@ -144,11 +170,21 @@ mod tests {
     fn should_support_to_string() {
         let correlation_id = CorrelationId::new();
 
+        assert!(
+            !correlation_id.is_empty(),
+            "correlation_id should be produce string"
+        )
+    }
+
+    #[test]
+    fn should_support_to_string_no_type_encasement() {
+        let correlation_id = CorrelationId::new();
+
         let correlation_id_string = correlation_id.to_string();
 
         assert!(
-            !correlation_id_string.is_empty(),
-            "correlation_id should be produce string"
+            !correlation_id_string.starts_with("CorrelationId"),
+            "correlation_id should just be the inner value without tuple name"
         )
     }
 
@@ -156,7 +192,7 @@ mod tests {
     fn should_support_to_json() {
         let correlation_id = CorrelationId::new();
 
-        let correlation_id_json = logging::utils::jsonify(correlation_id, false);
+        let correlation_id_json = utils::jsonify(correlation_id, false);
 
         assert!(
             !correlation_id_json.is_empty(),
@@ -223,5 +259,35 @@ mod tests {
         let hash = state.finish();
 
         assert!(hash > 0, "should be hashable");
+    }
+
+    #[test]
+    fn should_display_blake2bhash_in_hex() {
+        let hash = Blake2bHash([0u8; 32]);
+        let hash_hex = format!("{}", hash);
+        assert_eq!(
+            hash_hex,
+            "Blake2bHash(0000000000000000000000000000000000000000000000000000000000000000)"
+        );
+    }
+
+    #[test]
+    fn should_print_blake2bhash_lower_hex() {
+        let hash = Blake2bHash([10u8; 32]);
+        let hash_lower_hex = format!("{:x}", hash);
+        assert_eq!(
+            hash_lower_hex,
+            "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+        )
+    }
+
+    #[test]
+    fn should_print_blake2bhash_upper_hex() {
+        let hash = Blake2bHash([10u8; 32]);
+        let hash_lower_hex = format!("{:X}", hash);
+        assert_eq!(
+            hash_lower_hex,
+            "0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A"
+        )
     }
 }

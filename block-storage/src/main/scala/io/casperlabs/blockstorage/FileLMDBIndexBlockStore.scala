@@ -4,13 +4,13 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file._
 
-import cats.{Applicative, Monad}
+import cats.{Applicative, Apply, Monad}
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, ExitCase, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
 import io.casperlabs.shared.Resources.withResource
 import io.casperlabs.blockstorage.FileLMDBIndexBlockStore.Checkpoint
 import io.casperlabs.blockstorage.StorageError.StorageErr
@@ -21,12 +21,12 @@ import io.casperlabs.blockstorage.util.fileIO.{IOError, _}
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.catscontrib.MonadStateOps._
-import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metrics, Metrics.Source
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
-import org.lmdbjava.DbiFlags.MDB_CREATE
+import org.lmdbjava.DbiFlags.{MDB_CREATE, MDB_DUPSORT}
 import org.lmdbjava._
 import io.casperlabs.shared.PathOps._
 
@@ -45,6 +45,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     env: Env[ByteBuffer],
     index: Dbi[ByteBuffer],
     blockSummaryDB: Dbi[ByteBuffer],
+    deployHashesDb: Dbi[ByteBuffer],
     storagePath: Path,
     approvedBlockPath: Path,
     checkpointsDir: Path,
@@ -164,18 +165,19 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
       }
     )
 
-  override def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
+  override def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
     lock.withPermit(
       for {
-        randomAccessFile                   <- getBlockMessageRandomAccessFile
-        currentIndex                       <- getCurrentIndex
-        endOfFileOffset                    <- randomAccessFile.length
-        _                                  <- randomAccessFile.seek(endOfFileOffset)
-        (blockHash, blockMsgWithTransform) = f
-        blockMsgWithTransformByteArray     = blockMsgWithTransform.toByteArray
-        blockSummary                       = blockMsgWithTransform.toBlockSummary
-        _                                  <- randomAccessFile.writeInt(blockMsgWithTransformByteArray.length)
-        _                                  <- randomAccessFile.write(blockMsgWithTransformByteArray)
+        randomAccessFile               <- getBlockMessageRandomAccessFile
+        currentIndex                   <- getCurrentIndex
+        endOfFileOffset                <- randomAccessFile.length
+        _                              <- randomAccessFile.seek(endOfFileOffset)
+        blockMsgWithTransformByteArray = blockMsgWithTransform.toByteArray
+        blockSummary                   = blockMsgWithTransform.toBlockSummary
+        deployHashes = blockMsgWithTransform.getBlockMessage.getBody.deploys
+          .flatMap(_.deploy.map(_.deployHash))
+        _ <- randomAccessFile.writeInt(blockMsgWithTransformByteArray.length)
+        _ <- randomAccessFile.write(blockMsgWithTransformByteArray)
         _ <- withWriteTxn { txn =>
               val b = blockHash.toDirectByteBuffer
               index.put(
@@ -184,6 +186,9 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
                 currentIndex.toByteString.concat(endOfFileOffset.toByteString).toDirectByteBuffer
               )
               blockSummaryDB.put(txn, b, blockSummary.toByteString.toDirectByteBuffer)
+              deployHashes.foreach(
+                deployHash => deployHashesDb.put(txn, deployHash.toDirectByteBuffer, b)
+              )
             }
       } yield ()
     )
@@ -209,6 +214,20 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     withReadTxn { txn =>
       Option(blockSummaryDB.get(txn, blockHash.toDirectByteBuffer))
         .map(r => BlockSummary.parseFrom(ByteString.copyFrom(r).newCodedInput()))
+    }
+
+  override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
+    withReadTxn { txn =>
+      val c = deployHashesDb.iterate(
+        txn,
+        KeyRange.closed(deployHash.toDirectByteBuffer, deployHash.toDirectByteBuffer)
+      )
+      c.iterable()
+        .asScala
+        .map(kv => {
+          ByteString.copyFrom(kv.`val`())
+        })
+        .toSeq
     }
 
   override def checkpoint(): F[Unit] =
@@ -330,7 +349,7 @@ object FileLMDBIndexBlockStore {
       blockStoreDataDir.resolve("checkpoints")
     )
 
-  def create[F[_]: Monad: Concurrent: Log](
+  def create[F[_]: Monad: Concurrent: Log: Metrics](
       env: Env[ByteBuffer],
       storagePath: Path,
       approvedBlockPath: Path,
@@ -344,6 +363,9 @@ object FileLMDBIndexBlockStore {
               }
       blockSummaryDB <- Sync[F].delay {
                          env.openDbi("blockSummaries", MDB_CREATE)
+                       }
+      deployHashesDB <- Sync[F].delay {
+                         env.openDbi("deployHashes", MDB_CREATE, MDB_DUPSORT)
                        }
       _                            <- createNewFile(approvedBlockPath)
       blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)
@@ -359,23 +381,32 @@ object FileLMDBIndexBlockStore {
                    )
 
                    initialState.useStateByRef[F] { st =>
-                     (new FileLMDBIndexBlockStore[F](
-                       lock,
-                       env,
-                       index,
-                       blockSummaryDB,
-                       storagePath,
-                       approvedBlockPath,
-                       checkpointsDirPath,
-                       st
-                     ): BlockStore[F]).asRight[StorageError]
+                     val metricsF = Metrics[F]
+                     val store: BlockStore[F] =
+                       new FileLMDBIndexBlockStore[F](
+                         lock,
+                         env,
+                         index,
+                         blockSummaryDB,
+                         deployHashesDB,
+                         storagePath,
+                         approvedBlockPath,
+                         checkpointsDirPath,
+                         st
+                       ) with MeteredBlockStore[F] {
+                         override implicit val m: Metrics[F] = metricsF
+                         override implicit val ms: Source =
+                           Metrics.Source(BlockStorageMetricsSource, "file-lmdb")
+                         override implicit val a: Apply[F] = Concurrent[F]
+                       }
+                     store.asRight[StorageError]
                    }
                  case Left(e) => e.asLeft[BlockStore[F]].pure[F]
                }
     } yield result
   }
 
-  def create[F[_]: Monad: Concurrent: Log](config: Config): F[StorageErr[BlockStore[F]]] =
+  def create[F[_]: Monad: Concurrent: Log: Metrics](config: Config): F[StorageErr[BlockStore[F]]] =
     for {
       notExists <- Sync[F].delay(Files.notExists(config.indexPath))
       _         <- Sync[F].delay(Files.createDirectories(config.indexPath)).whenA(notExists)

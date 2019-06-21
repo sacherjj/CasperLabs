@@ -23,11 +23,7 @@ object Main {
         maybeConf <- Task(Configuration.parse(args))
         _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) {
               case (conn, conf) =>
-                val deployService = new GrpcDeployService(
-                  conn.host,
-                  conn.portExternal,
-                  conn.portInternal
-                )
+                val deployService = new GrpcDeployService(conn)
                 program(conf)(Sync[Task], deployService, Timer[Task])
                   .doOnFinish(_ => Task(deployService.close()))
             }
@@ -40,8 +36,9 @@ object Main {
       configuration: Configuration
   ): F[Unit] =
     configuration match {
-      case ShowBlock(hash) => DeployRuntime.showBlock(hash)
-
+      case ShowBlock(hash)   => DeployRuntime.showBlock(hash)
+      case ShowDeploy(hash)  => DeployRuntime.showDeploy(hash)
+      case ShowDeploys(hash) => DeployRuntime.showDeploys(hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
 
       case Deploy(from, nonce, sessionCode, paymentCode, maybePublicKey, maybePrivateKey) =>
@@ -61,8 +58,6 @@ object Main {
         DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
 
       case Query(hash, keyType, keyValue, path) =>
-        DeployRuntime.gracefulExit(
-          DeployService[F].queryState(protocol.QueryStateRequest(hash, keyType, keyValue, path))
-        )
+        DeployRuntime.queryState(hash, keyType, keyValue, path)
     }
 }

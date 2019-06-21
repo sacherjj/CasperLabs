@@ -1,9 +1,12 @@
 [workspace]
 
 members = [
+    "blessed-contracts/mint-token",
+    "blessed-contracts/test-mint-token",
     "comm",
     "common",
     "engine",
+    "metrics-scraper",
     "shared",
     "storage",
     "wasm-prep",

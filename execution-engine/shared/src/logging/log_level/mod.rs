@@ -1,8 +1,8 @@
 ///! Log levels are [ fatal | error | warning | info | debug ]
 ///!    all emergency, alert, and critical level log events will be coalesced into
-///         a single category, fatal
+///!        a single category, fatal
 ///!    all notice and informational level log events will be coalesced into
-///         a single category, info
+///!        a single category, info
 ///!    "no log" / "none" is NOT an option; the minimum allowed loglevel is fatal
 ///!   internally, syslog levels will be maintained for cross compatibility, with
 ///!        the following mapping:
@@ -10,6 +10,7 @@
 ///!            error: 3
 ///!            warning: 4
 ///!            info: 5
+///!            metric: 6
 ///!            debug: 7
 use std::cmp::{Ord, Ordering};
 use std::fmt;
@@ -28,6 +29,8 @@ pub enum LogLevel {
     Warning = 4,
     /// notice, informational
     Info = 5,
+    /// metrics
+    Metric = 6,
     /// debug, dev oriented messages
     Debug = 7,
 }
@@ -123,13 +126,14 @@ impl Into<log::Level> for LogLevel {
             LogLevel::Error => log::Level::Error,
             LogLevel::Warning => log::Level::Warn,
             LogLevel::Info => log::Level::Info,
+            LogLevel::Metric => log::Level::Trace,
             LogLevel::Debug => log::Level::Debug,
         }
     }
 }
 
 /// newtype to encapsulate log level priority
-#[derive(Clone, Debug, Hash, Serialize)]
+#[derive(Clone, Copy, Debug, Hash, Serialize)]
 pub struct LogPriority(u8);
 
 impl LogPriority {
@@ -139,7 +143,7 @@ impl LogPriority {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn value(&self) -> u8 {
+    pub(crate) fn value(self) -> u8 {
         self.0
     }
 }
@@ -231,6 +235,16 @@ mod tests {
     }
 
     #[test]
+    fn metric_should_be_max_vs_debug() {
+        let lvl = LogLevel::Debug;
+        let other = LogLevel::Metric;
+
+        let max = lvl.max(other);
+
+        assert_eq!(max, LogLevel::Metric, "metric should be more severe");
+    }
+
+    #[test]
     fn fatal_should_be_syslog_0() {
         assert_eq!(LogLevel::Fatal as u8, 0, "Fatal should be priority 0");
     }
@@ -248,6 +262,11 @@ mod tests {
     #[test]
     fn info_should_be_syslog_5() {
         assert_eq!(LogLevel::Info as u8, 5, "Info should be priority 5");
+    }
+
+    #[test]
+    fn metric_should_be_syslog_6() {
+        assert_eq!(LogLevel::Metric as u8, 6, "Metric should be priority 6");
     }
 
     #[test]
@@ -312,8 +331,20 @@ mod tests {
     }
 
     #[test]
+    fn log_trace_eq_metric() {
+        let ll: log::Level = LogLevel::Metric.into();
+        assert_eq!(ll, log::Level::Trace, "Trace eq Metric");
+    }
+
+    #[test]
     fn log_debug_eq_debug() {
         let ll: log::Level = LogLevel::Debug.into();
         assert_eq!(ll, log::Level::Debug, "Debug eq Debug");
+    }
+
+    #[test]
+    fn log_metric_gt_debug() {
+        let ll: log::Level = LogLevel::Metric.into();
+        assert!(ll > log::Level::Debug, "Metric should be gt Debug");
     }
 }
