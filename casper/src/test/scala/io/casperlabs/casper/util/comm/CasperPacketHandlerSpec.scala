@@ -154,7 +154,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
             blockApproval.toByteString
           )
           _ = {
-            log.warns shouldBe empty
+            log.warns.size shouldBe 1
+            log.warns.head should include("Unable to construct blessed terms")
             transportLayer.requests should not be empty
             val lastMessage = transportLayer.requests.last
             assert(lastMessage.peer == local && lastMessage.msg == expectedPacket)
