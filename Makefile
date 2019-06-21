@@ -136,8 +136,14 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Make a node that has some extras installed for testing.
 .make/docker-build/test/node: \
 		.make/docker-build/universal/node \
-		hack/docker/test-node.Dockerfile
+		hack/docker/test-node.Dockerfile \
+		package-blessed-contracts
+	# Add blessed contracts so we can use them in integration testing.
+	# For live tests we should mount them from a real source.
+	mkdir -p hack/docker/.genesis/blessed-contracts
+	tar -xvzf execution-engine/target/blessed-contracts.tar.gz -C hack/docker/.genesis/blessed-contracts
 	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test hack/docker
+	rm -rf hack/docker/.genesis
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test version for the execution engine as well just so we can swith version easily.
