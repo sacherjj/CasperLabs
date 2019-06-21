@@ -19,7 +19,7 @@ import io.casperlabs.shared.StoreType
 import org.scalacheck.ScalacheckShapeless._
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-
+import org.scalacheck.{Gen, Shrink}
 import scala.concurrent.duration._
 import scala.io.Source
 
@@ -32,6 +32,8 @@ class ConfigurationSpec
     with ParserImplicits {
 
   val configFilename: String = s"test-configuration.toml"
+
+  implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(
@@ -103,7 +105,7 @@ class ConfigurationSpec
       hasFaucet = false,
       requiredSigs = 1,
       genesisAccountPublicKeyPath = Paths.get("/tmp/test").some,
-      initialTokens = BigInt(0),
+      initialTokens = BigInt(1),
       mintCodePath = Paths.get("/tmp/test").some,
       posCodePath = Paths.get("/tmp/test").some,
       shardId = "test",
