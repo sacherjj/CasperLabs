@@ -403,8 +403,8 @@ impl Account {
         &self.known_urefs
     }
 
-    pub fn get_urefs_lookup(self) -> BTreeMap<String, Key> {
-        self.known_urefs
+    pub fn get_urefs_lookup_mut(&mut self) -> &mut BTreeMap<String, Key> {
+        &mut self.known_urefs
     }
 
     pub fn pub_key(&self) -> &[u8; 32] {

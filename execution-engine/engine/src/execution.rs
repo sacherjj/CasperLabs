@@ -298,6 +298,12 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
+    fn remove_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<(), Trap> {
+        let name = self.string_from_mem(name_ptr, name_size)?;
+        self.context.remove_uref(&name)?;
+        Ok(())
+    }
+
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &self.host_buf)
@@ -739,6 +745,14 @@ where
                 // args(0) = pointer to destination in Wasm memory
                 let ptr = Args::parse(args)?;
                 self.list_known_urefs(ptr)?;
+                Ok(None)
+            }
+
+            FunctionIndex::RemoveURef => {
+                // args(0) = pointer to uref name in Wasm memory
+                // args(1) = size of uref name
+                let (name_ptr, name_size) = Args::parse(args)?;
+                self.remove_uref(name_ptr, name_size)?;
                 Ok(None)
             }
 

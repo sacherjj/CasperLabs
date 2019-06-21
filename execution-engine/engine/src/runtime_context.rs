@@ -15,7 +15,7 @@ use common::uref::{AccessRights, URef};
 use common::value::account::{
     Account, ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
 };
-use common::value::Value;
+use common::value::{Contract, Value};
 use shared::newtypes::{CorrelationId, Validated};
 use storage::global_state::StateReader;
 
@@ -94,6 +94,62 @@ where
 
     pub fn contains_uref(&self, name: &str) -> bool {
         self.uref_lookup.contains_key(name)
+    }
+
+    // Helper function to avoid duplication in `remove_uref`.
+    fn remove_uref_from_contract(
+        &mut self,
+        contract_key: Key,
+        mut contract: Contract,
+        name: &str,
+    ) -> Result<(), Error> {
+        contract.get_urefs_lookup_mut().remove(name);
+        let validated_uref = Validated::new(contract_key, Validated::valid)?;
+        let validated_value =
+            Validated::new(Value::Contract(contract), |value| self.validate_keys(value))?;
+
+        self.state
+            .borrow_mut()
+            .write(validated_uref, validated_value);
+
+        Ok(())
+    }
+
+    /// Remove URef from the `known_urefs` map of the current context.
+    /// It removes both from the ephemeral map (RuntimeContext::known_urefs) but also
+    /// persistable map (one that is found in the TrackingCopy/GlobalState).
+    pub fn remove_uref(&mut self, name: &str) -> Result<(), Error> {
+        match self.base_key() {
+            public_key @ Key::Account(_) => {
+                let mut account: Account = self.read_gs_typed(&public_key)?;
+                self.uref_lookup.remove(name);
+                account.get_urefs_lookup_mut().remove(name);
+                let validated_uref = Validated::new(public_key, Validated::valid)?;
+                let validated_value =
+                    Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+
+                self.state
+                    .borrow_mut()
+                    .write(validated_uref, validated_value);
+
+                Ok(())
+            }
+            contract_uref @ Key::URef(_) => {
+                let mut contract: Contract = self.read_gs_typed(&contract_uref)?;
+                self.uref_lookup.remove(name);
+                self.remove_uref_from_contract(contract_uref, contract, name)
+            }
+            contract_hash @ Key::Hash(_) => {
+                let mut contract: Contract = self.read_gs_typed(&contract_hash)?;
+                self.uref_lookup.remove(name);
+                self.remove_uref_from_contract(contract_hash, contract, name)
+            }
+            contract_local @ Key::Local(_) => {
+                let mut contract: Contract = self.read_gs_typed(&contract_local)?;
+                self.uref_lookup.remove(name);
+                self.remove_uref_from_contract(contract_local, contract, name)
+            }
+        }
     }
 
     pub fn add_urefs(&mut self, urefs_map: HashMap<URefAddr, HashSet<AccessRights>>) {
@@ -1308,5 +1364,34 @@ mod tests {
         };
         let query_result = test(known_urefs, query).expect("should be ok");
         assert!(query_result)
+    }
+
+    #[test]
+    fn remove_uref_works() {
+        // Test that `remove_uref` removes Key from both ephemeral representation
+        // which is one of the current RuntimeContext, and also puts that change
+        // into the `TrackingCopy` so that it's later committed to the GlobalState.
+
+        let known_urefs = HashMap::new();
+        let base_acc_addr = [0u8; 32];
+        let (key, account) = mock_account(base_acc_addr);
+        let mut chacha_rng = create_rng(base_acc_addr, 0);
+        let uref_name = "Foo".to_owned();
+        let uref_key = random_uref_key(&mut chacha_rng, AccessRights::READ);
+        let mut uref_map = std::iter::once((uref_name.clone(), uref_key)).collect();
+        let mut runtime_context =
+            mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
+
+        assert!(runtime_context.contains_uref(&uref_name));
+        assert!(runtime_context.remove_uref(&uref_name).is_ok());
+        assert!(runtime_context.validate_key(&uref_key).is_err());
+        assert!(!runtime_context.contains_uref(&uref_name));
+        let effects = runtime_context.effect();
+        let transform = effects.transforms.get(&key).unwrap();
+        let account = match transform {
+            Transform::Write(Value::Account(account)) => account,
+            _ => panic!("Invalid transform operation found"),
+        };
+        assert!(!account.urefs_lookup().contains_key(&uref_name));
     }
 }

@@ -89,6 +89,7 @@ mod ext_ffi {
         pub fn add_associated_key(public_key_ptr: *const u8, weight: i32) -> i32;
         pub fn remove_associated_key(public_key_ptr: *const u8) -> i32;
         pub fn set_action_threshold(permission_level: u32, threshold: i32) -> i32;
+        pub fn remove_uref(name_ptr: *const u8, name_size: usize);
     }
 }
 

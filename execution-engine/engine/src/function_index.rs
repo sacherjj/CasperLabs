@@ -31,6 +31,7 @@ pub enum FunctionIndex {
     SetActionThresholdFuncIndex = 24,
     SerKnownURefs = 25,
     ListKnownURefsIndex = 26,
+    RemoveURef = 27,
 }
 
 impl Into<usize> for FunctionIndex {

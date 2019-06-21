@@ -245,6 +245,12 @@ pub fn add_uref(name: &str, key: &Key) {
     unsafe { ext_ffi::add_uref(name_ptr, name_size, key_ptr, key_size) };
 }
 
+/// Removes Key persisted under [name] in the current context's map.
+pub fn remove_uref(name: &str) {
+    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    unsafe { ext_ffi::remove_uref(name_ptr, name_size) }
+}
+
 /// Return `t` to the host, terminating the currently running module.
 /// Note this function is only relevent to contracts stored on chain which
 /// return a value to their caller. The return value of a directly deployed
