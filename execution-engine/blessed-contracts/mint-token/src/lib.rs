@@ -15,7 +15,6 @@ mod internal_purse_id;
 
 mod mint;
 
-use alloc::collections::BTreeMap;
 use alloc::string::String;
 use core::convert::TryInto;
 
