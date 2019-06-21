@@ -71,7 +71,7 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
 }
 
 #[no_mangle]
-pub extern "C" fn mint_ext() {
+pub extern "C" fn call() {
     let mint = CLMint;
     let method_name: String = contract_api::get_arg(0);
 
@@ -116,9 +116,4 @@ pub extern "C" fn mint_ext() {
 
         _ => panic!("Unknown method name!"),
     }
-}
-
-#[no_mangle]
-pub extern "C" fn call() {
-    let _hash = contract_api::store_function("mint_ext", BTreeMap::new());
 }
