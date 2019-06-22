@@ -49,7 +49,6 @@ def test_account_state(node):
     assert len(blocks) == 1  # There should be only one block, the genesis block
 
     response = account_state(blocks[0].summary.block_hash)
-    assert response.account.public_key == ACCOUNT
     assert response.account.nonce == 0
 
     block_hash = node.deploy_and_propose(session_contract = "test_counterdefine.wasm", nonce = 1)
