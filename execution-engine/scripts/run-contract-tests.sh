@@ -2,6 +2,12 @@
 
 set -o errexit
 
-cargo build -p mint-token --target wasm32-unknown-unknown
+CONTRACTS=(
+    "mint-token"
+)
 
-cargo test -p casperlabs-engine-grpc-server -- --ignored
+for CONTRACT in "${CONTRACTS[@]}"; do
+    cargo build -p "${CONTRACT}" --target wasm32-unknown-unknown
+done
+
+cargo test -p casperlabs-engine-grpc-server -- --ignored --nocapture
