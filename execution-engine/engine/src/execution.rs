@@ -579,18 +579,23 @@ where
         }
     }
 
+    /// looks up the public mint contract key in the caller's [uref_lookup] map.
+    fn get_mint_contract_public_key(&mut self) -> Result<Key, Error> {
+        match self.context.get_uref(MINT_NAME) {
+            Some(key @ Key::URef(_)) => Ok(*key),
+            _ => Err(URefNotFound(String::from(MINT_NAME))),
+        }
+    }
+
     /// looks up the public mint contract key in the caller's [uref_lookup] map and then
-    /// gets the "internal" mint contract key stored under the public mint contract key.
-    fn get_mint_contract_key(&mut self) -> Result<Key, Error> {
-        let public_mint_key = match self.context.get_uref(MINT_NAME) {
-            Some(key @ Key::URef(_)) => *key,
-            _ => return Err(URefNotFound(String::from(MINT_NAME))),
-        };
-        let internal_mint_key = match self.context.read_gs(&public_mint_key)? {
-            Some(Value::Key(key @ Key::URef(_))) => key,
+    /// gets the "internal" mint contract uref stored under the public mint contract key.
+    fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
+        let public_mint_key = self.get_mint_contract_public_key()?;
+        let internal_mint_uref = match self.context.read_gs(&public_mint_key)? {
+            Some(Value::Key(Key::URef(uref))) => uref,
             _ => return Err(KeyNotFound(public_mint_key)),
         };
-        Ok(internal_mint_key)
+        Ok(internal_mint_uref)
     }
 
     /// Adds a given [URef] to this execution's context's `known_urefs`.  
@@ -599,10 +604,10 @@ where
     /// represents a shortcoming of the permissions model or is actually one of intended uses of
     /// [RuntimeContext::add_urefs].  If it is deemed the latter, this method can be converted
     /// to a public method on [RuntimeContext].
-    fn make_known(&mut self, uref: URef) -> () {
+    fn make_known(&mut self, uref: URef) {
         let mut urefs: HashMap<URefAddr, HashSet<AccessRights>> = HashMap::new();
         {
-            let set = urefs.entry(uref.addr()).or_insert(HashSet::new());
+            let set = urefs.entry(uref.addr()).or_insert_with(HashSet::new);
             if let Some(access_rights) = uref.access_rights() {
                 set.insert(access_rights);
             }
@@ -661,17 +666,28 @@ where
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_key = self.get_mint_contract_key()?;
+        let mint_contract_uref = self.get_mint_contract_uref()?;
+        let mint_contract_key = Key::URef(mint_contract_uref);
         let target_addr = target.value();
         let target_key = Key::Account(target_addr);
 
         let target_purse_id = self.mint_create(mint_contract_key)?;
 
+        if source == target_purse_id {
+            return Ok(TransferResult::TransferError);
+        }
+
         self.make_known(source.value());
         self.make_known(target_purse_id.value());
 
         if self.mint_transfer(mint_contract_key, source, target_purse_id, amount)? {
-            let known_urefs = &[(String::from(MINT_NAME), mint_contract_key)];
+            let known_urefs = &[
+                (
+                    String::from(MINT_NAME),
+                    self.get_mint_contract_public_key()?,
+                ),
+                (mint_contract_uref.as_string(), mint_contract_key),
+            ];
             let account = Account::create(target_addr, known_urefs, target_purse_id);
             self.context
                 .write_account(target_key, Value::Account(account))?;
@@ -689,7 +705,7 @@ where
         target: PurseId,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_key = self.get_mint_contract_key()?;
+        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
 
         self.make_known(source.value());
         self.make_known(target.value());
@@ -718,8 +734,12 @@ where
                 self.transfer_to_new_account(source, target, amount)
             }
             Some(Value::Account(account)) => {
+                let target = account.purse_id();
+                if source == target {
+                    return Ok(TransferResult::TransferError);
+                }
                 // If an account exists, transfer the amount to its purse
-                self.transfer_to_existing_account(source, account.purse_id(), amount)
+                self.transfer_to_existing_account(source, target, amount)
             }
             Some(_) => {
                 // If some other value exists, return an error
