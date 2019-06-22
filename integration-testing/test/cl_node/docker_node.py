@@ -4,6 +4,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
+import base64
 from typing import List, Tuple, Dict
 
 from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
@@ -186,7 +187,7 @@ class DockerNode(LoggingDockerBase):
         path = f'{self.host_genesis_dir}/system-account/account-public.key'
         os.makedirs(os.path.dirname(path))
         with open(path, 'w') as f:
-            f.write(f'{self.from_address()}')
+            f.write(f'{self.genesis_account_key().public_key}')
 
     def create_bonds_file(self) -> None:
         N = self.NUMBER_OF_BONDS
@@ -205,15 +206,7 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.deploy_dir)
 
     def from_address(self):
-        return '30' * 32
-<<<<<<< HEAD
-<<<<<<< HEAD
-        return self.genesis_account_key().public_key
-=======
->>>>>>> d858e3f... OP-344: Convert base64 pregenerated keys to hex
-=======
         return base64.b64decode(self.genesis_account_key().public_key + '===').hex()
->>>>>>> 7efcd64... OP-300: Use the old --from_adddress
 
     @property
     def volumes(self) -> dict:
