@@ -278,11 +278,10 @@ package object gossiping {
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
-      validatorIdentity: Option[ValidatorIdentity]
+      validatorId: Option[ValidatorIdentity]
   ): Resource[F, DownloadManager[F]] =
     for {
       _           <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
-      validatorId <- Resource.pure[F, Option[ValidatorIdentity]](validatorIdentity)
       maybeValidatorPublicKey = validatorId
         .map(x => ByteString.copyFrom(x.publicKey))
         .filterNot(_.isEmpty)
@@ -686,7 +685,7 @@ package object gossiping {
       }
     }
 
-  def show(hash: ByteString) =
+  private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
 
   // Should only be called in non-stand alone mode.
