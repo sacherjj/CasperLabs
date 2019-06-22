@@ -153,6 +153,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::RemoveURef.into(),
             ),
+            "get_caller" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
+                FunctionIndex::GetCallerIndex.into(),
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",

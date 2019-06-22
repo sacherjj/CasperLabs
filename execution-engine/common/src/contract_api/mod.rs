@@ -251,6 +251,22 @@ pub fn remove_uref(name: &str) {
     unsafe { ext_ffi::remove_uref(name_ptr, name_size) }
 }
 
+/// Returns caller of current context.
+/// When in root context (not in the sub call) - returns None.
+/// When in the sub call - returns public key of the account that made the deploy.
+pub fn get_caller() -> Option<PublicKey> {
+    //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
+    let dest_ptr = alloc_bytes(36);
+    let result = unsafe { ext_ffi::get_caller(dest_ptr) };
+    if result == 1 {
+        let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
+        let pk = deserialize(&bytes).unwrap();
+        Some(pk)
+    } else {
+        None
+    }
+}
+
 /// Return `t` to the host, terminating the currently running module.
 /// Note this function is only relevent to contracts stored on chain which
 /// return a value to their caller. The return value of a directly deployed

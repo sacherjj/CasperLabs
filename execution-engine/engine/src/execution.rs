@@ -304,6 +304,22 @@ where
         Ok(())
     }
 
+    /// If caller is defined (it's a subcall) then writes caller public key
+    /// to [dest_ptr] in the Wasm memory and returns 1.
+    /// If caller is undefined (we are in  the base context), returns 0.
+    fn get_caller(&mut self, dest_ptr: u32) -> Result<i32, Trap> {
+        let caller = self.context.get_caller();
+        if let Some(key) = caller {
+            let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
+            self.memory
+                .set(dest_ptr, &bytes)
+                .map_err(|e| Error::Interpreter(e).into())
+                .map(|_| 1)
+        } else {
+            Ok(0)
+        }
+    }
+
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &self.host_buf)
@@ -756,6 +772,13 @@ where
                 Ok(None)
             }
 
+            FunctionIndex::GetCallerIndex => {
+                // args(0) = pointer to Wasm memory where to write.
+                let dest_ptr = Args::parse(args)?;
+                self.get_caller(dest_ptr)
+                    .map(|status| Some(RuntimeValue::I32(status)))
+            }
+
             FunctionIndex::GasFuncIndex => {
                 let gas: u32 = Args::parse(args)?;
                 self.gas(u64::from(gas))?;
@@ -877,6 +900,7 @@ where
             known_urefs,
             args,
             &current_runtime.context.account(),
+            Some(PublicKey::new(current_runtime.context.account().pub_key())),
             key,
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
@@ -1102,6 +1126,7 @@ impl Executor<Module> for WasmiExecutor {
             known_urefs,
             arguments,
             &account,
+            None,
             acct_key,
             gas_limit,
             gas_counter,

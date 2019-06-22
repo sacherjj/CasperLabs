@@ -32,6 +32,7 @@ pub enum FunctionIndex {
     SerKnownURefs = 25,
     ListKnownURefsIndex = 26,
     RemoveURef = 27,
+    GetCallerIndex = 28,
 }
 
 impl Into<usize> for FunctionIndex {
