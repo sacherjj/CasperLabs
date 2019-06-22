@@ -205,12 +205,15 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.deploy_dir)
 
     def from_address(self):
-        return base64.b64decode(self.genesis_account_key().public_key + '===').hex()
         return '30' * 32
+<<<<<<< HEAD
 <<<<<<< HEAD
         return self.genesis_account_key().public_key
 =======
 >>>>>>> d858e3f... OP-344: Convert base64 pregenerated keys to hex
+=======
+        return base64.b64decode(self.genesis_account_key().public_key + '===').hex()
+>>>>>>> 7efcd64... OP-300: Use the old --from_adddress
 
     @property
     def volumes(self) -> dict:
