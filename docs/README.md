@@ -7,6 +7,7 @@
 - [Developer Guide](../DEVELOPER.md)
 - [Docker - Local Network Simulation](../hack/docker/README.md)
 - [Generating Keys](../VALIDATOR.md#setting-up-keys)
+- [Pre-Built Binary Installation](INSTALL.md)
 - [Usage](../USAGE.md)
 - [Validator Guide](../VALIDATOR.md)
 
