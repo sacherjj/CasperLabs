@@ -175,7 +175,7 @@ object Genesis {
     unsignedBlockProto(body, header)
   }
 
-  def apply[F[_]: MonadThrowable: Log: Time: FilesAPI: ExecutionEngineService](
+  def apply[F[_]: MonadThrowable: Log: FilesAPI: ExecutionEngineService](
       conf: CasperConf
   ): F[BlockMsgWithTransform] = apply[F](
     conf.walletsFile,
@@ -190,7 +190,7 @@ object Genesis {
     conf.posCodePath
   )
 
-  def apply[F[_]: MonadThrowable: Log: Time: FilesAPI: ExecutionEngineService](
+  def apply[F[_]: MonadThrowable: Log: FilesAPI: ExecutionEngineService](
       walletsPath: Path,
       minimumBond: Long,
       maximumBond: Long,
@@ -206,7 +206,7 @@ object Genesis {
       wallets   <- getWallets[F](walletsPath)
       bonds     <- ExecutionEngineService[F].computeBonds(ExecutionEngineService[F].emptyStateHash)
       bondsMap  = bonds.map(b => PublicKey(b.validatorPublicKey.toByteArray) -> b.stake).toMap
-      timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+      timestamp = deployTimestamp.getOrElse(0L)
       initial = withoutContracts(
         bonds = bondsMap,
         timestamp = timestamp,
