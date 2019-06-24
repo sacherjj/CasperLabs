@@ -12,15 +12,6 @@ Feature file: ~/CasperLabs/integration-testing/features/deploy.feature
 """
 
 
-@pytest.fixture()
-def node(one_node_network):
-    with one_node_network as network:
-        # Wait for the genesis block reaching each node.
-        for node in network.docker_nodes:
-            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
-        yield network.docker_nodes[0]
-
-
 def deploy_and_propose(node, contract, nonce):
     node.client.deploy(session_contract=contract,
                        payment_contract=contract,
