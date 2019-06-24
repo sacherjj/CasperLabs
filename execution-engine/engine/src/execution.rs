@@ -17,19 +17,22 @@ use wasmi::{
 };
 
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE};
+use common::contract_api::argsparser::ArgsParser;
 use common::key::Key;
-use common::uref::AccessRights;
+use common::uref::{AccessRights, URef};
 use common::value::account::{
-    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure, Weight,
     PUBLIC_KEY_SIZE,
 };
-use common::value::Value;
+use common::value::{Account, Value, U512};
 use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
 use storage::global_state::StateReader;
 
 use args::Args;
+use common::contract_api::TransferResult;
 use engine_state::execution_result::ExecutionResult;
+use execution::Error::{KeyNotFound, URefNotFound};
 use function_index::FunctionIndex;
 use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
@@ -38,12 +41,15 @@ use runtime_context::RuntimeContext;
 use tracking_copy::TrackingCopy;
 use URefAddr;
 
+const MINT_NAME: &str = "mint";
+
 #[derive(Debug)]
 pub enum Error {
     Interpreter(InterpreterError),
     Storage(storage::error::Error),
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
+    AccountNotFound(Key),
     TypeMismatch(TypeMismatch),
     InvalidAccess {
         required: AccessRights,
@@ -572,6 +578,158 @@ where
             Err(e) => Err(e.into()),
         }
     }
+
+    /// looks up the public mint contract key in the caller's [uref_lookup] map.
+    fn get_mint_contract_public_uref_key(&mut self) -> Result<Key, Error> {
+        match self.context.get_uref(MINT_NAME) {
+            Some(key @ Key::URef(_)) => Ok(*key),
+            _ => Err(URefNotFound(String::from(MINT_NAME))),
+        }
+    }
+
+    /// looks up the public mint contract key in the caller's [uref_lookup] map and then
+    /// gets the "internal" mint contract uref stored under the public mint contract key.
+    fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
+        let public_mint_key = self.get_mint_contract_public_uref_key()?;
+        let internal_mint_uref = match self.context.read_gs(&public_mint_key)? {
+            Some(Value::Key(Key::URef(uref))) => uref,
+            _ => return Err(KeyNotFound(public_mint_key)),
+        };
+        Ok(internal_mint_uref)
+    }
+
+    /// Calls the "create" method on the mint contract at the given mint contract key
+    fn mint_create(&mut self, mint_contract_key: Key) -> Result<PurseId, Error> {
+        let amount: U512 = U512::from(0);
+
+        let args_bytes = {
+            let args = ("create", amount);
+            ArgsParser::parse(&args).and_then(|args| args.to_bytes())?
+        };
+
+        let urefs_bytes = Vec::<Key>::new().to_bytes()?;
+
+        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+
+        let result: URef = deserialize(&self.host_buf)?;
+
+        Ok(PurseId::new(result))
+    }
+
+    /// Calls the "transfer" method on the mint contract at the given mint contract key
+    fn mint_transfer(
+        &mut self,
+        mint_contract_key: Key,
+        source: PurseId,
+        target: PurseId,
+        amount: U512,
+    ) -> Result<bool, Error> {
+        let source_value: URef = source.value();
+        let target_value: URef = target.value();
+
+        let args_bytes = {
+            let args = ("transfer", source_value, target_value, amount);
+            ArgsParser::parse(&args).and_then(|args| args.to_bytes())?
+        };
+
+        let urefs_bytes = vec![Key::URef(source_value), Key::URef(target_value)].to_bytes()?;
+
+        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+
+        let result: String = deserialize(&self.host_buf)?;
+
+        Ok(&result == "Successful transfer")
+    }
+
+    /// Creates a new account at a given public key, transferring a given amount of tokens from
+    /// the given source purse to the new account's purse.
+    fn transfer_to_new_account(
+        &mut self,
+        source: PurseId,
+        target: PublicKey,
+        amount: U512,
+    ) -> Result<TransferResult, Error> {
+        let mint_contract_uref = self.get_mint_contract_uref()?;
+        let mint_contract_key = Key::URef(mint_contract_uref);
+        let target_addr = target.value();
+        let target_key = Key::Account(target_addr);
+
+        let target_purse_id = self.mint_create(mint_contract_key)?;
+
+        if source == target_purse_id {
+            return Ok(TransferResult::TransferError);
+        }
+
+        self.context.insert_uref(source.value());
+        self.context.insert_uref(target_purse_id.value());
+
+        if self.mint_transfer(mint_contract_key, source, target_purse_id, amount)? {
+            let known_urefs = &[
+                (
+                    String::from(MINT_NAME),
+                    self.get_mint_contract_public_uref_key()?,
+                ),
+                (mint_contract_uref.as_string(), mint_contract_key),
+            ];
+            let account = Account::create(target_addr, known_urefs, target_purse_id);
+            self.context.write_account(target_key, account)?;
+            Ok(TransferResult::TransferredToNewAccount)
+        } else {
+            Ok(TransferResult::TransferError)
+        }
+    }
+
+    /// Transferring a given amount of tokens from the given source purse to the new account's
+    /// purse. Requires that the [`PurseId`]s have already been created by the mint contract (or
+    /// are the genesis account's).
+    fn transfer_to_existing_account(
+        &mut self,
+        source: PurseId,
+        target: PurseId,
+        amount: U512,
+    ) -> Result<TransferResult, Error> {
+        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+
+        self.context.insert_uref(source.value());
+        self.context.insert_uref(target.value());
+
+        if self.mint_transfer(mint_contract_key, source, target, amount)? {
+            Ok(TransferResult::TransferredToExistingAccount)
+        } else {
+            Ok(TransferResult::TransferError)
+        }
+    }
+
+    /// Creates a new account at a given public key, transferring a given amount of tokens from
+    /// the caller's purse to the new account's purse.
+    pub fn transfer_to_account(
+        &mut self,
+        target: PublicKey,
+        amount: U512,
+    ) -> Result<TransferResult, Error> {
+        let source = self.context.account().purse_id();
+        let target_key = Key::Account(target.value());
+
+        // Look up the account at the given public key's address
+        match self.context.read_account(&target_key)? {
+            None => {
+                // If no account exists, create a new account and transfer the amount to its purse.
+                self.transfer_to_new_account(source, target, amount)
+            }
+            Some(Value::Account(account)) => {
+                let target = account.purse_id();
+                if source == target {
+                    return Ok(TransferResult::TransferredToExistingAccount);
+                }
+                // If an account exists, transfer the amount to its purse
+                self.transfer_to_existing_account(source, target, amount)
+            }
+            Some(_) => {
+                // If some other value exists, return an error
+                Err(Error::AccountNotFound(target_key))
+            }
+        }
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -851,6 +1009,25 @@ where
                 let (action_type_value, threshold_value): (u32, u8) = Args::parse(args)?;
                 let value = self.set_action_threshold(action_type_value, threshold_value)?;
                 Ok(Some(RuntimeValue::I32(value)))
+            }
+
+            FunctionIndex::TransferToAccountIndex => {
+                // args(0) = pointer to array of bytes of a public key
+                // args(1) = length of array of bytes of a public key
+                // args(2) = pointer to array of bytes of an amount
+                // args(3) = length of array of bytes of an amount
+                let (key_ptr, key_size, amount_ptr, amount_size): (u32, u32, u32, u32) =
+                    Args::parse(args)?;
+                let public_key: PublicKey = {
+                    let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+                    deserialize(&bytes).map_err(Error::BytesRepr)?
+                };
+                let amount: U512 = {
+                    let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
+                    deserialize(&bytes).map_err(Error::BytesRepr)?
+                };
+                let ret = self.transfer_to_account(public_key, amount)?;
+                Ok(Some(RuntimeValue::I32(ret.into())))
             }
         }
     }

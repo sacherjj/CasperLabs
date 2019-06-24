@@ -11,7 +11,7 @@ use crate::uref::URef;
 use crate::value::account::{
     ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
 };
-use crate::value::{Contract, Value};
+use crate::value::{Contract, Value, U512};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -360,4 +360,42 @@ pub fn set_action_threshold(
         d if d == 0 => Ok(()),
         d => Err(SetThresholdFailure::from(d)),
     }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TransferResult {
+    TransferredToExistingAccount,
+    TransferredToNewAccount,
+    TransferError,
+}
+
+impl TryFrom<i32> for TransferResult {
+    type Error = ();
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(TransferResult::TransferredToExistingAccount),
+            1 => Ok(TransferResult::TransferredToNewAccount),
+            2 => Ok(TransferResult::TransferError),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<TransferResult> for i32 {
+    fn from(result: TransferResult) -> Self {
+        match result {
+            TransferResult::TransferredToExistingAccount => 0,
+            TransferResult::TransferredToNewAccount => 1,
+            TransferResult::TransferError => 2,
+        }
+    }
+}
+
+pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
+    let (target_ptr, target_size, _bytes) = to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) }
+        .try_into()
+        .expect("should parse result")
 }
