@@ -336,20 +336,17 @@ where
         }
     }
 
-    pub fn write_account(&mut self, key: Key, value: Value) -> Result<(), Error> {
-        match (&key, &value) {
-            (Key::Account(_), Value::Account(_)) => {
-                let validated_key = Validated::new(key, |key| self.validate_key(&key))?;
-                let validated_value = Validated::new(value, |value| self.validate_keys(&value))?;
-                self.state
-                    .borrow_mut()
-                    .write(validated_key, validated_value);
-                Ok(())
-            }
-            (Key::Account(_), _) => {
-                panic!("Do not use this function for writing non-account values")
-            }
-            (_, _) => panic!("Do not use this function for writing non-account keys"),
+    pub fn write_account(&mut self, key: Key, account: Account) -> Result<(), Error> {
+        if let Key::Account(_) = key {
+            let validated_key = Validated::new(key, |key| self.validate_key(&key))?;
+            let validated_value =
+                Validated::new(Value::Account(account), |value| self.validate_keys(&value))?;
+            self.state
+                .borrow_mut()
+                .write(validated_key, validated_value);
+            Ok(())
+        } else {
+            panic!("Do not use this function for writing non-account keys")
         }
     }
 

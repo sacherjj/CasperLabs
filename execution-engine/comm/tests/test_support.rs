@@ -48,6 +48,7 @@ fn get_compiled_wasm_path(contract_file: PathBuf) -> PathBuf {
     path
 }
 
+/// Reads a given compiled contract file from [`COMPILED_WASM_PATH`].
 pub fn read_wasm_file_bytes(contract_file: &str) -> Vec<u8> {
     let contract_file = PathBuf::from(contract_file);
     let path = get_compiled_wasm_path(contract_file);

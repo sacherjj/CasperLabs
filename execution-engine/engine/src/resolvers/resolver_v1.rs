@@ -159,7 +159,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             ),
             "transfer_to_account" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
-                FunctionIndex::TransferToAccount.into(),
+                FunctionIndex::TransferToAccountIndex.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(
