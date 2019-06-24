@@ -192,8 +192,8 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
               time: LogicalTime[Task]
           ) =>
             val bondsFile = genesisPath.resolve("bonds.txt")
-            val mintFile  = genesisPath.resolve("mint.wam")
-            val posFile   = genesisPath.resolve("pos.wam")
+            val mintFile  = genesisPath.resolve("mint.wasm")
+            val posFile   = genesisPath.resolve("pos.wasm")
             val keyFile   = genesisPath.resolve("account.pem")
 
             printBonds(bondsFile.toString)

@@ -2,8 +2,8 @@
 
 set -e
 
-$(dirname $0)/docker-gen-keys.sh $1
-cd $1
+$(dirname $0)/docker-gen-keys.sh "$1"
+cd "$1"
 rm node*
 mv validator-id account-id
 mv validator-id-hex account-id-hex
