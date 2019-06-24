@@ -659,7 +659,7 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
       containsJustificationRegression <- latestMessagesOfBlock.toList.existsM {
                                           case (validator, currentBlockJustificationHash) =>
                                             if (validator == b.getHeader.validatorPublicKey) {
-                                              // W`e let checkEquivocations handle this case
+                                              // We let checkEquivocations handle this case
                                               false.pure[F]
                                             } else {
                                               val previousBlockJustificationHash =
