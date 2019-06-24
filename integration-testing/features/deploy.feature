@@ -73,6 +73,9 @@ Feature: Deploy Operation
        And: Propose of block deployed with nonce of 2 is successful
        And: Previous propose of block deployed with nonce of 4 is still a failure and deploy
             will stay in the deploy buffers.
+       And: Propose of block deployed with nonce of 3 is successful and this causes propose of block with
+            nonce of 4 becomes success finally.
+
 
   # Implemented: test_nonce.py : test_deploy_with_lower_nonce (first part of the test)
   Scenario: Deploy with correct nonce
