@@ -192,38 +192,45 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                     lastCommittee.pure[F]
                   } else {
                     // Otherwise set qbest to newCommittee.
-                    val levelKBlocks = blockLevelTags
+                    // The quorum of new pruned committee is the minimal support
+                    // of all block having level >= 1
+                    val levelAbove1Tags = blockLevelTags
                       .filter {
                         case (_, blockLevelTag) =>
-                          blockLevelTag.blockLevel >= k
+                          blockLevelTag.blockLevel >= 1
                       }
-                    val minEstimateLevelKTag = levelKBlocks.minBy {
+                    val minEstimateLevelKTag = levelAbove1Tags.minBy {
                       case (_, blockScoreTag) => blockScoreTag.estimateQ
                     }
                     val (_, minEstimate) = minEstimateLevelKTag
 
-                    // The quorum of new pruned committee is the min support of all block having level >= k
                     val newCommittee = Committee(
                       prunedCommittee,
                       minEstimate.estimateQ
                     )
 
-                    // split all blocks from L_k by whether its support exactly equal to minQ.
-                    val (toRemoved, prunedLevelKBlocks) = levelKBlocks.partition {
+                    // split all blocks from L_1 by whether its support exactly equal to minQ.
+                    val (toRemoved, prunedLevel1Blocks) = levelAbove1Tags.partition {
                       case (_, blockScoreTag) =>
                         blockScoreTag.estimateQ == minEstimate.estimateQ
                     }
-                    if (prunedLevelKBlocks.isEmpty) {
+                    if (prunedLevel1Blocks.isEmpty) {
                       // if there is no block bigger than minQ, then return directly
                       newCommittee.some.pure[F]
                     } else {
                       // prune validators
-                      val prunedValidatorCandidates = prunedLevelKBlocks.map {
-                        case (_, blockScoreAccumulator) =>
-                          blockScoreAccumulator.block.validatorPublicKey
-                      }.toSet
+                      val prunedValidatorCandidates = prunedLevel1Blocks
+                        .filter {
+                          case (_, blockScoreAccumulator) =>
+                            blockScoreAccumulator.blockLevel >= k
+                        }
+                        .map {
+                          case (_, blockScoreAccumulator) =>
+                            blockScoreAccumulator.block.validatorPublicKey
+                        }
+                        .toSet
                       // Update q to be the (new) quorum of L_k.
-                      val newQuorumOfPrunedL = prunedLevelKBlocks
+                      val newQuorumOfPrunedL = prunedLevel1Blocks
                         .minBy {
                           case (_, blockScoreAccumulator) => blockScoreAccumulator.estimateQ
                         }
@@ -440,7 +447,9 @@ object BlockScoreAccumulator {
       }
       .getOrElse(self)
 
-  // Though we only want to find best level 1 committee, this algorithm can calculate level k in one pass
+  // Though we only want to find best level 1 committee,
+  // this algorithm can calculate level k in one pass
+  // Support of level K is smaller or equal to support of level 1 to level K-1
   private def calculateLevelAndQ(
       self: BlockScoreAccumulator,
       k: Int,
