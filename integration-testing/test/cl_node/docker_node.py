@@ -206,7 +206,6 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.deploy_dir)
 
     def from_address(self):
-        return '30' * 32
         return base64.b64decode(self.genesis_account_key().public_key + '===').hex()
 
     @property
