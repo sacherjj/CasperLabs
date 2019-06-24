@@ -12,6 +12,15 @@ Feature file: ~/CasperLabs/integration-testing/features/deploy.feature
 """
 
 
+@pytest.fixture()
+def node(one_node_network):
+    with one_node_network as network:
+        # Wait for the genesis block reaching each node.
+        for node in network.docker_nodes:
+            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
+        yield network.docker_nodes[0]
+
+
 def deploy_and_propose(node, contract, nonce):
     node.client.deploy(session_contract=contract,
                        payment_contract=contract,
@@ -77,7 +86,7 @@ def test_deploy_with_higher_nonce(node, contracts: List[str]):
     assert sum(deploy_counts) == len(contracts)
 
 
-@pytest.mark.parametrize("contracts", [['test_helloname.wasm', 'test_helloworld.wasm', 'test_counterdefine.wasm']])
+@pytest.mark.parametrize("contracts", [['test_helloname.wasm', 'test_helloworld.wasm', 'test_counterdefine.wasm', 'test_countercall.wasm']])
 def test_deploy_with_higher_nonce_does_not_include_previous_deploy(node, contracts: List[str]):
     """
     Feature file: deploy.feature
@@ -96,7 +105,7 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(node, contrac
         node.client.propose()
 
     node.client.deploy(session_contract=contracts[2], payment_contract=contracts[2], nonce=2)
-    # The deploy with nonce 4 cannot be proposed now.It will be in the deploy buffer but does not include
+    # The deploy with nonce 4 cannot be proposed now. It will be in the deploy buffer but does not include
     # in the new block created now.
     node.client.propose()
     wait_for_blocks_count_at_least(node, 3, 3, node.timeout)
@@ -105,4 +114,15 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(node, contrac
     # Deploy counts of all blocks except the genesis block.
     deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
 
-    assert sum(deploy_counts) == len(contracts) - 1
+    assert sum(deploy_counts) == 2
+
+    deploy_and_propose(node, contracts[3], 3)
+    node.client.propose()
+    wait_for_blocks_count_at_least(node, 5, 5, node.timeout)
+
+    blocks = parse_show_blocks(node.client.show_blocks(100))
+
+    # Deploy counts of all blocks except the genesis block.
+    deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
+
+    assert sum(deploy_counts) == len(contracts)
