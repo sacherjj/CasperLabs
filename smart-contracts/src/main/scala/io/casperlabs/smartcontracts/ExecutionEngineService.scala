@@ -109,6 +109,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   ): F[Either[Throwable, GenesisResult]] =
     deploys.length match {
       case 0 =>
+        // NOTE: For now the EE supports the original 303030... default account.
         GenesisResult()
           .withPoststateHash(emptyStateHash)
           .withEffect(ExecutionEffect())
@@ -131,7 +132,9 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
         } yield response
       case _ =>
         MonadThrowable[F].raiseError(
-          new IllegalArgumentException("Currently only 1 deploy is supported.")
+          new IllegalArgumentException(
+            "Executing more than one blessed contract is not supported at the moment."
+          )
         )
     }
 
