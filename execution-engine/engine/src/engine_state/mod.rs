@@ -323,11 +323,10 @@ mod tests {
     use common::bytesrepr::ToBytes;
     use common::key::Key;
     use common::uref::{AccessRights, URef};
-    use common::value::account::PurseId;
-    use common::value::{Account, Contract, Value, U512};
+    use common::value::{Contract, Value, U512};
     use execution;
+    use shared::test_utils;
     use shared::transform::Transform;
-    use shared::{init, test_utils};
     use wasm_prep::wasm_costs::WasmCosts;
 
     use engine_state::create_genesis_effects;
@@ -370,18 +369,10 @@ mod tests {
         }
     }
 
-    fn extract_transform_account(effects: HashMap<Key, Transform>, key: &Key) -> Option<Account> {
-        if let Transform::Write(Value::Account(value)) =
-            effects.get(key).expect("should have value")
-        {
-            Some(value.to_owned())
-        } else {
-            None
-        }
-    }
-
     fn extract_transform_key(effects: HashMap<Key, Transform>, key: &Key) -> Option<Key> {
-        if let Transform::Write(Value::Key(value)) = effects.get(key).expect("should have value") {
+        if let Transform::Write(Value::Key(value)) =
+            effects.get(&key.normalize()).expect("should have value")
+        {
             Some(*value)
         } else {
             None
@@ -403,7 +394,7 @@ mod tests {
         key: &Key,
     ) -> Option<Contract> {
         if let Transform::Write(Value::Contract(value)) =
-            effects.get(key).expect("should have value")
+            effects.get(&key.normalize()).expect("should have value")
         {
             Some(value.to_owned())
         } else {
@@ -420,24 +411,24 @@ mod tests {
         assert!(transforms.iter().all(|(_, effect)| is_write(effect)));
     }
 
-    // TODO: fix
-    #[ignore]
     #[test]
     fn create_genesis_effects_stores_mint_contract_uref_at_public_uref() {
         // given predictable uref(s) should be able to retrieve values and assert expected
 
         let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
-        let public_uref_key = {
+        let public_uref = {
             let mut addr = [0u8; 32];
             rng.fill_bytes(&mut addr);
-            Key::URef(URef::new(addr, AccessRights::READ_ADD_WRITE))
+            URef::new(addr, AccessRights::READ_ADD_WRITE)
         };
+
+        let public_uref_key = Key::URef(public_uref);
 
         let transforms = get_genesis_transforms();
 
         assert!(
-            transforms.contains_key(&public_uref_key),
+            transforms.contains_key(&public_uref_key.normalize()),
             "should have expected public_uref"
         );
 
@@ -447,7 +438,7 @@ mod tests {
         let mint_contract_uref_key = {
             let mut addr = [0u8; 32];
             rng.fill_bytes(&mut addr);
-            Key::URef(URef::new(addr, AccessRights::READ))
+            Key::URef(URef::new(addr, AccessRights::READ_ADD_WRITE))
         };
 
         // the value under the outer mint_contract_uref should be a key value pointing at
@@ -458,19 +449,19 @@ mod tests {
         );
     }
 
-    // TODO: fix
-    #[ignore]
     #[test]
     fn create_genesis_effects_stores_mint_contract_code_at_mint_contract_uref() {
         let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
-        // this is passing as currently designed, but see bug: EE-380
-        let mint_contract_uref_key = {
+        let mint_contract_uref = {
             let mut addr = [0u8; 32];
             rng.fill_bytes(&mut addr);
             rng.fill_bytes(&mut addr);
-            Key::URef(URef::new(addr, AccessRights::READ))
+            URef::new(addr, AccessRights::READ_ADD_WRITE)
         };
+
+        // this is passing as currently designed, but see bug: EE-380
+        let mint_contract_uref_key = Key::URef(mint_contract_uref);
 
         let transforms = get_genesis_transforms();
 
@@ -491,6 +482,10 @@ mod tests {
 
         let mint_known_urefs = {
             let mut ret: BTreeMap<String, Key> = BTreeMap::new();
+            ret.insert(
+                mint_contract_uref.as_string(),
+                Key::URef(mint_contract_uref),
+            );
             ret.insert(balance_uref.as_string(), balance_uref_key);
             ret
         };
@@ -551,8 +546,6 @@ mod tests {
         );
     }
 
-    // TODO: fix
-    #[ignore]
     #[test]
     fn create_genesis_effects_balance_at_balance_uref() {
         let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
@@ -591,7 +584,7 @@ mod tests {
             "transforms should contain purse_id_local_key"
         );
 
-        let balance_uref_key = Key::URef(balance_uref);
+        let balance_uref_key = Key::URef(balance_uref).normalize();
 
         let actual = extract_transform_u512(transforms, &balance_uref_key)
             .expect("transform was not a write of a key");
@@ -602,35 +595,56 @@ mod tests {
         assert_eq!(actual, initial_tokens, "invalid balance");
     }
 
-    // TODO: fix
-    #[ignore]
     #[test]
     fn create_genesis_effects_stores_genesis_account_at_genesis_account_addr() {
         let account_key = Key::Account(GENESIS_ACCOUNT_ADDR);
 
         let transforms = get_genesis_transforms();
 
-        assert!(
-            transforms.contains_key(&account_key),
-            "should have expected account key"
-        );
+        let mint_public_uref = {
+            let account_transform = transforms
+                .get(&account_key)
+                .expect("should have expected account");
 
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
-
-        // this is passing as currently designed, but see bug: EE-380
-        let purse_id = {
-            let mut bytes = [0u8; 32];
-            rng.fill_bytes(&mut bytes);
-            rng.fill_bytes(&mut bytes);
-            rng.fill_bytes(&mut bytes);
-            PurseId::new(URef::new(bytes, AccessRights::READ_ADD_WRITE))
+            if let Transform::Write(Value::Account(account)) = account_transform {
+                account.urefs_lookup().get("mint")
+            } else {
+                None
+            }
+            .expect("should have uref")
         };
 
-        let genesis_account = init::create_genesis_account(GENESIS_ACCOUNT_ADDR, purse_id, &[]);
-        let actual =
-            extract_transform_account(transforms, &account_key).expect("should have account");
+        let mint_private_uref = {
+            let mint_public_uref_transform = transforms
+                .get(&mint_public_uref.normalize())
+                .expect("should have mint public uref tranform");
 
-        assert_eq!(actual, genesis_account, "invalid account indirection");
+            if let Transform::Write(Value::Key(key @ Key::URef(_))) = mint_public_uref_transform {
+                Some(key)
+            } else {
+                None
+            }
+            .expect("should have uref")
+        };
+
+        let actual_mint_contract_bytes = {
+            let mint_contract_transform = transforms
+                .get(&mint_private_uref.normalize())
+                .expect("should have expected uref");
+
+            if let Transform::Write(Value::Contract(contract)) = mint_contract_transform {
+                Some(contract.bytes())
+            } else {
+                None
+            }
+            .expect("should have contract")
+        };
+
+        let expected_mint_contract_bytes: Vec<u8> = get_mint_code_bytes().into();
+
+        assert_eq!(
+            actual_mint_contract_bytes,
+            expected_mint_contract_bytes.as_slice()
+        );
     }
-
 }
