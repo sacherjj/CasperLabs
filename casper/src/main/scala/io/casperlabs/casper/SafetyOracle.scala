@@ -123,17 +123,17 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                                       .map(_.latestBlockHash)
                                   )
         validatorLastLatestMsg <- OptionT(blockDag.lookup(validatorLastLatestHash))
-        end <- OptionT(
-                computeCompatibility(
-                  blockDag,
-                  candidateBlockHash,
-                  validatorLastLatestHash
-                ).map(t => (!t).some)
-              )
-        creatorJustificationAsList = if (end) {
-          List.empty[BlockMetadata]
-        } else {
+        continue <- OptionT(
+                     computeCompatibility(
+                       blockDag,
+                       candidateBlockHash,
+                       validatorLastLatestHash
+                     ).map(_.some)
+                   )
+        creatorJustificationAsList = if (continue) {
           List(validatorLastLatestMsg)
+        } else {
+          List.empty[BlockMetadata]
         }
       } yield creatorJustificationAsList).fold(List.empty[BlockMetadata])(id)
 
@@ -146,8 +146,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
   }
 
   def constructJDagFromLevelZeroMsgs(
-      levelZeroMsgs: Map[Validator, List[BlockMetadata]],
-      prunedMsgs: Set[BlockHash] = Set.empty[BlockHash]
+      levelZeroMsgs: Map[Validator, List[BlockMetadata]]
   ): DoublyLinkedDag[BlockHash] =
     levelZeroMsgs.values.foldLeft(BlockDependencyDag.empty: DoublyLinkedDag[BlockHash]) {
       case (jDag, msgs) =>
@@ -157,8 +156,8 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
               case (jDag, justification) =>
                 DoublyLinkedDagOperations.add(
                   jDag,
-                  justification.latestBlockHash,
-                  msg.blockHash
+                  parent = justification.latestBlockHash,
+                  child = msg.blockHash
                 )
             }
         }
@@ -183,8 +182,8 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                       q,
                       weightMap
                     )
-      (blockLevelTags, committeeLevels) = sweepResult
-      prunedCommittee = committeeLevels
+      (blockLevelTags, validatorLevels) = sweepResult
+      prunedCommittee = validatorLevels
         .filter { case (_, level) => level >= k }
         .keys
         .toSet
@@ -203,6 +202,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                     }
                     val (_, minEstimate) = minEstimateLevelKTag
 
+                    // The quorum of new pruned committee is the min support of all block having level >= k
                     val newCommittee = Committee(
                       prunedCommittee,
                       minEstimate.estimateQ
@@ -214,7 +214,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                         blockScoreTag.estimateQ == minEstimate.estimateQ
                     }
                     if (prunedLevelKBlocks.isEmpty) {
-                      // if there is no blocks bigger than minQ, than return directly
+                      // if there is no block bigger than minQ, then return directly
                       newCommittee.some.pure[F]
                     } else {
                       // prune validators
@@ -222,6 +222,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                         case (_, blockScoreAccumulator) =>
                           blockScoreAccumulator.block.validatorPublicKey
                       }.toSet
+                      // Update q to be the (new) quorum of L_k.
                       val newQuorumOfPrunedL = prunedLevelKBlocks
                         .minBy {
                           case (_, blockScoreAccumulator) => blockScoreAccumulator.estimateQ
@@ -270,18 +271,22 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
           acc + (b.blockHash -> BlockScoreAccumulator.empty(b))
       }
 
+    val effectiveWeight: Validator => Long = (vid: Validator) =>
+      if (committeeApproximation.contains(vid)) weightMap(vid) else 0L
+
     stream
       .foldLeftF((blockLevelTags, Map.empty[Validator, Int])) {
         case ((blockLevelTags, validatorLevel), b) =>
-          val currentBlockScore: BlockScoreAccumulator = blockLevelTags(b.blockHash)
+          val currentBlockScore = blockLevelTags(b.blockHash)
           val updatedBlockScore = BlockScoreAccumulator.updateOwnLevel(
             currentBlockScore,
             q,
-            committeeApproximation,
-            weightMap
+            effectiveWeight
           )
           val updatedBlockLevelTags = blockLevelTags.updated(b.blockHash, updatedBlockScore)
           for {
+            // after update current block's tag information,
+            // we need update its children seen blocks's level information as well
             updatedBlockLevelTags <- jDag.parentToChildAdjacencyList
                                       .getOrElse(b.blockHash, Set.empty)
                                       .toList
@@ -295,7 +300,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                                                 BlockScoreAccumulator.empty(childBlock)
                                               )
                                             updatedChildBlockStore = BlockScoreAccumulator
-                                              .addParent(
+                                              .inheritFromParent(
                                                 childBlockStore,
                                                 updatedBlockScore
                                               )
@@ -355,7 +360,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                                                     levelZeroMsgs,
                                                     weights,
                                                     None,
-                                                    maxWeightApproximation / 2
+                                                    q = maxWeightApproximation / 2
                                                   )
                  } yield committeeMembersAfterPruning
                }
@@ -376,11 +381,13 @@ case class BlockScoreAccumulator(
     blockLevel: Int,
     highestLevelSoFar: Int = 0
 )
+
 object BlockScoreAccumulator {
   def empty(block: BlockMetadata): BlockScoreAccumulator =
     BlockScoreAccumulator(block, Map.empty, 0, 0)
 
-  def addParent(
+  // children will inherit seen blocks from the parent
+  def inheritFromParent(
       self: BlockScoreAccumulator,
       parent: BlockScoreAccumulator
   ): BlockScoreAccumulator = {
@@ -413,11 +420,8 @@ object BlockScoreAccumulator {
   def updateOwnLevel(
       self: BlockScoreAccumulator,
       q: Long,
-      committeeApproximation: Set[Validator],
-      validatorsWeightMap: Map[Validator, Long]
-  ): BlockScoreAccumulator = {
-    val effectiveWeight: Validator => Long = (vid: Validator) =>
-      if (committeeApproximation.contains(vid)) validatorsWeightMap(vid) else 0L
+      effectiveWeight: Validator => Long
+  ): BlockScoreAccumulator =
     calculateLevelAndQ(self, self.highestLevelSoFar + 1, q, effectiveWeight)
       .map {
         case (level, estimateQ) =>
@@ -431,7 +435,6 @@ object BlockScoreAccumulator {
           )
       }
       .getOrElse(self)
-  }
 
   // Though we only want to find best level 1 committee, this algorithm can calculate level k in one pass
   private def calculateLevelAndQ(
