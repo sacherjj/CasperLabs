@@ -2,12 +2,13 @@
 
 ## Outline
 
-- [Developer Guide](../DEVELOPER.md)
-- [Validator Guide](../VALIDATOR.md)
-- [Generating Keys](../VALIDATOR.md#setting-up-keys)
-- [Docker - Local Network Simulation](../hack/docker/README.md)
-- [Contributing](../CONTRIBUTING.md)
 - [Building Example Contracts](https://github.com/CasperLabs/contract-examples/blob/master/README.md)
+- [Contributing](../CONTRIBUTING.md)
+- [Developer Guide](../DEVELOPER.md)
+- [Docker - Local Network Simulation](../hack/docker/README.md)
+- [Generating Keys](../VALIDATOR.md#setting-up-keys)
+- [Usage](../USAGE.md)
+- [Validator Guide](../VALIDATOR.md)
 
 ## Getting Help
 
