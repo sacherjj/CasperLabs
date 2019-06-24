@@ -75,3 +75,45 @@ def test_deploy_with_higher_nonce(node, contracts: List[str]):
     deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
 
     assert sum(deploy_counts) == len(contracts)
+
+
+@pytest.mark.parametrize("contracts", [['test_helloname.wasm', 'test_helloworld.wasm', 'test_counterdefine.wasm', 'test_countercall.wasm']])
+def test_deploy_with_higher_nonce_does_not_include_previous_deploy(node, contracts: List[str]):
+    """
+    Feature file: deploy.feature
+
+    Scenario: Deploy with higher nonce and created block does not include previously deployed contract.
+    """
+    # Deploy successfully with nonce 1 => Nonce is 1 for account.
+    deploy_and_propose(node, contracts[0], 1)
+
+    # Now there should be the genesis block and the one we just deployed and proposed.
+    wait_for_blocks_count_at_least(node, 2, 2, node.timeout)
+
+    node.client.deploy(session_contract=contracts[1], payment_contract=contracts[1], nonce=4)
+
+    with pytest.raises(NonZeroExitCodeError):
+        node.client.propose()
+
+    node.client.deploy(session_contract=contracts[2], payment_contract=contracts[2], nonce=2)
+    # The deploy with nonce 4 cannot be proposed now. It will be in the deploy buffer but does not include
+    # in the new block created now.
+    node.client.propose()
+    wait_for_blocks_count_at_least(node, 3, 3, node.timeout)
+    blocks = parse_show_blocks(node.client.show_blocks(100))
+
+    # Deploy counts of all blocks except the genesis block.
+    deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
+
+    assert sum(deploy_counts) == 2
+
+    deploy_and_propose(node, contracts[3], 3)
+    node.client.propose()
+    wait_for_blocks_count_at_least(node, 5, 5, node.timeout)
+
+    blocks = parse_show_blocks(node.client.show_blocks(100))
+
+    # Deploy counts of all blocks except the genesis block.
+    deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
+
+    assert sum(deploy_counts) == len(contracts)
