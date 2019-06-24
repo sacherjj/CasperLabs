@@ -15,6 +15,7 @@ import io.casperlabs.comm.transport
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.shared.{FilesAPI, Log}
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -22,6 +23,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   import BlockApproverProtocolTest._
 
   private implicit val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
+
+  implicit def filesApi(implicit log: Log[Effect]) = FilesAPI.create[Effect]
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
     val n                          = 8

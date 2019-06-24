@@ -28,7 +28,7 @@ import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.effects.PacketHandler
-import io.casperlabs.shared.{Log, LogSource, Time}
+import io.casperlabs.shared.{FilesAPI, Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
@@ -52,7 +52,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       _ <- Metrics[F].incrementCounter("blocks-received-again", 0)
     } yield ()
 
-  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI](
       conf: CasperConf,
       delay: FiniteDuration,
       executionEngineService: ExecutionEngineService[F],
@@ -121,7 +121,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           }
     } yield casperPacketHandler
 
-  private def initBootstrap[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+  private def initBootstrap[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI](
       conf: CasperConf,
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
@@ -163,7 +163,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           }
     } yield new CasperPacketHandlerImpl[F](standalone, validatorId)
 
-  private def connectAsGenesisValidator[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+  private def connectAsGenesisValidator[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI](
       conf: CasperConf
   ): F[CasperPacketHandler[F]] =
     for {
@@ -241,7 +241,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     *
     * When in this state node can't handle any other message type so it will return `F[None]`
     **/
-  private[comm] class GenesisValidatorHandler[F[_]: Sync: Concurrent: ConnectionsCell: NodeDiscovery: TransportLayer: Log: Time: Metrics: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+  private[comm] class GenesisValidatorHandler[F[_]: Sync: Concurrent: ConnectionsCell: NodeDiscovery: TransportLayer: Log: Time: Metrics: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI](
       validatorId: ValidatorIdentity,
       shardId: String,
       blockApprover: BlockApproverProtocol
@@ -280,7 +280,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       noop
 
     override def handleUnapprovedBlock(peer: Node, ub: UnapprovedBlock): F[Unit] =
-      blockApprover.unapprovedBlockPacketHandler(peer, ub)
+      blockApprover.unapprovedBlockPacketHandler[F](peer, ub)
 
     override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit] =
       Log[F].info(s"No approved block available on node ${na.nodeIdentifer}")

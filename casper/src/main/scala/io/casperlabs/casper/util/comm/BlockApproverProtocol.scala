@@ -12,12 +12,14 @@ import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ProcessedDeployResu
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProcessedDeployUtil, ProtoUtil}
 import io.casperlabs.casper.{consensus, LegacyConversions, ValidatorIdentity}
 import io.casperlabs.catscontrib.Catscontrib._
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.RPConfAsk
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
+import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.models.InternalProcessedDeploy
@@ -26,7 +28,6 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import java.nio.file.Path
 import scala.util.Try
 import scala.math.BigInt
-import io.casperlabs.crypto.Keys
 
 /**
   * Validator side of the protocol defined in
@@ -42,7 +43,7 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk: ExecutionEngineService](
+  def unapprovedBlockPacketHandler[F[_]: MonadThrowable: TransportLayer: Log: Time: ErrorHandler: RPConfAsk: ExecutionEngineService: FilesAPI](
       peer: Node,
       u: UnapprovedBlock
   ): F[Unit] =
@@ -53,7 +54,7 @@ class BlockApproverProtocol(
     } else {
       val candidate = u.candidate.get
       BlockApproverProtocol
-        .validateCandidate(
+        .validateCandidate[F](
           candidate,
           deployTimestamp,
           wallets,
@@ -120,7 +121,7 @@ object BlockApproverProtocol {
   ): BlockApproval =
     getBlockApproval(candidate, validatorId)
 
-  def validateCandidate[F[_]: Concurrent: Log: ExecutionEngineService](
+  def validateCandidate[F[_]: MonadThrowable: Log: ExecutionEngineService: FilesAPI](
       candidate: ApprovedBlockCandidate,
       timestamp: Long,
       wallets: Seq[PreWallet],
@@ -148,7 +149,7 @@ object BlockApproverProtocol {
         posParams  = ProofOfStakeParams(conf.minimumBond, conf.maximumBond, validators)
         genesisBlessedContracts <- EitherT.liftF(
                                     Genesis
-                                      .defaultBlessedTerms(
+                                      .defaultBlessedTerms[F](
                                         timestamp,
                                         conf.genesisAccountPublicKeyPath,
                                         conf.initialTokens,
@@ -204,7 +205,7 @@ object BlockApproverProtocol {
               .pure[F]
           )
       tuplespaceBonds <- EitherT(
-                          Concurrent[F]
+                          MonadThrowable[F]
                             .attempt(
                               ExecutionEngineService[F].computeBonds(postState.postStateHash)
                             )

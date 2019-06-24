@@ -15,6 +15,7 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.PathOps.RichPath
+import io.casperlabs.shared.{FilesAPI, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -210,6 +211,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             implicit val timeEff                   = time
             implicit val logEff                    = log
             implicit val executionEngineServiceEff = executionEngineService
+            implicit val filesApi                  = FilesAPI.create[Task]
 
             for {
               bonds <- Genesis.getBonds[Task](bondsFile)
@@ -249,6 +251,9 @@ object GenesisTest {
   def mkGenesisPath     = Files.createTempDirectory(s"casper-genesis-test")
   val numValidators     = 5
   val casperlabsChainId = "casperlabs"
+
+  implicit def filesApi(implicit log: Log[Task]) =
+    FilesAPI.create[Task]
 
   def fromBondsFile(bondsPath: Path)(
       implicit executionEngineService: ExecutionEngineService[Task],

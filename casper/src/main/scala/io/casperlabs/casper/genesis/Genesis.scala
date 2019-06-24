@@ -19,6 +19,7 @@ import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil, Sorting
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.shared.FilesAPI
 import io.casperlabs.ipc
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.{Log, LogSource, Resources, Time}
@@ -26,7 +27,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.io.Source
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Left, Right, Success, Try}
 import scala.util.control.NoStackTrace
 import io.casperlabs.crypto.Keys
 
@@ -36,11 +37,8 @@ object Genesis {
 
   val protocolVersion = 1L
 
-  private def readFile[F[_]: Sync](path: Path) =
-    Sync[F].delay(Files.readAllBytes(path))
-
   /** Construct deploys that will set up the system contracts. */
-  def defaultBlessedTerms[F[_]: Sync: Log](
+  def defaultBlessedTerms[F[_]: MonadThrowable: FilesAPI: Log](
       timestamp: Long,
       accountPublicKeyPath: Option[Path],
       initialTokens: BigInt,
@@ -52,7 +50,7 @@ object Genesis {
     def readCode(maybePath: Option[Path]) =
       maybePath.fold(none[ipc.DeployCode].pure[F]) { path =>
         Log[F].info(s"Reading Wasm code from $path") *>
-          readFile(path) map { bytes =>
+          FilesAPI[F].readBytes(path) map { bytes =>
           ipc.DeployCode(ByteString.copyFrom(bytes)).some
         }
       }
@@ -177,7 +175,7 @@ object Genesis {
     unsignedBlockProto(body, header)
   }
 
-  def apply[F[_]: Concurrent: Log: Time: ExecutionEngineService](
+  def apply[F[_]: MonadThrowable: Log: Time: FilesAPI: ExecutionEngineService](
       conf: CasperConf
   ): F[BlockMsgWithTransform] = apply[F](
     conf.walletsFile,
@@ -192,7 +190,7 @@ object Genesis {
     conf.posCodePath
   )
 
-  def apply[F[_]: Concurrent: Log: Time: ExecutionEngineService](
+  def apply[F[_]: MonadThrowable: Log: Time: FilesAPI: ExecutionEngineService](
       walletsPath: Path,
       minimumBond: Long,
       maximumBond: Long,
@@ -215,7 +213,7 @@ object Genesis {
         chainId = chainId
       )
       validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-      blessedContracts <- defaultBlessedTerms(
+      blessedContracts <- defaultBlessedTerms[F](
                            timestamp = timestamp,
                            accountPublicKeyPath = accountPublicKeyPath,
                            initialTokens = initialTokens,
@@ -238,7 +236,7 @@ object Genesis {
     else none[File].pure[F]
   }
 
-  private def readAccountPublicKey[F[_]: Sync: Log](
+  private def readAccountPublicKey[F[_]: MonadThrowable: FilesAPI: Log](
       maybePath: Option[Path]
   ): F[Option[Keys.PublicKey]] =
     maybePath match {
@@ -246,8 +244,8 @@ object Genesis {
         Log[F].info("Genesis account public key is missing.") *>
           none.pure[F]
       case Some(path) =>
-        readFile[F](path)
-          .map(new String(_, StandardCharsets.UTF_8))
+        FilesAPI[F]
+          .readString(path)
           .map(Ed25519.tryParsePublicKey(_))
           .flatMap {
             case None =>
@@ -258,14 +256,14 @@ object Genesis {
           }
     }
 
-  def getWallets[F[_]: Sync: Log](
+  def getWallets[F[_]: MonadThrowable: FilesAPI: Log](
       wallets: Path
   ): F[Seq[PreWallet]] = {
     def walletFromFile(file: File): F[Seq[PreWallet]] =
       for {
-        maybeLines <- Sync[F].delay { Try(Source.fromFile(file).getLines().toList) }
+        maybeLines <- FilesAPI[F].readString(file.toPath).map(_.split('\n').toList).attempt
         wallets <- maybeLines match {
-                    case Success(lines) =>
+                    case Right(lines) =>
                       lines
                         .traverse(PreWallet.fromLine(_) match {
                           case Right(wallet) => wallet.some.pure[F]
@@ -275,7 +273,7 @@ object Genesis {
                               .map(_ => none[PreWallet])
                         })
                         .map(_.flatten)
-                    case Failure(ex) =>
+                    case Left(ex) =>
                       Log[F]
                         .warn(
                           s"Failed to read ${file.getAbsolutePath} for reason: ${ex.getMessage}"

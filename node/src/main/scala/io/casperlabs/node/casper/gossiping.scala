@@ -24,7 +24,7 @@ import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.shared.{Cell, Log, Resources, Time}
+import io.casperlabs.shared.{Cell, FilesAPI, Log, Resources, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
@@ -43,7 +43,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer](
+  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI](
       port: Int,
       conf: Configuration,
       grpcScheduler: Scheduler
@@ -315,7 +315,7 @@ package object gossiping {
                         )
     } yield downloadManager
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F]
@@ -381,7 +381,7 @@ package object gossiping {
                                      .withBlock(LegacyConversions.fromBlock(block))
                                      .withRequiredSigs(conf.casper.requiredSigs)
 
-                                   BlockApproverProtocol.validateCandidate(
+                                   BlockApproverProtocol.validateCandidate[F](
                                      candidate,
                                      timestamp,
                                      wallets,

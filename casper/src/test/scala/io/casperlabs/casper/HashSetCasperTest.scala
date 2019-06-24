@@ -20,14 +20,13 @@ import io.casperlabs.crypto.hash.Keccak256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.{Ed25519, Secp256k1}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import io.casperlabs.shared.{Cell, Log}
+import io.casperlabs.shared.{Cell, FilesAPI, Log}
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
-
 import scala.collection.immutable
 
 /** Run tests using the TransportLayer. */
@@ -1399,6 +1398,7 @@ object HashSetCasperTest {
     implicit val logEff                  = new LogStub[Task]()
     val initial                          = Genesis.withoutContracts(bonds, deployTimestamp, "casperlabs")
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
+    implicit val filesApi                = FilesAPI.create[Task]
     val validators = bonds.map {
       case (id, stake) => ProofOfStakeValidator(id, stake)
     }.toSeq

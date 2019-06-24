@@ -49,6 +49,7 @@ import monix.execution.Scheduler
 import org.scalatest.{Matchers, WordSpec}
 
 import scala.concurrent.duration._
+import io.casperlabs.shared.FilesAPI
 
 class CasperPacketHandlerSpec extends WordSpec with Matchers {
   private def setup() = new {
@@ -92,6 +93,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val rpConf         = createRPConfAsk[Task](local)
     implicit val time           = TestTime.instance
     implicit val log            = new LogStub[Task]
+    implicit val filesApi       = FilesAPI.create[Task]
     implicit val errHandler =
       ApplicativeError_.applicativeError(new ApplicativeError[Task, CommError] {
         override def raiseError[A](e: CommError): Task[A] =
