@@ -261,7 +261,11 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
         jDag.parentToChildAdjacencyList
           .getOrElse(b.blockHash, Set.empty)
           .toList
-          .traverse(blockDag.lookup)
+          .traverse(
+            blockDag
+              .lookup(_)
+              .map(_.filter(b => committeeApproximation.contains(b.validatorPublicKey)))
+          )
           .map(_.flatten)
     )
 
