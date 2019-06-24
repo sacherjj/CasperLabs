@@ -12,6 +12,7 @@ use alloc::vec::Vec;
 use common::contract_api::*;
 use common::contract_api::pointers::UPointer;
 use common::key::Key;
+use common::uref::URef;
 
 fn hello_name(name: &str) -> String {
     let mut result = String::from("Hello, ");
@@ -64,12 +65,13 @@ fn publish(msg: String) {
 pub extern "C" fn mailing_list_ext() {
     let method_name: String = get_arg(0);
     match method_name.as_str() {
-        "sub" => match sub(get_arg(1)).map(Key::from) {
-            Some(key) => {
-                let extra_urefs = vec![key];
-                ret(&Some(key), &extra_urefs);
+        "sub" => match sub(get_arg(1)) {
+            Some(upointer) => {
+                let extra_uref = URef::new(upointer.0, upointer.1);
+                let extra_urefs = vec![extra_uref];
+                ret(&Some(Key::from(upointer)), &extra_urefs);
             }
-            none => ret(&none, &Vec::new()),
+            _ => ret(&Option::<Key>::None, &Vec::new()),
         },
         //Note that this is totally insecure. In reality
         //the pub method would be only available under an
@@ -126,3 +128,4 @@ pub extern "C" fn call() {
 
     add_uref("mailing", &_mailing_list_hash.into());
 }
+
