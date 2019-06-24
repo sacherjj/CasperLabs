@@ -84,15 +84,15 @@ class BlocksResponseAPITest
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
                        )
-        logEff             = new LogStub[Task]
-        casperRef          <- MultiParentCasperRef.of[Task]
-        _                  <- casperRef.set(casperEffect)
-        cliqueOracleEffect = new SafetyOracleInstancesImpl[Task]()(Sync[Task], logEff)
+        logEff                 = new LogStub[Task]
+        casperRef              <- MultiParentCasperRef.of[Task]
+        _                      <- casperRef.set(casperEffect)
+        finalityDetectorEffect = new SafetyOracleInstancesImpl[Task]()(Sync[Task], logEff)
         blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
                            logEff,
-                           cliqueOracleEffect,
+                           finalityDetectorEffect,
                            blockStore
                          )
       } yield blocksResponse.length should be(5)
@@ -150,15 +150,15 @@ class BlocksResponseAPITest
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
                        )
-        logEff             = new LogStub[Task]
-        casperRef          <- MultiParentCasperRef.of[Task]
-        _                  <- casperRef.set(casperEffect)
-        cliqueOracleEffect = new SafetyOracleInstancesImpl[Task]()(Sync[Task], logEff)
+        logEff                 = new LogStub[Task]
+        casperRef              <- MultiParentCasperRef.of[Task]
+        _                      <- casperRef.set(casperEffect)
+        finalityDetectorEffect = new SafetyOracleInstancesImpl[Task]()(Sync[Task], logEff)
         blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
                            logEff,
-                           cliqueOracleEffect,
+                           finalityDetectorEffect,
                            blockStore
                          )
       } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
@@ -215,15 +215,15 @@ class BlocksResponseAPITest
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips
                      )
-      logEff             = new LogStub[Task]
-      casperRef          <- MultiParentCasperRef.of[Task]
-      _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = new SafetyOracleInstancesImpl[Task]()(Sync[Task], logEff)
+      logEff                 = new LogStub[Task]
+      casperRef              <- MultiParentCasperRef.of[Task]
+      _                      <- casperRef.set(casperEffect)
+      finalityDetectorEffect = new SafetyOracleInstancesImpl[Task]()(Sync[Task], logEff)
       blocksResponse <- BlockAPI.showBlocks[Task](2)(
                          Sync[Task],
                          casperRef,
                          logEff,
-                         cliqueOracleEffect,
+                         finalityDetectorEffect,
                          blockStore
                        )
     } yield blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly

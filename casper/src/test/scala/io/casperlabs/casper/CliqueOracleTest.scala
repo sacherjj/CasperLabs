@@ -46,7 +46,7 @@ class CliqueOracleTest
         val v2Bond = Bond(v2, 1)
         val bonds  = Seq(v1Bond, v2Bond)
 
-        implicit val cliqueOracleEffect = new SafetyOracleInstancesImpl[Task]
+        implicit val finalityDetectorEffect = new SafetyOracleInstancesImpl[Task]
 
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
@@ -97,16 +97,16 @@ class CliqueOracleTest
                  HashMap(v1 -> b6.blockHash, v2 -> b7.blockHash)
                )
           dag           <- blockDagStorage.getRepresentation
-          levelZeroMsgs <- cliqueOracleEffect.levelZeroMsgs(dag, b1.blockHash, List(v1, v2))
+          levelZeroMsgs <- finalityDetectorEffect.levelZeroMsgs(dag, b1.blockHash, List(v1, v2))
           lowestLevelZeroMsgs = levelZeroMsgs.flatMap {
             case (bh, msgs) => msgs.lastOption.map(_.blockHash)
           }.toSet
           _    = lowestLevelZeroMsgs shouldBe Set(b2.blockHash, b3.blockHash)
-          jDag = cliqueOracleEffect.constructJDagFromLevelZeroMsgs(levelZeroMsgs)
+          jDag = finalityDetectorEffect.constructJDagFromLevelZeroMsgs(levelZeroMsgs)
           _    = jDag.parentToChildAdjacencyList(b2.blockHash) shouldBe Set(b4.blockHash)
           _    = jDag.parentToChildAdjacencyList(b3.blockHash) shouldBe Set(b4.blockHash, b5.blockHash)
           _    = jDag.parentToChildAdjacencyList(b4.blockHash) shouldBe Set(b6.blockHash, b7.blockHash)
-          sweepResult <- cliqueOracleEffect.sweep(
+          sweepResult <- finalityDetectorEffect.sweep(
                           dag,
                           jDag,
                           Set(v1, v2),
@@ -140,7 +140,7 @@ class CliqueOracleTest
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-      implicit val cliqueOracleEffect = new SafetyOracleInstancesImpl[Task]
+      implicit val finalityDetectorEffect = new SafetyOracleInstancesImpl[Task]
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](

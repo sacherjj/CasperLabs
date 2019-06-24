@@ -5,13 +5,11 @@ import cats.data.OptionT
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.SafetyOracle.Committee
-import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.ski.id
-import io.casperlabs.shared.{Log, StreamT}
+import io.casperlabs.shared.Log
 
 /*
  * Implementation inspired by The Inspector algorithm
@@ -93,18 +91,16 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
     ): F[List[BlockMetadata]] =
       blockDag.latestMessage(validator).flatMap {
         case Some(latestMsgByValidator) =>
-          for {
-            l <- DagOperations
-                  .bfTraverseF[F, BlockMetadata](List(latestMsgByValidator))(
-                    previousAgreedBlockFromTheSameValidator(
-                      blockDag,
-                      _,
-                      candidateBlockHash,
-                      validator
-                    )
-                  )
-                  .toList
-          } yield l
+          DagOperations
+            .bfTraverseF[F, BlockMetadata](List(latestMsgByValidator))(
+              previousAgreedBlockFromTheSameValidator(
+                blockDag,
+                _,
+                candidateBlockHash,
+                validator
+              )
+            )
+            .toList
         case None => List.empty[BlockMetadata].pure[F]
       }
 
@@ -115,27 +111,27 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
         validator: Validator
     ): F[List[BlockMetadata]] =
       (for {
-        validatorLastLatestHash <- OptionT.fromOption[F](
-                                    block.justifications
-                                      .find(
-                                        _.validatorPublicKey == validator
-                                      )
-                                      .map(_.latestBlockHash)
-                                  )
-        validatorLastLatestMsg <- OptionT(blockDag.lookup(validatorLastLatestHash))
+        previousHash <- OptionT.fromOption[F](
+                         block.justifications
+                           .find(
+                             _.validatorPublicKey == validator
+                           )
+                           .map(_.latestBlockHash)
+                       )
+        previousMsg <- OptionT(blockDag.lookup(previousHash))
         continue <- OptionT(
                      computeCompatibility(
                        blockDag,
                        candidateBlockHash,
-                       validatorLastLatestHash
+                       previousHash
                      ).map(_.some)
                    )
-        creatorJustificationAsList = if (continue) {
-          List(validatorLastLatestMsg)
+        previousMsgs = if (continue) {
+          List(previousMsg)
         } else {
           List.empty[BlockMetadata]
         }
-      } yield creatorJustificationAsList).fold(List.empty[BlockMetadata])(id)
+      } yield previousMsgs).fold(List.empty[BlockMetadata])(id)
 
     validators.foldLeftM(Map.empty[Validator, List[BlockMetadata]]) {
       case (acc, v) =>
@@ -210,7 +206,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                     )
 
                     // split all blocks from L_1 by whether its support exactly equal to minQ.
-                    val (toRemoved, prunedLevel1Blocks) = levelAbove1Tags.partition {
+                    val (_, prunedLevel1Blocks) = levelAbove1Tags.partition {
                       case (_, blockScoreTag) =>
                         blockScoreTag.estimateQ == minEstimate.estimateQ
                     }
@@ -277,10 +273,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
     )
 
     val blockLevelTags =
-      lowestLevelZeroMsgs.foldLeft(Map.empty[BlockHash, BlockScoreAccumulator]) {
-        case (acc, b) =>
-          acc + (b.blockHash -> BlockScoreAccumulator.empty(b))
-      }
+      lowestLevelZeroMsgs.map(b => b.blockHash -> BlockScoreAccumulator.empty(b)).toMap
 
     val effectiveWeight: Validator => Long = (vid: Validator) =>
       if (committeeApproximation.contains(vid)) weightMap(vid) else 0L
@@ -381,7 +374,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
 
 /**
   * We attach an instance of BlockScoreAccumulator to every block in the jDAG.
-  * As we traverse the jDag bottom-up (following the topological sorting). we accumulate the view of what is "seen"
+  * As we traverse the jDag bottom-up (following the topological sorting), we accumulate the view of what is "seen"
   * from the perspective of this block (as a map validator ---> highest level of his blocks seen in j-past-cone).
   * Here "level" is what Inspector Finality Detector calls a level.
   */
