@@ -8,8 +8,12 @@ CONTRACTS=(
     "transfer-to-account-02"
 )
 
+source "${HOME}/.cargo/env"
+
+rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown
+
 for CONTRACT in "${CONTRACTS[@]}"; do
-    ~/.cargo/bin/cargo build -p "${CONTRACT}" --target wasm32-unknown-unknown
+    cargo build -p "${CONTRACT}" --target wasm32-unknown-unknown
 done
 
-~/.cargo/bin/cargo test -p casperlabs-engine-grpc-server -- --ignored --nocapture
+cargo test -p casperlabs-engine-grpc-server -- --ignored --nocapture
