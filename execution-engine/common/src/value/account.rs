@@ -516,7 +516,7 @@ impl FromBytes for AssociatedKeys {
     }
 }
 
-const BLOCKTIME_SIZE: usize = U64_SIZE;
+pub const BLOCKTIME_SER_SIZE: usize = U64_SIZE;
 
 impl ToBytes for BlockTime {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
@@ -582,7 +582,7 @@ const INACTIVITY_PERIOD_LIMIT_ID: u8 = 2;
 
 impl ToBytes for AccountActivity {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SIZE + U8_SIZE));
+        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SER_SIZE + U8_SIZE));
         result.push(KEY_MANAGEMENT_LAST_USED_ID);
         result.extend(&self.key_management_last_used.to_bytes()?);
         result.push(DEPLOYMENT_LAST_USED_ID);
@@ -621,7 +621,7 @@ impl FromBytes for AccountActivity {
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let action_thresholds_size = 2 * (WEIGHT_SIZE + U8_SIZE);
-        let account_activity_size: usize = 3 * (BLOCKTIME_SIZE + U8_SIZE);
+        let account_activity_size: usize = 3 * (BLOCKTIME_SER_SIZE + U8_SIZE);
         let associated_keys_size =
             self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
         let known_urefs_size = UREF_SIZE * self.known_urefs.len() + U32_SIZE;

@@ -38,6 +38,7 @@ object ExecutionEngineServiceStub {
   def mock[F[_]](
       execFunc: (
           ByteString,
+          Long,
           Seq[Deploy],
           ProtocolVersion
       ) => F[Either[Throwable, Seq[DeployResult]]],
@@ -50,10 +51,11 @@ object ExecutionEngineServiceStub {
     override def emptyStateHash: ByteString = ByteString.EMPTY
     override def exec(
         prestate: ByteString,
+        blocktime: Long,
         deploys: Seq[Deploy],
         protocolVersion: ProtocolVersion
     ): F[Either[Throwable, Seq[DeployResult]]] =
-      execFunc(prestate, deploys, protocolVersion)
+      execFunc(prestate, blocktime, deploys, protocolVersion)
     override def commit(
         prestate: ByteString,
         effects: Seq[TransformEntry]
@@ -73,7 +75,7 @@ object ExecutionEngineServiceStub {
 
   def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
     mock[F](
-      (_, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
+      (_, _, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
       (_, _) => ByteString.EMPTY.asRight[Throwable].pure[F],
       (_, _, _) =>
         Applicative[F]

@@ -20,7 +20,7 @@ use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE}
 use common::key::Key;
 use common::uref::AccessRights;
 use common::value::account::{
-    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
     PUBLIC_KEY_SIZE,
 };
 use common::value::Value;
@@ -318,6 +318,18 @@ where
         } else {
             Ok(0)
         }
+    }
+
+    /// Writes current blocktime to [dest_ptr] in Wasm memory.
+    fn get_blocktime(&self, dest_ptr: u32) -> Result<(), Trap> {
+        let blocktime = self
+            .context
+            .get_blocktime()
+            .to_bytes()
+            .map_err(Error::BytesRepr)?;
+        self.memory
+            .set(dest_ptr, &blocktime)
+            .map_err(|e| Error::Interpreter(e).into())
     }
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
@@ -779,6 +791,13 @@ where
                     .map(|status| Some(RuntimeValue::I32(status)))
             }
 
+            FunctionIndex::GetBlocktimeIndex => {
+                // args(0) = pointer to Wasm memory where to write.
+                let dest_ptr = Args::parse(args)?;
+                self.get_blocktime(dest_ptr)?;
+                Ok(None)
+            }
+
             FunctionIndex::GasFuncIndex => {
                 let gas: u32 = Args::parse(args)?;
                 self.gas(u64::from(gas))?;
@@ -902,6 +921,7 @@ where
             &current_runtime.context.account(),
             Some(PublicKey::new(current_runtime.context.account().pub_key())),
             key,
+            current_runtime.context.get_blocktime(),
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
@@ -1020,7 +1040,7 @@ pub trait Executor<A> {
         parity_module: A,
         args: &[u8],
         account: Key,
-        timestamp: u64,
+        blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
@@ -1040,7 +1060,7 @@ impl Executor<Module> for WasmiExecutor {
         parity_module: Module,
         args: &[u8],
         acct_key: Key,
-        _timestamp: u64,
+        blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
@@ -1128,6 +1148,7 @@ impl Executor<Module> for WasmiExecutor {
             &account,
             None,
             acct_key,
+            blocktime,
             gas_limit,
             gas_counter,
             fn_store_id,
@@ -1293,7 +1314,7 @@ mod tests {
             parity_module,
             &[],
             account_key,
-            0u64,
+            BlockTime(0),
             invalid_nonce,
             100u64,
             1u64,

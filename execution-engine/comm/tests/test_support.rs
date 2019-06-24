@@ -23,7 +23,6 @@ pub fn get_mock_deploy() -> Deploy {
     deploy.set_gas_limit(1000);
     deploy.set_gas_price(1);
     deploy.set_nonce(1);
-    deploy.set_timestamp(10);
     let mut deploy_code = DeployCode::new();
     deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
     deploy.set_session(deploy_code);

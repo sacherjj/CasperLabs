@@ -13,7 +13,8 @@ use common::bytesrepr::{deserialize, ToBytes};
 use common::key::{Key, LOCAL_SEED_SIZE};
 use common::uref::{AccessRights, URef};
 use common::value::account::{
-    Account, ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    Account, ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure,
+    SetThresholdFailure, Weight,
 };
 use common::value::{Contract, Value};
 use shared::newtypes::{CorrelationId, Validated};
@@ -39,6 +40,7 @@ pub struct RuntimeContext<'a, R> {
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
+    blocktime: BlockTime,
     gas_limit: u64,
     gas_counter: u64,
     fn_store_id: u32,
@@ -60,6 +62,7 @@ where
         account: &'a Account,
         caller_key: Option<PublicKey>,
         base_key: Key,
+        blocktime: BlockTime,
         gas_limit: u64,
         gas_counter: u64,
         fn_store_id: u32,
@@ -74,6 +77,7 @@ where
             args,
             caller_key,
             account,
+            blocktime,
             base_key,
             gas_limit,
             gas_counter,
@@ -158,6 +162,10 @@ where
 
     pub fn get_caller(&self) -> Option<PublicKey> {
         self.caller_key
+    }
+
+    pub fn get_blocktime(&self) -> BlockTime {
+        self.blocktime
     }
 
     pub fn add_urefs(&mut self, urefs_map: HashMap<URefAddr, HashSet<AccessRights>>) {
@@ -699,6 +707,7 @@ mod tests {
             &account,
             None,
             base_key,
+            BlockTime(0),
             0,
             0,
             0,
@@ -994,6 +1003,7 @@ mod tests {
             &account,
             None,
             contract_key,
+            BlockTime(0),
             0,
             0,
             0,
@@ -1046,6 +1056,7 @@ mod tests {
             &account,
             None,
             other_contract_key,
+            BlockTime(0),
             0,
             0,
             0,

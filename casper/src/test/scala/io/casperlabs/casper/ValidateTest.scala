@@ -894,6 +894,7 @@ class ValidateTest
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               ExecEngineUtil.MergeResult.empty,
                               deploys,
+                              System.currentTimeMillis(),
                               ProtocolVersion(1)
                             )
         DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _, _, _) = deploysCheckpoint

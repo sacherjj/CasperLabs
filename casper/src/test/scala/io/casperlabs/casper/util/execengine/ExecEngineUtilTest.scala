@@ -114,10 +114,12 @@ class ExecEngineUtilTest
       executionEngineService: ExecutionEngineService[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
+      blocktime <- Task.delay(System.currentTimeMillis())
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
                           deploy,
+                          blocktime,
                           protocolVersion
                         )
       DeploysCheckpoint(_, _, result, _, _, _, _) = computeResult
@@ -160,7 +162,7 @@ class ExecEngineUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
-          (_, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
+          (_, _, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => new SmartContractEngineError("unimplemented").asLeft.pure[Task],
           _ => Seq.empty[Bond].pure[Task],
@@ -170,7 +172,7 @@ class ExecEngineUtilTest
 
       val failedCommitEEService: ExecutionEngineService[Task] =
         mock[Task](
-          (_, deploys, _) =>
+          (_, _, deploys, _) =>
             Task.now {
               def getExecutionEffect(deploy: ipc.Deploy) = {
                 val key =

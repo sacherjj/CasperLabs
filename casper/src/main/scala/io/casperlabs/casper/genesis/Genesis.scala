@@ -30,7 +30,6 @@ object Genesis {
 
   // Todo: there should be some initial contracts like Mint, POS or something else
   def defaultBlessedTerms(
-      timestamp: Long,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String
@@ -43,17 +42,19 @@ object Genesis {
       wallets: Seq[PreWallet],
       faucetCode: String => String,
       startHash: StateHash,
-      timestamp: Long
+      blocktime: Long
   ): F[BlockMsgWithTransform] =
     withContracts(
-      defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
+      defaultBlessedTerms(posParams, wallets, faucetCode),
       initial,
+      blocktime,
       startHash
     )
 
   def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
       blessedTerms: List[Deploy],
       initial: Block,
+      blocktime: Long,
       startHash: StateHash
   ): F[BlockMsgWithTransform] =
     for {
@@ -62,6 +63,7 @@ object Genesis {
                            ExecutionEngineService[F]
                              .exec(
                                startHash,
+                               blocktime,
                                blessedTerms.map(deployDataToEEDeploy),
                                CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(
                                  initial

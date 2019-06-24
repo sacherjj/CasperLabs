@@ -20,6 +20,7 @@ use std::iter::Iterator;
 use std::str;
 
 use common::key::Key;
+use common::value::account::BlockTime;
 use execution_engine::engine_state::error::RootNotFound;
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -225,7 +226,7 @@ fn main() {
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
             account_addr,
-            timestamp,
+            BlockTime(timestamp),
             nonce,
             state_hash,
             gas_limit,

@@ -9,7 +9,8 @@ use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 use crate::value::account::{
-    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    BLOCKTIME_SER_SIZE,
 };
 use crate::value::{Contract, Value};
 use alloc::collections::BTreeMap;
@@ -265,6 +266,15 @@ pub fn get_caller() -> Option<PublicKey> {
     } else {
         None
     }
+}
+
+pub fn get_blocktime() -> BlockTime {
+    let dest_ptr = alloc_bytes(BLOCKTIME_SER_SIZE);
+    let bytes = unsafe {
+        ext_ffi::get_blocktime(dest_ptr);
+        Vec::from_raw_parts(dest_ptr, BLOCKTIME_SER_SIZE, BLOCKTIME_SER_SIZE)
+    };
+    deserialize(&bytes).unwrap()
 }
 
 /// Return `t` to the host, terminating the currently running module.

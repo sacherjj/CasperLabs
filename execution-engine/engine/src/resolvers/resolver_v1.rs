@@ -157,6 +157,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
                 FunctionIndex::GetCallerIndex.into(),
             ),
+            "get_blocktime" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::GetBlocktimeIndex.into(),
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",
