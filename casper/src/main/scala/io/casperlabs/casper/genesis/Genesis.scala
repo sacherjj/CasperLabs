@@ -66,20 +66,20 @@ object Genesis {
                            readAccountPublicKey[F](accountPublicKeyPath),
                            "Genesis account key is missing."
                          )
-      mintCode <- read(readCode(mintCodePath), "Mint code is missing.")
-      posCode  <- read(readCode(posCodePath), "PoS code is missing.")
+      mintCode     <- read(readCode(mintCodePath), "Mint code is missing.")
+      maybePosCode <- EitherT.right[String](readCode(posCodePath))
 
       request = ipc.GenesisRequest(
         address = ByteString.copyFrom(accountPublicKey),
         initialTokens = state
           .BigInt(
             initialTokens.toString,
-            bitWidth = 512 // We could use `initialTokens.bitLength` to map to the closest of 128, 256 or 512 but this is what EE expects.
+            bitWidth = 512 // We could use `initialTokens.bitLength` to map to the closest of 128, 256 or 512 but this is what the EE expects.
           )
           .some,
         timestamp = timestamp,
         mintCode = mintCode.some,
-        proofOfStakeCode = posCode.some,
+        proofOfStakeCode = maybePosCode,
         protocolVersion = state.ProtocolVersion(protocolVersion).some
       )
 
