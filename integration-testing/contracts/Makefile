@@ -9,6 +9,11 @@ CONTRACTS := $(shell find . -type f -name Cargo.toml | sed 's/\/Cargo.toml//' | 
 
 RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 
+# FFI or other changes in the EE
+EE_SRC := $(shell find ../../execution-engine/common -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" \) \
+	| grep -v target \
+	| grep -v -e ipc.*\.rs)
+
 all: $(EXAMPLES)
 
 clean: $(shell find . -type f -name "Cargo.toml" | awk '{print $$1"/clean"}')
@@ -19,7 +24,10 @@ clean: $(shell find . -type f -name "Cargo.toml" | awk '{print $$1"/clean"}')
 # and copying them to the integration-testing/resources directory as well.
 # NOTE: Not all of them produce .wasm files at the moment.
 define CONTRACT_rule
-.make/contracts/$(1): $$(shell find $(1) -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" \)) .make/rustup-update
+.make/contracts/$(1): \
+	$$(shell find $(1) -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" \)) \
+	$$(EE_SRC) \
+	.make/rustup-update
 	cd $(1) && cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
 	find $(1)/target/wasm32-unknown-unknown/release \
 		-type f -name *.wasm \
