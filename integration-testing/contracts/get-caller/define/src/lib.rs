@@ -10,12 +10,13 @@ use common::value::account::PublicKey;
 
 #[no_mangle]
 pub extern "C" fn get_caller_ext() {
-    // Assumes that will be called using account with
-    // public key == 303030...[48u8; 32] in binary representation.
+    // Assumes that will be called using account with 
+    // public key == '71ba8d2072964fa42794d2752e1fdaac448a25d8943005b4c7128748d855219b'
     // Will fail if we ever change that.
     let caller = get_caller();
     assert!(caller.is_some());
-    let expected_caller = PublicKey::new([48u8; 32]);
+    let expected_caller = PublicKey::new([113, 186, 141, 32, 114, 150, 79, 164, 39, 148, 210, 117, 46, 31, 218, 172, 68, 138, 37, 216, 148, 48, 5, 180, 199, 18, 135, 72, 216, 85, 33, 155]
+);
     assert_eq!(caller.unwrap(), expected_caller);
 }
 
