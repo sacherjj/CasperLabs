@@ -8,13 +8,14 @@ mod queue;
 mod stakes;
 
 use alloc::string::String;
+use alloc::vec::Vec;
 
 use cl_std::contract_api::{self, pointers::UPointer};
 use cl_std::uref::URef;
 use cl_std::value::{account::PublicKey, U512};
 
 use crate::error::Error;
-use crate::queue::{QueueLocal, QueueProvider};
+use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
 use crate::stakes::{ContractStakes, StakesReader};
 
 /// The purse used to pay the stakes.
@@ -48,13 +49,9 @@ const MAX_REL_DECREASE: u64 = 100_000;
 // TODO: The validator should be the sender of the deploy, not an argument.
 fn bond<Q: QueueProvider, S: StakesReader>(
     amount: U512,
-    _source: PurseId,
     validator: PublicKey,
     timestamp: Timestamp,
 ) -> Result<(), Error> {
-    // POS_PURSE is a constant, it is the PurseID of the proof-of-stake contract's own purse.
-    // contract_api::transfer(source, POS_PURSE, amount)?;
-
     let mut queue = Q::read_bonding();
     if queue.0.len() >= MAX_BOND_LEN {
         return Err(Error::TooManyEventsInQueue);
@@ -97,7 +94,7 @@ fn unbond<Q: QueueProvider, S: StakesReader>(
 }
 
 /// Removes all due requests from the queues and applies them.
-fn step<Q: QueueProvider, S: StakesReader>(timestamp: u64) {
+fn step<Q: QueueProvider, S: StakesReader>(timestamp: u64) -> Vec<QueueEntry> {
     let mut bonding_queue = Q::read_bonding();
     let mut unbonding_queue = Q::read_unbonding();
 
@@ -117,9 +114,7 @@ fn step<Q: QueueProvider, S: StakesReader>(timestamp: u64) {
         S::write(&stakes);
     }
 
-    for _entry in unbonds {
-        // contract_api::transfer(POS_PURSE, entry.dest, entry.amount)?;
-    }
+    unbonds
 }
 
 #[no_mangle]
@@ -129,21 +124,33 @@ pub extern "C" fn pos_ext() {
     let validator = PublicKey::new([0; 32]); // TODO: Needs FFI.
 
     match method_name.as_str() {
+        // Type of this method: `fn bond(amount: U512, purse: URef)`
         "bond" => {
             let amount = contract_api::get_arg(1);
             let source_uref: URef = contract_api::get_arg(2);
-            let source = UPointer::<()>::from_uref(source_uref).unwrap();
-            bond::<QueueLocal, ContractStakes>(amount, source, validator, timestamp)
+            let _source = PurseId::from_uref(source_uref).unwrap();
+            // Transfer `amount` from the `source` purse to PoS internal purse.
+            // POS_PURSE is a constant, it is the PurseID of the proof-of-stake contract's own purse.
+            // Mateusz: moved this outside of `bond` function so that it [bond] can be unit tested.
+            // contract_api::transfer(source, POS_PURSE, amount)?;
+            bond::<QueueLocal, ContractStakes>(amount, validator, timestamp)
                 .expect("Failed to bond");
         }
+        // Type of this method: `fn unbond(amount: U512)`
         "unbond" => {
             let maybe_amount = contract_api::get_arg(1);
             unbond::<QueueLocal, ContractStakes>(maybe_amount, validator, timestamp)
                 .expect("Failed to unbond");
         }
+        // Type of this method: `fn step()`
         "step" => {
             // This is called by the system in every block.
-            step::<QueueLocal, ContractStakes>(timestamp);
+            let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
+
+            // Mateusz: Moved outside of `step` function so that it [step] can be unit tested.
+            for _entry in unbonds {
+                // contract_api::transfer(POS_PURSE, entry.dest, entry.amount)?;
+            }
         }
         _ => {}
     }

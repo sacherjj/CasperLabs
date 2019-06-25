@@ -114,10 +114,7 @@ impl Queue {
     }
 
     pub fn pop_older_than(&mut self, timestamp: Timestamp) -> Vec<QueueEntry> {
-        let (older_than, mut rest) = self
-            .0
-            .iter()
-            .partition(|entry| entry.timestamp < timestamp);
+        let (older_than, mut rest) = self.0.iter().partition(|entry| entry.timestamp < timestamp);
         mem::swap(&mut self.0, &mut rest);
         older_than
     }
