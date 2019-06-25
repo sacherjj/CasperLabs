@@ -10,14 +10,14 @@ use crate::error::Error;
 
 use super::{MAX_DECREASE, MAX_INCREASE, MAX_REL_DECREASE, MAX_REL_INCREASE, MAX_SPREAD};
 
-pub trait StakesReader {
+pub trait StakesProvider {
     fn read() -> Option<Stakes>;
     fn write(stakes: &Stakes);
 }
 
 pub struct ContractStakes;
 
-impl StakesReader for ContractStakes {
+impl StakesProvider for ContractStakes {
     /// Reads the current stakes from the contract's known urefs.
     fn read() -> Option<Stakes> {
         let mut stakes = BTreeMap::new();

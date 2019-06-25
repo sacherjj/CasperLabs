@@ -17,7 +17,7 @@ use cl_std::value::{account::PublicKey, U512};
 
 use crate::error::Error;
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
-use crate::stakes::{ContractStakes, StakesReader};
+use crate::stakes::{ContractStakes, StakesProvider};
 
 /// The purse used to pay the stakes.
 type PurseId = UPointer<()>;
@@ -48,7 +48,7 @@ const MAX_REL_DECREASE: u64 = 100_000;
 /// Enqueues the deploy's creator for becoming a validator. The bond `amount` is paid from the
 /// purse `source`.
 // TODO: The validator should be the sender of the deploy, not an argument.
-fn bond<Q: QueueProvider, S: StakesReader>(
+fn bond<Q: QueueProvider, S: StakesProvider>(
     amount: U512,
     validator: PublicKey,
     timestamp: Timestamp,
@@ -73,7 +73,7 @@ fn bond<Q: QueueProvider, S: StakesReader>(
 /// Enqueues the deploy's creator for unbonding. Their vote weight as a validator is decreased
 /// immediately, but the funds will only be released after a delay. If `maybe_amount` is `None`,
 /// all funds are enqueued for withdrawal, terminating the validator status.
-fn unbond<Q: QueueProvider, S: StakesReader>(
+fn unbond<Q: QueueProvider, S: StakesProvider>(
     maybe_amount: Option<U512>,
     validator: PublicKey,
     timestamp: Timestamp,
@@ -95,7 +95,7 @@ fn unbond<Q: QueueProvider, S: StakesReader>(
 }
 
 /// Removes all due requests from the queues and applies them.
-fn step<Q: QueueProvider, S: StakesReader>(timestamp: Timestamp) -> Vec<QueueEntry> {
+fn step<Q: QueueProvider, S: StakesProvider>(timestamp: Timestamp) -> Vec<QueueEntry> {
     let mut bonding_queue = Q::read_bonding();
     let mut unbonding_queue = Q::read_unbonding();
 
