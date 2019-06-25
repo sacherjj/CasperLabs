@@ -10,7 +10,7 @@ CONTRACTS := $(shell find . -type f -name Cargo.toml | sed 's/\/Cargo.toml//' | 
 RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 
 # FFI or other changes in the EE
-EE_SRC := $(shell find ../../execution-engine -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" \) \
+EE_SRC := $(shell find ../../execution-engine/common -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" \) \
 	| grep -v target \
 	| grep -v -e ipc.*\.rs)
 
