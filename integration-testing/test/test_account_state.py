@@ -56,7 +56,7 @@ def test_account_state(node):
     assert not deploys[0].is_error, str(deploys)
 
     response = account_state(block_hash)
-    assert response.account.nonce == 1
+    assert response.account.nonce == 1, str(response)
 
     for nonce in range(2, 5):
         block_hash = node.deploy_and_propose(session_contract="test_countercall.wasm", nonce = nonce)

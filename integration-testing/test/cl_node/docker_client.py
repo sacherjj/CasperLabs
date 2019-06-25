@@ -90,13 +90,14 @@ class DockerClient(CasperLabsClient, LoggingMixin):
                gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: Optional[int] = None,
-               session_contract: str = 'test_helloname.wasm',
-               payment_contract: str = 'test_helloname.wasm',
+               session_contract: str = '',
+               payment_contract: str = '',
                private_key: Optional[str] = None,
                public_key: Optional[str] = None) -> str:
 
         address  = from_address or self.node.from_address()
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
+        payment_contract = payment_contract or session_contract
 
         command = (f"deploy --from {address}"
                    f" --gas-limit {gas_limit}"
