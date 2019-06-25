@@ -12,6 +12,7 @@ use alloc::vec::Vec;
 
 use cl_std::contract_api::{self, pointers::UPointer};
 use cl_std::uref::URef;
+use cl_std::value::account::BlockTime;
 use cl_std::value::{account::PublicKey, U512};
 
 use crate::error::Error;
@@ -21,7 +22,7 @@ use crate::stakes::{ContractStakes, StakesReader};
 /// The purse used to pay the stakes.
 type PurseId = UPointer<()>;
 /// A timestamp of a block or bonding/unbonding request.
-type Timestamp = u64;
+type Timestamp = BlockTime;
 
 /// The time from a bonding request until bonding becomes effective.
 const BOND_DELAY: u64 = 60 * 60;
@@ -94,12 +95,13 @@ fn unbond<Q: QueueProvider, S: StakesReader>(
 }
 
 /// Removes all due requests from the queues and applies them.
-fn step<Q: QueueProvider, S: StakesReader>(timestamp: u64) -> Vec<QueueEntry> {
+fn step<Q: QueueProvider, S: StakesReader>(timestamp: Timestamp) -> Vec<QueueEntry> {
     let mut bonding_queue = Q::read_bonding();
     let mut unbonding_queue = Q::read_unbonding();
 
-    let bonds = bonding_queue.pop_older_than(timestamp.saturating_sub(BOND_DELAY));
-    let unbonds = unbonding_queue.pop_older_than(timestamp.saturating_sub(UNBOND_DELAY));
+    let bonds = bonding_queue.pop_older_than(BlockTime(timestamp.0.saturating_sub(BOND_DELAY)));
+    let unbonds =
+        unbonding_queue.pop_older_than(BlockTime(timestamp.0.saturating_sub(UNBOND_DELAY)));
 
     if !unbonds.is_empty() {
         Q::write_unbonding(&unbonding_queue);
@@ -120,8 +122,8 @@ fn step<Q: QueueProvider, S: StakesReader>(timestamp: u64) -> Vec<QueueEntry> {
 #[no_mangle]
 pub extern "C" fn pos_ext() {
     let method_name: String = contract_api::get_arg(0);
-    let timestamp = 0; // TODO: Needs FFI.
-    let validator = PublicKey::new([0; 32]); // TODO: Needs FFI.
+    let timestamp = contract_api::get_blocktime();
+    let validator = contract_api::get_caller().unwrap(); // TODO: Error handling.
 
     match method_name.as_str() {
         // Type of this method: `fn bond(amount: U512, purse: URef)`

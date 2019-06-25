@@ -4,6 +4,7 @@ use core::mem;
 
 use cl_std::bytesrepr::{self, FromBytes, ToBytes};
 use cl_std::contract_api;
+use cl_std::value::account::BlockTime;
 use cl_std::value::{account::PublicKey, Value, U512};
 
 use crate::error::Error;
@@ -40,7 +41,7 @@ impl FromBytes for QueueEntry {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (validator, bytes) = PublicKey::from_bytes(bytes)?;
         let (amount, bytes) = U512::from_bytes(bytes)?;
-        let (timestamp, bytes) = u64::from_bytes(bytes)?;
+        let (timestamp, bytes) = BlockTime::from_bytes(bytes)?;
         let entry = QueueEntry {
             validator,
             amount,
