@@ -9,9 +9,10 @@ use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 use crate::value::account::{
-    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    BLOCKTIME_SER_SIZE,
 };
-use crate::value::{Contract, Value};
+use crate::value::{Contract, Value, U512};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -267,6 +268,15 @@ pub fn get_caller() -> Option<PublicKey> {
     }
 }
 
+pub fn get_blocktime() -> BlockTime {
+    let dest_ptr = alloc_bytes(BLOCKTIME_SER_SIZE);
+    let bytes = unsafe {
+        ext_ffi::get_blocktime(dest_ptr);
+        Vec::from_raw_parts(dest_ptr, BLOCKTIME_SER_SIZE, BLOCKTIME_SER_SIZE)
+    };
+    deserialize(&bytes).unwrap()
+}
+
 /// Return `t` to the host, terminating the currently running module.
 /// Note this function is only relevent to contracts stored on chain which
 /// return a value to their caller. The return value of a directly deployed
@@ -360,4 +370,42 @@ pub fn set_action_threshold(
         d if d == 0 => Ok(()),
         d => Err(SetThresholdFailure::from(d)),
     }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TransferResult {
+    TransferredToExistingAccount,
+    TransferredToNewAccount,
+    TransferError,
+}
+
+impl TryFrom<i32> for TransferResult {
+    type Error = ();
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(TransferResult::TransferredToExistingAccount),
+            1 => Ok(TransferResult::TransferredToNewAccount),
+            2 => Ok(TransferResult::TransferError),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<TransferResult> for i32 {
+    fn from(result: TransferResult) -> Self {
+        match result {
+            TransferResult::TransferredToExistingAccount => 0,
+            TransferResult::TransferredToNewAccount => 1,
+            TransferResult::TransferError => 2,
+        }
+    }
+}
+
+pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
+    let (target_ptr, target_size, _bytes) = to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) }
+        .try_into()
+        .expect("should parse result")
 }

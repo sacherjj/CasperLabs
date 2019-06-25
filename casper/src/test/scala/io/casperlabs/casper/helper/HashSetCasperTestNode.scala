@@ -324,6 +324,7 @@ object HashSetCasperTestNode {
 
       override def exec(
           prestate: ByteString,
+          blocktime: Long,
           deploys: Seq[Deploy],
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =
@@ -351,6 +352,14 @@ object HashSetCasperTestNode {
           }
           .asRight[Throwable]
           .pure[F]
+
+      override def runGenesis(
+          deploys: Seq[Deploy],
+          protocolVersion: ProtocolVersion
+      ): F[Either[Throwable, GenesisResult]] =
+        commit(emptyStateHash, Seq.empty).map {
+          _.map(GenesisResult(_).withEffect(ExecutionEffect()))
+        }
 
       override def commit(
           prestate: ByteString,

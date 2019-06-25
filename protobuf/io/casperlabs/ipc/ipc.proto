@@ -12,7 +12,6 @@ message DeployCode {
 message Deploy {
     // Public key of the account which is the context of the execution.
     bytes address = 1; // length 32 bytes
-    uint64 timestamp = 2;
     DeployCode session = 3;
     DeployCode payment = 4;
     uint64 gas_limit = 5;
@@ -25,8 +24,9 @@ message Deploy {
 
 message ExecRequest {
     bytes parent_state_hash = 1;
-    repeated Deploy deploys = 2;
-    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
+    uint64 block_time = 2;
+    repeated Deploy deploys = 3;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 4;
 }
 
 message ExecResponse {

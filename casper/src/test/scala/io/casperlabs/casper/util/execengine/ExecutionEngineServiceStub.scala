@@ -36,8 +36,13 @@ object ExecutionEngineServiceStub {
     } yield ProtoUtil.postStateHash(b)).attempt
 
   def mock[F[_]](
+      runGenesisFunc: (
+          Seq[Deploy],
+          ProtocolVersion
+      ) => F[Either[Throwable, GenesisResult]],
       execFunc: (
           ByteString,
+          Long,
           Seq[Deploy],
           ProtocolVersion
       ) => F[Either[Throwable, Seq[DeployResult]]],
@@ -48,12 +53,18 @@ object ExecutionEngineServiceStub {
       verifyWasmFunc: ValidateRequest => F[Either[String, Unit]]
   ): ExecutionEngineService[F] = new ExecutionEngineService[F] {
     override def emptyStateHash: ByteString = ByteString.EMPTY
+    override def runGenesis(
+        deploys: Seq[Deploy],
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, GenesisResult]] =
+      runGenesisFunc(deploys, protocolVersion)
     override def exec(
         prestate: ByteString,
+        blocktime: Long,
         deploys: Seq[Deploy],
         protocolVersion: ProtocolVersion
     ): F[Either[Throwable, Seq[DeployResult]]] =
-      execFunc(prestate, deploys, protocolVersion)
+      execFunc(prestate, blocktime, deploys, protocolVersion)
     override def commit(
         prestate: ByteString,
         effects: Seq[TransformEntry]
@@ -73,7 +84,8 @@ object ExecutionEngineServiceStub {
 
   def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
     mock[F](
-      (_, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
+      (_, _) => GenesisResult().asRight[Throwable].pure[F],
+      (_, _, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
       (_, _) => ByteString.EMPTY.asRight[Throwable].pure[F],
       (_, _, _) =>
         Applicative[F]

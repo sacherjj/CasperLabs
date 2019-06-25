@@ -3,21 +3,25 @@ package io.casperlabs.casper.genesis
 import java.io.PrintWriter
 import java.nio.file.{Files, Path, Paths}
 import java.util.Base64
-
+import cats._
+import cats.implicits._
 import cats.effect.Sync
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, HashSetCasperTestNode}
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.protocol.Bond
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.PathOps.RichPath
+import io.casperlabs.shared.{FilesAPI, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
+import io.casperlabs.ipc.GenesisRequest
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   import GenesisTest._
@@ -53,6 +57,12 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         }
         .mkString("\n")
     )
+    pw.close()
+  }
+
+  def printFile(path: Path, content: String): Unit = {
+    val pw = new PrintWriter(path.toString)
+    pw.print(content)
     pw.close()
   }
 
@@ -170,6 +180,67 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         }
       )
   }
+
+  it should "prepare a GenesisRequest" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      Task.delay(
+        withGenResources {
+          (
+              executionEngineService: ExecutionEngineService[Task],
+              genesisPath: Path,
+              log: LogStub[Task],
+              time: LogicalTime[Task]
+          ) =>
+            val bondsFile = genesisPath.resolve("bonds.txt")
+            val mintFile  = genesisPath.resolve("mint.wasm")
+            val posFile   = genesisPath.resolve("pos.wasm")
+            val keyFile   = genesisPath.resolve("account.pem")
+
+            printBonds(bondsFile.toString)
+            printFile(mintFile, "mint code")
+            printFile(posFile, "proof of stake code")
+            printFile(
+              keyFile,
+              """
+              |-----BEGIN PUBLIC KEY-----
+              |MCowBQYDK2VwAyEAhRAJx+krVtJQ3+jRzE5HMAheSn7YzzPVBDMgyJQdUq0=
+              |-----END PUBLIC KEY-----
+              """.stripMargin('|').trim
+            )
+
+            implicit val timeEff                   = time
+            implicit val logEff                    = log
+            implicit val executionEngineServiceEff = executionEngineService
+            implicit val filesApi                  = FilesAPI.create[Task]
+
+            for {
+              bonds <- Genesis.getBonds[Task](bondsFile)
+              _     <- ExecutionEngineService[Task].setBonds(bonds)
+              genesisWithTransform <- Genesis[Task](
+                                       walletsPath = nonExistentPath,
+                                       minimumBond = 1L,
+                                       maximumBond = Long.MaxValue,
+                                       chainId = casperlabsChainId,
+                                       deployTimestamp = System.currentTimeMillis.some,
+                                       accountPublicKeyPath = keyFile.some,
+                                       initialTokens = BigInt(123),
+                                       mintCodePath = mintFile.some,
+                                       posCodePath = posFile.some
+                                     )
+              BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
+
+              request = GenesisRequest.parseFrom(
+                genesis.getBody.deploys.head.getDeploy.getBody.getSession.code.toByteArray
+              )
+            } yield {
+              request.initialTokens.get shouldBe state.BigInt("123", 512)
+              request.mintCode.get.code.toByteArray shouldBe ("mint code".getBytes)
+              request.proofOfStakeCode.get.code.toByteArray shouldBe ("proof of stake code".getBytes)
+              request.protocolVersion.get.value shouldBe 1L
+            }
+        }
+      )
+  }
 }
 
 object GenesisTest {
@@ -180,21 +251,27 @@ object GenesisTest {
   val numValidators     = 5
   val casperlabsChainId = "casperlabs"
 
+  implicit def filesApi(implicit log: Log[Task]) =
+    FilesAPI.create[Task]
+
   def fromBondsFile(bondsPath: Path)(
       implicit executionEngineService: ExecutionEngineService[Task],
       log: LogStub[Task],
       time: LogicalTime[Task]
   ): Task[BlockMsgWithTransform] =
     for {
-      bonds <- Genesis.getBonds[Task](bondsPath, numValidators)
+      bonds <- Genesis.getBonds[Task](bondsPath)
       _     <- ExecutionEngineService[Task].setBonds(bonds)
       genesis <- Genesis[Task](
                   walletsPath = nonExistentPath,
                   minimumBond = 1L,
                   maximumBond = Long.MaxValue,
-                  faucet = false,
                   chainId = casperlabsChainId,
-                  deployTimestamp = Some(System.currentTimeMillis)
+                  deployTimestamp = System.currentTimeMillis.some,
+                  accountPublicKeyPath = none[Path],
+                  initialTokens = BigInt(0),
+                  mintCodePath = none[Path],
+                  posCodePath = none[Path]
                 )
     } yield genesis
 

@@ -2,6 +2,7 @@ package io.casperlabs.node.configuration
 
 import java.nio.file.{Files, Path, Paths, StandardOpenOption}
 import java.util.concurrent.TimeUnit
+
 import cats.data.Validated.Valid
 import cats.syntax.option._
 import cats.syntax.show._
@@ -19,7 +20,7 @@ import io.casperlabs.shared.StoreType
 import org.scalacheck.ScalacheckShapeless._
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-
+import org.scalacheck.{Gen, Shrink}
 import scala.concurrent.duration._
 import scala.io.Source
 
@@ -32,6 +33,8 @@ class ConfigurationSpec
     with ParserImplicits {
 
   val configFilename: String = s"test-configuration.toml"
+
+  implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(
@@ -100,8 +103,11 @@ class ConfigurationSpec
       walletsFile = Paths.get("/tmp/test"),
       minimumBond = 1L,
       maximumBond = 1L,
-      hasFaucet = false,
       requiredSigs = 1,
+      genesisAccountPublicKeyPath = Paths.get("/tmp/test").some,
+      initialTokens = BigInt(1),
+      mintCodePath = Paths.get("/tmp/test").some,
+      posCodePath = Paths.get("/tmp/test").some,
       shardId = "test",
       standalone = false,
       approveGenesis = false,
@@ -163,8 +169,6 @@ class ConfigurationSpec
         |'customCertificateLocation' and 'customKeyLocation'
         |if certificate and key are custom""".stripMargin) {
     forAll { (maybeDataDir: Option[Path], maybeCert: Option[Path], maybeKey: Option[Path]) =>
-      import cats.instances.either._
-      import cats.syntax.flatMap._
       import shapeless._
 
       /*_*/
@@ -178,7 +182,7 @@ class ConfigurationSpec
         maybeKey.fold(confUpdatedCert)(lens[Configuration].tls.key.set(confUpdatedCert))
       /*_*/
 
-      val Right(defaults) = readFile(Source.fromResource("default-configuration.toml")) >>= Configuration.parseToml
+      val Right(defaults) = readFile(Source.fromResource("default-configuration.toml")) map Configuration.parseToml
       val Right(res) = Configuration
         .updateTls(Configuration.updatePaths(confUpdatedKey, defaultConf.server.dataDir), defaults)
       val Right(defaultCert) =

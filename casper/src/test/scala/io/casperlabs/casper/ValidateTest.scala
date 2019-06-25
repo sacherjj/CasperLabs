@@ -855,7 +855,7 @@ class ValidateTest
       implicit val executionEngineService: ExecutionEngineService[Task] =
         HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
       val deploys = Vector(ByteString.EMPTY)
-        .map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+        .map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis, Integer.MAX_VALUE))
       val processedDeploys = deploys.map(d => Block.ProcessedDeploy().withDeploy(d).withCost(1))
       val invalidHash      = ByteString.copyFromUtf8("invalid")
       for {
@@ -887,13 +887,14 @@ class ValidateTest
       val deploys =
         Vector(
           ByteString.EMPTY
-        ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+        ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis, Integer.MAX_VALUE))
 
       for {
         dag1 <- blockDagStorage.getRepresentation
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               ExecEngineUtil.MergeResult.empty,
                               deploys,
+                              System.currentTimeMillis,
                               ProtocolVersion(1)
                             )
         DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _, _, _) = deploysCheckpoint

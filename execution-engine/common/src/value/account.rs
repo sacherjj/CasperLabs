@@ -1,10 +1,16 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
 use crate::key::{Key, UREF_SIZE};
-use crate::uref::URef;
+use crate::uref::{URef, UREF_SIZE_SERIALIZED};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use failure::Fail;
+
+const DEFAULT_NONCE: u64 = 0;
+const DEFAULT_CURRENT_BLOCK_TIME: BlockTime = BlockTime(0);
+const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
+
+pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PurseId(URef);
@@ -16,6 +22,18 @@ impl PurseId {
 
     pub fn value(&self) -> URef {
         self.0
+    }
+}
+
+impl ToBytes for PurseId {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        ToBytes::to_bytes(&self.0)
+    }
+}
+
+impl FromBytes for PurseId {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        <URef>::from_bytes(bytes).map(|(uref, rem)| (PurseId::new(uref), rem))
     }
 }
 
@@ -400,6 +418,28 @@ impl Account {
         }
     }
 
+    pub fn create(
+        account_addr: [u8; 32],
+        known_urefs: &[(String, Key)],
+        purse_id: PurseId,
+    ) -> Self {
+        let known_urefs = known_urefs.iter().cloned().collect();
+        let nonce = DEFAULT_NONCE;
+        let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
+        let action_thresholds: ActionThresholds = Default::default();
+        let account_activity =
+            AccountActivity::new(DEFAULT_CURRENT_BLOCK_TIME, DEFAULT_INACTIVITY_PERIOD_TIME);
+        Account::new(
+            account_addr,
+            nonce,
+            known_urefs,
+            purse_id,
+            associated_keys,
+            action_thresholds,
+            account_activity,
+        )
+    }
+
     pub fn insert_urefs(&mut self, keys: &mut BTreeMap<String, Key>) {
         self.known_urefs.append(keys);
     }
@@ -516,7 +556,7 @@ impl FromBytes for AssociatedKeys {
     }
 }
 
-const BLOCKTIME_SIZE: usize = U64_SIZE;
+pub const BLOCKTIME_SER_SIZE: usize = U64_SIZE;
 
 impl ToBytes for BlockTime {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
@@ -582,7 +622,7 @@ const INACTIVITY_PERIOD_LIMIT_ID: u8 = 2;
 
 impl ToBytes for AccountActivity {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SIZE + U8_SIZE));
+        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SER_SIZE + U8_SIZE));
         result.push(KEY_MANAGEMENT_LAST_USED_ID);
         result.extend(&self.key_management_last_used.to_bytes()?);
         result.push(DEPLOYMENT_LAST_USED_ID);
@@ -621,7 +661,7 @@ impl FromBytes for AccountActivity {
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let action_thresholds_size = 2 * (WEIGHT_SIZE + U8_SIZE);
-        let account_activity_size: usize = 3 * (BLOCKTIME_SIZE + U8_SIZE);
+        let account_activity_size: usize = 3 * (BLOCKTIME_SER_SIZE + U8_SIZE);
         let associated_keys_size =
             self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
         let known_urefs_size = UREF_SIZE * self.known_urefs.len() + U32_SIZE;

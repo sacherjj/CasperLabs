@@ -25,6 +25,7 @@ use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 use self::ipc_grpc::ExecutionEngineService;
 use self::mappings::*;
+use common::value::account::BlockTime;
 
 const EXPECTED_PUBLIC_KEY_LENGTH: usize = 32;
 
@@ -152,6 +153,9 @@ where
 
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
+
+        let blocktime = BlockTime(exec_request.get_block_time());
+
         // TODO: don't unwrap
         let wasm_costs = WasmCosts::from_version(protocol_version.value).unwrap();
 
@@ -166,6 +170,7 @@ where
             &executor,
             &preprocessor,
             prestate_hash,
+            blocktime,
             deploys,
             protocol_version,
             correlation_id,
@@ -415,11 +420,13 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_deploys<A, H, E, P>(
     engine_state: &EngineState<H>,
     executor: &E,
     preprocessor: &P,
     prestate_hash: Blake2bHash,
+    blocktime: BlockTime,
     deploys: &[ipc::Deploy],
     protocol_version: &state::ProtocolVersion,
     correlation_id: CorrelationId,
@@ -457,7 +464,6 @@ where
                 Key::Account(dest)
             };
 
-            let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
             let protocol_version = protocol_version.value;
@@ -466,7 +472,7 @@ where
                     module_bytes,
                     args,
                     address,
-                    timestamp,
+                    blocktime,
                     nonce,
                     prestate_hash,
                     gas_limit,

@@ -454,7 +454,6 @@ object ProtoUtil {
 
   def deployDataToEEDeploy(d: Deploy): ipc.Deploy = ipc.Deploy(
     address = d.getHeader.accountPublicKey,
-    timestamp = d.getHeader.timestamp,
     session = d.getBody.session.map { case Deploy.Code(code, args) => ipc.DeployCode(code, args) },
     payment = d.getBody.payment.map { case Deploy.Code(code, args) => ipc.DeployCode(code, args) },
     // The new data type doesn't have a limit field. Remove this once payment is implemented.
