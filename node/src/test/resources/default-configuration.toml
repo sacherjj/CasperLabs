@@ -70,7 +70,6 @@ num-validators = 1
 wallets-file = "/tmp/test"
 minimum-bond = 1
 maximum-bond = 1
-has-faucet = false
 required-sigs = 1
 genesis-account-public-key-path = "/tmp/test"
 initial-tokens = 1

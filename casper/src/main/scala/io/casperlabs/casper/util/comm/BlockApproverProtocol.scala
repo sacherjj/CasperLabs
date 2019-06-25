@@ -85,7 +85,6 @@ object BlockApproverProtocol {
   case class GenesisConf(
       minimumBond: Long,
       maximumBond: Long,
-      hasFaucet: Boolean,
       requiredSigs: Int,
       genesisAccountPublicKeyPath: Option[Path],
       initialTokens: BigInt,
@@ -97,7 +96,6 @@ object BlockApproverProtocol {
       GenesisConf(
         conf.minimumBond,
         conf.maximumBond,
-        conf.hasFaucet,
         conf.requiredSigs,
         conf.genesisAccountPublicKeyPath,
         conf.initialTokens,

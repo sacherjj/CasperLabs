@@ -218,9 +218,6 @@ minimum-bond = 1
 # Maximum bond accepted by the PoS contract in the genesis block.
 maximum-bond = 9223372036854775807
 
-# True if there should be a public access CSPR faucet in the genesis block.
-has-faucet = false
-
 # Number of signatures from trusted validators required to creating an approved genesis block.
 required-sigs = 0
 

@@ -103,7 +103,6 @@ class ConfigurationSpec
       walletsFile = Paths.get("/tmp/test"),
       minimumBond = 1L,
       maximumBond = 1L,
-      hasFaucet = false,
       requiredSigs = 1,
       genesisAccountPublicKeyPath = Paths.get("/tmp/test").some,
       initialTokens = BigInt(1),

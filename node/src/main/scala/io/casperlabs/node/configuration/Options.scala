@@ -282,10 +282,6 @@ private[configuration] final case class Options private (
       gen[Long]("Maximum bond accepted by the PoS contract in the genesis block.")
 
     @scallop
-    val casperHasFaucet =
-      gen[Flag]("True if there should be a public access CSPR faucet in the genesis block.")
-
-    @scallop
     val casperGenesisAccountPublicKeyPath =
       gen[Path]("Path to the PEM encoded public key to use for the system account.")
 

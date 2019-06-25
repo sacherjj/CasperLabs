@@ -30,7 +30,6 @@ final case class CasperConf(
     walletsFile: Path,
     minimumBond: Long,
     maximumBond: Long,
-    hasFaucet: Boolean,
     requiredSigs: Int,
     genesisAccountPublicKeyPath: Option[Path],
     initialTokens: BigInt,
