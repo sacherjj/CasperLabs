@@ -11,14 +11,16 @@ RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 
 all: $(EXAMPLES)
 
-clean: down $(shell find . -type f -name "Cargo.toml" | awk '{print $$1"/clean"}')
+clean: $(shell find . -type f -name "Cargo.toml" | awk '{print $$1"/clean"}')
 	rm -rf .make
 
 # Defining rules so each target building a contract only depends on its own source. Needs GNU Make.
 # Building either a call or a define, leaving the WASM files in <contract>/target/wasm32-unknown-unknown/release/
+# and copying them to the integration-testing/resources directory as well.
 define CONTRACT_rule
 .make/contracts/$(1): $$(shell find $(1) -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" \)) .make/rustup-update
 	cd $(1) && cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
+	cp $(1)/target/wasm32-unknown-unknown/release/*.wasm ../resources
 	mkdir -p $$(dir $$@) && touch $$@
 endef
 
@@ -41,10 +43,3 @@ $(foreach d,$(CONTRACTS),$(eval $(call CONTRACT_rule,$(d))))
 	rustup toolchain install $(RUST_TOOLCHAIN)
 	rustup target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@
-
-
-up:
-	docker-compose up -d
-
-down:
-	docker-compose down
