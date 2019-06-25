@@ -83,6 +83,9 @@ impl Stakes {
         maybe_amount: Option<U512>,
     ) -> Result<U512, Error> {
         let min = self.max_without(validator).saturating_sub(MAX_SPREAD);
+        if self.0.len() == 1 {
+            return Err(Error::CannotUnbondLastValidator);
+        }
         if let Some(amount) = maybe_amount {
             // The minimum stake value to not violate the maximum spread.
             let stake = self.0.get_mut(validator).ok_or(Error::NotBonded)?;
@@ -93,9 +96,6 @@ impl Stakes {
                 *stake -= amount;
                 return Ok(amount);
             }
-        }
-        if self.0.len() == 1 {
-            return Err(Error::CannotUnbondLastValidator);
         }
         // If the the amount is less or equal to the stake, remove the validator.
         let stake = self.0.remove(validator).ok_or(Error::NotBonded)?;
