@@ -78,7 +78,7 @@ object scallopImpl {
     q"""
           val tomlType: String = classOf[$t].getSimpleName match {
             case "Path" | "String" | "Node" | "StoreType" | "FiniteDuration" => "String"
-            case "int" | "long"                                              => "Integer"
+            case "int" | "long" | "BigInt"                                   => "Integer"
             case "boolean"                                                   => "Boolean"
             case "double"                                                    => "Double"
             case other => sys.error(s"Unexpected @scallop type: $$other")

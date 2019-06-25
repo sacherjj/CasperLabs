@@ -31,7 +31,6 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
-
 import scala.concurrent.duration._
 
 /** Create the Casper stack using the TransportLayer and CasperPacketHandler. */
@@ -58,6 +57,7 @@ package object transport {
       multiParentCasperRef: MultiParentCasperRef[Effect],
       executionEngineService: ExecutionEngineService[Effect],
       finalizationHandler: LastFinalizedBlockHashContainer[Effect],
+      filesApiEff: FilesAPI[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {
     for {
@@ -121,6 +121,7 @@ package object transport {
                                 blockDagStorage,
                                 executionEngineService,
                                 finalizationHandler,
+                                filesApiEff,
                                 scheduler
                               )
 

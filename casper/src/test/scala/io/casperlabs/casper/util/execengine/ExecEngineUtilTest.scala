@@ -162,6 +162,7 @@ class ExecEngineUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
+          (_, _) => new Throwable("failed when run genesis").asLeft.pure[Task],
           (_, _, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => new SmartContractEngineError("unimplemented").asLeft.pure[Task],
@@ -172,6 +173,7 @@ class ExecEngineUtilTest
 
       val failedCommitEEService: ExecutionEngineService[Task] =
         mock[Task](
+          (_, _) => new Throwable("failed when run genesis").asLeft.pure[Task],
           (_, _, deploys, _) =>
             Task.now {
               def getExecutionEffect(deploy: ipc.Deploy) = {

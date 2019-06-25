@@ -84,6 +84,8 @@ class NodeRuntime private[node] (
     val logId: Log[Id]         = Log.logId
     val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
 
+    val filesApiEff = FilesAPI.create[Effect](Sync[Effect], logEff)
+
     // SSL context to use for the public facing API.
     val maybeApiSslContext = Option(conf.tls.readCertAndKey).filter(_ => conf.grpc.useTls).map {
       case (cert, key) =>
@@ -269,6 +271,7 @@ class NodeRuntime private[node] (
                 multiParentCasperRef,
                 executionEngineService,
                 finalizedBlocksStream,
+                filesApiEff,
                 scheduler,
                 logId,
                 metricsId
@@ -292,6 +295,7 @@ class NodeRuntime private[node] (
                 multiParentCasperRef,
                 executionEngineService,
                 finalizedBlocksStream,
+                filesApiEff,
                 scheduler
               )
             }
