@@ -6,6 +6,7 @@ CONTRACTS=(
     "mint-token"
     "transfer-to-account-01"
     "transfer-to-account-02"
+    "local-state"
 )
 
 source "${HOME}/.cargo/env"
