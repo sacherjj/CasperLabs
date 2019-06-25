@@ -164,14 +164,14 @@ object BlockAPI {
         DeployServiceResponse(success = false, s"Error: Could not create block.")
     }
 
-  def propose[F[_]: Bracket[?[_], Throwable]: MultiParentCasperRef: Log: Metrics](
+  def propose[F[_]: Sync: MultiParentCasperRef: Log: Metrics](
       blockApiLock: Semaphore[F]
   ): F[ByteString] = {
     def raise[A](ex: ServiceError.Exception): F[ByteString] =
       MonadThrowable[F].raiseError(ex)
 
     unsafeWithCasper[F, ByteString]("Could not create block.") { implicit casper =>
-      Resource.make(blockApiLock.tryAcquire)(blockApiLock.release.whenA).use {
+      Sync[F].bracket[Boolean, ByteString](blockApiLock.tryAcquire) {
         case true =>
           for {
             _          <- Metrics[F].incrementCounter("create-blocks")
@@ -210,7 +210,7 @@ object BlockAPI {
 
         case false =>
           raise(Aborted("There is another propose in progress."))
-      }
+      }(blockApiLock.release.whenA(_))
     }
   }
 
