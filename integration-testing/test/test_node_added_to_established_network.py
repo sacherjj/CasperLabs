@@ -17,7 +17,12 @@ def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
         for node in network.docker_nodes:
             wait_for_blocks_count_at_least(node, n, n, node.timeout)
 
-    block_hashes = [node.deploy_and_propose(session_contract=HELLO_NAME) for node in network.docker_nodes]
+    def propose(node, n):
+        block_hash = node.deploy_and_propose(session_contract=HELLO_NAME)
+        wait_for_blocks_propagated(n)
+        return block_hash
+
+    block_hashes = [propose(node, 1+1+i) for i, node in enumerate(network.docker_nodes)]
 
     # Wait until both nodes have the genesis plus the two blocks they proposed and gossiped.
     wait_for_blocks_propagated(3)
@@ -27,8 +32,8 @@ def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
     wait_for_blocks_propagated(3)
 
     node0, node1, node2 = network.docker_nodes
-    for block in block_hashes:
-        assert f"Attempting to add Block {block}... to DAG" in node2.logs()
+    for i, block_hash in enumerate(block_hashes):
+        assert f"Attempting to add Block #{i+1} ({block_hash}...)" in node2.logs()
 
     # Verify that the new node didn't do any gossiping.
     wait_for_gossip_metrics_and_assert_blocks_gossiped(node2, node2.timeout, 0)
