@@ -60,6 +60,7 @@ impl StakesReader for ContractStakes {
             .collect();
         // Remove and add urefs to update the contract's known urefs accordingly.
         for (name, _) in contract_api::list_known_urefs() {
+            // Mateusz: Why are we removing `name` from the `new_urefs` set?
             if name.starts_with("v_") && !new_urefs.remove(&name) {
                 contract_api::remove_uref(&name);
             }
@@ -118,6 +119,9 @@ impl Stakes {
             .or_insert(*amount);
     }
 
+    // Mateusz: Why is there `validate_bonding` but there's no `validate_unbonding`?
+    // `bond` always succeeds (I guess because it's called only in case `validate_bonding` succeeds,
+    // but `unbond` can return an error. Maybe we should consider being consistent here.
     /// Returns an error if bonding the specified amount is not allowed.
     pub fn validate_bonding(&self, validator: &PublicKey, amount: &U512) -> Result<(), Error> {
         let max = self.min_without(validator).saturating_add(MAX_SPREAD);
@@ -152,7 +156,12 @@ impl Stakes {
             .map(|(_, s)| s)
             .max()
             .cloned()
-            .unwrap_or_else(U512::zero)
+            .unwrap_or_else(U512::zero) // Mateusz: This is a bit unclear to me,
+                                        // if `validator` is the only one in the set,
+                                        // this function returns U512::zero.
+                                        // I understand that this may be useful for code that uses
+                                        // this returned value but maybe it would be better
+                                        // to return `Option<U512>` and to the special handling on the call side?
     }
 
     /// Returns the total stakes.
