@@ -10,15 +10,10 @@ use alloc::vec::Vec;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    // Assumes that `define` contract was deployed with
-    // address == 303030...
     // nonce == 0 (this is a bug since deploy should be using NEW nonce instead of OLD)
     // https://casperlabs.atlassian.net/browse/EE-384
     // fn_index == 0
-    let hash = ContractPointer::Hash([
-        164, 102, 153, 51, 236, 214, 169, 167, 126, 44, 250, 247, 179, 214, 203, 229, 239, 69, 145,
-        25, 5, 153, 113, 55, 255, 188, 176, 201, 7, 4, 42, 100,
-    ]);
+    let hash = ContractPointer::Hash([162, 53, 237, 10, 219, 164, 219, 4, 125, 1, 30, 222, 65, 92, 19, 117, 158, 50, 199, 250, 102, 33, 119, 69, 5, 8, 239, 33, 57, 153, 154, 212]);
     // Call `define` part of the contract.
     call_contract(hash, &(), &Vec::new())
 }
