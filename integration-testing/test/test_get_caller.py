@@ -2,7 +2,7 @@
 def deploy_and_propose_expect_no_errors(node, contract):
     client = node.d_client
 
-    block_hash = node.deploy_and_propose(session_contract = contract, payment_contract = contract)
+    block_hash = node.deploy_and_propose(session_contract=contract, payment_contract=contract)
     r = client.show_deploys(block_hash)[0]
     assert not r.is_error
     assert r.error_message == ''
