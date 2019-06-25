@@ -76,7 +76,10 @@ impl Stakes {
     /// Removes `amount` from the validator's stakes. If they have been slashed, it can happen that
     /// they don't have enough stakes anymore. The actual number is returned.
     ///
-    /// Returns an error if unbonding the specified amount is not allowed.
+    /// Returns an error if
+    /// * unbonding the specified amount is not allowed,
+    /// * tries to unbond last validator,
+    /// * validator was not bonded.
     pub fn unbond(
         &mut self,
         validator: &PublicKey,
@@ -86,6 +89,7 @@ impl Stakes {
         if self.0.len() == 1 {
             return Err(Error::CannotUnbondLastValidator);
         }
+
         if let Some(amount) = maybe_amount {
             // The minimum stake value to not violate the maximum spread.
             let stake = self.0.get_mut(validator).ok_or(Error::NotBonded)?;
