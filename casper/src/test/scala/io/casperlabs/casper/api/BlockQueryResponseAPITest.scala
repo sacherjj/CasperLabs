@@ -81,7 +81,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       .withHeader(header.withValidatorPublicKey(secondBlockSender).withChainId(chainId))
       .withBody(body)
 
-  val faultTolerance = -1f
+  val faultTolerance = -0.5
 
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.

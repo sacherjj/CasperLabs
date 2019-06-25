@@ -27,6 +27,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   StandaloneCasperHandler
 }
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
+import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.catscontrib.ApplicativeError_
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.comm.discovery.Node
@@ -117,7 +118,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
       override def findBestCommittee(
           blockDag: BlockDagRepresentation[Task],
-          candidateBlockHash: BlockHash
+          candidateBlockHash: BlockHash,
+          weights: Map[Validator, Long]
       ): Task[Option[SafetyOracle.Committee]] = Task.pure(None)
     }
   }

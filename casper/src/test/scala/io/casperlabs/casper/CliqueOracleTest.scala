@@ -99,7 +99,7 @@ class CliqueOracleTest
           dag           <- blockDagStorage.getRepresentation
           levelZeroMsgs <- finalityDetectorEffect.levelZeroMsgs(dag, b1.blockHash, List(v1, v2))
           lowestLevelZeroMsgs = levelZeroMsgs.flatMap {
-            case (bh, msgs) => msgs.lastOption.map(_.blockHash)
+            case (_, msgs) => msgs.lastOption.map(_.blockHash)
           }.toSet
           _    = lowestLevelZeroMsgs shouldBe Set(b2.blockHash, b3.blockHash)
           jDag = finalityDetectorEffect.constructJDagFromLevelZeroMsgs(levelZeroMsgs)
@@ -124,8 +124,12 @@ class CliqueOracleTest
           _                              = blockLevels(b8.blockHash).blockLevel shouldBe (2)
           _                              = validatorLevels(v1) shouldBe (2)
           result                         = validatorLevels(v2) shouldBe (1)
-          committee                      <- SafetyOracle[Task].findBestCommittee(dag, b1.blockHash)
-          _                              = committee shouldBe Some(Committee(Set(v1, v2), 2))
+          committee <- SafetyOracle[Task].findBestCommittee(
+                        dag,
+                        b1.blockHash,
+                        Map(v1 -> 1, v2 -> 1)
+                      )
+          _ = committee shouldBe Some(Committee(Set(v1, v2), 2))
         } yield result
   }
 
@@ -189,13 +193,13 @@ class CliqueOracleTest
         dag <- blockDagStorage.getRepresentation
 
         genesisFaultTolerance <- SafetyOracle[Task].normalizedFaultTolerance(dag, genesis.blockHash)
-        _                     = assert(genesisFaultTolerance === 1f +- 0.01f)
+        _                     = assert(genesisFaultTolerance === 0.5f +- 0.01f)
         b2FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b2.blockHash)
-        _                     = assert(b2FaultTolerance === -1f / 6 +- 0.01f)
+        _                     = assert(b2FaultTolerance === -1f / 12 +- 0.01f)
         b3FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b3.blockHash)
-        _                     = assert(b3FaultTolerance === -1f +- 0.01f)
+        _                     = assert(b3FaultTolerance === -0.5f +- 0.01f)
         b4FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b4.blockHash)
-        result                = assert(b4FaultTolerance === -1f / 6 +- 0.01f)
+        result                = assert(b4FaultTolerance === -1f / 12 +- 0.01f)
       } yield result
   }
 }

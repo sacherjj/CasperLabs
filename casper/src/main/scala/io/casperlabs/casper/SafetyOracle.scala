@@ -23,7 +23,7 @@ trait SafetyOracle[F[_]] {
     * for a candidate to be safe.
     *
     * @param candidateBlockHash Block hash of candidate block to detect safety on
-    * @return normalizedFaultTolerance float between -1 and 1, where -1 means potentially orphaned
+    * @return normalizedFaultTolerance float between -0.5 and 0.5, where -0.5 means potentially orphaned
     */
   def normalizedFaultTolerance(
       blockDag: BlockDagRepresentation[F],
@@ -35,7 +35,8 @@ trait SafetyOracle[F[_]] {
    */
   def findBestCommittee(
       blockDag: BlockDagRepresentation[F],
-      candidateBlockHash: BlockHash
+      candidateBlockHash: BlockHash,
+      weights: Map[Validator, Long]
   ): F[Option[Committee]]
 }
 
@@ -48,18 +49,27 @@ object SafetyOracle {
 class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
 
   /**
-    * To have a maximum clique of half the total weight,
+    * To have a committee of half the total weight,
     * you need at least twice the weight of the agreeingValidatorToWeight to be greater than the total weight.
-    * If that is false, we don't need to compute agreementGraphMaxCliqueWeight
+    * If that is false, we don't need to compute best committee
     * as we know the value is going to be below 0 and thus useless for finalization.
     */
   def normalizedFaultTolerance(
       blockDag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash
   ): F[Float] =
-    ???
+    for {
+      weights      <- computeMainParentWeightMap(blockDag, candidateBlockHash)
+      committeeOpt <- findBestCommittee(blockDag, candidateBlockHash, weights)
+      t = committeeOpt
+        .map(committee => {
+          val totalWeight = weights.values.sum
+          (2 * committee.bestQ - totalWeight) * 1.0f / (2 * totalWeight)
+        })
+        .getOrElse(-0.5f)
+    } yield t
 
-  private def computeMainParentWeightMap(
+  def computeMainParentWeightMap(
       blockDag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash
   ): F[Map[BlockHash, Long]] =
@@ -310,22 +320,27 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                                               )
                                           } yield acc.updated(child, updatedChildBlockStore)
                                       }
-            vid                      = b.validatorPublicKey
-            latestMessageOfValidator <- blockDag.latestMessage(vid).map(_.get)
-            updatedValidatorLevel = if (committeeApproximation.contains(vid) && latestMessageOfValidator.blockHash == b.blockHash)
+            vid = b.validatorPublicKey
+            isLastMsg <- blockDag
+                          .latestMessage(vid)
+                          .map(
+                            _.exists(
+                              _.blockHash == b.blockHash && committeeApproximation.contains(vid)
+                            )
+                          )
+            updatedValidatorLevel = if (isLastMsg) {
               validatorLevel + (vid -> updatedBlockScore.blockLevel)
-            else validatorLevel
+            } else validatorLevel
           } yield (updatedBlockLevelTags, updatedValidatorLevel)
       }
   }
 
   def findBestCommittee(
       blockDag: BlockDagRepresentation[F],
-      candidateBlockHash: BlockHash
+      candidateBlockHash: BlockHash,
+      weights: Map[Validator, Long]
   ): F[Option[Committee]] =
     for {
-      weights     <- computeMainParentWeightMap(blockDag, candidateBlockHash)
-      totalWeight = weights.values.sum
       committeeApproximation <- weights.keys.toList.filterA {
                                  case validator =>
                                    for {
@@ -345,6 +360,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                                    } yield result
 
                                }
+      totalWeight            = weights.values.sum
       maxWeightApproximation = committeeApproximation.map(weights).sum
       result <- if (2 * maxWeightApproximation < totalWeight) {
                  none[Committee].pure[F]
