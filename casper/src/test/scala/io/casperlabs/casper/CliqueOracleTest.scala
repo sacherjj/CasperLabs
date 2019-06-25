@@ -112,6 +112,7 @@ class CliqueOracleTest
                           Set(v1, v2),
                           levelZeroMsgs,
                           2,
+                          2,
                           HashMap(v1 -> 1, v2 -> 1)
                         )
           (blockLevels, validatorLevels) = sweepResult

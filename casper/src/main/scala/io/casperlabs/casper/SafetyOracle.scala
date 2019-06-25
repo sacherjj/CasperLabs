@@ -186,6 +186,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
                       committeeApproximation,
                       levelZeroMsgs,
                       q,
+                      k,
                       weightMap
                     )
       (blockLevelTags, validatorLevels) = sweepResult
@@ -264,6 +265,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[BlockMetadata]],
       q: Long,
+      k: Int,
       weightMap: Map[Validator, Long]
   ): F[(Map[BlockHash, BlockScoreAccumulator], Map[Validator, Int])] = {
     val lowestLevelZeroMsgs = committeeApproximation
@@ -295,6 +297,7 @@ class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
           val updatedBlockScore = BlockScoreAccumulator.updateOwnLevel(
             currentBlockScore,
             q,
+            k,
             effectiveWeight
           )
           val updatedBlockLevelTags = blockLevelTags.updated(b.blockHash, updatedBlockScore)
@@ -440,9 +443,10 @@ object BlockScoreAccumulator {
   def updateOwnLevel(
       self: BlockScoreAccumulator,
       q: Long,
+      k: Int,
       effectiveWeight: Validator => Long
   ): BlockScoreAccumulator =
-    calculateLevelAndQ(self, self.highestLevelSoFar + 1, q, effectiveWeight)
+    calculateLevelAndQ(self, math.min(self.highestLevelSoFar + 1, k), q, effectiveWeight)
       .map {
         case (level, estimateQ) =>
           val newMaxLevel = math.max(self.highestLevelSoFar, level)
