@@ -20,11 +20,14 @@ pub extern "C" fn call() {
     let name = "CasperLabs";
     let args = (method, name);
     let maybe_sub_key: Option<Key> = call_contract(hash.clone(), &args, &Vec::new());
+    assert_eq!(1, 2);
     let sub_key = maybe_sub_key.unwrap();
+
 
     let key_name = "mail_feed";
     add_uref(key_name, &sub_key);
     assert_eq!(sub_key, get_uref(key_name));
+
 
     let method = "pub";
     let message = "Hello, World!";

@@ -55,6 +55,8 @@ def generated_hashes(nodes):
     def deploy_and_propose(node, contract):
         block_hash = node.deploy_and_propose(session_contract=contract, payment_contract=contract)
         check_block_propagated()
+        deploys = node.client.show_deploys(block_hash)
+        assert not deploys[0].is_error, str(deploys)
         return block_hash
 
     return { contract_name: [deploy_and_propose(node, contract_name) for node in nodes]

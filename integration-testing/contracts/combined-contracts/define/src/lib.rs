@@ -13,6 +13,16 @@ use common::contract_api::*;
 use common::contract_api::pointers::UPointer;
 use common::key::Key;
 use common::uref::URef;
+use core::fmt::Write;
+
+// e.g. `addr_to_hex(&list_key.0)`
+fn addr_to_hex(addr: &[u8; 32]) -> String {
+    let mut str = String::with_capacity(64);
+    for b in addr {
+        write!(&mut str, "{:02x}", b).unwrap();
+    }
+    str
+}
 
 fn hello_name(name: &str) -> String {
     let mut result = String::from("Hello, ");
