@@ -12,7 +12,10 @@ use crate::Timestamp;
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
 
+// Mateusz: AFAIR there was a RequestId associated with `QueueEntry` that allows for canceling that request.
+// Is this purposefully omitted for simplicity?
 /// A pending entry in the bonding or unbonding queue.
+#[derive(Clone, Copy)]
 pub struct QueueEntry {
     /// The validator who is bonding or unbonding.
     pub validator: PublicKey,
@@ -111,14 +114,12 @@ impl Queue {
     }
 
     pub fn pop_older_than(&mut self, timestamp: Timestamp) -> Vec<QueueEntry> {
-        let index = self
+        let (older_than, mut rest) = self
             .0
             .iter()
-            .take_while(|entry| entry.timestamp < timestamp)
-            .count();
-        let mut list = self.0.split_off(index);
-        mem::swap(&mut self.0, &mut list);
-        list
+            .partition(|entry| entry.timestamp < timestamp);
+        mem::swap(&mut self.0, &mut rest);
+        older_than
     }
 }
 
