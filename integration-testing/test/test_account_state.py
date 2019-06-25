@@ -44,14 +44,17 @@ def test_account_state(node):
 
     def account_state(block_hash):
         return node.d_client.query_state(block_hash = block_hash, key_type = 'address', key = ACCOUNT, path = '')
-    
-    blocks = parse_show_blocks(node.d_client.show_blocks(1000)) 
+
+    blocks = parse_show_blocks(node.d_client.show_blocks(1000))
     assert len(blocks) == 1  # There should be only one block, the genesis block
 
     response = account_state(blocks[0].summary.block_hash)
     assert response.account.nonce == 0
 
     block_hash = node.deploy_and_propose(session_contract = "test_counterdefine.wasm", nonce = 1)
+    deploys = node.client.show_deploys(block_hash)
+    assert not deploys[0].is_error, str(deploys)
+
     response = account_state(block_hash)
     assert response.account.nonce == 1
 
