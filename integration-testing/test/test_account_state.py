@@ -49,7 +49,7 @@ def test_account_state(node):
 
     block_hash = node.deploy_and_propose(session_contract = "test_counterdefine.wasm", nonce = 1)
     deploys = node.client.show_deploys(block_hash)
-    assert not deploys[0].is_error, str(deploys)
+    assert not deploys[0].is_error
 
     response = account_state(block_hash)
     assert response.account.nonce == 1, str(response)
