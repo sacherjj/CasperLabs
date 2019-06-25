@@ -41,7 +41,7 @@ def test_revert_subcall(client, node):
 
 
 
-def ignore_test_revert_direct(client, node):
+def test_revert_direct(client, node):
     # This contract calls revert(1) directly
     block_hash = node.deploy_and_propose(session_contract = 'test_direct_revert_call.wasm',
                                          payment_contract = 'test_direct_revert_call.wasm')
