@@ -719,8 +719,9 @@ object MultiParentCasperImpl {
     )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] = {
       val validationStatus = (for {
         _ <- Log[F].info(
-              s"Attempting to add Block ${PrettyPrinter.buildString(block.blockHash)} to DAG."
+              s"Attempting to add ${PrettyPrinter.buildString(block)} to the DAG."
             )
+        hashPrefix = PrettyPrinter.buildString(block.blockHash)
         _ <- Validate.blockFull(
               block,
               dag,
@@ -730,6 +731,7 @@ object MultiParentCasperImpl {
         casperState <- Cell[F, CasperState].read
         // Confirm the parents are correct (including checking they commute) and capture
         // the effect needed to compute the correct pre-state as well.
+        _ <- Log[F].debug(s"Validating the parents of $hashPrefix")
         merged <- maybeContext.fold(
                    ExecEngineUtil.MergeResult
                      .empty[ExecEngineUtil.TransformMap, Block]
@@ -738,7 +740,9 @@ object MultiParentCasperImpl {
                    Validate
                      .parents[F](block, ctx.lastFinalizedBlockHash, ctx.genesis.blockHash, dag)
                  }
+        _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
         preStateHash <- ExecEngineUtil.computePrestate[F](merged)
+        _            <- Log[F].debug(s"Computing the effects for $hashPrefix")
         blockEffects <- ExecEngineUtil
                          .effectsForBlock[F](block, preStateHash, dag)
                          .recoverWith {
@@ -747,12 +751,14 @@ object MultiParentCasperImpl {
                                .buildString(block)}: $ex", ex) *>
                                FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                          }
+        _ <- Log[F].debug(s"Validating the transactions in $hashPrefix")
         _ <- Validate.transactions[F](
               block,
               dag,
               preStateHash,
               blockEffects
             )
+        _ <- Log[F].debug(s"Validating the bonds in $hashPrefix")
         _ <- maybeContext.fold(().pure[F]) { ctx =>
               Validate.bondsCache[F](block, ProtoUtil.bonds(ctx.genesis)) >>
                 EquivocationDetector
@@ -762,12 +768,15 @@ object MultiParentCasperImpl {
                     ctx.genesis
                   )
             }
+        _ <- Log[F].debug(s"Validating neglection for $hashPrefix")
         _ <- Validate
               .neglectedInvalidBlock[F](
                 block,
                 casperState.invalidBlockTracker
               )
+        _ <- Log[F].debug(s"Checking equivocation for $hashPrefix")
         _ <- EquivocationDetector.checkEquivocations[F](casperState.dependencyDag, block, dag)
+        _ <- Log[F].debug(s"Block effects calculated for $hashPrefix")
       } yield blockEffects).attempt
 
       validationStatus.flatMap {
