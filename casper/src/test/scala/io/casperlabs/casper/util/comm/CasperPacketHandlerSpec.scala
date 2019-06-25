@@ -75,7 +75,6 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       BlockApproverProtocol.GenesisConf(
         minimumBond = 1L,
         maximumBond = Long.MaxValue,
-        hasFaucet = false,
         requiredSigs = requiredSigs,
         genesisAccountPublicKeyPath = None,
         initialTokens = 0L,

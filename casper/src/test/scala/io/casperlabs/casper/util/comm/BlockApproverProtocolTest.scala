@@ -112,14 +112,13 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
       bonds,
       wallets,
       BlockApproverProtocol.GenesisConf(
-        1L,
-        Long.MaxValue,
-        false,
-        requiredSigs,
-        None,
-        0L,
-        None,
-        None
+        minimumBond = 1L,
+        maximumBond = Long.MaxValue,
+        requiredSigs = requiredSigs,
+        genesisAccountPublicKeyPath = None,
+        initialTokens = 0L,
+        mintCodePath = None,
+        posCodePath = None
       )
     ) -> node
   }
