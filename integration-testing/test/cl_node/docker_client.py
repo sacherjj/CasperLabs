@@ -47,7 +47,8 @@ class DockerClient(CasperLabsClient):
         error, status_code = r['Error'], r['StatusCode']
         stdout = container.logs(stdout=True, stderr=False).decode('utf-8')
         stderr = container.logs(stdout=False, stderr=True).decode('utf-8')
-        logging.info(f"EXITED exit_code: {status_code} STDERR: {stderr} STDOUT: {stdout}")
+        if status_code != 0:
+            logging.info(f"EXITED exit_code: {status_code} STDERR: {stderr} STDOUT: {stdout}")
 
         try:
             container.remove()
