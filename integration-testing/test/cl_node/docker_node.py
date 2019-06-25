@@ -238,6 +238,8 @@ class DockerNode(LoggingDockerBase):
         return output
 
     def deploy_and_propose(self, **deploy_kwargs) -> str:
+        if 'from_address' not in deploy_kwargs:
+            deploy_kwargs['from_address'] = self.from_address()
         deploy_output = self.client.deploy(**deploy_kwargs)
         assert 'Success!' in deploy_output
         block_hash_output_string = self.client.propose()
