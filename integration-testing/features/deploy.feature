@@ -63,6 +63,20 @@ Feature: Deploy Operation
        And: Propose of block deployed with nonce of 2 is successful
        And: Subsequent propose of block deployed with nonce of 3 is successful
 
+  # Implemented: test_nonce.py : test_deploy_with_higher_nonce_does_not_include_previous_deploy
+  Scenario: Deploy with higher nonce and created block does not include previously deployed contract
+     Given: Single Node Network
+       And: Nonce is 1 for account
+      When: Deploy is performed with nonce of 4
+      Then: Propose will fail
+       And: Deploy with nonce of 2 is successful
+       And: Propose of block deployed with nonce of 2 is successful
+       And: Previous propose of block deployed with nonce of 4 is still a failure and deploy
+            will stay in the deploy buffers.
+       And: Propose of block deployed with nonce of 3 is successful and this causes propose of block with
+            nonce of 4 becomes success finally.
+
+
   # Implemented: test_nonce.py : test_deploy_with_lower_nonce (first part of the test)
   Scenario: Deploy with correct nonce
      Given: Single Node Network

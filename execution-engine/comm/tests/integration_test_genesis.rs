@@ -19,13 +19,15 @@ use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineServi
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use shared::test_utils;
 
+const GENESIS_ADDR: [u8; 32] = [6u8; 32];
+
 #[test]
 fn should_run_genesis() {
     let global_state = InMemoryGlobalState::empty().expect("should create global state");
     let engine_state = EngineState::new(global_state, false);
 
     let genesis_request = {
-        let genesis_account_addr = [6u8; 32].to_vec();
+        let genesis_account_addr = GENESIS_ADDR.to_vec();
 
         let initial_tokens = {
             let mut ret = BigInt::new();
@@ -87,7 +89,7 @@ fn should_run_genesis_with_mint_bytes() {
     let global_state = InMemoryGlobalState::empty().expect("should create global state");
     let engine_state = EngineState::new(global_state, false);
 
-    let genesis_request = test_support::create_genesis_request();
+    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR);
 
     let request_options = RequestOptions::new();
 
