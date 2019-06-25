@@ -9,6 +9,7 @@ members = [
     "metrics-scraper",
     "shared",
     "storage",
+    "test-contracts/create-purse-01",
     "test-contracts/transfer-to-account-01",
     "test-contracts/transfer-to-account-02",
     "wasm-prep",

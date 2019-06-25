@@ -6,9 +6,12 @@ CONTRACTS=(
     "mint-token"
     "transfer-to-account-01"
     "transfer-to-account-02"
+    "create-purse-01"
 )
 
 source "${HOME}/.cargo/env"
+
+export RUST_BACKTRACE=1
 
 rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown
 

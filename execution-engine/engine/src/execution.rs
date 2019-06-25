@@ -628,6 +628,11 @@ where
         Ok(PurseId::new(result))
     }
 
+    fn create_purse(&mut self) -> Result<PurseId, Error> {
+        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+        self.mint_create(mint_contract_key)
+    }
+
     /// Calls the "transfer" method on the mint contract at the given mint contract key
     fn mint_transfer(
         &mut self,
@@ -1038,6 +1043,21 @@ where
                 let (action_type_value, threshold_value): (u32, u8) = Args::parse(args)?;
                 let value = self.set_action_threshold(action_type_value, threshold_value)?;
                 Ok(Some(RuntimeValue::I32(value)))
+            }
+
+            FunctionIndex::CreatePurseIndex => {
+                // args(0) = pointer to array for return value
+                // args(1) = length of array for return value
+                let (dest_ptr, dest_size): (u32, u32) = Args::parse(args)?;
+                let purse_id = match self.create_purse() {
+                    Ok(purse_id) => purse_id,
+                    Err(_err) => return Ok(Some(RuntimeValue::I32(0))),
+                };
+                let purse_id_bytes = purse_id.to_bytes().map_err(Error::BytesRepr)?;
+                assert_eq!(dest_size, purse_id_bytes.len() as u32);
+                self.host_buf = purse_id_bytes;
+                self.set_mem_from_buf(dest_ptr)?;
+                Ok(Some(RuntimeValue::I32(dest_size as i32)))
             }
 
             FunctionIndex::TransferToAccountIndex => {

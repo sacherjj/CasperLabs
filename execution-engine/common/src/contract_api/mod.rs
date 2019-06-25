@@ -10,7 +10,7 @@ use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 use crate::value::account::{
     ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
-    SetThresholdFailure, Weight, BLOCKTIME_SER_SIZE,
+    SetThresholdFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
 use crate::value::{Contract, Value, U512};
 use alloc::collections::BTreeMap;
@@ -369,6 +369,20 @@ pub fn set_action_threshold(
     match result {
         d if d == 0 => Ok(()),
         d => Err(SetThresholdFailure::from(d)),
+    }
+}
+
+pub fn create_purse() -> PurseId {
+    let purse_id_ptr = alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
+    let purse_id_size: usize = PURSE_ID_SIZE_SERIALIZED;
+    unsafe {
+        let ret = ext_ffi::create_purse(purse_id_ptr, purse_id_size);
+        if ret != 0 {
+            let bytes = Vec::from_raw_parts(purse_id_ptr, purse_id_size, purse_id_size);
+            deserialize(&bytes).unwrap()
+        } else {
+            panic!("could not create purse_id")
+        }
     }
 }
 
