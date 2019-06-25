@@ -37,23 +37,23 @@ class ExecEngineUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val genesisDeploys = Vector(
         ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis, Integer.MAX_VALUE))
       val genesisDeploysCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
       val b1Deploys = Vector(
         ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis, Integer.MAX_VALUE))
       val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
       val b2Deploys = Vector(
         ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis, Integer.MAX_VALUE))
       val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
       val b3Deploys = Vector(
         ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis, Integer.MAX_VALUE))
       val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
       /*
@@ -114,7 +114,7 @@ class ExecEngineUtilTest
       executionEngineService: ExecutionEngineService[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
-      blocktime <- Task.delay(System.currentTimeMillis())
+      blocktime <- Task.delay(System.currentTimeMillis)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
@@ -132,19 +132,19 @@ class ExecEngineUtilTest
         // deploy each Rholang program separately and record its cost
         val deploy1 = ProtoUtil.sourceDeploy(
           ByteString.copyFromUtf8("@1!(Nil)"),
-          System.currentTimeMillis(),
+          System.currentTimeMillis,
           Integer.MAX_VALUE
         )
         val deploy2 =
           ProtoUtil.sourceDeploy(
             ByteString.copyFromUtf8("@3!([1,2,3,4])"),
-            System.currentTimeMillis(),
+            System.currentTimeMillis,
             Integer.MAX_VALUE
           )
         val deploy3 =
           ProtoUtil.sourceDeploy(
             ByteString.copyFromUtf8("for(@x <- @0) { @4!(x.toByteArray()) }"),
-            System.currentTimeMillis(),
+            System.currentTimeMillis,
             Integer.MAX_VALUE
           )
         for {
@@ -466,7 +466,7 @@ object ExecEngineUtilTest {
 
   def prepareDeploys(v: Vector[ByteString], c: Long) = {
     val genesisDeploys =
-      v.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      v.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis, Integer.MAX_VALUE))
     genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
   }
 }

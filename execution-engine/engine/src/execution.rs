@@ -21,8 +21,8 @@ use common::contract_api::argsparser::ArgsParser;
 use common::key::Key;
 use common::uref::{AccessRights, URef};
 use common::value::account::{
-    ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure, Weight,
-    PUBLIC_KEY_SIZE,
+    ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
+    SetThresholdFailure, Weight, PUBLIC_KEY_SIZE,
 };
 use common::value::{Account, Value, U512};
 use shared::newtypes::{CorrelationId, Validated};
