@@ -174,7 +174,7 @@ object ExecEngineUtil {
   ): F[Seq[TransformEntry]] = {
     val deploys         = ProtoUtil.deploys(block)
     val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(block)
-    val blocktime       = block.getHeader.timestamp;
+    val blocktime       = block.getHeader.timestamp
 
     for {
       processedDeploys <- processDeploys[F](
