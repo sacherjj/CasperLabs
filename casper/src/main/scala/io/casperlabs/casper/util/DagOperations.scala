@@ -30,9 +30,10 @@ object DagOperations {
       type K = B
       def key(a: A) = k(a)
     }
-    def identity[A]           = instance[A, A](a => a)
-    implicit val blockKey     = instance[Block, BlockHash](_.blockHash)
-    implicit val blockHashKey = identity[BlockHash]
+    def identity[A]               = instance[A, A](a => a)
+    implicit val blockKey         = instance[Block, BlockHash](_.blockHash)
+    implicit val blockMetadataKey = instance[BlockMetadata, BlockHash](_.blockHash)
+    implicit val blockHashKey     = identity[BlockHash]
   }
 
   def bfTraverseF[F[_]: Monad, A](

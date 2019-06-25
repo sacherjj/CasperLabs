@@ -8,6 +8,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.SafetyOracle.Committee
+import io.casperlabs.casper.util.DagOperations.Key.blockMetadataKey
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.shared.Log
 
