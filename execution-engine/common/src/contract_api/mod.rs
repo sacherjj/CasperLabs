@@ -9,8 +9,8 @@ use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 use crate::value::account::{
-    ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
-    BLOCKTIME_SER_SIZE,
+    ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
+    SetThresholdFailure, Weight, BLOCKTIME_SER_SIZE,
 };
 use crate::value::{Contract, Value, U512};
 use alloc::collections::BTreeMap;
@@ -402,10 +402,36 @@ impl From<TransferResult> for i32 {
     }
 }
 
+/// Transfers `amount` of tokens from default purse of the account to `target` account.
+/// If `target` does not exist it will create it.
 pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
     unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) }
         .try_into()
         .expect("should parse result")
+}
+
+/// Transfers `amount` of tokens from `source` purse to `target` account.
+/// If `target` does not exist it will create it.
+pub fn transfer_from_purse_to_account(
+    source: PurseId,
+    target: PublicKey,
+    amount: U512,
+) -> TransferResult {
+    let (source_ptr, source_size, _bytes) = to_ptr(&source);
+    let (target_ptr, target_size, _bytes) = to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    unsafe {
+        ext_ffi::transfer_from_purse_to_account(
+            source_ptr,
+            source_size,
+            target_ptr,
+            target_size,
+            amount_ptr,
+            amount_size,
+        )
+    }
+    .try_into()
+    .expect("should parse result")
 }

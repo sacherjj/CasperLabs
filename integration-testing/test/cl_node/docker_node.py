@@ -121,12 +121,7 @@ class DockerNode(LoggingDockerBase):
                 f'{self.GRPC_EXTERNAL_PORT}/tcp': self.grpc_external_docker_port}
 
     def _get_container(self):
-        env = {
-            'RUST_BACKTRACE': 'full',
-            'CL_LOG_LEVEL': os.environ.get('CL_LOG_LEVEL', 'INFO'),
-            'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'true',
-            'CL_SERVER_NO_UPNP': 'true'
-        }
+        env = self.config.node_env
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
             env['_JAVA_OPTIONS'] = java_options

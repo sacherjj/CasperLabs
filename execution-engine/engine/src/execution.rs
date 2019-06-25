@@ -712,16 +712,26 @@ where
         }
     }
 
-    /// Creates a new account at a given public key, transferring a given amount of tokens from
-    /// the caller's purse to the new account's purse.
-    pub fn transfer_to_account(
+    /// Transfers `amount` of tokens from default purse of the account to `target` account.
+    /// If that account does not exist, creates one.
+    fn transfer_to_account(
         &mut self,
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let source = self.context.account().purse_id();
-        let target_key = Key::Account(target.value());
+        self.transfer_from_purse_to_account(source, target, amount)
+    }
 
+    /// Transfers `amount` of tokens from `source` purse to `target` account.
+    /// If that account does not exist, creates one.
+    fn transfer_from_purse_to_account(
+        &mut self,
+        source: PurseId,
+        target: PublicKey,
+        amount: U512,
+    ) -> Result<TransferResult, Error> {
+        let target_key = Key::Account(target.value());
         // Look up the account at the given public key's address
         match self.context.read_account(&target_key)? {
             None => {
@@ -1046,6 +1056,38 @@ where
                     deserialize(&bytes).map_err(Error::BytesRepr)?
                 };
                 let ret = self.transfer_to_account(public_key, amount)?;
+                Ok(Some(RuntimeValue::I32(ret.into())))
+            }
+
+            FunctionIndex::TransferFromPurseToAccountIndex => {
+                // args(0) = pointer to array of bytes in Wasm memory of a source purse
+                // args(1) = length of array of bytes in Wasm memory of a source purse
+                // args(2) = pointer to array of bytes in Wasm memory of a public key
+                // args(3) = length of array of bytes in Wasm memory of a public key
+                // args(4) = pointer to array of bytes in Wasm memory of an amount
+                // args(5) = length of array of bytes in Wasm memory of an amount
+                let (source_ptr, source_size, key_ptr, key_size, amount_ptr, amount_size): (
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                ) = Args::parse(args)?;
+
+                let source_purse = {
+                    let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
+                    deserialize(&bytes).map_err(Error::BytesRepr)?
+                };
+                let public_key: PublicKey = {
+                    let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+                    deserialize(&bytes).map_err(Error::BytesRepr)?
+                };
+                let amount: U512 = {
+                    let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
+                    deserialize(&bytes).map_err(Error::BytesRepr)?
+                };
+                let ret = self.transfer_from_purse_to_account(source_purse, public_key, amount)?;
                 Ok(Some(RuntimeValue::I32(ret.into())))
             }
         }

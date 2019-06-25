@@ -98,6 +98,14 @@ mod ext_ffi {
             amount_size: usize,
         ) -> i32;
         pub fn get_blocktime(dest_ptr: *const u8);
+        pub fn transfer_from_purse_to_account(
+            source_ptr: *const u8,
+            source_size: usize,
+            target_ptr: *const u8,
+            target_size: usize,
+            amount_ptr: *const u8,
+            amount_size: usize,
+        ) -> i32;
     }
 }
 
