@@ -14,7 +14,7 @@ use cl_std::uref::URef;
 use cl_std::value::{account::PublicKey, U512};
 
 use crate::error::Error;
-use crate::queue::Queue;
+use crate::queue::{QueueLocal, QueueProvider};
 use crate::stakes::Stakes;
 
 /// The purse used to pay the stakes.
@@ -46,7 +46,7 @@ const MAX_REL_DECREASE: u64 = 100_000;
 /// Enqueues the deploy's creator for becoming a validator. The bond `amount` is paid from the
 /// purse `source`.
 // TODO: The validator should be the sender of the deploy, not an argument.
-fn bond(
+fn bond<Q: QueueProvider>(
     amount: U512,
     _source: PurseId,
     validator: PublicKey,
@@ -55,7 +55,7 @@ fn bond(
     // POS_PURSE is a constant, it is the PurseID of the proof-of-stake contract's own purse.
     // contract_api::transfer(source, POS_PURSE, amount)?;
 
-    let mut queue = Queue::read_bonding();
+    let mut queue = Q::read_bonding();
     if queue.0.len() >= MAX_BOND_LEN {
         return Err(Error::TooManyEventsInQueue);
     }
@@ -68,19 +68,19 @@ fn bond(
     stakes.validate_bonding(&validator, &amount)?;
 
     queue.push(validator, amount, timestamp)?;
-    queue.write_bonding();
+    Q::write_bonding(&queue);
     Ok(())
 }
 
 /// Enqueues the deploy's creator for unbonding. Their vote weight as a validator is decreased
 /// immediately, but the funds will only be released after a delay. If `maybe_amount` is `None`,
 /// all funds are enqueued for withdrawal, terminating the validator status.
-fn unbond(
+fn unbond<Q: QueueProvider>(
     maybe_amount: Option<U512>,
     validator: PublicKey,
     timestamp: Timestamp,
 ) -> Result<(), Error> {
-    let mut queue = Queue::read_unbonding();
+    let mut queue = Q::read_unbonding();
     if queue.0.len() >= MAX_UNBOND_LEN {
         return Err(Error::TooManyEventsInQueue);
     }
@@ -92,25 +92,25 @@ fn unbond(
     // made later, after the unbonding delay.
     // contract_api::transfer_dry_run(POS_PURSE, dest, amount)?;
     queue.push(validator, payout, timestamp)?;
-    queue.write_unbonding();
+    Q::write_unbonding(&queue);
     Ok(())
 }
 
 /// Removes all due requests from the queues and applies them.
-fn step(timestamp: u64) {
-    let mut bonding_queue = Queue::read_bonding();
-    let mut unbonding_queue = Queue::read_unbonding();
+fn step<Q: QueueProvider>(timestamp: u64) {
+    let mut bonding_queue = Q::read_bonding();
+    let mut unbonding_queue = Q::read_unbonding();
 
     let bonds = bonding_queue.pop_older_than(timestamp.saturating_sub(BOND_DELAY));
     let unbonds = unbonding_queue.pop_older_than(timestamp.saturating_sub(UNBOND_DELAY));
 
     if !unbonds.is_empty() {
-        unbonding_queue.write_unbonding();
+        Q::write_unbonding(&unbonding_queue);
     }
 
     if !bonds.is_empty() {
         let mut stakes = Stakes::read().unwrap();
-        bonding_queue.write_bonding();
+        Q::write_bonding(&bonding_queue);
         for entry in bonds {
             stakes.bond(&entry.validator, &entry.amount);
         }
@@ -133,15 +133,15 @@ pub extern "C" fn pos_ext() {
             let amount = contract_api::get_arg(1);
             let source_uref: URef = contract_api::get_arg(2);
             let source = UPointer::<()>::from_uref(source_uref).unwrap();
-            bond(amount, source, validator, timestamp).expect("Failed to bond");
+            bond::<QueueLocal>(amount, source, validator, timestamp).expect("Failed to bond");
         }
         "unbond" => {
             let maybe_amount = contract_api::get_arg(1);
-            unbond(maybe_amount, validator, timestamp).expect("Failed to unbond");
+            unbond::<QueueLocal>(maybe_amount, validator, timestamp).expect("Failed to unbond");
         }
         "step" => {
             // This is called by the system in every block.
-            step(timestamp);
+            step::<QueueLocal>(timestamp);
         }
         _ => {}
     }

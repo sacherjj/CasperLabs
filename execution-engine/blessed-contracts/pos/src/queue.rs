@@ -56,17 +56,47 @@ impl ToBytes for QueueEntry {
     }
 }
 
-pub struct Queue(pub Vec<QueueEntry>);
+pub trait QueueProvider {
+    /// Reads bonding queue.
+    fn read_bonding() -> Queue;
 
-impl Queue {
-    pub fn read_bonding() -> Queue {
+    /// Reads unbonding queue.
+    fn read_unbonding() -> Queue;
+
+    /// Writes nbonding queue.
+    fn write_bonding(queue: &Queue);
+
+    /// Writes unbonding queue.
+    fn write_unbonding(queue: &Queue);
+}
+
+pub struct QueueLocal;
+
+impl QueueProvider for QueueLocal {
+    /// Reads bonding queue from the local state of the contract.
+    fn read_bonding() -> Queue {
         contract_api::read_local(BONDING_KEY).unwrap()
     }
 
-    pub fn read_unbonding() -> Queue {
+    /// Reads unbonding queue from the local state of the contract.
+    fn read_unbonding() -> Queue {
         contract_api::read_local(UNBONDING_KEY).unwrap()
     }
 
+    /// Writes bonding queue to the local state of the contract.
+    fn write_bonding(queue: &Queue) {
+        contract_api::write_local(BONDING_KEY, queue);
+    }
+
+    /// Writes unbonding queue to the local state of the contract.
+    fn write_unbonding(queue: &Queue) {
+        contract_api::write_local(UNBONDING_KEY, queue);
+    }
+}
+
+pub struct Queue(pub Vec<QueueEntry>);
+
+impl Queue {
     pub fn push(
         &mut self,
         validator: PublicKey,
@@ -78,14 +108,6 @@ impl Queue {
         }
         self.0.push(QueueEntry::new(validator, amount, timestamp));
         Ok(())
-    }
-
-    pub fn write_bonding(&self) {
-        contract_api::write_local(BONDING_KEY, self);
-    }
-
-    pub fn write_unbonding(&self) {
-        contract_api::write_local(UNBONDING_KEY, self);
     }
 
     pub fn pop_older_than(&mut self, timestamp: Timestamp) -> Vec<QueueEntry> {
