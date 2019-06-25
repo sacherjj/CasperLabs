@@ -16,7 +16,7 @@ use rand::RngCore;
 
 use common::key::Key;
 use common::uref::{AccessRights, URef};
-use common::value::account::PurseId;
+use common::value::account::{BlockTime, PurseId};
 use common::value::{Contract, Value, U512};
 use shared::init;
 use shared::newtypes::{Blake2bHash, CorrelationId};
@@ -266,7 +266,7 @@ where
         module_bytes: &[u8],
         args: &[u8],
         address: Key,
-        timestamp: u64,
+        blocktime: BlockTime,
         nonce: u64,
         prestate_hash: Blake2bHash,
         gas_limit: u64,
@@ -291,7 +291,7 @@ where
             module,
             args,
             address,
-            timestamp,
+            blocktime,
             nonce,
             gas_limit,
             protocol_version,

@@ -97,6 +97,7 @@ mod ext_ffi {
             amount_ptr: *const u8,
             amount_size: usize,
         ) -> i32;
+        pub fn get_blocktime(dest_ptr: *const u8);
     }
 }
 
