@@ -125,21 +125,11 @@ class DockerNode(LoggingDockerBase):
                 f'{self.GRPC_EXTERNAL_PORT}/tcp': self.grpc_external_docker_port}
 
     def _get_container(self):
-        env = {
-            'RUST_BACKTRACE': 'full',
-            'CL_LOG_LEVEL': os.environ.get('CL_LOG_LEVEL', 'INFO'),
-            'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'true',
-            'CL_SERVER_NO_UPNP': 'true',
-
-            'CL_VERSION': 'test',
-            'CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH': self.CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH,
-        }
+        env = self.config.node_env.copy()
+        env['CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH'] = self.CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
             env['_JAVA_OPTIONS'] = java_options
-        # Eliminate UPnP for docker, to not have delay
-        if self.is_in_docker:
-            env['CL_SERVER_NO_UPNP'] = 'true'
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix='deploy_')
         self.create_resources_dir()
 
