@@ -1,7 +1,7 @@
 import time
 from itertools import count
 import pytest
-from .cl_node.casperlabsnode import ( COMBINED_CONTRACT, COUNTER_CALL, HELLO_WORLD, MAILING_LIST_CALL, get_contract_state)
+from .cl_node.casperlabsnode import ( COMBINED_CONTRACT, COUNTER_CALL, HELLO_WORLD, MAILING_LIST_CALL)
 from .cl_node.wait import wait_for_blocks_count_at_least
 
 
@@ -64,12 +64,12 @@ def docker_client(three_node_network_with_combined_contract):
     return three_node_network_with_combined_contract.docker_client
 
 
-expected_result = count(1)
+expected_counter_result = count(1)
 
 test_parameters = [
-    (COUNTER_CALL, "counter/count", lambda: bytes(f'int_value: {next(expected_result)}\n\n', 'utf-8')),
-    (MAILING_LIST_CALL, "mailing/list", lambda: bytes('string_list {\n  values: "CasperLabs"\n}\n\n', 'utf-8')),
-    (HELLO_WORLD, "helloworld", lambda: b'string_value: "Hello, World"\n\n'),
+    (COUNTER_CALL, "counter/count", lambda r: r.int_value == next(expected_counter_result)),
+    (MAILING_LIST_CALL, "mailing/list", lambda r: r.string_list.values == "CasperLabs"),
+    (HELLO_WORLD, "helloworld", lambda r: r.string_value == "Hello, World"),
 ]
 
 @pytest.mark.parametrize("contract, path, expected", test_parameters)
@@ -80,12 +80,8 @@ def test_call_contracts_one_another(nodes, docker_client, generated_hashes, cont
     """
 
     def state(node, path, block_hash):
-        return get_contract_state(docker_client = docker_client, port = 40401, _type = "address",
-                                  key = 3030303030303030303030303030303030303030303030303030303030303030,
-                                  network_name = node.network, target_host_name = node.name, path = path,
-                                  block_hash = block_hash)
-
+        return node.d_client.query_state(block_hash = block_hash, key_type = "address", path = path,
+                                         key = 3030303030303030303030303030303030303030303030303030303030303030)
 
     for node, block_hash in zip(nodes, generated_hashes[contract]):
-        output = state(node, path, block_hash)
-        assert expected() == output
+        assert expected(state(node, path, block_hash))

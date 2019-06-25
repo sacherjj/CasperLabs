@@ -28,6 +28,7 @@ import io.casperlabs.catscontrib.MonadThrowable
   ): F[Either[Throwable, GenesisResult]]
   def exec(
       prestate: ByteString,
+      blocktime: Long,
       deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]]
@@ -71,11 +72,15 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
 
   override def exec(
       prestate: ByteString,
+      blocktime: Long,
       deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]] =
     for {
-      result <- sendMessage(ExecRequest(prestate, deploys, Some(protocolVersion)), _.exec) {
+      result <- sendMessage(
+                 ExecRequest(prestate, blocktime, deploys, Some(protocolVersion)),
+                 _.exec
+               ) {
                  _.result match {
                    case ExecResponse.Result.Success(ExecResult(deployResults)) =>
                      Right(deployResults)

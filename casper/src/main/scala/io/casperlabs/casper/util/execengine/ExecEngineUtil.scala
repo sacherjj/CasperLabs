@@ -40,12 +40,14 @@ object ExecEngineUtil {
   def computeDeploysCheckpoint[F[_]: MonadThrowable: BlockStore: Log: ExecutionEngineService](
       merged: MergeResult[TransformMap, Block],
       deploys: Seq[Deploy],
+      blocktime: Long,
       protocolVersion: state.ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
       preStateHash <- computePrestate[F](merged)
       processedDeploys <- processDeploys[F](
                            preStateHash,
+                           blocktime,
                            deploys,
                            protocolVersion
                          )
@@ -92,11 +94,12 @@ object ExecEngineUtil {
 
   private def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       prestate: StateHash,
+      blocktime: Long,
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
   ): F[Seq[DeployResult]] =
     ExecutionEngineService[F]
-      .exec(prestate, deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
+      .exec(prestate, blocktime, deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
       .rethrow
 
   private def processGenesisDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
@@ -169,6 +172,13 @@ object ExecEngineUtil {
     block.getHeader.parentHashes.isEmpty &&
       block.getHeader.getState.preStateHash == ExecutionEngineService[F].emptyStateHash
 
+  /** Runs deploys from the block and returns the effects they make.
+    *
+    * @param block Block to run.
+    * @param prestate prestate hash of the GlobalState on top of which to run deploys.
+    * @param dag Representation of the DAG.
+    * @return Effects of running deploys from the block.
+    */
   def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
       block: Block,
       prestate: StateHash,
@@ -176,6 +186,7 @@ object ExecEngineUtil {
   ): F[Seq[TransformEntry]] = {
     val deploys         = ProtoUtil.deploys(block).flatMap(_.deploy)
     val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(block)
+    val blocktime       = block.getHeader.timestamp
 
     if (isGenesisLike(block)) {
       for {
@@ -186,6 +197,7 @@ object ExecEngineUtil {
       for {
         processedDeploys <- processDeploys[F](
                              prestate,
+                             blocktime,
                              deploys,
                              protocolVersion
                            )

@@ -79,7 +79,9 @@ pub extern "C" fn call() {
             let amount: U512 = contract_api::get_arg(1);
             let purse_id = mint.create(amount);
             let purse_key = URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
-            contract_api::ret(&purse_key, &vec![purse_key])
+            // TODO: return `purse_key` in extra_urefs, currently broken
+            // Ref: https://casperlabs.atlassian.net/browse/EE-401
+            contract_api::ret(&purse_key, &vec![])
         }
 
         "balance" => {

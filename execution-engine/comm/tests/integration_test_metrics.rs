@@ -2,12 +2,14 @@ extern crate grpc;
 #[macro_use]
 extern crate lazy_static;
 
-extern crate casperlabs_engine_grpc_server;
 extern crate execution_engine;
 extern crate shared;
 extern crate storage;
 
-mod common;
+extern crate casperlabs_engine_grpc_server;
+
+#[allow(unused)]
+mod test_support;
 
 use grpc::RequestOptions;
 
@@ -21,12 +23,10 @@ use shared::test_utils;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
 use casperlabs_engine_grpc_server::engine_server::ipc::{
-    CommitRequest, Deploy, DeployCode, ExecRequest, GenesisRequest, QueryRequest, ValidateRequest,
+    CommitRequest, Deploy, ExecRequest, QueryRequest, ValidateRequest,
 };
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use casperlabs_engine_grpc_server::engine_server::state::{
-    BigInt, Key, Key_Address, ProtocolVersion,
-};
+use casperlabs_engine_grpc_server::engine_server::state::{Key, Key_Address};
 
 pub const PROC_NAME: &str = "ee-shared-lib-tests";
 
@@ -48,7 +48,7 @@ lazy_static! {
 fn should_query_with_metrics() {
     setup();
     let correlation_id = CorrelationId::new();
-    let mocked_account = mocked_account(common::MOCKED_ACCOUNT_ADDRESS);
+    let mocked_account = mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = global_state.root_hash.to_vec();
     let engine_state = EngineState::new(global_state, false);
@@ -57,7 +57,7 @@ fn should_query_with_metrics() {
     {
         let mut key = Key::new();
         let mut key_address = Key_Address::new();
-        key_address.set_account(common::MOCKED_ACCOUNT_ADDRESS.to_vec());
+        key_address.set_account(test_support::MOCKED_ACCOUNT_ADDRESS.to_vec());
         key.set_address(key_address);
 
         query_request.set_base_key(key);
@@ -100,7 +100,7 @@ fn should_query_with_metrics() {
 fn should_exec_with_metrics() {
     setup();
     let correlation_id = CorrelationId::new();
-    let mocked_account = mocked_account(common::MOCKED_ACCOUNT_ADDRESS);
+    let mocked_account = mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = global_state.root_hash.to_vec();
     let engine_state = EngineState::new(global_state, false);
@@ -108,11 +108,11 @@ fn should_exec_with_metrics() {
     let mut exec_request = ExecRequest::new();
     {
         let mut deploys: protobuf::RepeatedField<Deploy> = <protobuf::RepeatedField<Deploy>>::new();
-        deploys.push(common::get_mock_deploy());
+        deploys.push(test_support::get_mock_deploy());
 
         exec_request.set_deploys(deploys);
         exec_request.set_parent_state_hash(root_hash);
-        exec_request.set_protocol_version(common::get_protocol_version());
+        exec_request.set_protocol_version(test_support::get_protocol_version());
     }
 
     let _exec_response_result = engine_state
@@ -150,7 +150,7 @@ fn should_exec_with_metrics() {
 fn should_commit_with_metrics() {
     setup();
     let correlation_id = CorrelationId::new();
-    let mocked_account = mocked_account(common::MOCKED_ACCOUNT_ADDRESS);
+    let mocked_account = mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = global_state.root_hash.to_vec();
     let engine_state = EngineState::new(global_state, false);
@@ -197,7 +197,7 @@ fn should_commit_with_metrics() {
 fn should_validate_with_metrics() {
     setup();
     let correlation_id = CorrelationId::new();
-    let mocked_account = mocked_account(common::MOCKED_ACCOUNT_ADDRESS);
+    let mocked_account = mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let engine_state = EngineState::new(global_state, false);
 
@@ -237,92 +237,4 @@ fn should_validate_with_metrics() {
 
         assert_eq!(log_item.log_level, "Metric", "expected Metric");
     }
-}
-
-#[test]
-fn should_run_genesis() {
-    let global_state = InMemoryGlobalState::empty().expect("should create global state");
-    let engine_state = EngineState::new(global_state, false);
-
-    let genesis_request = {
-        let genesis_account_addr = [6u8; 32].to_vec();
-
-        let initial_tokens = {
-            let mut ret = BigInt::new();
-            ret.set_bit_width(512);
-            ret.set_value("1000000".to_string());
-            ret
-        };
-
-        let mint_code = {
-            let mut ret = DeployCode::new();
-            let wasm_bytes = test_utils::create_empty_wasm_module_bytes();
-            ret.set_code(wasm_bytes);
-            ret
-        };
-
-        let proof_of_stake_code = {
-            let mut ret = DeployCode::new();
-            let wasm_bytes = test_utils::create_empty_wasm_module_bytes();
-            ret.set_code(wasm_bytes);
-            ret
-        };
-
-        let protocol_version = {
-            let mut ret = ProtocolVersion::new();
-            ret.set_value(1);
-            ret
-        };
-
-        let mut ret = GenesisRequest::new();
-        ret.set_address(genesis_account_addr.to_vec());
-        ret.set_initial_tokens(initial_tokens);
-        ret.set_mint_code(mint_code);
-        ret.set_proof_of_stake_code(proof_of_stake_code);
-        ret.set_protocol_version(protocol_version);
-        ret
-    };
-
-    let request_options = RequestOptions::new();
-
-    let genesis_response = engine_state
-        .run_genesis(request_options, genesis_request)
-        .wait_drop_metadata();
-
-    let response = genesis_response.unwrap();
-
-    let state_handle = engine_state.state();
-
-    let state_handle_guard = state_handle.lock();
-
-    let state_root_hash = state_handle_guard.root_hash;
-    let response_root_hash = response.get_success().get_poststate_hash();
-
-    assert_eq!(state_root_hash.to_vec(), response_root_hash.to_vec());
-}
-
-#[ignore]
-#[test]
-fn should_run_genesis_with_mint_bytes() {
-    let global_state = InMemoryGlobalState::empty().expect("should create global state");
-    let engine_state = EngineState::new(global_state, false);
-
-    let genesis_request = common::create_genesis_request();
-
-    let request_options = RequestOptions::new();
-
-    let genesis_response = engine_state
-        .run_genesis(request_options, genesis_request)
-        .wait_drop_metadata();
-
-    let response = genesis_response.unwrap();
-
-    let state_handle = engine_state.state();
-
-    let state_handle_guard = state_handle.lock();
-
-    let state_root_hash = state_handle_guard.root_hash;
-    let response_root_hash = response.get_success().get_poststate_hash();
-
-    assert_eq!(state_root_hash.to_vec(), response_root_hash.to_vec());
 }

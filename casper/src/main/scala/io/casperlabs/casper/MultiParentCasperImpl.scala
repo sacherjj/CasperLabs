@@ -487,75 +487,73 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: Metrics: SafetyOracle: BlockS
       justifications: Seq[Justification],
       protocolVersion: ProtocolVersion
   ): F[CreateBlockStatus] =
-    ExecEngineUtil
-      .computeDeploysCheckpoint[F](
-        merged,
-        deploys,
+    (for {
+      now <- Time[F].currentMillis
+      result <- ExecEngineUtil
+                 .computeDeploysCheckpoint[F](
+                   merged,
+                   deploys,
+                   now,
+                   protocolVersion
+                 )
+      DeploysCheckpoint(
+        preStateHash,
+        postStateHash,
+        deploysForBlock,
+        // We don't have to put InvalidNonce deploys back to the buffer,
+        // as by default buffer is cleared when deploy gets included in
+        // the finalized block. If that strategy ever changes, we will have to
+        // put them back into the buffer explicitly.
+        invalidNonceDeploys,
+        deploysToDiscard,
+        number,
         protocolVersion
-      )
-      .flatMap {
-        case DeploysCheckpoint(
-            preStateHash,
-            postStateHash,
-            deploysForBlock,
-            // We don't have to put InvalidNonce deploys back to the buffer,
-            // as by default buffer is cleared when deploy gets included in
-            // the finalized block. If that strategy ever changes, we will have to
-            // put them back into the buffer explicitly.
-            invalidNonceDeploys,
-            deploysToDiscard,
-            number,
-            protocolVersion
-            ) =>
-          val status = if (deploysForBlock.isEmpty) {
-            CreateBlockStatus.noNewDeploys.pure[F]
-          } else {
-            Time[F].currentMillis map { now =>
-              val newBonds = ProtoUtil.bonds(parents.head)
+      ) = result
+      status = if (deploysForBlock.isEmpty) {
+        CreateBlockStatus.noNewDeploys
+      } else {
+        val newBonds = ProtoUtil.bonds(parents.head)
 
-              val postState = Block
-                .GlobalState()
-                .withPreStateHash(preStateHash)
-                .withPostStateHash(postStateHash)
-                .withBonds(newBonds)
+        val postState = Block
+          .GlobalState()
+          .withPreStateHash(preStateHash)
+          .withPostStateHash(postStateHash)
+          .withBonds(newBonds)
 
-              val body = Block
-                .Body()
-                .withDeploys(deploysForBlock)
+        val body = Block
+          .Body()
+          .withDeploys(deploysForBlock)
 
-              val header = blockHeader(
-                body,
-                parentHashes = parents.map(_.blockHash),
-                justifications = justifications,
-                state = postState,
-                rank = number,
-                protocolVersion = protocolVersion.value,
-                timestamp = now,
-                chainId = chainId
-              )
-              val block = unsignedBlockProto(body, header)
+        val header = blockHeader(
+          body,
+          parentHashes = parents.map(_.blockHash),
+          justifications = justifications,
+          state = postState,
+          rank = number,
+          protocolVersion = protocolVersion.value,
+          timestamp = now,
+          chainId = chainId
+        )
+        val block = unsignedBlockProto(body, header)
 
-              CreateBlockStatus.created(block)
-            }
-          }
-
-          // Discard deploys that will never be included because they failed some precondition.
-          // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included
-          // in the past of the new fork, it wouldn't hit this as the nonce would be what we expect.
-          // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
-          // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
-          // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
-          val discardDeploys = Cell[F, CasperState]
-            .modify { s =>
-              s.copy(
-                deployBuffer =
-                  s.deployBuffer.remove(deploysToDiscard.map(_.deploy.deployHash).toSet)
-              )
-            }
-            .whenA(deploysToDiscard.nonEmpty)
-
-          discardDeploys *> status
+        CreateBlockStatus.created(block)
       }
+      // Discard deploys that will never be included because they failed some precondition.
+      // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included
+      // in the past of the new fork, it wouldn't hit this as the nonce would be what we expect.
+      // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
+      // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
+      // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
+      discardDeploys <- Cell[F, CasperState]
+                         .modify { s =>
+                           s.copy(
+                             deployBuffer = s.deployBuffer
+                               .remove(deploysToDiscard.map(_.deploy.deployHash).toSet)
+                           )
+                         }
+                         .whenA(deploysToDiscard.nonEmpty)
+
+    } yield status)
       .handleErrorWith {
         case ex @ SmartContractEngineError(error_msg) =>
           Log[F]

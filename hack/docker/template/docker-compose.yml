@@ -41,7 +41,6 @@ services:
       HOME: /root
       BOOTSTRAP_HOSTNAME: node-0
       CL_GRPC_SOCKET: /root/.casperlabs/sockets/.casper-node.sock
-      CL_SERVER_USE_GOSSIPING: $CL_SERVER_USE_GOSSIPING
       CL_SERVER_RELAY_FACTOR: 1
       CL_SERVER_NO_UPNP: "true"
       CL_LOG_LEVEL: $CL_LOG_LEVEL

@@ -39,7 +39,6 @@ object Genesis {
 
   /** Construct deploys that will set up the system contracts. */
   def defaultBlessedTerms[F[_]: MonadThrowable: FilesAPI: Log](
-      timestamp: Long,
       accountPublicKeyPath: Option[Path],
       initialTokens: BigInt,
       posParams: ProofOfStakeParams,
@@ -77,14 +76,13 @@ object Genesis {
             bitWidth = 512 // We could use `initialTokens.bitLength` to map to the closest of 128, 256 or 512 but this is what the EE expects.
           )
           .some,
-        timestamp = timestamp,
         mintCode = mintCode.some,
         proofOfStakeCode = maybePosCode,
         protocolVersion = state.ProtocolVersion(protocolVersion).some
       )
 
       deploy = ProtoUtil.basicDeploy(
-        timestamp,
+        timestamp = 0L,
         sessionCode = ByteString.copyFrom(request.toByteArray),
         accountPublicKey = ByteString.copyFrom(accountPublicKey),
         nonce = 1
@@ -94,7 +92,8 @@ object Genesis {
     maybeDeploy.value flatMap {
       case Left(error) =>
         Log[F].warn(s"Unable to construct blessed terms: $error") *> List.empty[Deploy].pure[F]
-      case Right(deploy) => List(deploy).pure[F]
+      case Right(deploy) =>
+        List(deploy).pure[F]
     }
   }
 
@@ -214,7 +213,6 @@ object Genesis {
       )
       validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
       blessedContracts <- defaultBlessedTerms[F](
-                           timestamp = timestamp,
                            accountPublicKeyPath = accountPublicKeyPath,
                            initialTokens = initialTokens,
                            posParams = ProofOfStakeParams(minimumBond, maximumBond, validators),

@@ -67,33 +67,3 @@ def extract_block_hash_from_propose_output(propose_output: str):
         raise UnexpectedProposeOutputFormatError(propose_output)
     return match.group(1)
 
-
-def make_get_state_client_name() -> str:
-    return f"get_state.{random_string(5)}"
-
-
-def get_contract_state(
-    *,
-    docker_client: "DockerClient",
-    network_name: str,
-    target_host_name: str,
-    port: int,
-    _type: str,
-    key: str,
-    path: str,
-    block_hash: str,
-    image: str = DEFAULT_CLIENT_IMAGE
-):
-    name = make_get_state_client_name()
-    command = f'--host {target_host_name} --port {port} query-state -t {_type} -k {key} -p "{path}" -b {block_hash}'
-    logging.info(command)
-    output = docker_client.containers.run(
-        image,
-        name=name,
-        user='root',
-        auto_remove=True,
-        command=command,
-        network=network_name,
-        hostname=name
-    )
-    return output

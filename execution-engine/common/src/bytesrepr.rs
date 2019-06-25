@@ -554,6 +554,11 @@ mod proptests {
         fn test_access_rights(access_right in access_rights_arb()) {
             assert!(test_serialization_roundtrip(&access_right))
         }
+
+        #[test]
+        fn test_public_key(pk in public_key_arb()) {
+            assert!(test_serialization_roundtrip(&pk))
+        }
     }
 
 }

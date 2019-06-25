@@ -1393,10 +1393,10 @@ object HashSetCasperTest {
       bonds: Map[PublicKey, Long],
       minimumBond: Long,
       maximumBond: Long,
-      deployTimestamp: Long
+      timestamp: Long
   ): BlockMsgWithTransform = {
     implicit val logEff                  = new LogStub[Task]()
-    val initial                          = Genesis.withoutContracts(bonds, deployTimestamp, "casperlabs")
+    val initial                          = Genesis.withoutContracts(bonds, timestamp, "casperlabs")
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
     implicit val filesApi                = FilesAPI.create[Task]
     val validators = bonds.map {
@@ -1405,7 +1405,6 @@ object HashSetCasperTest {
 
     (for {
       blessed <- Genesis.defaultBlessedTerms[Task](
-                  deployTimestamp,
                   accountPublicKeyPath = None,
                   initialTokens = BigInt(0),
                   ProofOfStakeParams(minimumBond, maximumBond, validators),

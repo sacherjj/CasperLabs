@@ -45,7 +45,7 @@ max-message-size = 4194304
 chunk-size = 1048576
 
 # Use gossiping or the old transport layer.
-use-gossiping = false
+use-gossiping = true
 
 # Number of new nodes to which try to gossip a new block.
 relay-factor = 2

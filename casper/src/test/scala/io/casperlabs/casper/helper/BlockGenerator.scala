@@ -87,6 +87,7 @@ object BlockGenerator {
       result <- computeDeploysCheckpoint[F](
                  merged,
                  deploys,
+                 b.getHeader.timestamp,
                  ProtocolVersion(1)
                )
     } yield result

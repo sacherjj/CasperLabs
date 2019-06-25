@@ -150,7 +150,6 @@ object BlockApproverProtocol {
         genesisBlessedContracts <- EitherT.liftF(
                                     Genesis
                                       .defaultBlessedTerms[F](
-                                        timestamp,
                                         conf.genesisAccountPublicKeyPath,
                                         conf.initialTokens,
                                         posParams,
@@ -186,6 +185,7 @@ object BlockApproverProtocol {
       processedDeploys <- EitherT(
                            ExecutionEngineService[F].exec(
                              ExecutionEngineService[F].emptyStateHash,
+                             timestamp,
                              deploys
                                .map(ProtoUtil.deployDataToEEDeploy),
                              protocolVersion

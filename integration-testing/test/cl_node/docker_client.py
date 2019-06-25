@@ -129,7 +129,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         just_text = '--show-justification-lines' if show_justification_lines else ''
         return self.invoke_client(f'vdag --depth {depth} {just_text}')
 
-    def queryState(self, blockHash: str, key: str, path: str, keyType: str):
+    def query_state(self, block_hash: str, key: str, path: str, key_type: str):
         """
         Subcommand: query-state - Query a value in the global state.
           -b, --block-hash  <arg>   Hash of the block to query the state of
@@ -141,11 +141,11 @@ class DockerClient(CasperLabsClient, LoggingMixin):
           -h, --help                Show help message
 
         """
-        return self.invoke_client(f'query-state '
-                                  f' --block-hash "{blockHash}"'
-                                  f' --key "{key}"'
-                                  f' --path "{path}"'
-                                  f' --type "{keyType}"')
+        return parse(self.invoke_client(f'query-state '
+                                        f' --block-hash "{block_hash}"'
+                                        f' --key "{key}"'
+                                        f' --path "{path}"'
+                                        f' --type "{key_type}"'))
 
 
     def show_deploys(self, hash: str):
