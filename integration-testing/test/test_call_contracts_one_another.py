@@ -1,8 +1,10 @@
 import time
-from itertools import count
+import logging
 import pytest
+from itertools import count
 from .cl_node.casperlabsnode import ( COMBINED_CONTRACT, COUNTER_CALL, HELLO_WORLD, MAILING_LIST_CALL)
 from .cl_node.wait import wait_for_blocks_count_at_least
+from test import contract_hash
 
 
 class BlockPropagatedToAllNodesChecker:
@@ -67,17 +69,23 @@ def docker_client(three_node_network_with_combined_contract):
 expected_counter_result = count(1)
 
 test_parameters = [
-    (COUNTER_CALL, "counter/count", lambda r: r.int_value == next(expected_counter_result)),
-    (MAILING_LIST_CALL, "mailing/list", lambda r: r.string_list.values == "CasperLabs"),
-    (HELLO_WORLD, "helloworld", lambda r: r.string_value == "Hello, World"),
+    (COUNTER_CALL, 1, "counter/count", lambda r: r.int_value == next(expected_counter_result)),
+    (MAILING_LIST_CALL, 2, "mailing/list", lambda r: r.string_list.values == "CasperLabs"),
+    (HELLO_WORLD, 0, "helloworld", lambda r: r.string_value == "Hello, World"),
 ]
 
-@pytest.mark.parametrize("contract, path, expected", test_parameters)
-def test_call_contracts_one_another(nodes, docker_client, generated_hashes, contract, path, expected):
+@pytest.mark.parametrize("contract, function_counter, path, expected", test_parameters)
+def test_call_contracts_one_another(nodes, docker_client, generated_hashes, contract, function_counter, path, expected):
     """
     Feature file: consensus.feature
     Scenario: Call contracts deployed on a node from another node.
     """
+
+    # Help me figure out what hashes to put into the call contracts.
+    # combined-contracts/define/src/lib.rs defines them;
+    # the order is hello_name_ext, counter_ext, mailing_list_ext
+    h = contract_hash(nodes[0].from_address(), 0, function_counter)
+    logging.info("The expected contract hash for %s is %s (%s)" % (contract, list(h), h.hex()))
 
     def state(node, path, block_hash):
         return node.d_client.query_state(block_hash = block_hash, key = nodes[0].from_address(), key_type = "address", path = path)

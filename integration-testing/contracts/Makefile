@@ -17,10 +17,13 @@ clean: $(shell find . -type f -name "Cargo.toml" | awk '{print $$1"/clean"}')
 # Defining rules so each target building a contract only depends on its own source. Needs GNU Make.
 # Building either a call or a define, leaving the WASM files in <contract>/target/wasm32-unknown-unknown/release/
 # and copying them to the integration-testing/resources directory as well.
+# NOTE: Not all of them produce .wasm files at the moment.
 define CONTRACT_rule
 .make/contracts/$(1): $$(shell find $(1) -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" \)) .make/rustup-update
 	cd $(1) && cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
-	cp $(1)/target/wasm32-unknown-unknown/release/*.wasm ../resources
+	find $(1)/target/wasm32-unknown-unknown/release \
+		-type f -name *.wasm \
+		-exec cp {} ../resources \;
 	mkdir -p $$(dir $$@) && touch $$@
 endef
 
