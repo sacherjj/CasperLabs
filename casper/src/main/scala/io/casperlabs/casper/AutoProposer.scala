@@ -1,22 +1,20 @@
 package io.casperlabs.casper
 
-import cats._
-import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
+import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.shared.Time
-import io.casperlabs.shared.Log
+import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.shared.{Log, Time}
+
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 /** Propose a block automatically whenever a timespan has elapsed or
   * we have more than a certain number of new deploys in the buffer. */
-class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
+class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef](
     checkInterval: FiniteDuration,
     maxInterval: FiniteDuration,
     maxCount: Int,

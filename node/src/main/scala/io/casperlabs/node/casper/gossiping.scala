@@ -160,7 +160,7 @@ package object gossiping {
           for {
             _           <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
             state       <- Cell.mvarCell[F, CasperState](CasperState())
-            executor    = new MultiParentCasperImpl.StatelessExecutor(chainId)
+            executor    = new MultiParentCasperImpl.StatelessExecutor[F](chainId)
             dag         <- BlockDagStorage[F].getRepresentation
             result      <- executor.validateAndAddBlock(None, dag, block)(state)
             (status, _) = result
@@ -495,7 +495,7 @@ package object gossiping {
       awaitApproved: F[Unit],
       isInitialRef: Ref[F, Boolean]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
-    implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+    implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughApplicativeError[F]
 
     for {
       _ <- SynchronizerImpl.establishMetrics[F]

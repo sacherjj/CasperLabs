@@ -45,7 +45,7 @@ class ValidateTest
     with BlockDagStorageFixture
     with ArbitraryConsensus {
   implicit val log              = new LogStub[Task]
-  implicit val raiseValidateErr = Validate.raiseValidateErrorThroughSync[Task]
+  implicit val raiseValidateErr = Validate.raiseValidateErrorThroughApplicativeError[Task]
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.
   implicit def wrapWithThrowable[A <: InvalidBlock](err: A): Throwable =

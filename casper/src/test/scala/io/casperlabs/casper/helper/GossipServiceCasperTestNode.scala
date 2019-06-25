@@ -362,7 +362,8 @@ object GossipServiceCasperTestNodeFactory {
               } yield latest.values.toList
 
             override def validate(blockSummary: consensus.BlockSummary): F[Unit] = {
-              implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+              implicit val functorRaiseInvalidBlock =
+                Validate.raiseValidateErrorThroughApplicativeError[F]
               for {
                 dag <- casper.blockDag
                 _ <- Log[F].debug(
