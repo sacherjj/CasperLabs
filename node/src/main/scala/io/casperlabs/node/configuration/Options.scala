@@ -282,8 +282,20 @@ private[configuration] final case class Options private (
       gen[Long]("Maximum bond accepted by the PoS contract in the genesis block.")
 
     @scallop
-    val casperHasFaucet =
-      gen[Flag]("True if there should be a public access CSPR faucet in the genesis block.")
+    val casperGenesisAccountPublicKeyPath =
+      gen[Path]("Path to the PEM encoded public key to use for the system account.")
+
+    @scallop
+    val casperInitialTokens =
+      gen[BigInt]("Initial amount of tokens to pass to the Mint contract.")
+
+    @scallop
+    val casperMintCodePath =
+      gen[Path]("Path to the Wasm file which contains the Mint contract.")
+
+    @scallop
+    val casperPosCodePath =
+      gen[Path]("Path to the Wasm file which contains the Proof-of-Stake contract")
 
     @scallop
     val casperIgnoreDeploySignature =

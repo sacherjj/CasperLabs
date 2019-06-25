@@ -12,19 +12,3 @@ final case class ProofOfStakeParams(
   require(minimumBond <= maximumBond)
   require(validators.nonEmpty)
 }
-
-object ProofOfStake {
-  def initialBondsCode(validators: Seq[ProofOfStakeValidator]): String = {
-    import io.casperlabs.casper.util.Sorting.byteArrayOrdering
-    val sortedValidators = validators.sortBy(_.id)
-    val mapEntries = sortedValidators.iterator.zipWithIndex
-      .map {
-        case (ProofOfStakeValidator(id, stake), index) =>
-          val pk = Base16.encode(id)
-          s""" "$pk".hexToBytes() : ($stake, "secp256k1Verify", Nil, ${index + 1})"""
-      }
-      .mkString(", ")
-
-    s"{$mapEntries}"
-  }
-}

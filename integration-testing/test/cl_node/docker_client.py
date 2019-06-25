@@ -1,8 +1,10 @@
 import logging
 import time
+import os
 from typing import Optional
 from collections import defaultdict
 
+from test.cl_node import LoggingMixin
 from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
@@ -13,12 +15,12 @@ from test.cl_node.nonce_registry import NonceRegistry
 
 from docker.errors import ContainerError
 
-
-class DockerClient(CasperLabsClient):
+class DockerClient(CasperLabsClient, LoggingMixin):
 
     def __init__(self, node: 'DockerNode'):
         self.node = node
         self.docker_client = node.config.docker_client
+        super(DockerClient, self).__init__()
 
     @property
     def client_type(self) -> str:
@@ -32,7 +34,7 @@ class DockerClient(CasperLabsClient):
             }
         }
         command = f'--host {self.node.container_name} {command}'
-        logging.info(f"COMMAND {command}")
+        self.logger.info(f"COMMAND {command}")
         container = self.docker_client.containers.run(
             image = f"casperlabs/client:{self.node.docker_tag}",
             name = f"client-{self.node.config.number}-{random_string(5)}",
@@ -47,14 +49,18 @@ class DockerClient(CasperLabsClient):
         error, status_code = r['Error'], r['StatusCode']
         stdout = container.logs(stdout=True, stderr=False).decode('utf-8')
         stderr = container.logs(stdout=False, stderr=True).decode('utf-8')
-        logging.info(f"EXITED exit_code: {status_code} STDERR: {stderr} STDOUT: {stdout}")
+
+        # TODO: I don't understand why bug if I just call `self.logger.debug` then
+        # it doesn't print anything, even though the level is clearly set.
+        if self.log_level == 'DEBUG':
+            self.logger.info(f"EXITED exit_code: {status_code} STDERR: {stderr} STDOUT: {stdout}")
 
         try:
             container.remove()
         except docker.errors.APIError as e:
-            logging.warning(f"Exception while removing docker client container: {str(e)}")
+            self.logger.warning(f"Exception while removing docker client container: {str(e)}")
 
-        if status_code: 
+        if status_code:
             raise NonZeroExitCodeError(command=(command, status_code), exit_code=status_code, output=stderr)
 
         return stdout
@@ -72,11 +78,11 @@ class DockerClient(CasperLabsClient):
                 return self.propose()
             except NonZeroExitCodeError:
                 if attempt < max_attempts:
-                    logging.debug("Could not propose; retrying later.")
+                    self.logger.debug("Could not propose; retrying later.")
                     attempt += 1
                     time.sleep(retry_seconds)
                 else:
-                    logging.debug("Could not propose; no more retries!")
+                    self.logger.debug("Could not propose; no more retries!")
                     raise ex
 
     def deploy(self,
@@ -148,4 +154,3 @@ class DockerClient(CasperLabsClient):
 
     def show_deploy(self, hash: str):
         return parse(self.invoke_client(f'show-deploy {hash}'))
-
