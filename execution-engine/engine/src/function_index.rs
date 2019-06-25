@@ -34,8 +34,8 @@ pub enum FunctionIndex {
     RemoveURef = 27,
     GetCallerIndex = 28,
     TransferToAccountIndex = 29,
-    GetBlocktimeIndex = 30,
-    TransferFromPurseToAccountIndex = 31,
+    TransferFromPurseToAccountIndex = 30,
+    GetBlocktimeIndex = 31,
 }
 
 impl Into<usize> for FunctionIndex {
