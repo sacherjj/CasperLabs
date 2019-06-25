@@ -10,11 +10,16 @@ use crate::error::Error;
 
 use super::{MAX_DECREASE, MAX_INCREASE, MAX_REL_DECREASE, MAX_REL_INCREASE, MAX_SPREAD};
 
-pub struct Stakes(pub BTreeMap<PublicKey, U512>);
+pub trait StakesReader {
+    fn read() -> Option<Stakes>;
+    fn write(stakes: &Stakes);
+}
 
-impl Stakes {
+pub struct ContractStakes;
+
+impl StakesReader for ContractStakes {
     /// Reads the current stakes from the contract's known urefs.
-    pub fn read() -> Option<Stakes> {
+    fn read() -> Option<Stakes> {
         let mut stakes = BTreeMap::new();
         for (name, _) in contract_api::list_known_urefs() {
             let mut split_name = name.split('_');
@@ -36,9 +41,9 @@ impl Stakes {
 
     /// Writes the current stakes to the contract's known urefs.
     // TODO: Error handling
-    pub fn write(&self) {
+    fn write(stakes: &Stakes) {
         // Encode the stakes as a set of uref names.
-        let mut new_urefs: BTreeSet<String> = self
+        let mut new_urefs: BTreeSet<String> = stakes
             .0
             .iter()
             .map(|(pub_key, balance)| {
@@ -63,7 +68,11 @@ impl Stakes {
             contract_api::add_uref(&name, &Key::Hash([0; 32]));
         }
     }
+}
 
+pub struct Stakes(pub BTreeMap<PublicKey, U512>);
+
+impl Stakes {
     /// Removes `amount` from the validator's stakes. If they have been slashed, it can happen that
     /// they don't have enough stakes anymore. The actual number is returned.
     ///
