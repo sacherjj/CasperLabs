@@ -12,7 +12,6 @@ message DeployCode {
 message Deploy {
     // Public key of the account which is the context of the execution.
     bytes address = 1; // length 32 bytes
-    uint64 timestamp = 2;
     DeployCode session = 3;
     DeployCode payment = 4;
     uint64 gas_limit = 5;
@@ -25,8 +24,9 @@ message Deploy {
 
 message ExecRequest {
     bytes parent_state_hash = 1;
-    repeated Deploy deploys = 2;
-    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
+    uint64 block_time = 2;
+    repeated Deploy deploys = 3;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 4;
 }
 
 message ExecResponse {
@@ -83,16 +83,20 @@ message Transform {
     oneof transform_instance {
         TransformIdentity identity = 1;
         TransformAddInt32 add_i32 = 2;
-        TransformWrite write = 3;
-        TransformAddKeys add_keys = 4;
-        TransformFailure failure = 5;
-        TransformAddBigInt add_big_int = 6;
+        TransformAddUInt64 add_u64 = 3;
+        TransformWrite write = 4;
+        TransformAddKeys add_keys = 5;
+        TransformFailure failure = 6;
+        TransformAddBigInt add_big_int = 7;
     }
 }
 
 message TransformIdentity {}
 message TransformAddInt32 {
     int32 value = 1;
+}
+message TransformAddUInt64 {
+    uint64 value = 1;
 }
 message TransformAddBigInt {
     io.casperlabs.casper.consensus.state.BigInt value = 1;
@@ -244,6 +248,7 @@ message GenesisRequest {
 
 message GenesisResult {
     bytes poststate_hash = 1;
+    ExecutionEffect effect = 2;
 }
 
 message GenesisDeployError {

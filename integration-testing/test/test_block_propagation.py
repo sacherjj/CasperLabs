@@ -75,7 +75,7 @@ def test_block_propagation(nodes,
     for node in nodes:
         blocks = parse_show_blocks(node.client.show_blocks(expected_number_of_blocks * 100))
         # What propose returns is first 10 characters of block hash, so we can compare only first 10 charcters.
-        blocks_hashes = set([b.block_hash[:10] for b in blocks])
+        blocks_hashes = set([b.summary.block_hash[:10] for b in blocks])
         for t in deploy_threads:
             assert t.deployed_blocks_hashes.issubset(blocks_hashes), \
                    f"Not all blocks deployed and proposed on {t.node.container_name} were propagated to {node.container_name}"
@@ -118,7 +118,7 @@ def test_blocks_infect_network(not_all_connected_directly_nodes):
     block_hash = deploy_and_propose(first, 'test_helloname.wasm')
     wait_for_blocks_count_at_least(last, 2, 2)
     blocks = parse_show_blocks(last.client.show_blocks(2))
-    blocks_hashes = set([b.block_hash[:10] for b in blocks])
+    blocks_hashes = set([b.summary.block_hash[:10] for b in blocks])
     assert block_hash in blocks_hashes
 
 

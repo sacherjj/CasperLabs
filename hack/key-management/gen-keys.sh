@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
-set -euo pipefail
+
+#set -o pipefail
+set -eu
 trap 'handle_exit'  0
 
 VERBOSE=false
@@ -7,7 +9,7 @@ VERBOSE=false
 handle_exit() {
     LAST_COMMAND_STATUS=$?
     if [ "$LAST_COMMAND_STATUS" -ne 0 ]; then
-        if [ "$VERBOSE" == "true" ]; then
+        if [ "$VERBOSE" = "true" ]; then
             echo 'ERROR: script failed, see the command above' && exit 1
         else
             echo 'ERROR: script failed, you can re-run script with -v option to debug it' && exit "$LAST_COMMAND_STATUS"
@@ -32,6 +34,7 @@ handle_exit() {
 # node.key.pem          # secp256r1 private key
 # validator-id          # validator ID, used to run as a validator for validating transactions, used in bonds.txt file
 #                       # derived from validator.public.pem
+# validator-id-hex      # validator ID in hex, derived from validator.public.pem
 # validator-private.pem # ed25519 private key
 # validator-public.pem  # ed25519 public key
 #
@@ -41,7 +44,7 @@ handle_exit() {
 #   --casper-validator-private-key-path validator-private.pem
 #   --tls-key node.key.pem
 #   --tls-certificate node.certificate.pem
-if [ "$1" == "-v" ]; then
+if [ "$1" = "-v" ]; then
     VERBOSE=true
     set -v; shift
 fi
@@ -67,6 +70,7 @@ openssl pkey -outform DER -pubout -in "$OUTPUT_DIR/validator-private.pem" | tail
 # Assert validator-id is 32 bytes long
 VALIDATOR_ID_BASE64=$(cat "$OUTPUT_DIR/validator-id")
 VALIDATOR_ID_HEX=$(echo "$VALIDATOR_ID_BASE64" | openssl base64 -d | od -t x -An | tr -d '[:space:]')
+echo $VALIDATOR_ID_HEX > "$OUTPUT_DIR/validator-id-hex"
 VALIDATOR_BYTES=$((${#VALIDATOR_ID_HEX} / 2))
 if [ $VALIDATOR_BYTES -ne 32 ]
     then

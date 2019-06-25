@@ -82,11 +82,11 @@ class ConfigurationSpec
       relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       cleanBlockStorage = false
     )
-    val grpcServer = Configuration.GrpcServer(
-      host = "test",
+    val grpcServer = Configuration.Grpc(
       socket = Paths.get("/tmp/test"),
       portExternal = 1,
-      portInternal = 1
+      portInternal = 1,
+      useTls = false
     )
     val casper = CasperConf(
       validatorPublicKey = "test".some,

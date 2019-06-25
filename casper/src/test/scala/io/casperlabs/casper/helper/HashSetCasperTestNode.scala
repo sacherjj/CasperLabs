@@ -11,6 +11,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
@@ -35,6 +36,7 @@ import monix.execution.Scheduler
 
 import scala.collection.mutable.{Map => MutMap}
 import scala.util.Random
+import io.casperlabs.crypto.Keys
 
 /** Base class for test nodes with fields used by tests exposed as public. */
 abstract class HashSetCasperTestNode[F[_]](
@@ -43,7 +45,8 @@ abstract class HashSetCasperTestNode[F[_]](
     val genesis: Block,
     val blockDagDir: Path,
     val blockStoreDir: Path,
-    val validateNonces: Boolean
+    val validateNonces: Boolean,
+    maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]]
 )(
     implicit
     concurrentF: Concurrent[F],
@@ -63,7 +66,9 @@ abstract class HashSetCasperTestNode[F[_]](
     .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> b.stake)
     .toMap
 
-  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds, validateNonces)
+  implicit val casperSmartContractsApi =
+    maybeMakeEE.map(_(bonds, validateNonces)) getOrElse
+      HashSetCasperTestNode.simpleEEApi[F](bonds, validateNonces)
 
   /** Handle one message. */
   def receive(): F[Unit]
@@ -140,7 +145,8 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true
+      validateNonces: Boolean = true,
+      maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
@@ -154,7 +160,8 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true
+      validateNonces: Boolean = true,
+      maybeMakeEE: Option[MakeExecutionEngineService[Effect]] = None
   ): Effect[IndexedSeq[TestNode[Effect]]] =
     networkF[Effect](
       sks,
@@ -162,7 +169,8 @@ trait HashSetCasperTestNodeFactory {
       transforms,
       storageSize,
       faultToleranceThreshold,
-      validateNonces
+      validateNonces,
+      maybeMakeEE
     )(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
@@ -185,7 +193,9 @@ trait HashSetCasperTestNodeFactory {
 }
 
 object HashSetCasperTestNode {
-  type Effect[A] = EitherT[Task, CommError, A]
+  type Effect[A]                        = EitherT[Task, CommError, A]
+  type Bonds                            = Map[Keys.PublicKey, Long]
+  type MakeExecutionEngineService[F[_]] = (Bonds, Boolean) => ExecutionEngineService[F]
 
   val appErrId = new ApplicativeError[Id, CommError] {
     def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
@@ -255,7 +265,8 @@ object HashSetCasperTestNode {
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Defer: Applicative](
       initialBonds: Map[PublicKey, Long],
-      validateNonces: Boolean = true
+      validateNonces: Boolean = true,
+      generateConflict: Boolean = false
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
       import ipc._
@@ -275,8 +286,19 @@ object HashSetCasperTestNode {
         val key = Key(
           Key.Value.Hash(Key.Hash(deploy.session.fold(ByteString.EMPTY)(_.code)))
         )
-        val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
-        val op            = Op(Op.OpInstance.Read(ReadOp()))
+        val (op, transform) = if (!generateConflict) {
+          Op(Op.OpInstance.Read(ReadOp())) ->
+            Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+        } else {
+          Op(Op.OpInstance.Write(WriteOp())) ->
+            Transform(
+              Transform.TransformInstance.Write(
+                TransformWrite(
+                  state.Value(state.Value.Value.IntValue(0)).some
+                )
+              )
+            )
+        }
         val transforEntry = TransformEntry(Some(key), Some(transform))
         val opEntry       = OpEntry(Some(key), Some(op))
         ExecutionEffect(Seq(opEntry), Seq(transforEntry))
@@ -302,6 +324,7 @@ object HashSetCasperTestNode {
 
       override def exec(
           prestate: ByteString,
+          blocktime: Long,
           deploys: Seq[Deploy],
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =

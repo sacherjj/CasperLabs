@@ -45,7 +45,8 @@ class TransportLayerCasperTestNode[F[_]](
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     chainId: String = "casperlabs",
-    validateNonces: Boolean = true
+    validateNonces: Boolean = true,
+    maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
 )(
     implicit
     concurrentF: Concurrent[F],
@@ -61,7 +62,8 @@ class TransportLayerCasperTestNode[F[_]](
       genesis,
       blockDagDir,
       blockStoreDir,
-      validateNonces
+      validateNonces,
+      maybeMakeEE
     )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
   implicit val logEff: LogStub[F] = new LogStub[F](local.host, printEnabled = false)
@@ -175,7 +177,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true
+      validateNonces: Boolean = true,
+      maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
@@ -218,7 +221,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                     blockStoreDir,
                     semaphore,
                     faultToleranceThreshold,
-                    validateNonces = validateNonces
+                    validateNonces = validateNonces,
+                    maybeMakeEE = maybeMakeEE
                   )(
                     concurrentF,
                     blockStore,

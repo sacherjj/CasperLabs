@@ -25,6 +25,7 @@ import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.{syncId, taskLiftEitherT}
 import io.casperlabs.comm._
+import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.discovery.NodeDiscovery._
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery._
@@ -35,9 +36,9 @@ import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
+import io.netty.handler.ssl.ClientAuth
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
-
 import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
@@ -57,6 +58,7 @@ class NodeRuntime private[node] (
 
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
 
+  // intra-node gossiping port.
   private val port           = conf.server.port
   private val kademliaPort   = conf.server.kademliaPort
   private val blockstorePath = conf.server.dataDir.resolve("blockstore")
@@ -81,6 +83,12 @@ class NodeRuntime private[node] (
 
     val logId: Log[Id]         = Log.logId
     val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
+
+    // SSL context to use for the public facing API.
+    val maybeApiSslContext = Option(conf.tls.readCertAndKey).filter(_ => conf.grpc.useTls).map {
+      case (cert, key) =>
+        SslContexts.forServer(cert, key, ClientAuth.NONE)
+    }
 
     rpConfState >>= (_.runState { implicit state =>
       val metrics = diagnostics.effects.metrics[Task]
@@ -200,7 +208,8 @@ class NodeRuntime private[node] (
                 conf.grpc.portInternal,
                 conf.server.maxMessageSize,
                 blockingScheduler,
-                blockApiLock
+                blockApiLock,
+                maybeApiSslContext
               )(
                 logEff,
                 logId,
@@ -219,7 +228,8 @@ class NodeRuntime private[node] (
               conf.server.maxMessageSize,
               blockingScheduler,
               blockApiLock,
-              conf.casper.ignoreDeploySignature
+              conf.casper.ignoreDeploySignature,
+              maybeApiSslContext
             )(
               Concurrent[Effect],
               TaskLike[Effect],

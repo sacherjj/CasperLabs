@@ -32,6 +32,11 @@ parity-wasm = "0.31"
 [[bin]]
 name = "casperlabs-engine-grpc-server"
 path = "src/main.rs"
+
+[lib]
+name = "casperlabs_engine_grpc_server"
+path = "src/lib.rs"
+
 [package.metadata.rpm.cargo]
 buildflags = ["--release"]
 

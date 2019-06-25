@@ -29,7 +29,7 @@ Contract examples exist in another repo.  Clone https://github.com/CasperLabs/co
 
 We will create multiple nodes in docker with names such as `node-0`, `node-1` etc. Each will have a corresponding container running the Execution Engine.
 
-The setup process will establish validator keys in `.casperlabs/node-*` and bonds in `.casperlabs/genesis` by executing [gen-keys.sh](/docker/gen-keys.sh). By default 10 nodes' keys are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
+The setup process will establish validator keys in `.casperlabs/node-*` and bonds in `.casperlabs/genesis` by executing [docker-gen-keys.sh](/hack/key-management/docker-gen-keys.sh). By default 10 nodes' keys are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
 
 `node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first.
 
@@ -70,7 +70,7 @@ After connection is complete, all node logs will show `Peers: 2`.
 Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
 
 ```console
-./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
+./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --from 3030303030303030303030303030303030303030303030303030303030303030 \
      --gas-price 1 \
      --session /data/helloname.wasm \
@@ -103,13 +103,14 @@ If you check the log output, each node should get the block and provide some fee
 To sign deploy you'll need to [generate and ed25519 keypair](/VALIDATOR.md#setting-up-keys) and save them into `docker/keys`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments, for example:
 
 ```console
-./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
+./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --gas-price 1 \
-     --from='00000000000000000000000000000000'
+     --from 3030303030303030303030303030303030303030303030303030303030303030 \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
-     --public-key /keys/public.key \
-     --private-key /keys/private.key
+     --nonce 1 \
+     --public-key /keys/account-0/account-public.pem \
+     --private-key /keys/account-0/account-private.pem
 ```
 
 ## Monitoring

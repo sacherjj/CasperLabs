@@ -41,7 +41,7 @@ max-message-size = 4194304
 chunk-size = 1048576
 
 # Use gossiping or the old transport layer.
-use-gossiping = false
+use-gossiping = true
 
 # Number of new nodes to which try to gossip a new block.
 relay-factor = 2
@@ -144,9 +144,11 @@ socket = "$HOME/.casperlabs/.casper-node.sock"
 # Port used for external gRPC API, e.g. deployments.
 port-external = 40401
 
-# Port used for internal gRPC API, e.g. diagnostics.
+# Port used for internal gRPC API, e.g. proposing blocks, diagnostics.
 port-internal = 40402
 
+# Whether to enable TLS encryption on the public facing gRPC interfaces (e.g. deployments).
+use-tls = false
 
 # io.casperlabs.comm.transport.Tls
 [tls]

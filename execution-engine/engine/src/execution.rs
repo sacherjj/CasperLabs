@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
@@ -6,7 +5,7 @@ use std::fmt;
 use std::iter::IntoIterator;
 use std::rc::Rc;
 
-use blake2::digest::VariableOutput;
+use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 use itertools::Itertools;
 use parity_wasm::elements::{Error as ParityWasmError, Module};
@@ -17,16 +16,23 @@ use wasmi::{
     ModuleRef, RuntimeArgs, RuntimeValue, Trap,
 };
 
-use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
+use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE};
+use common::contract_api::argsparser::ArgsParser;
 use common::key::Key;
-use common::uref::AccessRights;
-use common::value::Value;
+use common::uref::{AccessRights, URef};
+use common::value::account::{
+    ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
+    SetThresholdFailure, Weight, PUBLIC_KEY_SIZE,
+};
+use common::value::{Account, Value, U512};
 use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
 use storage::global_state::StateReader;
 
 use args::Args;
+use common::contract_api::TransferResult;
 use engine_state::execution_result::ExecutionResult;
+use execution::Error::{KeyNotFound, URefNotFound};
 use function_index::FunctionIndex;
 use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
@@ -35,12 +41,15 @@ use runtime_context::RuntimeContext;
 use tracking_copy::TrackingCopy;
 use URefAddr;
 
+const MINT_NAME: &str = "mint";
+
 #[derive(Debug)]
 pub enum Error {
     Interpreter(InterpreterError),
     Storage(storage::error::Error),
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
+    AccountNotFound(Key),
     TypeMismatch(TypeMismatch),
     InvalidAccess {
         required: AccessRights,
@@ -60,6 +69,9 @@ pub enum Error {
     },
     /// Reverts execution with a provided status
     Revert(u32),
+    AddKeyFailure(AddKeyFailure),
+    RemoveKeyFailure(RemoveKeyFailure),
+    SetThresholdFailure(SetThresholdFailure),
 }
 
 impl fmt::Display for Error {
@@ -101,6 +113,24 @@ impl From<!> for Error {
 impl From<ResolverError> for Error {
     fn from(err: ResolverError) -> Error {
         Error::ResolverError(err)
+    }
+}
+
+impl From<AddKeyFailure> for Error {
+    fn from(err: AddKeyFailure) -> Error {
+        Error::AddKeyFailure(err)
+    }
+}
+
+impl From<RemoveKeyFailure> for Error {
+    fn from(err: RemoveKeyFailure) -> Error {
+        Error::RemoveKeyFailure(err)
+    }
+}
+
+impl From<SetThresholdFailure> for Error {
+    fn from(err: SetThresholdFailure) -> Error {
+        Error::SetThresholdFailure(err)
     }
 }
 
@@ -266,6 +296,48 @@ where
         self.context.add_uref(name, key).map_err(Into::into)
     }
 
+    /// Writes current [self.host_buf] into [dest_ptr] location in Wasm memory
+    /// for the contract to read.
+    pub fn list_known_urefs(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        self.memory
+            .set(dest_ptr, &self.host_buf)
+            .map_err(|e| Error::Interpreter(e).into())
+    }
+
+    fn remove_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<(), Trap> {
+        let name = self.string_from_mem(name_ptr, name_size)?;
+        self.context.remove_uref(&name)?;
+        Ok(())
+    }
+
+    /// If caller is defined (it's a subcall) then writes caller public key
+    /// to [dest_ptr] in the Wasm memory and returns 1.
+    /// If caller is undefined (we are in  the base context), returns 0.
+    fn get_caller(&mut self, dest_ptr: u32) -> Result<i32, Trap> {
+        let caller = self.context.get_caller();
+        if let Some(key) = caller {
+            let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
+            self.memory
+                .set(dest_ptr, &bytes)
+                .map_err(|e| Error::Interpreter(e).into())
+                .map(|_| 1)
+        } else {
+            Ok(0)
+        }
+    }
+
+    /// Writes current blocktime to [dest_ptr] in Wasm memory.
+    fn get_blocktime(&self, dest_ptr: u32) -> Result<(), Trap> {
+        let blocktime = self
+            .context
+            .get_blocktime()
+            .to_bytes()
+            .map_err(Error::BytesRepr)?;
+        self.memory
+            .set(dest_ptr, &blocktime)
+            .map_err(|e| Error::Interpreter(e).into())
+    }
+
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &self.host_buf)
@@ -354,6 +426,17 @@ where
         Ok(self.host_buf.len())
     }
 
+    fn serialize_known_urefs(&mut self) -> Result<usize, Trap> {
+        let bytes: Vec<u8> = self
+            .context
+            .list_known_urefs()
+            .to_bytes()
+            .map_err(Error::BytesRepr)?;
+        let length = bytes.len();
+        self.host_buf = bytes;
+        Ok(length)
+    }
+
     /// Tries to store a function, represented as bytes from the Wasm memory, into the GlobalState
     /// and writes back a function's hash at `hash_ptr` in the Wasm memory.
     pub fn store_function(
@@ -399,6 +482,19 @@ where
         self.context.write_gs(key, value).map_err(Into::into)
     }
 
+    /// Writes `value` under a key derived from `key` in the "local cluster" of GlobalState
+    pub fn write_local(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        value_ptr: u32,
+        value_size: u32,
+    ) -> Result<(), Trap> {
+        let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+        let value = self.value_from_mem(value_ptr, value_size)?;
+        self.context.write_ls(&key_bytes, value).map_err(Into::into)
+    }
+
     /// Adds `value` to the cell that `key` points at.
     pub fn add(
         &mut self,
@@ -424,18 +520,227 @@ where
         Ok(self.host_buf.len())
     }
 
-    /// Writes the seed associated with the [`RuntimeContext`] to the given destination
-    /// in runtime memory.
-    fn write_seed(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        let seed = self.context.seed();
-        self.memory
-            .set(dest_ptr, &seed)
-            .map_err(|e| Error::Interpreter(e).into())
+    /// Similar to `read`, this function is for reading from the "local cluster" of global state
+    pub fn read_local(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
+        let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+        let value: Option<Value> = self.context.read_ls(&key_bytes)?;
+        let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
+        self.host_buf = value_bytes;
+        Ok(self.host_buf.len())
     }
 
     /// Reverts contract execution with a status specified.
     pub fn revert(&mut self, status: u32) -> Trap {
         Error::Revert(status).into()
+    }
+
+    pub fn take_context(self) -> RuntimeContext<'a, R> {
+        self.context
+    }
+
+    fn add_associated_key(&mut self, public_key_ptr: u32, weight_value: u8) -> Result<i32, Trap> {
+        let public_key = {
+            // Public key as serialized bytes
+            let source_serialized =
+                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            // Public key deserialized
+            let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+            source
+        };
+        let weight = Weight::new(weight_value);
+
+        match self.context.add_associated_key(public_key, weight) {
+            Ok(_) => Ok(0),
+            // This relies on the fact that `AddKeyFailure` is represented as
+            // i32 and first variant start with number `1`, so all other variants
+            // are greater than the first one, so it's safe to assume `0` is success,
+            // and any error is greater than 0.
+            Err(Error::AddKeyFailure(e)) => Ok(e as i32),
+            // Any other variant just pass as `Trap`
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn remove_associated_key(&mut self, public_key_ptr: u32) -> Result<i32, Trap> {
+        let public_key = {
+            // Public key as serialized bytes
+            let source_serialized =
+                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            // Public key deserialized
+            let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+            source
+        };
+        match self.context.remove_associated_key(public_key) {
+            Ok(_) => Ok(0),
+            Err(Error::RemoveKeyFailure(e)) => Ok(e as i32),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn set_action_threshold(
+        &mut self,
+        action_type_value: u32,
+        threshold_value: u8,
+    ) -> Result<i32, Trap> {
+        let action_type = ActionType::from(action_type_value);
+        let threshold = Weight::new(threshold_value);
+        match self.context.set_action_threshold(action_type, threshold) {
+            Ok(_) => Ok(0),
+            Err(Error::SetThresholdFailure(e)) => Ok(e as i32),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// looks up the public mint contract key in the caller's [uref_lookup] map.
+    fn get_mint_contract_public_uref_key(&mut self) -> Result<Key, Error> {
+        match self.context.get_uref(MINT_NAME) {
+            Some(key @ Key::URef(_)) => Ok(*key),
+            _ => Err(URefNotFound(String::from(MINT_NAME))),
+        }
+    }
+
+    /// looks up the public mint contract key in the caller's [uref_lookup] map and then
+    /// gets the "internal" mint contract uref stored under the public mint contract key.
+    fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
+        let public_mint_key = self.get_mint_contract_public_uref_key()?;
+        let internal_mint_uref = match self.context.read_gs(&public_mint_key)? {
+            Some(Value::Key(Key::URef(uref))) => uref,
+            _ => return Err(KeyNotFound(public_mint_key)),
+        };
+        Ok(internal_mint_uref)
+    }
+
+    /// Calls the "create" method on the mint contract at the given mint contract key
+    fn mint_create(&mut self, mint_contract_key: Key) -> Result<PurseId, Error> {
+        let amount: U512 = U512::from(0);
+
+        let args_bytes = {
+            let args = ("create", amount);
+            ArgsParser::parse(&args).and_then(|args| args.to_bytes())?
+        };
+
+        let urefs_bytes = Vec::<Key>::new().to_bytes()?;
+
+        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+
+        let result: URef = deserialize(&self.host_buf)?;
+
+        Ok(PurseId::new(result))
+    }
+
+    /// Calls the "transfer" method on the mint contract at the given mint contract key
+    fn mint_transfer(
+        &mut self,
+        mint_contract_key: Key,
+        source: PurseId,
+        target: PurseId,
+        amount: U512,
+    ) -> Result<bool, Error> {
+        let source_value: URef = source.value();
+        let target_value: URef = target.value();
+
+        let args_bytes = {
+            let args = ("transfer", source_value, target_value, amount);
+            ArgsParser::parse(&args).and_then(|args| args.to_bytes())?
+        };
+
+        let urefs_bytes = vec![Key::URef(source_value), Key::URef(target_value)].to_bytes()?;
+
+        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+
+        let result: String = deserialize(&self.host_buf)?;
+
+        Ok(&result == "Successful transfer")
+    }
+
+    /// Creates a new account at a given public key, transferring a given amount of tokens from
+    /// the given source purse to the new account's purse.
+    fn transfer_to_new_account(
+        &mut self,
+        source: PurseId,
+        target: PublicKey,
+        amount: U512,
+    ) -> Result<TransferResult, Error> {
+        let mint_contract_uref = self.get_mint_contract_uref()?;
+        let mint_contract_key = Key::URef(mint_contract_uref);
+        let target_addr = target.value();
+        let target_key = Key::Account(target_addr);
+
+        let target_purse_id = self.mint_create(mint_contract_key)?;
+
+        if source == target_purse_id {
+            return Ok(TransferResult::TransferError);
+        }
+
+        self.context.insert_uref(source.value());
+        self.context.insert_uref(target_purse_id.value());
+
+        if self.mint_transfer(mint_contract_key, source, target_purse_id, amount)? {
+            let known_urefs = &[
+                (
+                    String::from(MINT_NAME),
+                    self.get_mint_contract_public_uref_key()?,
+                ),
+                (mint_contract_uref.as_string(), mint_contract_key),
+            ];
+            let account = Account::create(target_addr, known_urefs, target_purse_id);
+            self.context.write_account(target_key, account)?;
+            Ok(TransferResult::TransferredToNewAccount)
+        } else {
+            Ok(TransferResult::TransferError)
+        }
+    }
+
+    /// Transferring a given amount of tokens from the given source purse to the new account's
+    /// purse. Requires that the [`PurseId`]s have already been created by the mint contract (or
+    /// are the genesis account's).
+    fn transfer_to_existing_account(
+        &mut self,
+        source: PurseId,
+        target: PurseId,
+        amount: U512,
+    ) -> Result<TransferResult, Error> {
+        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+
+        self.context.insert_uref(source.value());
+        self.context.insert_uref(target.value());
+
+        if self.mint_transfer(mint_contract_key, source, target, amount)? {
+            Ok(TransferResult::TransferredToExistingAccount)
+        } else {
+            Ok(TransferResult::TransferError)
+        }
+    }
+
+    /// Creates a new account at a given public key, transferring a given amount of tokens from
+    /// the caller's purse to the new account's purse.
+    pub fn transfer_to_account(
+        &mut self,
+        target: PublicKey,
+        amount: U512,
+    ) -> Result<TransferResult, Error> {
+        let source = self.context.account().purse_id();
+        let target_key = Key::Account(target.value());
+
+        // Look up the account at the given public key's address
+        match self.context.read_account(&target_key)? {
+            None => {
+                // If no account exists, create a new account and transfer the amount to its purse.
+                self.transfer_to_new_account(source, target, amount)
+            }
+            Some(Value::Account(account)) => {
+                let target = account.purse_id();
+                if source == target {
+                    return Ok(TransferResult::TransferredToExistingAccount);
+                }
+                // If an account exists, transfer the amount to its purse
+                self.transfer_to_existing_account(source, target, amount)
+            }
+            Some(_) => {
+                // If some other value exists, return an error
+                Err(Error::AccountNotFound(target_key))
+            }
+        }
     }
 }
 
@@ -462,11 +767,25 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
+            FunctionIndex::ReadLocalFuncIndex => {
+                // args(0) = pointer to key bytes in Wasm memory
+                // args(1) = size of key bytes in Wasm memory
+                let (key_bytes_ptr, key_bytes_size) = Args::parse(args)?;
+                let size = self.read_local(key_bytes_ptr, key_bytes_size)?;
+                Ok(Some(RuntimeValue::I32(size as i32)))
+            }
+
             FunctionIndex::SerFnFuncIndex => {
                 // args(0) = pointer to name in Wasm memory
                 // args(1) = size of name in Wasm memory
                 let (name_ptr, name_size) = Args::parse(args)?;
                 let size = self.serialize_function(name_ptr, name_size)?;
+                Ok(Some(RuntimeValue::I32(size as i32)))
+            }
+
+            FunctionIndex::SerKnownURefs => {
+                // No args, returns byte size of the known URefs.
+                let size = self.serialize_known_urefs()?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -477,6 +796,16 @@ where
                 // args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
                 self.write(key_ptr, key_size, value_ptr, value_size)?;
+                Ok(None)
+            }
+
+            FunctionIndex::WriteLocalFuncIndex => {
+                // args(0) = pointer to key in Wasm memory
+                // args(1) = size of key
+                // args(2) = pointer to value
+                // args(3) = size of value
+                let (key_bytes_ptr, key_bytes_size, value_ptr, value_size) = Args::parse(args)?;
+                self.write_local(key_bytes_ptr, key_bytes_size, value_ptr, value_size)?;
                 Ok(None)
             }
 
@@ -598,6 +927,35 @@ where
                 Ok(None)
             }
 
+            FunctionIndex::ListKnownURefsIndex => {
+                // args(0) = pointer to destination in Wasm memory
+                let ptr = Args::parse(args)?;
+                self.list_known_urefs(ptr)?;
+                Ok(None)
+            }
+
+            FunctionIndex::RemoveURef => {
+                // args(0) = pointer to uref name in Wasm memory
+                // args(1) = size of uref name
+                let (name_ptr, name_size) = Args::parse(args)?;
+                self.remove_uref(name_ptr, name_size)?;
+                Ok(None)
+            }
+
+            FunctionIndex::GetCallerIndex => {
+                // args(0) = pointer to Wasm memory where to write.
+                let dest_ptr = Args::parse(args)?;
+                self.get_caller(dest_ptr)
+                    .map(|status| Some(RuntimeValue::I32(status)))
+            }
+
+            FunctionIndex::GetBlocktimeIndex => {
+                // args(0) = pointer to Wasm memory where to write.
+                let dest_ptr = Args::parse(args)?;
+                self.get_blocktime(dest_ptr)?;
+                Ok(None)
+            }
+
             FunctionIndex::GasFuncIndex => {
                 let gas: u32 = Args::parse(args)?;
                 self.gas(u64::from(gas))?;
@@ -629,12 +987,6 @@ where
                 Ok(Some(self.context.protocol_version().into()))
             }
 
-            FunctionIndex::SeedFnIndex => {
-                let dest_ptr = Args::parse(args)?;
-                self.write_seed(dest_ptr)?;
-                Ok(None)
-            }
-
             FunctionIndex::IsValidFnIndex => {
                 // args(0) = pointer to value to validate
                 // args(1) = size of value
@@ -652,6 +1004,49 @@ where
                 let status = Args::parse(args)?;
 
                 Err(self.revert(status))
+            }
+
+            FunctionIndex::AddAssociatedKeyFuncIndex => {
+                // args(0) = pointer to array of bytes of a public key
+                // args(1) = weight of the key
+                let (public_key_ptr, weight_value): (u32, u8) = Args::parse(args)?;
+                let value = self.add_associated_key(public_key_ptr, weight_value)?;
+                Ok(Some(RuntimeValue::I32(value)))
+            }
+
+            FunctionIndex::RemoveAssociatedKeyFuncIndex => {
+                // args(0) = pointer to array of bytes of a public key
+                // args(1) = size of serialized bytes of public key
+                let public_key_ptr: u32 = Args::parse(args)?;
+                let value = self.remove_associated_key(public_key_ptr)?;
+                Ok(Some(RuntimeValue::I32(value)))
+            }
+
+            FunctionIndex::SetActionThresholdFuncIndex => {
+                // args(0) = action type
+                // args(1) = new threshold
+                let (action_type_value, threshold_value): (u32, u8) = Args::parse(args)?;
+                let value = self.set_action_threshold(action_type_value, threshold_value)?;
+                Ok(Some(RuntimeValue::I32(value)))
+            }
+
+            FunctionIndex::TransferToAccountIndex => {
+                // args(0) = pointer to array of bytes of a public key
+                // args(1) = length of array of bytes of a public key
+                // args(2) = pointer to array of bytes of an amount
+                // args(3) = length of array of bytes of an amount
+                let (key_ptr, key_size, amount_ptr, amount_size): (u32, u32, u32, u32) =
+                    Args::parse(args)?;
+                let public_key: PublicKey = {
+                    let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+                    deserialize(&bytes).map_err(Error::BytesRepr)?
+                };
+                let amount: U512 = {
+                    let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
+                    deserialize(&bytes).map_err(Error::BytesRepr)?
+                };
+                let ret = self.transfer_to_account(public_key, amount)?;
+                Ok(Some(RuntimeValue::I32(ret.into())))
             }
         }
     }
@@ -689,6 +1084,7 @@ where
 
     let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
+
     let mut runtime = Runtime {
         memory,
         module: parity_module,
@@ -699,8 +1095,10 @@ where
             refs,
             known_urefs,
             args,
-            current_runtime.context.account().clone(),
+            &current_runtime.context.account(),
+            Some(PublicKey::new(current_runtime.context.account().pub_key())),
             key,
+            current_runtime.context.get_blocktime(),
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
@@ -762,14 +1160,13 @@ pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
-/// What is happening here?
-pub fn create_rng(account_addr: [u8; 32], timestamp: u64, nonce: u64) -> ChaChaRng {
+pub fn create_rng(account_addr: [u8; 32], nonce: u64) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
-    let hasher = VarBlake2b::new(32).unwrap();
+    let mut hasher = VarBlake2b::new(32).unwrap();
     data.extend(&account_addr);
-    data.extend_from_slice(&timestamp.to_le_bytes());
     data.extend_from_slice(&nonce.to_le_bytes());
+    hasher.input(data);
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
     ChaChaRng::from_seed(seed)
 }
@@ -820,7 +1217,7 @@ pub trait Executor<A> {
         parity_module: A,
         args: &[u8],
         account: Key,
-        timestamp: u64,
+        blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
@@ -840,7 +1237,7 @@ impl Executor<Module> for WasmiExecutor {
         parity_module: Module,
         args: &[u8],
         acct_key: Key,
-        timestamp: u64,
+        blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
@@ -904,7 +1301,7 @@ impl Executor<Module> for WasmiExecutor {
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
         let account_bytes = acct_key.as_account().unwrap();
-        let rng = create_rng(account_bytes, timestamp, nonce);
+        let rng = create_rng(account_bytes, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
@@ -925,8 +1322,10 @@ impl Executor<Module> for WasmiExecutor {
             &mut uref_lookup_local,
             known_urefs,
             arguments,
-            Cow::Borrowed(&account),
+            &account,
+            None,
             acct_key,
+            blocktime,
             gas_limit,
             gas_counter,
             fn_store_id,
@@ -972,9 +1371,11 @@ mod tests {
     use common::value::{Account, Value};
     use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
-    use execution::{Executor, WasmiExecutor};
+    use execution::{create_rng, Executor, WasmiExecutor};
     use parity_wasm::builder::ModuleBuilder;
     use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
+    use rand::RngCore;
+    use rand_chacha::ChaChaRng;
     use shared::newtypes::CorrelationId;
     use std::cell::RefCell;
     use std::collections::btree_map::BTreeMap;
@@ -1019,8 +1420,10 @@ mod tests {
             on_fail_charge!(input, 456, {
                 let mut effect = ExecutionEffect::default();
 
-                effect.0.insert(Key::Hash([42u8; 32]), Op::Read);
-                effect.1.insert(Key::Hash([42u8; 32]), Transform::Identity);
+                effect.ops.insert(Key::Hash([42u8; 32]), Op::Read);
+                effect
+                    .transforms
+                    .insert(Key::Hash([42u8; 32]), Transform::Identity);
 
                 effect
             });
@@ -1034,8 +1437,8 @@ mod tests {
             ExecutionResult::Failure { cost, effect, .. } => {
                 assert_eq!(cost, 456);
                 // Check if the containers are non-empty
-                assert_eq!(effect.0.len(), 1);
-                assert_eq!(effect.1.len(), 1);
+                assert_eq!(effect.ops.len(), 1);
+                assert_eq!(effect.transforms.len(), 1);
             }
         }
     }
@@ -1088,7 +1491,7 @@ mod tests {
             parity_module,
             &[],
             account_key,
-            0u64,
+            BlockTime(0),
             invalid_nonce,
             100u64,
             1u64,
@@ -1104,7 +1507,7 @@ mod tests {
                 effect,
                 cost,
             } => {
-                assert_eq!(effect, ExecutionEffect(HashMap::new(), HashMap::new()));
+                assert_eq!(effect, ExecutionEffect::new(HashMap::new(), HashMap::new()));
                 assert_eq!(cost, 0);
                 if let ::engine_state::error::Error::ExecError(Error::InvalidNonce {
                     deploy_nonce,
@@ -1118,5 +1521,33 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn gen_random(rng: &mut ChaChaRng) -> [u8; 32] {
+        let mut buff = [0u8; 32];
+        rng.fill_bytes(&mut buff);
+        buff
+    }
+
+    #[test]
+    fn should_generate_different_numbers_for_different_seeds() {
+        let account_addr = [0u8; 32];
+        let mut rng_a = create_rng(account_addr, 1);
+        let mut rng_b = create_rng(account_addr, 2);
+        let random_a = gen_random(&mut rng_a);
+        let random_b = gen_random(&mut rng_b);
+
+        assert_ne!(random_a, random_b)
+    }
+
+    #[test]
+    fn should_generate_same_numbers_for_same_seed() {
+        let account_addr = [0u8; 32];
+        let mut rng_a = create_rng(account_addr, 1);
+        let mut rng_b = create_rng(account_addr, 1);
+        let random_a = gen_random(&mut rng_a);
+        let random_b = gen_random(&mut rng_b);
+
+        assert_eq!(random_a, random_b)
     }
 }

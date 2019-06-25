@@ -46,12 +46,12 @@ class PythonClient(CasperLabsClient):
         logging.info(f'PY_CLIENT.propose() for {self.node.container_name}')
         return self.client.propose()
 
-    def queryState(self, blockHash: str, key: str, path: str, keyType: str):
-        return self.client.queryState(blockHash, key, path, keyType)
+    def query_state(self, block_hash: str, key: str, path: str, key_type: str):
+        return self.client.queryState(block_hash, key, path, key_type)
 
     def show_block(self, block_hash: str) -> str:
         # TODO:
-        pass
+        raise Exception("Not implemented yet")
 
     def show_blocks(self, depth: int):
         return self.client.showBlocks(depth)
@@ -59,3 +59,8 @@ class PythonClient(CasperLabsClient):
     def get_blocks_count(self, depth: int) -> int:
         return len(list(self.show_blocks(depth)))
 
+    def show_deploys(self, hash: str):
+        raise Exception("Not implemented yet")
+
+    def show_deploy(self, hash: str):
+        raise Exception("Not implemented yet")

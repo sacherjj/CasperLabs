@@ -90,14 +90,9 @@ package object types {
     "KeyLocal",
     fields[Unit, state.Key.Local](
       Field(
-        "seed",
+        "hash",
         StringType,
-        resolve = c => Base16.encode(c.value.seed.toByteArray)
-      ),
-      Field(
-        "keyHash",
-        StringType,
-        resolve = c => Base16.encode(c.value.keyHash.toByteArray)
+        resolve = c => Base16.encode(c.value.hash.toByteArray)
       )
     )
   )
@@ -252,11 +247,19 @@ package object types {
     )
   )
 
+  lazy val ValueLong = ObjectType(
+    "LongValue",
+    fields[Unit, state.Value.Value.LongValue](
+      Field("value", LongType, resolve = _.value.value)
+    )
+  )
+
   lazy val ValueUnion = UnionType(
     "ValueUnion",
     types = List(
       ValueInt,
       ValueByteArray,
+      ValueLong,
       IntList,
       ValueString,
       Account,

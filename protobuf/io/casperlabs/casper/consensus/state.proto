@@ -15,6 +15,7 @@ message Value {
 		BigInt big_int = 9;
 		Key key = 10;
 		Unit unit = 11;
+		uint64 long_value = 12;
 	}
 }
 
@@ -67,8 +68,7 @@ message Key {
 	}
 
 	message Local {
-		bytes seed = 1;
-		bytes key_hash = 2;
+		bytes hash = 1;
 	}
 }
 
@@ -80,7 +80,7 @@ message NamedKey {
 message Contract {
 	bytes body = 1;
 	repeated NamedKey known_urefs = 2;
-    	ProtocolVersion protocol_version = 3;
+    ProtocolVersion protocol_version = 3;
 }
 
 message Account {

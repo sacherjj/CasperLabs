@@ -32,5 +32,13 @@ class CasperLabsClient(ABC):
         pass
 
     @abstractmethod
-    def queryState(self, blockHash: str, key: str, path: str, keyType: str):
+    def query_state(self, block_hash: str, key: str, path: str, key_type: str):
+        pass
+
+    @abstractmethod
+    def show_deploys(self, hash: str):
+        pass
+
+    @abstractmethod
+    def show_deploy(self, hash: str):
         pass

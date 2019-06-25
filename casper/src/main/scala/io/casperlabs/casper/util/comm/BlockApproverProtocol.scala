@@ -126,7 +126,7 @@ object BlockApproverProtocol {
         posParams  = ProofOfStakeParams(minimumBond, maximumBond, validators)
         faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
         genesisBlessedContracts = Genesis
-          .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
+          .defaultBlessedTerms(posParams, wallets, faucetCode)
           .map(LegacyConversions.fromDeploy(_))
           .toSet
         blockDeploys = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
@@ -151,6 +151,7 @@ object BlockApproverProtocol {
       processedDeploys <- EitherT(
                            ExecutionEngineService[F].exec(
                              ExecutionEngineService[F].emptyStateHash,
+                             timestamp,
                              deploys
                                .map(ProtoUtil.deployDataToEEDeploy),
                              protocolVersion

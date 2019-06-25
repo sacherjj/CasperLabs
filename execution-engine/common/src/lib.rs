@@ -38,8 +38,15 @@ pub mod value;
 mod ext_ffi {
     extern "C" {
         pub fn read_value(key_ptr: *const u8, key_size: usize) -> usize;
-        pub fn get_read(value_ptr: *mut u8); //can only be called after `read_value`
+        pub fn read_value_local(key_ptr: *const u8, key_size: usize) -> usize;
+        pub fn get_read(value_ptr: *mut u8); //can only be called after `read_value` or `read_value_local`
         pub fn write(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
+        pub fn write_local(
+            key_ptr: *const u8,
+            key_size: usize,
+            value_ptr: *const u8,
+            value_size: usize,
+        );
         pub fn add(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
         pub fn new_uref(key_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
         pub fn serialize_function(name_ptr: *const u8, name_size: usize) -> usize;
@@ -51,6 +58,9 @@ mod ext_ffi {
             extra_urefs_size: usize,
             hash_ptr: *const u8,
         );
+        pub fn serialize_known_urefs() -> usize;
+        // Can only be called after `serialize_known_urefs`.
+        pub fn list_known_urefs(dest_ptr: *mut u8);
         pub fn load_arg(i: u32) -> usize;
         pub fn get_arg(dest: *mut u8); //can only be called after `load_arg`
         pub fn ret(
@@ -74,9 +84,20 @@ mod ext_ffi {
         pub fn has_uref_name(name_ptr: *const u8, name_size: usize) -> i32;
         pub fn add_uref(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);
         pub fn protocol_version() -> u64;
-        pub fn seed(dest: *mut u8);
         pub fn revert(status: u32) -> !;
         pub fn is_valid(value_ptr: *const u8, value_size: usize) -> i32;
+        pub fn add_associated_key(public_key_ptr: *const u8, weight: i32) -> i32;
+        pub fn remove_associated_key(public_key_ptr: *const u8) -> i32;
+        pub fn set_action_threshold(permission_level: u32, threshold: i32) -> i32;
+        pub fn remove_uref(name_ptr: *const u8, name_size: usize);
+        pub fn get_caller(dest_ptr: *const u8) -> i32;
+        pub fn transfer_to_account(
+            target_ptr: *const u8,
+            target_size: usize,
+            amount_ptr: *const u8,
+            amount_size: usize,
+        ) -> i32;
+        pub fn get_blocktime(dest_ptr: *const u8);
     }
 }
 

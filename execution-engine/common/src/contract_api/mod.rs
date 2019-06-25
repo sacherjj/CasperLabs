@@ -6,26 +6,18 @@ use self::alloc_util::*;
 use self::pointers::*;
 use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::ext_ffi;
-use crate::key::{Key, LOCAL_KEY_HASH_SIZE, LOCAL_SEED_SIZE, UREF_SIZE};
+use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
-use crate::value::{Contract, Value};
+use crate::value::account::{
+    ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    BLOCKTIME_SER_SIZE,
+};
+use crate::value::{Contract, Value, U512};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
 use core::convert::{TryFrom, TryInto};
-
-/// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
-fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_HASH_SIZE] {
-    let mut ret = [0u8; LOCAL_KEY_HASH_SIZE];
-    // Safe to unwrap here because our digest length is constant and valid
-    let mut hasher = VarBlake2b::new(LOCAL_KEY_HASH_SIZE).unwrap();
-    hasher.input(bytes);
-    hasher.variable_result(|hash| ret.clone_from_slice(hash));
-    ret
-}
 
 /// Read value under the key in the global state
 pub fn read<T>(u_ptr: UPointer<T>) -> T
@@ -41,35 +33,38 @@ where
         .unwrap()
 }
 
-/// Reads the value at the given key in the context-local partition of global state
-pub fn read_local<K, V>(key: K) -> Option<V>
-where
-    K: ToBytes,
-    V: TryFrom<Value>,
-{
-    let seed: [u8; LOCAL_SEED_SIZE] = {
-        let mut ret = [0u8; LOCAL_SEED_SIZE];
-        unsafe { ext_ffi::seed(ret.as_mut_ptr()) };
-        ret
-    };
-    let key_hash: [u8; LOCAL_KEY_HASH_SIZE] = {
-        let key_bytes = key.to_bytes().unwrap();
-        hash(&key_bytes)
-    };
-    let key = Key::Local { seed, key_hash };
-    read_untyped(&key).map(|v| {
-        v.try_into()
-            .map_err(|_| "T could not be derived from Value")
-            .unwrap()
-    })
-}
-
 fn read_untyped(key: &Key) -> Option<Value> {
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
     //      dropped then key_ptr becomes invalid.
 
     let (key_ptr, key_size, _bytes) = to_ptr(key);
     let value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
+    let value_ptr = alloc_bytes(value_size);
+    let value_bytes = unsafe {
+        ext_ffi::get_read(value_ptr);
+        Vec::from_raw_parts(value_ptr, value_size, value_size)
+    };
+    deserialize(&value_bytes).unwrap()
+}
+
+/// Reads the value at the given key in the context-local partition of global state
+pub fn read_local<K, V>(key: K) -> Option<V>
+where
+    K: ToBytes,
+    V: TryFrom<Value>,
+{
+    let key_bytes = key.to_bytes().unwrap();
+    read_untyped_local(&key_bytes).map(|v| {
+        v.try_into()
+            .map_err(|_| "T could not be derived from Value")
+            .unwrap()
+    })
+}
+
+fn read_untyped_local(key_bytes: &[u8]) -> Option<Value> {
+    let key_bytes_ptr = key_bytes.as_ptr();
+    let key_bytes_size = key_bytes.len();
+    let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
     let value_ptr = alloc_bytes(value_size);
     let value_bytes = unsafe {
         ext_ffi::get_read(value_ptr);
@@ -88,30 +83,30 @@ where
     write_untyped(&key, &value)
 }
 
+fn write_untyped(key: &Key, value: &Value) {
+    let (key_ptr, key_size, _bytes) = to_ptr(key);
+    let (value_ptr, value_size, _bytes2) = to_ptr(value);
+    unsafe {
+        ext_ffi::write(key_ptr, key_size, value_ptr, value_size);
+    }
+}
+
 /// Writes the given value at the given key in the context-local partition of global state
 pub fn write_local<K, V>(key: K, value: V)
 where
     K: ToBytes,
     V: Into<Value>,
 {
-    let seed: [u8; LOCAL_SEED_SIZE] = {
-        let mut ret = [0u8; LOCAL_SEED_SIZE];
-        unsafe { ext_ffi::seed(ret.as_mut_ptr()) };
-        ret
-    };
-    let key_hash: [u8; LOCAL_KEY_HASH_SIZE] = {
-        let key_bytes = key.to_bytes().unwrap();
-        hash(&key_bytes)
-    };
-    let key = Key::Local { seed, key_hash };
-    write_untyped(&key, &value.into());
+    let key_bytes = key.to_bytes().unwrap();
+    write_untyped_local(&key_bytes, &value.into());
 }
 
-fn write_untyped(key: &Key, value: &Value) {
-    let (key_ptr, key_size, _bytes) = to_ptr(key);
+fn write_untyped_local(key_bytes: &[u8], value: &Value) {
+    let key_bytes_ptr = key_bytes.as_ptr();
+    let key_bytes_size = key_bytes.len();
     let (value_ptr, value_size, _bytes2) = to_ptr(value);
     unsafe {
-        ext_ffi::write(key_ptr, key_size, value_ptr, value_size);
+        ext_ffi::write_local(key_bytes_ptr, key_bytes_size, value_ptr, value_size);
     }
 }
 
@@ -163,6 +158,16 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
         ext_ffi::get_function(fn_ptr);
         Vec::from_raw_parts(fn_ptr, fn_size, fn_size)
     }
+}
+
+pub fn list_known_urefs() -> BTreeMap<String, Key> {
+    let bytes_size = unsafe { ext_ffi::serialize_known_urefs() };
+    let dest_ptr = alloc_bytes(bytes_size);
+    let bytes = unsafe {
+        ext_ffi::list_known_urefs(dest_ptr);
+        Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
+    };
+    deserialize(&bytes).unwrap()
 }
 
 // TODO: fn_by_name, fn_bytes_by_name and ext_ffi::serialize_function should be removed.
@@ -241,6 +246,37 @@ pub fn add_uref(name: &str, key: &Key) {
     unsafe { ext_ffi::add_uref(name_ptr, name_size, key_ptr, key_size) };
 }
 
+/// Removes Key persisted under [name] in the current context's map.
+pub fn remove_uref(name: &str) {
+    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    unsafe { ext_ffi::remove_uref(name_ptr, name_size) }
+}
+
+/// Returns caller of current context.
+/// When in root context (not in the sub call) - returns None.
+/// When in the sub call - returns public key of the account that made the deploy.
+pub fn get_caller() -> Option<PublicKey> {
+    //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
+    let dest_ptr = alloc_bytes(36);
+    let result = unsafe { ext_ffi::get_caller(dest_ptr) };
+    if result == 1 {
+        let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
+        let pk = deserialize(&bytes).unwrap();
+        Some(pk)
+    } else {
+        None
+    }
+}
+
+pub fn get_blocktime() -> BlockTime {
+    let dest_ptr = alloc_bytes(BLOCKTIME_SER_SIZE);
+    let bytes = unsafe {
+        ext_ffi::get_blocktime(dest_ptr);
+        Vec::from_raw_parts(dest_ptr, BLOCKTIME_SER_SIZE, BLOCKTIME_SER_SIZE)
+    };
+    deserialize(&bytes).unwrap()
+}
+
 /// Return `t` to the host, terminating the currently running module.
 /// Note this function is only relevent to contracts stored on chain which
 /// return a value to their caller. The return value of a directly deployed
@@ -299,4 +335,77 @@ pub fn is_valid<T: Into<Value>>(t: T) -> bool {
     let (value_ptr, value_size, _bytes) = to_ptr(&value);
     let result = unsafe { ext_ffi::is_valid(value_ptr, value_size) };
     result != 0
+}
+
+/// Adds a public key with associated weight to an account.
+pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), AddKeyFailure> {
+    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
+    // Cast of u8 (weight) into i32 is assumed to be always safe
+    let result = unsafe { ext_ffi::add_associated_key(public_key_ptr, weight.value().into()) };
+    // Translates FFI
+    match result {
+        d if d == 0 => Ok(()),
+        d => Err(AddKeyFailure::from(d)),
+    }
+}
+
+/// Removes a public key from associated keys on an account
+pub fn remove_associated_key(public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
+    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
+    let result = unsafe { ext_ffi::remove_associated_key(public_key_ptr) };
+    match result {
+        d if d == 0 => Ok(()),
+        d => Err(RemoveKeyFailure::from(d)),
+    }
+}
+
+pub fn set_action_threshold(
+    permission_level: ActionType,
+    threshold: Weight,
+) -> Result<(), SetThresholdFailure> {
+    let permission_level = permission_level as u32;
+    let threshold = threshold.value().into();
+    let result = unsafe { ext_ffi::set_action_threshold(permission_level, threshold) };
+    match result {
+        d if d == 0 => Ok(()),
+        d => Err(SetThresholdFailure::from(d)),
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TransferResult {
+    TransferredToExistingAccount,
+    TransferredToNewAccount,
+    TransferError,
+}
+
+impl TryFrom<i32> for TransferResult {
+    type Error = ();
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(TransferResult::TransferredToExistingAccount),
+            1 => Ok(TransferResult::TransferredToNewAccount),
+            2 => Ok(TransferResult::TransferError),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<TransferResult> for i32 {
+    fn from(result: TransferResult) -> Self {
+        match result {
+            TransferResult::TransferredToExistingAccount => 0,
+            TransferResult::TransferredToNewAccount => 1,
+            TransferResult::TransferError => 2,
+        }
+    }
+}
+
+pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
+    let (target_ptr, target_size, _bytes) = to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) }
+        .try_into()
+        .expect("should parse result")
 }

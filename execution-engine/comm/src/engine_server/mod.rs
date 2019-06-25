@@ -1,3 +1,8 @@
+pub mod ipc;
+pub mod ipc_grpc;
+pub mod mappings;
+pub mod state;
+
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::ErrorKind;
@@ -8,25 +13,19 @@ use common::key::Key;
 use common::value::U512;
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::execution_result::ExecutionResult;
-use execution_engine::engine_state::EngineState;
+use execution_engine::engine_state::{EngineState, GenesisResult};
 use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
-use ipc_grpc::ExecutionEngineService;
-use mappings::*;
 use shared::logging;
 use shared::logging::{log_duration, log_info};
 use shared::newtypes::{Blake2bHash, CorrelationId};
-use storage::global_state::{CommitResult, History};
+use storage::global_state::History;
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
-pub mod ipc;
-pub mod ipc_grpc;
-pub mod mappings;
-pub mod state;
-
-#[cfg(test)]
-mod tests;
+use self::ipc_grpc::ExecutionEngineService;
+use self::mappings::*;
+use common::value::account::BlockTime;
 
 const EXPECTED_PUBLIC_KEY_LENGTH: usize = 32;
 
@@ -154,6 +153,9 @@ where
 
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
+
+        let blocktime = BlockTime(exec_request.get_block_time());
+
         // TODO: don't unwrap
         let wasm_costs = WasmCosts::from_version(protocol_version.value).unwrap();
 
@@ -168,6 +170,7 @@ where
             &executor,
             &preprocessor,
             prestate_hash,
+            blocktime,
             deploys,
             protocol_version,
             correlation_id,
@@ -370,18 +373,22 @@ where
             proof_of_stake_code_bytes,
             protocol_version,
         ) {
-            Ok(CommitResult::Success(post_state_hash)) => {
+            Ok(GenesisResult::Success {
+                post_state_hash,
+                effect,
+            }) => {
                 let success_message = format!("run_genesis successful: {}", post_state_hash);
                 log_info(&success_message);
 
                 let mut genesis_response = ipc::GenesisResponse::new();
                 let mut genesis_result = ipc::GenesisResult::new();
                 genesis_result.set_poststate_hash(post_state_hash.to_vec());
+                genesis_result.set_effect(effect.into());
                 genesis_response.set_success(genesis_result);
                 genesis_response
             }
-            Ok(commit_result) => {
-                let err_msg = commit_result.to_string();
+            Ok(genesis_result) => {
+                let err_msg = genesis_result.to_string();
                 logging::log_error(&err_msg);
 
                 let mut genesis_response = ipc::GenesisResponse::new();
@@ -413,11 +420,13 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_deploys<A, H, E, P>(
     engine_state: &EngineState<H>,
     executor: &E,
     preprocessor: &P,
     prestate_hash: Blake2bHash,
+    blocktime: BlockTime,
     deploys: &[ipc::Deploy],
     protocol_version: &state::ProtocolVersion,
     correlation_id: CorrelationId,
@@ -455,7 +464,6 @@ where
                 Key::Account(dest)
             };
 
-            let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
             let protocol_version = protocol_version.value;
@@ -464,7 +472,7 @@ where
                     module_bytes,
                     args,
                     address,
-                    timestamp,
+                    blocktime,
                     nonce,
                     prestate_hash,
                     gas_limit,

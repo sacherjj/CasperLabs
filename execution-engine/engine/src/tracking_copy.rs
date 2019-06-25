@@ -190,7 +190,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     }
 
     pub fn effect(&self) -> ExecutionEffect {
-        ExecutionEffect(self.ops.clone(), self.fns.clone())
+        ExecutionEffect::new(self.ops.clone(), self.fns.clone())
     }
 
     pub fn query(

@@ -70,6 +70,7 @@ pipeline:
       - "~/.cargo/bin/cargo update"
       - "~/.cargo/bin/cargo build"
       - "~/.cargo/bin/cargo test"
+      - "./scripts/run-contract-tests.sh"
     image: "casperlabs/buildenv:latest"
     when:
       event:
@@ -182,11 +183,26 @@ pipeline:
       - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
       - "make docker-build/execution-engine"
       - "make docker-build/integration-testing"
+      - "make docker-build/key-generator"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - staging
+        - trying
+
+  docker-keys-gen-test-bors:
+    commands:
+      - "mkdir /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+      - "./hack/key-management/docker-gen-keys.sh /tmp/keys-DRONE-${DRONE_BUILD_NUMBER} --test"
+      - "rm -rf /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/tmp:/tmp"
     when:
       branch:
         - staging
@@ -243,6 +259,22 @@ pipeline:
         - push
         - tag
 
+  docker-key-gen-merge:
+    commands:
+      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "make docker-build/key-generator"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
+
   package-sbt-artifacts-merge:
     commands:
       - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin node/docker:publishLocal client/docker:publishLocal"
@@ -269,6 +301,7 @@ pipeline:
     commands:
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "make cargo-package-all"
+      - "cp execution-engine/target/blessed-contracts.tar.gz artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm artifacts/${DRONE_BRANCH}"
       - "WORKING_DIR=$(pwd) ; cd execution-engine/target/release/rpmbuild/SOURCES ; OS=$(uname -s | tr '[:upper:]' '[:lower:]') ; ARCH=$(uname -p) ; SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed \"s/.tar.gz//\") ; TARGET=$(ls $SOURCE*.tar.gz | sed \"s/.tar.gz/_\"$OS\"_\"$ARCH\".tar.gz/\") ; tar -xzf $SOURCE.tar.gz ; tar -czf $TARGET -C $SOURCE/usr/bin/ . && cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}"
@@ -329,16 +362,20 @@ pipeline:
       docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:"$REF"
       docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:"$REF"
       docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:"$REF"
+      docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:"$REF"
       docker push casperlabs/node:"$REF"
       docker push casperlabs/client:"$REF"
       docker push casperlabs/execution-engine:"$REF"
+      docker push casperlabs/key-generator:"$REF"
       if [ "${DRONE_BRANCH}" = "master" ]; then
         docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:latest
         docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:latest
         docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:latest
+        docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:latest
         docker push casperlabs/node:latest
         docker push casperlabs/client:latest
         docker push casperlabs/execution-engine:latest
+        docker push casperlabs/key-generator:latest
       fi
       echo "done"
     image: "casperlabs/buildenv:latest"
@@ -408,7 +445,7 @@ pipeline:
       - slack_webhook
     template: |
       *{{ uppercasefirst build.status }}*
-        Author: {{ build.author }} 
+        Author: {{ build.author }}
         Drone Build: <{{ build.link }}|#{{ build.number }}>
         Commit Link: <https://github.com/{{repo.owner}}/{{repo.name}}/commit/{{build.commit}}|{{ truncate build.commit 10 }}>
     when:

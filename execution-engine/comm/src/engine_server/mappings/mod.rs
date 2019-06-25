@@ -3,6 +3,8 @@ mod uint;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
 
+use protobuf::ProtobufEnum;
+
 use common::uref::URef;
 use common::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
@@ -13,14 +15,15 @@ use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::op::Op;
 use execution_engine::execution::Error as ExecutionError;
 use execution_engine::utils;
-use ipc;
-use protobuf::ProtobufEnum;
 use shared::logging;
 use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;
 use shared::transform::{self, TypeMismatch};
-use state;
+use std::fmt::Display;
+use std::string::ToString;
 use storage::global_state::{CommitResult, History};
+
+use engine_server::{ipc, state};
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
@@ -29,6 +32,18 @@ fn transform_write(v: common::value::Value) -> Result<transform::Transform, Pars
 
 #[derive(Debug)]
 pub struct ParsingError(pub String);
+
+impl ParsingError {
+    /// Creates custom error given any type that implements Display.
+    ///
+    /// This includes types derived from Fail (for example) so it enables
+    /// short syntax for functions returning Result<_, ParsingError>:
+    ///
+    ///   any_func().map_err(ParsingError::custom)
+    fn custom<T: Display>(value: T) -> ParsingError {
+        ParsingError(value.to_string())
+    }
+}
 
 /// Smart constructor for parse errors
 fn parse_error<T>(message: String) -> Result<T, ParsingError> {
@@ -94,6 +109,8 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             Ok(transform::Transform::AddKeys(keys_map))
         } else if tr.has_add_i32() {
             Ok(transform::Transform::AddInt32(tr.get_add_i32().value))
+        } else if tr.has_add_u64() {
+            Ok(transform::Transform::AddUInt64(tr.get_add_u64().value))
         } else if tr.has_add_big_int() {
             let b = tr.get_add_big_int().get_value();
             let v = b.try_into()?;
@@ -105,54 +122,7 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             }
         } else if tr.has_write() {
             let v = tr.get_write().get_value();
-            if v.has_int_value() {
-                transform_write(common::value::Value::Int32(v.get_int_value()))
-            } else if v.has_big_int() {
-                let b = v.get_big_int();
-                let v = b.try_into()?;
-                transform_write(v)
-            } else if v.has_bytes_value() {
-                let v: Vec<u8> = Vec::from(v.get_bytes_value());
-                transform_write(common::value::Value::ByteArray(v))
-            } else if v.has_int_list() {
-                let list = v.get_int_list().values.to_vec();
-                transform_write(common::value::Value::ListInt32(list))
-            } else if v.has_string_value() {
-                transform_write(common::value::Value::String(
-                    v.get_string_value().to_string(),
-                ))
-            } else if v.has_account() {
-                let account = v.get_account().try_into()?;
-                transform_write(common::value::Value::Account(account))
-            } else if v.has_contract() {
-                let ipc_contr = v.get_contract();
-                let contr_body = ipc_contr.get_body().to_vec();
-                let known_urefs: URefMap = ipc_contr.get_known_urefs().try_into()?;
-                let contract = common::value::Contract::new(
-                    contr_body,
-                    known_urefs.0,
-                    ipc_contr.get_protocol_version().value,
-                );
-                transform_write(contract.into())
-            } else if v.has_string_list() {
-                let list = v.get_string_list().values.to_vec();
-                transform_write(common::value::Value::ListString(list.clone()))
-            } else if v.has_named_key() {
-                let nk = v.get_named_key();
-                let name = nk.get_name().to_string();
-                let key = nk.get_key().try_into()?;
-                transform_write(common::value::Value::NamedKey(name, key))
-            } else if v.has_key() {
-                let key = v.get_key().try_into()?;
-                transform_write(common::value::Value::Key(key))
-            } else if v.has_unit() {
-                transform_write(common::value::Value::Unit)
-            } else {
-                parse_error(format!(
-                    "TransformEntry write contained unknown value: {:?}",
-                    v
-                ))
-            }
+            transform_write(v.try_into()?)
         } else {
             parse_error("TransformEntry couldn't be parsed to known Transform.".to_owned())
         }
@@ -229,6 +199,7 @@ impl From<common::value::Value> for super::state::Value {
                 tv.set_contract(contract.into());
             }
             common::value::Value::Unit => tv.set_unit(state::Unit::new()),
+            common::value::Value::UInt64(num) => tv.set_long_value(num),
         };
         tv
     }
@@ -270,6 +241,10 @@ impl TryFrom<&super::state::Value> for common::value::Value {
             Ok(value.get_big_int().try_into()?)
         } else if value.has_key() {
             Ok(common::value::Value::Key(value.get_key().try_into()?))
+        } else if value.has_unit() {
+            Ok(common::value::Value::Unit)
+        } else if value.has_long_value() {
+            Ok(common::value::Value::UInt64(value.get_long_value()))
         } else {
             parse_error(format!(
                 "IPC Value {:?} couldn't be parsed to domain representation.",
@@ -316,8 +291,8 @@ impl From<common::value::account::Account> for super::state::Account {
             tmp.set_inactivity_period_limit(account.account_activity().inactivity_period_limit().0);
             tmp
         };
-        let account_urefs = account.get_urefs_lookup();
-        let account_urefs_lookup = URefMap(account_urefs);
+        let account_urefs = account.urefs_lookup();
+        let account_urefs_lookup = URefMap(account_urefs.clone());
         let ipc_urefs: Vec<super::state::NamedKey> = account_urefs_lookup.into();
         ipc_account.set_known_urefs(ipc_urefs.into());
         ipc_account.set_associated_keys(associated_keys.into());
@@ -364,10 +339,12 @@ impl TryFrom<&super::state::Account> for common::value::account::Account {
             let action_thresholds_ipc = value.get_action_thresholds();
             tmp.set_deployment_threshold(Weight::new(
                 action_thresholds_ipc.get_deployment_threshold() as u8,
-            ));
+            ))
+            .map_err(ParsingError::custom)?;
             tmp.set_key_management_threshold(Weight::new(
                 action_thresholds_ipc.get_key_management_threshold() as u8,
-            ));
+            ))
+            .map_err(ParsingError::custom)?;
             tmp
         };
         let account_activity: AccountActivity = {
@@ -421,6 +398,11 @@ impl From<transform::Transform> for super::ipc::Transform {
                 let mut add = super::ipc::TransformAddInt32::new();
                 add.set_value(i);
                 t.set_add_i32(add);
+            }
+            transform::Transform::AddUInt64(i) => {
+                let mut add = super::ipc::TransformAddUInt64::new();
+                add.set_value(i);
+                t.set_add_u64(add);
             }
             transform::Transform::AddUInt128(u) => {
                 add_big_int_transform(&mut t, u);
@@ -533,10 +515,9 @@ impl From<&common::key::Key> for super::state::Key {
                 let uref: super::state::Key_URef = (*uref).into();
                 k.set_uref(uref);
             }
-            common::key::Key::Local { seed, key_hash } => {
+            common::key::Key::Local(hash) => {
                 let mut key_local = super::state::Key_Local::new();
-                key_local.set_seed(seed.to_vec());
-                key_local.set_key_hash(key_hash.to_vec());
+                key_local.set_hash(hash.to_vec());
                 k.set_local(key_local);
             }
         }
@@ -575,17 +556,12 @@ impl TryFrom<&super::state::Key> for common::key::Key {
             Ok(common::key::Key::URef(uref))
         } else if ipc_key.has_local() {
             let ipc_local_key = ipc_key.get_local();
-            if !(ipc_local_key.seed.len() == 32 && ipc_local_key.key_hash.len() == 32) {
-                parse_error("Seed and key hash of local key have to be 32 bytes long.".to_string())
+            if ipc_local_key.hash.len() != 32 {
+                parse_error("Hash of local key have to be 32 bytes long.".to_string())
             } else {
-                let mut seed_buff = [0u8; 32];
                 let mut hash_buff = [0u8; 32];
-                seed_buff.copy_from_slice(&ipc_local_key.seed);
-                hash_buff.copy_from_slice(&ipc_local_key.key_hash);
-                Ok(common::key::Key::Local {
-                    seed: seed_buff,
-                    key_hash: hash_buff,
-                })
+                hash_buff.copy_from_slice(&ipc_local_key.hash);
+                Ok(common::key::Key::Local(hash_buff))
             }
         } else {
             parse_error(format!(
@@ -667,18 +643,20 @@ impl From<(common::key::Key, transform::Transform)> for super::ipc::TransformEnt
 impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
     fn from(ee: ExecutionEffect) -> super::ipc::ExecutionEffect {
         let mut eff = super::ipc::ExecutionEffect::new();
-        let ipc_ops: Vec<super::ipc::OpEntry> =
-            ee.0.iter()
-                .map(|(k, o)| {
-                    let mut op_entry = super::ipc::OpEntry::new();
-                    let ipc_key = k.into();
-                    let ipc_op = o.clone().into();
-                    op_entry.set_key(ipc_key);
-                    op_entry.set_operation(ipc_op);
-                    op_entry
-                })
-                .collect();
-        let ipc_tran: Vec<super::ipc::TransformEntry> = ee.1.into_iter().map(Into::into).collect();
+        let ipc_ops: Vec<super::ipc::OpEntry> = ee
+            .ops
+            .iter()
+            .map(|(k, o)| {
+                let mut op_entry = super::ipc::OpEntry::new();
+                let ipc_key = k.into();
+                let ipc_op = o.clone().into();
+                op_entry.set_key(ipc_key);
+                op_entry.set_operation(ipc_op);
+                op_entry
+            })
+            .collect();
+        let ipc_tran: Vec<super::ipc::TransformEntry> =
+            ee.transforms.into_iter().map(Into::into).collect();
         eff.set_op_map(protobuf::RepeatedField::from_vec(ipc_ops));
         eff.set_transform_map(protobuf::RepeatedField::from_vec(ipc_tran));
         eff
@@ -973,7 +951,7 @@ mod tests {
             tmp_map
         };
         let execution_effect: ExecutionEffect =
-            ExecutionEffect(HashMap::new(), input_transforms.clone());
+            ExecutionEffect::new(HashMap::new(), input_transforms.clone());
         let cost: u64 = 123;
         let execution_result: ExecutionResult = ExecutionResult::Success {
             effect: execution_effect,

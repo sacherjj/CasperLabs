@@ -5,26 +5,36 @@ use std::convert::TryFrom;
 #[repr(usize)]
 pub enum FunctionIndex {
     WriteFuncIndex = 0,
-    ReadFuncIndex = 1,
-    AddFuncIndex = 2,
-    NewFuncIndex = 3,
-    GetReadFuncIndex = 4,
-    SerFnFuncIndex = 5,
-    GetFnFuncIndex = 6,
-    LoadArgFuncIndex = 7,
-    GetArgFuncIndex = 8,
-    RetFuncIndex = 9,
-    GetCallResultFuncIndex = 10,
-    CallContractFuncIndex = 11,
-    GetURefFuncIndex = 12,
-    GasFuncIndex = 13,
-    HasURefFuncIndex = 14,
-    AddURefFuncIndex = 15,
-    StoreFnIndex = 16,
-    ProtocolVersionFuncIndex = 17,
-    SeedFnIndex = 18,
-    IsValidFnIndex = 19,
-    RevertFuncIndex = 20,
+    WriteLocalFuncIndex = 1,
+    ReadFuncIndex = 2,
+    ReadLocalFuncIndex = 3,
+    AddFuncIndex = 4,
+    NewFuncIndex = 5,
+    GetReadFuncIndex = 6,
+    SerFnFuncIndex = 7,
+    GetFnFuncIndex = 8,
+    LoadArgFuncIndex = 9,
+    GetArgFuncIndex = 10,
+    RetFuncIndex = 11,
+    GetCallResultFuncIndex = 12,
+    CallContractFuncIndex = 13,
+    GetURefFuncIndex = 14,
+    GasFuncIndex = 15,
+    HasURefFuncIndex = 16,
+    AddURefFuncIndex = 17,
+    StoreFnIndex = 18,
+    ProtocolVersionFuncIndex = 19,
+    IsValidFnIndex = 20,
+    RevertFuncIndex = 21,
+    AddAssociatedKeyFuncIndex = 22,
+    RemoveAssociatedKeyFuncIndex = 23,
+    SetActionThresholdFuncIndex = 24,
+    SerKnownURefs = 25,
+    ListKnownURefsIndex = 26,
+    RemoveURef = 27,
+    GetCallerIndex = 28,
+    TransferToAccountIndex = 29,
+    GetBlocktimeIndex = 30,
 }
 
 impl Into<usize> for FunctionIndex {
@@ -49,14 +59,14 @@ mod tests {
 
     #[test]
     fn primitive_to_enum() {
-        let element = FunctionIndex::try_from(19).expect("Unable to create enum from number");
+        let element = FunctionIndex::try_from(20).expect("Unable to create enum from number");
         assert_eq!(element, FunctionIndex::IsValidFnIndex);
     }
     #[test]
     fn enum_to_primitive() {
         let element = FunctionIndex::IsValidFnIndex;
         let primitive: usize = element.into();
-        assert_eq!(primitive, 19usize);
+        assert_eq!(primitive, 20usize);
     }
     #[test]
     #[should_panic]
