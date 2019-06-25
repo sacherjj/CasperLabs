@@ -33,13 +33,9 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     type PurseId = WithdrawId;
     type DepOnlyId = DepositId;
 
-    fn create(&self, balance: U512) -> Self::PurseId {
-        // Gorski writes:
-        //   This creates money out of nowhere. It doesn't decrease Mint's available tokens,
-        //   doesn't check whether it reached the limit, etc. I think that it should be created
-        //   with a 0 value at the start and the code that calls the `Mint::creates method would
-        //   transfer funds in a separate call.
-        let balance_uref: Key = contract_api::new_uref(balance).into();
+    fn create(&self) -> Self::PurseId {
+        let initial_balance = U512::from(0);
+        let balance_uref: Key = contract_api::new_uref(initial_balance).into();
 
         let purse_key: URef = contract_api::new_uref(()).into();
         let purse_id: WithdrawId = WithdrawId::from_uref(purse_key).unwrap();
@@ -76,8 +72,7 @@ pub extern "C" fn call() {
 
     match method_name.as_str() {
         "create" => {
-            let amount: U512 = contract_api::get_arg(1);
-            let purse_id = mint.create(amount);
+            let purse_id = mint.create();
             let purse_key = URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
             // TODO: return `purse_key` in extra_urefs, currently broken
             // Ref: https://casperlabs.atlassian.net/browse/EE-401
