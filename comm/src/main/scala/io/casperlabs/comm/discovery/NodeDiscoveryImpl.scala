@@ -7,6 +7,7 @@ import cats.effect.implicits._
 import cats.temp.par._
 import io.casperlabs.catscontrib._
 import Catscontrib._
+import cats.Monad
 import cats.effect._
 import cats.effect.concurrent.Ref
 import io.casperlabs.comm._
@@ -21,7 +22,7 @@ import scala.util.Random
 object NodeDiscoveryImpl {
   type Millis = Long
 
-  def create[F[_]: Concurrent: Log: Time: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Par](
+  def create[F[_]: Concurrent: Log: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Par](
       id: NodeIdentifier,
       port: Int,
       timeout: FiniteDuration,
@@ -98,7 +99,7 @@ object NodeDiscoveryImpl {
   }
 }
 
-private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Timer: Metrics: KademliaService: Par](
+private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: KademliaService: Par](
     id: NodeIdentifier,
     val table: PeerTable[F],
     recentlyAlivePeersRef: Ref[F, (Set[Node], Millis)],
@@ -143,7 +144,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Timer: Metrics
     val initRPC = KademliaService[F].receive(pingHandler, lookupHandler)
 
     val findNew = for {
-      _ <- Time[F].sleep(9.seconds)
+      _ <- Timer[F].sleep(9.seconds)
       _ <- findMorePeers()
     } yield ()
 
@@ -239,7 +240,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Timer: Metrics
   def updateRecentlyAlivePeers: F[Unit] =
     for {
       (recentlyAlivePeers, lastTimeAccess) <- recentlyAlivePeersRef.get
-      currentTime                          <- currentTime
+      currentTime                          <- Timer[F].clock.realTime(MILLISECONDS)
       oldEnough                            = FiniteDuration(currentTime - lastTimeAccess, MILLISECONDS) > alivePeersCacheExpirationPeriod
       alivePeers                           <- filterAlive(recentlyAlivePeers.toList)
       tooFewAlivePeers                     = alivePeers.size < alivePeersCacheMinThreshold
@@ -270,6 +271,4 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Timer: Metrics
       case (acc, batch)                  => filterAlive(batch).map(acc ++ _)
     }
   }
-
-  def currentTime: F[Millis] = Sync[F].delay(System.currentTimeMillis())
 }

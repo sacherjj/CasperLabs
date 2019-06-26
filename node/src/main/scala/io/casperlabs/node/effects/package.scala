@@ -37,7 +37,6 @@ package object effects {
       scheduler: Scheduler,
       peerNodeAsk: NodeAsk[Task],
       log: Log[Task],
-      time: Time[Task],
       metrics: Metrics[Task]
   ): Resource[Effect, NodeDiscovery[Task]] =
     NodeDiscoveryImpl

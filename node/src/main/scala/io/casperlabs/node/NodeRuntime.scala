@@ -125,7 +125,6 @@ class NodeRuntime private[node] (
                                                           blockingScheduler,
                                                           effects.peerNodeAsk,
                                                           log,
-                                                          effects.time,
                                                           metrics
                                                         )
 
