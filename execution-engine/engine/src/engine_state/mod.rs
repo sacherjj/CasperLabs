@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use rand::RngCore;
+use rand_chacha::ChaChaRng;
 
 use common::bytesrepr::ToBytes;
 use common::key::Key;
@@ -41,17 +42,14 @@ pub struct EngineState<H> {
     nonce_check: bool,
 }
 
-// TODO: Post devnet, make genesis creation regular contract execution.
-pub fn create_genesis_effects(
+fn create_mint_effects(
+    rng: &mut ChaChaRng,
     genesis_account_addr: [u8; 32],
     initial_tokens: U512,
     mint_code_bytes: WasmiBytes,
-    _pos_code_bytes: WasmiBytes,
-    _genesis_validators: Vec<(PublicKey, U512)>,
     protocol_version: u64,
-) -> Result<ExecutionEffect, execution::Error> {
+) -> Result<HashMap<Key, Value>, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
-    let mut rng = execution::create_rng(genesis_account_addr, 0);
 
     // Create (public_uref, mint_contract_uref)
 
@@ -156,9 +154,31 @@ pub fn create_genesis_effects(
         Value::Contract(mint_contract),
     );
 
+    Ok(tmp)
+}
+
+// TODO: Post devnet, make genesis creation regular contract execution.
+pub fn create_genesis_effects(
+    genesis_account_addr: [u8; 32],
+    initial_tokens: U512,
+    mint_code_bytes: WasmiBytes,
+    _pos_code_bytes: WasmiBytes,
+    _genesis_validators: Vec<(PublicKey, U512)>,
+    protocol_version: u64,
+) -> Result<ExecutionEffect, execution::Error> {
+    let mut rng = execution::create_rng(genesis_account_addr, 0);
+
+    let mint_effects = create_mint_effects(
+        &mut rng,
+        genesis_account_addr,
+        initial_tokens,
+        mint_code_bytes,
+        protocol_version,
+    )?;
+
     let mut execution_effect: ExecutionEffect = Default::default();
 
-    for (k, v) in tmp.into_iter() {
+    for (k, v) in mint_effects.into_iter() {
         let k = if let Key::URef(_) = k {
             k.normalize()
         } else {

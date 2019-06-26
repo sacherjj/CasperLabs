@@ -185,6 +185,7 @@ pub fn get_exec_transforms(
         .collect()
 }
 
+#[allow(clippy::implicit_hasher)]
 pub fn get_contract_uref(
     transforms: &HashMap<common::key::Key, Transform>,
     contract: Vec<u8>,
