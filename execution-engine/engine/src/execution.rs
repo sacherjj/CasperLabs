@@ -1049,15 +1049,13 @@ where
                 // args(0) = pointer to array for return value
                 // args(1) = length of array for return value
                 let (dest_ptr, dest_size): (u32, u32) = Args::parse(args)?;
-                let purse_id = match self.create_purse() {
-                    Ok(purse_id) => purse_id,
-                    Err(_err) => return Ok(Some(RuntimeValue::I32(0))),
-                };
+                let purse_id = self.create_purse()?;
                 let purse_id_bytes = purse_id.to_bytes().map_err(Error::BytesRepr)?;
                 assert_eq!(dest_size, purse_id_bytes.len() as u32);
-                self.host_buf = purse_id_bytes;
-                self.set_mem_from_buf(dest_ptr)?;
-                Ok(Some(RuntimeValue::I32(dest_size as i32)))
+                self.memory
+                    .set(dest_ptr, &purse_id_bytes)
+                    .map_err(Error::Interpreter)?;
+                Ok(Some(RuntimeValue::I32(0)))
             }
 
             FunctionIndex::TransferToAccountIndex => {

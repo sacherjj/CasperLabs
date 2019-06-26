@@ -374,11 +374,14 @@ pub fn set_action_threshold(
 
 pub fn create_purse() -> PurseId {
     let purse_id_ptr = alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
-    let purse_id_size: usize = PURSE_ID_SIZE_SERIALIZED;
     unsafe {
-        let ret = ext_ffi::create_purse(purse_id_ptr, purse_id_size);
-        if ret != 0 {
-            let bytes = Vec::from_raw_parts(purse_id_ptr, purse_id_size, purse_id_size);
+        let ret = ext_ffi::create_purse(purse_id_ptr, PURSE_ID_SIZE_SERIALIZED);
+        if ret == 0 {
+            let bytes = Vec::from_raw_parts(
+                purse_id_ptr,
+                PURSE_ID_SIZE_SERIALIZED,
+                PURSE_ID_SIZE_SERIALIZED,
+            );
             deserialize(&bytes).unwrap()
         } else {
             panic!("could not create purse_id")
