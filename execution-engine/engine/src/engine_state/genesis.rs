@@ -53,20 +53,19 @@ fn create_mint_effects(
     let purse_id_uref = create_uref(rng);
 
     // Create genesis genesis_account
-
-    // All blessed / system contract public urefs MUST be added to the genesis account's known_urefs
-    // TODO: do we need to deal with NamedKey ???
-    let known_urefs = &[
-        (String::from("mint"), Key::URef(public_uref)),
-        (
-            mint_contract_uref.as_string(),
-            Key::URef(mint_contract_uref),
-        ),
-    ];
-
-    let purse_id = PurseId::new(purse_id_uref);
-
-    let genesis_account = init::create_genesis_account(genesis_account_addr, purse_id, known_urefs);
+    let genesis_account = {
+        // All blessed / system contract public urefs MUST be added to the genesis account's known_urefs
+        // TODO: do we need to deal with NamedKey ???
+        let known_urefs = &[
+            (String::from("mint"), Key::URef(public_uref)),
+            (
+                mint_contract_uref.as_string(),
+                Key::URef(mint_contract_uref),
+            ),
+        ];
+        let purse_id = PurseId::new(purse_id_uref);
+        init::create_genesis_account(genesis_account_addr, purse_id, known_urefs)
+    };
 
     // Store (genesis_account_addr, genesis_account) in global state
 
