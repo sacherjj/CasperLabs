@@ -37,9 +37,7 @@ pub struct WasmTestBuilder {
     exec_response: Option<ExecResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
-    correlation_id: CorrelationId,
     engine_state: EngineState<InMemoryGlobalState>,
-    mocked_account: Vec<(Key, Value)>,
     /// Cached transform maps after subsequent successful runs
     /// i.e. transforms[0] is for first run() call etc.
     transforms: Vec<HashMap<common::key::Key, Transform>>,
@@ -57,9 +55,7 @@ impl Default for WasmTestBuilder {
             exec_response: None,
             genesis_hash: None,
             post_state_hash: None,
-            correlation_id,
             engine_state,
-            mocked_account,
             transforms: Vec::new(),
         }
     }
