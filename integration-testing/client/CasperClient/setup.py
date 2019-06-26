@@ -10,7 +10,7 @@ with open(path.join(here, "README.md"),  encoding="utf-8") as fh:
 
 setup(
     name='casperlabs_client',
-    version='0.3.0',
+    version='0.3.1',
     packages=['casper_client', 'casper_client.proto'],
     install_requires=['grpcio>=1.20'],
     description='Python Client for interacting with a CasperLabs Node',
