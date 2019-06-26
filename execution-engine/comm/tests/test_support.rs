@@ -8,16 +8,15 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::PathBuf;
 
-use execution_engine::engine_state::utils::WasmiBytes;
-use shared::test_utils;
-use shared::transform::Transform;
-
 use casperlabs_engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, ExecRequest, ExecResponse, GenesisRequest,
     GenesisResponse, TransformEntry,
 };
 use casperlabs_engine_grpc_server::engine_server::mappings::CommitTransforms;
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
+use execution_engine::engine_state::utils::WasmiBytes;
+use shared::test_utils;
+use shared::transform::Transform;
 
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/debug";
@@ -186,22 +185,15 @@ pub fn get_exec_transforms(
         .collect()
 }
 
-#[allow(clippy::implicit_hasher)]
-pub fn get_mint_contract_uref(
+pub fn get_contract_uref(
     transforms: &HashMap<common::key::Key, Transform>,
-    contracts: &HashMap<SystemContractType, WasmiBytes>,
+    contract: Vec<u8>,
 ) -> Option<common::uref::URef> {
-    let mint_contract_bytes: Vec<u8> = contracts
-        .get(&SystemContractType::Mint)
-        .map(ToOwned::to_owned)
-        .map(Into::into)
-        .expect("should get mint bytes");
-
     transforms
         .iter()
         .find(|(_, v)| match v {
             Transform::Write(common::value::Value::Contract(mint_contract))
-                if mint_contract.bytes() == mint_contract_bytes.as_slice() =>
+                if mint_contract.bytes() == contract.as_slice() =>
             {
                 true
             }
@@ -214,6 +206,34 @@ pub fn get_mint_contract_uref(
                 None
             }
         })
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn get_mint_contract_uref(
+    transforms: &HashMap<common::key::Key, Transform>,
+    contracts: &HashMap<SystemContractType, WasmiBytes>,
+) -> Option<common::uref::URef> {
+    let mint_contract_bytes: Vec<u8> = contracts
+        .get(&SystemContractType::Mint)
+        .map(ToOwned::to_owned)
+        .map(Into::into)
+        .expect("Should get mint bytes.");
+
+    get_contract_uref(&transforms, mint_contract_bytes)
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn get_pos_contract_uref(
+    transforms: &HashMap<common::key::Key, Transform>,
+    contracts: &HashMap<SystemContractType, WasmiBytes>,
+) -> Option<common::uref::URef> {
+    let mint_contract_bytes: Vec<u8> = contracts
+        .get(&SystemContractType::ProofOfStake)
+        .map(ToOwned::to_owned)
+        .map(Into::into)
+        .expect("Should get PoS bytes.");
+
+    get_contract_uref(&transforms, mint_contract_bytes)
 }
 
 #[allow(clippy::implicit_hasher)]
