@@ -121,7 +121,7 @@ impl WasmTestBuilder {
     /// overwrites existing cached post state hash with a new one.
     pub fn commit(&mut self) -> &mut WasmTestBuilder {
         let commit_request = test_support::create_commit_request(
-            self.genesis_hash
+            self.post_state_hash
                 .as_ref()
                 .expect("Should have genesis hash"),
             self.transforms
