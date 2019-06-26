@@ -20,6 +20,8 @@ use shared::newtypes::Blake2bHash;
 use shared::transform::{Transform, TypeMismatch};
 use storage::global_state::CommitResult;
 
+pub const POS_PURSE: &str = "pos_purse";
+
 fn create_uref<R: RngCore>(rng: &mut R) -> URef {
     let mut buff = [0u8; 32];
     rng.fill_bytes(&mut buff);
@@ -163,7 +165,7 @@ fn create_pos_effects(
         .map(|key| (key, Key::Hash([0u8; 32])))
         .collect();
 
-    known_urefs.insert("pos_purse".to_string(), Key::URef(pos_purse));
+    known_urefs.insert(POS_PURSE.to_string(), Key::URef(pos_purse));
 
     // Create PoS Contract object.
     let contract = Contract::new(pos_code.into(), known_urefs, protocol_version);
@@ -271,7 +273,7 @@ mod tests {
     use shared::transform::Transform;
     use wasm_prep::wasm_costs::WasmCosts;
 
-    use super::create_uref;
+    use super::{create_uref, POS_PURSE};
 
     const GENESIS_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
     const PROTOCOL_VERSION: u64 = 1;
@@ -620,7 +622,7 @@ mod tests {
         assert!(bonded_validator);
 
         assert_eq!(
-            pos_contract.urefs_lookup().get("pos_purse"),
+            pos_contract.urefs_lookup().get(POS_PURSE),
             Some(&Key::URef(pos_purse))
         );
     }
