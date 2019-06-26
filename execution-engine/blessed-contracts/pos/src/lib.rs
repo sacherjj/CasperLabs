@@ -11,6 +11,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use cl_std::contract_api;
+use cl_std::key::Key;
 use cl_std::uref::URef;
 use cl_std::value::account::{BlockTime, PublicKey, PurseId};
 use cl_std::value::U512;
@@ -18,6 +19,10 @@ use cl_std::value::U512;
 use crate::error::Error;
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
 use crate::stakes::{ContractStakes, StakesProvider};
+
+/// The uref name where the PoS purse is stored. It contains all staked tokens, and all unbonded
+/// tokens that are yet to be paid out.
+const PURSE_KEY: &str = "pos_purse";
 
 /// The time from a bonding request until the bond becomes effective and part of the stake.
 const BOND_DELAY: u64 = 0;
@@ -117,24 +122,39 @@ pub extern "C" fn pos_ext() {
     let method_name: String = contract_api::get_arg(0);
     let timestamp = contract_api::get_blocktime();
     let validator = contract_api::get_caller().unwrap(); // TODO: Error handling.
+    let pos_purse = match contract_api::get_uref(PURSE_KEY) {
+        Key::URef(uref) => PurseId::new(uref),
+        _ => panic!("PoS purse ID not found"),
+    };
 
     match method_name.as_str() {
         // Type of this method: `fn bond(amount: U512, purse: URef)`
         "bond" => {
             let amount = contract_api::get_arg(1);
             let source_uref: URef = contract_api::get_arg(2);
-            let _source = PurseId::new(source_uref);
+            let source = PurseId::new(source_uref);
             // Transfer `amount` from the `source` purse to PoS internal purse.
             // POS_PURSE is a constant, it is the PurseID of the proof-of-stake contract's own purse.
-            // Mateusz: moved this outside of `bond` function so that it [bond] can be unit tested.
-            // contract_api::transfer(source, POS_PURSE, amount)?;
+            if contract_api::PurseTransferResult::TransferError
+                == contract_api::transfer_from_purse_to_purse(source, pos_purse, amount)
+            {
+                panic!("Failed to transfer unbonded funds.");
+            }
             bond::<QueueLocal, ContractStakes>(amount, validator, timestamp)
                 .expect("Failed to bond");
 
             // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
-            for _entry in unbonds {
-                // contract_api::transfer(POS_PURSE, entry.validator, entry.amount)?;
+            for entry in unbonds {
+                if contract_api::TransferResult::TransferError
+                    == contract_api::transfer_from_purse_to_account(
+                        pos_purse,
+                        entry.validator,
+                        entry.amount,
+                    )
+                {
+                    panic!("Failed to transfer unbonded funds.");
+                }
             }
         }
         // Type of this method: `fn unbond(amount: U512)`
@@ -145,8 +165,16 @@ pub extern "C" fn pos_ext() {
 
             // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
-            for _entry in unbonds {
-                // contract_api::transfer(POS_PURSE, entry.validator, entry.amount)?;
+            for entry in unbonds {
+                if contract_api::TransferResult::TransferError
+                    == contract_api::transfer_from_purse_to_account(
+                        pos_purse,
+                        entry.validator,
+                        entry.amount,
+                    )
+                {
+                    panic!("Failed to transfer unbonded funds.");
+                }
             }
         }
         // Type of this method: `fn step()`
@@ -155,8 +183,15 @@ pub extern "C" fn pos_ext() {
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
 
             // Mateusz: Moved outside of `step` function so that it [step] can be unit tested.
-            for _entry in unbonds {
-                // contract_api::transfer(POS_PURSE, entry.validator, entry.amount)?;
+            for entry in unbonds {
+                // TODO: We currently ignore `TransferResult::TransferError`s here, since we can't recover from
+                // them and we shouldn't retry indefinitely. That would mean the contract just
+                // keeps the money forever, though.
+                contract_api::transfer_from_purse_to_account(
+                    pos_purse,
+                    entry.validator,
+                    entry.amount,
+                );
             }
         }
         _ => {}
