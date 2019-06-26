@@ -34,7 +34,7 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 /// Builder for simple WASM test
 pub struct WasmTestBuilder {
     genesis_addr: [u8; 32],
-    exec_response: Option<ExecResponse>,
+    exec_responses: Vec<ExecResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
     engine_state: EngineState<InMemoryGlobalState>,
@@ -52,7 +52,7 @@ impl Default for WasmTestBuilder {
         let engine_state = EngineState::new(global_state, false);
         WasmTestBuilder {
             genesis_addr: [0; 32],
-            exec_response: None,
+            exec_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
             engine_state,
@@ -109,7 +109,7 @@ impl WasmTestBuilder {
             .wait_drop_metadata()
             .expect("should exec");
 
-        self.exec_response = Some(exec_response.clone());
+        self.exec_responses.push(exec_response);
         self
     }
 
@@ -145,9 +145,10 @@ impl WasmTestBuilder {
     pub fn expect_success(&mut self) -> &mut WasmTestBuilder {
         // Check first result, as only first result is interesting for a simple test
         let exec_response = self
-            .exec_response
-            .clone()
-            .expect("Expected to be called after run()");
+            .exec_responses
+            .last()
+            .expect("Expected to be called after run()")
+            .clone();
         let deploy_result = exec_response
             .get_success()
             .get_deploy_results()
