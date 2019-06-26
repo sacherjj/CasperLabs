@@ -30,6 +30,6 @@ setup(
     ],
     python_requires='>=3.6.0',
     project_urls={
-        'Source': 'https://github.com/CasperLabs/CasperLabs/tree/dev/client/python'
+        'Source': 'https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperClient'
     },
 )
