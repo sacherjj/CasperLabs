@@ -21,14 +21,10 @@ use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::value::Value;
 use execution_engine::engine_state::EngineState;
-use execution_engine::tracking_copy::TrackingCopy;
 use shared::init::mocked_account;
-use shared::logging::logger::LogBufferProvider;
-use shared::logging::logger::BUFFERED_LOGGER;
 use shared::newtypes::CorrelationId;
 use shared::transform::Transform;
 use storage::global_state::in_memory::InMemoryGlobalState;
-use storage::global_state::History;
 
 use test_support::MOCKED_ACCOUNT_ADDRESS;
 use test_support::{create_exec_request, create_genesis_request};
@@ -73,36 +69,11 @@ impl WasmTestBuilder {
             .wait_drop_metadata()
             .unwrap();
 
-        let effect: &ExecutionEffect = genesis_response.get_success().get_effect();
-
-        let map: CommitTransforms = effect
-            .get_transform_map()
-            .try_into()
-            .expect("should convert");
-
-        let map = map.value();
-
         let state_handle = engine_state.state();
 
         let state_root_hash = {
             let state_handle_guard = state_handle.lock();
             let root_hash = state_handle_guard.root_hash;
-            let mut tracking_copy: TrackingCopy<InMemoryGlobalState> = state_handle_guard
-                .checkout(root_hash)
-                .expect("should return global state")
-                .map(TrackingCopy::new)
-                .expect("should return tracking copy");
-
-            for (k, v) in map.iter() {
-                if let Transform::Write(v) = v {
-                    assert_eq!(
-                        Some(v.to_owned()),
-                        tracking_copy.get(correlation_id, k).expect("should get")
-                    );
-                } else {
-                    panic!("ffuuu");
-                }
-            }
 
             root_hash
         };
@@ -114,10 +85,6 @@ impl WasmTestBuilder {
         assert_eq!(state_root_hash.to_vec(), post_state_hash);
         let exec_request =
             create_exec_request(self.genesis_addr, &self.wasm_file, &post_state_hash);
-
-        let _log_items = BUFFERED_LOGGER
-            .extract_correlated(&correlation_id.to_string())
-            .expect("log items expected");
 
         let exec_response = engine_state
             .exec(RequestOptions::new(), exec_request)
