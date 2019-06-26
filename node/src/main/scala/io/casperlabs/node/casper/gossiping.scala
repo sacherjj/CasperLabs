@@ -160,7 +160,7 @@ package object gossiping {
           for {
             _           <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
             state       <- Cell.mvarCell[F, CasperState](CasperState())
-            executor    = new MultiParentCasperImpl.StatelessExecutor(chainId)
+            executor    = new MultiParentCasperImpl.StatelessExecutor[F](chainId)
             dag         <- BlockDagStorage[F].getRepresentation
             result      <- executor.validateAndAddBlock(None, dag, block)(state)
             (status, _) = result
@@ -495,7 +495,7 @@ package object gossiping {
       awaitApproved: F[Unit],
       isInitialRef: Ref[F, Boolean]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
-    implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+    implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughApplicativeError[F]
 
     for {
       _ <- SynchronizerImpl.establishMetrics[F]
@@ -668,7 +668,7 @@ package object gossiping {
     def loop(prevPeers: Set[Node]): F[Unit] = {
       // Based on Connecttions.removeConn
       val newPeers = for {
-        peers <- NodeDiscovery[F].alivePeersAscendingDistance.map(_.toSet)
+        peers <- NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map(_.toSet)
         _     <- Log[F].info(s"Peers: ${peers.size}").whenA(peers.size != prevPeers.size)
         _ <- (prevPeers diff peers).toList.traverse { peer =>
               Log[F].info(s"Disconnected from ${peer.show}")
