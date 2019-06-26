@@ -112,9 +112,9 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
     /* Threshold to start gradually pinging peers to fill cache */
     alivePeersCacheMinThreshold: Int = 10,
     /* Period to re-fill cache */
-    alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
+    alivePeersCacheExpirationPeriod: FiniteDuration = 5.minutes,
     /* Period to update the cache */
-    alivePeersCacheUpdatePeriod: FiniteDuration = 1.minute,
+    alivePeersCacheUpdatePeriod: FiniteDuration = 15.seconds,
     /* Batches pinged in parallel */
     alivePeersCachePingsBatchSize: Int = 10
 ) extends NodeDiscovery[F] {
