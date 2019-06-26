@@ -1,3 +1,4 @@
+use core::fmt::Write;
 use std::cell::RefCell;
 use std::collections::btree_map::BTreeMap;
 use std::collections::HashMap;
@@ -147,13 +148,60 @@ fn create_mint_effects(
     Ok(tmp)
 }
 
+fn create_pos_effects(
+    rng: &mut ChaChaRng,
+    pos_code: WasmiBytes,
+    genesis_validators: Vec<(PublicKey, U512)>,
+    protocol_version: u64,
+) -> Result<HashMap<Key, Value>, execution::Error> {
+    let mut tmp: HashMap<Key, Value> = HashMap::new();
+
+    // Create (public_pos_uref, pos_contract_uref)
+    let public_pos_address = create_uref(rng);
+    let pos_uref = create_uref(rng);
+
+    // Mateusz: Maybe we could make `public_pos_address` a Key::Hash after all.
+    // Store public PoS address -> PoS contract relation
+    tmp.insert(
+        Key::URef(public_pos_address),
+        Value::Key(Key::URef(pos_uref)),
+    );
+
+    // Add genesis validators to PoS contract object.
+    // For now, we are storing validators in `known_urefs` map of the PoS contract
+    // in the form: key: "v_{validator_pk}_{validator_stake}", value: doesn't matter.
+    let known_urefs: BTreeMap<String, Key> = genesis_validators
+        .iter()
+        .map(|(pub_key, balance)| {
+            let key_bytes = pub_key.value();
+            let mut hex_key = String::with_capacity(64);
+            for byte in &key_bytes[..32] {
+                write!(hex_key, "{:02x}", byte).unwrap();
+            }
+            let mut uref = String::new();
+            uref.write_fmt(format_args!("v_{}_{}", hex_key, balance))
+                .unwrap();
+            uref
+        })
+        .map(|key| (key, Key::Hash([0u8; 32])))
+        .collect();
+
+    // Create PoS Contract object.
+    let contract = Contract::new(pos_code.into(), known_urefs, protocol_version);
+
+    // Store PoS code under `pos_uref`.
+    tmp.insert(Key::URef(pos_uref), Value::Contract(contract));
+
+    Ok(tmp)
+}
+
 // TODO: Post devnet, make genesis creation regular contract execution.
 pub fn create_genesis_effects(
     genesis_account_addr: [u8; 32],
     initial_tokens: U512,
     mint_code_bytes: WasmiBytes,
-    _pos_code_bytes: WasmiBytes,
-    _genesis_validators: Vec<(PublicKey, U512)>,
+    pos_code_bytes: WasmiBytes,
+    genesis_validators: Vec<(PublicKey, U512)>,
     protocol_version: u64,
 ) -> Result<ExecutionEffect, execution::Error> {
     let mut rng = execution::create_rng(genesis_account_addr, 0);
@@ -166,9 +214,16 @@ pub fn create_genesis_effects(
         protocol_version,
     )?;
 
+    let pos_effects = create_pos_effects(
+        &mut rng,
+        pos_code_bytes,
+        genesis_validators,
+        protocol_version,
+    )?;
+
     let mut execution_effect: ExecutionEffect = Default::default();
 
-    for (k, v) in mint_effects.into_iter() {
+    for (k, v) in mint_effects.into_iter().chain(pos_effects.into_iter()) {
         let k = if let Key::URef(_) = k {
             k.normalize()
         } else {
@@ -350,7 +405,7 @@ mod tests {
 
     const GENESIS_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
     const PROTOCOL_VERSION: u64 = 1;
-    const EXPECTED_GENESIS_TRANSFORM_COUNT: usize = 5;
+    const EXPECTED_GENESIS_TRANSFORM_COUNT: usize = 7; // 5 writes for Mint and 2 for PoS.
     const INITIAL_BALANCE: &str = "1000";
 
     fn get_initial_tokens(initial_balance: &str) -> U512 {
