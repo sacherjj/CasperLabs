@@ -25,9 +25,9 @@ type PurseId = UPointer<()>;
 type Timestamp = BlockTime;
 
 /// The time from a bonding request until bonding becomes effective.
-const BOND_DELAY: u64 = 60 * 60;
+const BOND_DELAY: u64 = 0;
 /// The time from an unbonding request until the stakes are paid out.
-const UNBOND_DELAY: u64 = 60 * 60 * 24;
+const UNBOND_DELAY: u64 = 0;
 /// The maximum number of pending bonding requests.
 const MAX_BOND_LEN: usize = 10;
 /// The maximum number of pending unbonding requests.
@@ -137,12 +137,24 @@ pub extern "C" fn pos_ext() {
             // contract_api::transfer(source, POS_PURSE, amount)?;
             bond::<QueueLocal, ContractStakes>(amount, validator, timestamp)
                 .expect("Failed to bond");
+
+            // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
+            let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
+            for _entry in unbonds {
+                // contract_api::transfer(POS_PURSE, entry.dest, entry.amount)?;
+            }
         }
         // Type of this method: `fn unbond(amount: U512)`
         "unbond" => {
             let maybe_amount = contract_api::get_arg(1);
             unbond::<QueueLocal, ContractStakes>(maybe_amount, validator, timestamp)
                 .expect("Failed to unbond");
+
+            // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
+            let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
+            for _entry in unbonds {
+                // contract_api::transfer(POS_PURSE, entry.dest, entry.amount)?;
+            }
         }
         // Type of this method: `fn step()`
         "step" => {
