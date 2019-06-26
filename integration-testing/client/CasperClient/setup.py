@@ -12,7 +12,7 @@ setup(
     name='casperlabs_client',
     version='0.3.1',
     packages=['casper_client', 'casper_client.proto'],
-    install_requires=['grpcio>=1.20'],
+    install_requires=['grpcio>=1.20', 'pyblake2==1.1.2', 'ed25519==1.4'],
     description='Python Client for interacting with a CasperLabs Node',
     long_description=long_description,
     long_description_content_type='text/markdown',
