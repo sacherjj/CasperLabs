@@ -392,8 +392,9 @@ mod tests {
     use std::collections::HashMap;
 
     use common::bytesrepr::ToBytes;
-    use common::key::Key;
+    use common::key::{addr_to_hex, Key};
     use common::value::{Contract, U512, Value};
+    use common::value::account::PublicKey;
     use engine_state::create_genesis_effects;
     use engine_state::utils::WasmiBytes;
     use execution;
@@ -688,5 +689,63 @@ mod tests {
             actual_mint_contract_bytes,
             expected_mint_contract_bytes.as_slice()
         );
+    }
+
+    #[test]
+    fn create_pos_effects() {
+        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
+
+        let genesis_validator_public_key = PublicKey::new([0u8; 32]);
+        let genesis_validator_stake = U512::from(1000);
+
+        let genesis_validators =
+            std::iter::once((genesis_validator_public_key, genesis_validator_stake)).collect();
+
+        let public_pos_address = create_uref(&mut rng);
+
+        let pos_contract_uref = create_uref(&mut rng);
+
+        let pos_contract_bytes = get_pos_code_bytes();
+
+        let pos_effects = {
+            // Use new PRNG for the PoS effects process.
+            let mut pos_rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
+            super::create_pos_effects(
+                &mut pos_rng,
+                pos_contract_bytes.clone(),
+                genesis_validators,
+                1,
+            )
+            .expect("Creating PoS effects in test should not fail.")
+        };
+
+        assert_eq!(
+            pos_effects.get(&Key::URef(public_pos_address)),
+            Some(&Value::Key(Key::URef(pos_contract_uref))),
+            "Public URef should point at PoS contract URef."
+        );
+
+        let pos_contract = match pos_effects
+            .get(&Key::URef(pos_contract_uref))
+            .expect("PoS contract should be stored in GlobalState.")
+        {
+            Value::Contract(contract) => contract,
+            _ => panic!("Expected Value::Contract"),
+        };
+
+        // rustc isn't smart enough to figure that out
+        let pos_contract_raw: Vec<u8> = pos_contract_bytes.into();
+        assert_eq!(pos_contract.bytes().to_vec(), pos_contract_raw);
+        assert_eq!(pos_contract.urefs_lookup().len(), 1);
+
+        let validator_name: String = {
+            let public_key_hex: String = addr_to_hex(&genesis_validator_public_key.value());
+            // This is how PoS contract stores validator keys in its known_urefs map.
+            format!("v_{}_{}", public_key_hex, genesis_validator_stake)
+        };
+
+        let bonded_validator = pos_contract.urefs_lookup().contains_key(&validator_name);
+
+        assert!(bonded_validator);
     }
 }
