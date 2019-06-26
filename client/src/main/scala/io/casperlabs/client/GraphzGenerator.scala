@@ -155,8 +155,16 @@ object GraphzGenerator {
       .flatMap(_.values.toList)
       .traverse {
         case ValidatorBlock(blockHash, parentsHashes, _) =>
-          parentsHashes
-            .traverse(p => g.edge(blockHash, p, constraint = Some(false)))
+          parentsHashes.zipWithIndex
+            .traverse {
+              case (p, index) =>
+                val style = if (index == 0) {
+                  Some(Bold)
+                } else {
+                  None
+                }
+                g.edge(blockHash, p, style = style, constraint = Some(false))
+            }
       }
       .as(())
 
