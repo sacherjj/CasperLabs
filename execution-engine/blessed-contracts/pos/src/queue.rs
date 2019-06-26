@@ -4,8 +4,8 @@ use core::mem;
 
 use cl_std::bytesrepr::{self, FromBytes, ToBytes};
 use cl_std::contract_api;
+use cl_std::value::{account::PublicKey, U512, Value};
 use cl_std::value::account::BlockTime;
-use cl_std::value::{account::PublicKey, Value, U512};
 
 use crate::error::Error;
 use crate::Timestamp;
@@ -13,8 +13,6 @@ use crate::Timestamp;
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
 
-// Mateusz: AFAIR there was a RequestId associated with `QueueEntry` that allows for canceling that request.
-// Is this purposefully omitted for simplicity?
 /// A pending entry in the bonding or unbonding queue.
 #[derive(Clone, Copy)]
 pub struct QueueEntry {
@@ -67,7 +65,7 @@ pub trait QueueProvider {
     /// Reads unbonding queue.
     fn read_unbonding() -> Queue;
 
-    /// Writes nbonding queue.
+    /// Writes bonding queue.
     fn write_bonding(queue: &Queue);
 
     /// Writes unbonding queue.

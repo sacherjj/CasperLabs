@@ -60,7 +60,6 @@ impl StakesProvider for ContractStakes {
             .collect();
         // Remove and add urefs to update the contract's known urefs accordingly.
         for (name, _) in contract_api::list_known_urefs() {
-            // Mateusz: Why are we removing `name` from the `new_urefs` set?
             if name.starts_with("v_") && !new_urefs.remove(&name) {
                 contract_api::remove_uref(&name);
             }
@@ -86,7 +85,10 @@ impl Stakes {
         validator: &PublicKey,
         maybe_amount: Option<U512>,
     ) -> Result<U512, Error> {
-        let min = self.max_without(validator).saturating_sub(MAX_SPREAD);
+        let min = self
+            .max_without(validator)
+            .unwrap_or_else(U512::zero)
+            .saturating_sub(MAX_SPREAD);
         if self.0.len() == 1 {
             return Err(Error::CannotUnbondLastValidator);
         }
@@ -119,13 +121,16 @@ impl Stakes {
             .or_insert(*amount);
     }
 
-    // Mateusz: Why is there `validate_bonding` but there's no `validate_unbonding`?
-    // `bond` always succeeds (I guess because it's called only in case `validate_bonding` succeeds,
-    // but `unbond` can return an error. Maybe we should consider being consistent here.
     /// Returns an error if bonding the specified amount is not allowed.
     pub fn validate_bonding(&self, validator: &PublicKey, amount: &U512) -> Result<(), Error> {
-        let max = self.min_without(validator).saturating_add(MAX_SPREAD);
-        let min = self.max_without(validator).saturating_sub(MAX_SPREAD);
+        let max = self
+            .min_without(validator)
+            .unwrap_or(U512::MAX)
+            .saturating_add(MAX_SPREAD);
+        let min = self
+            .max_without(validator)
+            .unwrap_or_else(U512::zero)
+            .saturating_sub(MAX_SPREAD);
         let stake = self.0.get(validator).map(|s| s + amount).unwrap_or(*amount);
         if stake > max || stake < min {
             return Err(Error::SpreadTooHigh);
@@ -138,30 +143,23 @@ impl Stakes {
     }
 
     /// Returns the minimum stake of the _other_ validators.
-    fn min_without(&self, validator: &PublicKey) -> U512 {
+    fn min_without(&self, validator: &PublicKey) -> Option<U512> {
         self.0
             .iter()
             .filter(|(v, _)| *v != validator)
             .map(|(_, s)| s)
             .min()
             .cloned()
-            .unwrap_or(U512::MAX)
     }
 
     /// Returns the maximum stake of the _other_ validators.
-    fn max_without(&self, validator: &PublicKey) -> U512 {
+    fn max_without(&self, validator: &PublicKey) -> Option<U512> {
         self.0
             .iter()
             .filter(|(v, _)| *v != validator)
             .map(|(_, s)| s)
             .max()
             .cloned()
-            .unwrap_or_else(U512::zero) // Mateusz: This is a bit unclear to me,
-                                        // if `validator` is the only one in the set,
-                                        // this function returns U512::zero.
-                                        // I understand that this may be useful for code that uses
-                                        // this returned value but maybe it would be better
-                                        // to return `Option<U512>` and to the special handling on the call side?
     }
 
     /// Returns the total stakes.
