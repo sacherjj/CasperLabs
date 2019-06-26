@@ -54,13 +54,13 @@ pub enum Error {
     InvalidAccess {
         required: AccessRights,
     },
-    ForgedReference(Key),
+    ForgedReference(URef),
     ArgIndexOutOfBounds(usize),
     URefNotFound(String),
     FunctionNotFound(String),
     ParityWasm(ParityWasmError),
     GasLimit,
-    Ret(Vec<Key>),
+    Ret(Vec<URef>),
     Rng(rand::Error),
     ResolverError(ResolverError),
     InvalidNonce {
@@ -360,7 +360,7 @@ where
             .map_err(Error::Interpreter)
             .and_then(|x| {
                 let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
-                let urefs = self.context.deserialize_keys(&urefs_bytes)?;
+                let urefs = self.context.deserialize_urefs(&urefs_bytes)?;
                 Ok((x, urefs))
             });
         match mem_get {
@@ -1195,7 +1195,7 @@ where
 {
     let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
 
-    let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
+    let known_urefs = extract_access_rights_from_keys(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
 
     let mut runtime = Runtime {
@@ -1235,7 +1235,7 @@ where
                     Error::Ret(ref ret_urefs) => {
                         //insert extra urefs returned from call
                         let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
-                            vec_key_rights_to_map(ret_urefs.clone());
+                            extract_access_rights_from_urefs(ret_urefs.clone());
                         current_runtime.context.add_urefs(ret_urefs_map);
                         return Ok(runtime.result);
                     }
@@ -1252,8 +1252,28 @@ where
     }
 }
 
-/// Groups vector of keys by their address and accumulates access rights per key.
-pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
+/// Groups a collection of urefs by their addresses and accumulates access rights per key
+pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
+    input: I,
+) -> HashMap<URefAddr, HashSet<AccessRights>> {
+    input
+        .into_iter()
+        .map(|uref: URef| (uref.addr(), uref.access_rights()))
+        .group_by(|(key, _)| *key)
+        .into_iter()
+        .map(|(key, group)| {
+            (
+                key,
+                group
+                    .filter_map(|(_, x)| x)
+                    .collect::<HashSet<AccessRights>>(),
+            )
+        })
+        .collect()
+}
+
+/// Groups a collection of keys by their address and accumulates access rights per key.
+pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
     input: I,
 ) -> HashMap<URefAddr, HashSet<AccessRights>> {
     input
@@ -1412,7 +1432,7 @@ impl Executor<Module> for WasmiExecutor {
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
-            vec_key_rights_to_map(uref_lookup_local.values().cloned());
+            extract_access_rights_from_keys(uref_lookup_local.values().cloned());
         let account_bytes = acct_key.as_account().unwrap();
         let rng = create_rng(account_bytes, nonce);
         let gas_counter = 0u64;
