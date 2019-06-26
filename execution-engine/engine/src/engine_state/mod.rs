@@ -1,9 +1,3 @@
-pub mod error;
-pub mod execution_effect;
-pub mod execution_result;
-pub mod op;
-pub mod utils;
-
 use std::cell::RefCell;
 use std::collections::btree_map::BTreeMap;
 use std::collections::HashMap;
@@ -14,25 +8,31 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use rand::RngCore;
 
+use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::uref::{AccessRights, URef};
+use common::value::{Contract, U512, Value};
 use common::value::account::{BlockTime, PurseId};
-use common::value::{Contract, Value, U512};
-use shared::init;
-use shared::newtypes::{Blake2bHash, CorrelationId};
-use shared::transform::{Transform, TypeMismatch};
-use storage::global_state::{CommitResult, History};
-use wasm_prep::wasm_costs::WasmCosts;
-use wasm_prep::Preprocessor;
-
-use self::error::{Error, RootNotFound};
-use self::execution_result::ExecutionResult;
-use common::bytesrepr::ToBytes;
 use engine_state::execution_effect::ExecutionEffect;
 use engine_state::op::Op;
 use engine_state::utils::WasmiBytes;
 use execution::{self, Executor};
+use shared::init;
+use shared::newtypes::{Blake2bHash, CorrelationId};
+use shared::transform::{Transform, TypeMismatch};
+use storage::global_state::{CommitResult, History};
 use tracking_copy::TrackingCopy;
+use wasm_prep::Preprocessor;
+use wasm_prep::wasm_costs::WasmCosts;
+
+use self::error::{Error, RootNotFound};
+use self::execution_result::ExecutionResult;
+
+pub mod error;
+pub mod execution_effect;
+pub mod execution_result;
+pub mod op;
+pub mod utils;
 
 pub struct EngineState<H> {
     // Tracks the "state" of the blockchain (or is an interface to it).
@@ -228,11 +228,11 @@ where
         _proof_of_stake_code_bytes: &[u8],
         protocol_version: u64,
     ) -> Result<GenesisResult, Error> {
-        let mint_code_bytes = WasmiBytes::new(mint_code_bytes, WasmCosts::free())?;
+        let mint_code = WasmiBytes::new(mint_code_bytes, WasmCosts::free())?;
         let effects = create_genesis_effects(
             genesis_account_addr,
             initial_tokens,
-            mint_code_bytes,
+            mint_code,
             protocol_version,
         )?;
         let mut state_guard = self.state.lock();
@@ -323,14 +323,13 @@ mod tests {
     use common::bytesrepr::ToBytes;
     use common::key::Key;
     use common::uref::{AccessRights, URef};
-    use common::value::{Contract, Value, U512};
+    use common::value::{Contract, U512, Value};
+    use engine_state::create_genesis_effects;
+    use engine_state::utils::WasmiBytes;
     use execution;
     use shared::test_utils;
     use shared::transform::Transform;
     use wasm_prep::wasm_costs::WasmCosts;
-
-    use engine_state::create_genesis_effects;
-    use engine_state::utils::WasmiBytes;
 
     const GENESIS_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
     const PROTOCOL_VERSION: u64 = 1;
