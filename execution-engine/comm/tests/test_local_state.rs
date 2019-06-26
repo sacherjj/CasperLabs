@@ -21,12 +21,9 @@ use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::value::Value;
 use execution_engine::engine_state::EngineState;
-use shared::init::mocked_account;
-use shared::newtypes::CorrelationId;
 use shared::transform::Transform;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
-use test_support::MOCKED_ACCOUNT_ADDRESS;
 use test_support::{create_exec_request, create_genesis_request};
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
@@ -45,10 +42,7 @@ pub struct WasmTestBuilder {
 
 impl Default for WasmTestBuilder {
     fn default() -> WasmTestBuilder {
-        let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
-        let correlation_id = CorrelationId::new();
-        let global_state =
-            InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
+        let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, false);
         WasmTestBuilder {
             genesis_addr: [0; 32],
