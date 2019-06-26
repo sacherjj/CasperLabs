@@ -265,7 +265,7 @@ class GrpcGossipServiceSpec
         "only allow them up to the limit" in {
           val maxParallelBlockDownloads = 2
           forAll { (block: Block) =>
-            runTestUnsafe(TestData.fromBlock(block), timeout = 10.seconds) {
+            runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
               TestEnvironment(testDataRef, maxParallelBlockDownloads = maxParallelBlockDownloads)
                 .use { stub =>
                   val parallelNow = new AtomicInteger(0)
