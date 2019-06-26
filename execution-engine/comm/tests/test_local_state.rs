@@ -32,44 +32,56 @@ use test_support::{create_exec_request, create_genesis_request};
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 
 /// Builder for simple WASM test
-#[derive(Default)]
 pub struct WasmTestBuilder {
     genesis_addr: [u8; 32],
-    wasm_file: String,
     exec_response: Option<ExecResponse>,
+    genesis_hash: Option<Vec<u8>>,
+    post_state_hash: Option<Vec<u8>>,
+    correlation_id: CorrelationId,
+    engine_state: EngineState<InMemoryGlobalState>,
+    mocked_account: Vec<(Key, Value)>,
+    /// Cached transform maps after subsequent successful runs
+    /// i.e. transforms[0] is for first run() call etc.
+    transforms: Vec<HashMap<common::key::Key, Transform>>,
+}
+
+impl Default for WasmTestBuilder {
+    fn default() -> WasmTestBuilder {
+        let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
+        let correlation_id = CorrelationId::new();
+        let global_state =
+            InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
+        let engine_state = EngineState::new(global_state, false);
+        WasmTestBuilder {
+            genesis_addr: [0; 32],
+            exec_response: None,
+            genesis_hash: None,
+            post_state_hash: None,
+            correlation_id,
+            engine_state,
+            mocked_account,
+            transforms: Vec::new(),
+        }
+    }
 }
 
 impl WasmTestBuilder {
-    pub fn new<T: Into<String>>(wasm_file: T) -> WasmTestBuilder {
-        WasmTestBuilder {
-            genesis_addr: [0; 32],
-            wasm_file: wasm_file.into(),
-            exec_response: None,
-        }
-    }
     /// Sets a genesis address
     pub fn with_genesis_addr(&mut self, genesis_addr: [u8; 32]) -> &mut WasmTestBuilder {
         self.genesis_addr = genesis_addr;
         self
     }
 
-    /// Runs genesis and after that runs actual WASM contract and expects
-    /// transformations to happen at the end of execution.
-    pub fn run(&mut self) -> &mut WasmTestBuilder {
-        let correlation_id = CorrelationId::new();
-        let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
-        let global_state =
-            InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-        let engine_state = EngineState::new(global_state, false);
-
+    pub fn run_genesis(&mut self) -> &mut WasmTestBuilder {
         let (genesis_request, _contracts) = create_genesis_request(self.genesis_addr);
 
-        let genesis_response = engine_state
+        let genesis_response = self
+            .engine_state
             .run_genesis(RequestOptions::new(), genesis_request)
             .wait_drop_metadata()
             .unwrap();
 
-        let state_handle = engine_state.state();
+        let state_handle = self.engine_state.state();
 
         let state_root_hash = {
             let state_handle_guard = state_handle.lock();
@@ -78,30 +90,69 @@ impl WasmTestBuilder {
             root_hash
         };
 
-        let genesis_hash = genesis_response.get_success().get_poststate_hash();
+        let genesis_hash = genesis_response.get_success().get_poststate_hash().to_vec();
+        assert_eq!(state_root_hash.to_vec(), genesis_hash);
+        self.genesis_hash = Some(genesis_hash.clone());
+        // This value will change between subsequent contract executions
+        self.post_state_hash = Some(genesis_hash);
+        self
+    }
 
-        let post_state_hash = genesis_hash.to_vec();
+    /// Runs a contract and after that runs actual WASM contract and expects
+    /// transformations to happen at the end of execution.
+    pub fn exec(&mut self, wasm_file: &str) -> &mut WasmTestBuilder {
+        let exec_request = create_exec_request(
+            self.genesis_addr,
+            &wasm_file,
+            self.post_state_hash
+                .as_ref()
+                .expect("Should have post state hash"),
+        );
 
-        assert_eq!(state_root_hash.to_vec(), post_state_hash);
-        let exec_request =
-            create_exec_request(self.genesis_addr, &self.wasm_file, &post_state_hash);
-
-        let exec_response = engine_state
+        let exec_response = self
+            .engine_state
             .exec(RequestOptions::new(), exec_request)
             .wait_drop_metadata()
             .expect("should exec");
 
-        // Verify transforms
         self.exec_response = Some(exec_response.clone());
         self
     }
 
-    /// Expects a successful run and returns transformations
-    pub fn expect_success(&self) -> HashMap<common::key::Key, Transform> {
+    /// Runs a commit request, expects a successful response, and
+    /// overwrites existing cached post state hash with a new one.
+    pub fn commit(&mut self) -> &mut WasmTestBuilder {
+        let commit_request = test_support::create_commit_request(
+            self.genesis_hash
+                .as_ref()
+                .expect("Should have genesis hash"),
+            self.transforms
+                .last()
+                .as_ref()
+                .expect("Should have transform effects"),
+        );
+
+        let commit_response = self
+            .engine_state
+            .commit(RequestOptions::new(), commit_request)
+            .wait_drop_metadata()
+            .expect("Should have commit response");
+        if !commit_response.has_success() {
+            panic!(
+                "Expected commit success but received a failure instead: {:?}",
+                commit_response
+            );
+        }
+        self.post_state_hash = Some(commit_response.get_success().get_poststate_hash().to_vec());
+        self
+    }
+
+    /// Expects a successful run and caches transformations
+    pub fn expect_success(&mut self) -> &mut WasmTestBuilder {
         // Check first result, as only first result is interesting for a simple test
         let exec_response = self
             .exec_response
-            .as_ref()
+            .clone()
             .expect("Expected to be called after run()");
         let deploy_result = exec_response
             .get_success()
@@ -120,24 +171,50 @@ impl WasmTestBuilder {
             .get_transform_map()
             .try_into()
             .expect("should convert");
-        commit_transforms.value()
+        let transforms = commit_transforms.value();
+        // Cache transformations
+        self.transforms.push(transforms);
+        self
+    }
+
+    /// Gets the transform map that's cached between runs
+    pub fn get_transforms(&self) -> Vec<HashMap<common::key::Key, Transform>> {
+        self.transforms.clone()
     }
 }
 
 #[ignore]
 #[test]
 fn should_run_local_state_contract() {
-    let transforms = WasmTestBuilder::new("local_state.wasm")
+    // This test runs a contract that's after every call extends the same key with more data
+    let transforms = WasmTestBuilder::default()
         .with_genesis_addr(GENESIS_ADDR)
-        .run()
-        .expect_success();
+        .run_genesis()
+        .exec("local_state.wasm")
+        .expect_success()
+        .commit()
+        .exec("local_state.wasm")
+        .expect_success()
+        .commit()
+        .get_transforms();
 
     let expected_local_key = Key::local(GENESIS_ADDR, &[66u8; 32].to_bytes().unwrap());
 
     assert_eq!(
         transforms
+            .get(0)
+            .expect("Should have at least one transform")
             .get(&expected_local_key)
             .expect("Should have expected local key"),
         &Transform::Write(Value::String(String::from("Hello, world!")))
+    );
+
+    assert_eq!(
+        transforms
+            .get(1)
+            .expect("Should have at least two transform")
+            .get(&expected_local_key)
+            .expect("Should have expected local key"),
+        &Transform::Write(Value::String(String::from("Hello, world! Hello, world!")))
     );
 }
