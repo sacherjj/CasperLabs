@@ -14,7 +14,7 @@ use std::convert::TryInto;
 
 use grpc::RequestOptions;
 
-use casperlabs_engine_grpc_server::engine_server::ipc::{ExecResponse, ExecutionEffect};
+use casperlabs_engine_grpc_server::engine_server::ipc::ExecResponse;
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use casperlabs_engine_grpc_server::engine_server::mappings::CommitTransforms;
 use common::bytesrepr::ToBytes;
@@ -85,9 +85,7 @@ impl WasmTestBuilder {
 
         let state_root_hash = {
             let state_handle_guard = state_handle.lock();
-            let root_hash = state_handle_guard.root_hash;
-
-            root_hash
+            state_handle_guard.root_hash
         };
 
         let genesis_hash = genesis_response.get_success().get_poststate_hash().to_vec();
