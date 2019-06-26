@@ -2,12 +2,12 @@ package io.casperlabs.comm.discovery
 
 import scala.concurrent.duration._
 import scala.util.Random
-import cats._
 import cats.implicits._
+import io.casperlabs.catscontrib.MonadThrowable
 import org.scalatest._
 import io.casperlabs.comm.discovery.NodeUtils._
 
-abstract class KademliaServiceSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
+abstract class KademliaServiceSpec[F[_]: MonadThrowable: cats.effect.Timer, E <: Environment]
     extends KademliaServiceRuntime[F, E]
     with WordSpecLike
     with Matchers {
