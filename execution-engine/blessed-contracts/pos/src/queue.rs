@@ -1,14 +1,12 @@
 use alloc::vec::Vec;
 use core::convert::TryFrom;
-use core::mem;
 
 use cl_std::bytesrepr::{self, FromBytes, ToBytes};
 use cl_std::contract_api;
-use cl_std::value::{account::PublicKey, U512, Value};
-use cl_std::value::account::BlockTime;
+use cl_std::value::account::{BlockTime, PublicKey};
+use cl_std::value::{Value, U512};
 
 use crate::error::Error;
-use crate::Timestamp;
 
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
@@ -21,12 +19,12 @@ pub struct QueueEntry {
     /// The amount by which to change the stakes.
     pub amount: U512,
     /// The timestamp when the request was made.
-    pub timestamp: Timestamp,
+    pub timestamp: BlockTime,
 }
 
 impl QueueEntry {
     /// Creates a new `QueueEntry` with the current block's timestamp.
-    fn new(validator: PublicKey, amount: U512, timestamp: Timestamp) -> QueueEntry {
+    fn new(validator: PublicKey, amount: U512, timestamp: BlockTime) -> QueueEntry {
         QueueEntry {
             validator,
             amount,
@@ -96,14 +94,18 @@ impl QueueProvider for QueueLocal {
     }
 }
 
+/// A queue of bonding or unbonding requests, sorted by timestamp in ascending order.
 pub struct Queue(pub Vec<QueueEntry>);
 
 impl Queue {
+    /// Pushes a new entry to the end of the queue.
+    ///
+    /// Returns an error if the validator already has a request in the queue.
     pub fn push(
         &mut self,
         validator: PublicKey,
         amount: U512,
-        timestamp: Timestamp,
+        timestamp: BlockTime,
     ) -> Result<(), Error> {
         if self.0.iter().any(|entry| entry.validator == validator) {
             return Err(Error::MultipleRequests);
@@ -112,9 +114,13 @@ impl Queue {
         Ok(())
     }
 
-    pub fn pop_older_than(&mut self, timestamp: Timestamp) -> Vec<QueueEntry> {
-        let (older_than, mut rest) = self.0.iter().partition(|entry| entry.timestamp < timestamp);
-        mem::swap(&mut self.0, &mut rest);
+    /// Returns all queue entries at least as old as the specified timestamp.
+    pub fn pop_due(&mut self, timestamp: BlockTime) -> Vec<QueueEntry> {
+        let (older_than, rest) = self
+            .0
+            .iter()
+            .partition(|entry| entry.timestamp <= timestamp);
+        self.0 = rest;
         older_than
     }
 }

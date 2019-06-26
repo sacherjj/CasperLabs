@@ -73,10 +73,11 @@ impl StakesProvider for ContractStakes {
 pub struct Stakes(pub BTreeMap<PublicKey, U512>);
 
 impl Stakes {
-    /// Removes `amount` from the validator's stakes. If they have been slashed, it can happen that
-    /// they don't have enough stakes anymore. The actual number is returned.
+    /// If `maybe_amount` is `None`, removes all the validator's stakes, otherwise subtracts the
+    /// given amount. If the stakes are lower than the specified amount, it also subtracts all the
+    /// stakes.
     ///
-    /// Returns an error if
+    /// Returns the amount that was actually subtracted from the stakes, or an error if
     /// * unbonding the specified amount is not allowed,
     /// * tries to unbond last validator,
     /// * validator was not bonded.
@@ -104,9 +105,9 @@ impl Stakes {
                 return Ok(amount);
             }
         }
-        // If the the amount is less or equal to the stake, remove the validator.
+        // If the the amount is greater or equal to the stake, remove the validator.
         let stake = self.0.remove(validator).ok_or(Error::NotBonded)?;
-        let max_decrease = MAX_DECREASE.min(self.sum() * MAX_REL_DECREASE);
+        let max_decrease = MAX_DECREASE.min(self.sum() * MAX_REL_DECREASE / 1_000_000);
         if stake > min.saturating_add(MAX_DECREASE) && stake > max_decrease {
             return Err(Error::UnbondTooLarge);
         }
@@ -135,7 +136,7 @@ impl Stakes {
         if stake > max || stake < min {
             return Err(Error::SpreadTooHigh);
         }
-        let max_increase = MAX_INCREASE.min(self.sum() * MAX_REL_INCREASE);
+        let max_increase = MAX_INCREASE.min(self.sum() * MAX_REL_INCREASE / 1_000_000);
         if stake > min.saturating_add(MAX_INCREASE) && *amount > max_increase {
             return Err(Error::BondTooLarge);
         }

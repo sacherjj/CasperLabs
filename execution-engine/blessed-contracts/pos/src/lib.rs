@@ -10,21 +10,16 @@ mod stakes;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use cl_std::contract_api::{self, pointers::UPointer};
+use cl_std::contract_api;
 use cl_std::uref::URef;
-use cl_std::value::account::BlockTime;
-use cl_std::value::{account::PublicKey, U512};
+use cl_std::value::account::{BlockTime, PublicKey, PurseId};
+use cl_std::value::U512;
 
 use crate::error::Error;
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
 use crate::stakes::{ContractStakes, StakesProvider};
 
-/// The purse used to pay the stakes.
-type PurseId = UPointer<()>;
-/// A timestamp of a block or bonding/unbonding request.
-type Timestamp = BlockTime;
-
-/// The time from a bonding request until bonding becomes effective.
+/// The time from a bonding request until the bond becomes effective and part of the stake.
 const BOND_DELAY: u64 = 0;
 /// The time from an unbonding request until the stakes are paid out.
 const UNBOND_DELAY: u64 = 0;
@@ -47,11 +42,10 @@ const MAX_REL_DECREASE: u64 = 100_000;
 
 /// Enqueues the deploy's creator for becoming a validator. The bond `amount` is paid from the
 /// purse `source`.
-// TODO: The validator should be the sender of the deploy, not an argument.
 fn bond<Q: QueueProvider, S: StakesProvider>(
     amount: U512,
     validator: PublicKey,
-    timestamp: Timestamp,
+    timestamp: BlockTime,
 ) -> Result<(), Error> {
     let mut queue = Q::read_bonding();
     if queue.0.len() >= MAX_BOND_LEN {
@@ -59,7 +53,7 @@ fn bond<Q: QueueProvider, S: StakesProvider>(
     }
 
     let mut stakes = S::read().ok_or(Error::InvalidContractState)?;
-    // Simulate applying all earlier bonds.
+    // Simulate applying all earlier bonds. The modified stakes are not written.
     for entry in &queue.0 {
         stakes.bond(&entry.validator, &entry.amount);
     }
@@ -76,7 +70,7 @@ fn bond<Q: QueueProvider, S: StakesProvider>(
 fn unbond<Q: QueueProvider, S: StakesProvider>(
     maybe_amount: Option<U512>,
     validator: PublicKey,
-    timestamp: Timestamp,
+    timestamp: BlockTime,
 ) -> Result<(), Error> {
     let mut queue = Q::read_unbonding();
     if queue.0.len() >= MAX_UNBOND_LEN {
@@ -86,8 +80,8 @@ fn unbond<Q: QueueProvider, S: StakesProvider>(
     let mut stakes = S::read().ok_or(Error::InvalidContractState)?;
     let payout = stakes.unbond(&validator, maybe_amount)?;
     S::write(&stakes);
-    // Make sure the destination is valid and the amount can be paid. The actual payment will be
-    // made later, after the unbonding delay.
+    // TODO: Make sure the destination is valid and the amount can be paid. The actual payment will
+    // be made later, after the unbonding delay.
     // contract_api::transfer_dry_run(POS_PURSE, dest, amount)?;
     queue.push(validator, payout, timestamp)?;
     Q::write_unbonding(&queue);
@@ -95,21 +89,20 @@ fn unbond<Q: QueueProvider, S: StakesProvider>(
 }
 
 /// Removes all due requests from the queues and applies them.
-fn step<Q: QueueProvider, S: StakesProvider>(timestamp: Timestamp) -> Vec<QueueEntry> {
+fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Vec<QueueEntry> {
     let mut bonding_queue = Q::read_bonding();
     let mut unbonding_queue = Q::read_unbonding();
 
-    let bonds = bonding_queue.pop_older_than(BlockTime(timestamp.0.saturating_sub(BOND_DELAY)));
-    let unbonds =
-        unbonding_queue.pop_older_than(BlockTime(timestamp.0.saturating_sub(UNBOND_DELAY)));
+    let bonds = bonding_queue.pop_due(BlockTime(timestamp.0.saturating_sub(BOND_DELAY)));
+    let unbonds = unbonding_queue.pop_due(BlockTime(timestamp.0.saturating_sub(UNBOND_DELAY)));
 
     if !unbonds.is_empty() {
         Q::write_unbonding(&unbonding_queue);
     }
 
     if !bonds.is_empty() {
-        let mut stakes = S::read().unwrap();
         Q::write_bonding(&bonding_queue);
+        let mut stakes = S::read().unwrap();
         for entry in bonds {
             stakes.bond(&entry.validator, &entry.amount);
         }
@@ -130,7 +123,7 @@ pub extern "C" fn pos_ext() {
         "bond" => {
             let amount = contract_api::get_arg(1);
             let source_uref: URef = contract_api::get_arg(2);
-            let _source = PurseId::from_uref(source_uref).unwrap();
+            let _source = PurseId::new(source_uref);
             // Transfer `amount` from the `source` purse to PoS internal purse.
             // POS_PURSE is a constant, it is the PurseID of the proof-of-stake contract's own purse.
             // Mateusz: moved this outside of `bond` function so that it [bond] can be unit tested.
@@ -141,7 +134,7 @@ pub extern "C" fn pos_ext() {
             // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
             for _entry in unbonds {
-                // contract_api::transfer(POS_PURSE, entry.dest, entry.amount)?;
+                // contract_api::transfer(POS_PURSE, entry.validator, entry.amount)?;
             }
         }
         // Type of this method: `fn unbond(amount: U512)`
@@ -153,7 +146,7 @@ pub extern "C" fn pos_ext() {
             // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
             for _entry in unbonds {
-                // contract_api::transfer(POS_PURSE, entry.dest, entry.amount)?;
+                // contract_api::transfer(POS_PURSE, entry.validator, entry.amount)?;
             }
         }
         // Type of this method: `fn step()`
@@ -163,7 +156,7 @@ pub extern "C" fn pos_ext() {
 
             // Mateusz: Moved outside of `step` function so that it [step] can be unit tested.
             for _entry in unbonds {
-                // contract_api::transfer(POS_PURSE, entry.dest, entry.amount)?;
+                // contract_api::transfer(POS_PURSE, entry.validator, entry.amount)?;
             }
         }
         _ => {}
