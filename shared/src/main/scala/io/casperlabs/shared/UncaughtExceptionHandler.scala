@@ -14,6 +14,7 @@ object UncaughtExceptionHandler extends UncaughtExceptionReporter {
         // To flush logs
         Thread.sleep(1000)
         sys.exit(1)
+      case _ =>
     }
   }
 }
