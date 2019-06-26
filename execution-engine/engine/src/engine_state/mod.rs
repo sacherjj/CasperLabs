@@ -159,6 +159,8 @@ fn create_pos_effects(
     // Create (public_pos_uref, pos_contract_uref)
     let public_pos_address = create_uref(rng);
     let pos_uref = create_uref(rng);
+    // Create PoS purse.
+    let pos_purse = create_uref(rng);
 
     // Mateusz: Maybe we could make `public_pos_address` a Key::Hash after all.
     // Store public PoS address -> PoS contract relation
@@ -170,7 +172,7 @@ fn create_pos_effects(
     // Add genesis validators to PoS contract object.
     // For now, we are storing validators in `known_urefs` map of the PoS contract
     // in the form: key: "v_{validator_pk}_{validator_stake}", value: doesn't matter.
-    let known_urefs: BTreeMap<String, Key> = genesis_validators
+    let mut known_urefs: BTreeMap<String, Key> = genesis_validators
         .iter()
         .map(|(pub_key, balance)| {
             let key_bytes = pub_key.value();
@@ -185,6 +187,8 @@ fn create_pos_effects(
         })
         .map(|key| (key, Key::Hash([0u8; 32])))
         .collect();
+
+    known_urefs.insert("pos_purse".to_string(), Key::URef(pos_purse));
 
     // Create PoS Contract object.
     let contract = Contract::new(pos_code.into(), known_urefs, protocol_version);
@@ -705,6 +709,8 @@ mod tests {
 
         let pos_contract_uref = create_uref(&mut rng);
 
+        let pos_purse = create_uref(&mut rng);
+
         let pos_contract_bytes = get_pos_code_bytes();
 
         let pos_effects = {
@@ -736,7 +742,7 @@ mod tests {
         // rustc isn't smart enough to figure that out
         let pos_contract_raw: Vec<u8> = pos_contract_bytes.into();
         assert_eq!(pos_contract.bytes().to_vec(), pos_contract_raw);
-        assert_eq!(pos_contract.urefs_lookup().len(), 1);
+        assert_eq!(pos_contract.urefs_lookup().len(), 2); // 1 for bonded validator, 1 for PoS purse.
 
         let validator_name: String = {
             let public_key_hex: String = addr_to_hex(&genesis_validator_public_key.value());
@@ -747,5 +753,8 @@ mod tests {
         let bonded_validator = pos_contract.urefs_lookup().contains_key(&validator_name);
 
         assert!(bonded_validator);
+
+        assert_eq!(pos_contract.urefs_lookup().get("pos_purse"), Some(&Key::URef(pos_purse)));
     }
+
 }
