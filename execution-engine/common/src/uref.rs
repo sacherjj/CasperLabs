@@ -70,8 +70,31 @@ impl bytesrepr::FromBytes for AccessRights {
 }
 
 /// Represents an unforgeable reference
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct URef([u8; UREF_ADDR_SIZE], Option<AccessRights>);
+
+impl core::fmt::Display for URef {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let addr = self.addr();
+        let access_rights_o = self.access_rights();
+        if let Some(access_rights) = access_rights_o {
+            write!(
+                f,
+                "URef({}, {})",
+                super::key::addr_to_hex(&addr),
+                access_rights
+            )
+        } else {
+            write!(f, "URef({}, None)", super::key::addr_to_hex(&addr))
+        }
+    }
+}
+
+impl core::fmt::Debug for URef {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
 
 impl URef {
     /// Creates a [`URef`] from an id and access rights.
