@@ -6,11 +6,8 @@ extern crate storage;
 
 use grpc::RequestOptions;
 
-use casperlabs_engine_grpc_server::engine_server::ipc::{DeployCode, GenesisRequest};
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use execution_engine::engine_state::EngineState;
-use shared::test_utils;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
 #[allow(unused)]
