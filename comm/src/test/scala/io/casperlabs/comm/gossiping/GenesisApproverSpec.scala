@@ -109,10 +109,12 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
     }
 
     "keep polling until the transition can be made" in {
+      // We're going to keep adding approvals to the candidate from the test.
       @volatile var candidate = GenesisCandidate(genesis.blockHash)
 
       def addApproval() = Task.delay {
         val n = candidate.approvals.size
+        // The next validator signs it, so it's a valid signature.
         val a = genesis.getHeader.getState.bonds.drop(n).take(1).map { b =>
           Approval(b.validatorPublicKey).withSignature(sample(arbitrary[Signature]))
         }
@@ -122,20 +124,23 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
       TestFixture.fromBootstrap(
         remoteCandidate = () => Task.delay(candidate),
         environment = new MockEnvironment() {
+          // Need 2 signatures.
           override def canTransition(block: Block, signatories: Set[ByteString]): Boolean =
             signatories.size > 1
         },
         pollInterval = 10.millis
       ) { approver =>
-        val ops = List.fill(5) {
+        val ops = List.fill(4) {
           for {
-            _ <- Task.sleep(50.millis)
+            _ <- Task.sleep(200.millis)
+            // Ask the approver itself what it thinks the candidate is.
+            // We keep adding approvals here but it should top at approvals.
             r <- approver.getCandidate
             _ <- addApproval()
           } yield r.right.get.approvals.size
         }
         ops.sequence.map {
-          _ shouldBe List(0, 1, 2, 2, 2)
+          _ shouldBe List(0, 1, 2, 2)
         }
       }
     }
