@@ -3,10 +3,11 @@
 set -o errexit
 
 CONTRACTS=(
+    "create-purse-01"
+    "local-state"
     "mint-token"
     "transfer-to-account-01"
     "transfer-to-account-02"
-    "create-purse-01"
 )
 
 source "${HOME}/.cargo/env"

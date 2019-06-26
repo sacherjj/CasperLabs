@@ -107,6 +107,14 @@ mod ext_ffi {
             amount_ptr: *const u8,
             amount_size: usize,
         ) -> i32;
+        pub fn transfer_from_purse_to_purse(
+            source_ptr: *const u8,
+            source_size: usize,
+            target_ptr: *const u8,
+            target_size: usize,
+            amount_ptr: *const u8,
+            amount_size: usize,
+        ) -> i32;
     }
 }
 

@@ -33,10 +33,11 @@ pub enum FunctionIndex {
     ListKnownURefsIndex = 26,
     RemoveURef = 27,
     GetCallerIndex = 28,
-    CreatePurseIndex = 29,
-    TransferToAccountIndex = 30,
-    TransferFromPurseToAccountIndex = 31,
-    GetBlocktimeIndex = 32,
+    GetBlocktimeIndex = 29,
+    CreatePurseIndex = 30,
+    TransferToAccountIndex = 31,
+    TransferFromPurseToAccountIndex = 32,
+    TransferFromPurseToPurseIndex = 33,
 }
 
 impl Into<usize> for FunctionIndex {

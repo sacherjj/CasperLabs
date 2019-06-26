@@ -452,3 +452,54 @@ pub fn transfer_from_purse_to_account(
     .try_into()
     .expect("should parse result")
 }
+
+// TODO: Improve returned result type.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum PurseTransferResult {
+    TransferSuccessful,
+    TransferError,
+}
+
+impl TryFrom<i32> for PurseTransferResult {
+    type Error = ();
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(PurseTransferResult::TransferSuccessful),
+            1 => Ok(PurseTransferResult::TransferError),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<PurseTransferResult> for i32 {
+    fn from(result: PurseTransferResult) -> Self {
+        match result {
+            PurseTransferResult::TransferSuccessful => 0,
+            PurseTransferResult::TransferError => 1,
+        }
+    }
+}
+
+/// Transfers `amount` of tokens from `source` purse to `target` purse.
+pub fn transfer_from_purse_to_purse(
+    source: PurseId,
+    target: PurseId,
+    amount: U512,
+) -> PurseTransferResult {
+    let (source_ptr, source_size, _bytes) = to_ptr(&source);
+    let (target_ptr, target_size, _bytes) = to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    unsafe {
+        ext_ffi::transfer_from_purse_to_purse(
+            source_ptr,
+            source_size,
+            target_ptr,
+            target_size,
+            amount_ptr,
+            amount_size,
+        )
+    }
+    .try_into()
+    .expect("Should parse result")
+}

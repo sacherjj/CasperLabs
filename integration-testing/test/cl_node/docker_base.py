@@ -233,8 +233,8 @@ class DockerBase:
                 self.disconnect_from_network(network_name)
             try:
                 self.container.remove(force=True, v=True)
-            except docker.errors.NotFound:
-                pass
+            except Exception as e:
+                logging.error(f'Error removing container {self.container_name}: {e}')
 
 
 class LoggingDockerBase(DockerBase):

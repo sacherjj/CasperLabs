@@ -30,7 +30,7 @@ use shared::transform::TypeMismatch;
 use storage::global_state::StateReader;
 
 use args::Args;
-use common::contract_api::TransferResult;
+use common::contract_api::{PurseTransferResult, TransferResult};
 use engine_state::execution_result::ExecutionResult;
 use execution::Error::{KeyNotFound, URefNotFound};
 use function_index::FunctionIndex;
@@ -612,10 +612,8 @@ where
 
     /// Calls the "create" method on the mint contract at the given mint contract key
     fn mint_create(&mut self, mint_contract_key: Key) -> Result<PurseId, Error> {
-        let amount: U512 = U512::from(0);
-
         let args_bytes = {
-            let args = ("create", amount);
+            let args = "create";
             ArgsParser::parse(&args).and_then(|args| args.to_bytes())?
         };
 
@@ -755,6 +753,41 @@ where
                 // If some other value exists, return an error
                 Err(Error::AccountNotFound(target_key))
             }
+        }
+    }
+
+    /// Transfers `amount` of tokens from `source` purse to `target` purse.
+    fn transfer_from_purse_to_purse(
+        &mut self,
+        source_ptr: u32,
+        source_size: u32,
+        target_ptr: u32,
+        target_size: u32,
+        amount_ptr: u32,
+        amount_size: u32,
+    ) -> Result<PurseTransferResult, Error> {
+        let source_purse: PurseId = {
+            let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
+            deserialize(&bytes).map_err(Error::BytesRepr)?
+        };
+
+        let target_purse: PurseId = {
+            let bytes = self.bytes_from_mem(target_ptr, target_size as usize)?;
+            deserialize(&bytes).map_err(Error::BytesRepr)?
+        };
+
+        let amount: U512 = {
+            let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
+            deserialize(&bytes).map_err(Error::BytesRepr)?
+        };
+
+        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+
+        if self.mint_transfer(mint_contract_key, source_purse, target_purse, amount)? {
+            Ok(PurseTransferResult::TransferSuccessful)
+        } else {
+            // TODO: Improve returned type (insufficient funds/access rights, non-existent purses)
+            Ok(PurseTransferResult::TransferError)
         }
     }
 }
@@ -1106,6 +1139,26 @@ where
                     deserialize(&bytes).map_err(Error::BytesRepr)?
                 };
                 let ret = self.transfer_from_purse_to_account(source_purse, public_key, amount)?;
+                Ok(Some(RuntimeValue::I32(ret.into())))
+            }
+
+            FunctionIndex::TransferFromPurseToPurseIndex => {
+                // args(0) = pointer to array of bytes in Wasm memory of a source purse
+                // args(1) = length of array of bytes in Wasm memory of a source purse
+                // args(2) = pointer to array of bytes in Wasm memory of a target purse
+                // args(3) = length of array of bytes in Wasm memory of a target purse
+                // args(4) = pointer to array of bytes in Wasm memory of an amount
+                // args(5) = length of array of bytes in Wasm memory of an amount
+                let (source_ptr, source_size, target_ptr, target_size, amount_ptr, amount_size) =
+                    Args::parse(args)?;
+                let ret = self.transfer_from_purse_to_purse(
+                    source_ptr,
+                    source_size,
+                    target_ptr,
+                    target_size,
+                    amount_ptr,
+                    amount_size,
+                )?;
                 Ok(Some(RuntimeValue::I32(ret.into())))
             }
         }
