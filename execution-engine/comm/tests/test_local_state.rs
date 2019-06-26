@@ -108,8 +108,22 @@ impl WasmTestBuilder {
             .exec(RequestOptions::new(), exec_request)
             .wait_drop_metadata()
             .expect("should exec");
-
-        self.exec_responses.push(exec_response);
+        self.exec_responses.push(exec_response.clone());
+        // Parse deploy results
+        let deploy_result = exec_response
+            .get_success()
+            .get_deploy_results()
+            .get(0)
+            .expect("Unable to get first deploy result");
+        let commit_transforms: CommitTransforms = deploy_result
+            .get_execution_result()
+            .get_effects()
+            .get_transform_map()
+            .try_into()
+            .expect("should convert");
+        let transforms = commit_transforms.value();
+        // Cache transformations
+        self.transforms.push(transforms);
         self
     }
 
@@ -160,15 +174,6 @@ impl WasmTestBuilder {
                 exec_response,
             );
         }
-        let commit_transforms: CommitTransforms = deploy_result
-            .get_execution_result()
-            .get_effects()
-            .get_transform_map()
-            .try_into()
-            .expect("should convert");
-        let transforms = commit_transforms.value();
-        // Cache transformations
-        self.transforms.push(transforms);
         self
     }
 
@@ -195,6 +200,7 @@ fn should_run_local_state_contract() {
 
     let expected_local_key = Key::local(GENESIS_ADDR, &[66u8; 32].to_bytes().unwrap());
 
+    assert_eq!(transforms.len(), 2);
     assert_eq!(
         transforms
             .get(0)
