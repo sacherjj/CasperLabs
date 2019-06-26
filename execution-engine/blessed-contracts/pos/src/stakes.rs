@@ -50,7 +50,7 @@ impl StakesProvider for ContractStakes {
                 let key_bytes = pub_key.value();
                 let mut hex_key = String::with_capacity(64);
                 for byte in &key_bytes[..32] {
-                    write!(hex_key, "{:02X}", byte).unwrap();
+                    write!(hex_key, "{:02x}", byte).unwrap();
                 }
                 let mut uref = String::new();
                 uref.write_fmt(format_args!("v_{}_{}", hex_key, balance))
