@@ -42,6 +42,12 @@ pub struct EngineState<H> {
     nonce_check: bool,
 }
 
+fn create_uref<R: RngCore>(rng: &mut R) -> URef {
+    let mut buff = [0u8; 32];
+    rng.fill_bytes(&mut buff);
+    URef::new(buff, AccessRights::READ_ADD_WRITE)
+}
+
 fn create_mint_effects(
     rng: &mut ChaChaRng,
     genesis_account_addr: [u8; 32],
@@ -53,17 +59,9 @@ fn create_mint_effects(
 
     // Create (public_uref, mint_contract_uref)
 
-    let public_uref = {
-        let mut addr = [0u8; 32];
-        rng.fill_bytes(&mut addr);
-        URef::new(addr, AccessRights::READ_ADD_WRITE)
-    };
+    let public_uref = create_uref(rng);
 
-    let mint_contract_uref = {
-        let mut addr = [0u8; 32];
-        rng.fill_bytes(&mut addr);
-        URef::new(addr, AccessRights::READ_ADD_WRITE)
-    };
+    let mint_contract_uref = create_uref(rng);
 
     // Store (public_uref, mint_contract_uref) in global state
 
@@ -72,11 +70,7 @@ fn create_mint_effects(
         Value::Key(Key::URef(mint_contract_uref)),
     );
 
-    let purse_id_uref = {
-        let mut addr = [0u8; 32];
-        rng.fill_bytes(&mut addr);
-        URef::new(addr, AccessRights::READ_ADD_WRITE)
-    };
+    let purse_id_uref = create_uref(rng);
 
     // Create genesis genesis_account
 
@@ -112,11 +106,7 @@ fn create_mint_effects(
         Key::local(seed, local_key_bytes)
     };
 
-    let balance_uref = {
-        let mut addr = [0u8; 32];
-        rng.fill_bytes(&mut addr);
-        URef::new(addr, AccessRights::READ_ADD_WRITE)
-    };
+    let balance_uref = create_uref(rng);
 
     let balance_uref_key = Key::URef(balance_uref);
 
@@ -346,11 +336,8 @@ mod tests {
     use std::collections::btree_map::BTreeMap;
     use std::collections::HashMap;
 
-    use rand::RngCore;
-
     use common::bytesrepr::ToBytes;
     use common::key::Key;
-    use common::uref::{AccessRights, URef};
     use common::value::{Contract, U512, Value};
     use engine_state::create_genesis_effects;
     use engine_state::utils::WasmiBytes;
@@ -358,6 +345,8 @@ mod tests {
     use shared::test_utils;
     use shared::transform::Transform;
     use wasm_prep::wasm_costs::WasmCosts;
+
+    use super::create_uref;
 
     const GENESIS_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
     const PROTOCOL_VERSION: u64 = 1;
@@ -453,11 +442,7 @@ mod tests {
 
         let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
-        let public_uref = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            URef::new(addr, AccessRights::READ_ADD_WRITE)
-        };
+        let public_uref = create_uref(&mut rng);
 
         let public_uref_key = Key::URef(public_uref);
 
@@ -471,16 +456,13 @@ mod tests {
         let actual = extract_transform_key(transforms, &public_uref_key)
             .expect("transform was not a write of a key");
 
-        let mint_contract_uref_key = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            Key::URef(URef::new(addr, AccessRights::READ_ADD_WRITE))
-        };
+        let mint_contract_uref_key = create_uref(&mut rng);
 
         // the value under the outer mint_contract_uref should be a key value pointing at
         // the current contract bytes
         assert_eq!(
-            actual, mint_contract_uref_key,
+            actual,
+            Key::URef(mint_contract_uref_key),
             "invalid mint contract indirection"
         );
     }
@@ -489,12 +471,9 @@ mod tests {
     fn create_genesis_effects_stores_mint_contract_code_at_mint_contract_uref() {
         let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
-        let mint_contract_uref = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            rng.fill_bytes(&mut addr);
-            URef::new(addr, AccessRights::READ_ADD_WRITE)
-        };
+        let _public_uref = create_uref(&mut rng);
+
+        let mint_contract_uref = create_uref(&mut rng);
 
         // this is passing as currently designed, but see bug: EE-380
         let mint_contract_uref_key = Key::URef(mint_contract_uref);
@@ -506,13 +485,10 @@ mod tests {
 
         let mint_code_bytes = get_mint_code_bytes();
 
+        let _purse_id_uref = create_uref(&mut rng);
+
         // this is passing as currently designed, but see bug: EE-380
-        let balance_uref = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            rng.fill_bytes(&mut addr);
-            URef::new(addr, AccessRights::READ_ADD_WRITE)
-        };
+        let balance_uref = create_uref(&mut rng);
 
         let balance_uref_key = Key::URef(balance_uref);
 
@@ -536,19 +512,11 @@ mod tests {
     fn create_genesis_effects_balance_uref_at_purse_id() {
         let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
-        // this is passing as currently designed, but see bug: EE-380
-        let mint_contract_uref = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            rng.fill_bytes(&mut addr);
-            URef::new(addr, AccessRights::READ)
-        };
+        // Ignoring first URef, it's "public uref".
+        let _ = create_uref(&mut rng);
+        let mint_contract_uref = create_uref(&mut rng);
 
-        let purse_id_uref = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            URef::new(addr, AccessRights::READ_ADD_WRITE)
-        };
+        let purse_id_uref = create_uref(&mut rng);
 
         let purse_id_local_key = {
             let seed = mint_contract_uref.addr();
@@ -557,11 +525,7 @@ mod tests {
             Key::local(seed, local_key_bytes)
         };
 
-        let balance_uref = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            URef::new(addr, AccessRights::READ_ADD_WRITE)
-        };
+        let balance_uref = create_uref(&mut rng);
 
         let transforms = get_genesis_transforms();
 
@@ -586,19 +550,10 @@ mod tests {
     fn create_genesis_effects_balance_at_balance_uref() {
         let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
 
-        // this is passing as currently designed, but see bug: EE-380
-        let mint_contract_uref = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            rng.fill_bytes(&mut addr);
-            URef::new(addr, AccessRights::READ)
-        };
+        let _public_uref = create_uref(&mut rng);
+        let mint_contract_uref = create_uref(&mut rng);
 
-        let purse_id_uref = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            URef::new(addr, AccessRights::READ_ADD_WRITE)
-        };
+        let purse_id_uref = create_uref(&mut rng);
 
         let purse_id_local_key = {
             let seed = mint_contract_uref.addr();
@@ -607,11 +562,7 @@ mod tests {
             Key::local(seed, local_key_bytes)
         };
 
-        let balance_uref = {
-            let mut addr = [0u8; 32];
-            rng.fill_bytes(&mut addr);
-            URef::new(addr, AccessRights::READ_ADD_WRITE)
-        };
+        let balance_uref = create_uref(&mut rng);
 
         let transforms = get_genesis_transforms();
 
