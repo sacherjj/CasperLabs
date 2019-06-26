@@ -9,6 +9,11 @@ message DeployCode {
   bytes args = 2; // ABI-encoded arguments
 }
 
+message Bond {
+    bytes validator_public_key = 1;
+    io.casperlabs.casper.consensus.state.BigInt stake = 2;
+}
+
 message Deploy {
     // Public key of the account which is the context of the execution.
     bytes address = 1; // length 32 bytes
@@ -243,7 +248,8 @@ message GenesisRequest {
     uint64 timestamp = 3;
     DeployCode mint_code = 4;
     DeployCode proof_of_stake_code = 5;
-    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 6;
+    repeated Bond genesis_validators = 6;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 7;
 }
 
 message GenesisResult {

@@ -12,7 +12,7 @@ use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::uref::{AccessRights, URef};
 use common::value::{Contract, U512, Value};
-use common::value::account::{BlockTime, PurseId};
+use common::value::account::{BlockTime, PublicKey, PurseId};
 use engine_state::execution_effect::ExecutionEffect;
 use engine_state::op::Op;
 use engine_state::utils::WasmiBytes;
@@ -41,10 +41,13 @@ pub struct EngineState<H> {
     nonce_check: bool,
 }
 
+// TODO: Post devnet, make genesis creation regular contract execution.
 pub fn create_genesis_effects(
     genesis_account_addr: [u8; 32],
     initial_tokens: U512,
     mint_code_bytes: WasmiBytes,
+    _pos_code_bytes: WasmiBytes,
+    _genesis_validators: Vec<(PublicKey, U512)>,
     protocol_version: u64,
 ) -> Result<ExecutionEffect, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
@@ -225,14 +228,19 @@ where
         genesis_account_addr: [u8; 32],
         initial_tokens: U512,
         mint_code_bytes: &[u8],
-        _proof_of_stake_code_bytes: &[u8],
+        proof_of_stake_code_bytes: &[u8],
+        genesis_validators: Vec<(PublicKey, U512)>,
         protocol_version: u64,
     ) -> Result<GenesisResult, Error> {
         let mint_code = WasmiBytes::new(mint_code_bytes, WasmCosts::free())?;
+        let pos_code = WasmiBytes::new(proof_of_stake_code_bytes, WasmCosts::free())?;
+
         let effects = create_genesis_effects(
             genesis_account_addr,
             initial_tokens,
             mint_code,
+            pos_code,
+            genesis_validators,
             protocol_version,
         )?;
         let mut state_guard = self.state.lock();
@@ -345,15 +353,24 @@ mod tests {
         WasmiBytes::new(raw_bytes.as_slice(), WasmCosts::free()).expect("should create wasmi bytes")
     }
 
+    fn get_pos_code_bytes() -> WasmiBytes {
+        let raw_bytes = test_utils::create_empty_wasm_module_bytes();
+        WasmiBytes::new(raw_bytes.as_slice(), WasmCosts::free()).expect("should create wasmi bytes")
+    }
+
     fn get_genesis_transforms() -> HashMap<Key, Transform> {
         let initial_tokens = get_initial_tokens(INITIAL_BALANCE);
 
         let mint_code_bytes = get_mint_code_bytes();
+        let pos_code_bytes = get_pos_code_bytes();
+        let genesis_validators = Vec::new();
 
         create_genesis_effects(
             GENESIS_ACCOUNT_ADDR,
             initial_tokens,
             mint_code_bytes,
+            pos_code_bytes,
+            genesis_validators,
             PROTOCOL_VERSION,
         )
         .expect("should create effects")

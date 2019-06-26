@@ -1,8 +1,3 @@
-pub mod ipc;
-pub mod ipc_grpc;
-pub mod mappings;
-pub mod state;
-
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::ErrorKind;
@@ -10,22 +5,27 @@ use std::marker::{Send, Sync};
 use std::time::Instant;
 
 use common::key::Key;
+use common::value::account::{BlockTime, PublicKey};
 use common::value::U512;
+use execution_engine::engine_state::{EngineState, GenesisResult};
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::execution_result::ExecutionResult;
-use execution_engine::engine_state::{EngineState, GenesisResult};
 use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
 use shared::logging;
 use shared::logging::{log_duration, log_info};
 use shared::newtypes::{Blake2bHash, CorrelationId};
 use storage::global_state::History;
-use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
+use wasm_prep::wasm_costs::WasmCosts;
 
 use self::ipc_grpc::ExecutionEngineService;
 use self::mappings::*;
-use common::value::account::BlockTime;
+
+pub mod ipc;
+pub mod ipc_grpc;
+pub mod mappings;
+pub mod state;
 
 const EXPECTED_PUBLIC_KEY_LENGTH: usize = 32;
 
@@ -363,6 +363,24 @@ where
 
         let proof_of_stake_code_bytes = genesis_request.get_proof_of_stake_code().get_code();
 
+        let genesis_validators = genesis_request
+            .get_genesis_validators()
+            .to_vec()
+            .iter()
+            .map(|bond| {
+                // TODO: Extract parsing of slice into [u8; 32] into helper function.
+                let pk: PublicKey = {
+                    let address = bond.get_validator_public_key();
+                    let mut buff = [0u8; 32];
+                    buff.copy_from_slice(&address);
+                    PublicKey::new(buff)
+                };
+                let bond: U512 = bond.get_stake().try_into().unwrap();
+
+                (pk, bond)
+            })
+            .collect();
+
         let protocol_version = genesis_request.get_protocol_version().value;
 
         let genesis_response = match self.commit_genesis(
@@ -371,6 +389,7 @@ where
             initial_tokens,
             mint_code_bytes,
             proof_of_stake_code_bytes,
+            genesis_validators,
             protocol_version,
         ) {
             Ok(GenesisResult::Success {
