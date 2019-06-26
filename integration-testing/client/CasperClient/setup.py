@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
 from setuptools import setup
+from os import path
 
-with open("README.md", "r") as fh:
+here = path.abspath(path.dirname(__file__))
+
+with open(path.join(here, "README.md"),  encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
@@ -13,15 +16,17 @@ setup(
     description='Python Client for interacting with a CasperLabs Node',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    author='CasperLabs',
+    include_package_data=True,
+    keywords='casperlabs blockchain ethereum smart-contracts',
+    author='CasperLabs LLC',
     license='CasperLabs Open Source License (COSL)',
     classifiers=[
         'Development Status :: 3 - Alpha',
-        'Intended Audience :: Developers',
-        'Programming Language :: Python 3.6',
-        'Programming Language :: Python 3.7',
-        'Programming Language:: Python:: 3:: Only',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3 :: Only',
         'Operating System :: OS Independent',
+        'Intended Audience :: Developers',
     ],
     python_requires='>=3.6.0',
     project_urls={
