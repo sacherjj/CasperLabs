@@ -12,6 +12,7 @@ from setuptools import setup
 from os import path
 from os.path import basename, dirname, join
 
+from setuptools.command.develop import develop as DevelopCommand
 from setuptools.command.install import install as InstallCommand
 from setuptools.command.test import test as TestCommand
 from distutils.spawn import find_executable
@@ -133,19 +134,35 @@ class CInstall(InstallCommand):
         super(CInstall, self).run()
 
 
+class CDevelop(DevelopCommand):
+    def run(self):
+        run_codegen()
+        super(CDevelop, self).run()
+
+
 class CTest(TestCommand):
     def run(self):
         run_codegen()
         super(CTest, self).run()
+
+
 setup(
     name='casperlabs_client',
     version='0.3.1',
     packages=['casper_client', 'casper_client.proto'],
     tests_require=['pytest', 'in-place==0.4.0', 'pytest-runner', 'grpcio-tools>=1.20'],
-    setup_requires=['pytest-runner', 'grpcio-tools>=1.20', 'in-place==0.4.0'],
-    install_requires=['grpcio>=1.20', 'pyblake2==1.1.2', 'ed25519==1.4'],
+    setup_requires=['grpcio-tools>=1.20',
+                    'in-place==0.4.0',
+                    'grpcio>=1.20'],
+    install_requires=['pytest-runner',
+                      'grpcio-tools>=1.20',
+                      'in-place==0.4.0',
+                      'grpcio>=1.20',
+                      'pyblake2==1.1.2',
+                      'ed25519==1.4'],
     cmdclass={
         'install': CInstall,
+        'develop': CDevelop,
         'test': CTest
     },
     description='Python Client for interacting with a CasperLabs Node',
