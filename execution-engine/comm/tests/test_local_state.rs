@@ -9,11 +9,6 @@ extern crate storage;
 #[allow(dead_code)]
 mod test_support;
 
-use std::collections::HashMap;
-use std::convert::TryInto;
-
-use grpc::RequestOptions;
-
 use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::value::Value;
