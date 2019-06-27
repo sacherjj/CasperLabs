@@ -8,13 +8,12 @@ import shutil
 from glob import glob
 from pathlib import Path
 from shutil import copyfile
-from setuptools import setup
+from setuptools import setup, find_packages
 from os import path
 from os.path import basename, dirname, join
 
 from setuptools.command.develop import develop as DevelopCommand
 from setuptools.command.install import install as InstallCommand
-from setuptools.command.test import test as TestCommand
 from distutils.spawn import find_executable
 
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
@@ -131,39 +130,29 @@ with open(path.join(here, "README.md"),  encoding="utf-8") as fh:
 class CInstall(InstallCommand):
     def run(self):
         run_codegen()
-        super(CInstall, self).run()
+        # This is workaround for a bug in setuptools
+        self.do_egg_install()
 
 
 class CDevelop(DevelopCommand):
     def run(self):
         run_codegen()
-        super(CDevelop, self).run()
-
-
-class CTest(TestCommand):
-    def run(self):
-        run_codegen()
-        super(CTest, self).run()
+        super().run()
 
 
 setup(
     name='casperlabs_client',
     version='0.3.1',
-    packages=['casper_client', 'casper_client.proto'],
-    tests_require=['pytest', 'in-place==0.4.0', 'pytest-runner', 'grpcio-tools>=1.20'],
+    packages=find_packages(exclude=['tests']),
     setup_requires=['grpcio-tools>=1.20',
                     'in-place==0.4.0',
                     'grpcio>=1.20'],
-    install_requires=['pytest-runner',
-                      'grpcio-tools>=1.20',
-                      'in-place==0.4.0',
-                      'grpcio>=1.20',
+    install_requires=['grpcio>=1.20',
                       'pyblake2==1.1.2',
                       'ed25519==1.4'],
     cmdclass={
         'install': CInstall,
         'develop': CDevelop,
-        'test': CTest
     },
     description='Python Client for interacting with a CasperLabs Node',
     long_description=long_description,
@@ -173,6 +162,7 @@ setup(
     author='CasperLabs LLC',
     author_email='testing@casperlabs.io',
     license='CasperLabs Open Source License (COSL)',
+    zip_safe=False,
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Programming Language :: Python :: 3.6',
