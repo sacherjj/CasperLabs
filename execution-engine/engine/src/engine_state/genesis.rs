@@ -28,6 +28,11 @@ fn create_uref<R: RngCore>(rng: &mut R) -> URef {
     URef::new(buff, AccessRights::READ_ADD_WRITE)
 }
 
+fn create_local_key<T: ToBytes>(seed: [u8; 32], key: T) -> Result<Key, common::bytesrepr::Error> {
+    let local_key_bytes = key.to_bytes()?;
+    Ok(Key::local(seed, &local_key_bytes))
+}
+
 fn create_mint_effects(
     rng: &mut ChaChaRng,
     genesis_account_addr: [u8; 32],
@@ -80,12 +85,7 @@ fn create_mint_effects(
 
     // Create (purse_id_local_key, balance_uref) (for mint-local state)
 
-    let purse_id_local_key = {
-        let seed = mint_contract_uref.addr();
-        let local_key = purse_id_uref.addr();
-        let local_key_bytes = &local_key.to_bytes()?;
-        Key::local(seed, local_key_bytes)
-    };
+    let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())?;
 
     let balance_uref = create_uref(rng);
 
@@ -99,12 +99,7 @@ fn create_mint_effects(
     let pos_balance_uref = create_uref(rng);
     let pos_balance_uref_key = Key::URef(pos_balance_uref);
 
-    let pos_purse_local_key = {
-        let seed = mint_contract_uref.addr();
-        let local_key = pos_purse.addr();
-        let local_key_bytes = &local_key.to_bytes()?;
-        Key::local(seed, local_key_bytes)
-    };
+    let pos_purse_local_key = create_local_key(mint_contract_uref.addr(), pos_purse.addr())?;
 
     tmp.insert(pos_purse_local_key, Value::Key(pos_balance_uref_key));
 
@@ -494,13 +489,11 @@ mod tests {
 
         let purse_id_uref = create_uref(&mut rng);
 
-        let purse_id_local_key = {
-            let seed = mint_contract_uref.addr();
-            let local_key = purse_id_uref.addr();
-            let local_key_bytes = &local_key.to_bytes().expect("should serialize");
-            Key::local(seed, local_key_bytes)
-        };
+        let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())
+            .expect("Should create local key.");
 
+        let pos_purse_local_key = create_local_key(mint_contract_uref.addr(), pos_purse.addr())
+            .expect("Should create local key.");
         let balance_uref = create_uref(&mut rng);
 
         let transforms = get_genesis_transforms();
@@ -536,12 +529,8 @@ mod tests {
 
         let purse_id_uref = create_uref(&mut rng);
 
-        let purse_id_local_key = {
-            let seed = mint_contract_uref.addr();
-            let local_key = purse_id_uref.addr();
-            let local_key_bytes = &local_key.to_bytes().expect("should serialize");
-            Key::local(seed, local_key_bytes)
-        };
+        let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())
+            .expect("Should create local key.");
 
         let balance_uref = create_uref(&mut rng);
 
