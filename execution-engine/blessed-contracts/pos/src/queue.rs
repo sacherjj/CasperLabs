@@ -1,12 +1,13 @@
 use alloc::vec::Vec;
 use core::convert::TryFrom;
+use core::result;
 
 use cl_std::bytesrepr::{self, FromBytes, ToBytes};
 use cl_std::contract_api;
 use cl_std::value::account::{BlockTime, PublicKey};
 use cl_std::value::{Value, U512};
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
@@ -34,7 +35,7 @@ impl QueueEntry {
 }
 
 impl FromBytes for QueueEntry {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+    fn from_bytes(bytes: &[u8]) -> result::Result<(Self, &[u8]), bytesrepr::Error> {
         let (validator, bytes) = PublicKey::from_bytes(bytes)?;
         let (amount, bytes) = U512::from_bytes(bytes)?;
         let (timestamp, bytes) = BlockTime::from_bytes(bytes)?;
@@ -48,7 +49,7 @@ impl FromBytes for QueueEntry {
 }
 
 impl ToBytes for QueueEntry {
-    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+    fn to_bytes(&self) -> result::Result<Vec<u8>, bytesrepr::Error> {
         Ok((self.validator.to_bytes()?.into_iter())
             .chain(self.amount.to_bytes()?)
             .chain(self.timestamp.to_bytes()?)
@@ -58,10 +59,10 @@ impl ToBytes for QueueEntry {
 
 pub trait QueueProvider {
     /// Reads bonding queue.
-    fn read_bonding() -> Queue;
+    fn read_bonding() -> Result<Queue>;
 
     /// Reads unbonding queue.
-    fn read_unbonding() -> Queue;
+    fn read_unbonding() -> Result<Queue>;
 
     /// Writes bonding queue.
     fn write_bonding(queue: &Queue);
@@ -74,13 +75,13 @@ pub struct QueueLocal;
 
 impl QueueProvider for QueueLocal {
     /// Reads bonding queue from the local state of the contract.
-    fn read_bonding() -> Queue {
-        contract_api::read_local(BONDING_KEY).unwrap()
+    fn read_bonding() -> Result<Queue> {
+        contract_api::read_local(BONDING_KEY).ok_or(Error::QueueNotFound)
     }
 
     /// Reads unbonding queue from the local state of the contract.
-    fn read_unbonding() -> Queue {
-        contract_api::read_local(UNBONDING_KEY).unwrap()
+    fn read_unbonding() -> Result<Queue> {
+        contract_api::read_local(UNBONDING_KEY).ok_or(Error::QueueNotFound)
     }
 
     /// Writes bonding queue to the local state of the contract.
@@ -101,12 +102,7 @@ impl Queue {
     /// Pushes a new entry to the end of the queue.
     ///
     /// Returns an error if the validator already has a request in the queue.
-    pub fn push(
-        &mut self,
-        validator: PublicKey,
-        amount: U512,
-        timestamp: BlockTime,
-    ) -> Result<(), Error> {
+    pub fn push(&mut self, validator: PublicKey, amount: U512, timestamp: BlockTime) -> Result<()> {
         if self.0.iter().any(|entry| entry.validator == validator) {
             return Err(Error::MultipleRequests);
         }
@@ -126,17 +122,17 @@ impl Queue {
 }
 
 impl TryFrom<Value> for Queue {
-    type Error = &'static str; // TODO: Error handling.
+    type Error = Error;
 
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
+    fn try_from(value: Value) -> Result<Self> {
         let bytes = match value {
             Value::ByteArray(bytes) => bytes,
-            _ => return Err("Queue must be represented as Value::ByteArray."),
+            _ => return Err(Error::QueueNotStoredAsByteArray),
         };
         let (queue, rest) =
-            Queue::from_bytes(&bytes).map_err(|_| "Failed to deserialize queue.")?;
+            Queue::from_bytes(&bytes).map_err(|_| Error::QueueDeserializationFailed)?;
         if !rest.is_empty() {
-            return Err("Failed to deserialize queue: surplus bytes.");
+            return Err(Error::QueueDeserializationExtraBytes);
         }
         Ok(queue)
     }
@@ -144,12 +140,12 @@ impl TryFrom<Value> for Queue {
 
 impl Into<Value> for &Queue {
     fn into(self) -> Value {
-        Value::ByteArray(self.to_bytes().unwrap())
+        Value::ByteArray(self.to_bytes().expect("Serialization cannot fail"))
     }
 }
 
 impl FromBytes for Queue {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+    fn from_bytes(bytes: &[u8]) -> result::Result<(Self, &[u8]), bytesrepr::Error> {
         let (len, mut bytes) = u64::from_bytes(bytes)?;
         let mut queue = Vec::new();
         for _ in 0..len {
@@ -162,7 +158,7 @@ impl FromBytes for Queue {
 }
 
 impl ToBytes for Queue {
-    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+    fn to_bytes(&self) -> result::Result<Vec<u8>, bytesrepr::Error> {
         let mut bytes = (self.0.len() as u64).to_bytes()?; // TODO: Allocate correct capacity.
         for entry in &self.0 {
             bytes.extend(entry.to_bytes()?);

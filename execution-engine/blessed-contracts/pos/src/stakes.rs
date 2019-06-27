@@ -6,12 +6,12 @@ use cl_std::contract_api;
 use cl_std::key::Key;
 use cl_std::value::{account::PublicKey, U512};
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 
 use super::{MAX_DECREASE, MAX_INCREASE, MAX_REL_DECREASE, MAX_REL_INCREASE, MAX_SPREAD};
 
 pub trait StakesProvider {
-    fn read() -> Option<Stakes>;
+    fn read() -> Result<Stakes>;
     fn write(stakes: &Stakes);
 }
 
@@ -19,28 +19,32 @@ pub struct ContractStakes;
 
 impl StakesProvider for ContractStakes {
     /// Reads the current stakes from the contract's known urefs.
-    fn read() -> Option<Stakes> {
+    fn read() -> Result<Stakes> {
         let mut stakes = BTreeMap::new();
         for (name, _) in contract_api::list_known_urefs() {
             let mut split_name = name.split('_');
             if Some("v") != split_name.next() {
                 continue;
             }
-            let hex_key = split_name.next()?;
+            let hex_key = split_name
+                .next()
+                .ok_or(Error::StakesKeyDeserializationFailed)?;
             let mut key_bytes = [0u8; 32];
             for i in 0..32 {
-                key_bytes[i] = u8::from_str_radix(&hex_key[2 * i..2 * (i + 1)], 16).ok()?;
+                key_bytes[i] = u8::from_str_radix(&hex_key[2 * i..2 * (i + 1)], 16)
+                    .map_err(|_| Error::StakesKeyDeserializationFailed)?;
             }
             let pub_key = PublicKey::new(key_bytes);
-            let balance_dec = split_name.next()?;
-            let balance = U512::from_dec_str(balance_dec).ok()?;
+            let balance = split_name
+                .next()
+                .and_then(|b| U512::from_dec_str(b).ok())
+                .ok_or(Error::StakesDeserializationFailed)?;
             stakes.insert(pub_key, balance);
         }
-        Some(Stakes(stakes))
+        Ok(Stakes(stakes))
     }
 
     /// Writes the current stakes to the contract's known urefs.
-    // TODO: Error handling
     fn write(stakes: &Stakes) {
         // Encode the stakes as a set of uref names.
         let mut new_urefs: BTreeSet<String> = stakes
@@ -50,11 +54,11 @@ impl StakesProvider for ContractStakes {
                 let key_bytes = pub_key.value();
                 let mut hex_key = String::with_capacity(64);
                 for byte in &key_bytes[..32] {
-                    write!(hex_key, "{:02x}", byte).unwrap();
+                    write!(hex_key, "{:02x}", byte).expect("Writing to a string cannot fail");
                 }
                 let mut uref = String::new();
                 uref.write_fmt(format_args!("v_{}_{}", hex_key, balance))
-                    .unwrap();
+                    .expect("Writing to a string cannot fail");
                 uref
             })
             .collect();
@@ -81,11 +85,7 @@ impl Stakes {
     /// * unbonding the specified amount is not allowed,
     /// * tries to unbond last validator,
     /// * validator was not bonded.
-    pub fn unbond(
-        &mut self,
-        validator: &PublicKey,
-        maybe_amount: Option<U512>,
-    ) -> Result<U512, Error> {
+    pub fn unbond(&mut self, validator: &PublicKey, maybe_amount: Option<U512>) -> Result<U512> {
         let min = self
             .max_without(validator)
             .unwrap_or_else(U512::zero)
@@ -123,7 +123,7 @@ impl Stakes {
     }
 
     /// Returns an error if bonding the specified amount is not allowed.
-    pub fn validate_bonding(&self, validator: &PublicKey, amount: &U512) -> Result<(), Error> {
+    pub fn validate_bonding(&self, validator: &PublicKey, amount: &U512) -> Result<()> {
         let max = self
             .min_without(validator)
             .unwrap_or(U512::MAX)

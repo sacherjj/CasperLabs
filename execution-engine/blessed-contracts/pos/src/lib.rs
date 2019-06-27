@@ -16,7 +16,7 @@ use cl_std::uref::URef;
 use cl_std::value::account::{BlockTime, PublicKey, PurseId};
 use cl_std::value::U512;
 
-use crate::error::Error;
+use crate::error::{Error, Result, ResultExt};
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
 use crate::stakes::{ContractStakes, StakesProvider};
 
@@ -51,13 +51,13 @@ fn bond<Q: QueueProvider, S: StakesProvider>(
     amount: U512,
     validator: PublicKey,
     timestamp: BlockTime,
-) -> Result<(), Error> {
-    let mut queue = Q::read_bonding();
+) -> Result<()> {
+    let mut queue = Q::read_bonding()?;
     if queue.0.len() >= MAX_BOND_LEN {
         return Err(Error::TooManyEventsInQueue);
     }
 
-    let mut stakes = S::read().ok_or(Error::InvalidContractState)?;
+    let mut stakes = S::read()?;
     // Simulate applying all earlier bonds. The modified stakes are not written.
     for entry in &queue.0 {
         stakes.bond(&entry.validator, &entry.amount);
@@ -76,13 +76,13 @@ fn unbond<Q: QueueProvider, S: StakesProvider>(
     maybe_amount: Option<U512>,
     validator: PublicKey,
     timestamp: BlockTime,
-) -> Result<(), Error> {
-    let mut queue = Q::read_unbonding();
+) -> Result<()> {
+    let mut queue = Q::read_unbonding()?;
     if queue.0.len() >= MAX_UNBOND_LEN {
         return Err(Error::TooManyEventsInQueue);
     }
 
-    let mut stakes = S::read().ok_or(Error::InvalidContractState)?;
+    let mut stakes = S::read()?;
     let payout = stakes.unbond(&validator, maybe_amount)?;
     S::write(&stakes);
     // TODO: Make sure the destination is valid and the amount can be paid. The actual payment will
@@ -94,9 +94,9 @@ fn unbond<Q: QueueProvider, S: StakesProvider>(
 }
 
 /// Removes all due requests from the queues and applies them.
-fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Vec<QueueEntry> {
-    let mut bonding_queue = Q::read_bonding();
-    let mut unbonding_queue = Q::read_unbonding();
+fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec<QueueEntry>> {
+    let mut bonding_queue = Q::read_bonding()?;
+    let mut unbonding_queue = Q::read_unbonding()?;
 
     let bonds = bonding_queue.pop_due(BlockTime(timestamp.0.saturating_sub(BOND_DELAY)));
     let unbonds = unbonding_queue.pop_due(BlockTime(timestamp.0.saturating_sub(UNBOND_DELAY)));
@@ -107,21 +107,20 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Vec<QueueE
 
     if !bonds.is_empty() {
         Q::write_bonding(&bonding_queue);
-        let mut stakes = S::read().unwrap();
+        let mut stakes = S::read()?;
         for entry in bonds {
             stakes.bond(&entry.validator, &entry.amount);
         }
         S::write(&stakes);
     }
 
-    unbonds
+    Ok(unbonds)
 }
 
 #[no_mangle]
 pub extern "C" fn pos_ext() {
     let method_name: String = contract_api::get_arg(0);
     let timestamp = contract_api::get_blocktime();
-    let validator = contract_api::get_caller().unwrap(); // TODO: Error handling.
     let pos_purse = match contract_api::get_uref(PURSE_KEY) {
         Key::URef(uref) => PurseId::new(uref),
         _ => panic!("PoS purse ID not found"),
@@ -130,6 +129,9 @@ pub extern "C" fn pos_ext() {
     match method_name.as_str() {
         // Type of this method: `fn bond(amount: U512, purse: URef)`
         "bond" => {
+            let validator = contract_api::get_caller()
+                .ok_or(Error::NoCaller)
+                .unwrap_or_revert();
             let amount = contract_api::get_arg(1);
             let source_uref: URef = contract_api::get_arg(2);
             let source = PurseId::new(source_uref);
@@ -138,13 +140,12 @@ pub extern "C" fn pos_ext() {
             if contract_api::PurseTransferResult::TransferError
                 == contract_api::transfer_from_purse_to_purse(source, pos_purse, amount)
             {
-                panic!("Failed to transfer unbonded funds.");
+                contract_api::revert(Error::BondTransferFailed.into());
             }
-            bond::<QueueLocal, ContractStakes>(amount, validator, timestamp)
-                .expect("Failed to bond");
+            bond::<QueueLocal, ContractStakes>(amount, validator, timestamp).unwrap_or_revert();
 
             // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
-            let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
+            let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
             for entry in unbonds {
                 if contract_api::TransferResult::TransferError
                     == contract_api::transfer_from_purse_to_account(
@@ -153,18 +154,21 @@ pub extern "C" fn pos_ext() {
                         entry.amount,
                     )
                 {
-                    panic!("Failed to transfer unbonded funds.");
+                    contract_api::revert(Error::UnbondTransferFailed.into());
                 }
             }
         }
         // Type of this method: `fn unbond(amount: U512)`
         "unbond" => {
+            let validator = contract_api::get_caller()
+                .ok_or(Error::NoCaller)
+                .unwrap_or_revert();
             let maybe_amount = contract_api::get_arg(1);
             unbond::<QueueLocal, ContractStakes>(maybe_amount, validator, timestamp)
-                .expect("Failed to unbond");
+                .unwrap_or_revert();
 
             // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
-            let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
+            let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
             for entry in unbonds {
                 if contract_api::TransferResult::TransferError
                     == contract_api::transfer_from_purse_to_account(
@@ -173,20 +177,20 @@ pub extern "C" fn pos_ext() {
                         entry.amount,
                     )
                 {
-                    panic!("Failed to transfer unbonded funds.");
+                    contract_api::revert(Error::UnbondTransferFailed.into());
                 }
             }
         }
         // Type of this method: `fn step()`
         "step" => {
             // This is called by the system in every block.
-            let unbonds = step::<QueueLocal, ContractStakes>(timestamp);
+            let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
 
             // Mateusz: Moved outside of `step` function so that it [step] can be unit tested.
             for entry in unbonds {
-                // TODO: We currently ignore `TransferResult::TransferError`s here, since we can't recover from
-                // them and we shouldn't retry indefinitely. That would mean the contract just
-                // keeps the money forever, though.
+                // TODO: We currently ignore `TransferResult::TransferError`s here, since we can't
+                // recover from them and we shouldn't retry indefinitely. That would mean the
+                // contract just keeps the money forever, though.
                 contract_api::transfer_from_purse_to_account(
                     pos_purse,
                     entry.validator,
