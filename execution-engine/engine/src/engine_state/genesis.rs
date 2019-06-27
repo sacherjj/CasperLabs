@@ -420,31 +420,47 @@ mod tests {
     }
 
     #[test]
-    fn create_genesis_effects_stores_mint_contract_uref_at_public_uref() {
+    fn create_genesis_effects_stores_contracts_uref_at_public_uref() {
         let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
 
-        let public_uref = rng.get_uref(MINT_PUBLIC_ADDRESS);
+        let mint_public_address = rng.get_uref(MINT_PUBLIC_ADDRESS);
+        let pos_public_address = rng.get_uref(POS_PUBLIC_ADDRESS);
 
-        let public_uref_key = Key::URef(public_uref);
+        let mint_public_uref_key = Key::URef(mint_public_address);
+        let pos_public_uref_key = Key::URef(pos_public_address);
 
         let transforms = get_genesis_transforms();
 
         assert!(
-            transforms.contains_key(&public_uref_key.normalize()),
-            "should have expected public_uref"
+            transforms.contains_key(&mint_public_uref_key.normalize()),
+            "Should have expected Mint public_uref"
         );
 
-        let actual = extract_transform_key(&transforms, &public_uref_key)
-            .expect("transform was not a write of a key");
+        assert!(
+            transforms.contains_key(&pos_public_uref_key.normalize()),
+            "Should have expected PoS key."
+        );
 
-        let mint_contract_uref_key = rng.get_uref(MINT_PRIVATE_ADDRESS);
+        let actual_mint_private_address = extract_transform_key(&transforms, &mint_public_uref_key)
+            .expect("transform was not a write of a key");
+        let actual_pos_private_address = extract_transform_key(&transforms, &pos_public_uref_key)
+            .expect("Transforms did not contain PoS public uref Write.");
+
+        let mint_private_address = rng.get_uref(MINT_PRIVATE_ADDRESS);
+        let pos_private_address = rng.get_uref(POS_PRIVATE_ADDRESS);
 
         // the value under the outer mint_contract_uref should be a key value pointing at
         // the current contract bytes
         assert_eq!(
-            actual,
-            Key::URef(mint_contract_uref_key),
+            actual_mint_private_address,
+            Key::URef(mint_private_address),
             "invalid mint contract indirection"
+        );
+
+        assert_eq!(
+            actual_pos_private_address,
+            Key::URef(pos_private_address),
+            "Invalid PoS contract indirection"
         );
     }
 
