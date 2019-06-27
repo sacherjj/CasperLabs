@@ -58,7 +58,7 @@ class GossipServiceCasperTestNode[F[_]](
       maybeMakeEE
     )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
-  implicit val safetyOracleEff: SafetyOracle[F] = new SafetyOracleInstancesImpl[F]
+  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
 
   //val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 

@@ -50,7 +50,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Sync: Log: Time: Metrics: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+class MultiParentCasperImpl[F[_]: Sync: Log: Time: Metrics: FinalityDetector: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -239,7 +239,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: Metrics: SafetyOracle: BlockS
       blockHash: BlockHash
   ): F[Boolean] =
     for {
-      faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
+      faultTolerance <- FinalityDetector[F].normalizedFaultTolerance(dag, blockHash)
       _ <- Log[F].info(
             s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance; threshold is $faultToleranceThreshold"
           )
@@ -674,7 +674,7 @@ object MultiParentCasperImpl {
       _ <- Metrics[F].incrementGauge("processed_deploys", 0)
     } yield ()
 
-  def create[F[_]: Sync: Log: Time: Metrics: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Cell[
+  def create[F[_]: Sync: Log: Time: Metrics: FinalityDetector: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Cell[
     ?[_],
     CasperState
   ]](

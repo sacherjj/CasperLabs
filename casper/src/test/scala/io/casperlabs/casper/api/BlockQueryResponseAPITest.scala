@@ -182,7 +182,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   private def effectsForSimpleCasperSetup(
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
-  ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
+  ): Task[(LogStub[Task], MultiParentCasperRef[Task], FinalityDetector[Task])] =
     for {
       _ <- blockDagStorage.insert(genesisBlock)
       _ <- blockDagStorage.insert(secondBlock)
@@ -201,13 +201,13 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new SafetyOracleInstancesImpl[Task]()(Sync[Task], logEff)
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
     } yield (logEff, casperRef, finalityDetectorEffect)
 
   private def emptyEffects(
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
-  ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
+  ): Task[(LogStub[Task], MultiParentCasperRef[Task], FinalityDetector[Task])] =
     for {
       casperEffect <- NoOpsCasperEffect(
                        HashMap[BlockHash, BlockMsgWithTransform](
@@ -224,6 +224,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new SafetyOracleInstancesImpl[Task]()(Sync[Task], logEff)
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
     } yield (logEff, casperRef, finalityDetectorEffect)
 }

@@ -6,7 +6,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.SafetyOracle.Committee
+import io.casperlabs.casper.FinalityDetector.Committee
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 
@@ -46,7 +46,7 @@ class CliqueOracleTest
         val v2Bond = Bond(v2, 1)
         val bonds  = Seq(v1Bond, v2Bond)
 
-        implicit val finalityDetectorEffect = new SafetyOracleInstancesImpl[Task]
+        implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
 
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
@@ -125,7 +125,7 @@ class CliqueOracleTest
           _                              = blockLevels(b8.blockHash).blockLevel shouldBe (2)
           _                              = validatorLevels(v1) shouldBe (2)
           result                         = validatorLevels(v2) shouldBe (1)
-          committee <- SafetyOracle[Task].findBestCommittee(
+          committee <- FinalityDetector[Task].findBestCommittee(
                         dag,
                         b1.blockHash,
                         Map(v1 -> 1, v2 -> 1)
@@ -145,7 +145,7 @@ class CliqueOracleTest
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-      implicit val finalityDetectorEffect = new SafetyOracleInstancesImpl[Task]
+      implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
@@ -193,14 +193,15 @@ class CliqueOracleTest
 
         dag <- blockDagStorage.getRepresentation
 
-        genesisFaultTolerance <- SafetyOracle[Task].normalizedFaultTolerance(dag, genesis.blockHash)
-        _                     = assert(genesisFaultTolerance === 0.5f +- 0.01f)
-        b2FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b2.blockHash)
-        _                     = assert(b2FaultTolerance === -1f / 12 +- 0.01f)
-        b3FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b3.blockHash)
-        _                     = assert(b3FaultTolerance === -0.5f +- 0.01f)
-        b4FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b4.blockHash)
-        result                = assert(b4FaultTolerance === -1f / 12 +- 0.01f)
+        genesisFaultTolerance <- FinalityDetector[Task]
+                                  .normalizedFaultTolerance(dag, genesis.blockHash)
+        _                = assert(genesisFaultTolerance === 0.5f +- 0.01f)
+        b2FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(dag, b2.blockHash)
+        _                = assert(b2FaultTolerance === -1f / 12 +- 0.01f)
+        b3FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(dag, b3.blockHash)
+        _                = assert(b3FaultTolerance === -0.5f +- 0.01f)
+        b4FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(dag, b4.blockHash)
+        result           = assert(b4FaultTolerance === -1f / 12 +- 0.01f)
       } yield result
   }
 }

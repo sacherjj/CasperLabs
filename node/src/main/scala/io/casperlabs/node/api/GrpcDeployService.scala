@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.SafetyOracle
+import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.protocol._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -26,7 +26,7 @@ object GrpcDeployService {
   def splitPath(path: String): Seq[String] =
     path.split("/").filter(_.nonEmpty)
 
-  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: TaskLike: ExecutionEngineService](
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: FinalityDetector: BlockStore: TaskLike: ExecutionEngineService](
       blockApiLock: Semaphore[F],
       ignoreDeploySignature: Boolean
   )(

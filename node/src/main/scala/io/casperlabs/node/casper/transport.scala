@@ -49,7 +49,7 @@ package object transport {
       logEff: Log[Effect],
       metrics: Metrics[Task],
       metricsEff: Metrics[Effect],
-      safetyOracle: SafetyOracle[Effect],
+      safetyOracle: FinalityDetector[Effect],
       blockStore: BlockStore[Effect],
       blockDagStorage: BlockDagStorage[Effect],
       connectionsCell: ConnectionsCell[Task],

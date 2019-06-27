@@ -110,7 +110,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
-    implicit val safetyOracle = new SafetyOracle[Task] {
+    implicit val safetyOracle = new FinalityDetector[Task] {
       override def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[Task],
           estimateBlockHash: BlockHash
@@ -120,7 +120,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           blockDag: BlockDagRepresentation[Task],
           candidateBlockHash: BlockHash,
           weights: Map[Validator, Long]
-      ): Task[Option[SafetyOracle.Committee]] = Task.pure(None)
+      ): Task[Option[FinalityDetector.Committee]] = Task.pure(None)
     }
   }
 

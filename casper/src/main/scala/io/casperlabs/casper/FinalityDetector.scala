@@ -7,7 +7,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.ProtoUtil._
-import io.casperlabs.casper.SafetyOracle.Committee
+import io.casperlabs.casper.FinalityDetector.Committee
 import io.casperlabs.casper.util.DagOperations.Key.blockMetadataKey
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.shared.Log
@@ -17,7 +17,7 @@ import io.casperlabs.shared.Log
  *
  * https://hackingresear.ch/cbc-inspector/
  */
-trait SafetyOracle[F[_]] {
+trait FinalityDetector[F[_]] {
 
   /**
     * The normalizedFaultTolerance must be greater than the fault tolerance threshold t in order
@@ -41,13 +41,13 @@ trait SafetyOracle[F[_]] {
   ): F[Option[Committee]]
 }
 
-object SafetyOracle {
-  def apply[F[_]](implicit ev: SafetyOracle[F]): SafetyOracle[F] = ev
+object FinalityDetector {
+  def apply[F[_]](implicit ev: FinalityDetector[F]): FinalityDetector[F] = ev
 
   case class Committee(validators: Set[Validator], bestQ: Long)
 }
 
-class SafetyOracleInstancesImpl[F[_]: Monad: Log] extends SafetyOracle[F] {
+class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F] {
 
   /**
     * To have a committee of half the total weight,

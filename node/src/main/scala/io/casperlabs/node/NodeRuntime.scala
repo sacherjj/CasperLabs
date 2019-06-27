@@ -180,7 +180,9 @@ class NodeRuntime private[node] (
                                                                             .of[Effect]
                                                                         )
 
-        implicit0(safetyOracle: SafetyOracle[Effect]) = new SafetyOracleInstancesImpl[Effect]()(
+        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorInstancesImpl[
+          Effect
+        ]()(
           Monad[Effect],
           logEff
         )

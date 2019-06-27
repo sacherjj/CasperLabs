@@ -80,7 +80,7 @@ class ManyValidatorsTest
       logEff                 = new LogStub[Task]
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new SafetyOracleInstancesImpl[Task]
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
       result <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                  MonadThrowable[Task],
                  casperRef,
