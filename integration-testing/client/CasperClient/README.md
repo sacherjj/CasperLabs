@@ -5,6 +5,11 @@ to CasperLabs node's gRPC Deploy API.
 
 It also provides command line interface with syntax compatible with the Scala client.
 
+## Installation
+
+You can install the `casperlabs-client` library with `pip install casperlabs-client` and then
+you can start using it in your programs.
+
 ## Typical usage of the API
 
 Instantiate `CasperClient` and issue a requests.
