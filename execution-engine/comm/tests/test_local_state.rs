@@ -36,18 +36,14 @@ fn should_run_local_state_contract() {
 
     assert_eq!(transforms.len(), 2);
     assert_eq!(
-        transforms
-            .get(0)
-            .expect("Should have at least one transform")
+        transforms[0]
             .get(&expected_local_key)
             .expect("Should have expected local key"),
         &Transform::Write(Value::String(String::from("Hello, world!")))
     );
 
     assert_eq!(
-        transforms
-            .get(1)
-            .expect("Should have at least two transform")
+        transforms[1]
             .get(&expected_local_key)
             .expect("Should have expected local key"),
         &Transform::Write(Value::String(String::from("Hello, world! Hello, world!")))

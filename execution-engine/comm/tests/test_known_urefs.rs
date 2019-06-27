@@ -33,7 +33,7 @@ fn should_run_known_urefs_contract() {
         .expect("Should have at least one transform");
     // Execution yields 3 transformations 2 of which are uref
     assert_eq!(transform.len(), 3);
-    let s = transform
+    let string_value = transform
         .iter()
         .filter_map(|(k, v)| {
             if let Transform::Write(Value::String(s)) = v {
@@ -45,7 +45,7 @@ fn should_run_known_urefs_contract() {
         })
         .nth(0)
         .expect("Should have write string");
-    assert_eq!(s, "Hello, world!");
+    assert_eq!(string_value, "Hello, world!");
 
     let u512_value = transform
         .iter()
@@ -62,9 +62,7 @@ fn should_run_known_urefs_contract() {
 
     assert_eq!(u512_value, &U512::from(123456789u64));
 
-    let account = transforms
-        .get(0)
-        .expect("Should have at least one transform")
+    let account = transform
         .get(&Key::Account(GENESIS_ADDR))
         .and_then(|transform| {
             if let Transform::Write(Value::Account(account)) = transform {
