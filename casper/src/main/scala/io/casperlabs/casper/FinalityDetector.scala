@@ -30,15 +30,6 @@ trait FinalityDetector[F[_]] {
       blockDag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash
   ): F[Float]
-
-  /*
-   * finding the best level 1 committee for a given candidate block
-   */
-  def findBestCommittee(
-      blockDag: BlockDagRepresentation[F],
-      candidateBlockHash: BlockHash,
-      weights: Map[Validator, Long]
-  ): F[Option[Committee]]
 }
 
 object FinalityDetector {
@@ -67,7 +58,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
           val totalWeight = weights.values.sum
           (2 * committee.bestQ - totalWeight) * 1.0f / (2 * totalWeight)
         })
-        .getOrElse(-0.5f)
+        .getOrElse(0f)
     } yield t
 
   def computeMainParentWeightMap(
@@ -339,6 +330,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
       }
   }
 
+  /* finding the best level 1 committee for a given candidate block */
   def findBestCommittee(
       blockDag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash,

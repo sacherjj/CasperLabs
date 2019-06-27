@@ -125,7 +125,7 @@ class CliqueOracleTest
           _                              = blockLevels(b8.blockHash).blockLevel shouldBe (2)
           _                              = validatorLevels(v1) shouldBe (2)
           result                         = validatorLevels(v2) shouldBe (1)
-          committee <- FinalityDetector[Task].findBestCommittee(
+          committee <- finalityDetectorEffect.findBestCommittee(
                         dag,
                         b1.blockHash,
                         Map(v1 -> 1, v2 -> 1)
@@ -199,7 +199,7 @@ class CliqueOracleTest
         b2FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(dag, b2.blockHash)
         _                = assert(b2FaultTolerance === -1f / 12 +- 0.01f)
         b3FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(dag, b3.blockHash)
-        _                = assert(b3FaultTolerance === -0.5f +- 0.01f)
+        _                = assert(b3FaultTolerance === 0f +- 0.01f)
         b4FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(dag, b4.blockHash)
         result           = assert(b4FaultTolerance === -1f / 12 +- 0.01f)
       } yield result
