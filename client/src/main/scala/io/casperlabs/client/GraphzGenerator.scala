@@ -158,6 +158,7 @@ object GraphzGenerator {
           parentsHashes.zipWithIndex
             .traverse {
               case (p, index) =>
+                // Bolding the edge to main parent
                 val style = if (index == 0) {
                   Some(Bold)
                 } else {
