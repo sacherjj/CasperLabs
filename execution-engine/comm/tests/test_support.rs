@@ -243,33 +243,36 @@ pub fn get_account(
 
 /// Builder for simple WASM test
 pub struct WasmTestBuilder {
-    genesis_addr: [u8; 32],
+    engine_state: EngineState<InMemoryGlobalState>,
     exec_responses: Vec<ExecResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
-    engine_state: EngineState<InMemoryGlobalState>,
     /// Cached transform maps after subsequent successful runs
     /// i.e. transforms[0] is for first run() call etc.
     transforms: Vec<HashMap<common::key::Key, Transform>>,
 }
 
+impl Default for WasmTestBuilder {
+    fn default() -> WasmTestBuilder {
+        Self::new()
+    }
+}
+
 impl WasmTestBuilder {
-    /// Creates a builder with an address
-    pub fn new(genesis_addr: [u8; 32]) -> WasmTestBuilder {
+    pub fn new() -> WasmTestBuilder {
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, false);
         WasmTestBuilder {
-            genesis_addr,
+            engine_state,
             exec_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
-            engine_state,
             transforms: Vec::new(),
         }
     }
 
-    pub fn run_genesis(&mut self) -> &mut WasmTestBuilder {
-        let (genesis_request, _contracts) = create_genesis_request(self.genesis_addr);
+    pub fn run_genesis(&mut self, genesis_addr: [u8; 32]) -> &mut WasmTestBuilder {
+        let (genesis_request, _contracts) = create_genesis_request(genesis_addr);
 
         let genesis_response = self
             .engine_state
