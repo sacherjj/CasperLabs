@@ -140,7 +140,7 @@ class CDevelop(DevelopCommand):
 
 setup(
     name='casperlabs_client',
-    version='0.3.1',
+    version='0.3.2',
     packages=find_packages(exclude=['tests']),
     setup_requires=['grpcio-tools>=1.20',
                     'in-place==0.4.0',
