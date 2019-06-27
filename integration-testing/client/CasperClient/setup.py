@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import sys
 import re
 import errno
 import urllib.request
@@ -13,11 +14,22 @@ from os.path import basename, dirname, join
 
 from setuptools.command.install import install as InstallCommand
 from setuptools.command.test import test as TestCommand
+from distutils.spawn import find_executable
 
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 PROTOBUF_DIR = f'{THIS_DIRECTORY}/../../../protobuf'
 PROTO_DIR = f'{THIS_DIRECTORY}/casper_client/proto'
 PACKAGE_DIR = f'{THIS_DIRECTORY}/casper_client'
+
+
+def proto_compiler_check():
+    proto_c = find_executable('protoc')
+    if proto_c is None:
+        sys.stderr.write(
+            "protoc is not installed. "
+            "Please install Protocol Buffers binary package for your Operating System.\n"
+        )
+        sys.exit(-1)
 
 
 def make_dirs(path):
@@ -94,6 +106,7 @@ def clean_up():
 
 
 def run_codegen():
+    proto_compiler_check()
     clean_up()
 
     collect_proto_files()
@@ -117,6 +130,7 @@ class CInstall(InstallCommand):
     def run(self):
         run_codegen()
         super(CInstall, self).run()
+
 
 class CTest(TestCommand):
     def run(self):
