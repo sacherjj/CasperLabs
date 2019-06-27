@@ -42,15 +42,20 @@ impl GenesisURefsSource {
         urefs_map.insert(MINT_PUBLIC_ADDRESS, create_uref(&mut chacha_rng));
         urefs_map.insert(MINT_PRIVATE_ADDRESS, create_uref(&mut chacha_rng));
         urefs_map.insert(GENESIS_ACCOUNT_PURSE, create_uref(&mut chacha_rng));
-        urefs_map.insert(MINT_GENESIS_ACCOUNT_BALANCE_UREF, create_uref(&mut chacha_rng));
+        urefs_map.insert(
+            MINT_GENESIS_ACCOUNT_BALANCE_UREF,
+            create_uref(&mut chacha_rng),
+        );
         urefs_map.insert(MINT_POS_BALANCE_UREF, create_uref(&mut chacha_rng));
 
         GenesisURefsSource(urefs_map)
     }
 
     pub fn get_uref(&self, label: &str) -> URef {
-        *self.0.get(label)
-            .expect(&format!("URef {} wasn't generated.", label))
+        *self
+            .0
+            .get(label)
+            .unwrap_or_else(|| panic!("URef {} wasn't generated.", label))
     }
 }
 
@@ -320,7 +325,11 @@ mod tests {
     use common::value::{Contract, U512, Value};
     use common::value::account::PublicKey;
     use engine_state::create_genesis_effects;
-    use engine_state::genesis::{GENESIS_ACCOUNT_PURSE, GenesisURefsSource, MINT_GENESIS_ACCOUNT_BALANCE_UREF, MINT_POS_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS, POS_PRIVATE_ADDRESS, POS_PUBLIC_ADDRESS};
+    use engine_state::genesis::{
+        GENESIS_ACCOUNT_PURSE, GenesisURefsSource, MINT_GENESIS_ACCOUNT_BALANCE_UREF,
+        MINT_POS_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS, POS_PRIVATE_ADDRESS,
+        POS_PUBLIC_ADDRESS,
+    };
     use engine_state::utils::WasmiBytes;
     use shared::test_utils;
     use shared::transform::Transform;
@@ -535,8 +544,9 @@ mod tests {
             "transforms should contain pos_purse_local_key"
         );
 
-        let mint_genesis_account_balance_uref = extract_transform_key(&transforms, &purse_id_local_key)
-            .expect("transform was not a write of a key");
+        let mint_genesis_account_balance_uref =
+            extract_transform_key(&transforms, &purse_id_local_key)
+                .expect("transform was not a write of a key");
 
         assert_eq!(
             mint_genesis_account_balance_uref,
@@ -547,7 +557,11 @@ mod tests {
         let mint_pos_balance_uref = extract_transform_key(&transforms, &pos_purse_local_key)
             .expect("Transform was not a write of a key.");
 
-        assert_eq!(mint_pos_balance_uref, Key::URef(expected_mint_pos_balance_uref), "create_genesis_effects should store PoS purse -> balance association.");
+        assert_eq!(
+            mint_pos_balance_uref,
+            Key::URef(expected_mint_pos_balance_uref),
+            "create_genesis_effects should store PoS purse -> balance association."
+        );
     }
 
     #[test]
@@ -559,11 +573,13 @@ mod tests {
         let genesis_account_purse = rng.get_uref(GENESIS_ACCOUNT_PURSE);
         let pos_purse = rng.get_uref(POS_PURSE);
 
-        let genesis_account_purse_id_local_key = create_local_key(mint_contract_uref.addr(), genesis_account_purse.addr())
-            .expect("Mint should create local key for genesis account purse.");
+        let genesis_account_purse_id_local_key =
+            create_local_key(mint_contract_uref.addr(), genesis_account_purse.addr())
+                .expect("Mint should create local key for genesis account purse.");
 
-        let pos_validators_balance_local_key = create_local_key(mint_contract_uref.addr(), pos_purse.addr())
-            .expect("Mint should create local key for PoS purse.");
+        let pos_validators_balance_local_key =
+            create_local_key(mint_contract_uref.addr(), pos_purse.addr())
+                .expect("Mint should create local key for PoS purse.");
 
         let genesis_account_balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
         let pos_balance_uref = rng.get_uref(MINT_POS_BALANCE_UREF);
@@ -583,18 +599,26 @@ mod tests {
         let genesis_account_balance_uref_key = Key::URef(genesis_account_balance_uref).normalize();
         let pos_balance_uref_key = Key::URef(pos_balance_uref).normalize();
 
-        let actual_genesis_account_balance = extract_transform_u512(&transforms, &genesis_account_balance_uref_key)
-            .expect("transform was not a write of a key");
+        let actual_genesis_account_balance =
+            extract_transform_u512(&transforms, &genesis_account_balance_uref_key)
+                .expect("transform was not a write of a key");
 
-        let actual_pos_validators_balance = extract_transform_u512(&transforms, &pos_balance_uref_key)
-            .expect("transform was not a write of a key");
+        let actual_pos_validators_balance =
+            extract_transform_u512(&transforms, &pos_balance_uref_key)
+                .expect("transform was not a write of a key");
 
         let initial_genesis_account_balance = get_initial_tokens(INITIAL_GENESIS_ACCOUNT_BALANCE);
         let initial_pos_validators_balance = get_initial_tokens(INITIAL_POS_VALIDATORS_BALANCE);
 
         // the value under the outer balance_uref_key should be a U512 value (the actual balance)
-        assert_eq!(actual_genesis_account_balance, initial_genesis_account_balance, "Invalid Genesis account balance");
-        assert_eq!(actual_pos_validators_balance, initial_pos_validators_balance, "Invalid PoS genesis validators' balance.");
+        assert_eq!(
+            actual_genesis_account_balance, initial_genesis_account_balance,
+            "Invalid Genesis account balance"
+        );
+        assert_eq!(
+            actual_pos_validators_balance, initial_pos_validators_balance,
+            "Invalid PoS genesis validators' balance."
+        );
     }
 
     #[test]
@@ -681,13 +705,8 @@ mod tests {
         let pos_contract_bytes = get_pos_code_bytes();
 
         let pos_effects = {
-            super::create_pos_effects(
-                &mut rng,
-                pos_contract_bytes.clone(),
-                genesis_validators,
-                1,
-            )
-            .expect("Creating PoS effects in test should not fail.")
+            super::create_pos_effects(&mut rng, pos_contract_bytes.clone(), genesis_validators, 1)
+                .expect("Creating PoS effects in test should not fail.")
         };
 
         assert_eq!(
