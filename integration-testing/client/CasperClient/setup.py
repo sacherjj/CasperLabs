@@ -92,6 +92,7 @@ def collect_proto_files():
 
     for file_name in Path(f"{PROTOBUF_DIR}/io/").glob('**/*.proto'):
         copyfile(file_name, f'{PROTO_DIR}/{basename(file_name)}')
+    print("Finished collecting files...")
 
 
 def clean_up():
@@ -140,8 +141,8 @@ setup(
     name='casperlabs_client',
     version='0.3.1',
     packages=['casper_client', 'casper_client.proto'],
-    tests_require=['pytest', 'in-place', 'pytest-runner', 'grpcio-tools>=1.20'],
-    setup_requires=['pytest-runner', 'grpcio-tools>=1.20', 'in-place'],
+    tests_require=['pytest', 'in-place==0.4.0', 'pytest-runner', 'grpcio-tools>=1.20'],
+    setup_requires=['pytest-runner', 'grpcio-tools>=1.20', 'in-place==0.4.0'],
     install_requires=['grpcio>=1.20', 'pyblake2==1.1.2', 'ed25519==1.4'],
     cmdclass={
         'install': CInstall,
