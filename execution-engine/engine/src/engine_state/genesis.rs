@@ -673,12 +673,13 @@ mod tests {
         let validator_b_name: String =
             pos_validator_key(genesis_validator_b_public_key, genesis_validator_b_stake);
 
-        assert!(pos_contract.urefs_lookup().contains_key(&validator_a_name));
-        assert!(pos_contract.urefs_lookup().contains_key(&validator_b_name));
+        assert!(pos_contract.urefs_lookup().contains_key(&validator_a_name), "create_pos_effects should correctly store genesis validators in PoS known_urefs_map.");
+        assert!(pos_contract.urefs_lookup().contains_key(&validator_b_name), "create_pos_effects should correctly store genesis validators in PoS known_urefs_map.");
 
         assert_eq!(
             pos_contract.urefs_lookup().get(POS_PURSE),
-            Some(&Key::URef(pos_purse))
+            Some(&Key::URef(pos_purse)),
+            "create_pos_effects should store POS_PURSE in PoS contract's known urefs map."
         );
     }
 
