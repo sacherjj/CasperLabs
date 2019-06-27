@@ -86,13 +86,13 @@ impl Stakes {
     /// * tries to unbond last validator,
     /// * validator was not bonded.
     pub fn unbond(&mut self, validator: &PublicKey, maybe_amount: Option<U512>) -> Result<U512> {
+        if self.0.len() == 1 {
+            return Err(Error::CannotUnbondLastValidator);
+        }
         let min = self
             .max_without(validator)
             .unwrap_or_else(U512::zero)
             .saturating_sub(MAX_SPREAD);
-        if self.0.len() == 1 {
-            return Err(Error::CannotUnbondLastValidator);
-        }
 
         if let Some(amount) = maybe_amount {
             // The minimum stake value to not violate the maximum spread.
