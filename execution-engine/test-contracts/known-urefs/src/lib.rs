@@ -17,14 +17,14 @@ pub extern "C" fn call() {
 
     // Add new urefs
     let hello_world_uref1: Key = new_uref(String::from("Hello, world!")).into();
-    let _ = add_uref("URef1", &hello_world_uref1);
+    add_uref("URef1", &hello_world_uref1);
     assert_eq!(list_known_urefs().len(), 3);
 
     // Verify if the uref is present
     assert!(has_uref("URef1"));
 
     let big_value_uref: Key = new_uref(U512::max_value()).into();
-    let _ = add_uref("URef2", &big_value_uref);
+    add_uref("URef2", &big_value_uref);
 
     assert_eq!(list_known_urefs().len(), 4);
 
@@ -63,9 +63,9 @@ pub extern "C" fn call() {
     assert_eq!(new_big_value, U512::zero());
 
     // I can overwrite some data under the pointer
-    write(big_value_uptr, U512::from(123456789u64));
+    write(big_value_uptr, U512::from(123_456_789u64));
     let new_value: U512 = read(big_value_uptr);
-    assert_eq!(new_value, U512::from(123456789u64));
+    assert_eq!(new_value, U512::from(123_456_789u64));
 
     // Try to remove non existing uref which shouldn't fail
     remove_uref("URef1");
