@@ -71,7 +71,7 @@ fn create_local_key<T: ToBytes>(seed: [u8; 32], key: T) -> Result<Key, common::b
 }
 
 fn create_mint_effects(
-    rng: &mut GenesisURefsSource,
+    rng: &GenesisURefsSource,
     genesis_account_addr: [u8; 32],
     initial_tokens: U512,
     mint_code_bytes: WasmiBytes,
@@ -179,7 +179,7 @@ fn create_mint_effects(
 }
 
 fn create_pos_effects(
-    rng: &mut GenesisURefsSource,
+    rng: &GenesisURefsSource,
     pos_code: WasmiBytes,
     genesis_validators: Vec<(PublicKey, U512)>,
     protocol_version: u64,
@@ -238,22 +238,18 @@ pub fn create_genesis_effects(
     genesis_validators: Vec<(PublicKey, U512)>,
     protocol_version: u64,
 ) -> Result<ExecutionEffect, execution::Error> {
-    let mut rng = GenesisURefsSource::new(genesis_account_addr, 0);
+    let rng = GenesisURefsSource::new(genesis_account_addr, 0);
 
     let genesis_validator_stakes: U512 = genesis_validators
         .iter()
         .map(|t| t.1)
         .fold(U512::zero(), |a, b| a + b);
 
-    let pos_effects = create_pos_effects(
-        &mut rng,
-        pos_code_bytes,
-        genesis_validators,
-        protocol_version,
-    )?;
+    let pos_effects =
+        create_pos_effects(&rng, pos_code_bytes, genesis_validators, protocol_version)?;
 
     let mint_effects = create_mint_effects(
-        &mut rng,
+        &rng,
         genesis_account_addr,
         initial_tokens,
         mint_code_bytes,
