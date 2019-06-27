@@ -253,26 +253,19 @@ pub struct WasmTestBuilder {
     transforms: Vec<HashMap<common::key::Key, Transform>>,
 }
 
-impl Default for WasmTestBuilder {
-    fn default() -> WasmTestBuilder {
+impl WasmTestBuilder {
+    /// Creates a builder with an address
+    pub fn new(genesis_addr: [u8; 32]) -> WasmTestBuilder {
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, false);
         WasmTestBuilder {
-            genesis_addr: [0; 32],
+            genesis_addr,
             exec_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
             engine_state,
             transforms: Vec::new(),
         }
-    }
-}
-
-impl WasmTestBuilder {
-    /// Sets a genesis address
-    pub fn with_genesis_addr(&mut self, genesis_addr: [u8; 32]) -> &mut WasmTestBuilder {
-        self.genesis_addr = genesis_addr;
-        self
     }
 
     pub fn run_genesis(&mut self) -> &mut WasmTestBuilder {
