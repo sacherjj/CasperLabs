@@ -292,7 +292,6 @@ mod tests {
     use std::collections::btree_map::BTreeMap;
     use std::collections::HashMap;
 
-    use common::bytesrepr::ToBytes;
     use common::key::{addr_to_hex, Key};
     use common::uref::URef;
     use common::value::{Contract, U512, Value};
@@ -304,7 +303,7 @@ mod tests {
     use shared::transform::Transform;
     use wasm_prep::wasm_costs::WasmCosts;
 
-    use super::{create_uref, POS_PURSE};
+    use super::{create_local_key, create_uref, POS_PURSE};
 
     const GENESIS_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
     const PROTOCOL_VERSION: u64 = 1;
@@ -352,7 +351,7 @@ mod tests {
         }
     }
 
-    fn extract_transform_key(effects: HashMap<Key, Transform>, key: &Key) -> Option<Key> {
+    fn extract_transform_key(effects: &HashMap<Key, Transform>, key: &Key) -> Option<Key> {
         if let Transform::Write(Value::Key(value)) =
             effects.get(&key.normalize()).expect("should have value")
         {
@@ -362,7 +361,7 @@ mod tests {
         }
     }
 
-    fn extract_transform_u512(effects: HashMap<Key, Transform>, key: &Key) -> Option<U512> {
+    fn extract_transform_u512(effects: &HashMap<Key, Transform>, key: &Key) -> Option<U512> {
         if let Transform::Write(Value::UInt512(value)) =
             effects.get(key).expect("should have value")
         {
@@ -373,7 +372,7 @@ mod tests {
     }
 
     fn extract_transform_contract_bytes(
-        effects: HashMap<Key, Transform>,
+        effects: &HashMap<Key, Transform>,
         key: &Key,
     ) -> Option<Contract> {
         if let Transform::Write(Value::Contract(value)) =
@@ -416,7 +415,7 @@ mod tests {
             "should have expected public_uref"
         );
 
-        let actual = extract_transform_key(transforms, &public_uref_key)
+        let actual = extract_transform_key(&transforms, &public_uref_key)
             .expect("transform was not a write of a key");
 
         let mint_contract_uref_key = create_uref(&mut rng);
@@ -448,7 +447,7 @@ mod tests {
 
         let transforms = get_genesis_transforms();
 
-        let actual = extract_transform_contract_bytes(transforms, &mint_contract_uref_key)
+        let actual = extract_transform_contract_bytes(&transforms, &mint_contract_uref_key)
             .expect("transform was not a write of a key");
 
         let mint_code_bytes = get_mint_code_bytes();
@@ -555,7 +554,7 @@ mod tests {
 
         let balance_uref_key = Key::URef(balance_uref).normalize();
 
-        let actual = extract_transform_u512(transforms, &balance_uref_key)
+        let actual = extract_transform_u512(&transforms, &balance_uref_key)
             .expect("transform was not a write of a key");
 
         let initial_tokens = get_initial_tokens(INITIAL_BALANCE);
