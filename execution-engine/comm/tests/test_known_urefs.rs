@@ -60,7 +60,7 @@ fn should_run_known_urefs_contract() {
         .nth(0)
         .expect("Should have write string");
 
-    assert_eq!(u512_value, &U512::from(123456789u64));
+    assert_eq!(u512_value, &U512::from(123_456_789u64));
 
     let account = transform
         .get(&Key::Account(GENESIS_ADDR))
