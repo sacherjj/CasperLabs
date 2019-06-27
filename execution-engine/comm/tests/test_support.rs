@@ -294,9 +294,9 @@ impl WasmTestBuilder {
 
     /// Runs a contract and after that runs actual WASM contract and expects
     /// transformations to happen at the end of execution.
-    pub fn exec(&mut self, wasm_file: &str) -> &mut WasmTestBuilder {
+    pub fn exec(&mut self, address: [u8; 32], wasm_file: &str) -> &mut WasmTestBuilder {
         let exec_request = create_exec_request(
-            self.genesis_addr,
+            address,
             &wasm_file,
             self.post_state_hash
                 .as_ref()

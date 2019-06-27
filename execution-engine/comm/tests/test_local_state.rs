@@ -24,10 +24,10 @@ fn should_run_local_state_contract() {
     // This test runs a contract that's after every call extends the same key with more data
     let transforms = WasmTestBuilder::new(GENESIS_ADDR)
         .run_genesis()
-        .exec("local_state.wasm")
+        .exec(GENESIS_ADDR, "local_state.wasm")
         .expect_success()
         .commit()
-        .exec("local_state.wasm")
+        .exec(GENESIS_ADDR, "local_state.wasm")
         .expect_success()
         .commit()
         .get_transforms();
