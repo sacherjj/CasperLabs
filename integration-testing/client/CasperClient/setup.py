@@ -121,9 +121,7 @@ def run_codegen():
                  glob(f'{PACKAGE_DIR}/*pb2*py'))
 
 
-here = path.abspath(path.dirname(__file__))
-
-with open(path.join(here, "README.md"),  encoding="utf-8") as fh:
+with open(path.join(THIS_DIRECTORY, "README.md"),  encoding="utf-8") as fh:
     long_description = fh.read()
 
 
