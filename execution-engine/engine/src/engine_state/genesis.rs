@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::fmt;
 
 use rand::RngCore;
-use rand_chacha::ChaChaRng;
 
 use common::bytesrepr::ToBytes;
 use common::key::Key;
@@ -21,6 +20,39 @@ use shared::transform::{Transform, TypeMismatch};
 use storage::global_state::CommitResult;
 
 pub const POS_PURSE: &str = "pos_purse";
+pub const POS_PUBLIC_ADDRESS: &str = "pos_public_address";
+pub const POS_PRIVATE_ADDRESS: &str = "pos_private_address";
+pub const MINT_PUBLIC_ADDRESS: &str = "mint_public_address";
+pub const MINT_PRIVATE_ADDRESS: &str = "mint_private_address";
+pub const GENESIS_ACCOUNT_PURSE: &str = "genesis_account_purse";
+pub const MINT_GENESIS_ACCOUNT_BALANCE_UREF: &str = "mint_genesis_account_balance_uref";
+pub const MINT_POS_BALANCE_UREF: &str = "mint_pos_balance_uref";
+
+/// Structure for tracking URefs generated in the genesis process.
+struct GenesisURefsSource(BTreeMap<&'static str, URef>);
+
+impl GenesisURefsSource {
+    fn new(genesis_account_addr: [u8; 32], nonce: u64) -> GenesisURefsSource {
+        // Pregenerates all URefs so that they are statically known.
+        let mut chacha_rng = execution::create_rng(genesis_account_addr, nonce);
+        let mut urefs_map = BTreeMap::new();
+        urefs_map.insert(POS_PURSE, create_uref(&mut chacha_rng));
+        urefs_map.insert(POS_PUBLIC_ADDRESS, create_uref(&mut chacha_rng));
+        urefs_map.insert(POS_PRIVATE_ADDRESS, create_uref(&mut chacha_rng));
+        urefs_map.insert(MINT_PUBLIC_ADDRESS, create_uref(&mut chacha_rng));
+        urefs_map.insert(MINT_PRIVATE_ADDRESS, create_uref(&mut chacha_rng));
+        urefs_map.insert(GENESIS_ACCOUNT_PURSE, create_uref(&mut chacha_rng));
+        urefs_map.insert(MINT_GENESIS_ACCOUNT_BALANCE_UREF, create_uref(&mut chacha_rng));
+        urefs_map.insert(MINT_POS_BALANCE_UREF, create_uref(&mut chacha_rng));
+
+        GenesisURefsSource(urefs_map)
+    }
+
+    pub fn get_uref(&self, label: &str) -> URef {
+        *self.0.get(label)
+            .expect(&format!("URef {} wasn't generated.", label))
+    }
+}
 
 fn create_uref<R: RngCore>(rng: &mut R) -> URef {
     let mut buff = [0u8; 32];
@@ -34,7 +66,7 @@ fn create_local_key<T: ToBytes>(seed: [u8; 32], key: T) -> Result<Key, common::b
 }
 
 fn create_mint_effects(
-    rng: &mut ChaChaRng,
+    rng: &mut GenesisURefsSource,
     genesis_account_addr: [u8; 32],
     initial_tokens: U512,
     mint_code_bytes: WasmiBytes,
@@ -46,9 +78,9 @@ fn create_mint_effects(
 
     // Create (public_uref, mint_contract_uref)
 
-    let public_uref = create_uref(rng);
+    let public_uref = rng.get_uref(MINT_PUBLIC_ADDRESS);
 
-    let mint_contract_uref = create_uref(rng);
+    let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
     // Store (public_uref, mint_contract_uref) in global state
 
@@ -57,7 +89,7 @@ fn create_mint_effects(
         Value::Key(Key::URef(mint_contract_uref)),
     );
 
-    let purse_id_uref = create_uref(rng);
+    let purse_id_uref = rng.get_uref(GENESIS_ACCOUNT_PURSE);
 
     // Create genesis genesis_account
     let genesis_account = {
@@ -87,7 +119,7 @@ fn create_mint_effects(
 
     let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())?;
 
-    let balance_uref = create_uref(rng);
+    let balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
 
     let balance_uref_key = Key::URef(balance_uref);
 
@@ -96,7 +128,7 @@ fn create_mint_effects(
     tmp.insert(purse_id_local_key, Value::Key(balance_uref_key));
 
     // Store (pos_purse_local_key, pos_balance_uref_key) in local state.
-    let pos_balance_uref = create_uref(rng);
+    let pos_balance_uref = rng.get_uref(MINT_POS_BALANCE_UREF);
     let pos_balance_uref_key = Key::URef(pos_balance_uref);
 
     let pos_purse_local_key = create_local_key(mint_contract_uref.addr(), pos_purse.addr())?;
@@ -142,8 +174,7 @@ fn create_mint_effects(
 }
 
 fn create_pos_effects(
-    rng: &mut ChaChaRng,
-    pos_purse: URef,
+    rng: &mut GenesisURefsSource,
     pos_code: WasmiBytes,
     genesis_validators: Vec<(PublicKey, U512)>,
     protocol_version: u64,
@@ -151,8 +182,8 @@ fn create_pos_effects(
     let mut tmp: HashMap<Key, Value> = HashMap::new();
 
     // Create (public_pos_uref, pos_contract_uref)
-    let public_pos_address = create_uref(rng);
-    let pos_uref = create_uref(rng);
+    let public_pos_address = rng.get_uref(POS_PUBLIC_ADDRESS);
+    let pos_uref = rng.get_uref(POS_PRIVATE_ADDRESS);
 
     // Mateusz: Maybe we could make `public_pos_address` a Key::Hash after all.
     // Store public PoS address -> PoS contract relation
@@ -180,6 +211,8 @@ fn create_pos_effects(
         .map(|key| (key, Key::Hash([0u8; 32])))
         .collect();
 
+    let pos_purse = rng.get_uref(POS_PURSE);
+
     known_urefs.insert(POS_PURSE.to_string(), Key::URef(pos_purse));
 
     // Create PoS Contract object.
@@ -200,18 +233,17 @@ pub fn create_genesis_effects(
     genesis_validators: Vec<(PublicKey, U512)>,
     protocol_version: u64,
 ) -> Result<ExecutionEffect, execution::Error> {
-    let mut rng = execution::create_rng(genesis_account_addr, 0);
+    let mut rng = GenesisURefsSource::new(genesis_account_addr, 0);
 
     let genesis_validator_stakes: U512 = genesis_validators
         .iter()
         .map(|t| t.1)
         .fold(U512::zero(), |a, b| a + b);
 
-    let pos_purse = create_uref(&mut rng);
+    let pos_purse = rng.get_uref(POS_PURSE);
 
     let pos_effects = create_pos_effects(
         &mut rng,
-        pos_purse,
         pos_code_bytes,
         genesis_validators,
         protocol_version,
@@ -288,17 +320,16 @@ mod tests {
     use std::collections::HashMap;
 
     use common::key::{addr_to_hex, Key};
-    use common::uref::URef;
     use common::value::{Contract, U512, Value};
     use common::value::account::PublicKey;
     use engine_state::create_genesis_effects;
+    use engine_state::genesis::{GENESIS_ACCOUNT_PURSE, GenesisURefsSource, MINT_GENESIS_ACCOUNT_BALANCE_UREF, MINT_POS_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS, POS_PRIVATE_ADDRESS, POS_PUBLIC_ADDRESS};
     use engine_state::utils::WasmiBytes;
-    use execution;
     use shared::test_utils;
     use shared::transform::Transform;
     use wasm_prep::wasm_costs::WasmCosts;
 
-    use super::{create_local_key, create_uref, POS_PURSE};
+    use super::{create_local_key, POS_PURSE};
 
     const GENESIS_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
     const PROTOCOL_VERSION: u64 = 1;
@@ -390,16 +421,9 @@ mod tests {
 
     #[test]
     fn create_genesis_effects_stores_mint_contract_uref_at_public_uref() {
-        // given predictable uref(s) should be able to retrieve values and assert expected
+        let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
 
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
-
-        // We need to advance PRNG by 3 calls - PoS purse, PoS public address, PoS contract URef.
-        let _: Vec<URef> = std::iter::repeat_with(|| create_uref(&mut rng))
-            .take(3)
-            .collect();
-
-        let public_uref = create_uref(&mut rng);
+        let public_uref = rng.get_uref(MINT_PUBLIC_ADDRESS);
 
         let public_uref_key = Key::URef(public_uref);
 
@@ -413,7 +437,7 @@ mod tests {
         let actual = extract_transform_key(&transforms, &public_uref_key)
             .expect("transform was not a write of a key");
 
-        let mint_contract_uref_key = create_uref(&mut rng);
+        let mint_contract_uref_key = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
         // the value under the outer mint_contract_uref should be a key value pointing at
         // the current contract bytes
@@ -426,16 +450,9 @@ mod tests {
 
     #[test]
     fn create_genesis_effects_stores_mint_contract_code_at_mint_contract_uref() {
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
+        let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
 
-        // We need to advance PRNG by 3 calls - PoS purse, PoS public address, PoS contract URef.
-        let _: Vec<URef> = std::iter::repeat_with(|| create_uref(&mut rng))
-            .take(3)
-            .collect();
-
-        let _public_mint_uref = create_uref(&mut rng);
-
-        let mint_contract_uref = create_uref(&mut rng);
+        let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
         // this is passing as currently designed, but see bug: EE-380
         let mint_contract_uref_key = Key::URef(mint_contract_uref);
@@ -447,14 +464,12 @@ mod tests {
 
         let mint_code_bytes = get_mint_code_bytes();
 
-        let _purse_id_uref = create_uref(&mut rng);
-
         // this is passing as currently designed, but see bug: EE-380
-        let balance_uref = create_uref(&mut rng);
+        let balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
 
         let balance_uref_key = Key::URef(balance_uref);
 
-        let pos_balance_uref = create_uref(&mut rng);
+        let pos_balance_uref = rng.get_uref(MINT_POS_BALANCE_UREF);
         let pos_balance_uref_key = Key::URef(pos_balance_uref);
 
         let mint_known_urefs = {
@@ -475,26 +490,23 @@ mod tests {
     }
 
     #[test]
-    fn create_genesis_effects_balance_uref_at_purse_id() {
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
+    fn create_genesis_effects_stores_local_keys_balance_urefs_associations() {
+        let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
 
-        // We need to advance PRNG by 3 calls - PoS purse, PoS public address, PoS contract URef.
-        let _: Vec<URef> = std::iter::repeat_with(|| create_uref(&mut rng))
-            .take(3)
-            .collect();
+        let pos_purse = rng.get_uref(POS_PURSE);
+        let expected_mint_pos_balance_uref = rng.get_uref(MINT_POS_BALANCE_UREF);
 
-        // Ignoring first URef, it's "public uref".
-        let _public_mint_uref = create_uref(&mut rng);
-        let mint_contract_uref = create_uref(&mut rng);
+        let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
-        let purse_id_uref = create_uref(&mut rng);
+        let purse_id_uref = rng.get_uref(GENESIS_ACCOUNT_PURSE);
 
         let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())
             .expect("Should create local key.");
 
         let pos_purse_local_key = create_local_key(mint_contract_uref.addr(), pos_purse.addr())
             .expect("Should create local key.");
-        let balance_uref = create_uref(&mut rng);
+
+        let balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
 
         let transforms = get_genesis_transforms();
 
@@ -503,36 +515,38 @@ mod tests {
             "transforms should contain purse_id_local_key"
         );
 
-        let actual = extract_transform_key(transforms, &purse_id_local_key)
+        assert!(
+            transforms.contains_key(&pos_purse_local_key),
+            "transforms should contain pos_purse_local_key"
+        );
+
+        let mint_genesis_account_balance_uref = extract_transform_key(&transforms, &purse_id_local_key)
             .expect("transform was not a write of a key");
 
-        // the value under the outer mint_contract_uref should be a key value pointing at
-        // the current contract bytes
         assert_eq!(
-            actual,
+            mint_genesis_account_balance_uref,
             Key::URef(balance_uref),
             "invalid balance indirection"
         );
+
+        let mint_pos_balance_uref = extract_transform_key(&transforms, &pos_purse_local_key)
+            .expect("Transform was not a write of a key.");
+
+        assert_eq!(mint_pos_balance_uref, Key::URef(expected_mint_pos_balance_uref), "create_genesis_effects should store PoS purse -> balance association.");
     }
 
     #[test]
     fn create_genesis_effects_balance_at_balance_uref() {
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
+        let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
 
-        // We need to advance PRNG by 3 calls - PoS purse, PoS public address, PoS contract URef.
-        let _: Vec<URef> = std::iter::repeat_with(|| create_uref(&mut rng))
-            .take(3)
-            .collect();
+        let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
-        let _public_uref = create_uref(&mut rng);
-        let mint_contract_uref = create_uref(&mut rng);
-
-        let purse_id_uref = create_uref(&mut rng);
+        let purse_id_uref = rng.get_uref(GENESIS_ACCOUNT_PURSE);
 
         let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())
             .expect("Should create local key.");
 
-        let balance_uref = create_uref(&mut rng);
+        let balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
 
         let transforms = get_genesis_transforms();
 
@@ -614,7 +628,7 @@ mod tests {
 
     #[test]
     fn create_pos_effects() {
-        let mut rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
+        let mut rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
 
         let genesis_validator_a_public_key = PublicKey::new([0u8; 32]);
         let genesis_validator_a_stake = U512::from(1000);
@@ -627,21 +641,17 @@ mod tests {
             (genesis_validator_b_public_key, genesis_validator_b_stake),
         ];
 
-        let pos_purse = create_uref(&mut rng);
+        let pos_purse = rng.get_uref(POS_PURSE);
 
-        let public_pos_address = create_uref(&mut rng);
+        let public_pos_address = rng.get_uref(POS_PUBLIC_ADDRESS);
 
-        let pos_contract_uref = create_uref(&mut rng);
+        let pos_contract_uref = rng.get_uref(POS_PRIVATE_ADDRESS);
 
         let pos_contract_bytes = get_pos_code_bytes();
 
         let pos_effects = {
-            // Use new PRNG for the PoS effects process.
-            let mut pos_rng = execution::create_rng(GENESIS_ACCOUNT_ADDR, 0);
-            let _pos_purse = create_uref(&mut pos_rng);
             super::create_pos_effects(
-                &mut pos_rng,
-                pos_purse,
+                &mut rng,
                 pos_contract_bytes.clone(),
                 genesis_validators,
                 1,
@@ -673,8 +683,14 @@ mod tests {
         let validator_b_name: String =
             pos_validator_key(genesis_validator_b_public_key, genesis_validator_b_stake);
 
-        assert!(pos_contract.urefs_lookup().contains_key(&validator_a_name), "create_pos_effects should correctly store genesis validators in PoS known_urefs_map.");
-        assert!(pos_contract.urefs_lookup().contains_key(&validator_b_name), "create_pos_effects should correctly store genesis validators in PoS known_urefs_map.");
+        assert!(
+            pos_contract.urefs_lookup().contains_key(&validator_a_name),
+            "create_pos_effects should correctly store genesis validators in PoS known_urefs_map."
+        );
+        assert!(
+            pos_contract.urefs_lookup().contains_key(&validator_b_name),
+            "create_pos_effects should correctly store genesis validators in PoS known_urefs_map."
+        );
 
         assert_eq!(
             pos_contract.urefs_lookup().get(POS_PURSE),
