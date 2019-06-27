@@ -70,13 +70,13 @@ fn create_mint_effects(
     genesis_account_addr: [u8; 32],
     initial_tokens: U512,
     mint_code_bytes: WasmiBytes,
-    pos_purse: URef,
     pos_bonded_balance: U512,
     protocol_version: u64,
 ) -> Result<HashMap<Key, Value>, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
 
     // Create (public_uref, mint_contract_uref)
+    let pos_purse = rng.get_uref(POS_PURSE);
 
     let public_uref = rng.get_uref(MINT_PUBLIC_ADDRESS);
 
@@ -240,8 +240,6 @@ pub fn create_genesis_effects(
         .map(|t| t.1)
         .fold(U512::zero(), |a, b| a + b);
 
-    let pos_purse = rng.get_uref(POS_PURSE);
-
     let pos_effects = create_pos_effects(
         &mut rng,
         pos_code_bytes,
@@ -254,7 +252,6 @@ pub fn create_genesis_effects(
         genesis_account_addr,
         initial_tokens,
         mint_code_bytes,
-        pos_purse,
         genesis_validator_stakes,
         protocol_version,
     )?;
@@ -334,7 +331,8 @@ mod tests {
     const GENESIS_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
     const PROTOCOL_VERSION: u64 = 1;
     const EXPECTED_GENESIS_TRANSFORM_COUNT: usize = 9; // 7 writes for Mint and 2 for PoS.
-    const INITIAL_BALANCE: &str = "1000";
+    const INITIAL_GENESIS_ACCOUNT_BALANCE: &str = "1000";
+    const INITIAL_POS_VALIDATORS_BALANCE: &str = "15000";
 
     fn get_initial_tokens(initial_balance: &str) -> U512 {
         U512::from_dec_str(initial_balance).expect("should create U512")
@@ -351,15 +349,16 @@ mod tests {
     }
 
     fn get_genesis_transforms() -> HashMap<Key, Transform> {
-        let initial_tokens = get_initial_tokens(INITIAL_BALANCE);
+        let initial_genesis_account_balance = get_initial_tokens(INITIAL_GENESIS_ACCOUNT_BALANCE);
+        let initial_pos_validators_balance = get_initial_tokens(INITIAL_POS_VALIDATORS_BALANCE);
 
         let mint_code_bytes = get_mint_code_bytes();
         let pos_code_bytes = get_pos_code_bytes();
-        let genesis_validators = Vec::new();
+        let genesis_validators = vec![(PublicKey::new([1u8; 32]), initial_pos_validators_balance)];
 
         create_genesis_effects(
             GENESIS_ACCOUNT_ADDR,
-            initial_tokens,
+            initial_genesis_account_balance,
             mint_code_bytes,
             pos_code_bytes,
             genesis_validators,
@@ -552,34 +551,50 @@ mod tests {
     }
 
     #[test]
-    fn create_genesis_effects_balance_at_balance_uref() {
+    fn create_genesis_effects_balances_at_balance_urefs() {
         let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
 
         let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
-        let purse_id_uref = rng.get_uref(GENESIS_ACCOUNT_PURSE);
+        let genesis_account_purse = rng.get_uref(GENESIS_ACCOUNT_PURSE);
+        let pos_purse = rng.get_uref(POS_PURSE);
 
-        let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())
-            .expect("Should create local key.");
+        let genesis_account_purse_id_local_key = create_local_key(mint_contract_uref.addr(), genesis_account_purse.addr())
+            .expect("Mint should create local key for genesis account purse.");
 
-        let balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
+        let pos_validators_balance_local_key = create_local_key(mint_contract_uref.addr(), pos_purse.addr())
+            .expect("Mint should create local key for PoS purse.");
+
+        let genesis_account_balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
+        let pos_balance_uref = rng.get_uref(MINT_POS_BALANCE_UREF);
 
         let transforms = get_genesis_transforms();
 
         assert!(
-            transforms.contains_key(&purse_id_local_key),
-            "transforms should contain purse_id_local_key"
+            transforms.contains_key(&genesis_account_purse_id_local_key),
+            "transforms should contain account_purse_id_local_key",
         );
 
-        let balance_uref_key = Key::URef(balance_uref).normalize();
+        assert!(
+            transforms.contains_key(&pos_validators_balance_local_key),
+            "Transforms should contain pos_validators_balance_local_key",
+        );
 
-        let actual = extract_transform_u512(&transforms, &balance_uref_key)
+        let genesis_account_balance_uref_key = Key::URef(genesis_account_balance_uref).normalize();
+        let pos_balance_uref_key = Key::URef(pos_balance_uref).normalize();
+
+        let actual_genesis_account_balance = extract_transform_u512(&transforms, &genesis_account_balance_uref_key)
             .expect("transform was not a write of a key");
 
-        let initial_tokens = get_initial_tokens(INITIAL_BALANCE);
+        let actual_pos_validators_balance = extract_transform_u512(&transforms, &pos_balance_uref_key)
+            .expect("transform was not a write of a key");
+
+        let initial_genesis_account_balance = get_initial_tokens(INITIAL_GENESIS_ACCOUNT_BALANCE);
+        let initial_pos_validators_balance = get_initial_tokens(INITIAL_POS_VALIDATORS_BALANCE);
 
         // the value under the outer balance_uref_key should be a U512 value (the actual balance)
-        assert_eq!(actual, initial_tokens, "invalid balance");
+        assert_eq!(actual_genesis_account_balance, initial_genesis_account_balance, "Invalid Genesis account balance");
+        assert_eq!(actual_pos_validators_balance, initial_pos_validators_balance, "Invalid PoS genesis validators' balance.");
     }
 
     #[test]
