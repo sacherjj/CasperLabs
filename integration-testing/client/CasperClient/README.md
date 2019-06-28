@@ -12,7 +12,11 @@ you can start using it in your programs.
 
 ## Development
 
-Please see `DEVELOPER.md` file for instructions.
+All the files matching `*_pb2.py`, `*_pb2_grpc.py` are generated from proto files.Presently, these files are
+not tracked in the repo, so you might not see them.  Please run `python run_codegen.py` see the generated python
+files.  Please do not modify them otherwise your changes will be overwritten and lost.
+
+Rest of the python files can be modified and committed to git repo.
 
 ## Typical usage of the API
 
