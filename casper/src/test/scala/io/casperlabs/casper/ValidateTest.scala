@@ -230,26 +230,6 @@ class ValidateTest
     Validate.deploySignature[Task](deploy) shouldBeF false
   }
 
-  it should "skip approvals and public key matching check if its public key equals to '3030...30'" in withoutStorage {
-    val genDeploy = for {
-      d            <- arbitrary[consensus.Deploy]
-      approvalKeys <- genAccountKeys
-      signature    = approvalKeys.sign(d.deployHash)
-    } yield d
-      .withHeader(
-        d.getHeader.withAccountPublicKey(
-          ByteString.copyFrom(
-            Base16.decode("3030303030303030303030303030303030303030303030303030303030303030")
-          )
-        )
-      )
-      .withApprovals(
-        List(Approval().withApproverPublicKey(approvalKeys.publicKey).withSignature(signature))
-      )
-    val deploy = sample(genDeploy)
-    Validate.deploySignature[Task](deploy) shouldBeF true
-  }
-
   it should "return false if a key in an approval is empty" in withoutStorage {
     val genDeploy = for {
       d <- arbitrary[consensus.Deploy]
