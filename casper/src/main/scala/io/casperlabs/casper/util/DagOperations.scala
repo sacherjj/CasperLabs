@@ -78,10 +78,10 @@ object DagOperations {
           )
       }
     }
-    val childToparent = doublyLinkedDag.childToParentAdjacencyList ++ doublyLinkedDag.dependencyFree
+    val childToParent = doublyLinkedDag.childToParentAdjacencyList ++ doublyLinkedDag.dependencyFree
       .map(_ -> Set.empty[BlockHash])
       .toMap
-    help(childToparent, List.empty)
+    help(childToParent, List.empty)
   }
 
   /**

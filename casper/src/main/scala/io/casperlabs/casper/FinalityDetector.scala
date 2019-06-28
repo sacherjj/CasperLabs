@@ -22,14 +22,13 @@ trait FinalityDetector[F[_]] {
 
   /**
     * The normalizedFaultTolerance must be greater than
-		* the fault tolerance threshold t in order for a candidate to be safe.
-		* The range of t is [-1,1], and a positive t means the fraction of validators would have
-		* to equivocate to revert the decision on the block, a negative t means unless that fraction
-		* equivocates, the block can't get finalized. (I.e. it's orphaned.)
-		*
-		* @param candidateBlockHash Block hash of candidate block to detect safety on
-    * @return normalizedFaultTolerance float between -1 and 1,
-		*         where
+    * the fault tolerance threshold t in order for a candidate to be safe.
+    * The range of t is [-1,1], and a positive t means the fraction of validators would have
+    * to equivocate to revert the decision on the block, a negative t means unless that fraction
+    * equivocates, the block can't get finalized. (I.e. it's orphaned.)
+    *
+    * @param candidateBlockHash Block hash of candidate block to detect safety on
+    * @return normalizedFaultTolerance float between -1 and 1
     */
   def normalizedFaultTolerance(
       blockDag: BlockDagRepresentation[F],
@@ -272,6 +271,11 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
       if (committeeApproximation.contains(vid)) weightMap(vid) else 0L
 
     toposortedBlockHashesOpt match {
+      // should never happen
+      case None =>
+        Log[F].error("find a cycle in the dag") *> MonadThrowable[F].raiseError(
+          new RuntimeException
+        )
       case Some(blockHashes) =>
         blockHashes.foldLeftM(
           (Map.empty[BlockHash, BlockScoreAccumulator], Map.empty[Validator, Int])
@@ -332,12 +336,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
                        }
             } yield result
         }
-
-      // should never happen
-      case None =>
-        Log[F].error("find a cycle in the dag") *> MonadThrowable[F].raiseError(
-          new RuntimeException
-        )
     }
   }
 
