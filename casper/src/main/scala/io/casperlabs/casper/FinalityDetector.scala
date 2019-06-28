@@ -174,13 +174,15 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
     }
   }
 
+  // Reducing L to a committee with quorum q
+  // In a loop, prune L to quorum q, and prune L to the set of validators with a block in L_k,
+  // until both steps don't change L anymore.
   private def pruningLoop(
       blockDag: BlockDagRepresentation[F],
       jDag: DoublyLinkedDag[BlockHash],
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[BlockMetadata]],
       weightMap: Map[Validator, Long],
-      lastCommittee: Option[Committee],
       q: Long,
       k: Int = 1
   ): F[Option[Committee]] =
@@ -199,62 +201,60 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
         .filter { case (_, level) => level >= k }
         .keys
         .toSet
-      committee <- if (prunedCommittee.isEmpty) {
-                    // If L is empty, return qbest
-                    lastCommittee.pure[F]
-                  } else {
-                    // Otherwise set qbest to newCommittee.
-                    // The quorum of new pruned committee is the minimal support
-                    // of all block having level >= 1
-                    val levelAbove1Tags = blockLevelTags
-                      .filter {
-                        case (_, blockLevelTag) =>
-                          blockLevelTag.blockLevel >= 1
-                      }
-                    val minEstimateLevelKTag = levelAbove1Tags.minBy {
-                      case (_, blockScoreTag) => blockScoreTag.estimateQ
-                    }
-                    val (_, minEstimate) = minEstimateLevelKTag
-
-                    val newCommittee = Committee(
-                      prunedCommittee,
-                      minEstimate.estimateQ
-                    )
-
-                    // split all blocks from L_1 by whether its support exactly equal to minQ.
-                    val (_, prunedLevel1Blocks) = levelAbove1Tags.partition {
-                      case (_, blockScoreTag) =>
-                        blockScoreTag.estimateQ == minEstimate.estimateQ
-                    }
-                    if (prunedLevel1Blocks.isEmpty) {
-                      // if there is no block bigger than minQ, then return directly
-                      newCommittee.some.pure[F]
+      committee <- if (prunedCommittee == committeeApproximation) {
+                    if (prunedCommittee.isEmpty) {
+                      none[Committee].pure[F]
                     } else {
-                      // prune validators
-                      val prunedValidatorCandidates = prunedLevel1Blocks
-                        .filter {
-                          case (_, blockScoreAccumulator) =>
-                            blockScoreAccumulator.blockLevel >= k
-                        }
-                        .map {
-                          case (_, blockScoreAccumulator) =>
-                            blockScoreAccumulator.block.validatorPublicKey
-                        }
-                        .toSet
-
-                      pruningLoop(
-                        blockDag,
-                        jDag,
-                        prunedValidatorCandidates,
-                        levelZeroMsgs,
-                        weightMap,
-                        Some(newCommittee),
-                        minEstimate.estimateQ + 1L,
-                        k
-                      )
+                      val estimateQs = blockLevelTags.flatMap {
+                        case (_, blockLevelTag) =>
+                          if (blockLevelTag.blockLevel >= 1) {
+                            blockLevelTag.estimateQ.some
+                          } else {
+                            None
+                          }
+                      }
+                      Committee(prunedCommittee, q).some.pure[F]
                     }
+                  } else {
+                    pruningLoop(blockDag, jDag, prunedCommittee, levelZeroMsgs, weightMap, q, k)
                   }
     } yield committee
+
+  def findBestQLoop(
+      blockDag: BlockDagRepresentation[F],
+      jDag: DoublyLinkedDag[BlockHash],
+      committeeApproximation: Set[Validator],
+      levelZeroMsgs: Map[Validator, List[BlockMetadata]],
+      weightMap: Map[Validator, Long],
+      q: Long,
+      k: Int = 1,
+      qBestCommittee: Option[Committee] = None
+  ): F[Option[Committee]] =
+    for {
+      committeeOpt <- pruningLoop(
+                       blockDag,
+                       jDag,
+                       committeeApproximation,
+                       levelZeroMsgs,
+                       weightMap,
+                       q,
+                       k
+                     )
+      result <- committeeOpt match {
+                 case None => qBestCommittee.pure[F]
+                 case Some(committee) =>
+                   findBestQLoop(
+                     blockDag,
+                     jDag,
+                     committee.validators,
+                     levelZeroMsgs,
+                     weightMap,
+                     committee.bestQ + 1,
+                     k,
+                     committee.some
+                   )
+               }
+    } yield result
 
   // Tag level information for each block in one-pass
   def sweep(
@@ -339,7 +339,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
           new RuntimeException
         )
     }
-
   }
 
   /* finding the best level 1 committee for a given candidate block */
@@ -381,19 +380,17 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
                                    )
                    jDag = constructJDagFromLevelZeroMsgs(levelZeroMsgs)
 
-                   committeeMembersAfterPruning <- pruningLoop(
+                   committeeMembersAfterPruning <- findBestQLoop(
                                                     blockDag,
                                                     jDag,
                                                     committeeApproximation.toSet,
                                                     levelZeroMsgs,
                                                     weights,
-                                                    None,
-                                                    q = maxWeightApproximation / 2
+                                                    maxWeightApproximation / 2
                                                   )
                  } yield committeeMembersAfterPruning
                }
     } yield result
-
 }
 
 /**
