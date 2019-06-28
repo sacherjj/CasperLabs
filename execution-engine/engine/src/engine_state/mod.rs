@@ -14,8 +14,8 @@ use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::Transform;
 use storage::global_state::{CommitResult, History};
 use tracking_copy::TrackingCopy;
-use wasm_prep::Preprocessor;
 use wasm_prep::wasm_costs::WasmCosts;
+use wasm_prep::Preprocessor;
 
 use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;

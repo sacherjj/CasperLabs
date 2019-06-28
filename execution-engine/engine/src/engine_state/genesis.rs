@@ -7,8 +7,8 @@ use rand::RngCore;
 use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::uref::{AccessRights, URef};
-use common::value::{Contract, U512, Value};
 use common::value::account::PurseId;
+use common::value::{Contract, Value, U512};
 use engine_state::execution_effect::ExecutionEffect;
 use engine_state::op::Op;
 use engine_state::utils::WasmiBytes;
@@ -195,7 +195,7 @@ mod tests {
     use common::bytesrepr::ToBytes;
     use common::key::Key;
     use common::uref::{AccessRights, URef};
-    use common::value::{Contract, U512, Value};
+    use common::value::{Contract, Value, U512};
     use engine_state::create_genesis_effects;
     use engine_state::utils::WasmiBytes;
     use execution;
