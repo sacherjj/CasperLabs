@@ -12,6 +12,7 @@ use alloc::vec::Vec;
 use common::contract_api::*;
 use common::contract_api::pointers::UPointer;
 use common::key::Key;
+use common::uref::URef;
 
 fn hello_name(name: &str) -> String {
     let mut result = String::from("Hello, ");
@@ -60,27 +61,28 @@ fn publish(msg: String) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn mailing_list_ext() {
-    let method_name: String = get_arg(0);
-    match method_name.as_str() {
-        "sub" => match sub(get_arg(1)).map(Key::from) {
-            Some(Key::URef(uref)) => {
-                let extra_urefs = vec![uref];
-                ret(&Some(Key::URef(uref)), &extra_urefs);
-            }
-            none => ret(&none, &Vec::new()),
-        },
-        //Note that this is totally insecure. In reality
-        //the pub method would be only available under an
-        //unforgable reference because otherwise anyone could
-        //spam the mailing list.
-        "pub" => {
-            publish(get_arg(1));
-        }
-        _ => panic!("Unknown method name!"),
-    }
-}
+ #[no_mangle]
+ pub extern "C" fn mailing_list_ext() {
+     let method_name: String = get_arg(0);
+     match method_name.as_str() {
+         "sub" => match sub(get_arg(1)) {
+             Some(upointer) => {
+                 let extra_uref = URef::new(upointer.0, upointer.1);
+                 let extra_urefs = vec![extra_uref];
+                 ret(&Some(Key::from(upointer)), &extra_urefs);
+             }
+             _ => ret(&Option::<Key>::None, &Vec::new()),
+         },
+         //Note that this is totally insecure. In reality
+         //the pub method would be only available under an
+         //unforgable reference because otherwise anyone could
+         //spam the mailing list.
+         "pub" => {
+             publish(get_arg(1));
+         }
+         _ => panic!("Unknown method name!"),
+     }
+ }
 
 
 #[no_mangle]
