@@ -57,31 +57,31 @@ object DagOperations {
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[k.K])))
   }
 
-  def bfToposortTraverseF[F[_]: Monad](
-      start: List[BlockMetadata]
-  )(neighbours: BlockMetadata => F[List[BlockMetadata]]): StreamT[F, BlockMetadata] = {
-    def build(
-        q: mutable.PriorityQueue[BlockMetadata],
-        prevVisited: HashSet[BlockHash]
-    ): F[StreamT[F, BlockMetadata]] =
-      if (q.isEmpty) StreamT.empty[F, BlockMetadata].pure[F]
-      else {
-        val curr = q.dequeue
-        if (prevVisited(curr.blockHash)) build(q, prevVisited)
-        else
-          for {
-            ns      <- neighbours(curr)
-            visited = prevVisited + curr.blockHash
-            newQ    = q ++ ns.filterNot(b => visited(b.blockHash))
-          } yield StreamT.cons(curr, Eval.always(build(newQ, visited)))
+  // Kahn's algorithm for topological ordering
+  def topologySort(doublyLinkedDag: DoublyLinkedDag[BlockHash]): Option[List[BlockHash]] = {
+    @tailrec
+    def help(
+        curChildToParents: Map[BlockHash, Set[BlockHash]],
+        sorted: List[BlockHash]
+    ): Option[List[BlockHash]] = {
+      val (zeroInDegrees, nonZeroInDegrees) = curChildToParents.partition {
+        case (c, ps) => ps.isEmpty
       }
-
-    implicit val blockTopoOrdering: Ordering[BlockMetadata] =
-      Ordering.by[BlockMetadata, Long](_.rank).reverse
-
-    StreamT.delay(
-      Eval.now(build(mutable.PriorityQueue.empty[BlockMetadata] ++ start, HashSet.empty[BlockHash]))
-    )
+      (zeroInDegrees.isEmpty, nonZeroInDegrees.isEmpty) match {
+        case (true, true) => Some(sorted)
+        // when there are no zero in-degree nodes, but still exists other nodes, it is no longer DAG.
+        case (true, false) => None
+        case _ =>
+          help(
+            nonZeroInDegrees.mapValues(_ -- zeroInDegrees.keys),
+            sorted ++ zeroInDegrees.keys.toList
+          )
+      }
+    }
+    val childToparent = doublyLinkedDag.childToParentAdjacencyList ++ doublyLinkedDag.dependencyFree
+      .map(_ -> Set.empty[BlockHash])
+      .toMap
+    help(childToparent, List.empty)
   }
 
   /**

@@ -184,7 +184,8 @@ class NodeRuntime private[node] (
           Effect
         ]()(
           Monad[Effect],
-          logEff
+          logEff,
+          MonadThrowable[Effect]
         )
 
         blockApiLock <- Resource.liftF(Semaphore[Effect](1))

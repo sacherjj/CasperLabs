@@ -10,8 +10,9 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper._
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.protocol.{BlockQuery}
+import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.catscontrib.TaskContrib._
@@ -198,10 +199,14 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
                          )
                        )
                      )(Sync[Task], blockStore, blockDagStorage)
-      logEff                 = new LogStub[Task]()
-      casperRef              <- MultiParentCasperRef.of[Task]
-      _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
+      logEff    = new LogStub[Task]()
+      casperRef <- MultiParentCasperRef.of[Task]
+      _         <- casperRef.set(casperEffect)
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(
+        Sync[Task],
+        logEff,
+        MonadThrowable[Task]
+      )
     } yield (logEff, casperRef, finalityDetectorEffect)
 
   private def emptyEffects(
@@ -221,9 +226,13 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
                          )
                        )
                      )(Sync[Task], blockStore, blockDagStorage)
-      logEff                 = new LogStub[Task]()
-      casperRef              <- MultiParentCasperRef.of[Task]
-      _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
+      logEff    = new LogStub[Task]()
+      casperRef <- MultiParentCasperRef.of[Task]
+      _         <- casperRef.set(casperEffect)
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(
+        Sync[Task],
+        logEff,
+        MonadThrowable[Task]
+      )
     } yield (logEff, casperRef, finalityDetectorEffect)
 }

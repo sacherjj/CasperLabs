@@ -6,6 +6,7 @@ import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.casper.Estimator.BlockHash
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -48,19 +49,28 @@ class DagOperationsTest
           b5      <- createBlock[Task](Seq(b3.blockHash))
           b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
           b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
-
-          dag <- blockDagStorage.getRepresentation
-          stream = DagOperations.bfToposortTraverseF[Task](List(BlockMetadata.fromBlock(genesis))) {
-            b =>
-              dag
-                .children(b.blockHash)
-                .flatMap {
-                  case Some(bs) => bs.toList.traverse(l => dag.lookup(l).map(_.get))
-                  case None     => List.empty[BlockMetadata].pure[Task]
-                }
+          l       <- (0 to 8).toList.traverse(blockDagStorage.lookupById).map(_.flatten)
+          pDag = l.foldLeft(BlockDependencyDag.empty: DoublyLinkedDag[BlockHash]) {
+            case (dag, block) => {
+              block.getHeader.parentHashes.foldLeft(dag) {
+                case (d, p) =>
+                  DoublyLinkedDagOperations.add(d, p, block.blockHash)
+              }
+            }
           }
-          result <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 3, 4, 5, 6, 7))
-        } yield result
+          toposort  = DagOperations.topologySort(BlockDependencyDag.empty)
+          _         = toposort shouldBe Some(List.empty)
+          toposort1 = DagOperations.topologySort(pDag)
+          bl        = toposort1.get
+          _         = bl.take(2) shouldBe List(genesis.blockHash, b1.blockHash)
+          _ = bl.drop(2).take(4).toSet shouldBe Set(
+            b2.blockHash,
+            b3.blockHash,
+            b4.blockHash,
+            b5.blockHash
+          )
+          _ = bl.drop(6).take(2).toSet shouldBe Set(b6.blockHash, b7.blockHash)
+        } yield ()
   }
 
   "Greatest common ancestor" should "be computed properly" in withStorage {
