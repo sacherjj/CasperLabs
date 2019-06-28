@@ -232,12 +232,9 @@ where
     /// then all function addresses generated within one deploy would have been the same.
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
-        {
-            let account = self.account();
-            pre_hash_bytes.extend_from_slice(&account.pub_key());
-            pre_hash_bytes.append(&mut account.nonce().to_bytes()?);
-            pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
-        }
+        pre_hash_bytes.extend_from_slice(&self.account().pub_key());
+        pre_hash_bytes.append(&mut self.account().nonce().to_bytes()?);
+        pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
 
         self.inc_fn_store_id();
 

@@ -1373,7 +1373,7 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
-        let account = match value {
+        let mut account = match value {
             Value::Account(a) => a,
             other => {
                 return ExecutionResult::precondition_failure(
@@ -1401,12 +1401,12 @@ impl Executor<Module> for WasmiExecutor {
                 );
             }
 
-            let mut updated_account = account.clone();
-            updated_account.increment_nonce();
+            // Save the incremented nonce which will be used through the execution lifecycle
+            account.increment_nonce();
             // Store updated account with new nonce
             tc.borrow_mut().write(
                 validated_key,
-                Validated::new(updated_account.into(), Validated::valid).unwrap(),
+                Validated::new(account.clone().into(), Validated::valid).unwrap(),
             );
         }
 
@@ -1414,7 +1414,7 @@ impl Executor<Module> for WasmiExecutor {
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
         let account_bytes = acct_key.as_account().unwrap();
-        let rng = create_rng(account_bytes, nonce);
+        let rng = create_rng(account_bytes, account.nonce());
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
