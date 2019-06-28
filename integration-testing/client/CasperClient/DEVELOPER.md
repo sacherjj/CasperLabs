@@ -11,5 +11,15 @@ Rest of the python files can be modified and committed to git repo.
 Please increase the version in `setup.py` if you have modified any of the tracked files in `CasperClient` folder.
 
 While bumping up the version number, please follow semantic version rules. You can find the guidelines for semantic
-version in official [website](https://semver.org).
+version in the official [website](https://semver.org).
 
+## Generating a new package and uploading to PyPi
+
+You need to install twine package with `pip install twine` and after that create the source distribution with
+`python setup.py sdist`. You can upload the package to PyPi with `twine upload dist/*`. Please ask in `#testing`
+channel or mail to `testing@casperlabs.io` for credentials.
+
+Please make sure everything is alright before uploading to PyPi otherwise you cannot override any existing versions
+even after deleting them in PyPi. This is a security protection and guarantee from PyPi guys.
+
+Enjoy hacking away. :)

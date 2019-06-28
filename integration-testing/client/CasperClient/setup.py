@@ -20,6 +20,7 @@ THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 PROTOBUF_DIR = f'{THIS_DIRECTORY}/../../../protobuf'
 PROTO_DIR = f'{THIS_DIRECTORY}/casper_client/proto'
 PACKAGE_DIR = f'{THIS_DIRECTORY}/casper_client'
+NAME = 'casperlabs_client'
 
 
 def proto_compiler_check():
@@ -28,6 +29,14 @@ def proto_compiler_check():
         sys.stderr.write(
             "protoc is not installed. "
             "Please install Protocol Buffers binary package for your Operating System.\n"
+        )
+        sys.exit(-1)
+
+
+def python_compiler_check():
+    if sys.version < '3.6':
+        sys.stderr.write(
+            f"{NAME} is only supported on Python versions 3.6+.\n"
         )
         sys.exit(-1)
 
@@ -105,6 +114,7 @@ def clean_up():
 
 
 def run_codegen():
+    python_compiler_check()
     proto_compiler_check()
     clean_up()
     make_dirs(f'{PROTO_DIR}')
@@ -134,7 +144,7 @@ class CDevelop(DevelopCommand):
 
 
 setup(
-    name='casperlabs_client',
+    name=NAME,
     version='0.3.2',
     packages=find_packages(exclude=['tests']),
     setup_requires=['grpcio-tools>=1.20',
@@ -166,6 +176,8 @@ setup(
     ],
     python_requires='>=3.6.0',
     project_urls={
-        'Source': 'https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperClient'
+        'Source': 'https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperClient',
+        'Readme': 'https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperClient/README.md',
+        'Developer Guide': 'https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperClient/DEVELOPER.md'
     },
 )
