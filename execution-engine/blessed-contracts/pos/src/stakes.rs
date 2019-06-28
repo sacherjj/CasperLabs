@@ -86,9 +86,6 @@ impl Stakes {
     /// * tries to unbond last validator,
     /// * validator was not bonded.
     pub fn unbond(&mut self, validator: &PublicKey, maybe_amount: Option<U512>) -> Result<U512> {
-        if self.0.len() == 1 {
-            return Err(Error::CannotUnbondLastValidator);
-        }
         let min = self
             .max_without(validator)
             .unwrap_or_else(U512::zero)
@@ -104,6 +101,9 @@ impl Stakes {
                 *stake -= amount;
                 return Ok(amount);
             }
+        }
+        if self.0.len() == 1 {
+            return Err(Error::CannotUnbondLastValidator);
         }
         // If the the amount is greater or equal to the stake, remove the validator.
         let stake = self.0.remove(validator).ok_or(Error::NotBonded)?;

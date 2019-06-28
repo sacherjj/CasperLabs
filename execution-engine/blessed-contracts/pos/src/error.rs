@@ -2,7 +2,7 @@ use core::result;
 
 use cl_std::contract_api;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 // TODO: Split this up into user errors vs. system errors.
 pub enum Error {
     NotBonded,
