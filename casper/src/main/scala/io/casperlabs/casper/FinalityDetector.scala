@@ -83,7 +83,10 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
       candidateBlockHash: BlockHash,
       targetBlockHash: BlockHash
   ): F[Boolean] =
-    isInMainChain(blockDag, candidateBlockHash, targetBlockHash)
+    for {
+      candidateBlockMetadata <- blockDag.lookup(candidateBlockHash)
+      result                 <- isInMainChain(blockDag, candidateBlockMetadata.get, targetBlockHash)
+    } yield result
 
   def levelZeroMsgs(
       blockDag: BlockDagRepresentation[F],
