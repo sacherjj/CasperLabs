@@ -166,11 +166,15 @@ pub extern "C" fn pos_ext() {
             // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
             for entry in unbonds {
-                contract_api::transfer_from_purse_to_account(
-                    pos_purse,
-                    entry.validator,
-                    entry.amount,
-                );
+                if contract_api::TransferResult::TransferError
+                    == contract_api::transfer_from_purse_to_account(
+                        pos_purse,
+                        entry.validator,
+                        entry.amount,
+                    )
+                {
+                    contract_api::revert(Error::UnbondTransferFailed.into());
+                }
             }
         }
         // Type of this method: `fn step()`

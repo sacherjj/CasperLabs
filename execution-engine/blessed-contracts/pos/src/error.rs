@@ -14,6 +14,7 @@ pub enum Error {
     BondTooLarge,
     UnbondTooLarge,
     BondTransferFailed,
+    UnbondTransferFailed,
     // System errors
     NoCaller,
     // TODO: Put these in their own enum, and wrap them separately in `BondingError` and
@@ -39,6 +40,7 @@ impl Into<u32> for Error {
             Error::BondTooLarge => 5,
             Error::UnbondTooLarge => 6,
             Error::BondTransferFailed => 7,
+            Error::UnbondTransferFailed => 8,
             // System errors
             Error::NoCaller => 0x100,
             Error::QueueNotStoredAsByteArray => 0x200,
