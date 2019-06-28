@@ -168,6 +168,12 @@ def test_network_partition_and_rejoin(four_nodes_network):
     partitions = nodes[:int(n / 2)], nodes[int(n / 2):]
     logging.info("PARTITIONS: {}".format(partitions))
 
+    # Node updates its list of alive peers in background with a certain period
+    # So we need to wait here for nodes to re-connect partitioned peers
+    for partition in partitions:
+        for node in partition:
+            wait_for_peers_count_at_least(node, len(partition) - 1, 60)
+
     # Propose separately in each partition. They should not see each others' blocks,
     # so everyone has the genesis plus the 1 block proposed in its partition.
     # Using the same nonce in both partitions because otherwise one of them will
@@ -188,7 +194,7 @@ def test_network_partition_and_rejoin(four_nodes_network):
     # Node updates its list of alive peers in background with a certain period
     # So we need to wait here for nodes to re-connect partitioned peers
     for node in nodes:
-        wait_for_peers_count_at_least(node, len(nodes) - 1, 60)
+        wait_for_peers_count_at_least(node, n - 1, 60)
 
     # When we propose a node in partition[0] it should propagate to partition[1],
     # however, nodes in partition[0] will still not see blocks from partition[1]
