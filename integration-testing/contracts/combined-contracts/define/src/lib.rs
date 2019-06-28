@@ -65,9 +65,9 @@ pub extern "C" fn mailing_list_ext() {
     let method_name: String = get_arg(0);
     match method_name.as_str() {
         "sub" => match sub(get_arg(1)).map(Key::from) {
-            Some(key) => {
-                let extra_urefs = vec![key];
-                ret(&Some(key), &extra_urefs);
+            Some(Key::URef(uref)) => {
+                let extra_urefs = vec![uref];
+                ret(&Some(Key::URef(uref)), &extra_urefs);
             }
             none => ret(&none, &Vec::new()),
         },
