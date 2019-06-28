@@ -12,7 +12,7 @@ import monix.eval.Task
 
 import scala.collection.immutable.{HashMap, HashSet}
 
-class CliqueOracleTest
+class FinalityDetectorTest
     extends FlatSpec
     with Matchers
     with BlockGenerator

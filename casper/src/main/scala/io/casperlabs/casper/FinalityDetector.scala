@@ -23,8 +23,9 @@ trait FinalityDetector[F[_]] {
   /**
     * The normalizedFaultTolerance must be greater than
 		* the fault tolerance threshold t in order for a candidate to be safe.
-		* The range of it is [-1,1].
-		*    * -1 means
+		* The range of t is [-1,1], and a positive t means the fraction of validators would have
+		* to equivocate to revert the decision on the block, a negative t means unless that fraction
+		* equivocates, the block can't get finalized. (I.e. it's orphaned.)
 		*
 		* @param candidateBlockHash Block hash of candidate block to detect safety on
     * @return normalizedFaultTolerance float between -1 and 1,
@@ -91,7 +92,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
       validators: List[Validator]
   ): F[Map[Validator, List[BlockMetadata]]] = {
 
-    // Get level zero messages of validator A
+    // Get level zero messages of the specified validator
     def levelZeroMsgsOfValidator(
         validator: Validator
     ): F[List[BlockMetadata]] =
@@ -240,13 +241,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
                             blockScoreAccumulator.block.validatorPublicKey
                         }
                         .toSet
-                      // Update q to be the (new) quorum of L_k.
-                      val newQuorumOfPrunedL = prunedLevel1Blocks
-                        .minBy {
-                          case (_, blockScoreAccumulator) => blockScoreAccumulator.estimateQ
-                        }
-                        ._2
-                        .estimateQ
 
                       pruningLoop(
                         blockDag,
@@ -255,7 +249,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
                         levelZeroMsgs,
                         weightMap,
                         Some(newCommittee),
-                        newQuorumOfPrunedL,
+                        minEstimate.estimateQ + 1L,
                         k
                       )
                     }
@@ -376,7 +370,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
                                }
       totalWeight            = weights.values.sum
       maxWeightApproximation = committeeApproximation.map(weights).sum
-      result <- if (2 * maxWeightApproximation < totalWeight) {
+      result <- if (2 * maxWeightApproximation <= totalWeight) {
                  none[Committee].pure[F]
                } else {
                  for {
@@ -427,7 +421,7 @@ object BlockScoreAccumulator {
   ): BlockScoreAccumulator = {
     val (highestLevelSoFar, highestLevelBySeenBlocks) =
       parent.highestLevelBySeenBlocks
-        .foldLeft(self.highestLevelSoFar -> self.highestLevelBySeenBlocks) {
+        .foldLeft((self.highestLevelSoFar, self.highestLevelBySeenBlocks)) {
           case ((highestLevel, acc), (vid, level)) =>
             val oldLevel = acc.getOrElse(vid, -1)
             val newAcc =
