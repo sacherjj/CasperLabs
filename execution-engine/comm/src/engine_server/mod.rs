@@ -382,8 +382,17 @@ where
                     let mut buff = [0u8; 32];
                     buff.copy_from_slice(&address);
                     let pk = PublicKey::new(buff);
-                    let bond: U512 = bond.get_stake().try_into().unwrap();
-                    Ok((pk, bond))
+                    match bond.get_stake().try_into() {
+                        Ok(bond) => Ok((pk, bond)),
+                        Err(err) => {
+                            let err_msg = format!("{:?}", err);
+                            logging::log_error(&err_msg);
+
+                            let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                            genesis_deploy_error.set_message(err_msg);
+                            Err(genesis_deploy_error)
+                        }
+                    }
                 }
             })
             .collect();
