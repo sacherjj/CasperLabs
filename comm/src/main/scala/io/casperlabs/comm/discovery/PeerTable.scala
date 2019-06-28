@@ -11,7 +11,7 @@ import io.casperlabs.comm.discovery.PeerTable.Entry
 import scala.annotation.tailrec
 import scala.util.Sorting
 
-object PeerTable {
+private[discovery] object PeerTable {
   final case class Entry(node: Node, pinging: Boolean = false) {
     override def toString = s"#{PeerTableEntry $node}"
   }
@@ -46,7 +46,7 @@ object PeerTable {
     * @return `Some(Int)` if `a` and `b` are comparable in this table,
     * `None` otherwise.
     */
-  private[discovery] def longestCommonBitPrefix(a: NodeIdentifier, b: NodeIdentifier): Int = {
+  def longestCommonBitPrefix(a: NodeIdentifier, b: NodeIdentifier): Int = {
     @tailrec
     def highBit(idx: Int): Int =
       if (idx === a.key.length) 8 * a.key.length
@@ -58,31 +58,44 @@ object PeerTable {
     highBit(0)
   }
 
-  private[discovery] def xorDistance(a: NodeIdentifier, b: NodeIdentifier): BigInt =
+  def xorDistance(a: NodeIdentifier, b: NodeIdentifier): BigInt =
     BigInt(a.key.zip(b.key).map { case (l, r) => (l ^ r).toByte }.toArray).abs
 
-  private[discovery] def xorDistance(a: ByteString, b: ByteString): BigInt =
+  def xorDistance(a: ByteString, b: ByteString): BigInt =
     xorDistance(NodeIdentifier(a), NodeIdentifier(b))
+
+  def sort[A](entries: List[A], target: NodeIdentifier)(
+      extractId: A => ByteString
+  ): List[A] =
+    entries.sorted(
+      (x: A, y: A) =>
+        Ordering[BigInt].compare(
+          PeerTable.xorDistance(target.asByteString, extractId(x)),
+          PeerTable.xorDistance(target.asByteString, extractId(y))
+        )
+    )
 }
 
 /** `PeerTable` implements the routing table used in the Kademlia
   * network discovery and routing protocol.
   *
   */
-final class PeerTable[F[_]: Monad](
+private[discovery] final class PeerTable[F[_]: Monad](
     local: NodeIdentifier,
-    private[discovery] val k: Int,
-    private[discovery] val tableRef: Ref[F, Vector[List[Entry]]]
+    val k: Int,
+    val tableRef: Ref[F, Vector[List[Entry]]]
 ) {
+  import PeerTable.sort
+
   private implicit def arrayEq[A]: Eq[Array[A]] = Eq.instance[Array[A]]((a, b) => a.sameElements(b))
   private implicit val bytestringEq: Eq[ByteString] =
     Eq.instance[ByteString]((a, b) => a.toByteArray === b.toByteArray)
 
-  private[discovery] val width = local.key.length // in bytes
+  val width = local.key.length // in bytes
 
-  private[discovery] def longestCommonBitPrefix(other: Node): Int =
+  def longestCommonBitPrefix(other: Node): Int =
     PeerTable.longestCommonBitPrefix(local, NodeIdentifier(other.id))
-  private[discovery] def longestCommonBitPrefix(other: NodeIdentifier): Int =
+  def longestCommonBitPrefix(other: NodeIdentifier): Int =
     PeerTable.longestCommonBitPrefix(local, other)
 
   def updateLastSeen(peer: Node)(implicit K: KademliaService[F]): F[Unit] = {
@@ -131,7 +144,7 @@ final class PeerTable[F[_]: Monad](
 
   def lookup(toLookup: NodeIdentifier): F[Seq[Node]] =
     tableRef.get.map { table =>
-      sort(table.flatten.toList, toLookup).take(k).map(_.node)
+      sort(table.flatten.toList, toLookup)(_.node.id).take(k).map(_.node)
     }
 
   def find(toFind: NodeIdentifier): F[Option[Node]] =
@@ -142,7 +155,7 @@ final class PeerTable[F[_]: Monad](
     )
 
   def peersAscendingDistance: F[List[Node]] = tableRef.get.map { table =>
-    sort(table.flatten.toList, local).map(_.node).toList
+    sort(table.flatten.toList, local)(_.node.id).map(_.node)
   }
 
   def sparseness: F[Seq[Int]] =
@@ -152,14 +165,5 @@ final class PeerTable[F[_]: Monad](
           case ((bucketA, _), (bucketB, _)) => bucketA.size < bucketB.size
         }
         .map(_._2)
-    )
-
-  private def sort(entries: Seq[Entry], target: NodeIdentifier): Seq[Entry] =
-    entries.sorted(
-      (x: Entry, y: Entry) =>
-        Ordering[BigInt].compare(
-          PeerTable.xorDistance(target.asByteString, x.node.id),
-          PeerTable.xorDistance(target.asByteString, y.node.id)
-        )
     )
 }

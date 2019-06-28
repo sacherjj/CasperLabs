@@ -1,9 +1,8 @@
 package io.casperlabs.client
 
 import cats.effect.{Sync, Timer}
-import io.casperlabs.casper.protocol
 import io.casperlabs.client.configuration._
-import io.casperlabs.shared.{Log, UncaughtExceptionLogger}
+import io.casperlabs.shared.{Log, UncaughtExceptionHandler}
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -15,7 +14,7 @@ object Main {
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
       "node-runner",
-      reporter = UncaughtExceptionLogger
+      reporter = UncaughtExceptionHandler
     )
 
     val exec =

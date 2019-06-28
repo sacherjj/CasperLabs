@@ -109,7 +109,8 @@ sealed abstract class MultiParentCasperInstances {
     for {
       dag <- BlockDagStorage[F].getRepresentation
       _ <- {
-        implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+        implicit val functorRaiseInvalidBlock =
+          Validate.raiseValidateErrorThroughApplicativeError[F]
         Validate.transactions[F](genesis, dag, genesisPreState, genesisEffects)
       }
       blockProcessingLock <- Semaphore[F](1)

@@ -179,7 +179,7 @@ object ExecEngineUtil {
     * @param dag Representation of the DAG.
     * @return Effects of running deploys from the block.
     */
-  def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
+  def effectsForBlock[F[_]: MonadThrowable: BlockStore: ExecutionEngineService](
       block: Block,
       prestate: StateHash,
       dag: BlockDagRepresentation[F]

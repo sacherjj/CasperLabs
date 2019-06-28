@@ -21,7 +21,8 @@ import scala.util.Either
 object ExecutionEngineServiceStub {
   type Bonds = Map[PublicKey, Long]
 
-  implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
+  implicit def functorRaiseInvalidBlock[F[_]: Sync] =
+    Validate.raiseValidateErrorThroughApplicativeError[F]
 
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
       b: Block,
