@@ -12,6 +12,9 @@ CARGO_FLAGS="-Z unstable-options"
 source "${HOME}/.cargo/env"
 
 # This is also necessary for CI
+rustup toolchain install $(cat "${DIR}/rust-toolchain")
+
+# This is also necessary for CI
 rustup target add --toolchain $(cat "${DIR}/rust-toolchain") $ARCH
 
 pushd $DIR
