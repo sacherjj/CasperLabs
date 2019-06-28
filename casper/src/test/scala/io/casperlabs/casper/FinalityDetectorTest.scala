@@ -115,6 +115,33 @@ class FinalityDetectorTest
                           2,
                           HashMap(v1 -> 1, v2 -> 1)
                         )
+          committeeOpt <- finalityDetectorEffect.pruningLoop(
+                           dag,
+                           jDag,
+                           Set.empty,
+                           levelZeroMsgs,
+                           HashMap(v1 -> 1, v2 -> 1),
+                           1
+                         )
+          _ = committeeOpt shouldBe None
+          committeeopt <- finalityDetectorEffect.pruningLoop(
+                           dag,
+                           jDag,
+                           Set(v1, v2),
+                           levelZeroMsgs,
+                           HashMap(v1 -> 1, v2 -> 1),
+                           1
+                         )
+          _ = committeeopt shouldBe Some(Committee(Set(v1, v2), 1L))
+          committeeopt <- finalityDetectorEffect.pruningLoop(
+                           dag,
+                           jDag,
+                           Set(v1, v2),
+                           levelZeroMsgs,
+                           HashMap(v1 -> 1, v2 -> 1),
+                           2
+                         )
+          _                              = committeeopt shouldBe Some(Committee(Set(v1, v2), 2L))
           (blockLevels, validatorLevels) = sweepResult
           _                              = blockLevels(b2.blockHash).blockLevel shouldBe (0)
           _                              = blockLevels(b3.blockHash).blockLevel shouldBe (0)

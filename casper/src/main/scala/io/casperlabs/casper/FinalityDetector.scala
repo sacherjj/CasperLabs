@@ -177,7 +177,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
   // Reducing L to a committee with quorum q
   // In a loop, prune L to quorum q, and prune L to the set of validators with a block in L_k,
   // until both steps don't change L anymore.
-  private def pruningLoop(
+  def pruningLoop(
       blockDag: BlockDagRepresentation[F],
       jDag: DoublyLinkedDag[BlockHash],
       committeeApproximation: Set[Validator],
