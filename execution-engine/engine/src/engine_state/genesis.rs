@@ -679,7 +679,7 @@ mod tests {
 
     #[test]
     fn create_pos_effects() {
-        let mut rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
+        let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
 
         let genesis_validator_a_public_key = PublicKey::new([0u8; 32]);
         let genesis_validator_a_stake = U512::from(1000);
@@ -701,7 +701,7 @@ mod tests {
         let pos_contract_bytes = get_pos_code_bytes();
 
         let pos_effects = {
-            super::create_pos_effects(&mut rng, pos_contract_bytes.clone(), genesis_validators, 1)
+            super::create_pos_effects(&rng, pos_contract_bytes.clone(), genesis_validators, 1)
                 .expect("Creating PoS effects in test should not fail.")
         };
 
