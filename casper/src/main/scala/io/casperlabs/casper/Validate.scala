@@ -15,6 +15,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
@@ -234,8 +235,17 @@ object Validate {
                                   }
                                 }
                                 .map(_.forall(identity))
-        keysMatched = d.approvals.toList.exists { a =>
-          a.approverPublicKey == d.getHeader.accountPublicKey
+        //TODO: Temporary check for easier development process until we get rid of the '3030...30' account
+        keysMatched = if (d.getHeader.accountPublicKey == ByteString.copyFrom(
+                            Base16.decode(
+                              "3030303030303030303030303030303030303030303030303030303030303030"
+                            )
+                          )) {
+          true
+        } else {
+          d.approvals.toList.exists { a =>
+            a.approverPublicKey == d.getHeader.accountPublicKey
+          }
         }
         _ <- Log[F]
               .warn(
