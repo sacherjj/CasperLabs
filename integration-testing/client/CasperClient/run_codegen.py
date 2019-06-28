@@ -86,15 +86,13 @@ def clean_up():
         shutil.rmtree(f'{PROTO_DIR}')
     except FileNotFoundError:
         pass
-    make_dirs(f'{PROTO_DIR}')
-
     for file_name in glob(f'{PACKAGE_DIR}/*pb2*py'):
         os.remove(file_name)
 
 
 def run_codegen():
     clean_up()
-
+    make_dirs(f'{PROTO_DIR}')
     collect_proto_files()
 
     modify_files("Patch proto files' imports", [(r'".+/', '"')], glob(f'{PROTO_DIR}/*.proto'))
