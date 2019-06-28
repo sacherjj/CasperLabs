@@ -74,6 +74,7 @@ impl StakesProvider for ContractStakes {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Stakes(pub BTreeMap<PublicKey, U512>);
 
 impl Stakes {
@@ -90,6 +91,7 @@ impl Stakes {
             .max_without(validator)
             .unwrap_or_else(U512::zero)
             .saturating_sub(MAX_SPREAD);
+        let max_decrease = MAX_DECREASE.min(self.sum() * MAX_REL_DECREASE / 1_000_000);
 
         if let Some(amount) = maybe_amount {
             // The minimum stake value to not violate the maximum spread.
@@ -97,6 +99,9 @@ impl Stakes {
             if *stake > amount {
                 if *stake - amount < min {
                     return Err(Error::SpreadTooHigh);
+                }
+                if amount > max_decrease {
+                    return Err(Error::UnbondTooLarge);
                 }
                 *stake -= amount;
                 return Ok(amount);
@@ -107,7 +112,6 @@ impl Stakes {
         }
         // If the the amount is greater or equal to the stake, remove the validator.
         let stake = self.0.remove(validator).ok_or(Error::NotBonded)?;
-        let max_decrease = MAX_DECREASE.min(self.sum() * MAX_REL_DECREASE / 1_000_000);
         if stake > min.saturating_add(MAX_DECREASE) && stake > max_decrease {
             return Err(Error::UnbondTooLarge);
         }
@@ -168,5 +172,63 @@ impl Stakes {
         self.0
             .values()
             .fold(U512::zero(), |sum, s| sum.saturating_add(*s))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use cl_std::value::{account::PublicKey, U512};
+
+    use crate::error::Error;
+    use crate::stakes::Stakes;
+
+    const KEY1: [u8; 32] = [1; 32];
+    const KEY2: [u8; 32] = [2; 32];
+
+    fn new_stakes(stakes: &[([u8; 32], usize)]) -> Stakes {
+        Stakes(
+            stakes
+                .iter()
+                .map(|&(key, amount)| (PublicKey::new(key), U512::from(amount)))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn test_unbond() {
+        let mut stakes = new_stakes(&[(KEY1, 5), (KEY2, 10)]);
+        assert_eq!(
+            Ok(U512::from(5)),
+            stakes.unbond(&PublicKey::new(KEY1), None)
+        );
+        assert_eq!(new_stakes(&[(KEY2, 10)]), stakes);
+    }
+
+    #[test]
+    fn test_unbond_last_validator() {
+        let mut stakes = new_stakes(&[(KEY1, 5)]);
+        assert_eq!(
+            Err(Error::CannotUnbondLastValidator),
+            stakes.unbond(&PublicKey::new(KEY1), None)
+        );
+    }
+
+    #[test]
+    fn test_partially_unbond() {
+        let mut stakes = new_stakes(&[(KEY1, 50)]);
+        assert_eq!(
+            Ok(U512::from(4)),
+            stakes.unbond(&PublicKey::new(KEY1), Some(U512::from(4)))
+        );
+        assert_eq!(new_stakes(&[(KEY1, 46)]), stakes);
+    }
+
+    #[test]
+    fn test_unbond_too_much() {
+        let mut stakes = new_stakes(&[(KEY1, 50)]);
+        assert_eq!(
+            Err(Error::UnbondTooLarge),
+            stakes.unbond(&PublicKey::new(KEY1), Some(U512::from(6)))
+        );
     }
 }
