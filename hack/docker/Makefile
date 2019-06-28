@@ -1,4 +1,4 @@
-CL_CASPER_NUM_VALIDATORS ?= 10
+CL_CASPER_NUM_VALIDATORS ?= 3
 CL_SERVER_HTTP_PORT ?= 40403
 CL_VERSION ?= latest
 
@@ -95,27 +95,24 @@ slow:
 # Generate keys and bonds.
 .casperlabs:
 	mkdir -p .casperlabs/bootstrap
-	mkdir -p .casperlabs/genesis
+	mkdir -p .casperlabs/genesis/system-account
 	mkdir -p .casperlabs/node-0
 	mkdir -p keys/account-0
-	../key-management/docker-gen-keys.sh .casperlabs/node-0 || \
-		(cd ../..  && \
-		make docker-build/key-generator && \
-		cd hack/docker && \
-		../key-management/docker-gen-keys.sh .casperlabs/node-0)
+
+	@# TODO: When we start publishing blessed-contracts.tar.gz download it make it available.
+
+	../key-management/docker-gen-account-keys.sh .casperlabs/genesis/system-account
+	../key-management/docker-gen-account-keys.sh keys/account-0
+	../key-management/docker-gen-keys.sh .casperlabs/node-0
+
 	cp -r .casperlabs/node-0/node-id .casperlabs/bootstrap/node-id
 	(cat .casperlabs/node-0/validator-id; echo " $(CL_CASPER_NUM_VALIDATORS)") >> .casperlabs/genesis/bonds.txt
-	../key-management/docker-gen-keys.sh keys/account-0
-	(cd keys/account-0 && rm -rf node.certificate.pem  node-id  node.key.pem  validator-id)
-	(cd keys/account-0 && mv validator-private.pem account-private.pem && mv validator-public.pem account-public.pem)
 
 	bash -c 'i=1 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
 		mkdir -p .casperlabs/node-$$i ; \
 		mkdir -p keys/account-$$i ; \
 		../key-management/docker-gen-keys.sh .casperlabs/node-$$i ; \
-		../key-management/docker-gen-keys.sh keys/account-$$i ; \
-		(cd keys/account-$$i && rm -rf node.certificate.pem  node-id  node.key.pem  validator-id && cd ../..); \
-		(cd keys/account-$$i && mv validator-private.pem account-private.pem && mv validator-public.pem account-public.pem && cd ../..); \
+		../key-management/docker-gen-account-keys.sh keys/account-$$i ; \
 		BOND=$$(( $(CL_CASPER_NUM_VALIDATORS)+2*$$i )) ; \
 		(cat .casperlabs/node-$$i/validator-id; echo " $$BOND") >> .casperlabs/genesis/bonds.txt ; \
 		((i = i + 1)) ; \

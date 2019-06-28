@@ -24,11 +24,11 @@ if [[ -z "$DRONE_BUILD_NUMBER" ]]; then
     TAG="latest"
     docker pull casperlabs/key-generator:"$TAG" &> /dev/null || {
         TAG="dev"
-        echo "Failed to pull casperlabs/key-generator:latest"
-        echo "Falling back to casperlabs/key-generator:dev"
-        docker pull casperlabs/key-generator:"$TAG"
+        #echo "Failed to pull casperlabs/key-generator:latest"
+        #echo "Falling back to casperlabs/key-generator:dev"
+        docker pull casperlabs/key-generator:"$TAG" &> /dev/null
     }
-    docker run --rm -it -v "$OUTPUT_DIR":/keys casperlabs/key-generator:"$TAG" /keys
+    docker run --rm -it --user $UID -v "$OUTPUT_DIR":/keys casperlabs/key-generator:"$TAG" /keys
 else
     docker run --rm -v "$OUTPUT_DIR":/keys casperlabs/key-generator:DRONE-"$DRONE_BUILD_NUMBER" /keys
 fi

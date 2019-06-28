@@ -91,6 +91,7 @@ mod ext_ffi {
         pub fn set_action_threshold(permission_level: u32, threshold: i32) -> i32;
         pub fn remove_uref(name_ptr: *const u8, name_size: usize);
         pub fn get_caller(dest_ptr: *const u8) -> i32;
+        pub fn create_purse(purse_id_ptr: *const u8, purse_id_size: usize) -> i32;
         pub fn transfer_to_account(
             target_ptr: *const u8,
             target_size: usize,
@@ -98,6 +99,22 @@ mod ext_ffi {
             amount_size: usize,
         ) -> i32;
         pub fn get_blocktime(dest_ptr: *const u8);
+        pub fn transfer_from_purse_to_account(
+            source_ptr: *const u8,
+            source_size: usize,
+            target_ptr: *const u8,
+            target_size: usize,
+            amount_ptr: *const u8,
+            amount_size: usize,
+        ) -> i32;
+        pub fn transfer_from_purse_to_purse(
+            source_ptr: *const u8,
+            source_size: usize,
+            target_ptr: *const u8,
+            target_size: usize,
+            amount_ptr: *const u8,
+            amount_size: usize,
+        ) -> i32;
     }
 }
 

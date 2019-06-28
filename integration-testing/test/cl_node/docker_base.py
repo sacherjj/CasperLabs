@@ -60,6 +60,7 @@ class DockerConfig:
     docker_client: 'DockerClient'
     node_private_key: str
     node_public_key: str = None
+    node_env: dict = None
     network: Optional[Any] = None
     number: int = 0
     rand_str: Optional[str] = None
@@ -75,6 +76,13 @@ class DockerConfig:
     def __post_init__(self):
         if self.rand_str is None:
             self.rand_str = random_string(5)
+        if self.node_env is None:
+            self.node_env = {
+                'RUST_BACKTRACE': 'full',
+                'CL_LOG_LEVEL': os.environ.get("CL_LOG_LEVEL", "INFO"),
+                'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'true',
+                'CL_SERVER_NO_UPNP': 'true'
+            }
 
     def node_command_options(self, server_host: str) -> dict:
         bootstrap_path = '/root/.casperlabs/bootstrap'
@@ -225,8 +233,8 @@ class DockerBase:
                 self.disconnect_from_network(network_name)
             try:
                 self.container.remove(force=True, v=True)
-            except docker.errors.NotFound:
-                pass
+            except Exception as e:
+                logging.error(f'Error removing container {self.container_name}: {e}')
 
 
 class LoggingDockerBase(DockerBase):

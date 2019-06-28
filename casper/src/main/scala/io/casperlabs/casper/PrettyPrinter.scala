@@ -35,6 +35,7 @@ object PrettyPrinter {
         case None    => "Write(Nothing)"
         case Some(v) => s"Write(${buildString(v)})"
       }
+    case Transform.TransformInstance.AddU64(TransformAddUInt64(x)) => s"AddU64($x)"
   }
 
   def buildString(v: Option[ProtocolVersion]): String = v match {
@@ -74,6 +75,8 @@ object PrettyPrinter {
     case Value.Value.StringValue(s)               => s"String($s)"
     case Value.Value.BigInt(v)                    => s"BigInt(${v.value})"
     case Value.Value.Key(key)                     => buildString(key)
+    case Value.Value.LongValue(l)                 => s"Long($l)"
+    case Value.Value.Unit(_)                      => "Unit"
   }
 
   def buildString(b: BlockMessage): String =

@@ -157,13 +157,25 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
                 FunctionIndex::GetCallerIndex.into(),
             ),
+            "get_blocktime" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::GetBlocktimeIndex.into(),
+            ),
+            "create_purse" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                FunctionIndex::CreatePurseIndex.into(),
+            ),
             "transfer_to_account" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
                 FunctionIndex::TransferToAccountIndex.into(),
             ),
-            "get_blocktime" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::GetBlocktimeIndex.into(),
+            "transfer_from_purse_to_account" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
+                FunctionIndex::TransferFromPurseToAccountIndex.into(),
+            ),
+            "transfer_from_purse_to_purse" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
+                FunctionIndex::TransferFromPurseToPurseIndex.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

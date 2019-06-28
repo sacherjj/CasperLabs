@@ -121,12 +121,7 @@ class DockerNode(LoggingDockerBase):
                 f'{self.GRPC_EXTERNAL_PORT}/tcp': self.grpc_external_docker_port}
 
     def _get_container(self):
-        env = {
-            'RUST_BACKTRACE': 'full',
-            'CL_LOG_LEVEL': 'DEBUG',
-            'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'true',
-            'CL_SERVER_NO_UPNP': 'true'
-        }
+        env = self.config.node_env
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
             env['_JAVA_OPTIONS'] = java_options
@@ -230,6 +225,15 @@ class DockerNode(LoggingDockerBase):
         deploy_output = self.client.deploy(**deploy_kwargs)
         assert 'Success!' in deploy_output
         block_hash_output_string = self.client.propose()
+        block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
+        assert block_hash is not None
+        logging.info(f"The block hash: {block_hash} generated for {self.container.name}")
+        return block_hash
+
+    def deploy_and_propose_with_retry(self, max_attempts: int, retry_seconds: int, **deploy_kwargs) -> str:
+        deploy_output = self.client.deploy(**deploy_kwargs)
+        assert 'Success!' in deploy_output
+        block_hash_output_string = self.client.propose_with_retry(max_attempts, retry_seconds)
         block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
         assert block_hash is not None
         logging.info(f"The block hash: {block_hash} generated for {self.container.name}")

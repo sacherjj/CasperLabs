@@ -1,3 +1,7 @@
+# Do not support:
+#   * Nested tables
+#   * Arrays
+
 # io.casperlabs.node.configuration.Configuration.Server
 [server]
 
@@ -214,11 +218,20 @@ minimum-bond = 1
 # Maximum bond accepted by the PoS contract in the genesis block.
 maximum-bond = 9223372036854775807
 
-# True if there should be a public access CSPR faucet in the genesis block.
-has-faucet = false
-
 # Number of signatures from trusted validators required to creating an approved genesis block.
 required-sigs = 0
+
+# Path to the PEM encoded public key to use for the system account.
+# genesis-account-public-key-path =
+
+# Initial amount of tokens to pass to the Mint contract.
+initial-tokens = 0
+
+# Path to the Wasm file which contains the Mint contract.
+# mint-code-path =
+
+# Path to the Wasm file which contains the Proof-of-Stake contract
+# pos-code-path =
 
 # Identifier of the shard this node is connected to.
 shard-id = "casperlabs"

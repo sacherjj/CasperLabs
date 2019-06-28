@@ -268,7 +268,7 @@ def wait_for_new_fork_choice_tip_block(node: 'Node', block: str, timeout_seconds
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
-def wait_for_blocks_count_at_least(node: 'Node', expected_blocks_count: int, max_retrieved_blocks: int, timeout_seconds: int = 10):
+def wait_for_blocks_count_at_least(node: 'Node', expected_blocks_count: int, max_retrieved_blocks: int, timeout_seconds: int = 60):
     predicate = BlocksCountAtLeast(node, expected_blocks_count, max_retrieved_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 

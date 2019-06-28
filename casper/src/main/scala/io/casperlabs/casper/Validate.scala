@@ -1,26 +1,23 @@
 package io.casperlabs.casper
 
-import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{Applicative, Functor, Monad}
+import cats.{Applicative, ApplicativeError, Functor, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.protocol.{ApprovedBlock}
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}, Block.Justification
+import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
+import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.util.ProtoUtil.bonds
-import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
-import io.casperlabs.casper.consensus.state
-import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
@@ -37,13 +34,14 @@ object Validate {
 
   val DRIFT = 15000 // 15 seconds
 
-  def raiseValidateErrorThroughSync[F[_]: Sync]: FunctorRaise[F, InvalidBlock] =
+  def raiseValidateErrorThroughApplicativeError[F[_]: ApplicativeError[?[_], Throwable]]
+      : FunctorRaise[F, InvalidBlock] =
     new FunctorRaise[F, InvalidBlock] {
       override val functor: Functor[F] =
         Functor[F]
 
       override def raise[A](e: InvalidBlock): F[A] =
-        Sync[F].raiseError(ValidateErrorWrapper(e))
+        ValidateErrorWrapper(e).raiseError[F, A]
     }
 
   final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception(status.toString)

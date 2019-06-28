@@ -39,7 +39,7 @@ object EffectsTestInstances {
     var nodes: List[Node] = List.empty[Node]
     def reset(): Unit =
       nodes = List.empty[Node]
-    def alivePeersAscendingDistance: F[List[Node]] = Sync[F].delay {
+    def recentlyAlivePeersAscendingDistance: F[List[Node]] = Sync[F].delay {
       nodes
     }
     def discover: F[Unit]                                          = ???

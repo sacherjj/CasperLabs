@@ -48,9 +48,9 @@ class NodeRuntime private[node] (
 )(implicit log: Log[Task]) {
 
   private[this] val loopScheduler =
-    Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
+    Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionHandler)
   private[this] val blockingScheduler =
-    Scheduler.cached("blocking-io", 4, 64, reporter = UncaughtExceptionLogger)
+    Scheduler.cached("blocking-io", 4, 64, reporter = UncaughtExceptionHandler)
   private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
     catsConcurrentEffectForEffect(
       scheduler
@@ -84,6 +84,8 @@ class NodeRuntime private[node] (
     val logId: Log[Id]         = Log.logId
     val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
 
+    val filesApiEff = FilesAPI.create[Effect](Sync[Effect], logEff)
+
     // SSL context to use for the public facing API.
     val maybeApiSslContext = Option(conf.tls.readCertAndKey).filter(_ => conf.grpc.useTls).map {
       case (cert, key) =>
@@ -113,14 +115,16 @@ class NodeRuntime private[node] (
         implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                           id,
                                                           kademliaPort,
-                                                          conf.server.defaultTimeout
+                                                          conf.server.defaultTimeout,
+                                                          conf.server.useGossiping,
+                                                          conf.server.relayFactor,
+                                                          conf.server.relaySaturation
                                                         )(
                                                           maybeBootstrap
                                                         )(
                                                           blockingScheduler,
                                                           effects.peerNodeAsk,
                                                           log,
-                                                          effects.time,
                                                           metrics
                                                         )
 
@@ -274,6 +278,7 @@ class NodeRuntime private[node] (
                 multiParentCasperRef,
                 executionEngineService,
                 finalizedBlocksStream,
+                filesApiEff,
                 scheduler,
                 logId,
                 metricsId
@@ -297,6 +302,7 @@ class NodeRuntime private[node] (
                 multiParentCasperRef,
                 executionEngineService,
                 finalizedBlocksStream,
+                filesApiEff,
                 scheduler
               )
             }

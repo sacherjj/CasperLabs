@@ -341,7 +341,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
           Log[F].debug(s"Relayed an approval for $id to $relayed peers.")
       }
 
-    nodeDiscovery.alivePeersAscendingDistance.flatMap { peers =>
+    nodeDiscovery.recentlyAlivePeersAscendingDistance.flatMap { peers =>
       loop(Random.shuffle(peers), 0)
     }
   }

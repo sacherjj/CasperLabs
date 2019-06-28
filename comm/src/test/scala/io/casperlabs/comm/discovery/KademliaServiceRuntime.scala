@@ -1,19 +1,17 @@
 package io.casperlabs.comm.discovery
 
-import java.util.concurrent.atomic.AtomicInteger
-
-import scala.collection.mutable
-import scala.concurrent.duration._
-import scala.util.Random
-
 import cats._
 import cats.effect.Timer
 import cats.effect.concurrent.MVar
 import cats.implicits._
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm._
+
+import scala.collection.mutable
 import scala.concurrent.duration._
 
-abstract class KademliaServiceRuntime[F[_]: Monad: Timer, E <: Environment] extends TestRuntime {
+abstract class KademliaServiceRuntime[F[_]: MonadThrowable: Timer, E <: Environment]
+    extends TestRuntime {
 
   def createEnvironment(port: Int): F[E]
 
@@ -21,13 +19,21 @@ abstract class KademliaServiceRuntime[F[_]: Monad: Timer, E <: Environment] exte
 
   def extract[A](fa: F[A]): A
 
-  def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
-    for {
-      e1 <- createEnvironment(getFreePort)
-      e2 <- createEnvironment(getFreePort)
-      _  = require(e1 != e2, "Oop, we picked the same port twice!")
-      r  <- block(e1, e2)
-    } yield r
+  def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] = {
+    def loop(i: Int, maxRetries: Int): F[A] =
+      if (i == maxRetries)
+        MonadThrowable[F].raiseError[A](
+          new IllegalStateException(s"Failed to pick distinct ports after $maxRetries attempts")
+        )
+      else
+        for {
+          e1 <- createEnvironment(getFreePort)
+          e2 <- createEnvironment(getFreePort)
+          r  <- if (e1.port == e2.port) loop(i + 1, maxRetries) else block(e1, e2)
+        } yield r
+
+    loop(0, 5)
+  }
 
   trait Runtime[A] {
     protected def pingHandler: PingHandler[F]

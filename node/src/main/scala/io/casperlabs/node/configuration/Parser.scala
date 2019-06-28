@@ -21,6 +21,7 @@ private[configuration] trait Parser[A] {
 private[configuration] trait ParserImplicits {
   implicit val stringParser: Parser[String] = _.asRight[String]
   implicit val intParser: Parser[Int]       = s => Try(s.toInt).toEither.leftMap(_.getMessage)
+  implicit val bigIntParser: Parser[BigInt] = s => Try(BigInt(s)).toEither.leftMap(_.getMessage)
   implicit val longParser: Parser[Long]     = s => Try(s.toLong).toEither.leftMap(_.getMessage)
   implicit val doubleParser: Parser[Double] = s => Try(s.toDouble).toEither.leftMap(_.getMessage)
   implicit val booleanParser: Parser[Boolean] = {
