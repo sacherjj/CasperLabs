@@ -1401,7 +1401,8 @@ impl Executor<Module> for WasmiExecutor {
                 );
             }
 
-            // Save the incremented nonce which will be used through the execution lifecycle
+            // Increment nonce in the account that would be later used through the execution
+            // lifecycle.
             account.increment_nonce();
             // Store updated account with new nonce
             tc.borrow_mut().write(
