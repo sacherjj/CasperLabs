@@ -366,7 +366,6 @@ where
 
         let genesis_validators_result = genesis_request
             .get_genesis_validators()
-            .to_vec()
             .iter()
             .map(|bond| {
                 let address = bond.get_validator_public_key();
