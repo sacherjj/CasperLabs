@@ -68,7 +68,8 @@ expected_counter_result = count(1)
 
 test_parameters = [
     (COUNTER_CALL, "counter/count", lambda r: r.int_value == next(expected_counter_result)),
-    (MAILING_LIST_CALL, "mailing/list", lambda r: r.string_list.values == "CasperLabs"),
+    # TODO: reenable this test when EE-401 fix is merged
+    # (MAILING_LIST_CALL, "mailing/list", lambda r: r.string_list.values == "CasperLabs"),
     (HELLO_WORLD, "helloworld", lambda r: r.string_value == "Hello, World"),
 ]
 

@@ -101,21 +101,21 @@ pub extern "C" fn counter_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
+    // hello_name
+    let pointer = store_function("hello_name_ext", BTreeMap::new());
+    add_uref("hello_name", &pointer.into());
 
-    let _hello_name_hash = store_function("hello_name_ext", BTreeMap::new());
-    add_uref("hello", &_hello_name_hash.into());
-
+    // counter
     let counter_local_key = new_uref(0); //initialize counter
 
     //create map of references for stored contract
     let mut counter_urefs: BTreeMap<String, Key> = BTreeMap::new();
     let key_name = String::from("count");
     counter_urefs.insert(key_name, counter_local_key.into());
-
     let _counter_hash = store_function("counter_ext", counter_urefs);
     add_uref("counter", &_counter_hash.into());
 
-
+    // mailing list
     let init_list: Vec<String> = Vec::new();
     let list_key = new_uref(init_list);
 
@@ -124,7 +124,6 @@ pub extern "C" fn call() {
     let key_name = String::from("list");
     mailing_list_urefs.insert(key_name, list_key.into());
 
-    let _mailing_list_hash = store_function("mailing_list_ext", mailing_list_urefs);
-
-    add_uref("mailing", &_mailing_list_hash.into());
+    let pointer = store_function("mailing_list_ext", mailing_list_urefs);
+    add_uref("mailing", &pointer.into())
 }

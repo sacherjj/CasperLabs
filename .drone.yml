@@ -213,6 +213,7 @@ pipeline:
       - "apt-get update && apt-get -y install gcc"
       - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2"
       - "cd integration-testing"
+      - "./contracts/build_contracts.sh"
       - ./docker_run_tests.sh
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
