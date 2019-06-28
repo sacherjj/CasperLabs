@@ -16,8 +16,8 @@ pub extern "C" fn call() {
     // https://casperlabs.atlassian.net/browse/EE-384
     // fn_index == 1
     let hash = ContractPointer::Hash([
-        164, 102, 153, 51, 236, 214, 169, 167, 126, 44, 250, 247, 179, 214, 203, 229, 239, 69, 145,
-        25, 5, 153, 113, 55, 255, 188, 176, 201, 7, 4, 42, 100,
+        40, 187, 84, 61, 149, 153, 87, 11, 8, 127, 115, 154, 177, 24, 64, 119, 110, 49, 39, 103,
+        248, 25, 47, 60, 132, 200, 80, 11, 5, 132, 64, 160,
     ]);
     // Call `define` part of the contract.
     call_contract(hash, &(), &Vec::new())

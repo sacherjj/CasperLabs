@@ -12,9 +12,8 @@ use common::contract_api::pointers::ContractPointer;
 pub extern "C" fn call() {
     //This hash comes from blake2b256( [0;32] ++ [0;8] ++ [0;4] )
     let hash = ContractPointer::Hash([
-        201, 123, 219, 72, 220, 218, 196, 8, 153, 155, 66, 213, 0, 56,
-        26, 117, 58, 115, 205, 209, 96, 73, 89, 3, 7, 155, 124, 250,
-        90, 64, 33, 161
+        25, 163, 109, 131, 31, 124, 41, 185, 236, 114, 217, 3, 151, 135, 34, 41, 131, 156, 136,
+        140, 248, 77, 118, 167, 226, 213, 63, 106, 29, 164, 56, 197,
     ]);
     let arg = "inc";
     let _result: () = call_contract(hash.clone(), &arg, &Vec::new());
