@@ -51,7 +51,6 @@ impl Key {
 
 // There is no impl LowerHex for neither [u8; 32] nor &[u8] in std.
 // I can't impl them b/c they're not living in current crate.
-/// Creates a hex string from [u8; 32] table.
 pub fn addr_to_hex(addr: &[u8; 32]) -> String {
     let mut str = String::with_capacity(64);
     for b in addr {
@@ -63,10 +62,18 @@ pub fn addr_to_hex(addr: &[u8; 32]) -> String {
 impl core::fmt::Display for Key {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Key::Account(addr) => write!(f, "Key::Account({})", addr_to_hex(addr)),
-            Key::Hash(addr) => write!(f, "Key::Hash({})", addr_to_hex(addr)),
-            Key::URef(uref) => write!(f, "Key::{}", uref), // Display impl for URef will append URef(…).
-            Key::Local(hash) => write!(f, "Key::Local({})", addr_to_hex(hash)),
+            Key::Account(addr) => write!(f, "Account({})", addr_to_hex(addr)),
+            Key::Hash(addr) => write!(f, "Hash({})", addr_to_hex(addr)),
+            Key::URef(uref) => {
+                let addr = uref.addr();
+                let access_rights_o = uref.access_rights();
+                if let Some(access_rights) = access_rights_o {
+                    write!(f, "URef({}, {})", addr_to_hex(&addr), access_rights)
+                } else {
+                    write!(f, "URef({}, None)", addr_to_hex(&addr))
+                }
+            }
+            Key::Local(hash) => write!(f, "Local({})", addr_to_hex(hash)),
         }
     }
 }
@@ -257,22 +264,19 @@ mod tests {
         let account_key = Key::Account(addr_array);
         assert_eq!(
             format!("{}", account_key),
-            format!("Key::Account({})", expected_hash)
+            format!("Account({})", expected_hash)
         );
         let uref_key = Key::URef(URef::new(addr_array, AccessRights::READ));
         assert_eq!(
             format!("{}", uref_key),
-            format!("Key::URef({}, READ)", expected_hash)
+            format!("URef({}, READ)", expected_hash)
         );
         let hash_key = Key::Hash(addr_array);
-        assert_eq!(
-            format!("{}", hash_key),
-            format!("Key::Hash({})", expected_hash)
-        );
+        assert_eq!(format!("{}", hash_key), format!("Hash({})", expected_hash));
         let local_key = Key::Local(addr_array);
         assert_eq!(
             format!("{}", local_key),
-            format!("Key::Local({})", expected_hash)
+            format!("Local({})", expected_hash)
         );
     }
 }

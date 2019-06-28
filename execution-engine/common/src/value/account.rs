@@ -1,10 +1,9 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
-use crate::key::{addr_to_hex, Key, UREF_SIZE};
+use crate::key::{Key, UREF_SIZE};
 use crate::uref::{URef, UREF_SIZE_SERIALIZED};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::fmt::{Debug, Display, Formatter};
 use failure::Fail;
 
 const DEFAULT_NONCE: u64 = 0;
@@ -242,20 +241,8 @@ impl Weight {
 
 pub const WEIGHT_SIZE: usize = U8_SIZE;
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct PublicKey([u8; KEY_SIZE]);
-
-impl Display for PublicKey {
-    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "PublicKey({})", addr_to_hex(&self.0))
-    }
-}
-
-impl Debug for PublicKey {
-    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "{}", self)
-    }
-}
 
 // TODO: This needs to be updated, `PUBLIC_KEY_SIZE` is not 32 bytes as KEY_SIZE * U8_SIZE.
 // I am not changing that as I don't want to deal with ripple effect.
