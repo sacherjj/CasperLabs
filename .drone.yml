@@ -181,7 +181,7 @@ pipeline:
   docker-build-ee-int-bors:
     commands:
       - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-      - "./integration-tests/contracts/build_contracts.sh"
+      - "./integration-testing/contracts/build_contracts.sh"
       - "make docker-build/execution-engine"
       - "make docker-build/integration-testing"
       - "make docker-build/key-generator"
