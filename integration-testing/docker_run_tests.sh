@@ -34,10 +34,7 @@ cleanup() {
 }
 trap cleanup 0
 
-# Running locally, build contracts if needed
-if [[ -z $TAG_NAME ]]; then
-    ./contracts/build_contracts.sh
-fi
+./contracts/build_contracts.sh
 
 echo "Setting up networks for Python Client..."
 for num in $(seq 0 $MAX_NODE_COUNT)
