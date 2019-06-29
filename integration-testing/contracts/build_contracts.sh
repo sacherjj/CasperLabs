@@ -4,18 +4,21 @@ set -o errexit
 
 ARCH="wasm32-unknown-unknown"
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-SOURCE_DIR="${DIR}/target/${ARCH}/debug"
+SOURCE_DIR="${DIR}/target/${ARCH}/release"
 DEST_DIR="${DIR}/../resources"
+CARGO_FLAGS="-Z unstable-options"
 
 # This is necessary for CI
 source "${HOME}/.cargo/env"
 
-rustup target add --toolchain $(cat rust-toolchain) "${ARCH}"
+# This is also necessary for CI
+rustup toolchain install $(cat "${DIR}/rust-toolchain")
 
-cargo build --target "${ARCH}"
+# This is also necessary for CI
+rustup target add --toolchain $(cat "${DIR}/rust-toolchain") $ARCH
 
-WASMS=($(find "${SOURCE_DIR}" -name \*.wasm))
+pushd $DIR
 
-for FILE in "${WASMS[@]}"; do
-    cp -v "${FILE}" "${DEST_DIR}"
-done
+cargo build $CARGO_FLAGS --target $ARCH --release --out-dir $DEST_DIR
+
+popd
