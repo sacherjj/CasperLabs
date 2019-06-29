@@ -13,16 +13,6 @@ use common::contract_api::*;
 use common::contract_api::pointers::UPointer;
 use common::key::Key;
 use common::uref::URef;
-use core::fmt::Write;
-
-// e.g. `addr_to_hex(&list_key.0)`
-fn addr_to_hex(addr: &[u8; 32]) -> String {
-    let mut str = String::with_capacity(64);
-    for b in addr {
-        write!(&mut str, "{:02x}", b).unwrap();
-    }
-    str
-}
 
 fn hello_name(name: &str) -> String {
     let mut result = String::from("Hello, ");
@@ -71,29 +61,28 @@ fn publish(msg: String) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn mailing_list_ext() {
-    let method_name: String = get_arg(0);
-    match method_name.as_str() {
-        "sub" => match sub(get_arg(1)) {
-            Some(upointer) => {
-                let extra_uref = URef::new(upointer.0, upointer.1);
-                let extra_urefs = vec![extra_uref];
-                ret(&Some(Key::from(upointer)), &extra_urefs);
-            }
-            _ => ret(&Option::<Key>::None, &Vec::new()),
-        },
-        //Note that this is totally insecure. In reality
-        //the pub method would be only available under an
-        //unforgable reference because otherwise anyone could
-        //spam the mailing list.
-        "pub" => {
-            publish(get_arg(1));
-        }
-        _ => panic!("Unknown method name!"),
-    }
-}
-
+ #[no_mangle]
+ pub extern "C" fn mailing_list_ext() {
+     let method_name: String = get_arg(0);
+     match method_name.as_str() {
+         "sub" => match sub(get_arg(1)) {
+             Some(upointer) => {
+                 let extra_uref = URef::new(upointer.0, upointer.1);
+                 let extra_urefs = vec![extra_uref];
+                 ret(&Some(Key::from(upointer)), &extra_urefs);
+             }
+             _ => ret(&Option::<Key>::None, &Vec::new()),
+         },
+         //Note that this is totally insecure. In reality
+         //the pub method would be only available under an
+         //unforgable reference because otherwise anyone could
+         //spam the mailing list.
+         "pub" => {
+             publish(get_arg(1));
+         }
+         _ => panic!("Unknown method name!"),
+     }
+ }
 
 #[no_mangle]
 pub extern "C" fn counter_ext() {
@@ -111,21 +100,21 @@ pub extern "C" fn counter_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
+    // hello_name
+    let pointer = store_function("hello_name_ext", BTreeMap::new());
+    add_uref("hello_name", &pointer.into());
 
-    let _hello_name_hash = store_function("hello_name_ext", BTreeMap::new());
-    add_uref("hello", &_hello_name_hash.into());
-
+    // counter
     let counter_local_key = new_uref(0); //initialize counter
 
     //create map of references for stored contract
     let mut counter_urefs: BTreeMap<String, Key> = BTreeMap::new();
     let key_name = String::from("count");
     counter_urefs.insert(key_name, counter_local_key.into());
-
     let _counter_hash = store_function("counter_ext", counter_urefs);
     add_uref("counter", &_counter_hash.into());
 
-
+    // mailing list
     let init_list: Vec<String> = Vec::new();
     let list_key = new_uref(init_list);
 
@@ -134,8 +123,6 @@ pub extern "C" fn call() {
     let key_name = String::from("list");
     mailing_list_urefs.insert(key_name, list_key.into());
 
-    let _mailing_list_hash = store_function("mailing_list_ext", mailing_list_urefs);
-
-    add_uref("mailing", &_mailing_list_hash.into());
+    let pointer = store_function("mailing_list_ext", mailing_list_urefs);
+    add_uref("mailing", &pointer.into())
 }
-

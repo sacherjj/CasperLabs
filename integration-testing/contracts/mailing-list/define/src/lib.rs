@@ -46,28 +46,28 @@ fn publish(msg: String) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn mailing_list_ext() {
-    let method_name: String = get_arg(0);
-    match method_name.as_str() {
-        "sub" => match sub(get_arg(1)) {
-            Some(upointer) => {
-                let extra_uref = URef::new(upointer.0, upointer.1);
-                let extra_urefs = vec![extra_uref];
-                ret(&Some(Key::from(upointer)), &extra_urefs);
-            }
-            _ => ret(&Option::<Key>::None, &Vec::new()),
-        },
-        //Note that this is totally insecure. In reality
-        //the pub method would be only available under an
-        //unforgable reference because otherwise anyone could
-        //spam the mailing list.
-        "pub" => {
-            publish(get_arg(1));
-        }
-        _ => panic!("Unknown method name!"),
-    }
-}
+ #[no_mangle]
+ pub extern "C" fn mailing_list_ext() {
+     let method_name: String = get_arg(0);
+     match method_name.as_str() {
+         "sub" => match sub(get_arg(1)) {
+             Some(upointer) => {
+                 let extra_uref = URef::new(upointer.0, upointer.1);
+                 let extra_urefs = vec![extra_uref];
+                 ret(&Some(Key::from(upointer)), &extra_urefs);
+             }
+             _ => ret(&Option::<Key>::None, &Vec::new()),
+         },
+         //Note that this is totally insecure. In reality
+         //the pub method would be only available under an
+         //unforgable reference because otherwise anyone could
+         //spam the mailing list.
+         "pub" => {
+             publish(get_arg(1));
+         }
+         _ => panic!("Unknown method name!"),
+     }
+ }
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -79,5 +79,6 @@ pub extern "C" fn call() {
     let key_name = String::from("list");
     mailing_list_urefs.insert(key_name, list_key.into());
 
-    let _hash = store_function("mailing_list_ext", mailing_list_urefs);
+    let pointer = store_function("mailing_list_ext", mailing_list_urefs);
+    add_uref("mailing", &pointer.into())
 }
