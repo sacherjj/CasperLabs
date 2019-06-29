@@ -201,38 +201,49 @@ object Validate {
       } yield false
     }
 
-  def deploySignature[F[_]: Applicative: Log](d: consensus.Deploy): F[Boolean] =
+  def deploySignature[F[_]: Monad: Log](d: consensus.Deploy): F[Boolean] =
     if (d.approvals.isEmpty) {
       Log[F].warn(
         s"Deploy ${PrettyPrinter.buildString(d.deployHash)} has no signatures."
       ) *> false.pure[F]
     } else {
-      d.approvals.toList.traverse { a =>
-        signatureVerifiers(a.getSignature.sigAlgorithm)
-          .map { verify =>
-            Try {
-              verify(
-                d.deployHash.toByteArray,
-                Signature(a.getSignature.sig.toByteArray),
-                PublicKey(a.approverPublicKey.toByteArray)
-              )
-            } match {
-              case Success(true) =>
-                true.pure[F]
-              case _ =>
-                Log[F].warn(
-                  s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash)} is invalid."
-                ) *> false.pure[F]
-            }
-          } getOrElse {
-          Log[F].warn(
-            s"Signature algorithm ${a.getSignature.sigAlgorithm} of deploy ${PrettyPrinter
-              .buildString(d.deployHash)} is unsupported."
-          ) *> false.pure[F]
+      for {
+        signatoriesVerified <- d.approvals.toList
+                                .traverse { a =>
+                                  signatureVerifiers(a.getSignature.sigAlgorithm)
+                                    .map { verify =>
+                                      Try {
+                                        verify(
+                                          d.deployHash.toByteArray,
+                                          Signature(a.getSignature.sig.toByteArray),
+                                          PublicKey(a.approverPublicKey.toByteArray)
+                                        )
+                                      } match {
+                                        case Success(true) =>
+                                          true.pure[F]
+                                        case _ =>
+                                          Log[F].warn(
+                                            s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash)} is invalid."
+                                          ) *> false.pure[F]
+                                      }
+                                    } getOrElse {
+                                    Log[F].warn(
+                                      s"Signature algorithm ${a.getSignature.sigAlgorithm} of deploy ${PrettyPrinter
+                                        .buildString(d.deployHash)} is unsupported."
+                                    ) *> false.pure[F]
+                                  }
+                                }
+                                .map(_.forall(identity))
+        keysMatched = d.approvals.toList.exists { a =>
+          a.approverPublicKey == d.getHeader.accountPublicKey
         }
-      } map {
-        _.forall(identity)
-      }
+        _ <- Log[F]
+              .warn(
+                s"Signatories of deploy ${PrettyPrinter.buildString(d.deployHash)} don't contain at least one signature with key equal to public key: ${PrettyPrinter
+                  .buildString(d.getHeader.accountPublicKey)}"
+              )
+              .whenA(!keysMatched)
+      } yield signatoriesVerified && keysMatched
     }
 
   def blockSender[F[_]: Monad: Log: BlockStore](
