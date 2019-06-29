@@ -34,8 +34,6 @@ cleanup() {
 }
 trap cleanup 0
 
-./contracts/build_contracts.sh
-
 echo "Setting up networks for Python Client..."
 for num in $(seq 0 $MAX_NODE_COUNT)
 do
