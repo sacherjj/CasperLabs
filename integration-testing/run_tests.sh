@@ -12,6 +12,7 @@ if [[ "$TEST_RUN_ARGS" == "" ]]; then
     TEST_RUN_ARGS=$@
 fi
 
+(cd contracts && ./build_contracts.sh)
 pipenv sync
 pipenv run client/CasperClient/install.sh
 pipenv run py.test ${PYTEST_ARGS} -v "$TEST_RUN_ARGS"
