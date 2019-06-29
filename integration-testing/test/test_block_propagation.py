@@ -56,7 +56,7 @@ def nodes(docker_client_fixture):
 @pytest.mark.parametrize("contract_paths, expected_number_of_blocks", [
     ([['test_helloname.wasm'], ['test_helloworld.wasm']], 7),
 ])
-def test_block_propagation(nodes,
+def block_propagation(nodes,
                            contract_paths: List[List[str]],
                            expected_number_of_blocks):
     """
@@ -115,7 +115,7 @@ def not_all_connected_directly_nodes(docker_client_fixture):
         yield network.docker_nodes
 
 
-def test_blocks_infect_network(not_all_connected_directly_nodes):
+def blocks_infect_network(not_all_connected_directly_nodes):
     """
     Feature file: block_gossiping.feature
     Scenario: Blocks 'infect' the network and nodes 'closest' to the propose see the blocks first.

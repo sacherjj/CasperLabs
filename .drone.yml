@@ -101,7 +101,7 @@ pipeline:
 # This section is for bors' branches only
   sbt-test-docker-bors:
     commands:
-      - "sbt test node/docker:publishLocal client/docker:publishLocal"
+      - "sbt node/docker:publishLocal client/docker:publishLocal"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
@@ -112,71 +112,70 @@ pipeline:
         - staging
         - trying
 
-  git-status-post-scala-compile-bors:
-    commands: |
-      STATUS_CHECK=$(git status)
-      if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK"; exit 1; fi
-    image: "casperlabs/buildenv:latest"
-    when:
-      branch:
-        - staging
-        - trying
-
+#  git-status-post-scala-compile-bors:
+#    commands: |
+#      STATUS_CHECK=$(git status)
+#      if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK"; exit 1; fi
+#    image: "casperlabs/buildenv:latest"
+#    when:
+#      branch:
+#        - staging
+#        - trying
+#
   rust-compile-test-bors:
     commands:
       - "cd execution-engine/"
       - "~/.cargo/bin/cargo update"
       - "~/.cargo/bin/cargo build"
-      - "~/.cargo/bin/cargo test"
     image: "casperlabs/buildenv:latest"
     when:
       branch:
         - staging
         - trying
-
-  run-cargo-fmt-bors:
-    commands:
-      - "cd execution-engine"
-      - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-      - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
-      - "~/.cargo/bin/cargo fmt --all -- --check"
-    image: "casperlabs/buildenv:latest"
-    when:
-      branch:
-        - staging
-        - trying
-
-  run-rust-lints-bors:
-    commands:
-      - "cd execution-engine"
-      - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-      - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
-      - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
-    image: "casperlabs/buildenv:latest"
-    when:
-      branch:
-        - staging
-        - trying
-
-  try-cargo-publish-bors:
-    commands:
-      - "cd execution-engine/common"
-      - "~/.cargo/bin/cargo publish --dry-run"
-    image: "casperlabs/buildenv:latest"
-    when:
-      branch:
-        - staging
-        - trying
-
-  run-rust-benchmarks-bors:
-    commands:
-      - "cd execution-engine/"
-      - "~/.cargo/bin/cargo bench"
-    image: "casperlabs/buildenv:latest"
-    when:
-      branch:
-        - staging
-        - trying
+#
+#  run-cargo-fmt-bors:
+#    commands:
+#      - "cd execution-engine"
+#      - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
+#      - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
+#      - "~/.cargo/bin/cargo fmt --all -- --check"
+#    image: "casperlabs/buildenv:latest"
+#    when:
+#      branch:
+#        - staging
+#        - trying
+#
+#  run-rust-lints-bors:
+#    commands:
+#      - "cd execution-engine"
+#      - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
+#      - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
+#      - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
+#    image: "casperlabs/buildenv:latest"
+#    when:
+#      branch:
+#        - staging
+#        - trying
+#
+#  try-cargo-publish-bors:
+#    commands:
+#      - "cd execution-engine/common"
+#      - "~/.cargo/bin/cargo publish --dry-run"
+#    image: "casperlabs/buildenv:latest"
+#    when:
+#      branch:
+#        - staging
+#        - trying
+#
+#  run-rust-benchmarks-bors:
+#    commands:
+#      - "cd execution-engine/"
+#      - "~/.cargo/bin/cargo bench"
+#    image: "casperlabs/buildenv:latest"
+#    when:
+#      branch:
+#        - staging
+#        - trying
 
   docker-build-ee-int-bors:
     commands:
@@ -194,19 +193,19 @@ pipeline:
         - staging
         - trying
 
-  docker-keys-gen-test-bors:
-    commands:
-      - "mkdir /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
-      - "./hack/key-management/docker-gen-keys.sh /tmp/keys-DRONE-${DRONE_BUILD_NUMBER} --test"
-      - "rm -rf /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
-    image: "casperlabs/buildenv:latest"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - "/tmp:/tmp"
-    when:
-      branch:
-        - staging
-        - trying
+#  docker-keys-gen-test-bors:
+#    commands:
+#      - "mkdir /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+#      - "./hack/key-management/docker-gen-keys.sh /tmp/keys-DRONE-${DRONE_BUILD_NUMBER} --test"
+#      - "rm -rf /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+#    image: "casperlabs/buildenv:latest"
+#    volumes:
+#      - "/var/run/docker.sock:/var/run/docker.sock"
+#      - "/tmp:/tmp"
+#    when:
+#      branch:
+#        - staging
+#        - trying
 
   run-integration-tests:
     commands:
