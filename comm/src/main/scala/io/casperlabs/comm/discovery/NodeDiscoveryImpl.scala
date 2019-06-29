@@ -126,7 +126,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
     for {
       _     <- table.updateLastSeen(peer)
       peers <- table.peersAscendingDistance
-      _     <- Metrics[F].setGauge("peers", peers.length.toLong)
+      _     <- Metrics[F].setGauge("peers_all_known", peers.length.toLong)
     } yield ()
 
   private def pingHandler(peer: Node): F[Unit] =
@@ -145,17 +145,13 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
 
     val findNew = for {
       _ <- Timer[F].sleep(9.seconds)
-      _ <- findMorePeers()
+      _ <- findMorePeers(5)
     } yield ()
 
     initRPC *> lookup(id) *> findNew.forever
   }
 
-  private def findMorePeers(
-      alpha: Int = 3,
-      k: Int = PeerTable.Redundancy,
-      bucketsToFill: Int = 5
-  ): F[Unit] = {
+  private def findMorePeers(bucketsToFill: Int): F[Unit] = {
 
     def generateId(distance: Int): NodeIdentifier = {
       val target       = id.key.to[mutable.ArrayBuffer] // Our key
@@ -210,7 +206,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
       }
 
     for {
-      shortlist <- table.lookup(toLookup).map(_.take(alpha))
+      shortlist <- recentlyAlivePeersAscendingDistance(toLookup).map(_.take(alpha))
       closestNode <- shortlist.headOption
                       .filter(p => NodeIdentifier(p.id) == toLookup)
                       .fold(loop(0, Set(id), shortlist)(None))(_.some.pure[F])
@@ -219,9 +215,12 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
   }
 
   override def recentlyAlivePeersAscendingDistance: F[List[Node]] =
+    recentlyAlivePeersAscendingDistance(id)
+
+  def recentlyAlivePeersAscendingDistance(anchorId: NodeIdentifier): F[List[Node]] =
     if (gossipingEnabled)
       recentlyAlivePeersRef.get.map {
-        case (recentlyAlivePeers, _) => PeerTable.sort(recentlyAlivePeers.toList, id)(_.id)
+        case (recentlyAlivePeers, _) => PeerTable.sort(recentlyAlivePeers.toList, anchorId)(_.id)
       } else
       // TODO: this is misleading because returned peers won't necessarily be alive.
       // Though, this is fine because it's only used by
@@ -256,6 +255,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
       _ <- recentlyAlivePeersRef.set(
             (newAlivePeers.toSet, if (oldEnough) currentTime else lastTimeAccess)
           )
+      _ <- Metrics[F].setGauge("peers_alive", newAlivePeers.size)
     } yield ()
 
   def filterAlive(peers: List[Node]): F[List[Node]] =
