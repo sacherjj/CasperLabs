@@ -32,7 +32,7 @@ pub extern "C" fn list_known_urefs_ext() {
 pub extern "C" fn call() {
     let uref = new_uref(Value::Int32(1));
     add_uref("Foo", &uref.clone().into());
-    let accounts_known_urefs = list_known_urefs();
+    let _accounts_known_urefs = list_known_urefs();
     let expected_urefs: BTreeMap<String, Key> =
         iter::once(("Foo".to_owned(), uref.into())).collect();
     // Test that `list_known_urefs` returns correct value when called in the context of an account.

@@ -25,7 +25,7 @@ pub extern "C" fn call() {
     let maybe_sub_key: Option<Key> = call_contract(pointer.clone(), &args, &Vec::new());
     let sub_key = maybe_sub_key.unwrap();
 
-    let key_name = "list";
+    let key_name = "mail_feed";
     add_uref(key_name, &sub_key);
     assert_eq!(sub_key, get_uref(key_name));
 
