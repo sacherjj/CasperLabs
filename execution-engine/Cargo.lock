@@ -603,6 +603,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "known-urefs"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

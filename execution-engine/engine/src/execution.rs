@@ -263,16 +263,16 @@ where
     }
 
     /// Load the uref known by the given name into the Wasm memory
-    pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
+    pub fn get_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
             .context
             .get_uref(&name)
             .ok_or_else(|| Error::URefNotFound(name))?;
         let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
-        self.memory
-            .set(dest_ptr, &uref_bytes)
-            .map_err(|e| Error::Interpreter(e).into())
+
+        self.host_buf = uref_bytes;
+        Ok(self.host_buf.len())
     }
 
     pub fn has_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
@@ -952,10 +952,9 @@ where
             FunctionIndex::GetURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
-                // args(2) = pointer to destination in Wasm memory
-                let (name_ptr, name_size, dest_ptr) = Args::parse(args)?;
-                self.get_uref(name_ptr, name_size, dest_ptr)?;
-                Ok(None)
+                let (name_ptr, name_size) = Args::parse(args)?;
+                let size = self.get_uref(name_ptr, name_size)?;
+                Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             FunctionIndex::HasURefFuncIndex => {

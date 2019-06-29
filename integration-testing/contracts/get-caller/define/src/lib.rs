@@ -5,7 +5,7 @@ extern crate alloc;
 extern crate common;
 
 use alloc::collections::btree_map::BTreeMap;
-use common::contract_api::{get_caller, store_function};
+use common::contract_api::{get_caller, store_function, add_uref};
 use common::value::account::PublicKey;
 
 #[no_mangle]
@@ -23,5 +23,6 @@ pub extern "C" fn get_caller_ext() {
 pub extern "C" fn call() {
     //  When in the base context there is no caller.
     assert_eq!(get_caller(), None);
-    store_function("get_caller_ext", BTreeMap::new());
+    let pointer = store_function("get_caller_ext", BTreeMap::new());
+    add_uref("get_caller", &pointer.into());
 }

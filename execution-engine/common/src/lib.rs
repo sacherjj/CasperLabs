@@ -80,7 +80,7 @@ mod ext_ffi {
             extra_urefs_size: usize,
         ) -> usize;
         pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
-        pub fn get_uref(name_ptr: *const u8, name_size: usize, dest: *mut u8);
+        pub fn get_uref(name_ptr: *const u8, name_size: usize) -> usize;
         pub fn has_uref_name(name_ptr: *const u8, name_size: usize) -> i32;
         pub fn add_uref(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);
         pub fn protocol_version() -> u64;

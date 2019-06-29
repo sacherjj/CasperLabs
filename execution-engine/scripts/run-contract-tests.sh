@@ -10,6 +10,8 @@ CONTRACTS=(
     "ee-401-regression-call"
     "transfer-to-account-01"
     "transfer-to-account-02"
+    "local-state"
+    "known-urefs"
 )
 
 source "${HOME}/.cargo/env"
