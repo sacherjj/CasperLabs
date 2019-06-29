@@ -111,7 +111,9 @@ package object gossiping {
                         }
                       }
 
-      isInitialRef <- Resource.liftF(Ref.of[F, Boolean](true))
+      isInitialRef <- Resource.liftF(
+                       Ref.of[F, Boolean](conf.server.bootstrap.nonEmpty && !conf.casper.standalone)
+                     )
       synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval.join, isInitialRef)
 
       gossipServiceServer <- makeGossipServiceServer(
@@ -124,14 +126,19 @@ package object gossiping {
                               grpcScheduler
                             )
 
-      // Start syncing with the bootstrap in the background.
-      _ <- makeInitialSynchronization(
-            conf,
-            gossipServiceServer,
-            connectToGossip,
-            awaitApproval.join,
-            isInitialRef
-          )
+      // Start syncing with the bootstrap and/or some others in the background.
+      _ <- Resource
+            .liftF(isInitialRef.get)
+            .ifM(
+              makeInitialSynchronization(
+                conf,
+                gossipServiceServer,
+                connectToGossip,
+                awaitApproval.join,
+                isInitialRef
+              ),
+              Resource.liftF(().pure[F])
+            )
 
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
       _ <- makePeerCountPrinter
