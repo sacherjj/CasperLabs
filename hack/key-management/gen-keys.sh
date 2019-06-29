@@ -69,7 +69,7 @@ openssl pkey -outform DER -pubout -in "$OUTPUT_DIR/validator-private.pem" | tail
 
 # Assert validator-id is 32 bytes long
 VALIDATOR_ID_BASE64=$(cat "$OUTPUT_DIR/validator-id")
-VALIDATOR_ID_HEX=$(echo "$VALIDATOR_ID_BASE64" | openssl base64 -d | od -t x -An | tr -d '[:space:]')
+VALIDATOR_ID_HEX=$(echo "$VALIDATOR_ID_BASE64" | openssl base64 -d | hexdump -ve '/1 "%02x" ')
 echo $VALIDATOR_ID_HEX > "$OUTPUT_DIR/validator-id-hex"
 VALIDATOR_BYTES=$((${#VALIDATOR_ID_HEX} / 2))
 if [ $VALIDATOR_BYTES -ne 32 ]
