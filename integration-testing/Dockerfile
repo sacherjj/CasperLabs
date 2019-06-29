@@ -5,7 +5,7 @@ LABEL MAINTAINER="CasperLabs, LLC. <info@casperlabs.io>"
 RUN apt-get update && apt-get -y install gcc
 RUN python3 -m pip install pipenv docker pytest pytest-json pytest-mypy pytest-pylint typing-extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2
 
-ENTRYPOINT ["/root/integration-testing/run_tests.sh", "/root/integration-testing/test/test_block_propagation.py"]
+ENTRYPOINT ["/root/integration-testing/run_tests.sh"]
 
 WORKDIR /root/integration-testing
 RUN mkdir -p /root/integration-testing
