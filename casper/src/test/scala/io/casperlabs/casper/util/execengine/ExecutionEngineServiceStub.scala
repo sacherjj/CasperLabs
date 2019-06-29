@@ -3,9 +3,10 @@ package io.casperlabs.casper.util.execengine
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
+import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper.Validate
+import io.casperlabs.casper.{InvalidBlock, Validate}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -21,7 +22,7 @@ import scala.util.Either
 object ExecutionEngineServiceStub {
   type Bonds = Map[PublicKey, Long]
 
-  implicit def functorRaiseInvalidBlock[F[_]: Sync] =
+  implicit def functorRaiseInvalidBlock[F[_]: Sync]: FunctorRaise[F, InvalidBlock] =
     Validate.raiseValidateErrorThroughApplicativeError[F]
 
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
@@ -32,8 +33,8 @@ object ExecutionEngineServiceStub {
       parents      <- ProtoUtil.unsafeGetParents[F](b)
       merged       <- ExecEngineUtil.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil.computePrestate[F](merged)
-      effects      <- ExecEngineUtil.effectsForBlock[F](b, preStateHash, dag)
-      _            <- Validate.transactions[F](b, dag, preStateHash, effects)
+      effects      <- ExecEngineUtil.effectsForBlock[F](b, preStateHash)
+      _            <- Validate.transactions[F](b, preStateHash, effects)
     } yield ProtoUtil.postStateHash(b)).attempt
 
   def mock[F[_]](

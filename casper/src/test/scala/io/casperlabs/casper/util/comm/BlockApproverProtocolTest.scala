@@ -94,7 +94,6 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
   ): Effect[(BlockApproverProtocol, TransportLayerCasperTestNode[Effect])] = {
 
     val deployTimestamp = 1L
-    val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
 
     val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.buildGenesis(
       wallets,

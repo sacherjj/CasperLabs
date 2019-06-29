@@ -52,7 +52,7 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _ <- lock.release
     } yield modifiedBlock
 
-  def inject(index: Int, block: Block): F[Unit] =
+  def inject(index: Long, block: Block): F[Unit] =
     for {
       _ <- lock.acquire
       _ <- idToBlocksRef.update(_.updated(index, block))
@@ -73,12 +73,12 @@ final class IndexedBlockDagStorage[F[_]: Monad](
 
   def close(): F[Unit] = underlying.close()
 
-  def lookupById(id: Int): F[Option[Block]] =
+  def lookupById(id: Long): F[Option[Block]] =
     for {
       idToBlocks <- idToBlocksRef.get
     } yield idToBlocks.get(id)
 
-  def lookupByIdUnsafe(id: Int): F[Block] =
+  def lookupByIdUnsafe(id: Long): F[Block] =
     for {
       idToBlocks <- idToBlocksRef.get
     } yield idToBlocks(id)

@@ -313,8 +313,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
   /** Return the list of tips. */
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     for {
-      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
-      rankedEstimates        <- Estimator.tips[F](dag, genesis.blockHash)
+      rankedEstimates <- Estimator.tips[F](dag, genesis.blockHash)
     } yield rankedEstimates
 
   /*
@@ -356,7 +355,6 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
         protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(number)
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
                      createProposal(
-                       dag,
                        parents,
                        merged,
                        remaining,
@@ -414,8 +412,6 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
       tipHashes: IndexedSeq[BlockHash]
   ): F[Int] =
     for {
-      casperState <- Cell[F, CasperState].read
-
       // We actually need the tips which can be merged, the ones which we'd build on if we
       // attempted to create a new block.
       tips    <- tipHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
@@ -479,7 +475,6 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
   private def createProposal(
-      dag: BlockDagRepresentation[F],
       parents: Seq[Block],
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
       deploys: Seq[Deploy],
@@ -543,14 +538,14 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
       // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
       // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
       // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
-      discardDeploys <- Cell[F, CasperState]
-                         .modify { s =>
-                           s.copy(
-                             deployBuffer = s.deployBuffer
-                               .remove(deploysToDiscard.map(_.deploy.deployHash).toSet)
-                           )
-                         }
-                         .whenA(deploysToDiscard.nonEmpty)
+      _ <- Cell[F, CasperState]
+            .modify { s =>
+              s.copy(
+                deployBuffer = s.deployBuffer
+                  .remove(deploysToDiscard.map(_.deploy.deployHash).toSet)
+              )
+            }
+            .whenA(deploysToDiscard.nonEmpty)
 
     } yield status)
       .handleErrorWith {
@@ -737,13 +732,13 @@ object MultiParentCasperImpl {
                      .pure[F]
                  ) { ctx =>
                    Validate
-                     .parents[F](block, ctx.lastFinalizedBlockHash, ctx.genesis.blockHash, dag)
+                     .parents[F](block, ctx.genesis.blockHash, dag)
                  }
         _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
         preStateHash <- ExecEngineUtil.computePrestate[F](merged)
         _            <- Log[F].debug(s"Computing the effects for $hashPrefix")
         blockEffects <- ExecEngineUtil
-                         .effectsForBlock[F](block, preStateHash, dag)
+                         .effectsForBlock[F](block, preStateHash)
                          .recoverWith {
                            case NonFatal(ex) =>
                              Log[F].error(s"Could not calculate effects for block ${PrettyPrinter
@@ -753,7 +748,6 @@ object MultiParentCasperImpl {
         _ <- Log[F].debug(s"Validating the transactions in $hashPrefix")
         _ <- Validate.transactions[F](
               block,
-              dag,
               preStateHash,
               blockEffects
             )
@@ -763,7 +757,6 @@ object MultiParentCasperImpl {
                 EquivocationDetector
                   .checkNeglectedEquivocationsWithUpdate[F](
                     block,
-                    dag,
                     ctx.genesis
                   )
             }

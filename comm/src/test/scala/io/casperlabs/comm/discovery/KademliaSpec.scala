@@ -7,7 +7,7 @@ import org.scalatest._
 
 import scala.collection.mutable
 
-class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
+private[discovery] class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   val local = createPeer("00000001")
   val peer0 = createPeer("00000010")
   val peer1 = createPeer("00001000")

@@ -4,6 +4,7 @@ import java.nio.file.StandardOpenOption
 
 import cats.effect.Sync
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
@@ -23,6 +24,7 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 import scala.util.Random
 
+@silent("match may not be exhaustive")
 trait BlockDagStorageTest
     extends FlatSpecLike
     with Matchers
@@ -73,6 +75,7 @@ trait BlockDagStorageTest
   }
 }
 
+@silent("match may not be exhaustive")
 class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   import java.nio.file.{Files, Path}

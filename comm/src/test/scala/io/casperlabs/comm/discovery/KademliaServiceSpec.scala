@@ -48,7 +48,7 @@ abstract class KademliaServiceSpec[F[_]: MonadThrowable: cats.effect.Timer, E <:
 
             val result: TwoNodesResult = run()
 
-            result() shouldEqual (true, true)
+            result() shouldEqual ((true, true))
             pingHandler.received should have length 2
             val (receiver1, sender1) = pingHandler.received.head
             val (receiver2, sender2) = pingHandler.received.tail.head

@@ -113,20 +113,17 @@ object EquivocationDetector {
     InvalidBlock
   ]](
       block: Block,
-      dag: BlockDagRepresentation[F],
       genesis: Block
   )(implicit state: Cell[F, CasperState]): F[Unit] =
     Monad[F].ifM(
       isNeglectedEquivocationDetectedWithUpdate[F](
         block,
-        dag,
         genesis
       )
     )(FunctorRaise[F, InvalidBlock].raise[Unit](NeglectedEquivocation), Monad[F].unit)
 
   private def isNeglectedEquivocationDetectedWithUpdate[F[_]: MonadThrowable: BlockStore](
       block: Block,
-      dag: BlockDagRepresentation[F],
       genesis: Block
   )(implicit state: Cell[F, CasperState]): F[Boolean] =
     for {
@@ -134,7 +131,6 @@ object EquivocationDetector {
       neglectedEquivocationDetected <- s.equivocationsTracker.toList.existsM { equivocationRecord =>
                                         updateEquivocationsTracker[F](
                                           block,
-                                          dag,
                                           equivocationRecord,
                                           genesis
                                         )
@@ -149,14 +145,12 @@ object EquivocationDetector {
     */
   private def updateEquivocationsTracker[F[_]: MonadThrowable: BlockStore](
       block: Block,
-      dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
       genesis: Block
   )(implicit state: Cell[F, CasperState]): F[Boolean] =
     for {
       equivocationDiscoveryStatus <- getEquivocationDiscoveryStatus[F](
                                       block,
-                                      dag,
                                       equivocationRecord,
                                       genesis
                                     )
@@ -182,7 +176,6 @@ object EquivocationDetector {
 
   private def getEquivocationDiscoveryStatus[F[_]: MonadThrowable: BlockStore](
       block: Block,
-      dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
       genesis: Block
   ): F[EquivocationDiscoveryStatus] = {

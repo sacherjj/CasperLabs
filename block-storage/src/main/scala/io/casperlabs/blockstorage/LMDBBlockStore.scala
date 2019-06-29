@@ -20,12 +20,10 @@ import org.lmdbjava.Txn.NotReadyException
 import org.lmdbjava._
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 import scala.language.higherKinds
 
 class LMDBBlockStore[F[_]] private (
     val env: Env[ByteBuffer],
-    path: Path,
     blocks: Dbi[ByteBuffer],
     blockSummaryDB: Dbi[ByteBuffer],
     deployHashesDb: Dbi[ByteBuffer]
@@ -175,7 +173,6 @@ object LMDBBlockStore {
 
     new LMDBBlockStore[F](
       env,
-      config.dir,
       blocks,
       blockSummaryDB,
       deployHashesDb
@@ -186,7 +183,7 @@ object LMDBBlockStore {
     }
   }
 
-  def create[F[_]](env: Env[ByteBuffer], path: Path)(
+  def create[F[_]](env: Env[ByteBuffer])(
       implicit
       syncF: Sync[F],
       metricsF: Metrics[F]
@@ -197,7 +194,6 @@ object LMDBBlockStore {
 
     new LMDBBlockStore[F](
       env,
-      path,
       blocks,
       blockSummaryDb,
       deployHashesDb
@@ -208,10 +204,10 @@ object LMDBBlockStore {
     }
   }
 
-  def createWithId(env: Env[ByteBuffer], path: Path): BlockStore[Id] = {
+  def createWithId(env: Env[ByteBuffer]): BlockStore[Id] = {
     import io.casperlabs.catscontrib.effect.implicits._
     import io.casperlabs.metrics.Metrics.MetricsNOP
     implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
-    LMDBBlockStore.create(env, path)(syncId, metrics)
+    LMDBBlockStore.create(env)(syncId, metrics)
   }
 }

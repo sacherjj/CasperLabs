@@ -1,5 +1,6 @@
 package io.casperlabs.shared
 import cats.effect.Sync
+import com.github.ghik.silencer.silent
 import io.casperlabs.metrics.Metrics
 
 import scala.collection.mutable.{Map => MutableMap}
@@ -8,8 +9,9 @@ class MetricsTestImpl[F[_]: Sync] extends Metrics[F] {
   val counters: MutableMap[String, Long] = MutableMap.empty
   val samplers: MutableMap[String, Long] = MutableMap.empty
   val gauges: MutableMap[String, Long]   = MutableMap.empty
-  final case class Record(value: Long, count: Long)
-  val records: MutableMap[String, List[Record]] = MutableMap.empty
+  @silent("The outer reference in this type test cannot be checked at run time.")
+  private final case class Record(value: Long, count: Long)
+  private val records: MutableMap[String, List[Record]] = MutableMap.empty
 
   private def incrementBy(name: String, delta: Long)(
       m: MutableMap[String, Long]

@@ -49,24 +49,24 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
-        b6 <- createBlock[Task](
-               Seq(b4.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
-             )
+        _ <- createBlock[Task](
+              Seq(b4.blockHash),
+              v2,
+              bonds,
+              HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+            )
         b7 <- createBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b8 <- createBlock[Task](
-               Seq(b7.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
-             )
+        _ <- createBlock[Task](
+              Seq(b7.blockHash),
+              v1,
+              bonds,
+              HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
+            )
         dag <- blockDagStorage.getRepresentation
         forkchoice <- Estimator.tips[Task](
                        dag,
@@ -239,7 +239,7 @@ class ForkchoiceTest
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           a       <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
           b       <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          _       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
           d       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
           e       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
           f       <- createBlock[Task](Seq(b.blockHash), v2, bonds)

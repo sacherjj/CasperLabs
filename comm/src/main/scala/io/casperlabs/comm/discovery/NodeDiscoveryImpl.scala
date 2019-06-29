@@ -255,7 +255,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
       _ <- recentlyAlivePeersRef.set(
             (newAlivePeers.toSet, if (oldEnough) currentTime else lastTimeAccess)
           )
-      _ <- Metrics[F].setGauge("peers_alive", newAlivePeers.size)
+      _ <- Metrics[F].setGauge("peers_alive", newAlivePeers.size.toLong)
     } yield ()
 
   def filterAlive(peers: List[Node]): F[List[Node]] =

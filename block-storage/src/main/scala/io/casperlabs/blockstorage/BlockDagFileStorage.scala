@@ -519,7 +519,6 @@ object BlockDagFileStorage {
   private def validateLatestMessagesData[F[_]: Monad](
       latestMessagesRaf: RandomAccessIO[F],
       readLatestMessagesCrc: Long,
-      latestMessagesCrcPath: Path,
       latestMessagesList: List[(Validator, BlockHash)]
   ): F[(Map[Validator, BlockHash], Crc32[F])] = {
     val fullCalculatedCrc = calculateLatestMessagesCrc[F](latestMessagesList)
@@ -583,7 +582,6 @@ object BlockDagFileStorage {
   private def validateDataLookupData[F[_]: Monad](
       dataLookupRandomAccessFile: RandomAccessIO[F],
       readDataLookupCrc: Long,
-      dataLookupCrcPath: Path,
       dataLookupList: List[(BlockHash, BlockMetadata)]
   ): F[(List[(BlockHash, BlockMetadata)], Crc32[F])] = {
     val fullCalculatedCrc = calculateDataLookupCrc[F](dataLookupList)
@@ -692,7 +690,6 @@ object BlockDagFileStorage {
                                  result <- validateLatestMessagesData[F](
                                             latestMessagesFile,
                                             readLatestMessagesCrc,
-                                            config.latestMessagesCrcPath,
                                             latestMessagesList
                                           )
                                  (latestMessagesMap, calculatedLatestMessagesCrc) = result
@@ -709,7 +706,6 @@ object BlockDagFileStorage {
                              result <- validateDataLookupData[F](
                                         randomAccessIO,
                                         readDataLookupCrc,
-                                        config.blockMetadataCrcPath,
                                         dataLookupList
                                       )
                            } yield result
