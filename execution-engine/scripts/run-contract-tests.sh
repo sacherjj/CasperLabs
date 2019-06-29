@@ -6,6 +6,8 @@ CONTRACTS=(
     "create-purse-01"
     "local-state"
     "mint-token"
+    "ee-401-regression"
+    "ee-401-regression-call"
     "transfer-to-account-01"
     "transfer-to-account-02"
     "local-state"

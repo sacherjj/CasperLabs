@@ -427,6 +427,10 @@ where
             Key::URef(uref) => uref,
             _ => return Ok(()),
         };
+        self.validate_uref(uref)
+    }
+
+    pub fn validate_uref(&self, uref: &URef) -> Result<(), Error> {
         if let Some(new_rights) = uref.access_rights() {
             self.known_urefs
                 .get(&uref.addr()) // Check if the `key` is known
@@ -436,7 +440,7 @@ where
                         .any(|right| *right & new_rights == new_rights)
                 }) // are we allowed to use it this way?
                 .map(|_| ()) // at this point we know it's valid to use `key`
-                .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
+                .ok_or_else(|| Error::ForgedReference(*uref)) // otherwise `key` is forged
         } else {
             Ok(())
         }
@@ -445,6 +449,12 @@ where
     pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
         let keys: Vec<Key> = deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_key(k))?;
+        Ok(keys)
+    }
+
+    pub fn deserialize_urefs(&self, bytes: &[u8]) -> Result<Vec<URef>, Error> {
+        let keys: Vec<URef> = deserialize(bytes)?;
+        keys.iter().try_for_each(|k| self.validate_uref(k))?;
         Ok(keys)
     }
 
@@ -645,7 +655,7 @@ mod tests {
         AccountActivity, ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
         RemoveKeyFailure, SetThresholdFailure, Weight,
     };
-    use execution::{create_rng, vec_key_rights_to_map};
+    use execution::{create_rng, extract_access_rights_from_keys};
     use shared::newtypes::CorrelationId;
     use tracking_copy::TrackingCopy;
 
@@ -786,7 +796,7 @@ mod tests {
         // Test fixture
         let mut rng = rand::thread_rng();
         let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref]);
         // Use uref as the key to perform an action on the global state.
         // This should succeed because the uref is valid.
         let query_result = test(known_urefs, |mut rc| rc.write_gs(uref, Value::Int32(43)));
@@ -808,7 +818,7 @@ mod tests {
     fn store_contract_with_uref_valid() {
         let mut rng = rand::thread_rng();
         let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref]);
 
         let contract = Value::Contract(Contract::new(
             Vec::new(),
@@ -851,7 +861,7 @@ mod tests {
         // Test that storing contract under URef that is known and has WRITE access works.
         let mut rng = rand::thread_rng();
         let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![contract_uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
         let contract: Value = Contract::new(
             Vec::new(),
             once(("ValidURef".to_owned(), contract_uref)).collect(),
@@ -891,7 +901,7 @@ mod tests {
         // Test that storing contract under URef that is known but is not writeable fails.
         let mut rng = rand::thread_rng();
         let contract_uref = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![contract_uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
         let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
 
         let query_result = test(known_urefs, |mut rc| {
@@ -945,7 +955,7 @@ mod tests {
         // Account key is addable if it is a "base" key - current context of the execution.
         let mut rng = rand::thread_rng();
         let uref = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref]);
         let query_result = test(known_urefs, |mut rc| {
             let base_key = rc.base_key();
             let uref_name = "NewURef".to_owned();
@@ -1018,7 +1028,7 @@ mod tests {
 
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref]);
         let chacha_rng = create_rng(base_acc_addr, 0);
 
         let mut runtime_context = RuntimeContext::new(
@@ -1072,7 +1082,7 @@ mod tests {
 
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref]);
         let chacha_rng = create_rng(base_acc_addr, 0);
         let mut runtime_context = RuntimeContext::new(
             Rc::clone(&tc),
@@ -1103,7 +1113,7 @@ mod tests {
     fn uref_key_readable_valid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.read_gs(&uref_key));
         assert!(query_result.is_ok());
     }
@@ -1112,7 +1122,7 @@ mod tests {
     fn uref_key_readable_invalid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.read_gs(&uref_key));
         assert_invalid_access(query_result, AccessRights::READ);
     }
@@ -1121,7 +1131,7 @@ mod tests {
     fn uref_key_writeable_valid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.write_gs(uref_key, Value::Int32(1)));
         assert!(query_result.is_ok());
     }
@@ -1130,7 +1140,7 @@ mod tests {
     fn uref_key_writeable_invalid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.write_gs(uref_key, Value::Int32(1)));
         assert_invalid_access(query_result, AccessRights::WRITE);
     }
@@ -1139,7 +1149,7 @@ mod tests {
     fn uref_key_addable_valid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::ADD_WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| {
             rc.write_gs(uref_key, Value::Int32(10))
                 .expect("Writing to the GlobalState should work.");
@@ -1152,7 +1162,7 @@ mod tests {
     fn uref_key_addable_invalid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.add_gs(uref_key, Value::Int32(1)));
         assert_invalid_access(query_result, AccessRights::ADD);
     }
