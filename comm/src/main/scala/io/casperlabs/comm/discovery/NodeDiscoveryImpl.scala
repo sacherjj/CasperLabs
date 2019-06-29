@@ -126,7 +126,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
     for {
       _     <- table.updateLastSeen(peer)
       peers <- table.peersAscendingDistance
-      _     <- Metrics[F].setGauge("peers", peers.length.toLong)
+      _     <- Metrics[F].setGauge("peers_all_known", peers.length.toLong)
     } yield ()
 
   private def pingHandler(peer: Node): F[Unit] =
@@ -255,6 +255,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
       _ <- recentlyAlivePeersRef.set(
             (newAlivePeers.toSet, if (oldEnough) currentTime else lastTimeAccess)
           )
+      _ <- Metrics[F].setGauge("peers_alive", newAlivePeers.size)
     } yield ()
 
   def filterAlive(peers: List[Node]): F[List[Node]] =
