@@ -269,7 +269,7 @@ object HashSetCasperTestNode {
       generateConflict: Boolean = false
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
-      import ipc._
+      import ipc.{Bond => _, _}
 
       // NOTE: Some tests would benefit from tacking this per pre-state-hash,
       // but when I tried to do that a great many more failed.
