@@ -7,7 +7,6 @@ RUN curl -OL https://github.com/google/protobuf/releases/download/v3.2.0/protoc-
 RUN unzip protoc-3.2.0-linux-x86_64.zip -d protoc3 && sudo mv protoc3/bin/* /usr/local/bin/
 RUN sudo mv protoc3/include/* /usr/local/include/ && ln -s /protoc3/bin/protoc /usr/bin/protoc
 RUN python3 -m pip install pipenv
-RUN curl https://sh.rustup.rs -ysSf | sh
 ENTRYPOINT ["/root/integration-testing/run_tests.sh"]
 
 WORKDIR /root/integration-testing
