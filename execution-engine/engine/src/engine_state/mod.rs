@@ -6,7 +6,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use common::key::Key;
-use common::value::account::BlockTime;
+use common::value::account::{BlockTime, PublicKey};
 use common::value::U512;
 use engine_state::utils::WasmiBytes;
 use execution::{self, Executor};
@@ -52,14 +52,19 @@ where
         genesis_account_addr: [u8; 32],
         initial_tokens: U512,
         mint_code_bytes: &[u8],
-        _proof_of_stake_code_bytes: &[u8],
+        proof_of_stake_code_bytes: &[u8],
+        genesis_validators: Vec<(PublicKey, U512)>,
         protocol_version: u64,
     ) -> Result<GenesisResult, Error> {
-        let mint_code_bytes = WasmiBytes::new(mint_code_bytes, WasmCosts::free())?;
+        let mint_code = WasmiBytes::new(mint_code_bytes, WasmCosts::free())?;
+        let pos_code = WasmiBytes::new(proof_of_stake_code_bytes, WasmCosts::free())?;
+
         let effects = create_genesis_effects(
             genesis_account_addr,
             initial_tokens,
-            mint_code_bytes,
+            mint_code,
+            pos_code,
+            genesis_validators,
             protocol_version,
         )?;
         let mut state_guard = self.state.lock();

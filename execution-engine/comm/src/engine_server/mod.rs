@@ -5,7 +5,7 @@ use std::marker::{Send, Sync};
 use std::time::Instant;
 
 use common::key::Key;
-use common::value::account::BlockTime;
+use common::value::account::{BlockTime, PublicKey};
 use common::value::U512;
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -363,6 +363,56 @@ where
 
         let proof_of_stake_code_bytes = genesis_request.get_proof_of_stake_code().get_code();
 
+        let genesis_validators_result = genesis_request
+            .get_genesis_validators()
+            .iter()
+            .map(|bond| {
+                let address = bond.get_validator_public_key();
+                if address.len() != 32 {
+                    let err_msg =
+                        "Validator public key has to be exactly 32 bytes long".to_string();
+                    logging::log_error(&err_msg);
+
+                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                    genesis_deploy_error.set_message(err_msg);
+
+                    Err(genesis_deploy_error)
+                } else {
+                    let mut buff = [0u8; 32];
+                    buff.copy_from_slice(&address);
+                    let pk = PublicKey::new(buff);
+                    match bond.get_stake().try_into() {
+                        Ok(bond) => Ok((pk, bond)),
+                        Err(err) => {
+                            let err_msg = format!("{:?}", err);
+                            logging::log_error(&err_msg);
+
+                            let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                            genesis_deploy_error.set_message(err_msg);
+                            Err(genesis_deploy_error)
+                        }
+                    }
+                }
+            })
+            .collect();
+
+        let genesis_validators = match genesis_validators_result {
+            Ok(validators) => validators,
+            Err(genesis_error) => {
+                let mut genesis_response = ipc::GenesisResponse::new();
+                genesis_response.set_failed_deploy(genesis_error);
+
+                log_duration(
+                    correlation_id,
+                    METRIC_DURATION_GENESIS,
+                    TAG_RESPONSE_GENESIS,
+                    start.elapsed(),
+                );
+
+                return grpc::SingleResponse::completed(genesis_response);
+            }
+        };
+
         let protocol_version = genesis_request.get_protocol_version().value;
 
         let genesis_response = match self.commit_genesis(
@@ -371,6 +421,7 @@ where
             initial_tokens,
             mint_code_bytes,
             proof_of_stake_code_bytes,
+            genesis_validators,
             protocol_version,
         ) {
             Ok(GenesisResult::Success {
