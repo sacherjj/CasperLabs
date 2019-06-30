@@ -28,7 +28,7 @@ import io.casperlabs.shared.{Cell, FilesAPI, Log, Resources, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{TimeUnit, TimeoutException}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import monix.eval.TaskLike
 import monix.execution.Scheduler
@@ -70,9 +70,14 @@ package object gossiping {
         cachedConnections.connection(node, enforce = true) map { chan =>
           new GossipingGrpcMonix.GossipServiceStub(chan)
         } map {
-          GrpcGossipService.toGossipService(_, onError = {
-            case Unavailable(_) => disconnect(cachedConnections, node)
-          })
+          GrpcGossipService.toGossipService(
+            _,
+            onError = {
+              case Unavailable(_)      => disconnect(cachedConnections, node)
+              case _: TimeoutException => disconnect(cachedConnections, node)
+            },
+            timeout = conf.server.defaultTimeout
+          )
         }
       }
 

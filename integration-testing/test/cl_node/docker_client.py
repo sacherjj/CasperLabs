@@ -90,10 +90,13 @@ class DockerClient(CasperLabsClient, LoggingMixin):
                gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: Optional[int] = None,
-               session_contract: str = '',
-               payment_contract: str = '',
+               session_contract: str = None,
+               payment_contract: str = None,
                private_key: Optional[str] = None,
                public_key: Optional[str] = None) -> str:
+
+        assert session_contract is not None
+        assert payment_contract is not None
 
         address  = from_address or self.node.from_address()
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
