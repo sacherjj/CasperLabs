@@ -54,13 +54,13 @@ pub enum Error {
     InvalidAccess {
         required: AccessRights,
     },
-    ForgedReference(Key),
+    ForgedReference(URef),
     ArgIndexOutOfBounds(usize),
     URefNotFound(String),
     FunctionNotFound(String),
     ParityWasm(ParityWasmError),
     GasLimit,
-    Ret(Vec<Key>),
+    Ret(Vec<URef>),
     Rng(rand::Error),
     ResolverError(ResolverError),
     InvalidNonce {
@@ -263,16 +263,16 @@ where
     }
 
     /// Load the uref known by the given name into the Wasm memory
-    pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
+    pub fn get_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
             .context
             .get_uref(&name)
             .ok_or_else(|| Error::URefNotFound(name))?;
         let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
-        self.memory
-            .set(dest_ptr, &uref_bytes)
-            .map_err(|e| Error::Interpreter(e).into())
+
+        self.host_buf = uref_bytes;
+        Ok(self.host_buf.len())
     }
 
     pub fn has_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
@@ -360,7 +360,7 @@ where
             .map_err(Error::Interpreter)
             .and_then(|x| {
                 let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
-                let urefs = self.context.deserialize_keys(&urefs_bytes)?;
+                let urefs = self.context.deserialize_urefs(&urefs_bytes)?;
                 Ok((x, urefs))
             });
         match mem_get {
@@ -624,6 +624,11 @@ where
         let result: URef = deserialize(&self.host_buf)?;
 
         Ok(PurseId::new(result))
+    }
+
+    fn create_purse(&mut self) -> Result<PurseId, Error> {
+        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+        self.mint_create(mint_contract_key)
     }
 
     /// Calls the "transfer" method on the mint contract at the given mint contract key
@@ -947,10 +952,9 @@ where
             FunctionIndex::GetURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
-                // args(2) = pointer to destination in Wasm memory
-                let (name_ptr, name_size, dest_ptr) = Args::parse(args)?;
-                self.get_uref(name_ptr, name_size, dest_ptr)?;
-                Ok(None)
+                let (name_ptr, name_size) = Args::parse(args)?;
+                let size = self.get_uref(name_ptr, name_size)?;
+                Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             FunctionIndex::HasURefFuncIndex => {
@@ -1073,6 +1077,19 @@ where
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
+            FunctionIndex::CreatePurseIndex => {
+                // args(0) = pointer to array for return value
+                // args(1) = length of array for return value
+                let (dest_ptr, dest_size): (u32, u32) = Args::parse(args)?;
+                let purse_id = self.create_purse()?;
+                let purse_id_bytes = purse_id.to_bytes().map_err(Error::BytesRepr)?;
+                assert_eq!(dest_size, purse_id_bytes.len() as u32);
+                self.memory
+                    .set(dest_ptr, &purse_id_bytes)
+                    .map_err(Error::Interpreter)?;
+                Ok(Some(RuntimeValue::I32(0)))
+            }
+
             FunctionIndex::TransferToAccountIndex => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = length of array of bytes of a public key
@@ -1177,7 +1194,7 @@ where
 {
     let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
 
-    let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
+    let known_urefs = extract_access_rights_from_keys(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
 
     let mut runtime = Runtime {
@@ -1217,7 +1234,7 @@ where
                     Error::Ret(ref ret_urefs) => {
                         //insert extra urefs returned from call
                         let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
-                            vec_key_rights_to_map(ret_urefs.clone());
+                            extract_access_rights_from_urefs(ret_urefs.clone());
                         current_runtime.context.add_urefs(ret_urefs_map);
                         return Ok(runtime.result);
                     }
@@ -1234,8 +1251,28 @@ where
     }
 }
 
-/// Groups vector of keys by their address and accumulates access rights per key.
-pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
+/// Groups a collection of urefs by their addresses and accumulates access rights per key
+pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
+    input: I,
+) -> HashMap<URefAddr, HashSet<AccessRights>> {
+    input
+        .into_iter()
+        .map(|uref: URef| (uref.addr(), uref.access_rights()))
+        .group_by(|(key, _)| *key)
+        .into_iter()
+        .map(|(key, group)| {
+            (
+                key,
+                group
+                    .filter_map(|(_, x)| x)
+                    .collect::<HashSet<AccessRights>>(),
+            )
+        })
+        .collect()
+}
+
+/// Groups a collection of keys by their address and accumulates access rights per key.
+pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
     input: I,
 ) -> HashMap<URefAddr, HashSet<AccessRights>> {
     input
@@ -1394,7 +1431,7 @@ impl Executor<Module> for WasmiExecutor {
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
-            vec_key_rights_to_map(uref_lookup_local.values().cloned());
+            extract_access_rights_from_keys(uref_lookup_local.values().cloned());
         let account_bytes = acct_key.as_account().unwrap();
         let rng = create_rng(account_bytes, nonce);
         let gas_counter = 0u64;

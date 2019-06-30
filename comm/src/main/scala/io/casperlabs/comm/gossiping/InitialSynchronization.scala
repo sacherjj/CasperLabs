@@ -82,7 +82,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
                   if (memoizeNodes) {
                     (if (skipFailedNodesInNextRounds) successful else nodes).pure[F]
                   } else {
-                    nodeDiscovery.alivePeersAscendingDistance.map { peers =>
+                    nodeDiscovery.recentlyAlivePeersAscendingDistance.map { peers =>
                       val nodes = selectNodes(peers)
                       if (skipFailedNodesInNextRounds) {
                         nodes.filterNot(newFailed)
@@ -101,7 +101,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
             }
       }
 
-    nodeDiscovery.alivePeersAscendingDistance
+    nodeDiscovery.recentlyAlivePeersAscendingDistance
       .flatMap { peers =>
         val nodesToSyncWith = selectNodes(peers)
         loop(nodesToSyncWith, Set.empty)

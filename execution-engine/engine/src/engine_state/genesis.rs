@@ -153,6 +153,7 @@ fn create_mint_effects(
 
     tmp.insert(balance_uref_key, balance);
 
+    // Create mint_contract
     let mint_known_urefs = {
         let mut ret: BTreeMap<String, Key> = BTreeMap::new();
         ret.insert(balance_uref.as_string(), balance_uref_key);

@@ -10,7 +10,7 @@ use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 use crate::value::account::{
     ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
-    SetThresholdFailure, Weight, BLOCKTIME_SER_SIZE,
+    SetThresholdFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
 use crate::value::{Contract, Value, U512};
 use alloc::collections::BTreeMap;
@@ -223,13 +223,16 @@ pub fn get_arg<T: FromBytes>(i: u32) -> T {
 /// depending on whether the current module is a sub-call or not.
 pub fn get_uref(name: &str) -> Key {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let dest_ptr = alloc_bytes(UREF_SIZE);
-    let uref_bytes = unsafe {
-        ext_ffi::get_uref(name_ptr, name_size, dest_ptr);
-        Vec::from_raw_parts(dest_ptr, UREF_SIZE, UREF_SIZE)
+    let key_size = unsafe { ext_ffi::get_uref(name_ptr, name_size) };
+    let dest_ptr = alloc_bytes(key_size);
+    let key_bytes = unsafe {
+        // TODO: unify FFIs that just copy from the host buffer
+        // https://casperlabs.atlassian.net/browse/EE-426
+        ext_ffi::get_arg(dest_ptr);
+        Vec::from_raw_parts(dest_ptr, key_size, key_size)
     };
     // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&uref_bytes).unwrap()
+    deserialize(&key_bytes).unwrap()
 }
 
 /// Check if the given name corresponds to a known unforgable reference
@@ -369,6 +372,23 @@ pub fn set_action_threshold(
     match result {
         d if d == 0 => Ok(()),
         d => Err(SetThresholdFailure::from(d)),
+    }
+}
+
+pub fn create_purse() -> PurseId {
+    let purse_id_ptr = alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
+    unsafe {
+        let ret = ext_ffi::create_purse(purse_id_ptr, PURSE_ID_SIZE_SERIALIZED);
+        if ret == 0 {
+            let bytes = Vec::from_raw_parts(
+                purse_id_ptr,
+                PURSE_ID_SIZE_SERIALIZED,
+                PURSE_ID_SIZE_SERIALIZED,
+            );
+            deserialize(&bytes).unwrap()
+        } else {
+            panic!("could not create purse_id")
+        }
     }
 }
 

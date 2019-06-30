@@ -1,6 +1,5 @@
 package io.casperlabs.node
 
-import cats.effect.ExitCode
 import cats.implicits._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm._
@@ -24,7 +23,7 @@ object Main {
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
       "node-runner",
-      reporter = UncaughtExceptionLogger
+      reporter = UncaughtExceptionHandler
     )
 
     val exec: Task[Unit] =

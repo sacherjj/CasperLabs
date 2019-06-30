@@ -45,7 +45,7 @@ class ValidateTest
     with BlockDagStorageFixture
     with ArbitraryConsensus {
   implicit val log              = new LogStub[Task]
-  implicit val raiseValidateErr = Validate.raiseValidateErrorThroughSync[Task]
+  implicit val raiseValidateErr = Validate.raiseValidateErrorThroughApplicativeError[Task]
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.
   implicit def wrapWithThrowable[A <: InvalidBlock](err: A): Throwable =
@@ -216,6 +216,18 @@ class ValidateTest
   "Deploy signature validation" should "return true for valid signatures" in withoutStorage {
     val deploy = sample(arbitrary[consensus.Deploy])
     Validate.deploySignature[Task](deploy) shouldBeF true
+  }
+
+  it should "return false if its public key doesn't contained in approvals" in withoutStorage {
+    val genDeploy = for {
+      d            <- arbitrary[consensus.Deploy]
+      approvalKeys <- genAccountKeys
+      signature    = approvalKeys.sign(d.deployHash)
+    } yield d.withApprovals(
+      List(Approval().withApproverPublicKey(approvalKeys.publicKey).withSignature(signature))
+    )
+    val deploy = sample(genDeploy)
+    Validate.deploySignature[Task](deploy) shouldBeF false
   }
 
   it should "return false if a key in an approval is empty" in withoutStorage {

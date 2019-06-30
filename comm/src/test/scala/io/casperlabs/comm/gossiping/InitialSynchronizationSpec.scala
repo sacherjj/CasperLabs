@@ -203,9 +203,9 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
   implicit val metris  = new Metrics.MetricsNOP[Task]
 
   class MockNodeDiscovery(nodes: List[Node]) extends NodeDiscovery[Task] {
-    def discover                    = ???
-    def lookup(id: NodeIdentifier)  = ???
-    def alivePeersAscendingDistance = Task.now(nodes)
+    def discover                            = ???
+    def lookup(id: NodeIdentifier)          = ???
+    def recentlyAlivePeersAscendingDistance = Task.now(nodes)
   }
 
   object MockBackend extends GossipServiceServer.Backend[Task] {

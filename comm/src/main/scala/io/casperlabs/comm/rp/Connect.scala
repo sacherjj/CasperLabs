@@ -127,7 +127,7 @@ object Connect {
     for {
       connections <- ConnectionsCell[F].read
       tout        <- RPConfAsk[F].reader(_.defaultTimeout)
-      peers <- NodeDiscovery[F].alivePeersAscendingDistance
+      peers <- NodeDiscovery[F].recentlyAlivePeersAscendingDistance
                 .map(p => (p.toSet -- connections).toList)
       connected <- peers.traverseFilter { peer =>
                     ErrorHandler[F].attempt(conn(peer, tout)).flatMap {

@@ -102,7 +102,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::GetCallResultFuncIndex.into(),
             ),
             "get_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 3][..], None),
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::GetURefFuncIndex.into(),
             ),
             "has_uref_name" => FuncInstance::alloc_host(
@@ -160,6 +160,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "get_blocktime" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GetBlocktimeIndex.into(),
+            ),
+            "create_purse" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                FunctionIndex::CreatePurseIndex.into(),
             ),
             "transfer_to_account" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),

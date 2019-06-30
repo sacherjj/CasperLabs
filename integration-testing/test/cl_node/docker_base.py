@@ -79,7 +79,7 @@ class DockerConfig:
         if self.node_env is None:
             self.node_env = {
                 'RUST_BACKTRACE': 'full',
-                'CL_LOG_LEVEL': 'DEBUG',
+                'CL_LOG_LEVEL': os.environ.get("CL_LOG_LEVEL", "INFO"),
                 'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'true',
                 'CL_SERVER_NO_UPNP': 'true'
             }
