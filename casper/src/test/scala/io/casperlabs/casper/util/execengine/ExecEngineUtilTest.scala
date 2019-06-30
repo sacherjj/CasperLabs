@@ -224,7 +224,7 @@ class ExecEngineUtilTest
           implicit executionEngineService: ExecutionEngineService[Task]
       ) =
         for {
-          b1  <- blockDagStorage.lookupByIdUnsafe(index.toLong)
+          b1  <- blockDagStorage.lookupByIdUnsafe(index)
           dag <- blockDagStorage.getRepresentation
           computeBlockCheckpointResult <- computeBlockCheckpoint(
                                            b1,

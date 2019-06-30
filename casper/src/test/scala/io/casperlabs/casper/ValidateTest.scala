@@ -115,7 +115,7 @@ class ValidateTest
   )(implicit sk: PrivateKey, blockDagStorage: IndexedBlockDagStorage[Task]): Task[Block] = {
     val pk = Ed25519.tryToPublic(sk).get
     for {
-      block  <- blockDagStorage.lookupByIdUnsafe(i.toLong)
+      block  <- blockDagStorage.lookupByIdUnsafe(i)
       dag    <- blockDagStorage.getRepresentation
       result <- ProtoUtil.signBlock[Task](block, dag, pk, sk, Ed25519)
     } yield result
@@ -321,7 +321,7 @@ class ValidateTest
 
   it should "return true for sequential numbering" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val n = 6L
+      val n = 6
       for {
         _   <- createChain[Task](n.toInt)
         dag <- blockDagStorage.getRepresentation
@@ -331,7 +331,7 @@ class ValidateTest
         _   <- blockDagStorage.lookupByIdUnsafe(3) >>= (b => Validate.blockNumber[Task](b, dag))
         _   <- blockDagStorage.lookupByIdUnsafe(4) >>= (b => Validate.blockNumber[Task](b, dag))
         _   <- blockDagStorage.lookupByIdUnsafe(5) >>= (b => Validate.blockNumber[Task](b, dag))
-        _ <- (0L until n).toList.forallM[Task] { i =>
+        _ <- (0 until n).toList.forallM[Task] { i =>
               (blockDagStorage.lookupByIdUnsafe(i) >>= (b => Validate.blockNumber[Task](b, dag)))
                 .map(_ => true)
             } shouldBeF true
@@ -405,11 +405,11 @@ class ValidateTest
 
   it should "return true for sequential numbering" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val n              = 20L
+      val n              = 20
       val validatorCount = 3
       for {
-        _ <- createChainWithRoundRobinValidators[Task](n.toInt, validatorCount)
-        _ <- (0L until n).toList.forallM[Task](
+        _ <- createChainWithRoundRobinValidators[Task](n, validatorCount)
+        _ <- (0 until n).toList.forallM[Task](
               i =>
                 for {
                   block <- blockDagStorage.lookupByIdUnsafe(i)
@@ -597,7 +597,7 @@ class ValidateTest
               bonds,
               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
             )
-        _ <- (1L to 6L).toList.forallM[Task](
+        _ <- (1 to 6).toList.forallM[Task](
               i =>
                 for {
                   block <- blockDagStorage.lookupByIdUnsafe(i)
@@ -652,7 +652,7 @@ class ValidateTest
         b2 <- createValidatorBlock[Task](Seq(b1), Seq(b1, b0), 0)
         b3 <- createValidatorBlock[Task](Seq(b0), Seq(b2, b0), 1)
         b4 <- createValidatorBlock[Task](Seq(b3), Seq(b2, b3), 1)
-        _ <- (0L to 4L).toList.forallM[Task](
+        _ <- (0 to 4).toList.forallM[Task](
               i =>
                 for {
                   block <- blockDagStorage.lookupByIdUnsafe(i)

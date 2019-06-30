@@ -28,7 +28,7 @@ object BlockGenerator {
       genesis: Block
   ): F[Block] =
     for {
-      b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id.toLong)
+      b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
       dag <- IndexedBlockDagStorage[F].getRepresentation
       computeBlockCheckpointResult <- computeBlockCheckpoint[F](
                                        b,
@@ -66,7 +66,7 @@ object BlockGenerator {
     val updatedBlock =
       ProtoUtil.unsignedBlockProto(updatedBlockBody, updatedBlockHeader).withBlockHash(b.blockHash)
     BlockStore[F].put(b.blockHash, updatedBlock, Seq.empty) *>
-      IndexedBlockDagStorage[F].inject(id.toLong, updatedBlock)
+      IndexedBlockDagStorage[F].inject(id, updatedBlock)
   }
 
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Log: ExecutionEngineService](
