@@ -313,6 +313,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
   /** Return the list of tips. */
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     for {
+      //TODO: Probably makes sense to use last finalized block here
       rankedEstimates <- Estimator.tips[F](dag, genesis.blockHash)
     } yield rankedEstimates
 
