@@ -8,9 +8,10 @@ import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
-
+import com.github.ghik.silencer.silent
 import scala.collection.immutable.HashMap
 
+@silent("is never used")
 class CliqueOracleTest
     extends FlatSpec
     with Matchers
@@ -58,24 +59,24 @@ class CliqueOracleTest
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
-        _ <- createBlock[Task](
-              Seq(b4.blockHash),
-              v2,
-              bonds,
-              HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
-            )
+        b6 <- createBlock[Task](
+               Seq(b4.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+             )
         b7 <- createBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        _ <- createBlock[Task](
-              Seq(b7.blockHash),
-              v1,
-              bonds,
-              HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
-            )
+        b8 <- createBlock[Task](
+               Seq(b7.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
+             )
         dag                   <- blockDagStorage.getRepresentation
         genesisFaultTolerance <- SafetyOracle[Task].normalizedFaultTolerance(dag, genesis.blockHash)
         _                     = assert(genesisFaultTolerance === 1f +- 0.01f)
@@ -132,18 +133,18 @@ class CliqueOracleTest
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
-        _ <- createBlock[Task](
-              Seq(b5.blockHash),
-              v3,
-              bonds,
-              HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-            )
-        _ <- createBlock[Task](
-              Seq(b6.blockHash),
-              v2,
-              bonds,
-              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-            )
+        b7 <- createBlock[Task](
+               Seq(b5.blockHash),
+               v3,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+             )
+        b8 <- createBlock[Task](
+               Seq(b6.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+             )
 
         dag <- blockDagStorage.getRepresentation
 
