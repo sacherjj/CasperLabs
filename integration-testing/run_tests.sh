@@ -12,7 +12,6 @@ if [[ "$TEST_RUN_ARGS" == "" ]]; then
     TEST_RUN_ARGS=$@
 fi
 
-(cd contracts && ./build_contracts.sh)
 pip install pipenv
 pipenv sync
 pipenv run client/CasperClient/install.sh
