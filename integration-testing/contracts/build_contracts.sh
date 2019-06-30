@@ -9,6 +9,7 @@ DEST_DIR="${DIR}/../resources"
 CARGO_FLAGS="-Z unstable-options"
 
 # This is necessary for CI
+find ${HOME} / -name .cargo -type d
 source "${HOME}/.cargo/env"
 
 # This is also necessary for CI
