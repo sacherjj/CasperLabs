@@ -12,6 +12,8 @@ if [[ "$TEST_RUN_ARGS" == "" ]]; then
     TEST_RUN_ARGS=$@
 fi
 
+ls -l resources/*.wasm
+
 pip install pipenv
 pipenv sync
 pipenv run client/CasperClient/install.sh
