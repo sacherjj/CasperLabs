@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use rand::RngCore;
+use rand_chacha::ChaChaRng;
 
 use common::bytesrepr::ToBytes;
 use common::key::Key;
@@ -32,9 +33,27 @@ pub const MINT_POS_BALANCE_UREF: &str = "mint_pos_balance_uref";
 struct GenesisURefsSource(BTreeMap<&'static str, URef>);
 
 impl GenesisURefsSource {
-    fn new(genesis_account_addr: [u8; 32], nonce: u64) -> GenesisURefsSource {
+    fn create_genesis_rng() -> ChaChaRng {
+        // We are using easy to recover address and nonce as seeds so that the addresses
+        // can be recomputed by the EngineState for PoS purposes.
+        // This should never clash with the deploy's PRNG as there is no Ed25519 private key that
+        // corresponds to `000..00` public key. Even if there was, because we are using nonce=0
+        // and any valid deploy starts with nonce=1 the seed to deploy's PRNG will be different.
+        execution::create_rng([0u8; 32], 0)
+    }
+
+    pub fn get_uref(&self, label: &str) -> URef {
+        *self
+            .0
+            .get(label)
+            .unwrap_or_else(|| panic!("URef {} wasn't generated.", label))
+    }
+}
+
+impl Default for GenesisURefsSource {
+    fn default() -> Self {
         // Pregenerates all URefs so that they are statically known.
-        let mut chacha_rng = execution::create_rng(genesis_account_addr, nonce);
+        let mut chacha_rng = GenesisURefsSource::create_genesis_rng();
         let mut urefs_map = BTreeMap::new();
         urefs_map.insert(POS_PURSE, create_uref(&mut chacha_rng));
         urefs_map.insert(POS_PUBLIC_ADDRESS, create_uref(&mut chacha_rng));
@@ -49,13 +68,6 @@ impl GenesisURefsSource {
         urefs_map.insert(MINT_POS_BALANCE_UREF, create_uref(&mut chacha_rng));
 
         GenesisURefsSource(urefs_map)
-    }
-
-    pub fn get_uref(&self, label: &str) -> URef {
-        *self
-            .0
-            .get(label)
-            .unwrap_or_else(|| panic!("URef {} wasn't generated.", label))
     }
 }
 
@@ -239,7 +251,7 @@ pub fn create_genesis_effects(
     genesis_validators: Vec<(PublicKey, U512)>,
     protocol_version: u64,
 ) -> Result<ExecutionEffect, execution::Error> {
-    let rng = GenesisURefsSource::new(genesis_account_addr, 0);
+    let rng = GenesisURefsSource::default();
 
     let genesis_validator_stakes: U512 = genesis_validators
         .iter()
@@ -426,7 +438,7 @@ mod tests {
 
     #[test]
     fn create_genesis_effects_stores_contracts_uref_at_public_uref() {
-        let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
+        let rng = GenesisURefsSource::default();
 
         let mint_public_address = rng.get_uref(MINT_PUBLIC_ADDRESS);
         let pos_public_address = rng.get_uref(POS_PUBLIC_ADDRESS);
@@ -471,7 +483,7 @@ mod tests {
 
     #[test]
     fn create_genesis_effects_stores_mint_contract_code_at_mint_contract_uref() {
-        let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
+        let rng = GenesisURefsSource::default();
 
         let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
@@ -512,7 +524,7 @@ mod tests {
 
     #[test]
     fn create_genesis_effects_stores_local_keys_balance_urefs_associations() {
-        let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
+        let rng = GenesisURefsSource::default();
 
         let pos_purse = rng.get_uref(POS_PURSE);
         let expected_mint_pos_balance_uref = rng.get_uref(MINT_POS_BALANCE_UREF);
@@ -563,7 +575,7 @@ mod tests {
 
     #[test]
     fn create_genesis_effects_balances_at_balance_urefs() {
-        let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
+        let rng = GenesisURefsSource::default();
 
         let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
@@ -673,7 +685,7 @@ mod tests {
 
     #[test]
     fn create_pos_effects() {
-        let rng = GenesisURefsSource::new(GENESIS_ACCOUNT_ADDR, 0);
+        let rng = GenesisURefsSource::default();
 
         let genesis_validator_a_public_key = PublicKey::new([0u8; 32]);
         let genesis_validator_a_stake = U512::from(1000);
