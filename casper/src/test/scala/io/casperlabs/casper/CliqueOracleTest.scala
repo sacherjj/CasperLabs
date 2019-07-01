@@ -2,15 +2,16 @@ package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
-import org.scalatest.{FlatSpec, Matchers}
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
+import org.scalatest.{FlatSpec, Matchers}
+import com.github.ghik.silencer.silent
+import scala.collection.immutable.HashMap
 
-import scala.collection.immutable.{HashMap, HashSet}
-
+@silent("is never used")
 class CliqueOracleTest
     extends FlatSpec
     with Matchers

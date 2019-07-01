@@ -153,7 +153,7 @@ object StoreBenchSuite {
   def repeatedIteratorFrom[A](elems: IndexedSeq[A]): Iterator[A] =
     Iterator
       .iterate((0, elems(0))) {
-        case (n, e) =>
+        case (n, _) =>
           val next = (n + 1) % elems.length
           (next, elems(next))
       }

@@ -5,6 +5,7 @@ import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
 import cats.syntax.either._
 import cats.syntax.validated._
+import com.github.ghik.silencer.silent
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric._
@@ -159,11 +160,15 @@ object Configuration extends ParserImplicits {
       def update(a: A): A
     }
 
+    @silent("is never used")
     implicit def default[A: NotPath: NotSubConfig]: PathUpdater[A] =
       identity(_)
+
+    @silent("is never used")
     implicit def option[A](implicit U: PathUpdater[A]): PathUpdater[Option[A]] =
       opt => opt.map(U.update)
 
+    @silent("is never used")
     implicit val pathUpdater: PathUpdater[Path] = (path: Path) =>
       Paths.get(replacePrefix(path, defaultDataDir, dataDir))
 

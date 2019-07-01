@@ -69,15 +69,13 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   it should "throw exception when bonds file does not exist" in withGenResources {
     (
         executionEngineService: ExecutionEngineService[Task],
-        genesisPath: Path,
-        log: LogStub[Task],
-        time: LogicalTime[Task]
+        _: Path,
+        log: LogStub[Task]
     ) =>
       for {
         r <- fromBondsFile(nonExistentPath)(
               executionEngineService,
-              log,
-              time
+              log
             ).attempt
       } yield {
         log.errors.count(
@@ -94,8 +92,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
     (
         executionEngineService: ExecutionEngineService[Task],
         genesisPath: Path,
-        log: LogStub[Task],
-        time: LogicalTime[Task]
+        log: LogStub[Task]
     ) =>
       val badBondsFile = genesisPath.resolve("misformatted.txt")
 
@@ -106,8 +103,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       for {
         r <- fromBondsFile(badBondsFile)(
               executionEngineService,
-              log,
-              time
+              log
             ).attempt
       } yield {
         log.errors.count(
@@ -124,8 +120,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
     (
         executionEngineService: ExecutionEngineService[Task],
         genesisPath: Path,
-        log: LogStub[Task],
-        time: LogicalTime[Task]
+        log: LogStub[Task]
     ) =>
       val bondsFile = genesisPath.resolve("givenBonds.txt")
       printBonds(bondsFile.toString)
@@ -133,8 +128,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       for {
         genesisWithTransform <- fromBondsFile(bondsFile)(
                                  executionEngineService,
-                                 log,
-                                 time
+                                 log
                                )
         BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
         bonds                                   = ProtoUtil.bonds(genesis)
@@ -154,8 +148,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
           (
               executionEngineService: ExecutionEngineService[Task],
               genesisPath: Path,
-              log: LogStub[Task],
-              time: LogicalTime[Task]
+              log: LogStub[Task]
           ) =>
             val bondsFile = genesisPath.resolve("bonds.txt")
             printBonds(bondsFile.toString)
@@ -164,8 +157,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             for {
               genesisWithTransform <- fromBondsFile(bondsFile)(
                                        executionEngineService,
-                                       log,
-                                       time
+                                       log
                                      )
               BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
               _ <- BlockStore[Task]
@@ -181,65 +173,62 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       )
   }
 
-  it should "prepare a GenesisRequest" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      Task.delay(
-        withGenResources {
-          (
-              executionEngineService: ExecutionEngineService[Task],
-              genesisPath: Path,
-              log: LogStub[Task],
-              time: LogicalTime[Task]
-          ) =>
-            val bondsFile = genesisPath.resolve("bonds.txt")
-            val mintFile  = genesisPath.resolve("mint.wasm")
-            val posFile   = genesisPath.resolve("pos.wasm")
-            val keyFile   = genesisPath.resolve("account.pem")
+  it should "prepare a GenesisRequest" in withStorage { _ => _ =>
+    Task.delay(
+      withGenResources {
+        (
+            executionEngineService: ExecutionEngineService[Task],
+            genesisPath: Path,
+            log: LogStub[Task]
+        ) =>
+          val bondsFile = genesisPath.resolve("bonds.txt")
+          val mintFile  = genesisPath.resolve("mint.wasm")
+          val posFile   = genesisPath.resolve("pos.wasm")
+          val keyFile   = genesisPath.resolve("account.pem")
 
-            printBonds(bondsFile.toString)
-            printFile(mintFile, "mint code")
-            printFile(posFile, "proof of stake code")
-            printFile(
-              keyFile,
-              """
+          printBonds(bondsFile.toString)
+          printFile(mintFile, "mint code")
+          printFile(posFile, "proof of stake code")
+          printFile(
+            keyFile,
+            """
               |-----BEGIN PUBLIC KEY-----
               |MCowBQYDK2VwAyEAhRAJx+krVtJQ3+jRzE5HMAheSn7YzzPVBDMgyJQdUq0=
               |-----END PUBLIC KEY-----
               """.stripMargin('|').trim
+          )
+
+          implicit val logEff                    = log
+          implicit val executionEngineServiceEff = executionEngineService
+          implicit val filesApi                  = FilesAPI.create[Task]
+
+          for {
+            bonds <- Genesis.getBonds[Task](bondsFile)
+            _     <- ExecutionEngineService[Task].setBonds(bonds)
+            genesisWithTransform <- Genesis[Task](
+                                     walletsPath = nonExistentPath,
+                                     minimumBond = 1L,
+                                     maximumBond = Long.MaxValue,
+                                     chainId = casperlabsChainId,
+                                     deployTimestamp = System.currentTimeMillis.some,
+                                     accountPublicKeyPath = keyFile.some,
+                                     initialTokens = BigInt(123),
+                                     mintCodePath = mintFile.some,
+                                     posCodePath = posFile.some
+                                   )
+            BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
+
+            request = GenesisRequest.parseFrom(
+              genesis.getBody.deploys.head.getDeploy.getBody.getSession.code.toByteArray
             )
-
-            implicit val timeEff                   = time
-            implicit val logEff                    = log
-            implicit val executionEngineServiceEff = executionEngineService
-            implicit val filesApi                  = FilesAPI.create[Task]
-
-            for {
-              bonds <- Genesis.getBonds[Task](bondsFile)
-              _     <- ExecutionEngineService[Task].setBonds(bonds)
-              genesisWithTransform <- Genesis[Task](
-                                       walletsPath = nonExistentPath,
-                                       minimumBond = 1L,
-                                       maximumBond = Long.MaxValue,
-                                       chainId = casperlabsChainId,
-                                       deployTimestamp = System.currentTimeMillis.some,
-                                       accountPublicKeyPath = keyFile.some,
-                                       initialTokens = BigInt(123),
-                                       mintCodePath = mintFile.some,
-                                       posCodePath = posFile.some
-                                     )
-              BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
-
-              request = GenesisRequest.parseFrom(
-                genesis.getBody.deploys.head.getDeploy.getBody.getSession.code.toByteArray
-              )
-            } yield {
-              request.initialTokens.get shouldBe state.BigInt("123", 512)
-              request.mintCode.get.code.toByteArray shouldBe ("mint code".getBytes)
-              request.proofOfStakeCode.get.code.toByteArray shouldBe ("proof of stake code".getBytes)
-              request.protocolVersion.get.value shouldBe 1L
-            }
-        }
-      )
+          } yield {
+            request.initialTokens.get shouldBe state.BigInt("123", 512)
+            request.mintCode.get.code.toByteArray shouldBe ("mint code".getBytes)
+            request.proofOfStakeCode.get.code.toByteArray shouldBe ("proof of stake code".getBytes)
+            request.protocolVersion.get.value shouldBe 1L
+          }
+      }
+    )
   }
 }
 
@@ -256,8 +245,7 @@ object GenesisTest {
 
   def fromBondsFile(bondsPath: Path)(
       implicit executionEngineService: ExecutionEngineService[Task],
-      log: LogStub[Task],
-      time: LogicalTime[Task]
+      log: LogStub[Task]
   ): Task[BlockMsgWithTransform] =
     for {
       bonds <- Genesis.getBonds[Task](bondsPath)
@@ -276,16 +264,15 @@ object GenesisTest {
     } yield genesis
 
   def withGenResources(
-      body: (ExecutionEngineService[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
+      body: (ExecutionEngineService[Task], Path, LogStub[Task]) => Task[Unit]
   ): Unit = {
     val storagePath             = mkStoragePath
     val genesisPath             = mkGenesisPath
     val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
     val log                     = new LogStub[Task]
-    val time                    = new LogicalTime[Task]
 
     val task = for {
-      result <- body(casperSmartContractsApi, genesisPath, log, time)
+      result <- body(casperSmartContractsApi, genesisPath, log)
       _      <- Sync[Task].delay { storagePath.recursivelyDelete() }
       _      <- Sync[Task].delay { genesisPath.recursivelyDelete() }
     } yield result

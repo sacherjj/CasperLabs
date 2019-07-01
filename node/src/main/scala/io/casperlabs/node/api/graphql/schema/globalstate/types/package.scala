@@ -282,6 +282,7 @@ package object types {
           case state.Value.Value.Contract(value)    => value
           case state.Value.Value.BytesValue(value)  => value
           case state.Value.Value.BigInt(value)      => value
+          case state.Value.Value.LongValue(value)   => value
           case value: state.Value.Value.StringValue => value
           case state.Value.Value.Key(value)         => value
           case state.Value.Value.Unit(value)        => value
