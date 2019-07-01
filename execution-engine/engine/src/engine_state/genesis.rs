@@ -8,8 +8,8 @@ use rand::RngCore;
 use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::uref::{AccessRights, URef};
+use common::value::{Contract, U512, Value};
 use common::value::account::{PublicKey, PurseId};
-use common::value::{Contract, Value, U512};
 use engine_state::execution_effect::ExecutionEffect;
 use engine_state::op::Op;
 use engine_state::utils::WasmiBytes;
@@ -319,11 +319,11 @@ mod tests {
     use std::collections::HashMap;
 
     use common::key::{addr_to_hex, Key};
+    use common::value::{Contract, U512, Value};
     use common::value::account::PublicKey;
-    use common::value::{Contract, Value, U512};
     use engine_state::create_genesis_effects;
     use engine_state::genesis::{
-        GenesisURefsSource, GENESIS_ACCOUNT_PURSE, MINT_GENESIS_ACCOUNT_BALANCE_UREF,
+        GENESIS_ACCOUNT_PURSE, GenesisURefsSource, MINT_GENESIS_ACCOUNT_BALANCE_UREF,
         MINT_POS_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS, POS_PRIVATE_ADDRESS,
         POS_PUBLIC_ADDRESS,
     };
@@ -676,6 +676,25 @@ mod tests {
         let public_key_hex: String = addr_to_hex(&pk.value());
         // This is how PoS contract stores validator keys in its known_urefs map.
         format!("v_{}_{}", public_key_hex, stakes)
+    }
+
+    // Dual of `pos_validator_key`. Parses PoS bond format to PublicKey, U512 pair.
+    fn pos_validator_to_tuple(pos_bond: String) -> Option<(PublicKey, U512)> {
+        let mut split_bond = pos_bond.split('_'); // expected format is "v_{public_key}_{bond}".
+        if Some("v") != split_bond.next() {
+            return None;
+        } else {
+            let hex_key: &str = split_bond.next()?;
+            let mut key_bytes = [0u8; 32];
+            for i in 0..32 {
+                key_bytes[i] = u8::from_str_radix(&hex_key[2 * i..2 * (i + 1)], 16).ok()?;
+            }
+            let pub_key = PublicKey::new(key_bytes);
+            let balance = split_bond
+                .next()
+                .and_then(|b| U512::from_dec_str(b).ok())?;
+            Some((pub_key, balance))
+        }
     }
 
     #[test]
