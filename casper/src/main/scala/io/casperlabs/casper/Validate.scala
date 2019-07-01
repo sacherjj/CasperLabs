@@ -539,7 +539,7 @@ object Validate {
     */
   def parents[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: Block,
-      genesisBlockHash: BlockHash,
+      lastFinalizedBlock: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
     def printHashes(hashes: Iterable[ByteString]) =
@@ -547,7 +547,7 @@ object Validate {
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.getHeader.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, genesisBlockHash, latestMessagesHashes)
+      tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlock, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)

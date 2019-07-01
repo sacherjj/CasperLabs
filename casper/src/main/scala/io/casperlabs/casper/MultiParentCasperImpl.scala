@@ -697,7 +697,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
       chainId: String
   ) {
 
@@ -726,14 +726,15 @@ object MultiParentCasperImpl {
         casperState <- Cell[F, CasperState].read
         // Confirm the parents are correct (including checking they commute) and capture
         // the effect needed to compute the correct pre-state as well.
-        _ <- Log[F].debug(s"Validating the parents of $hashPrefix")
+        _                  <- Log[F].debug(s"Validating the parents of $hashPrefix")
+        lastFinalizedBlock <- LastFinalizedBlockHashContainer[F].get
         merged <- maybeContext.fold(
                    ExecEngineUtil.MergeResult
                      .empty[ExecEngineUtil.TransformMap, Block]
                      .pure[F]
-                 ) { ctx =>
+                 ) { _ =>
                    Validate
-                     .parents[F](block, ctx.genesis.blockHash, dag)
+                     .parents[F](block, lastFinalizedBlock, dag)
                  }
         _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
         preStateHash <- ExecEngineUtil.computePrestate[F](merged)
