@@ -318,7 +318,7 @@ mod tests {
     use std::collections::btree_map::BTreeMap;
     use std::collections::HashMap;
 
-    use common::key::{addr_to_hex, Key};
+    use common::key::Key;
     use common::value::{Contract, U512, Value};
     use common::value::account::PublicKey;
     use engine_state::create_genesis_effects;
@@ -327,7 +327,7 @@ mod tests {
         MINT_POS_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS, POS_PRIVATE_ADDRESS,
         POS_PUBLIC_ADDRESS,
     };
-    use engine_state::utils::WasmiBytes;
+    use engine_state::utils::{pos_validator_key, WasmiBytes};
     use shared::test_utils;
     use shared::transform::Transform;
     use wasm_prep::wasm_costs::WasmCosts;
@@ -669,32 +669,6 @@ mod tests {
             actual_mint_contract_bytes,
             expected_mint_contract_bytes.as_slice()
         );
-    }
-
-    // Helper function to create validator labels as they are constructed in PoS.
-    fn pos_validator_key(pk: PublicKey, stakes: U512) -> String {
-        let public_key_hex: String = addr_to_hex(&pk.value());
-        // This is how PoS contract stores validator keys in its known_urefs map.
-        format!("v_{}_{}", public_key_hex, stakes)
-    }
-
-    // Dual of `pos_validator_key`. Parses PoS bond format to PublicKey, U512 pair.
-    fn pos_validator_to_tuple(pos_bond: String) -> Option<(PublicKey, U512)> {
-        let mut split_bond = pos_bond.split('_'); // expected format is "v_{public_key}_{bond}".
-        if Some("v") != split_bond.next() {
-            return None;
-        } else {
-            let hex_key: &str = split_bond.next()?;
-            let mut key_bytes = [0u8; 32];
-            for i in 0..32 {
-                key_bytes[i] = u8::from_str_radix(&hex_key[2 * i..2 * (i + 1)], 16).ok()?;
-            }
-            let pub_key = PublicKey::new(key_bytes);
-            let balance = split_bond
-                .next()
-                .and_then(|b| U512::from_dec_str(b).ok())?;
-            Some((pub_key, balance))
-        }
     }
 
     #[test]
