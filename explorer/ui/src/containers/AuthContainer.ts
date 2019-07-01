@@ -1,5 +1,5 @@
 import { observable } from 'mobx';
-import createAuth0Client from "@auth0/auth0-spa-js";
+import createAuth0Client from '@auth0/auth0-spa-js';
 
 // https://github.com/auth0/auth0-spa-js/issues/41
 // https://auth0.com/docs/quickstart/spa/vanillajs
@@ -17,16 +17,17 @@ export class AuthContainer {
   async init() {
     const auth0 = await this.connect();
 
-    if (window.location.search.includes("code=")) {
+    if (window.location.search.includes('code=')) {
       const { appState } = await auth0.handleRedirectCallback();
-      const url = appState && appState.targetUrl
-        ? appState.targetUrl
-        : window.location.pathname;
+      const url =
+        appState && appState.targetUrl
+          ? appState.targetUrl
+          : window.location.pathname;
       window.history.replaceState({}, document.title, url);
     }
 
     const isAuthenticated = await auth0.isAuthenticated();
-    this.user = isAuthenticated ? (await auth0.getUser()) : null;
+    this.user = isAuthenticated ? await auth0.getUser() : null;
   }
 
   async connect() {
@@ -34,13 +35,16 @@ export class AuthContainer {
       domain: this.conf.domain,
       client_id: this.conf.clientId,
       display: 'popup',
-      redirect_uri: window.location.origin,
+      redirect_uri: window.location.origin
     });
   }
 
   async login() {
     const auth0 = await this.connect();
-    await auth0.loginWithPopup({ display: 'popup' });
+    const isAuthenticated = await auth0.isAuthenticated();
+    if (!isAuthenticated) {
+      await auth0.loginWithPopup({ display: 'popup' });
+    }
     this.user = await auth0.getUser();
   }
 

@@ -13,6 +13,7 @@ import Home from './Home';
 import Accounts from './Accounts';
 import Faucet from './Faucet';
 import Explorer from './Explorer';
+import { PrivateRoute } from './Utils';
 
 import logo from '../img/logo-full.png';
 
@@ -229,8 +230,16 @@ const Content = (props: AppProps) => (
         <Alerts {...props} />
         <Switch>
           <Route exact path={Pages.Home} render={_ => <Home {...props} />} />
-          <Route path={Pages.Accounts} render={_ => <Accounts />} />
-          <Route path={Pages.Faucet} render={_ => <Faucet />} />
+          <PrivateRoute
+            path={Pages.Accounts}
+            auth={props.auth}
+            render={_ => <Accounts />}
+          />
+          <PrivateRoute
+            path={Pages.Faucet}
+            auth={props.auth}
+            render={_ => <Faucet />}
+          />
           <Route path={Pages.Explorer} render={_ => <Explorer />} />
         </Switch>
       </div>

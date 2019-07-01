@@ -1,4 +1,7 @@
-import * as React from 'react';
+import React from 'react';
+import { Route, RouteProps } from 'react-router-dom';
+import { observer } from 'mobx-react';
+import AuthContainer from '../containers/AuthContainer';
 
 export const Loading = () => (
   <div className="text-center">
@@ -56,3 +59,18 @@ export const UnderConstruction = (message: string) => {
     </div>
   );
 };
+
+interface PrivateRouteProps extends RouteProps {
+  auth: AuthContainer;
+}
+
+@observer
+export class PrivateRoute extends React.Component<PrivateRouteProps, {}> {
+  render() {
+    if (this.props.auth.user == null) {
+      this.props.auth.login();
+      return Loading();
+    }
+    return <Route {...this.props} />;
+  }
+}
