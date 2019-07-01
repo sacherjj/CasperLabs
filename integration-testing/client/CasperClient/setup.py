@@ -146,7 +146,7 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version='0.3.5',
+    version='0.3.7',
     packages=find_packages(exclude=['tests']),
     setup_requires=['grpcio-tools>=1.20',
                     'in-place==0.4.0',
