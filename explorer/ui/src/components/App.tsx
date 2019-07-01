@@ -208,13 +208,6 @@ AppProps & RouteComponentProps<any>,
                   )
               }
             </li>
-            <li className="nav-item">
-              {
-                <a className="nav-link" onClick={_ => this.props.auth.logout()}>
-                  <i className="fa fa-fw fa-sign-out-alt"></i>Sign out
-                </a>
-              }
-            </li>
           </ul>
         </div>
       </nav>

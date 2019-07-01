@@ -3,9 +3,9 @@ import ReactDOM from 'react-dom';
 import { HashRouter } from 'react-router-dom';
 
 import * as serviceWorker from './serviceWorker';
-import Main from './components/Main';
+import App from './components/App';
 import CasperContainer from './containers/CasperContainer';
-import { Auth0Provider } from "./react-auth0-wrapper";
+import AuthContainer from './containers/AuthContainer';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
@@ -19,14 +19,9 @@ let w = window as any;
 w.$ = w.jQuery = jQuery;
 
 ReactDOM.render(
-  <Auth0Provider
-    domain={window.config.auth0.domain}
-    client_id={window.config.auth0.clientId}
-    redirect_uri={window.location.origin}>
-    <HashRouter>
-      <Main casper={new CasperContainer()} />
-    </HashRouter>
-  </Auth0Provider>,
+  <HashRouter>
+    <App casper={new CasperContainer()} auth={new AuthContainer(window.config.auth0)} />
+  </HashRouter>,
   document.getElementById('root')
 );
 

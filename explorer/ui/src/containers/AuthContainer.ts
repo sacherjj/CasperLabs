@@ -1,28 +1,53 @@
 import { observable } from 'mobx';
+import createAuth0Client from "@auth0/auth0-spa-js";
 
-import { Auth0Provided } from '../react-auth0-wrapper'
+// https://github.com/auth0/auth0-spa-js/issues/41
+// https://auth0.com/docs/quickstart/spa/vanillajs
+// https://auth0.com/docs/quickstart/spa/react
 
 export class AuthContainer {
+  conf: Auth0Config;
+  @observable user: User | null = null;
 
-  provided: Auth0Provided;
-
-  constructor(provided: Auth0Provided) {
-    this.provided = provided;
+  constructor(conf: Auth0Config) {
+    this.conf = conf;
+    this.init();
   }
 
-  @observable user: User | undefined = undefined;
-  @observable isAuthenticated = false
+  async init() {
+    const auth0 = await this.connect();
+
+    if (window.location.search.includes("code=")) {
+      const { appState } = await auth0.handleRedirectCallback();
+      const url = appState && appState.targetUrl
+        ? appState.targetUrl
+        : window.location.pathname;
+      window.history.replaceState({}, document.title, url);
+    }
+
+    const isAuthenticated = await auth0.isAuthenticated();
+    this.user = isAuthenticated ? (await auth0.getUser()) : null;
+  }
+
+  async connect() {
+    return await createAuth0Client({
+      domain: this.conf.domain,
+      client_id: this.conf.clientId,
+      display: 'popup',
+      redirect_uri: window.location.origin,
+    });
+  }
 
   async login() {
-    await this.provided.loginWithPopup();
-    this.user = this.provided.user;
-    this.isAuthenticated = this.provided.isAuthenticated;
+    const auth0 = await this.connect();
+    await auth0.loginWithPopup({ display: 'popup' });
+    this.user = await auth0.getUser();
   }
 
-  logout() {
-    this.provided.logout();
-    this.user = undefined;
-    this.isAuthenticated = false;
+  async logout() {
+    const auth0 = await this.connect();
+    auth0.logout({ returnTo: window.location.origin });
+    this.user = null;
   }
 }
 
