@@ -56,6 +56,7 @@ message CommitRequest {
 
 message CommitResult {
   bytes poststate_hash = 1;
+  repeated Bond bonded_validators = 2;
 }
 
 message CommitResponse {
