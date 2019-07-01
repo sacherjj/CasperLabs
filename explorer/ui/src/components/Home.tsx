@@ -8,7 +8,7 @@ import AuthContainer from '../containers/AuthContainer';
 
 interface Props {
   casper: CasperContainer;
-  auth: AuthContainer
+  auth: AuthContainer;
 }
 
 const Home = observer((props: Props) => {
@@ -21,12 +21,10 @@ const Home = observer((props: Props) => {
             This is a self serice portal for dApp developers to interact with
             the CasperLabs blockchain. On devnet you can use this portal to
             create accounts for yourself, fund them with some free tokens to
-            play with, and explore the block DAG. If you're having an issue
-              then don't hesitate to let us know on{' '}
+            play with, and explore the block DAG. If you're having an issue then
+            don't hesitate to let us know on{' '}
             <a href="https://t.me/casperlabss">Telegram</a> or{' '}
-            <a href="https://github.com/CasperLabs/CasperLabs/issues">
-              Github
-              </a>
+            <a href="https://github.com/CasperLabs/CasperLabs/issues">Github</a>
           </p>
           <ul className="list-inline" id="go-to-buttons">
             <li className="list-inline-item">
@@ -36,53 +34,42 @@ const Home = observer((props: Props) => {
                 role="button"
               >
                 Read our Tech Spec &raquo;
-                </a>
+              </a>
             </li>
-
-            {!props.auth.user && (
-              <li className="list-inline-item">
-                <a
-                  className="btn btn-success btn-lg"
-                  href="#"
-                  role="button"
-                  onClick={_ => props.auth.login()}
-                >
-                  Log in to access your accounts &raquo;
-                  </a>
-              </li>
-            )}
           </ul>
         </div>
       </div>
 
       <div className="row">
-        {props.casper.accounts != null && <AccountsCard accounts={props.casper.accounts} />}
+        <AccountsCard accounts={props.casper.accounts} />
+        {props.casper.accounts && <FaucetCard />}
+        <ExploreCard />
       </div>
 
       <div className="card">
         <div className="card-header bg-danger text-white">
           Looking for help?
-          </div>
+        </div>
         <div className="card-body">
           <p>
             To write contracts have a look at the{' '}
             <a href="https://github.com/CasperLabs/contract-examples">
               contract
-              </a>{' '}
+            </a>{' '}
             and the{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/USAGE.md">
               usage examples
-              </a>
+            </a>
             , the{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/DEVELOPER.md">
               developer guide
-              </a>{' '}
+            </a>{' '}
             and the{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker">
               local docker network setup
-              </a>
+            </a>
             .
-            </p>
+          </p>
         </div>
       </div>
 
@@ -125,17 +112,41 @@ const Card = (props: CardProps) => (
   </div>
 );
 
-function CardMessage(message: string) {
-  return <div className="mr-5">{message}</div>;
-}
+const CardMessage = (props: { message: string }) => {
+  return <div className="mr-5">{props.message}</div>;
+};
 
-const AccountsCard = (props: { accounts: Account[] }) => {
+const AccountsCard = (props: { accounts: Account[] | null }) => {
+  const background =
+    props.accounts && props.accounts.length > 0 ? 'success' : 'primary';
   return (
-    <Card background="primary" icon="cubes" to={Pages.Accounts}>
-      {CardMessage(`${props.accounts.length} Accounts`)}
+    <Card background={background} icon="address-book" to={Pages.Accounts}>
+      {props.accounts != null ? (
+        <CardMessage message={`You have ${props.accounts.length} account(s)`} />
+      ) : (
+        <CardMessage message="Create an account" />
+      )}
     </Card>
   );
 };
 
-        // TODO: DeployCard with the cached deploys to send another one?
-        // TODO: BlocksCard with the last finalized block, or the tips?
+const FaucetCard = ({}) => {
+  // TODO: Display available funds.
+  return (
+    <Card background="primary" icon="coins" to={Pages.Faucet}>
+      <CardMessage message="Request tokens" />
+    </Card>
+  );
+};
+
+const ExploreCard = ({}) => {
+  // TODO: Display latest block timestamp.
+  return (
+    <Card background="success" icon="project-diagram" to={Pages.Explorer}>
+      <CardMessage message="Explore the block DAG" />
+    </Card>
+  );
+};
+
+// TODO: DeployCard with the cached deploys to send another one?
+// TODO: BlocksCard with the last finalized block, or the tips?
