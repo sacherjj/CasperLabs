@@ -12,6 +12,7 @@
     "@types/react-dom": "16.8.4",
     "@types/react-router-dom": "^4.3.4",
     "bootstrap": "^4.3.1",
+    "bootstrap-components": "^1.1.287",
     "jquery": "^3.4.1",
     "lint-staged": "^8.2.1",
     "mobx": "^5.10.1",

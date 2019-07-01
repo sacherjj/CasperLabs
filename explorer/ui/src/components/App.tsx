@@ -10,6 +10,9 @@ import AuthContainer from '../containers/AuthContainer';
 
 import * as Pages from './Pages';
 import Home from './Home';
+import Accounts from './Accounts';
+import Faucet from './Faucet';
+import Explorer from './Explorer';
 
 import logo from '../img/logo-full.png';
 
@@ -22,7 +25,7 @@ class MenuItem {
     public label: string,
     public icon: string,
     public exact: boolean = false
-  ) { }
+  ) {}
 }
 
 const SideMenuItems: MenuItem[] = [
@@ -60,7 +63,7 @@ export default class App extends React.Component<AppProps, {}> {
     // })
 
     // Toggle the side navigation
-    $('#sidenavToggler').click(function (e) {
+    $('#sidenavToggler').click(function(e) {
       e.preventDefault();
       $('body').toggleClass('sidenav-toggled');
       $('.navbar-sidenav .nav-link-collapse').addClass('collapsed');
@@ -70,7 +73,7 @@ export default class App extends React.Component<AppProps, {}> {
     });
 
     // Force the toggled class to be removed when a collapsible nav link is clicked
-    $('.navbar-sidenav .nav-link-collapse').click(function (e) {
+    $('.navbar-sidenav .nav-link-collapse').click(function(e) {
       e.preventDefault();
       $('body').removeClass('sidenav-toggled');
     });
@@ -78,7 +81,7 @@ export default class App extends React.Component<AppProps, {}> {
     // Prevent the content wrapper from scrolling when the fixed side navigation hovered over
     $(
       'body.fixed-nav .navbar-sidenav, body.fixed-nav .sidenav-toggler, body.fixed-nav .navbar-collapse'
-    ).on('mousewheel DOMMouseScroll', function (e: any) {
+    ).on('mousewheel DOMMouseScroll', function(e: any) {
       var e0 = e.originalEvent,
         delta = e0.wheelDelta || -e0.detail;
       this.scrollTop += (delta < 0 ? 1 : -1) * 30;
@@ -86,7 +89,7 @@ export default class App extends React.Component<AppProps, {}> {
     });
 
     // Scroll to top button appear
-    $(document).scroll(function () {
+    $(document).scroll(function() {
       var scrollDistance = $(this).scrollTop()!;
       if (scrollDistance > 100) {
         $('.scroll-to-top').fadeIn();
@@ -96,7 +99,7 @@ export default class App extends React.Component<AppProps, {}> {
     });
 
     // Scroll to top
-    $(document).on('click', 'a.scroll-to-top', function (e) {
+    $(document).on('click', 'a.scroll-to-top', function(e) {
       var anchor = $(this);
       var offset = $(anchor.attr('href')!).offset()!;
       $('html, body')
@@ -148,8 +151,8 @@ const NavLink = (props: { item: MenuItem }) => {
 // Moved `withRouter` to a separate line.
 @observer
 class _Navigation extends React.Component<
-AppProps & RouteComponentProps<any>,
-{}
+  AppProps & RouteComponentProps<any>,
+  {}
 > {
   render() {
     return (
@@ -196,17 +199,15 @@ AppProps & RouteComponentProps<any>,
               </div>
             </li>
             <li className="nav-item">
-              {
-                this.props.auth.user ? (
-                  <a className="nav-link" onClick={_ => this.props.auth.logout()}>
-                    <i className="fa fa-fw fa-sign-out-alt"></i>Sign out
+              {this.props.auth.user ? (
+                <a className="nav-link" onClick={_ => this.props.auth.logout()}>
+                  <i className="fa fa-fw fa-sign-out-alt"></i>Sign out
                 </a>
-                ) : (
-                    <a className="nav-link" onClick={_ => this.props.auth.login()}>
-                      <i className="fa fa-fw fa-sign-in-alt"></i>Sign in
+              ) : (
+                <a className="nav-link" onClick={_ => this.props.auth.login()}>
+                  <i className="fa fa-fw fa-sign-in-alt"></i>Sign in
                 </a>
-                  )
-              }
+              )}
             </li>
           </ul>
         </div>
@@ -228,9 +229,9 @@ const Content = (props: AppProps) => (
         <Alerts {...props} />
         <Switch>
           <Route exact path={Pages.Home} render={_ => <Home {...props} />} />
-          <Route path={Pages.Accounts} render={_ => <Home {...props} />} />
-          <Route path={Pages.Faucet} render={_ => <Home {...props} />} />
-          <Route path={Pages.Explorer} render={_ => <Home {...props} />} />
+          <Route path={Pages.Accounts} render={_ => <Accounts />} />
+          <Route path={Pages.Faucet} render={_ => <Faucet />} />
+          <Route path={Pages.Explorer} render={_ => <Explorer />} />
         </Switch>
       </div>
     </div>

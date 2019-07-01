@@ -14,7 +14,7 @@ interface Props {
 const Home = observer((props: Props) => {
   return (
     <div>
-      <div className="jumbotron">
+      <div className="jumbotron shadow">
         <div>
           <h1>CasperLabs Explorer</h1>
           <p>
@@ -130,7 +130,7 @@ const AccountsCard = (props: { accounts: Account[] | null }) => {
   );
 };
 
-const FaucetCard = ({}) => {
+const FaucetCard = (_: {}) => {
   // TODO: Display available funds.
   return (
     <Card background="primary" icon="coins" to={Pages.Faucet}>
@@ -139,7 +139,7 @@ const FaucetCard = ({}) => {
   );
 };
 
-const ExploreCard = ({}) => {
+const ExploreCard = (_: {}) => {
   // TODO: Display latest block timestamp.
   return (
     <Card background="success" icon="project-diagram" to={Pages.Explorer}>
