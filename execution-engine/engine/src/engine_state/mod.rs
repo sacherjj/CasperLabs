@@ -6,16 +6,16 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use common::key::Key;
+use common::value::{U512, Value};
 use common::value::account::{BlockTime, PublicKey};
-use common::value::U512;
 use engine_state::utils::WasmiBytes;
 use execution::{self, Executor};
 use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::Transform;
-use storage::global_state::{CommitResult, History};
+use storage::global_state::{CommitResult, History, StateReader};
 use tracking_copy::TrackingCopy;
-use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::Preprocessor;
+use wasm_prep::wasm_costs::WasmCosts;
 
 use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;
@@ -143,4 +143,32 @@ where
             .lock()
             .commit(correlation_id, prestate_hash, effects)
     }
+}
+
+/// Returns bonded validators at `poststate_hash` state.
+pub fn get_bonded_validators<H: History>(
+    state: Arc<Mutex<H>>,
+    poststate_hash: Blake2bHash,
+    pos_key: &Key, // Address of the PoS as currently bonded validators are stored in its known urefs map.
+    correlation_id: CorrelationId,
+) -> Result<Option<HashMap<PublicKey, U512>>, H::Error> {
+    state
+        .lock()
+        .checkout(poststate_hash)
+        .and_then(|maybe_reader| match maybe_reader {
+            Some(reader) => reader.read(correlation_id, pos_key).map(|maybe_value| {
+                if let Some(Value::Account(account)) = maybe_value {
+                    let bonded_validators = account
+                        .urefs_lookup()
+                        .keys()
+                        .into_iter()
+                        .filter_map(|entry| utils::pos_validator_to_tuple(entry))
+                        .collect::<HashMap<PublicKey, U512>>();
+                    Some(bonded_validators)
+                } else {
+                    None
+                }
+            }),
+            None => Ok(None),
+        })
 }
