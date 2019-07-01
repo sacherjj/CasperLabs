@@ -80,9 +80,8 @@ object CommUtil {
       _     <- TransportLayer[F].stream(peers, msg)
     } yield ()
 
-  def requestApprovedBlock[F[_]: Monad: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](
-      delay: FiniteDuration
-  ): F[Unit] = {
+  def requestApprovedBlock[F[_]: Monad: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk]()
+      : F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
     for {
       maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)

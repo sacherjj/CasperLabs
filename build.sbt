@@ -44,7 +44,9 @@ lazy val projectSettings = Seq(
   Test / testForkedParallel := false,
   IntegrationTest / fork := true,
   IntegrationTest / parallelExecution := false,
-  IntegrationTest / testForkedParallel := false
+  IntegrationTest / testForkedParallel := false,
+  Compile / doc / sources := Seq.empty,
+  Compile / packageDoc / publishArtifact := false
 )
 
 lazy val coverageSettings = Seq(

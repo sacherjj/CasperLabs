@@ -51,7 +51,6 @@ object blockImplicits {
       version         <- arbitrary[Long]
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[ByteString]]
-      justifications  <- arbitrary[Seq[Justification]]
       deploys         <- arbitrary[Seq[Block.ProcessedDeploy]]
     } yield Block()
       .withBlockHash(hash)

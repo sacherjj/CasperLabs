@@ -133,7 +133,10 @@ object Dependencies {
     http4sDependencies ++ circeDependencies
 
   val commonDependencies: Seq[ModuleID] =
-    logging ++ testing :+ kindProjector :+ macroParadise :+ betterMonadicFor
+    Seq(
+      compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.1"),
+      "com.github.ghik" %% "silencer-lib" % "1.4.1" % Provided
+    ) ++ logging ++ testing :+ kindProjector :+ macroParadise :+ betterMonadicFor
 
   val gatlingDependencies: Seq[ModuleID] = Seq(
     gatlingFramework,
