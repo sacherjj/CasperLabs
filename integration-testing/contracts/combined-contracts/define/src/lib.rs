@@ -41,7 +41,9 @@ fn update_list(name: String) {
 
 fn sub(name: String) -> Option<UPointer<Vec<String>>> {
     if has_uref(&name) {
-        None //already subscribed
+        let init_message = vec![String::from("Hello again!")];
+        let new_key = new_uref(init_message);
+        Some(new_key) //already subscribed
     } else {
         let init_message = vec![String::from("Welcome!")];
         let new_key = new_uref(init_message);
