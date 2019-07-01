@@ -96,8 +96,10 @@ def collect_proto_files():
              f'{PROTO_DIR}/descriptor.proto')
     copyfile(join(dirname(grpc_tools.__file__), '_proto/google/protobuf/wrappers.proto'), f'{PROTO_DIR}/wrappers.proto')
 
-    copyfile(f'{PROTOBUF_DIR}/google/api/http.proto', f'{PROTO_DIR}/http.proto')
-    copyfile(f'{PROTOBUF_DIR}/google/api/annotations.proto', f'{PROTO_DIR}/annotations.proto')
+    download("https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/protobuf/google/api/annotations.proto",
+             f"{PROTO_DIR}")
+    download("https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/protobuf/google/api/http.proto",
+             f"{PROTO_DIR}")
 
     for file_name in Path(f"{PROTOBUF_DIR}/io/").glob('**/*.proto'):
         copyfile(file_name, f'{PROTO_DIR}/{basename(file_name)}')
@@ -133,8 +135,7 @@ with open(path.join(THIS_DIRECTORY, "README.md"),  encoding="utf-8") as fh:
 class CInstall(InstallCommand):
     def run(self):
         run_codegen()
-        # This is workaround for a bug in setuptools
-        self.do_egg_install()
+        super().run()
 
 
 class CDevelop(DevelopCommand):
@@ -145,7 +146,7 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version='0.3.2',
+    version='0.3.7',
     packages=find_packages(exclude=['tests']),
     setup_requires=['grpcio-tools>=1.20',
                     'in-place==0.4.0',
@@ -178,6 +179,5 @@ setup(
     project_urls={
         'Source': 'https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperClient',
         'Readme': 'https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperClient/README.md',
-        'Developer Guide': 'https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperClient/DEVELOPER.md'
     },
 )
