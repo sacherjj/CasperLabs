@@ -733,7 +733,7 @@ object MultiParentCasperImpl {
                      .pure[F]
                  ) { ctx =>
                    Validate
-                     .parents[F](block, ctx.genesis.blockHash, dag)
+                     .parents[F](block, ctx.lastFinalizedBlockHash, dag)
                  }
         _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
         preStateHash <- ExecEngineUtil.computePrestate[F](merged)
