@@ -3,7 +3,6 @@ import { observable } from 'mobx';
 // CasperContainer talks to the API on behalf of React
 // components and exposes the state in MobX observables.
 export class CasperContainer {
-  @observable principal: Principal | null = null;
 
   @observable accounts: Account[] | null = null;
 
@@ -20,14 +19,6 @@ export class CasperContainer {
     // this.exec(this.service.listAccounts(), (xs) => {
     //   this.accounts = xs;
     // })
-  }
-
-  login() {
-    // TODO: Show the login window.
-  }
-
-  logout() {
-    // TODO: Delete the token from local storage and refresh the window.
   }
 }
 

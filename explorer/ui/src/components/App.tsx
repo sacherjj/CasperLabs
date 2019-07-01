@@ -6,6 +6,7 @@ import { Switch, Route, Link, withRouter } from 'react-router-dom';
 import { RouteComponentProps } from 'react-router';
 
 import CasperContainer from '../containers/CasperContainer';
+import AuthContainer from '../containers/AuthContainer';
 
 import * as Pages from './Pages';
 import Home from './Home';
@@ -21,7 +22,7 @@ class MenuItem {
     public label: string,
     public icon: string,
     public exact: boolean = false
-  ) {}
+  ) { }
 }
 
 const SideMenuItems: MenuItem[] = [
@@ -32,10 +33,11 @@ const SideMenuItems: MenuItem[] = [
 ];
 
 export interface AppProps {
-  container: CasperContainer;
+  casper: CasperContainer;
+  auth: AuthContainer;
 }
 
-// The entry point for rendering Wharf.
+// The entry point for rendering.
 export default class App extends React.Component<AppProps, {}> {
   render() {
     return (
@@ -58,7 +60,7 @@ export default class App extends React.Component<AppProps, {}> {
     // })
 
     // Toggle the side navigation
-    $('#sidenavToggler').click(function(e) {
+    $('#sidenavToggler').click(function (e) {
       e.preventDefault();
       $('body').toggleClass('sidenav-toggled');
       $('.navbar-sidenav .nav-link-collapse').addClass('collapsed');
@@ -68,7 +70,7 @@ export default class App extends React.Component<AppProps, {}> {
     });
 
     // Force the toggled class to be removed when a collapsible nav link is clicked
-    $('.navbar-sidenav .nav-link-collapse').click(function(e) {
+    $('.navbar-sidenav .nav-link-collapse').click(function (e) {
       e.preventDefault();
       $('body').removeClass('sidenav-toggled');
     });
@@ -76,7 +78,7 @@ export default class App extends React.Component<AppProps, {}> {
     // Prevent the content wrapper from scrolling when the fixed side navigation hovered over
     $(
       'body.fixed-nav .navbar-sidenav, body.fixed-nav .sidenav-toggler, body.fixed-nav .navbar-collapse'
-    ).on('mousewheel DOMMouseScroll', function(e: any) {
+    ).on('mousewheel DOMMouseScroll', function (e: any) {
       var e0 = e.originalEvent,
         delta = e0.wheelDelta || -e0.detail;
       this.scrollTop += (delta < 0 ? 1 : -1) * 30;
@@ -84,7 +86,7 @@ export default class App extends React.Component<AppProps, {}> {
     });
 
     // Scroll to top button appear
-    $(document).scroll(function() {
+    $(document).scroll(function () {
       var scrollDistance = $(this).scrollTop()!;
       if (scrollDistance > 100) {
         $('.scroll-to-top').fadeIn();
@@ -94,7 +96,7 @@ export default class App extends React.Component<AppProps, {}> {
     });
 
     // Scroll to top
-    $(document).on('click', 'a.scroll-to-top', function(e) {
+    $(document).on('click', 'a.scroll-to-top', function (e) {
       var anchor = $(this);
       var offset = $(anchor.attr('href')!).offset()!;
       $('html, body')
@@ -129,7 +131,6 @@ const NavLink = (props: { item: MenuItem }) => {
           >
             <Link to={item.path} className="nav-link">
               <i className={'fa fa-fw fa-' + item.icon}></i>
-              &nbsp;
               <span className="nav-link-text">{item.label}</span>
             </Link>
           </li>
@@ -147,11 +148,10 @@ const NavLink = (props: { item: MenuItem }) => {
 // Moved `withRouter` to a separate line.
 @observer
 class _Navigation extends React.Component<
-  AppProps & RouteComponentProps<any>,
-  {}
+AppProps & RouteComponentProps<any>,
+{}
 > {
   render() {
-    let c = this.props.container;
     return (
       <nav
         className="navbar navbar-expand-lg navbar-dark bg-dark fixed-top"
@@ -192,19 +192,28 @@ class _Navigation extends React.Component<
           <ul className="navbar-nav ml-auto">
             <li className="nav-item">
               <div className="username">
-                {c.principal && c.principal.username}
+                {this.props.auth.user && this.props.auth.user.name}
               </div>
             </li>
             <li className="nav-item">
-              {(c.principal != null && (
-                <a className="nav-link" onClick={_ => c.logout()}>
+              {
+                this.props.auth.user ? (
+                  <a className="nav-link" onClick={_ => this.props.auth.logout()}>
+                    <i className="fa fa-fw fa-sign-out-alt"></i>Sign out
+                </a>
+                ) : (
+                    <a className="nav-link" onClick={_ => this.props.auth.login()}>
+                      <i className="fa fa-fw fa-sign-in-alt"></i>Sign in
+                </a>
+                  )
+              }
+            </li>
+            <li className="nav-item">
+              {
+                <a className="nav-link" onClick={_ => this.props.auth.logout()}>
                   <i className="fa fa-fw fa-sign-out-alt"></i>Sign out
                 </a>
-              )) || (
-                <a className="nav-link" onClick={_ => c.login()}>
-                  <i className="fa fa-fw fa-sign-in-alt"></i>Sign in
-                </a>
-              )}
+              }
             </li>
           </ul>
         </div>
@@ -238,7 +247,7 @@ const Content = (props: AppProps) => (
 // Alerts displays the outcome of the last async error on the top of the page.
 // Dismissing the error clears the state and removes the element.
 const Alerts = observer((props: AppProps) => {
-  if (props.container.error == null) return null;
+  if (props.casper.error == null) return null;
   // Not using the `data-dismiss="alert"` to dismiss via Bootstrap JS
   // becuase then it doesn't re-render when there's a new error.
   return (
@@ -251,11 +260,11 @@ const Alerts = observer((props: AppProps) => {
           type="button"
           className="close"
           aria-label="Close"
-          onClick={_ => (props.container.error = null)}
+          onClick={_ => (props.casper.error = null)}
         >
           <span aria-hidden="true">&times;</span>
         </button>
-        <strong>Error!</strong> {props.container.error}
+        <strong>Error!</strong> {props.casper.error}
       </div>
     </div>
   );

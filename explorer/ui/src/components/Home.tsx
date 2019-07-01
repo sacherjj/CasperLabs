@@ -3,111 +3,95 @@ import { Link } from 'react-router-dom';
 import { observer } from 'mobx-react';
 
 import * as Pages from './Pages';
-import { RefreshableComponent } from './Utils';
 import CasperContainer from '../containers/CasperContainer';
+import AuthContainer from '../containers/AuthContainer';
 
 interface Props {
-  container: CasperContainer;
+  casper: CasperContainer;
+  auth: AuthContainer
 }
 
-class State {
-  timer: any;
-}
-
-@observer
-export default class Home extends RefreshableComponent<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    // No good place for a refresh button, so let's polling to keep the
-    // dashboard up to date.
-    this.refreshIntervalMillis = 60 * 1000;
-  }
-
-  render() {
-    let c = this.props.container;
-    return (
-      <div>
-        <div className="jumbotron">
-          <div>
-            <h1>CasperLabs Explorer</h1>
-            <p>
-              This is a self serice portal for dApp developers to interact with
-              the CasperLabs blockchain. On devnet you can use this portal to
-              create accounts for yourself, fund them with some free tokens to
-              play with, and explore the block DAG. If you're having an issue
+const Home = observer((props: Props) => {
+  return (
+    <div>
+      <div className="jumbotron">
+        <div>
+          <h1>CasperLabs Explorer</h1>
+          <p>
+            This is a self serice portal for dApp developers to interact with
+            the CasperLabs blockchain. On devnet you can use this portal to
+            create accounts for yourself, fund them with some free tokens to
+            play with, and explore the block DAG. If you're having an issue
               then don't hesitate to let us know on{' '}
-              <a href="https://t.me/casperlabss">Telegram</a> or{' '}
-              <a href="https://github.com/CasperLabs/CasperLabs/issues">
-                Github
+            <a href="https://t.me/casperlabss">Telegram</a> or{' '}
+            <a href="https://github.com/CasperLabs/CasperLabs/issues">
+              Github
               </a>
-            </p>
-            <ul className="list-inline" id="go-to-buttons">
+          </p>
+          <ul className="list-inline" id="go-to-buttons">
+            <li className="list-inline-item">
+              <a
+                className="btn btn-success btn-lg"
+                href="https://techspec.casperlabs.io/"
+                role="button"
+              >
+                Read our Tech Spec &raquo;
+                </a>
+            </li>
+
+            {!props.auth.user && (
               <li className="list-inline-item">
                 <a
                   className="btn btn-success btn-lg"
-                  href="https://techspec.casperlabs.io/"
+                  href="#"
                   role="button"
+                  onClick={_ => props.auth.login()}
                 >
-                  Read our Tech Spec &raquo;
-                </a>
-              </li>
-
-              {c.principal == null && (
-                <li className="list-inline-item">
-                  <a
-                    className="btn btn-success btn-lg"
-                    role="button"
-                    href="#"
-                    onClick={_ => c.login()}
-                  >
-                    Log in to access your accounts &raquo;
+                  Log in to access your accounts &raquo;
                   </a>
-                </li>
-              )}
-            </ul>
-          </div>
+              </li>
+            )}
+          </ul>
         </div>
-
-        <div className="row">
-          {c.accounts != null && <AccountsCard accounts={c.accounts} />}
-        </div>
-
-        <div className="card">
-          <div className="card-header bg-danger text-white">
-            Looking for help?
-          </div>
-          <div className="card-body">
-            <p>
-              To write contracts have a look at the{' '}
-              <a href="https://github.com/CasperLabs/contract-examples">
-                contract
-              </a>{' '}
-              and the{' '}
-              <a href="https://github.com/CasperLabs/CasperLabs/USAGE.md">
-                usage examples
-              </a>
-              , the{' '}
-              <a href="https://github.com/CasperLabs/CasperLabs/DEVELOPER.md">
-                developer guide
-              </a>{' '}
-              and the{' '}
-              <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker">
-                local docker network setup
-              </a>
-              .
-            </p>
-          </div>
-        </div>
-
-        <br />
       </div>
-    );
-  }
 
-  refresh() {
-    this.props.container.refreshAccounts();
-  }
-}
+      <div className="row">
+        {props.casper.accounts != null && <AccountsCard accounts={props.casper.accounts} />}
+      </div>
+
+      <div className="card">
+        <div className="card-header bg-danger text-white">
+          Looking for help?
+          </div>
+        <div className="card-body">
+          <p>
+            To write contracts have a look at the{' '}
+            <a href="https://github.com/CasperLabs/contract-examples">
+              contract
+              </a>{' '}
+            and the{' '}
+            <a href="https://github.com/CasperLabs/CasperLabs/USAGE.md">
+              usage examples
+              </a>
+            , the{' '}
+            <a href="https://github.com/CasperLabs/CasperLabs/DEVELOPER.md">
+              developer guide
+              </a>{' '}
+            and the{' '}
+            <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker">
+              local docker network setup
+              </a>
+            .
+            </p>
+        </div>
+      </div>
+
+      <br />
+    </div>
+  );
+});
+
+export default Home;
 
 interface CardProps {
   background: string;
@@ -153,5 +137,5 @@ const AccountsCard = (props: { accounts: Account[] }) => {
   );
 };
 
-// TODO: DeployCard with the cached deploys to send another one?
-// TODO: BlocksCard with the last finalized block, or the tips?
+        // TODO: DeployCard with the cached deploys to send another one?
+        // TODO: BlocksCard with the last finalized block, or the tips?
