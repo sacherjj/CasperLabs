@@ -1010,8 +1010,10 @@ mod tests {
             cost
         );
         // for the time being all other execution errors are treated in the same way
-        let forged_ref_error =
-            execution_engine::execution::Error::ForgedReference(Key::Account([1u8; 32]));
+        let forged_ref_error = execution_engine::execution::Error::ForgedReference(URef::new(
+            [1u8; 32],
+            AccessRights::READ_ADD_WRITE,
+        ));
         assert_eq!(test_cost(cost, forged_ref_error), cost);
     }
 

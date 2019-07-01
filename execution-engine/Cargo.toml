@@ -10,6 +10,8 @@ members = [
     "shared",
     "storage",
     "test-contracts/create-purse-01",
+    "test-contracts/ee-401-regression",
+    "test-contracts/ee-401-regression-call",
     "test-contracts/transfer-to-account-01",
     "test-contracts/transfer-to-account-02",
     "test-contracts/local-state",

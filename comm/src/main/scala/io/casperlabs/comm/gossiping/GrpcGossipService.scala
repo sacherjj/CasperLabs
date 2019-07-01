@@ -14,7 +14,7 @@ import monix.reactive.Observable
 import monix.tail.Iterant
 
 import scala.concurrent.TimeoutException
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 /** Adapt the GossipService to Monix generated interfaces. */
 object GrpcGossipService {
@@ -85,14 +85,19 @@ object GrpcGossipService {
   def toGossipService[F[_]: Sync: TaskLift: TaskLike: ObservableIterant](
       stub: GossipingGrpcMonix.GossipService,
       // Can inject a callback to close the faulty channel.
-      onError: PartialFunction[Throwable, F[Unit]] = PartialFunction.empty
+      onError: PartialFunction[Throwable, F[Unit]] = PartialFunction.empty,
+      timeout: FiniteDuration = Duration.Zero
   ): GossipService[F] =
     new GossipService[F] {
-      private def withErrorCallback[T](obs: Observable[T]): Iterant[F, T] =
-        obs.doOnErrorF(onError orElse { case _ => ().pure[F] }).toIterant
+      private def withErrorCallback[T](obs: Observable[T]): Iterant[F, T] = {
+        val ot = if (timeout == Duration.Zero) obs else obs.timeoutOnSlowUpstream(timeout)
+        ot.doOnErrorF(onError orElse { case _ => ().pure[F] }).toIterant
+      }
 
-      private def withErrorCallback[T](task: Task[T]): F[T] =
-        task.to[F].onError(onError)
+      private def withErrorCallback[T](task: Task[T]): F[T] = {
+        val tt = if (timeout == Duration.Zero) task else task.timeout(timeout)
+        tt.to[F].onError(onError)
+      }
 
       /** Notify the callee about new blocks. */
       def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =

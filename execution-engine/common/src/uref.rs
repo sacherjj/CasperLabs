@@ -70,8 +70,31 @@ impl bytesrepr::FromBytes for AccessRights {
 }
 
 /// Represents an unforgeable reference
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct URef([u8; UREF_ADDR_SIZE], Option<AccessRights>);
+
+impl core::fmt::Display for URef {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let addr = self.addr();
+        let access_rights_o = self.access_rights();
+        if let Some(access_rights) = access_rights_o {
+            write!(
+                f,
+                "URef({}, {})",
+                super::key::addr_to_hex(&addr),
+                access_rights
+            )
+        } else {
+            write!(f, "URef({}, None)", super::key::addr_to_hex(&addr))
+        }
+    }
+}
+
+impl core::fmt::Debug for URef {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
 
 impl URef {
     /// Creates a [`URef`] from an id and access rights.
@@ -128,7 +151,7 @@ impl URef {
     }
 
     pub fn as_string(&self) -> String {
-        format!("{:?}", self.0)
+        format!("{:?}", self)
     }
 }
 
@@ -193,7 +216,8 @@ mod tests {
 
     use crate::gens;
     use crate::test_utils;
-    use crate::uref::AccessRights;
+    use crate::uref::{AccessRights, URef};
+    use alloc::string::String;
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)
@@ -245,5 +269,20 @@ mod tests {
         fn test_uref(uref in gens::uref_arb()) {
             assert!(test_utils::test_serialization_roundtrip(&uref));
         }
+    }
+
+    #[test]
+    fn uref_as_string() {
+        // Since we are putting URefs to known_urefs map keyed by the label that `as_string()`
+        // returns, any changes to the string representation of that type cannot break the format.
+        let expected_hash = core::iter::repeat("0").take(64).collect::<String>();
+        let addr_array = [0u8; 32];
+        let uref_a = URef::new(addr_array, AccessRights::READ);
+        assert_eq!(uref_a.as_string(), format!("URef({}, READ)", expected_hash));
+        let uref_b = URef::new(addr_array, AccessRights::WRITE);
+        assert_eq!(
+            uref_b.as_string(),
+            format!("URef({}, WRITE)", expected_hash)
+        );
     }
 }

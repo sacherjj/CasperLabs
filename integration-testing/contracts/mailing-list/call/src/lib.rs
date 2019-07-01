@@ -13,15 +13,16 @@ use common::key::Key;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    //This hash comes from blake2b256( [0;32] ++ [0;8] ++ [0;4] )
-    let hash = ContractPointer::Hash([
-        67, 232, 122, 169, 14, 106, 54, 34, 212, 177, 47, 78, 119, 93, 170, 83, 253, 198, 239, 179,
-        90, 172, 18, 205, 87, 44, 42, 226, 77, 179, 219, 69,
-    ]);
+    let pointer = if let Key::Hash(hash) = get_uref("mailing") {
+        ContractPointer::Hash(hash)
+    } else {
+        revert(66); // exit code is currently arbitrary
+    };
+
     let method = "sub";
     let name = "CasperLabs";
     let args = (method, name);
-    let maybe_sub_key: Option<Key> = call_contract(hash.clone(), &args, &Vec::new());
+    let maybe_sub_key: Option<Key> = call_contract(pointer.clone(), &args, &Vec::new());
     let sub_key = maybe_sub_key.unwrap();
 
     let key_name = "mail_feed";
@@ -31,7 +32,7 @@ pub extern "C" fn call() {
     let method = "pub";
     let message = "Hello, World!";
     let args = (method, message);
-    let _result: () = call_contract(hash, &args, &Vec::new());
+    let _result: () = call_contract(pointer, &args, &Vec::new());
 
     let list_key: UPointer<Vec<String>> = sub_key.to_u_ptr().unwrap();
     let messages = read(list_key);

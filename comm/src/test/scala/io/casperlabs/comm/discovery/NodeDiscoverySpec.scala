@@ -128,8 +128,13 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
       "quit early if asked peer already in peer table" in
         forAll(genFullyConnectedPeers) { peers: Map[Node, List[Node]] =>
           val target = chooseRandom(peers)
-          TextFixture.prefilledTable(connections = peers, k = totalN(peers)) { (kademlia, nd, _) =>
+          TextFixture.prefilledTable(
+            connections = peers,
+            k = totalN(peers),
+            alivePeersCacheSize = totalN(peers)
+          ) { (kademlia, nd, _) =>
             for {
+              _        <- nd.updateRecentlyAlivePeers
               response <- nd.lookup(NodeIdentifier(target.id))
             } yield {
               kademlia.totalLookups shouldBe 0
@@ -145,9 +150,11 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
             connections = peers.toMap.mapValues(List(_)),
             tableInitial = Set(initial),
             k = totalN(peers),
-            alpha = 1
+            alpha = 1,
+            alivePeersCacheSize = totalN(peers)
           ) { (kademlia, nd, _) =>
             for {
+              _        <- nd.updateRecentlyAlivePeers
               response <- nd.lookup(NodeIdentifier(target.id))
             } yield {
               // 0 - initial, 4 - target
@@ -183,9 +190,11 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
             connections = withFailures,
             tableInitial = Set(initialAlwaysHealthy),
             k = totalN(peers),
-            alpha = alpha
+            alpha = alpha,
+            alivePeersCacheSize = totalN(peers)
           ) { (_, nd, _) =>
             for {
+              _         <- nd.updateRecentlyAlivePeers
               _         <- nd.lookup(NodeIdentifier(target.id))
               fromTable <- nd.table.peersAscendingDistance
             } yield {
@@ -199,14 +208,18 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
         val target              = peers.head
         val itself              = Node(NodeDiscoverySpec.id, "localhost", 40400, 40404)
         val allPointingToItself = peers.tail.map(p => (p, List(itself))).toMap
-        TextFixture.prefilledTable(connections = allPointingToItself, k = peers.size) {
-          (kademlia, nd, _) =>
-            for {
-              response <- nd.lookup(NodeIdentifier(target.id))
-            } yield {
-              response shouldBe Some(itself)
-              kademlia.lookupsBy(itself) shouldBe 0
-            }
+        TextFixture.prefilledTable(
+          connections = allPointingToItself,
+          k = peers.size,
+          alivePeersCacheSize = peers.size
+        ) { (kademlia, nd, _) =>
+          for {
+            _        <- nd.updateRecentlyAlivePeers
+            response <- nd.lookup(NodeIdentifier(target.id))
+          } yield {
+            response shouldBe Some(itself)
+            kademlia.lookupsBy(itself) shouldBe 0
+          }
         }
       }
       "stop lookup when successfully called 'k' peers" in forAll(genSequentiallyConnectedPeers) {
@@ -219,9 +232,11 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
             connections = peers.toMap.mapValues(List(_)),
             tableInitial = Set(initial),
             k = k,
-            alpha = 1
+            alpha = 1,
+            alivePeersCacheSize = totalN(peers)
           ) { (kademlia, nd, _) =>
             for {
+              _        <- nd.updateRecentlyAlivePeers
               response <- nd.lookup(NodeIdentifier(target.id))
             } yield {
               kademlia.totalLookups shouldBe k
@@ -253,9 +268,11 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
             connections = swapped.toMap.mapValues(List(_)),
             tableInitial = Set(initial),
             k = totalN(peers),
-            alpha = 1
+            alpha = 1,
+            alivePeersCacheSize = totalN(peers)
           ) { (kademlia, nd, _) =>
             for {
+              _        <- nd.updateRecentlyAlivePeers
               response <- nd.lookup(NodeIdentifier(target.id))
             } yield {
               kademlia.totalLookups shouldBe indexToSwapWith + 2
@@ -273,9 +290,11 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
             connections = peers.toMap.mapValues(List(_)),
             tableInitial = Set(initial),
             k = totalN(peers),
-            alpha = alpha
+            alpha = alpha,
+            alivePeersCacheSize = totalN(peers)
           ) { (kademlia, nd, _) =>
             for {
+              _ <- nd.updateRecentlyAlivePeers
               _ <- nd.lookup(NodeIdentifier(target.id))
             } yield {
               kademlia.concurrentLookups should be <= alpha

@@ -19,9 +19,9 @@ RESOURCES_PATH = "../../../resources/"
 def resource(file_name):
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), RESOURCES_PATH, file_name)
 
-CONTRACT = resource("test_helloname.wasm")
-PAYMENT = resource("payment.wasm")
-SESSION = resource("session.wasm")
+CONTRACT = resource("old_wasm/test_helloname.wasm")
+PAYMENT = resource("old_wasm/test_helloname.wasm")
+SESSION = resource("old_wasm/test_helloname.wasm")
 
 HASH = 'd9d087fe5d22dbfa1bacb57d6da8d509f7191a216cee6a971de32463ff0f284f'
 

@@ -5,8 +5,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
-import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.util.ProtoUtil
@@ -14,8 +14,15 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtilTest._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.ipc
-import io.casperlabs.ipc._
 import io.casperlabs.casper.consensus.state._
+import io.casperlabs.ipc.{
+  DeployResult,
+  ExecutionEffect,
+  OpEntry,
+  Transform,
+  TransformEntry,
+  TransformIdentity
+}
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
