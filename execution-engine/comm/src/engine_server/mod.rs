@@ -256,7 +256,7 @@ where
                                 .collect::<Vec<ipc::Bond>>()
                                 .into();
                             grpc_response
-                                .take_success() // We know it's a success because of the check few lines earlier.
+                                .mut_success() // We know it's a success because of the check few lines earlier.
                                 .set_bonded_validators(grpc_bonded_validators);
                             grpc_response
                         }
