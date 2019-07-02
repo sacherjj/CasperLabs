@@ -16,7 +16,8 @@ SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sb
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
-DOCKER_TEST_TAG := $(shell if [ -n ${DRONE_BUILD_NUMBER} ]; then echo DRONE-${DRONE_BUILD_NUMBER}; else echo test; fi )
+DOCKER_TEST_TAG := $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test; else echo DRONE-${DRONE_BUILD_NUMBER}; fi)
+
 
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
