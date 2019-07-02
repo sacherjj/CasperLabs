@@ -10,24 +10,25 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::PathBuf;
 
+use grpc::RequestOptions;
+
 use casperlabs_engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, ExecRequest, ExecResponse, GenesisRequest,
     GenesisResponse, TransformEntry,
 };
+use casperlabs_engine_grpc_server::engine_server::ipc;
+use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use casperlabs_engine_grpc_server::engine_server::mappings::CommitTransforms;
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
+use execution_engine::engine_state::EngineState;
 use execution_engine::engine_state::utils::WasmiBytes;
 use shared::test_utils;
 use shared::transform::Transform;
+use storage::global_state::in_memory::InMemoryGlobalState;
 
-use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 //use common::bytesrepr::ToBytes;
 //use common::key::Key;
 //use common::value::Value;
-
-use execution_engine::engine_state::EngineState;
-use grpc::RequestOptions;
-use storage::global_state::in_memory::InMemoryGlobalState;
 
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/debug";
@@ -73,6 +74,7 @@ pub enum SystemContractType {
 
 pub fn create_genesis_request(
     address: [u8; 32],
+    genesis_validators: Vec<(common::value::account::PublicKey, common::value::U512)>,
 ) -> (GenesisRequest, HashMap<SystemContractType, WasmiBytes>) {
     let genesis_account_addr = address.to_vec();
     let mut contracts: HashMap<SystemContractType, WasmiBytes> = HashMap::new();
@@ -105,6 +107,16 @@ pub fn create_genesis_request(
         ret
     };
 
+    let grpc_genesis_validators: Vec<ipc::Bond> = genesis_validators
+        .iter()
+        .map(|(pk, bond)| {
+            let mut grpc_bond = ipc::Bond::new();
+            grpc_bond.set_validator_public_key(pk.value().to_vec());
+            grpc_bond.set_stake((*bond).into());
+            grpc_bond
+        })
+        .collect();
+
     let protocol_version = {
         let mut ret = ProtocolVersion::new();
         ret.set_value(1);
@@ -117,6 +129,7 @@ pub fn create_genesis_request(
     ret.set_mint_code(mint_code);
     ret.set_proof_of_stake_code(proof_of_stake_code);
     ret.set_protocol_version(protocol_version);
+    ret.set_genesis_validators(grpc_genesis_validators.into());
 
     (ret, contracts)
 }
@@ -292,8 +305,13 @@ impl WasmTestBuilder {
         }
     }
 
-    pub fn run_genesis(&mut self, genesis_addr: [u8; 32]) -> &mut WasmTestBuilder {
-        let (genesis_request, _contracts) = create_genesis_request(genesis_addr);
+    pub fn run_genesis(
+        &mut self,
+        genesis_addr: [u8; 32],
+        genesis_validators: Vec<(common::value::account::PublicKey, common::value::U512)>,
+    ) -> &mut WasmTestBuilder {
+        let (genesis_request, _contracts) =
+            create_genesis_request(genesis_addr, genesis_validators);
 
         let genesis_response = self
             .engine_state

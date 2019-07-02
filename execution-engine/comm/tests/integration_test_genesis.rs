@@ -21,7 +21,7 @@ fn should_run_genesis() {
     let global_state = InMemoryGlobalState::empty().expect("should create global state");
     let engine_state = EngineState::new(global_state, false);
 
-    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR);
+    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR, Vec::new());
 
     let request_options = RequestOptions::new();
 

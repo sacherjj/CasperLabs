@@ -1,18 +1,17 @@
-extern crate grpc;
-
 extern crate casperlabs_engine_grpc_server;
 extern crate common;
 extern crate execution_engine;
+extern crate grpc;
 extern crate shared;
 extern crate storage;
 
-#[allow(dead_code)]
-mod test_support;
-
 use common::key::Key;
-use common::value::{Value, U512};
+use common::value::{U512, Value};
 use shared::transform::Transform;
 use test_support::WasmTestBuilder;
+
+#[allow(dead_code)]
+mod test_support;
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 
@@ -20,7 +19,7 @@ const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 #[test]
 fn should_run_known_urefs_contract() {
     let transforms = WasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR)
+        .run_genesis(GENESIS_ADDR, Vec::new())
         .exec(GENESIS_ADDR, "known_urefs.wasm")
         .commit()
         .expect_success()

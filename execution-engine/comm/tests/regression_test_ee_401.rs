@@ -1,33 +1,34 @@
-extern crate grpc;
-
+extern crate casperlabs_engine_grpc_server;
 extern crate common;
 extern crate execution_engine;
+extern crate grpc;
 extern crate shared;
 extern crate storage;
 
-extern crate casperlabs_engine_grpc_server;
-
-#[allow(unused)]
-mod test_support;
-
 use grpc::RequestOptions;
 
+use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+use common::value::account::PublicKey;
+use common::value::U512;
 use execution_engine::engine_state::EngineState;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
-use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+#[allow(unused)]
+mod test_support;
 
 const GENESIS_ADDR: [u8; 32] = [0u8; 32];
 
 #[ignore]
 #[test]
 fn should_execute_contracts_which_provide_extra_urefs() {
+    let genesis_validators = vec![(PublicKey::new([1u8; 32]), U512::from(1000))];
     let global_state = InMemoryGlobalState::empty().unwrap();
     let engine_state = EngineState::new(global_state, false);
 
     // run genesis
 
-    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR);
+    let (genesis_request, _) =
+        test_support::create_genesis_request(GENESIS_ADDR, genesis_validators);
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
