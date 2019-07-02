@@ -310,16 +310,13 @@ where
         Ok(())
     }
 
-    /// If caller is defined (it's a subcall) then writes caller public key
-    /// to [dest_ptr] in the Wasm memory and returns 1.
-    /// If caller is undefined (we are in  the base context), returns 0.
-    fn get_caller(&mut self, dest_ptr: u32) -> Result<i32, Trap> {
+    /// Writes caller (deploy) account public key to [dest_ptr] in the Wasm memory.
+    fn get_caller(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         let key = self.context.get_caller();
         let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
         self.memory
             .set(dest_ptr, &bytes)
             .map_err(|e| Error::Interpreter(e).into())
-            .map(|_| 1)
     }
 
     /// Writes current blocktime to [dest_ptr] in Wasm memory.
@@ -1009,8 +1006,8 @@ where
             FunctionIndex::GetCallerIndex => {
                 // args(0) = pointer to Wasm memory where to write.
                 let dest_ptr = Args::parse(args)?;
-                self.get_caller(dest_ptr)
-                    .map(|status| Some(RuntimeValue::I32(status)))
+                self.get_caller(dest_ptr)?;
+                Ok(None)
             }
 
             FunctionIndex::GetBlocktimeIndex => {

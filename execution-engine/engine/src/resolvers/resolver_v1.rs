@@ -154,7 +154,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::RemoveURef.into(),
             ),
             "get_caller" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GetCallerIndex.into(),
             ),
             "get_blocktime" => FuncInstance::alloc_host(

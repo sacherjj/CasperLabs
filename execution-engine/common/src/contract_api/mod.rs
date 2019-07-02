@@ -261,7 +261,7 @@ pub fn remove_uref(name: &str) {
 pub fn get_caller() -> PublicKey {
     //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
     let dest_ptr = alloc_bytes(36);
-    let _ = unsafe { ext_ffi::get_caller(dest_ptr) };
+    unsafe { ext_ffi::get_caller(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
     deserialize(&bytes).unwrap()
 }
