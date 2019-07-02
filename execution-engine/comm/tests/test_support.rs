@@ -142,6 +142,7 @@ pub fn create_exec_request(
     contract_file_name: &str,
     pre_state_hash: &[u8],
     nonce: u64,
+    args: Vec<Vec<u8>>,
 ) -> ExecRequest {
     let bytes_to_deploy = read_wasm_file_bytes(contract_file_name);
 
@@ -152,6 +153,11 @@ pub fn create_exec_request(
     deploy.set_nonce(nonce);
     let mut deploy_code = DeployCode::new();
     deploy_code.set_code(bytes_to_deploy);
+
+    if !args.is_empty() {
+        deploy_code.set_args(common::bytesrepr::serialize(args).expect("Unable to serialize args"));
+    }
+
     deploy.set_session(deploy_code);
 
     let mut exec_request = ExecRequest::new();
@@ -343,7 +349,13 @@ impl WasmTestBuilder {
 
     /// Runs a contract and after that runs actual WASM contract and expects
     /// transformations to happen at the end of execution.
-    pub fn exec(&mut self, address: [u8; 32], wasm_file: &str, nonce: u64) -> &mut WasmTestBuilder {
+    pub fn exec(
+        &mut self,
+        address: [u8; 32],
+        wasm_file: &str,
+        nonce: u64,
+        args: Vec<Vec<u8>>,
+    ) -> &mut WasmTestBuilder {
         let exec_request = create_exec_request(
             address,
             &wasm_file,
@@ -351,6 +363,7 @@ impl WasmTestBuilder {
                 .as_ref()
                 .expect("Should have post state hash"),
             nonce,
+            args,
         );
 
         let exec_response = self
