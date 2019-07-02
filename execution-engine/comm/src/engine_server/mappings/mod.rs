@@ -1,7 +1,7 @@
-mod uint;
-
 use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
+use std::fmt::Display;
+use std::string::ToString;
 
 use protobuf::ProtobufEnum;
 
@@ -9,6 +9,8 @@ use common::uref::URef;
 use common::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
 };
+use common::value::U512;
+use engine_server::{ipc, state};
 use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -19,11 +21,9 @@ use shared::logging;
 use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;
 use shared::transform::{self, TypeMismatch};
-use std::fmt::Display;
-use std::string::ToString;
 use storage::global_state::{CommitResult, History};
 
-use engine_server::{ipc, state};
+mod uint;
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
@@ -902,20 +902,49 @@ fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::Depl
     deploy_result
 }
 
+// TODO: Split into atomic functions and improve errors.
+pub fn to_domain_validators(bond: &ipc::Bond) -> Result<(PublicKey, U512), String> {
+    let address = bond.get_validator_public_key();
+    if address.len() != 32 {
+        let err_msg = "Validator public key has to be exactly 32 bytes long".to_string();
+        Err(err_msg)
+    } else {
+        let mut buff = [0u8; 32];
+        buff.copy_from_slice(&address);
+        let pk = PublicKey::new(buff);
+        match bond.get_stake().try_into() {
+            Ok(bond) => Ok((pk, bond)),
+            Err(err) => {
+                let err_msg = format!("{:?}", err);
+                Err(err_msg)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::convert::TryInto;
+
+    use proptest::prelude::*;
+
+    use common::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
+    use common::key::Key;
+    use common::uref::{AccessRights, URef};
+    use engine_server::mappings::CommitTransforms;
+    use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
+    use execution_engine::engine_state::error::Error::ExecError;
+    use execution_engine::engine_state::execution_effect::ExecutionEffect;
+    use execution_engine::engine_state::execution_result::ExecutionResult;
+    use execution_engine::execution::Error;
+    use shared::newtypes::Blake2bHash;
+    use shared::transform::gens::transform_arb;
+    use shared::transform::Transform;
+
     use super::execution_error;
     use super::ipc;
     use super::state;
-    use common::key::Key;
-    use common::uref::{AccessRights, URef};
-    use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
-    use execution_engine::engine_state::execution_effect::ExecutionEffect;
-    use execution_engine::engine_state::execution_result::ExecutionResult;
-    use shared::newtypes::Blake2bHash;
-    use shared::transform::Transform;
-    use std::collections::HashMap;
-    use std::convert::TryInto;
 
     // Test that wasm_error function actually returns DeployResult with result set to WasmError
     #[test]
@@ -1063,13 +1092,6 @@ mod tests {
             "Exit code: 10"
         );
     }
-
-    use common::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
-    use engine_server::mappings::CommitTransforms;
-    use execution_engine::engine_state::error::Error::ExecError;
-    use execution_engine::execution::Error;
-    use proptest::prelude::*;
-    use shared::transform::gens::transform_arb;
 
     proptest! {
         #[test]
