@@ -16,8 +16,10 @@ use wasmi::{
     ModuleRef, RuntimeArgs, RuntimeValue, Trap,
 };
 
+use args::Args;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE};
 use common::contract_api::argsparser::ArgsParser;
+use common::contract_api::{PurseTransferResult, TransferResult};
 use common::key::Key;
 use common::uref::{AccessRights, URef};
 use common::value::account::{
@@ -25,12 +27,6 @@ use common::value::account::{
     SetThresholdFailure, Weight, PUBLIC_KEY_SIZE,
 };
 use common::value::{Account, Value, U512};
-use shared::newtypes::{CorrelationId, Validated};
-use shared::transform::TypeMismatch;
-use storage::global_state::StateReader;
-
-use args::Args;
-use common::contract_api::{PurseTransferResult, TransferResult};
 use engine_state::execution_result::ExecutionResult;
 use execution::Error::{KeyNotFound, URefNotFound};
 use function_index::FunctionIndex;
@@ -38,10 +34,14 @@ use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
 use resolvers::memory_resolver::MemoryResolver;
 use runtime_context::RuntimeContext;
+use shared::newtypes::{CorrelationId, Validated};
+use shared::transform::TypeMismatch;
+use storage::global_state::StateReader;
 use tracking_copy::TrackingCopy;
 use URefAddr;
 
 const MINT_NAME: &str = "mint";
+const POS_NAME: &str = "pos";
 
 #[derive(Debug)]
 pub enum Error {
@@ -599,6 +599,13 @@ where
         }
     }
 
+    fn get_pos_contract_public_uref_key(&mut self) -> Result<Key, Error> {
+        match self.context.get_uref(POS_NAME) {
+            Some(key @ Key::URef(_)) => Ok(*key),
+            _ => Err(URefNotFound(String::from(POS_NAME))),
+        }
+    }
+
     /// looks up the public mint contract key in the caller's [uref_lookup] map and then
     /// gets the "internal" mint contract uref stored under the public mint contract key.
     fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
@@ -606,6 +613,15 @@ where
         let internal_mint_uref = match self.context.read_gs(&public_mint_key)? {
             Some(Value::Key(Key::URef(uref))) => uref,
             _ => return Err(KeyNotFound(public_mint_key)),
+        };
+        Ok(internal_mint_uref)
+    }
+
+    fn get_pos_contract_uref(&mut self) -> Result<URef, Error> {
+        let public_pos_key = self.get_pos_contract_public_uref_key()?;
+        let internal_mint_uref = match self.context.read_gs(&public_pos_key)? {
+            Some(Value::Key(Key::URef(uref))) => uref,
+            _ => return Err(KeyNotFound(public_pos_key)),
         };
         Ok(internal_mint_uref)
     }
@@ -665,7 +681,9 @@ where
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let mint_contract_uref = self.get_mint_contract_uref()?;
+        let pos_contract_uref = self.get_pos_contract_uref()?;
         let mint_contract_key = Key::URef(mint_contract_uref);
+        let pos_contract_key = Key::URef(pos_contract_uref);
         let target_addr = target.value();
         let target_key = Key::Account(target_addr);
 
@@ -683,6 +701,11 @@ where
                     String::from(MINT_NAME),
                     self.get_mint_contract_public_uref_key()?,
                 ),
+                (
+                    String::from(POS_NAME),
+                    self.get_pos_contract_public_uref_key()?,
+                ),
+                (pos_contract_uref.as_string(), pos_contract_key),
                 (mint_contract_uref.as_string(), mint_contract_key),
             ];
             let account = Account::create(target_addr, known_urefs, target_purse_id);
@@ -1493,7 +1516,16 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
 
 #[cfg(test)]
 mod tests {
-    use super::Error;
+    use std::cell::RefCell;
+    use std::collections::btree_map::BTreeMap;
+    use std::collections::HashMap;
+    use std::rc::Rc;
+
+    use parity_wasm::builder::ModuleBuilder;
+    use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
+    use rand::RngCore;
+    use rand_chacha::ChaChaRng;
+
     use common::key::Key;
     use common::uref::{AccessRights, URef};
     use common::value::account::{
@@ -1503,17 +1535,11 @@ mod tests {
     use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
     use execution::{create_rng, Executor, WasmiExecutor};
-    use parity_wasm::builder::ModuleBuilder;
-    use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
-    use rand::RngCore;
-    use rand_chacha::ChaChaRng;
     use shared::newtypes::CorrelationId;
-    use std::cell::RefCell;
-    use std::collections::btree_map::BTreeMap;
-    use std::collections::HashMap;
-    use std::rc::Rc;
     use storage::global_state::StateReader;
     use tracking_copy::TrackingCopy;
+
+    use super::Error;
 
     fn on_fail_charge_test_helper<T>(
         f: impl Fn() -> Result<T, Error>,

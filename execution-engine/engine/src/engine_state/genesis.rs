@@ -95,6 +95,8 @@ fn create_mint_effects(
     );
 
     let purse_id_uref = rng.get_uref(GENESIS_ACCOUNT_PURSE);
+    let pos_public_uref = rng.get_uref(POS_PUBLIC_ADDRESS);
+    let pos_private_uref = rng.get_uref(POS_PRIVATE_ADDRESS);
 
     // Create genesis genesis_account
     let genesis_account = {
@@ -102,6 +104,8 @@ fn create_mint_effects(
         // TODO: do we need to deal with NamedKey ???
         let known_urefs = &[
             (String::from("mint"), Key::URef(public_uref)),
+            (String::from("pos"), Key::URef(pos_public_uref)),
+            (pos_private_uref.as_string(), Key::URef(pos_private_uref)),
             (
                 mint_contract_uref.as_string(),
                 Key::URef(mint_contract_uref),
