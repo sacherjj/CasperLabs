@@ -186,6 +186,7 @@ pipeline:
       - "make docker-build/execution-engine"
       - "make docker-build/integration-testing"
       - "make docker-build/key-generator"
+      - "make docker-build/explorer"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
