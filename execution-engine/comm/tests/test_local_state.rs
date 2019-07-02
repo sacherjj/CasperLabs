@@ -5,6 +5,8 @@ extern crate grpc;
 extern crate shared;
 extern crate storage;
 
+use std::collections::HashMap;
+
 use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::value::Value;
@@ -21,7 +23,7 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 fn should_run_local_state_contract() {
     // This test runs a contract that's after every call extends the same key with more data
     let transforms = WasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, Vec::new())
+        .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec(GENESIS_ADDR, "local_state.wasm")
         .expect_success()
         .commit()

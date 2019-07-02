@@ -5,6 +5,8 @@ extern crate grpc;
 extern crate shared;
 extern crate storage;
 
+use std::collections::HashMap;
+
 use common::key::Key;
 use common::value::{U512, Value};
 use shared::transform::Transform;
@@ -19,7 +21,7 @@ const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 #[test]
 fn should_run_known_urefs_contract() {
     let transforms = WasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, Vec::new())
+        .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec(GENESIS_ADDR, "known_urefs.wasm")
         .commit()
         .expect_success()

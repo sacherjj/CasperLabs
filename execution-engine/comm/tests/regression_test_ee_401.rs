@@ -5,11 +5,11 @@ extern crate grpc;
 extern crate shared;
 extern crate storage;
 
+use std::collections::HashMap;
+
 use grpc::RequestOptions;
 
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use common::value::account::PublicKey;
-use common::value::U512;
 use execution_engine::engine_state::EngineState;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
@@ -21,14 +21,12 @@ const GENESIS_ADDR: [u8; 32] = [0u8; 32];
 #[ignore]
 #[test]
 fn should_execute_contracts_which_provide_extra_urefs() {
-    let genesis_validators = vec![(PublicKey::new([1u8; 32]), U512::from(1000))];
     let global_state = InMemoryGlobalState::empty().unwrap();
     let engine_state = EngineState::new(global_state, false);
 
     // run genesis
 
-    let (genesis_request, _) =
-        test_support::create_genesis_request(GENESIS_ADDR, genesis_validators);
+    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)

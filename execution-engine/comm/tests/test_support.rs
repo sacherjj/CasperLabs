@@ -12,11 +12,11 @@ use std::path::PathBuf;
 
 use grpc::RequestOptions;
 
+use casperlabs_engine_grpc_server::engine_server::ipc;
 use casperlabs_engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, ExecRequest, ExecResponse, GenesisRequest,
     GenesisResponse, TransformEntry,
 };
-use casperlabs_engine_grpc_server::engine_server::ipc;
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use casperlabs_engine_grpc_server::engine_server::mappings::CommitTransforms;
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
@@ -74,7 +74,7 @@ pub enum SystemContractType {
 
 pub fn create_genesis_request(
     address: [u8; 32],
-    genesis_validators: Vec<(common::value::account::PublicKey, common::value::U512)>,
+    genesis_validators: HashMap<common::value::account::PublicKey, common::value::U512>,
 ) -> (GenesisRequest, HashMap<SystemContractType, WasmiBytes>) {
     let genesis_account_addr = address.to_vec();
     let mut contracts: HashMap<SystemContractType, WasmiBytes> = HashMap::new();
@@ -308,7 +308,7 @@ impl WasmTestBuilder {
     pub fn run_genesis(
         &mut self,
         genesis_addr: [u8; 32],
-        genesis_validators: Vec<(common::value::account::PublicKey, common::value::U512)>,
+        genesis_validators: HashMap<common::value::account::PublicKey, common::value::U512>,
     ) -> &mut WasmTestBuilder {
         let (genesis_request, _contracts) =
             create_genesis_request(genesis_addr, genesis_validators);

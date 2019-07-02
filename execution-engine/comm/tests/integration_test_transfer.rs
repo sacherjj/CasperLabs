@@ -14,7 +14,7 @@ use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::uref::{AccessRights, URef};
 use common::value::{U512, Value};
-use common::value::account::{PublicKey, PurseId};
+use common::value::account::PurseId;
 use execution_engine::engine_state::EngineState;
 use shared::transform::Transform;
 use storage::global_state::in_memory::InMemoryGlobalState;
@@ -80,7 +80,6 @@ impl TestContext {
 #[ignore]
 #[test]
 fn should_transfer_to_account() {
-    let genesis_validators = vec![(PublicKey::new([1u8; 32]), U512::from(1000))];
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
     let genesis_account_key = Key::Account(GENESIS_ADDR);
@@ -92,7 +91,7 @@ fn should_transfer_to_account() {
     // Run genesis
 
     let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, genesis_validators);
+        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -174,7 +173,6 @@ fn should_transfer_to_account() {
 #[ignore]
 #[test]
 fn should_transfer_from_account_to_account() {
-    let genesis_validators = vec![(PublicKey::new([1u8; 32]), U512::from(1000))];
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_1_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
     let transfer_2_amount: U512 = U512::from(TRANSFER_2_AMOUNT);
@@ -188,7 +186,7 @@ fn should_transfer_from_account_to_account() {
     // Run genesis
 
     let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, genesis_validators);
+        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -318,7 +316,6 @@ fn should_transfer_from_account_to_account() {
 #[ignore]
 #[test]
 fn should_transfer_to_existing_account() {
-    let genesis_validators = vec![(PublicKey::new([1u8; 32]), U512::from(1000))];
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_1_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
     let transfer_2_amount: U512 = U512::from(TRANSFER_2_AMOUNT);
@@ -332,7 +329,7 @@ fn should_transfer_to_existing_account() {
     // Run genesis
 
     let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, genesis_validators);
+        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -475,14 +472,12 @@ fn should_transfer_to_existing_account() {
 #[ignore]
 #[test]
 fn should_fail_when_insufficient_funds() {
-    let genesis_validators = vec![(PublicKey::new([1u8; 32]), U512::from(1000))];
     let global_state = InMemoryGlobalState::empty().unwrap();
     let engine_state = EngineState::new(global_state, false);
 
     // Run genesis
 
-    let (genesis_request, _) =
-        test_support::create_genesis_request(GENESIS_ADDR, genesis_validators);
+    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -579,7 +574,6 @@ fn should_fail_when_insufficient_funds() {
 #[ignore]
 #[test]
 fn should_create_purse() {
-    let genesis_validators = vec![(PublicKey::new([1u8; 32]), U512::from(1000))];
     let genesis_account_key = Key::Account(GENESIS_ADDR);
     let account_key = Key::Account(ACCOUNT_1_ADDR);
     let global_state = InMemoryGlobalState::empty().unwrap();
@@ -588,7 +582,7 @@ fn should_create_purse() {
     // Run genesis & set up an account
 
     let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, genesis_validators);
+        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
