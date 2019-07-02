@@ -3,7 +3,9 @@
 
 extern crate alloc;
 extern crate cl_std;
+
 use alloc::string::String;
+
 use cl_std::contract_api::{
     add, add_uref, get_uref, has_uref, list_known_urefs, new_uref, read, remove_uref, write,
 };
@@ -12,13 +14,14 @@ use cl_std::value::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    // Account starts with two known urefs: mint, and purse_id
-    assert_eq!(list_known_urefs().len(), 2);
+    let initi_uref_num = 4;
+    // Account starts with four known urefs: mint public uref, mint private uref, pos public uref & pos private uref.
+    assert_eq!(list_known_urefs().len(), initi_uref_num);
 
     // Add new urefs
     let hello_world_uref1: Key = new_uref(String::from("Hello, world!")).into();
     add_uref("URef1", &hello_world_uref1);
-    assert_eq!(list_known_urefs().len(), 3);
+    assert_eq!(list_known_urefs().len(), initi_uref_num + 1);
 
     // Verify if the uref is present
     assert!(has_uref("URef1"));
@@ -26,7 +29,7 @@ pub extern "C" fn call() {
     let big_value_uref: Key = new_uref(U512::max_value()).into();
     add_uref("URef2", &big_value_uref);
 
-    assert_eq!(list_known_urefs().len(), 4);
+    assert_eq!(list_known_urefs().len(), initi_uref_num + 2);
 
     // Read data hidden behind `URef1` uref
     let hello_world: String = read(
@@ -75,5 +78,5 @@ pub extern "C" fn call() {
     // Cleaned up state
     assert!(!has_uref("URef1"));
     assert!(!has_uref("URef2"));
-    assert_eq!(list_known_urefs().len(), 2);
+    assert_eq!(list_known_urefs().len(), initi_uref_num);
 }
