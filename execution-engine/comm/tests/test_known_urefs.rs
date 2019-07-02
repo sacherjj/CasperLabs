@@ -22,7 +22,7 @@ const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 fn should_run_known_urefs_contract() {
     let transforms = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, "known_urefs.wasm", 1)
+        .exec(GENESIS_ADDR, "known_urefs.wasm", 1, vec![])
         .commit()
         .expect_success()
         .get_transforms();
