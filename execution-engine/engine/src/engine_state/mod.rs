@@ -163,7 +163,7 @@ pub fn get_bonded_validators<H: History>(
         .checkout(root_hash)
         .map_err(GetBondedValidatorsError::StorageErrors)
         .and_then(|maybe_reader| match maybe_reader {
-            Some(reader) => match reader.read(correlation_id, pos_key) {
+            Some(reader) => match reader.read(correlation_id, &pos_key.normalize()) {
                 Ok(Some(Value::Contract(contract))) => {
                     let bonded_validators = contract
                         .urefs_lookup()
