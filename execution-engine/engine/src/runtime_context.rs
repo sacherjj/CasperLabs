@@ -156,8 +156,8 @@ where
         }
     }
 
-    pub fn get_caller(&self) -> Option<PublicKey> {
-        Some(self.account.pub_key().into())
+    pub fn get_caller(&self) -> PublicKey {
+        self.account.pub_key().into()
     }
 
     pub fn get_blocktime(&self) -> BlockTime {

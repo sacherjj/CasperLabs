@@ -314,16 +314,12 @@ where
     /// to [dest_ptr] in the Wasm memory and returns 1.
     /// If caller is undefined (we are in  the base context), returns 0.
     fn get_caller(&mut self, dest_ptr: u32) -> Result<i32, Trap> {
-        let caller = self.context.get_caller();
-        if let Some(key) = caller {
-            let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
-            self.memory
-                .set(dest_ptr, &bytes)
-                .map_err(|e| Error::Interpreter(e).into())
-                .map(|_| 1)
-        } else {
-            Ok(0)
-        }
+        let key = self.context.get_caller();
+        let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
+        self.memory
+            .set(dest_ptr, &bytes)
+            .map_err(|e| Error::Interpreter(e).into())
+            .map(|_| 1)
     }
 
     /// Writes current blocktime to [dest_ptr] in Wasm memory.
