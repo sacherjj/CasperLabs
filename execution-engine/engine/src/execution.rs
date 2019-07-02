@@ -18,15 +18,15 @@ use wasmi::{
 
 use args::Args;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE};
-use common::contract_api::{PurseTransferResult, TransferResult};
 use common::contract_api::argsparser::ArgsParser;
+use common::contract_api::{PurseTransferResult, TransferResult};
 use common::key::Key;
 use common::uref::{AccessRights, URef};
-use common::value::{Account, U512, Value};
 use common::value::account::{
-    ActionType, AddKeyFailure, BlockTime, PUBLIC_KEY_SIZE, PublicKey, PurseId,
-    RemoveKeyFailure, SetThresholdFailure, Weight,
+    ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
+    SetThresholdFailure, Weight, PUBLIC_KEY_SIZE,
 };
+use common::value::{Account, Value, U512};
 use engine_state::execution_result::ExecutionResult;
 use execution::Error::{KeyNotFound, URefNotFound};
 use function_index::FunctionIndex;
@@ -1528,10 +1528,10 @@ mod tests {
 
     use common::key::Key;
     use common::uref::{AccessRights, URef};
-    use common::value::{Account, Value};
     use common::value::account::{
         AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
     };
+    use common::value::{Account, Value};
     use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
     use execution::{create_rng, Executor, WasmiExecutor};
