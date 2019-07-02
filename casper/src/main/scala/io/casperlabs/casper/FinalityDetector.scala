@@ -10,7 +10,6 @@ import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.FinalityDetector.Committee
 import io.casperlabs.casper.util.DagOperations.Key.blockMetadataKey
 import io.casperlabs.catscontrib.ski.id
-import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.Log
 
 /*
@@ -42,7 +41,7 @@ object FinalityDetector {
   case class Committee(validators: Set[Validator], bestQ: Long)
 }
 
-class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends FinalityDetector[F] {
+class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F] {
 
   /**
     * To have a committee of half the total weight,
@@ -127,11 +126,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
                            )
                            .map(_.latestBlockHash)
                        )
-        previousMsg <- OptionT(
-                        blockDag
-                          .lookup(previousHash)
-                          .map(_.filter(_.validatorPublicKey == validator))
-                      )
+        previousMsg <- OptionT(blockDag.lookup(previousHash))
         continue <- OptionT(
                      computeCompatibility(
                        blockDag,
@@ -156,25 +151,21 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
 
   def constructJDagFromLevelZeroMsgs(
       levelZeroMsgs: Map[Validator, List[BlockMetadata]]
-  ): DoublyLinkedDag[BlockHash] = {
-    val msgs   = levelZeroMsgs.values.flatten
-    val msgSet = msgs.map(_.blockHash).toSet
-    msgs.foldLeft(BlockDependencyDag.empty: DoublyLinkedDag[BlockHash]) {
-      case (jDag, msg) =>
-        msg.justifications.foldLeft(jDag) {
-          case (jDag, justification) =>
-            if (msgSet.contains(justification.latestBlockHash)) {
-              DoublyLinkedDagOperations.add(
-                jDag,
-                parent = justification.latestBlockHash,
-                child = msg.blockHash
-              )
-            } else {
-              jDag
+  ): DoublyLinkedDag[BlockHash] =
+    levelZeroMsgs.values.foldLeft(BlockDependencyDag.empty: DoublyLinkedDag[BlockHash]) {
+      case (jDag, msgs) =>
+        msgs.foldLeft(jDag) {
+          case (jDag, msg) =>
+            msg.justifications.foldLeft(jDag) {
+              case (jDag, justification) =>
+                DoublyLinkedDagOperations.add(
+                  jDag,
+                  parent = justification.latestBlockHash,
+                  child = msg.blockHash
+                )
             }
         }
     }
-  }
 
   // Reducing L to a committee with quorum q
   // In a loop, prune L to quorum q, and prune L to the set of validators with a block in L_k,
@@ -268,78 +259,69 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log: MonadThrowable] extends Fi
       k: Int,
       weightMap: Map[Validator, Long]
   ): F[(Map[BlockHash, BlockScoreAccumulator], Map[Validator, Int])] = {
-    val toposortedBlockHashesOpt: Option[List[BlockHash]] = DagOperations.topologySort(jDag)
+    val lowestLevelZeroMsgs = committeeApproximation
+      .flatMap(v => levelZeroMsgs(v).lastOption)
+      .toList
+    val stream = DagOperations.bfToposortTraverseF(lowestLevelZeroMsgs)(
+      b =>
+        jDag.parentToChildAdjacencyList
+          .getOrElse(b.blockHash, Set.empty)
+          .toList
+          .traverse(
+            blockDag
+              .lookup(_)
+              .map(_.filter(b => committeeApproximation.contains(b.validatorPublicKey)))
+          )
+          .map(_.flatten)
+    )
+
+    val blockLevelTags =
+      lowestLevelZeroMsgs.map(b => b.blockHash -> BlockScoreAccumulator.empty(b)).toMap
 
     val effectiveWeight: Validator => Long = (vid: Validator) =>
       if (committeeApproximation.contains(vid)) weightMap(vid) else 0L
 
-    toposortedBlockHashesOpt match {
-      // should never happen
-      case None =>
-        Log[F].error("find a cycle in the dag") *> MonadThrowable[F].raiseError(
-          new RuntimeException
-        )
-      case Some(blockHashes) =>
-        blockHashes.foldLeftM(
-          (Map.empty[BlockHash, BlockScoreAccumulator], Map.empty[Validator, Int])
-        ) {
-          case (nochanged @ (blockLevelTags, validatorLevel), b) =>
-            for {
-              blockMetadata <- blockDag.lookup(b)
-              result <- if (!committeeApproximation.contains(blockMetadata.get.validatorPublicKey)) {
-                         nochanged.pure[F]
-                       } else {
-                         val currentBlockScore =
-                           blockLevelTags.getOrElse(
-                             b,
-                             BlockScoreAccumulator.empty(blockMetadata.get)
-                           )
-                         val updatedBlockScore = BlockScoreAccumulator.updateOwnLevel(
-                           currentBlockScore,
-                           q,
-                           k,
-                           effectiveWeight
-                         )
-                         val updatedBlockLevelTags = blockLevelTags.updated(b, updatedBlockScore)
-                         for {
-                           // after update current block's tag information,
-                           // we need update its children seen blocks's level information as well
-                           updatedBlockLevelTags <- jDag.parentToChildAdjacencyList
-                                                     .getOrElse(b, Set.empty)
-                                                     .toList
-                                                     .foldLeftM(updatedBlockLevelTags) {
-                                                       case (acc, child) =>
-                                                         for {
-                                                           childBlock <- blockDag
-                                                                          .lookup(child)
-                                                                          .map(_.get)
-                                                           childBlockStore = acc
-                                                             .getOrElse(
-                                                               child,
-                                                               BlockScoreAccumulator
-                                                                 .empty(childBlock)
-                                                             )
-                                                           updatedChildBlockStore = BlockScoreAccumulator
-                                                             .inheritFromParent(
-                                                               childBlockStore,
-                                                               updatedBlockScore
-                                                             )
-                                                         } yield acc.updated(
-                                                           child,
-                                                           updatedChildBlockStore
-                                                         )
-                                                     }
-                           vid = blockMetadata.get.validatorPublicKey
-                           maxLevel = math.max(
-                             validatorLevel.getOrElse(vid, 0),
-                             updatedBlockScore.blockLevel
-                           )
-                           updatedValidatorLevel = validatorLevel.updated(vid, maxLevel)
-                         } yield (updatedBlockLevelTags, updatedValidatorLevel)
-                       }
-            } yield result
-        }
-    }
+    stream
+      .foldLeftF((blockLevelTags, Map.empty[Validator, Int])) {
+        case ((blockLevelTags, validatorLevel), b) =>
+          val currentBlockScore = blockLevelTags(b.blockHash)
+          val updatedBlockScore = BlockScoreAccumulator.updateOwnLevel(
+            currentBlockScore,
+            q,
+            k,
+            effectiveWeight
+          )
+          val updatedBlockLevelTags = blockLevelTags.updated(b.blockHash, updatedBlockScore)
+          for {
+            // after update current block's tag information,
+            // we need update its children seen blocks's level information as well
+            updatedBlockLevelTags <- jDag.parentToChildAdjacencyList
+                                      .getOrElse(b.blockHash, Set.empty)
+                                      .toList
+                                      .foldLeftM(updatedBlockLevelTags) {
+                                        case (acc, child) =>
+                                          for {
+                                            childBlock <- blockDag.lookup(child).map(_.get)
+                                            childBlockStore = acc
+                                              .getOrElse(
+                                                child,
+                                                BlockScoreAccumulator.empty(childBlock)
+                                              )
+                                            updatedChildBlockStore = BlockScoreAccumulator
+                                              .inheritFromParent(
+                                                childBlockStore,
+                                                updatedBlockScore
+                                              )
+                                          } yield acc.updated(child, updatedChildBlockStore)
+                                      }
+            vid = b.validatorPublicKey
+            maxLevel = math.max(
+              validatorLevel.getOrElse(vid, 0),
+              updatedBlockScore.blockLevel
+            )
+            updatedValidatorLevel = validatorLevel.updated(vid, maxLevel)
+          } yield (updatedBlockLevelTags, updatedValidatorLevel)
+      }
   }
 
   /* finding the best level 1 committee for a given candidate block */

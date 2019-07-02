@@ -10,7 +10,6 @@ import io.casperlabs.casper.{genesis, _}
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
@@ -85,14 +84,10 @@ class BlocksResponseAPITest
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
                        )
-        logEff    = new LogStub[Task]
-        casperRef <- MultiParentCasperRef.of[Task]
-        _         <- casperRef.set(casperEffect)
-        finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(
-          Sync[Task],
-          logEff,
-          MonadThrowable[Task]
-        )
+        logEff                 = new LogStub[Task]
+        casperRef              <- MultiParentCasperRef.of[Task]
+        _                      <- casperRef.set(casperEffect)
+        finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
         blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
@@ -155,14 +150,10 @@ class BlocksResponseAPITest
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
                        )
-        logEff    = new LogStub[Task]
-        casperRef <- MultiParentCasperRef.of[Task]
-        _         <- casperRef.set(casperEffect)
-        finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(
-          Sync[Task],
-          logEff,
-          MonadThrowable[Task]
-        )
+        logEff                 = new LogStub[Task]
+        casperRef              <- MultiParentCasperRef.of[Task]
+        _                      <- casperRef.set(casperEffect)
+        finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
         blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
@@ -224,14 +215,10 @@ class BlocksResponseAPITest
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips
                      )
-      logEff    = new LogStub[Task]
-      casperRef <- MultiParentCasperRef.of[Task]
-      _         <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(
-        Sync[Task],
-        logEff,
-        MonadThrowable[Task]
-      )
+      logEff                 = new LogStub[Task]
+      casperRef              <- MultiParentCasperRef.of[Task]
+      _                      <- casperRef.set(casperEffect)
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
       blocksResponse <- BlockAPI.showBlocks[Task](2)(
                          Sync[Task],
                          casperRef,
