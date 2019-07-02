@@ -9,7 +9,7 @@ use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 use crate::value::account::{
-    ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
+    Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
 use crate::value::{Contract, Value, U512};
@@ -385,6 +385,19 @@ pub fn create_purse() -> PurseId {
             panic!("could not create purse_id")
         }
     }
+}
+
+pub fn main_purse() -> PurseId {
+    // TODO: this could be more efficient, bringing the entire account
+    // object across the host/wasm boundary only to use 32 bytes of
+    // its data is pretty bad. A native FFI (as opposed to a library
+    // API) would get around this problem. However, this solution
+    // works for the time being.
+    // https://casperlabs.atlassian.net/browse/EE-439
+    let account_pk = get_caller();
+    let key = Key::Account(account_pk.value());
+    let account: Account = read_untyped(&key).unwrap().try_into().unwrap();
+    account.purse_id()
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
