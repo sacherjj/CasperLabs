@@ -16,6 +16,8 @@ SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sb
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
+DOCKER_TEST_TAG := $(shell if [[ -n ${DRONE_BUILD_NUMBER} ]]; then echo DRONE-${DRONE_BUILD_NUMBER}; else echo test; fi )
+
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
 # https://stackoverflow.com/questions/5426934/why-this-makefile-removes-my-goal
@@ -117,7 +119,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		integration-testing/Dockerfile
 	$(eval IT_PATH = integration-testing)
 	cp -r protobuf $(IT_PATH)/
-	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
+	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_TEST_TAG) $(IT_PATH)/
 	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@
 
@@ -142,26 +144,26 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	# For live tests we should mount them from a real source.
 	mkdir -p hack/docker/.genesis/blessed-contracts
 	tar -xvzf execution-engine/target/blessed-contracts.tar.gz -C hack/docker/.genesis/blessed-contracts
-	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_LATEST_TAG) hack/docker
+	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG) hack/docker
 	rm -rf hack/docker/.genesis
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test version for the execution engine as well just so we can swith version easily.
 .make/docker-build/test/execution-engine: \
 		.make/docker-build/execution-engine
-	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:test
+	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test tagged version of client so all tags exist for integration-testing.
 .make/docker-build/test/client: \
 		.make/docker-build/universal/client
-	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:test
+	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make an image to run Python tests under integration-testing.
 .make/docker-build/test/integration-testing: \
 		.make/docker-build/integration-testing
-	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:test
+	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make an image for keys generation
