@@ -50,7 +50,7 @@ Feature: Consensus
       # Check the account balance that funded the deployment and confirm that no funds were deducted for the deployment (it was not finalized)
 
   # Implemented test_bonding.py : test_bonding
-  Scenario: Bonding
+  Scenario: Bonding a validator node to an existing network
     Given: 3 Node Network
       When: Node-1 Deploys test_helloworld.wasm
       And: Node-1 Proposes block A
