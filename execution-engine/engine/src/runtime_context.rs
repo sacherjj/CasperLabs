@@ -428,6 +428,19 @@ where
     }
 
     pub fn validate_uref(&self, uref: &URef) -> Result<(), Error> {
+        if self.account.purse_id().value().addr() == uref.addr() {
+            // If passed uref matches account's purse then we have to also validate their access
+            // rights.
+            if let Some(rights) = self.account.purse_id().value().access_rights() {
+                if let Some(uref_rights) = uref.access_rights() {
+                    // Access rights of the passed uref, and the account's purse_id should match
+                    if rights & uref_rights == uref_rights {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
         if let Some(new_rights) = uref.access_rights() {
             self.known_urefs
                 .get(&uref.addr()) // Check if the `key` is known
