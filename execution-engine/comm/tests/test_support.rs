@@ -9,6 +9,7 @@ extern crate wasm_prep;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use grpc::RequestOptions;
 
@@ -26,6 +27,7 @@ use execution_engine::engine_state::utils::WasmiBytes;
 use execution_engine::engine_state::EngineState;
 use shared::test_utils;
 use shared::transform::Transform;
+use std::ops::Deref;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
 //use common::bytesrepr::ToBytes;
@@ -286,15 +288,19 @@ pub fn get_account(
 }
 
 /// Builder for simple WASM test
+#[derive(Clone)]
 pub struct WasmTestBuilder {
-    engine_state: EngineState<InMemoryGlobalState>,
+    /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for EngineState`
+    engine_state: Rc<EngineState<InMemoryGlobalState>>,
     exec_responses: Vec<ExecResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
     /// Cached transform maps after subsequent successful runs
     /// i.e. transforms[0] is for first run() call etc.
-    transforms: Vec<HashMap<common::key::Key, Transform>>,
-    bonded_validators: Vec<HashMap<common::value::account::PublicKey, common::value::U512>>,
+    pub transforms: Vec<HashMap<common::key::Key, Transform>>,
+    pub bonded_validators: Vec<HashMap<common::value::account::PublicKey, common::value::U512>>,
+    /// Cached genesis transforms
+    pub genesis_account: Option<common::value::Account>,
 }
 
 impl Default for WasmTestBuilder {
@@ -303,17 +309,41 @@ impl Default for WasmTestBuilder {
     }
 }
 
+/// A wrapper type to disambiguate builder from an actual result
+pub struct WasmTestResult(WasmTestBuilder);
+
+impl Deref for WasmTestResult {
+    type Target = WasmTestBuilder;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl WasmTestBuilder {
+    /// Carries on attributes from TestResult for further executions
+    pub fn from_result(result: WasmTestResult) -> WasmTestBuilder {
+        WasmTestBuilder {
+            engine_state: result.0.engine_state,
+            exec_responses: Vec::new(),
+            genesis_hash: result.0.genesis_hash,
+            post_state_hash: result.0.post_state_hash,
+            transforms: Vec::new(),
+            bonded_validators: result.0.bonded_validators,
+            genesis_account: result.0.genesis_account,
+        }
+    }
+
     pub fn new() -> WasmTestBuilder {
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state);
         WasmTestBuilder {
-            engine_state,
+            engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
             transforms: Vec::new(),
             bonded_validators: Vec::new(),
+            genesis_account: None,
         }
     }
 
@@ -330,6 +360,22 @@ impl WasmTestBuilder {
             .run_genesis(RequestOptions::new(), genesis_request)
             .wait_drop_metadata()
             .unwrap();
+
+        // Cache genesis response transforms for easy access later
+        let genesis_transforms = get_genesis_transforms(&genesis_response);
+        // Cache the account
+        self.genesis_account = Some(
+            get_account(
+                &genesis_transforms,
+                &common::key::Key::Account(genesis_addr),
+            )
+            .unwrap_or_else(|| {
+                panic!(
+                    "Unable to obtain genesis account from genesis response: {:?}",
+                    genesis_response
+                )
+            }),
+        );
 
         let state_handle = self.engine_state.state();
 
@@ -457,5 +503,16 @@ impl WasmTestBuilder {
         &self,
     ) -> Vec<HashMap<common::value::account::PublicKey, common::value::U512>> {
         self.bonded_validators.clone()
+    }
+
+    /// Gets genesis account (if present)
+    pub fn get_genesis_account(&self) -> &common::value::Account {
+        self.genesis_account
+            .as_ref()
+            .expect("Unable to obtain genesis account. Please run genesis first.")
+    }
+
+    pub fn finish(&self) -> WasmTestResult {
+        WasmTestResult(self.clone())
     }
 }
