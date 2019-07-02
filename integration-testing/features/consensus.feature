@@ -49,19 +49,17 @@ Feature: Consensus
       # Confirm that the contract is not in the global state
       # Check the account balance that funded the deployment and confirm that no funds were deducted for the deployment (it was not finalized)
 
-  # Not Implemented
+  # Implemented test_bonding.py : test_bonding
   Scenario: Bonding
-     Given: 3 Node Network
-      # TODO: Convert into steps
-      # Create blocks / state on the network (create some deployments & propose blocks from a single validator)
-      # Let the blocks propagate through the network
-      # Spin up a new node
-      # Join the network
-      # Observe the node catch up on state
-      # Send a bonding deployment to one of the other nodes using a client
-      # Observe the block # containing the bonding request
-      # Send a deploy to the newly bonded validator
-      # Propose via the newly bonded validator
-      # Observe the block # proposed
-      # Observe that the block is validated by other nodes.
-      # Observe that the deployed contract is in the state of the other nodes in the network.
+    Given: 3 Node Network
+      When: Node-1 Deploys test_helloworld.wasm
+      And: Node-1 Proposes block A
+      Then: Node-1, Node-2, Node-3 has block A
+      And: Node-4 joins the network
+      Then: Node-4 has block A
+      And: Send a bonding deployment to Node-1
+      And: Node-1 proposes and creates a block B
+      Then: block B's hash contains the bonding request.
+      And: Node-4 deploys a contract and proposes block C.
+      Then: Node-1, Node-2, Node-3 validates the block C.
+      Then: Node-1, Node-2, and Node-3 have block C.
