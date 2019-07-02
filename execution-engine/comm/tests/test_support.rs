@@ -18,7 +18,9 @@ use casperlabs_engine_grpc_server::engine_server::ipc::{
     GenesisResponse, TransformEntry,
 };
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use casperlabs_engine_grpc_server::engine_server::mappings::CommitTransforms;
+use casperlabs_engine_grpc_server::engine_server::mappings::{
+    CommitTransforms, to_domain_validators,
+};
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use execution_engine::engine_state::EngineState;
 use execution_engine::engine_state::utils::WasmiBytes;
@@ -284,6 +286,7 @@ pub struct WasmTestBuilder {
     /// Cached transform maps after subsequent successful runs
     /// i.e. transforms[0] is for first run() call etc.
     transforms: Vec<HashMap<common::key::Key, Transform>>,
+    bonded_validators: Vec<HashMap<common::value::account::PublicKey, common::value::U512>>,
 }
 
 impl Default for WasmTestBuilder {
@@ -302,6 +305,7 @@ impl WasmTestBuilder {
             genesis_hash: None,
             post_state_hash: None,
             transforms: Vec::new(),
+            bonded_validators: Vec::new(),
         }
     }
 
@@ -311,7 +315,7 @@ impl WasmTestBuilder {
         genesis_validators: HashMap<common::value::account::PublicKey, common::value::U512>,
     ) -> &mut WasmTestBuilder {
         let (genesis_request, _contracts) =
-            create_genesis_request(genesis_addr, genesis_validators);
+            create_genesis_request(genesis_addr, genesis_validators.clone());
 
         let genesis_response = self
             .engine_state
@@ -331,6 +335,7 @@ impl WasmTestBuilder {
         self.genesis_hash = Some(genesis_hash.clone());
         // This value will change between subsequent contract executions
         self.post_state_hash = Some(genesis_hash);
+        self.bonded_validators.push(genesis_validators);
         self
     }
 
@@ -351,11 +356,12 @@ impl WasmTestBuilder {
             .wait_drop_metadata()
             .expect("should exec");
         self.exec_responses.push(exec_response.clone());
+        assert!(exec_response.has_success());
         // Parse deploy results
         let deploy_result = exec_response
             .get_success()
             .get_deploy_results()
-            .get(0)
+            .get(0) // We only allow for issuing single deploy (one wasm file).
             .expect("Unable to get first deploy result");
         let commit_transforms: CommitTransforms = deploy_result
             .get_execution_result()
@@ -393,7 +399,14 @@ impl WasmTestBuilder {
                 commit_response
             );
         }
-        self.post_state_hash = Some(commit_response.get_success().get_poststate_hash().to_vec());
+        let commit_success = commit_response.get_success();
+        self.post_state_hash = Some(commit_success.get_poststate_hash().to_vec());
+        let bonded_validators = commit_success
+            .get_bonded_validators()
+            .iter()
+            .map(|bond| to_domain_validators(bond).unwrap())
+            .collect();
+        self.bonded_validators.push(bonded_validators);
         self
     }
 
@@ -422,5 +435,11 @@ impl WasmTestBuilder {
     /// Gets the transform map that's cached between runs
     pub fn get_transforms(&self) -> Vec<HashMap<common::key::Key, Transform>> {
         self.transforms.clone()
+    }
+
+    pub fn get_bonded_validators(
+        &self,
+    ) -> Vec<HashMap<common::value::account::PublicKey, common::value::U512>> {
+        self.bonded_validators.clone()
     }
 }
