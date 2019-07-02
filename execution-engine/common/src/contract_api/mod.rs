@@ -258,17 +258,12 @@ pub fn remove_uref(name: &str) {
 /// Returns caller of current context.
 /// When in root context (not in the sub call) - returns None.
 /// When in the sub call - returns public key of the account that made the deploy.
-pub fn get_caller() -> Option<PublicKey> {
+pub fn get_caller() -> PublicKey {
     //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
     let dest_ptr = alloc_bytes(36);
-    let result = unsafe { ext_ffi::get_caller(dest_ptr) };
-    if result == 1 {
-        let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
-        let pk = deserialize(&bytes).unwrap();
-        Some(pk)
-    } else {
-        None
-    }
+    unsafe { ext_ffi::get_caller(dest_ptr) };
+    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
+    deserialize(&bytes).unwrap()
 }
 
 pub fn get_blocktime() -> BlockTime {
