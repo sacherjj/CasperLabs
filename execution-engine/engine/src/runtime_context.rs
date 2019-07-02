@@ -428,6 +428,19 @@ where
     }
 
     pub fn validate_uref(&self, uref: &URef) -> Result<(), Error> {
+        if self.account.purse_id().value().addr() == uref.addr() {
+            // If passed uref matches account's purse then we have to also validate their access
+            // rights.
+            if let Some(rights) = self.account.purse_id().value().access_rights() {
+                if let Some(uref_rights) = uref.access_rights() {
+                    // Access rights of the passed uref, and the account's purse_id should match
+                    if rights & uref_rights == uref_rights {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
         if let Some(new_rights) = uref.access_rights() {
             self.known_urefs
                 .get(&uref.addr()) // Check if the `key` is known
@@ -681,13 +694,13 @@ mod tests {
         TrackingCopy::new(reader)
     }
 
-    fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
+    fn mock_account_with_purse_id(addr: [u8; 32], purse_id: [u8; 32]) -> (Key, value::Account) {
         let associated_keys = AssociatedKeys::new(PublicKey::new(addr), Weight::new(1));
         let account = value::account::Account::new(
             addr,
             0,
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            PurseId::new(URef::new(purse_id, AccessRights::READ_ADD_WRITE)),
             associated_keys,
             Default::default(),
             AccountActivity::new(BlockTime(0), BlockTime(100)),
@@ -695,6 +708,10 @@ mod tests {
         let key = Key::Account(addr);
 
         (key, account)
+    }
+
+    fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
+        mock_account_with_purse_id(addr, [0; 32])
     }
 
     // create random account key.
@@ -1448,5 +1465,36 @@ mod tests {
             _ => panic!("Invalid transform operation found"),
         };
         assert!(!account.urefs_lookup().contains_key(&uref_name));
+    }
+
+    #[test]
+    fn validate_valid_purse_id_of_an_account() {
+        // Tests that URef which matches a purse_id of a given context gets validated
+        let mock_purse_id = [42u8; 32];
+        let known_urefs = HashMap::new();
+        let base_acc_addr = [0u8; 32];
+        let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
+        let chacha_rng = create_rng(base_acc_addr, 0);
+        let mut uref_map = BTreeMap::new();
+        let runtime_context =
+            mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
+
+        // URef that has the same id as purse_id of an account gets validated successfully.
+        let purse_id = URef::new(mock_purse_id, AccessRights::READ_ADD_WRITE);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+
+        // URef that has the same id as purse_id of an account gets validated successfully
+        // as the passed purse has only subset of the privileges
+        let purse_id = URef::new(mock_purse_id, AccessRights::READ);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+        let purse_id = URef::new(mock_purse_id, AccessRights::ADD);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+        let purse_id = URef::new(mock_purse_id, AccessRights::WRITE);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+
+        // Purse ID that doesn't match account's purse_id should fail as it's also not in known
+        // urefs.
+        let purse_id = URef::new([53; 32], AccessRights::READ_ADD_WRITE);
+        assert!(runtime_context.validate_uref(&purse_id).is_err());
     }
 }
