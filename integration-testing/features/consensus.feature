@@ -54,7 +54,7 @@ Feature: Consensus
     Given: 3 Node Network
       When: Node-1 Deploys test_helloworld.wasm
       And: Node-1 Proposes block A
-      Then: Node-1, Node-2, Node-3 has block A
+      Then: Node-1, Node-2, Node-3 have block A
       And: Node-4 joins the network
       Then: Node-4 has block A
       And: Send a bonding deployment to Node-1
