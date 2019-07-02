@@ -44,3 +44,10 @@ services:
     networks:
       - casperlabs
 
+  explorer:
+    image: casperlabs/explorer:${CL_VERSION}
+    container_name: explorer
+    networks:
+      - casperlabs
+    ports:
+      - ${CL_EXPLORER_HTTP_PORT}:5000

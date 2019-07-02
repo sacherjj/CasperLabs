@@ -41,19 +41,22 @@ docker-build-all: \
 	docker-build/client \
 	docker-build/execution-engine \
 	docker-build/integration-testing \
-	docker-build/key-generator
+	docker-build/key-generator \
+	docker-build/explorer
 
 docker-push-all: \
 	docker-push/node \
 	docker-push/client \
 	docker-push/execution-engine \
-	docker-push/key-generator
+	docker-push/key-generator \
+	docker-push/explorer
 
 docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
 docker-build/client: .make/docker-build/universal/client .make/docker-build/test/client
 docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
 docker-build/key-generator: .make/docker-build/key-generator
+docker-build/explorer: .make/docker-build/explorer
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -169,6 +172,17 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	hack/key-management/Dockerfile \
 	hack/key-management/gen-keys.sh
 	docker build -f hack/key-management/Dockerfile -t $(DOCKER_USERNAME)/key-generator:$(DOCKER_LATEST_TAG) hack/key-management
+	mkdir -p $(dir $@) && touch $@
+
+# Make an image to host the Casper Explorer UI and the faucet microservice.
+.make/docker-build/explorer: \
+		explorer/Dockerfile \
+		$(shell find explorer/ui/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" \)) \
+		explorer/ui/package.json
+	cd explorer/ui && \
+	npm install && \
+	npm run build
+	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
