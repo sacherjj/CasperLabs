@@ -25,13 +25,18 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
           title="Accounts"
           refresh={() => this.refresh()}
           rows={this.props.auth.accounts}
-          headers={['Name', 'Public Key (Base64)', 'Public Key (Base16)']}
+          headers={['Name', 'Public Key (Base64)', 'Public Key (Base16)', '']}
           renderRow={(account: UserAccount) => {
             return (
               <tr key={account.name}>
                 <td>{account.name}</td>
                 <td>{account.publicKey}</td>
                 <td>{base64toHex(account.publicKey)}</td>
+                <td className="text-center">
+                  <a onClick={_ => this.props.auth.deleteAccount(account.name)}>
+                    <i className="fa fa-fw fa-trash-alt" title="Delete" />
+                  </a>
+                </td>
               </tr>
             );
           }}

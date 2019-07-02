@@ -113,17 +113,26 @@ export class AuthContainer {
       saveToFile(form.privateKey, `${form.name}.private.key`);
       saveToFile(form.publicKey, `${form.name}.public.key`);
       // Add the public key to the accounts and save it to Auth0.
-      await this.saveAccount({ name: form.name, publicKey: form.publicKey });
+      await this.addAccount({ name: form.name, publicKey: form.publicKey });
       return true;
     } else {
       return false;
     }
   }
 
-  private async saveAccount(account: UserAccount) {
+  async deleteAccount(name: String) {
+    this.accounts = this.accounts!.filter(x => x.name != name);
+    await this.errors.capture(this.saveAccounts());
+  }
+
+  private async addAccount(account: UserAccount) {
     this.accounts = this.accounts!.concat(account);
+    await this.errors.capture(this.saveAccounts());
+  }
+
+  private async saveAccounts() {
     const userMetadata = {
-      user_metadata: { accounts: this.accounts! }
+      user_metadata: { accounts: this.accounts }
     };
     const auth0 = await this.getAuth0();
     const token = await auth0.getTokenSilently();
