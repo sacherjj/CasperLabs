@@ -30,8 +30,10 @@ export const ListInline = (props: { children: any }) => {
   const children = [].concat(props.children);
   return (
     <ul className="list-inline">
-      {children.map((child: any) => (
-        <li className="list-inline-item">{child}</li>
+      {children.map((child: any, idx: number) => (
+        <li key={idx} className="list-inline-item">
+          {child}
+        </li>
       ))}
     </ul>
   );

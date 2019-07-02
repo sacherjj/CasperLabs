@@ -13,7 +13,7 @@ interface Auth0Config {
   clientId: string;
 }
 
-interface Account {
+interface UserAccount {
   // Human readable name.
   name: string;
   // Public key in PEM format.
@@ -21,7 +21,7 @@ interface Account {
 }
 
 interface UserMetadata {
-  accounts?: Account[];
+  accounts?: UserAccount[];
 }
 
 interface User {

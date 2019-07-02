@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { observer } from 'mobx-react';
 
-import * as Pages from './Pages';
+import Pages from './Pages';
 import CasperContainer from '../containers/CasperContainer';
 import AuthContainer from '../containers/AuthContainer';
 
@@ -118,7 +118,7 @@ const CardMessage = (props: { message: string }) => {
   return <div className="mr-5">{props.message}</div>;
 };
 
-const AccountsCard = (props: { accounts: Account[] | null }) => {
+const AccountsCard = (props: { accounts: UserAccount[] | null }) => {
   const background =
     props.accounts && props.accounts.length > 0 ? 'success' : 'primary';
   return (

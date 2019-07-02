@@ -48,7 +48,7 @@ export const TextField = observer((props: TextProps) => {
       id={props.id}
       type="text"
       placeholder={props.placeholder}
-      value={props.value || undefined}
+      value={props.value || ''}
       readOnly={props.readonly || false}
       onChange={e => props.onChange!(e.target.value)}
     />

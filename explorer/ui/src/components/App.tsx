@@ -6,7 +6,7 @@ import { Switch, Route, Link, withRouter } from 'react-router-dom';
 import { RouteComponentProps } from 'react-router';
 
 import logo from '../img/logo-full.png';
-import * as Pages from './Pages';
+import Pages from './Pages';
 import Home from './Home';
 import Accounts from './Accounts';
 import Faucet from './Faucet';

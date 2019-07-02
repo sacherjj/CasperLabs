@@ -25,21 +25,21 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
           title="Accounts"
           refresh={() => this.refresh()}
           rows={this.props.auth.accounts}
-          headers={['Name', 'Public Key Base16']}
-          renderRow={(account: Account) => {
-            let keyBase16 = base64toHex(account.publicKey);
+          headers={['Name', 'Public Key (Base64)', 'Public Key (Base16)']}
+          renderRow={(account: UserAccount) => {
             return (
               <tr key={account.name}>
                 <td>{account.name}</td>
-                <td>{keyBase16}</td>
+                <td>{account.publicKey}</td>
+                <td>{base64toHex(account.publicKey)}</td>
               </tr>
             );
           }}
           footerMessage={
             <span>
-              You can create new account here; don't worry, the private key will
-              never leave the browser, we'll save it straight to disk on your
-              machine.
+              You can create new account here, which is basically an Ed25519
+              public key. Don't worry, the private key will never leave the
+              browser, we'll save it straight to disk on your machine.
             </span>
           }
         />
@@ -67,14 +67,33 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
                 id="id-account-name"
                 label="Name"
                 value={newAccount.name}
+                placeholder="Human readable alias"
                 onChange={x => {
                   newAccount.name = x;
                 }}
               />
               <TextField
-                id="id-public-key"
-                label="Public Key"
+                id="id-public-key-base64"
+                label="Public Key (Base64)"
+                value={newAccount.publicKey!}
+                readonly={true}
+              />
+              <TextField
+                id="id-public-key-base16"
+                label="Public Key (Base16)"
                 value={base64toHex(newAccount.publicKey!)}
+                readonly={true}
+              />
+              <TextField
+                id="id-private-key-base64"
+                label="Public Key (Base64)"
+                value={newAccount.privateKey!}
+                readonly={true}
+              />
+              <TextField
+                id="id-private-key-base16"
+                label="Public Key (Base16)"
+                value={base64toHex(newAccount.privateKey!)}
                 readonly={true}
               />
             </Form>

@@ -3,17 +3,22 @@ import createAuth0Client from '@auth0/auth0-spa-js';
 import Auth0Client from '@auth0/auth0-spa-js/dist/typings/Auth0Client';
 import ErrorContainer from './ErrorContainer';
 import FormData from './FormData';
+import * as nacl from 'tweetnacl-ts';
+import { encodeBase64 } from 'tweetnacl-util';
+import { saveAs } from 'file-saver';
 
 // https://github.com/auth0/auth0-spa-js/issues/41
 // https://auth0.com/docs/quickstart/spa/vanillajs
 // https://auth0.com/docs/quickstart/spa/react
 // https://auth0.com/docs/api/management/v2/get-access-tokens-for-spas
+// https://www.npmjs.com/package/tweetnacl-ts#signatures
+// https://tweetnacl.js.org/#/sign
 
 const Auth0ApiUrl = 'https://casperlabs.auth0.com/api/v2/';
 
 export class AuthContainer {
   @observable user: User | null = null;
-  @observable accounts: Account[] | null = null;
+  @observable accounts: UserAccount[] | null = null;
 
   // An application we wish to start, while we're configuring it.
   @observable newAccount: NewAccountFormData | null = null;
@@ -25,10 +30,10 @@ export class AuthContainer {
   }
 
   private async init() {
-    this.auth0 = await this.connect();
+    const auth0 = await this.getAuth0();
 
     if (window.location.search.includes('code=')) {
-      const { appState } = await this.auth0!.handleRedirectCallback();
+      const { appState } = await auth0.handleRedirectCallback();
       const url =
         appState && appState.targetUrl
           ? appState.targetUrl
@@ -39,8 +44,10 @@ export class AuthContainer {
     this.fetchUser();
   }
 
-  private async connect() {
-    return await createAuth0Client({
+  private async getAuth0() {
+    if (this.auth0 != null) return this.auth0;
+
+    const auth0 = await createAuth0Client({
       domain: this.conf.domain,
       client_id: this.conf.clientId,
       redirect_uri: window.location.origin,
@@ -49,10 +56,14 @@ export class AuthContainer {
       scope:
         'read:current_user, create:current_user_metadata, update:current_user_metadata'
     });
+
+    this.auth0 = auth0;
+    return auth0;
   }
 
   async login() {
-    const isAuthenticated = await this.auth0!.isAuthenticated();
+    const auth0 = await this.getAuth0();
+    const isAuthenticated = await auth0.isAuthenticated();
     if (!isAuthenticated) {
       await this.auth0!.loginWithPopup({
         response_type: 'token id_token'
@@ -62,23 +73,23 @@ export class AuthContainer {
   }
 
   async logout() {
-    this.auth0!.logout({ returnTo: window.location.origin });
+    const auth0 = await this.getAuth0();
+    auth0.logout({ returnTo: window.location.origin });
     this.user = null;
     this.accounts = null;
   }
 
   private async fetchUser() {
-    const isAuthenticated = await this.auth0!.isAuthenticated();
-    this.user = isAuthenticated ? await this.auth0!.getUser() : null;
+    const auth0 = await this.getAuth0();
+    const isAuthenticated = await auth0.isAuthenticated();
+    this.user = isAuthenticated ? await auth0.getUser() : null;
     this.refreshAccounts();
   }
 
   async refreshAccounts() {
     if (this.user != null) {
-      // this.exec(this.service.listAccounts(), (xs) => {
-      //   this.accounts = xs;
-      // })
-      const token = await this.auth0!.getTokenSilently();
+      const auth0 = await this.getAuth0();
+      const token = await auth0.getTokenSilently();
       const response = await fetch(
         `${Auth0ApiUrl}users/${this.user.sub}?fields=user_metadata`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -95,27 +106,63 @@ export class AuthContainer {
     this.newAccount = new NewAccountFormData(this.accounts!);
   }
 
-  async createAccount() {
-    alert('Creating...');
-    return true;
+  async createAccount(): Promise<boolean> {
+    let form = this.newAccount!;
+    if (form.clean()) {
+      // Save the private and public keys to disk.
+      saveToFile(form.privateKey, `${form.name}.private.key`);
+      saveToFile(form.publicKey, `${form.name}.public.key`);
+      // Add the public key to the accounts and save it to Auth0.
+      await this.saveAccount({ name: form.name, publicKey: form.publicKey });
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  private async saveAccount(account: UserAccount) {
+    this.accounts = this.accounts!.concat(account);
+    const userMetadata = {
+      user_metadata: { accounts: this.accounts! }
+    };
+    const auth0 = await this.getAuth0();
+    const token = await auth0.getTokenSilently();
+    const response = await fetch(`${Auth0ApiUrl}users/${this.user!.sub}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(userMetadata)
+    });
+    const user = await response.json();
+    console.log(user);
   }
 }
 
+function saveToFile(content: string, filename: string) {
+  let blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  saveAs(blob, filename);
+}
+
 export class NewAccountFormData extends FormData {
-  constructor(private accounts: Account[]) {
+  constructor(private accounts: UserAccount[]) {
     super();
-    // TODO: Generate key pair and assign to public and private keys.
+    // Generate key pair and assign to public and private keys.
+    const keys = nacl.sign_keyPair();
+    this.publicKey = encodeBase64(keys.publicKey);
+    this.privateKey = encodeBase64(keys.secretKey);
   }
 
-  @observable name: string | null = null;
-  @observable publicKey: string | null = null;
-  @observable privateKey: string | null = null;
+  @observable name: string = '';
+  @observable publicKey: string = '';
+  @observable privateKey: string = '';
 
   protected check() {
-    if (this.name == null || this.name === '') return 'Name cannot be empty!';
+    if (this.name === '') return 'Name cannot be empty!';
 
     if (this.accounts.some(x => x.name === this.name))
-      return `An account with name '$name' already exists.`;
+      return `An account with name '${this.name}' already exists.`;
 
     if (this.accounts.some(x => x.publicKey === this.publicKey))
       return 'An account with this public key already exists.';
