@@ -4,6 +4,8 @@ import { observer } from 'mobx-react';
 import AuthContainer from '../containers/AuthContainer';
 import { RefreshableComponent, Button, ListInline } from './Utils';
 import DataTable from './DataTable';
+import Modal from './Modal';
+import { Form, TextField } from './Forms';
 
 interface Props {
   auth: AuthContainer;
@@ -16,6 +18,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
   }
 
   render() {
+    const newAccount = this.props.auth.newAccount;
     return (
       <div>
         <DataTable
@@ -42,14 +45,43 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
         />
 
         <ListInline>
-          <Button title="Create account" onClick={() => this.createAccount()} />
+          <Button
+            title="Create Account"
+            onClick={() => this.props.auth.configureNewAccount()}
+          />
         </ListInline>
+
+        {newAccount && (
+          <Modal
+            id="new-account"
+            title="Create Account"
+            submitLabel="Save"
+            onSubmit={() => this.props.auth.createAccount()}
+            onClose={() => {
+              this.props.auth.newAccount = null;
+            }}
+            error={newAccount.error}
+          >
+            <Form>
+              <TextField
+                id="id-account-name"
+                label="Name"
+                value={newAccount.name}
+                onChange={x => {
+                  newAccount.name = x;
+                }}
+              />
+              <TextField
+                id="id-public-key"
+                label="Public Key"
+                value={base64toHex(newAccount.publicKey!)}
+                readonly={true}
+              />
+            </Form>
+          </Modal>
+        )}
       </div>
     );
-  }
-
-  createAccount() {
-    alert('Create');
   }
 }
 

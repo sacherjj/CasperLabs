@@ -2,6 +2,7 @@ import { observable } from 'mobx';
 import createAuth0Client from '@auth0/auth0-spa-js';
 import Auth0Client from '@auth0/auth0-spa-js/dist/typings/Auth0Client';
 import ErrorContainer from './ErrorContainer';
+import FormData from './FormData';
 
 // https://github.com/auth0/auth0-spa-js/issues/41
 // https://auth0.com/docs/quickstart/spa/vanillajs
@@ -13,6 +14,9 @@ const Auth0ApiUrl = 'https://casperlabs.auth0.com/api/v2/';
 export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: Account[] | null = null;
+
+  // An application we wish to start, while we're configuring it.
+  @observable newAccount: NewAccountFormData | null = null;
 
   private auth0: Auth0Client | null = null;
 
@@ -84,6 +88,39 @@ export class AuthContainer {
       const meta: UserMetadata = fields.user_metadata || {};
       this.accounts = meta.accounts || [];
     }
+  }
+
+  // Open a new account creation form.
+  configureNewAccount() {
+    this.newAccount = new NewAccountFormData(this.accounts!);
+  }
+
+  async createAccount() {
+    alert('Creating...');
+    return true;
+  }
+}
+
+export class NewAccountFormData extends FormData {
+  constructor(private accounts: Account[]) {
+    super();
+    // TODO: Generate key pair and assign to public and private keys.
+  }
+
+  @observable name: string | null = null;
+  @observable publicKey: string | null = null;
+  @observable privateKey: string | null = null;
+
+  protected check() {
+    if (this.name == null || this.name === '') return 'Name cannot be empty!';
+
+    if (this.accounts.some(x => x.name === this.name))
+      return `An account with name '$name' already exists.`;
+
+    if (this.accounts.some(x => x.publicKey === this.publicKey))
+      return 'An account with this public key already exists.';
+
+    return null;
   }
 }
 
