@@ -42,7 +42,9 @@ const Home = observer((props: Props) => {
 
       <div className="row">
         <AccountsCard accounts={props.auth.accounts} />
-        {props.auth.accounts && <FaucetCard />}
+        {props.auth.accounts && props.auth.accounts.length > 0 && (
+          <FaucetCard />
+        )}
         <ExploreCard />
       </div>
 
@@ -121,10 +123,10 @@ const AccountsCard = (props: { accounts: Account[] | null }) => {
     props.accounts && props.accounts.length > 0 ? 'success' : 'primary';
   return (
     <Card background={background} icon="address-book" to={Pages.Accounts}>
-      {props.accounts != null ? (
-        <CardMessage message={`You have ${props.accounts.length} account(s)`} />
-      ) : (
+      {props.accounts == null || props.accounts.length == 0 ? (
         <CardMessage message="Create an account" />
+      ) : (
+        <CardMessage message={`You have ${props.accounts.length} account(s)`} />
       )}
     </Card>
   );

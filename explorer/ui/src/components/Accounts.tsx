@@ -10,7 +10,7 @@ interface Props {
 @observer
 export default class Accounts extends RefreshableComponent<Props, {}> {
   refresh() {
-    // this.props.auth.refreshAccounts();
+    this.props.auth.refreshAccounts();
   }
 
   render() {

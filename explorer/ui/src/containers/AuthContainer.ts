@@ -6,6 +6,9 @@ import ErrorContainer from './ErrorContainer';
 // https://github.com/auth0/auth0-spa-js/issues/41
 // https://auth0.com/docs/quickstart/spa/vanillajs
 // https://auth0.com/docs/quickstart/spa/react
+// https://auth0.com/docs/api/management/v2/get-access-tokens-for-spas
+
+const Auth0ApiUrl = 'https://casperlabs.auth0.com/api/v2/';
 
 export class AuthContainer {
   @observable user: User | null = null;
@@ -29,36 +32,58 @@ export class AuthContainer {
       window.history.replaceState({}, document.title, url);
     }
 
-    const isAuthenticated = await this.auth0!.isAuthenticated();
-    this.user = isAuthenticated ? await this.auth0!.getUser() : null;
+    this.fetchUser();
   }
 
   private async connect() {
     return await createAuth0Client({
       domain: this.conf.domain,
       client_id: this.conf.clientId,
-      display: 'popup',
-      redirect_uri: window.location.origin
+      redirect_uri: window.location.origin,
+      // This is needed so that we can query and update the `user_metadata` from here.
+      audience: Auth0ApiUrl,
+      scope:
+        'read:current_user, create:current_user_metadata, update:current_user_metadata'
     });
   }
 
   async login() {
     const isAuthenticated = await this.auth0!.isAuthenticated();
     if (!isAuthenticated) {
-      await this.auth0!.loginWithPopup({});
+      await this.auth0!.loginWithPopup({
+        response_type: 'token id_token'
+      } as PopupLoginOptions);
     }
-    this.user = await this.auth0!.getUser();
+    this.fetchUser();
   }
 
   async logout() {
     this.auth0!.logout({ returnTo: window.location.origin });
     this.user = null;
+    this.accounts = null;
   }
 
-  refreshAccounts() {
-    // this.exec(this.service.listAccounts(), (xs) => {
-    //   this.accounts = xs;
-    // })
+  private async fetchUser() {
+    const isAuthenticated = await this.auth0!.isAuthenticated();
+    this.user = isAuthenticated ? await this.auth0!.getUser() : null;
+    this.refreshAccounts();
+  }
+
+  async refreshAccounts() {
+    if (this.user != null) {
+      // this.exec(this.service.listAccounts(), (xs) => {
+      //   this.accounts = xs;
+      // })
+      const token = await this.auth0!.getTokenSilently();
+      const response = await fetch(
+        `${Auth0ApiUrl}users/${this.user.sub}?fields=user_metadata`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const fields = await response.json();
+      const meta: UserMetadata = fields.user_metadata || {};
+      this.accounts = meta.accounts || [];
+    }
   }
 }
 
