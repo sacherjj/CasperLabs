@@ -145,30 +145,36 @@ where
     }
 }
 
-/// Returns bonded validators at `poststate_hash` state.
+pub enum GetBondedValidatorsError<H: History> {
+    StorageErrors(H::Error),
+    PostStateHashNotFound(Blake2bHash),
+    PoSNotFound(Key),
+}
+
+/// Calculates bonded validators at `root_hash` state.
 pub fn get_bonded_validators<H: History>(
     state: Arc<Mutex<H>>,
-    poststate_hash: Blake2bHash,
+    root_hash: Blake2bHash,
     pos_key: &Key, // Address of the PoS as currently bonded validators are stored in its known urefs map.
     correlation_id: CorrelationId,
-) -> Result<Option<HashMap<PublicKey, U512>>, H::Error> {
+) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<H>> {
     state
         .lock()
-        .checkout(poststate_hash)
+        .checkout(root_hash)
+        .map_err(GetBondedValidatorsError::StorageErrors)
         .and_then(|maybe_reader| match maybe_reader {
-            Some(reader) => reader.read(correlation_id, pos_key).map(|maybe_value| {
-                if let Some(Value::Account(account)) = maybe_value {
-                    let bonded_validators = account
+            Some(reader) => match reader.read(correlation_id, pos_key) {
+                Ok(Some(Value::Contract(contract))) => {
+                    let bonded_validators = contract
                         .urefs_lookup()
                         .keys()
-                        .into_iter()
                         .filter_map(|entry| utils::pos_validator_to_tuple(entry))
                         .collect::<HashMap<PublicKey, U512>>();
-                    Some(bonded_validators)
-                } else {
-                    None
+                    Ok(bonded_validators)
                 }
-            }),
-            None => Ok(None),
+                Ok(_) => Err(GetBondedValidatorsError::PoSNotFound(*pos_key)),
+                Err(error) => Err(GetBondedValidatorsError::StorageErrors(error)),
+            },
+            None => Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)),
         })
 }

@@ -30,7 +30,7 @@ pub const MINT_GENESIS_ACCOUNT_BALANCE_UREF: &str = "mint_genesis_account_balanc
 pub const MINT_POS_BALANCE_UREF: &str = "mint_pos_balance_uref";
 
 /// Structure for tracking URefs generated in the genesis process.
-struct GenesisURefsSource(BTreeMap<&'static str, URef>);
+pub struct GenesisURefsSource(BTreeMap<&'static str, URef>);
 
 impl GenesisURefsSource {
     fn create_genesis_rng() -> ChaChaRng {
@@ -47,6 +47,10 @@ impl GenesisURefsSource {
             .0
             .get(label)
             .unwrap_or_else(|| panic!("URef {} wasn't generated.", label))
+    }
+
+    pub fn get_pos_address(&self) -> URef {
+        *self.0.get(POS_PRIVATE_ADDRESS).unwrap() // It's safe to unwrap as we have included it when creating `GenesisURefsSource`.
     }
 }
 
