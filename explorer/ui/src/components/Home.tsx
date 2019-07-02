@@ -123,7 +123,7 @@ const AccountsCard = (props: { accounts: Account[] | null }) => {
     props.accounts && props.accounts.length > 0 ? 'success' : 'primary';
   return (
     <Card background={background} icon="address-book" to={Pages.Accounts}>
-      {props.accounts == null || props.accounts.length == 0 ? (
+      {props.accounts == null || props.accounts.length === 0 ? (
         <CardMessage message="Create an account" />
       ) : (
         <CardMessage message={`You have ${props.accounts.length} account(s)`} />

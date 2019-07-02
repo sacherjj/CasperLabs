@@ -14,7 +14,9 @@ interface Auth0Config {
 }
 
 interface Account {
-  alias: string;
+  // Human readable name.
+  name: string;
+  // Public key in PEM format.
   publicKey: string;
 }
 
