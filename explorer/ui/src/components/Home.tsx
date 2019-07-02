@@ -41,8 +41,8 @@ const Home = observer((props: Props) => {
       </div>
 
       <div className="row">
-        <AccountsCard accounts={props.casper.accounts} />
-        {props.casper.accounts && <FaucetCard />}
+        <AccountsCard accounts={props.auth.accounts} />
+        {props.auth.accounts && <FaucetCard />}
         <ExploreCard />
       </div>
 

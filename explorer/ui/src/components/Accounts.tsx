@@ -1,9 +1,19 @@
-import { UnderConstruction } from './Utils';
+import { observer } from 'mobx-react';
 
-const Accounts = () => {
-  return UnderConstruction(
-    'Create public/private key pairs you can use on the blockchain.'
-  );
-};
+import AuthContainer from '../containers/AuthContainer';
+import { RefreshableComponent, UnderConstruction } from './Utils';
 
-export default Accounts;
+interface Props {
+  auth: AuthContainer;
+}
+
+@observer
+export default class Accounts extends RefreshableComponent<Props, {}> {
+  refresh() {
+    // this.props.auth.refreshAccounts();
+  }
+
+  render() {
+    return UnderConstruction('Grab accounts from Auth0');
+  }
+}
