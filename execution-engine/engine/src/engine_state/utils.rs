@@ -40,6 +40,9 @@ pub fn pos_validator_to_tuple(pos_bond: &str) -> Option<(PublicKey, U512)> {
         None
     } else {
         let hex_key: &str = split_bond.next()?;
+        if hex_key.len() != 64 {
+            return None;
+        }
         let mut key_bytes = [0u8; 32];
         for i in 0..32 {
             key_bytes[i] = u8::from_str_radix(&hex_key[2 * i..2 * (i + 1)], 16).ok()?;
@@ -47,5 +50,43 @@ pub fn pos_validator_to_tuple(pos_bond: &str) -> Option<(PublicKey, U512)> {
         let pub_key = PublicKey::new(key_bytes);
         let balance = split_bond.next().and_then(|b| U512::from_dec_str(b).ok())?;
         Some((pub_key, balance))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common::key::addr_to_hex;
+    use common::value::account::PublicKey;
+    use common::value::U512;
+
+    use super::{pos_validator_key, pos_validator_to_tuple};
+
+    #[test]
+    fn should_to_string_pos_validator() {
+        let public_key = PublicKey::new([1u8; 32]);
+        let hex_public_key = addr_to_hex(&public_key.value());
+        let stake = U512::from(100);
+        let expected = format!("v_{}_{}", hex_public_key, stake);
+        assert_eq!(pos_validator_key(public_key, stake), expected);
+    }
+
+    #[test]
+    fn should_parse_string_to_validator_tuple() {
+        let public_key = PublicKey::new([1u8; 32]);
+        let hex_public_key = addr_to_hex(&public_key.value());
+        let stake = U512::from(100);
+        let strng = format!("v_{}_{}", hex_public_key, stake);
+
+        let parsed = pos_validator_to_tuple(&strng);
+        assert!(parsed.is_some());
+        let (parsed_pk, parsed_stake) = parsed.unwrap();
+        assert_eq!(parsed_pk, public_key);
+        assert_eq!(parsed_stake, stake);
+    }
+
+    #[test]
+    fn should_not_parse_string_to_validator_tuple() {
+        let not_validator_stake = "v_10_ab".to_string();
+        assert!(pos_validator_to_tuple(&not_validator_stake).is_none());
     }
 }
