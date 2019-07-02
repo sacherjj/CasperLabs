@@ -101,7 +101,8 @@ pipeline:
 # This section is for bors' branches only
   sbt-test-docker-bors:
     commands:
-      - "sbt test node/docker:publishLocal client/docker:publishLocal"
+      - "sbt test"
+      - "make docker-build/node docker-build/client"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"

@@ -56,7 +56,7 @@ class DeployThread(threading.Thread):
 
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
-                        ([['test_helloname.wasm']], [1, 1, 1, 0])
+                        ([['test_helloname.wasm']], [1, 1, 1, 1])
 ])
 # Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(three_node_network,

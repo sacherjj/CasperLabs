@@ -18,7 +18,7 @@ def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
             wait_for_blocks_count_at_least(node, n, n, node.timeout)
 
     def propose(node, n):
-        block_hash = node.deploy_and_propose(session_contract=HELLO_NAME)
+        block_hash = node.deploy_and_propose(session_contract=HELLO_NAME, payment_contract=HELLO_NAME)
         wait_for_blocks_propagated(n)
         return block_hash
 

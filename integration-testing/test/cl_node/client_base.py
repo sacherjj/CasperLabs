@@ -11,7 +11,7 @@ class CasperLabsClient(ABC):
 
     @abstractmethod
     def deploy(self,
-               from_address: str = "3030303030303030303030303030303030303030303030303030303030303030",
+               from_address: str = None,
                gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: int = None, # nonce == None means framework should provide correct nonce

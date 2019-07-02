@@ -22,24 +22,25 @@ class PythonClient(CasperLabsClient):
         return 'python'
 
     def deploy(self,
-               from_address: str = "3030303030303030303030303030303030303030303030303030303030303030",
+               from_address: str = None,
                gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: int = None,
                session_contract: Optional[str] = 'test_helloname.wasm',
                payment_contract: Optional[str] = 'test_helloname.wasm') -> str:
 
-        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(from_address)
+        address  = from_address or self.node.from_address()
+        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
 
         resources_path = self.node.resources_folder
         session_contract_path = str(resources_path / session_contract)
         payment_contract_path = str(resources_path / payment_contract)
 
-        logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
+        logging.info(f'PY_CLIENT.deploy(from_address={address}, gas_limit={gas_limit}, gas_price={gas_price}, '
                      f'payment_contract={payment_contract_path}, session_contract={session_contract_path}, '
                      f'nonce={deploy_nonce})')
 
-        r = self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price, payment_contract, session_contract, deploy_nonce)
+        r = self.client.deploy(address.encode('UTF-8'), gas_limit, gas_price, payment_contract, session_contract, deploy_nonce)
         return r
 
     def propose(self) -> str:
