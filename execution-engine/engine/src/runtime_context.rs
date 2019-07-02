@@ -35,8 +35,6 @@ pub struct RuntimeContext<'a, R> {
     // Original account for read only tasks taken before execution
     account: &'a Account,
     args: Vec<Vec<u8>>,
-    // Key of the caller.
-    caller_key: Option<PublicKey>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
@@ -60,7 +58,6 @@ where
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
         account: &'a Account,
-        caller_key: Option<PublicKey>,
         base_key: Key,
         blocktime: BlockTime,
         gas_limit: u64,
@@ -75,7 +72,6 @@ where
             uref_lookup,
             known_urefs,
             args,
-            caller_key,
             account,
             blocktime,
             base_key,
@@ -161,7 +157,7 @@ where
     }
 
     pub fn get_caller(&self) -> Option<PublicKey> {
-        self.caller_key
+        Some(self.account.pub_key().into())
     }
 
     pub fn get_blocktime(&self) -> BlockTime {
@@ -755,7 +751,6 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
-            None,
             base_key,
             BlockTime(0),
             0,
@@ -1051,7 +1046,6 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
-            None,
             contract_key,
             BlockTime(0),
             0,
@@ -1104,7 +1098,6 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
-            None,
             other_contract_key,
             BlockTime(0),
             0,
