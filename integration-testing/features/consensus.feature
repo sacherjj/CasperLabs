@@ -50,16 +50,11 @@ Feature: Consensus
       # Check the account balance that funded the deployment and confirm that no funds were deducted for the deployment (it was not finalized)
 
   # Implemented test_bonding.py : test_bonding
-  Scenario: Bonding a validator node to an existing network
-    Given: 3 Node Network
-      When: Node-1 Deploys test_helloworld.wasm
-      And: Node-1 Proposes block A
-      Then: Node-1, Node-2, Node-3 have block A
-      And: Node-4 joins the network
-      Then: Node-4 has block A
-      And: Send a bonding deployment to Node-1
-      And: Node-1 proposes and creates a block B
-      Then: block B's hash contains the bonding request.
-      And: Node-4 deploys a contract and proposes block C.
-      Then: Node-1, Node-2, Node-3 validates the block C.
-      Then: Node-1, Node-2, and Node-3 have block C.
+  Scenario: Bonding a validator node to an existing single node network
+    Given: Single  Node Network
+     And: A bonded Validator.
+     When: New node joins.
+     And: Deploys bonding request.
+     And: That bonding request is valid.
+     Then: New node becomes bonded.
+     And: Starting from new block new node can be found in bonded validators set.
