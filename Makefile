@@ -142,7 +142,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	# For live tests we should mount them from a real source.
 	mkdir -p hack/docker/.genesis/blessed-contracts
 	tar -xvzf execution-engine/target/blessed-contracts.tar.gz -C hack/docker/.genesis/blessed-contracts
-	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test hack/docker
+	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_LATEST_TAG) hack/docker
 	rm -rf hack/docker/.genesis
 	mkdir -p $(dir $@) && touch $@
 
