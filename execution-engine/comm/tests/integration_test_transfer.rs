@@ -1,29 +1,26 @@
-extern crate grpc;
-
+extern crate casperlabs_engine_grpc_server;
 extern crate common;
 extern crate execution_engine;
+extern crate grpc;
 extern crate shared;
 extern crate storage;
-
-extern crate casperlabs_engine_grpc_server;
-
-#[allow(unused)]
-mod test_support;
 
 use std::collections::HashMap;
 
 use grpc::RequestOptions;
 
+use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::uref::{AccessRights, URef};
+use common::value::{U512, Value};
 use common::value::account::PurseId;
-use common::value::{Value, U512};
 use execution_engine::engine_state::EngineState;
 use shared::transform::Transform;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
-use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+#[allow(unused)]
+mod test_support;
 
 const INITIAL_GENESIS_AMOUNT: u32 = 1_000_000;
 
@@ -263,6 +260,8 @@ fn should_transfer_from_account_to_account() {
         .wait_drop_metadata()
         .unwrap();
 
+    assert!(commit_response.has_success(), "Commit wasn't successful: {:?}", commit_response);
+
     let commit_hash = commit_response.get_success().get_poststate_hash();
 
     // Exec transfer 2 contract
@@ -410,6 +409,8 @@ fn should_transfer_to_existing_account() {
         .wait_drop_metadata()
         .unwrap();
 
+    assert!(commit_response.has_success(), "Commit wasn't successful: {:?}", commit_response);
+
     let commit_hash = commit_response.get_success().get_poststate_hash();
 
     // Exec transfer contract
@@ -497,6 +498,8 @@ fn should_fail_when_insufficient_funds() {
         .commit(RequestOptions::new(), commit_request)
         .wait_drop_metadata()
         .unwrap();
+
+    assert!(commit_response.has_success(), "Commit wasn't successful: {:?}", commit_response);
 
     let commit_hash = commit_response.get_success().get_poststate_hash();
 
@@ -616,6 +619,8 @@ fn should_create_purse() {
         .commit(RequestOptions::new(), commit_request)
         .wait_drop_metadata()
         .unwrap();
+
+    assert!(commit_response.has_success(), "Commit wasn't successful: {:?}", commit_response);
 
     let commit_hash = commit_response.get_success().get_poststate_hash();
 
