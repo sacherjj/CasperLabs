@@ -36,6 +36,7 @@ publish: \
 
 clean: cargo/clean
 	sbt clean
+	cd explorer/ui && rm -rf node_modules build
 	rm -rf .make
 
 
