@@ -1,6 +1,5 @@
 CL_CASPER_NUM_VALIDATORS ?= 3
 CL_SERVER_HTTP_PORT ?= 40403
-CL_VERSION ?= latest
 
 REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
 
@@ -24,7 +23,6 @@ node-%: .casperlabs
 
 	@# Create an .env file to hold template variables for docker-compose.
 	echo NODE_NUMBER=$(N) >> $(ENV)
-	echo CL_VERSION=$(CL_VERSION) >> $(ENV)
 
 	@# Link Dockerfile so we can change it and reapply.
 	@#ln -s ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml

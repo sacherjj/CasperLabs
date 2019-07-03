@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import org.scalatest.{FlatSpec, Matchers}
@@ -12,6 +13,7 @@ import monix.eval.Task
 
 import scala.collection.immutable.{HashMap, HashSet}
 
+@silent("is never used")
 class FinalityDetectorTest
     extends FlatSpec
     with Matchers

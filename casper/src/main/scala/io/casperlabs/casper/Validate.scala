@@ -167,12 +167,12 @@ object Validate {
           )
       _ <- Validate.blockSummary[F](summary, chainId)
       // Checks that need dependencies.
-      _ <- Validate.missingBlocks[F](summary, dag)
-      _ <- Validate.timestamp[F](summary, dag)
+      _ <- Validate.missingBlocks[F](summary)
+      _ <- Validate.timestamp[F](summary)
       _ <- Validate.blockNumber[F](summary, dag)
       _ <- Validate.sequenceNumber[F](summary, dag)
       _ <- maybeGenesis.filterNot(_.blockHash == summary.blockHash).fold(().pure[F]) { genesis =>
-            Validate.justificationFollows[F](summary, genesis, dag) *>
+            Validate.justificationFollows[F](summary) *>
               Validate.justificationRegressions[F](summary, genesis, dag)
           }
       // Checks that need the body.
@@ -201,38 +201,49 @@ object Validate {
       } yield false
     }
 
-  def deploySignature[F[_]: Applicative: Log](d: consensus.Deploy): F[Boolean] =
+  def deploySignature[F[_]: Monad: Log](d: consensus.Deploy): F[Boolean] =
     if (d.approvals.isEmpty) {
       Log[F].warn(
         s"Deploy ${PrettyPrinter.buildString(d.deployHash)} has no signatures."
       ) *> false.pure[F]
     } else {
-      d.approvals.toList.traverse { a =>
-        signatureVerifiers(a.getSignature.sigAlgorithm)
-          .map { verify =>
-            Try {
-              verify(
-                d.deployHash.toByteArray,
-                Signature(a.getSignature.sig.toByteArray),
-                PublicKey(a.approverPublicKey.toByteArray)
-              )
-            } match {
-              case Success(true) =>
-                true.pure[F]
-              case _ =>
-                Log[F].warn(
-                  s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash)} is invalid."
-                ) *> false.pure[F]
-            }
-          } getOrElse {
-          Log[F].warn(
-            s"Signature algorithm ${a.getSignature.sigAlgorithm} of deploy ${PrettyPrinter
-              .buildString(d.deployHash)} is unsupported."
-          ) *> false.pure[F]
+      for {
+        signatoriesVerified <- d.approvals.toList
+                                .traverse { a =>
+                                  signatureVerifiers(a.getSignature.sigAlgorithm)
+                                    .map { verify =>
+                                      Try {
+                                        verify(
+                                          d.deployHash.toByteArray,
+                                          Signature(a.getSignature.sig.toByteArray),
+                                          PublicKey(a.approverPublicKey.toByteArray)
+                                        )
+                                      } match {
+                                        case Success(true) =>
+                                          true.pure[F]
+                                        case _ =>
+                                          Log[F].warn(
+                                            s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash)} is invalid."
+                                          ) *> false.pure[F]
+                                      }
+                                    } getOrElse {
+                                    Log[F].warn(
+                                      s"Signature algorithm ${a.getSignature.sigAlgorithm} of deploy ${PrettyPrinter
+                                        .buildString(d.deployHash)} is unsupported."
+                                    ) *> false.pure[F]
+                                  }
+                                }
+                                .map(_.forall(identity))
+        keysMatched = d.approvals.toList.exists { a =>
+          a.approverPublicKey == d.getHeader.accountPublicKey
         }
-      } map {
-        _.forall(identity)
-      }
+        _ <- Log[F]
+              .warn(
+                s"Signatories of deploy ${PrettyPrinter.buildString(d.deployHash)} don't contain at least one signature with key equal to public key: ${PrettyPrinter
+                  .buildString(d.getHeader.accountPublicKey)}"
+              )
+              .whenA(!keysMatched)
+      } yield signatoriesVerified && keysMatched
     }
 
   def blockSender[F[_]: Monad: Log: BlockStore](
@@ -320,8 +331,7 @@ object Validate {
     * Works with either efficient justifications or full explicit justifications
     */
   def missingBlocks[F[_]: Monad: Log: BlockStore: RaiseValidationError](
-      block: BlockSummary,
-      dag: BlockDagRepresentation[F]
+      block: BlockSummary
   ): F[Unit] =
     for {
       parentsPresent <- block.getHeader.parentHashes.toList.forallM(p => BlockStore[F].contains(p))
@@ -334,8 +344,7 @@ object Validate {
 
   // This is not a slashable offence
   def timestamp[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
-      b: BlockSummary,
-      dag: BlockDagRepresentation[F]
+      b: BlockSummary
   ): F[Unit] =
     for {
       currentTime  <- Time[F].currentMillis
@@ -531,21 +540,14 @@ object Validate {
   def parents[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: Block,
       lastFinalizedBlockHash: BlockHash,
-      genesisBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
-    val maybeParentHashes = ProtoUtil.parentHashes(b)
-    val parentHashes = maybeParentHashes match {
-      case hashes if hashes.isEmpty => Seq(lastFinalizedBlockHash)
-      case hashes                   => hashes
-    }
-
     def printHashes(hashes: Iterable[ByteString]) =
-      hashes.map(PrettyPrinter.buildString(_)).mkString("[", ", ", "]")
+      hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.getHeader.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, genesisBlockHash, latestMessagesHashes)
+      tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
@@ -582,9 +584,7 @@ object Validate {
    * This check must come before Validate.parents
    */
   def justificationFollows[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
-      b: BlockSummary,
-      genesis: Block,
-      dag: BlockDagRepresentation[F]
+      b: BlockSummary
   ): F[Unit] = {
     val raiseNoParent =
       Log[F].warn(ignore(b, s"doesn't have a parent.")) *>
@@ -598,8 +598,8 @@ object Validate {
       status <- if (bondedValidators == justifiedValidators) {
                  Applicative[F].unit
                } else {
-                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString(_))
-                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString(_))
+                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString)
+                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString)
                  for {
                    _ <- Log[F].warn(
                          ignore(
@@ -704,7 +704,6 @@ object Validate {
     InvalidBlock
   ]](
       block: Block,
-      dag: BlockDagRepresentation[F],
       preStateHash: StateHash,
       effects: Seq[ipc.TransformEntry]
   ): F[Unit] = {

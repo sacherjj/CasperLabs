@@ -16,8 +16,10 @@ use wasmi::{
     ModuleRef, RuntimeArgs, RuntimeValue, Trap,
 };
 
+use args::Args;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE};
 use common::contract_api::argsparser::ArgsParser;
+use common::contract_api::{PurseTransferResult, TransferResult};
 use common::key::Key;
 use common::uref::{AccessRights, URef};
 use common::value::account::{
@@ -25,12 +27,6 @@ use common::value::account::{
     SetThresholdFailure, Weight, PUBLIC_KEY_SIZE,
 };
 use common::value::{Account, Value, U512};
-use shared::newtypes::{CorrelationId, Validated};
-use shared::transform::TypeMismatch;
-use storage::global_state::StateReader;
-
-use args::Args;
-use common::contract_api::{PurseTransferResult, TransferResult};
 use engine_state::execution_result::ExecutionResult;
 use execution::Error::{KeyNotFound, URefNotFound};
 use function_index::FunctionIndex;
@@ -38,10 +34,14 @@ use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
 use resolvers::memory_resolver::MemoryResolver;
 use runtime_context::RuntimeContext;
+use shared::newtypes::{CorrelationId, Validated};
+use shared::transform::TypeMismatch;
+use storage::global_state::StateReader;
 use tracking_copy::TrackingCopy;
 use URefAddr;
 
 const MINT_NAME: &str = "mint";
+const POS_NAME: &str = "pos";
 
 #[derive(Debug)]
 pub enum Error {
@@ -54,13 +54,13 @@ pub enum Error {
     InvalidAccess {
         required: AccessRights,
     },
-    ForgedReference(Key),
+    ForgedReference(URef),
     ArgIndexOutOfBounds(usize),
     URefNotFound(String),
     FunctionNotFound(String),
     ParityWasm(ParityWasmError),
     GasLimit,
-    Ret(Vec<Key>),
+    Ret(Vec<URef>),
     Rng(rand::Error),
     ResolverError(ResolverError),
     InvalidNonce {
@@ -263,16 +263,16 @@ where
     }
 
     /// Load the uref known by the given name into the Wasm memory
-    pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
+    pub fn get_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
             .context
             .get_uref(&name)
             .ok_or_else(|| Error::URefNotFound(name))?;
         let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
-        self.memory
-            .set(dest_ptr, &uref_bytes)
-            .map_err(|e| Error::Interpreter(e).into())
+
+        self.host_buf = uref_bytes;
+        Ok(self.host_buf.len())
     }
 
     pub fn has_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
@@ -310,20 +310,13 @@ where
         Ok(())
     }
 
-    /// If caller is defined (it's a subcall) then writes caller public key
-    /// to [dest_ptr] in the Wasm memory and returns 1.
-    /// If caller is undefined (we are in  the base context), returns 0.
-    fn get_caller(&mut self, dest_ptr: u32) -> Result<i32, Trap> {
-        let caller = self.context.get_caller();
-        if let Some(key) = caller {
-            let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
-            self.memory
-                .set(dest_ptr, &bytes)
-                .map_err(|e| Error::Interpreter(e).into())
-                .map(|_| 1)
-        } else {
-            Ok(0)
-        }
+    /// Writes caller (deploy) account public key to [dest_ptr] in the Wasm memory.
+    fn get_caller(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        let key = self.context.get_caller();
+        let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
+        self.memory
+            .set(dest_ptr, &bytes)
+            .map_err(|e| Error::Interpreter(e).into())
     }
 
     /// Writes current blocktime to [dest_ptr] in Wasm memory.
@@ -360,7 +353,7 @@ where
             .map_err(Error::Interpreter)
             .and_then(|x| {
                 let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
-                let urefs = self.context.deserialize_keys(&urefs_bytes)?;
+                let urefs = self.context.deserialize_urefs(&urefs_bytes)?;
                 Ok((x, urefs))
             });
         match mem_get {
@@ -599,6 +592,13 @@ where
         }
     }
 
+    fn get_pos_contract_public_uref_key(&mut self) -> Result<Key, Error> {
+        match self.context.get_uref(POS_NAME) {
+            Some(key @ Key::URef(_)) => Ok(*key),
+            _ => Err(URefNotFound(String::from(POS_NAME))),
+        }
+    }
+
     /// looks up the public mint contract key in the caller's [uref_lookup] map and then
     /// gets the "internal" mint contract uref stored under the public mint contract key.
     fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
@@ -606,6 +606,15 @@ where
         let internal_mint_uref = match self.context.read_gs(&public_mint_key)? {
             Some(Value::Key(Key::URef(uref))) => uref,
             _ => return Err(KeyNotFound(public_mint_key)),
+        };
+        Ok(internal_mint_uref)
+    }
+
+    fn get_pos_contract_uref(&mut self) -> Result<URef, Error> {
+        let public_pos_key = self.get_pos_contract_public_uref_key()?;
+        let internal_mint_uref = match self.context.read_gs(&public_pos_key)? {
+            Some(Value::Key(Key::URef(uref))) => uref,
+            _ => return Err(KeyNotFound(public_pos_key)),
         };
         Ok(internal_mint_uref)
     }
@@ -665,7 +674,9 @@ where
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let mint_contract_uref = self.get_mint_contract_uref()?;
+        let pos_contract_uref = self.get_pos_contract_uref()?;
         let mint_contract_key = Key::URef(mint_contract_uref);
+        let pos_contract_key = Key::URef(pos_contract_uref);
         let target_addr = target.value();
         let target_key = Key::Account(target_addr);
 
@@ -675,7 +686,6 @@ where
             return Ok(TransferResult::TransferError);
         }
 
-        self.context.insert_uref(source.value());
         self.context.insert_uref(target_purse_id.value());
 
         if self.mint_transfer(mint_contract_key, source, target_purse_id, amount)? {
@@ -684,6 +694,11 @@ where
                     String::from(MINT_NAME),
                     self.get_mint_contract_public_uref_key()?,
                 ),
+                (
+                    String::from(POS_NAME),
+                    self.get_pos_contract_public_uref_key()?,
+                ),
+                (pos_contract_uref.as_string(), pos_contract_key),
                 (mint_contract_uref.as_string(), mint_contract_key),
             ];
             let account = Account::create(target_addr, known_urefs, target_purse_id);
@@ -705,7 +720,6 @@ where
     ) -> Result<TransferResult, Error> {
         let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
 
-        self.context.insert_uref(source.value());
         self.context.insert_uref(target.value());
 
         if self.mint_transfer(mint_contract_key, source, target, amount)? {
@@ -952,10 +966,9 @@ where
             FunctionIndex::GetURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
-                // args(2) = pointer to destination in Wasm memory
-                let (name_ptr, name_size, dest_ptr) = Args::parse(args)?;
-                self.get_uref(name_ptr, name_size, dest_ptr)?;
-                Ok(None)
+                let (name_ptr, name_size) = Args::parse(args)?;
+                let size = self.get_uref(name_ptr, name_size)?;
+                Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             FunctionIndex::HasURefFuncIndex => {
@@ -993,8 +1006,8 @@ where
             FunctionIndex::GetCallerIndex => {
                 // args(0) = pointer to Wasm memory where to write.
                 let dest_ptr = Args::parse(args)?;
-                self.get_caller(dest_ptr)
-                    .map(|status| Some(RuntimeValue::I32(status)))
+                self.get_caller(dest_ptr)?;
+                Ok(None)
             }
 
             FunctionIndex::GetBlocktimeIndex => {
@@ -1195,7 +1208,7 @@ where
 {
     let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
 
-    let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
+    let known_urefs = extract_access_rights_from_keys(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
 
     let mut runtime = Runtime {
@@ -1209,7 +1222,6 @@ where
             known_urefs,
             args,
             &current_runtime.context.account(),
-            Some(PublicKey::new(current_runtime.context.account().pub_key())),
             key,
             current_runtime.context.get_blocktime(),
             current_runtime.context.gas_limit(),
@@ -1235,7 +1247,7 @@ where
                     Error::Ret(ref ret_urefs) => {
                         //insert extra urefs returned from call
                         let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
-                            vec_key_rights_to_map(ret_urefs.clone());
+                            extract_access_rights_from_urefs(ret_urefs.clone());
                         current_runtime.context.add_urefs(ret_urefs_map);
                         return Ok(runtime.result);
                     }
@@ -1252,8 +1264,28 @@ where
     }
 }
 
-/// Groups vector of keys by their address and accumulates access rights per key.
-pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
+/// Groups a collection of urefs by their addresses and accumulates access rights per key
+pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
+    input: I,
+) -> HashMap<URefAddr, HashSet<AccessRights>> {
+    input
+        .into_iter()
+        .map(|uref: URef| (uref.addr(), uref.access_rights()))
+        .group_by(|(key, _)| *key)
+        .into_iter()
+        .map(|(key, group)| {
+            (
+                key,
+                group
+                    .filter_map(|(_, x)| x)
+                    .collect::<HashSet<AccessRights>>(),
+            )
+        })
+        .collect()
+}
+
+/// Groups a collection of keys by their address and accumulates access rights per key.
+pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
     input: I,
 ) -> HashMap<URefAddr, HashSet<AccessRights>> {
     input
@@ -1373,7 +1405,7 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
-        let account = match value {
+        let mut account = match value {
             Value::Account(a) => a,
             other => {
                 return ExecutionResult::precondition_failure(
@@ -1401,20 +1433,21 @@ impl Executor<Module> for WasmiExecutor {
                 );
             }
 
-            let mut updated_account = account.clone();
-            updated_account.increment_nonce();
+            // Increment nonce in the account that would be later used through the execution
+            // lifecycle.
+            account.increment_nonce();
             // Store updated account with new nonce
             tc.borrow_mut().write(
                 validated_key,
-                Validated::new(updated_account.into(), Validated::valid).unwrap(),
+                Validated::new(account.clone().into(), Validated::valid).unwrap(),
             );
         }
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
-            vec_key_rights_to_map(uref_lookup_local.values().cloned());
+            extract_access_rights_from_keys(uref_lookup_local.values().cloned());
         let account_bytes = acct_key.as_account().unwrap();
-        let rng = create_rng(account_bytes, nonce);
+        let rng = create_rng(account_bytes, account.nonce());
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
@@ -1436,7 +1469,6 @@ impl Executor<Module> for WasmiExecutor {
             known_urefs,
             arguments,
             &account,
-            None,
             acct_key,
             blocktime,
             gas_limit,
@@ -1475,7 +1507,16 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
 
 #[cfg(test)]
 mod tests {
-    use super::Error;
+    use std::cell::RefCell;
+    use std::collections::btree_map::BTreeMap;
+    use std::collections::HashMap;
+    use std::rc::Rc;
+
+    use parity_wasm::builder::ModuleBuilder;
+    use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
+    use rand::RngCore;
+    use rand_chacha::ChaChaRng;
+
     use common::key::Key;
     use common::uref::{AccessRights, URef};
     use common::value::account::{
@@ -1485,17 +1526,11 @@ mod tests {
     use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
     use execution::{create_rng, Executor, WasmiExecutor};
-    use parity_wasm::builder::ModuleBuilder;
-    use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
-    use rand::RngCore;
-    use rand_chacha::ChaChaRng;
     use shared::newtypes::CorrelationId;
-    use std::cell::RefCell;
-    use std::collections::btree_map::BTreeMap;
-    use std::collections::HashMap;
-    use std::rc::Rc;
     use storage::global_state::StateReader;
     use tracking_copy::TrackingCopy;
+
+    use super::Error;
 
     fn on_fail_charge_test_helper<T>(
         f: impl Fn() -> Result<T, Error>,

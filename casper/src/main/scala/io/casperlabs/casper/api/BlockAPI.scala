@@ -4,6 +4,7 @@ import cats.Monad
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Bracket, Concurrent, Resource}
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, StorageError}
 import io.casperlabs.casper.Estimator.BlockHash
@@ -216,6 +217,7 @@ object BlockAPI {
 
   // FIX: Not used at the moment - in RChain it's being used in method like `getListeningName*`
   @deprecated("To be removed before devnet.", "0.4")
+  @silent("is never used")
   private def getMainChainFromTip[F[_]: MonadThrowable: MultiParentCasper: Log: FinalityDetector: BlockStore](
       depth: Int
   ): F[IndexedSeq[Block]] =

@@ -10,25 +10,27 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::PathBuf;
 
-use execution_engine::engine_state::utils::WasmiBytes;
-use shared::test_utils;
-use shared::transform::Transform;
+use grpc::RequestOptions;
 
+use casperlabs_engine_grpc_server::engine_server::ipc;
 use casperlabs_engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, ExecRequest, ExecResponse, GenesisRequest,
     GenesisResponse, TransformEntry,
 };
-use casperlabs_engine_grpc_server::engine_server::mappings::CommitTransforms;
-use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
-
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+use casperlabs_engine_grpc_server::engine_server::mappings::{
+    to_domain_validators, CommitTransforms,
+};
+use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
+use execution_engine::engine_state::utils::WasmiBytes;
+use execution_engine::engine_state::EngineState;
+use shared::test_utils;
+use shared::transform::Transform;
+use storage::global_state::in_memory::InMemoryGlobalState;
+
 //use common::bytesrepr::ToBytes;
 //use common::key::Key;
 //use common::value::Value;
-
-use execution_engine::engine_state::EngineState;
-use grpc::RequestOptions;
-use storage::global_state::in_memory::InMemoryGlobalState;
 
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/debug";
@@ -72,8 +74,10 @@ pub enum SystemContractType {
     ProofOfStake,
 }
 
+#[allow(clippy::implicit_hasher)]
 pub fn create_genesis_request(
     address: [u8; 32],
+    genesis_validators: HashMap<common::value::account::PublicKey, common::value::U512>,
 ) -> (GenesisRequest, HashMap<SystemContractType, WasmiBytes>) {
     let genesis_account_addr = address.to_vec();
     let mut contracts: HashMap<SystemContractType, WasmiBytes> = HashMap::new();
@@ -106,6 +110,16 @@ pub fn create_genesis_request(
         ret
     };
 
+    let grpc_genesis_validators: Vec<ipc::Bond> = genesis_validators
+        .iter()
+        .map(|(pk, bond)| {
+            let mut grpc_bond = ipc::Bond::new();
+            grpc_bond.set_validator_public_key(pk.value().to_vec());
+            grpc_bond.set_stake((*bond).into());
+            grpc_bond
+        })
+        .collect();
+
     let protocol_version = {
         let mut ret = ProtocolVersion::new();
         ret.set_value(1);
@@ -118,6 +132,7 @@ pub fn create_genesis_request(
     ret.set_mint_code(mint_code);
     ret.set_proof_of_stake_code(proof_of_stake_code);
     ret.set_protocol_version(protocol_version);
+    ret.set_genesis_validators(grpc_genesis_validators.into());
 
     (ret, contracts)
 }
@@ -198,21 +213,15 @@ pub fn get_exec_transforms(
 }
 
 #[allow(clippy::implicit_hasher)]
-pub fn get_mint_contract_uref(
+pub fn get_contract_uref(
     transforms: &HashMap<common::key::Key, Transform>,
-    contracts: &HashMap<SystemContractType, WasmiBytes>,
+    contract: Vec<u8>,
 ) -> Option<common::uref::URef> {
-    let mint_contract_bytes: Vec<u8> = contracts
-        .get(&SystemContractType::Mint)
-        .map(ToOwned::to_owned)
-        .map(Into::into)
-        .expect("should get mint bytes");
-
     transforms
         .iter()
         .find(|(_, v)| match v {
             Transform::Write(common::value::Value::Contract(mint_contract))
-                if mint_contract.bytes() == mint_contract_bytes.as_slice() =>
+                if mint_contract.bytes() == contract.as_slice() =>
             {
                 true
             }
@@ -225,6 +234,34 @@ pub fn get_mint_contract_uref(
                 None
             }
         })
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn get_mint_contract_uref(
+    transforms: &HashMap<common::key::Key, Transform>,
+    contracts: &HashMap<SystemContractType, WasmiBytes>,
+) -> Option<common::uref::URef> {
+    let mint_contract_bytes: Vec<u8> = contracts
+        .get(&SystemContractType::Mint)
+        .map(ToOwned::to_owned)
+        .map(Into::into)
+        .expect("Should get mint bytes.");
+
+    get_contract_uref(&transforms, mint_contract_bytes)
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn get_pos_contract_uref(
+    transforms: &HashMap<common::key::Key, Transform>,
+    contracts: &HashMap<SystemContractType, WasmiBytes>,
+) -> Option<common::uref::URef> {
+    let mint_contract_bytes: Vec<u8> = contracts
+        .get(&SystemContractType::ProofOfStake)
+        .map(ToOwned::to_owned)
+        .map(Into::into)
+        .expect("Should get PoS bytes.");
+
+    get_contract_uref(&transforms, mint_contract_bytes)
 }
 
 #[allow(clippy::implicit_hasher)]
@@ -250,6 +287,7 @@ pub struct WasmTestBuilder {
     /// Cached transform maps after subsequent successful runs
     /// i.e. transforms[0] is for first run() call etc.
     transforms: Vec<HashMap<common::key::Key, Transform>>,
+    bonded_validators: Vec<HashMap<common::value::account::PublicKey, common::value::U512>>,
 }
 
 impl Default for WasmTestBuilder {
@@ -268,11 +306,17 @@ impl WasmTestBuilder {
             genesis_hash: None,
             post_state_hash: None,
             transforms: Vec::new(),
+            bonded_validators: Vec::new(),
         }
     }
 
-    pub fn run_genesis(&mut self, genesis_addr: [u8; 32]) -> &mut WasmTestBuilder {
-        let (genesis_request, _contracts) = create_genesis_request(genesis_addr);
+    pub fn run_genesis(
+        &mut self,
+        genesis_addr: [u8; 32],
+        genesis_validators: HashMap<common::value::account::PublicKey, common::value::U512>,
+    ) -> &mut WasmTestBuilder {
+        let (genesis_request, _contracts) =
+            create_genesis_request(genesis_addr, genesis_validators.clone());
 
         let genesis_response = self
             .engine_state
@@ -292,6 +336,7 @@ impl WasmTestBuilder {
         self.genesis_hash = Some(genesis_hash.clone());
         // This value will change between subsequent contract executions
         self.post_state_hash = Some(genesis_hash);
+        self.bonded_validators.push(genesis_validators);
         self
     }
 
@@ -312,11 +357,12 @@ impl WasmTestBuilder {
             .wait_drop_metadata()
             .expect("should exec");
         self.exec_responses.push(exec_response.clone());
+        assert!(exec_response.has_success());
         // Parse deploy results
         let deploy_result = exec_response
             .get_success()
             .get_deploy_results()
-            .get(0)
+            .get(0) // We only allow for issuing single deploy (one wasm file).
             .expect("Unable to get first deploy result");
         let commit_transforms: CommitTransforms = deploy_result
             .get_execution_result()
@@ -354,7 +400,14 @@ impl WasmTestBuilder {
                 commit_response
             );
         }
-        self.post_state_hash = Some(commit_response.get_success().get_poststate_hash().to_vec());
+        let commit_success = commit_response.get_success();
+        self.post_state_hash = Some(commit_success.get_poststate_hash().to_vec());
+        let bonded_validators = commit_success
+            .get_bonded_validators()
+            .iter()
+            .map(|bond| to_domain_validators(bond).unwrap())
+            .collect();
+        self.bonded_validators.push(bonded_validators);
         self
     }
 
@@ -383,5 +436,11 @@ impl WasmTestBuilder {
     /// Gets the transform map that's cached between runs
     pub fn get_transforms(&self) -> Vec<HashMap<common::key::Key, Transform>> {
         self.transforms.clone()
+    }
+
+    pub fn get_bonded_validators(
+        &self,
+    ) -> Vec<HashMap<common::value::account::PublicKey, common::value::U512>> {
+        self.bonded_validators.clone()
     }
 }

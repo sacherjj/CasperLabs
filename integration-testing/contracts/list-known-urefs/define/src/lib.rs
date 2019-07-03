@@ -7,7 +7,7 @@ extern crate common;
 use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
-use common::contract_api::{add_uref, list_known_urefs, store_function, new_uref, get_uref};
+use common::contract_api::{add_uref, get_uref, list_known_urefs, new_uref, store_function};
 use common::key::Key;
 use common::value::Value;
 use core::iter;
@@ -32,12 +32,13 @@ pub extern "C" fn list_known_urefs_ext() {
 pub extern "C" fn call() {
     let uref = new_uref(Value::Int32(1));
     add_uref("Foo", &uref.clone().into());
-    let accounts_known_urefs = list_known_urefs();
+    let _accounts_known_urefs = list_known_urefs();
     let expected_urefs: BTreeMap<String, Key> =
         iter::once(("Foo".to_owned(), uref.into())).collect();
     // Test that `list_known_urefs` returns correct value when called in the context of an account.
     // Store `list_known_urefs_ext` to be called in the `call` part of this contract.
     // We don't have to  pass `expected_urefs` to exercise this function but
     // it adds initial known urefs to the state of the contract.
-    store_function("list_known_urefs_ext", expected_urefs);
+    let pointer = store_function("list_known_urefs_ext", expected_urefs);
+    add_uref("list_known_urefs", &pointer.into())
 }

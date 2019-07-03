@@ -198,14 +198,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                     if (prunedCommittee.isEmpty) {
                       none[Committee].pure[F]
                     } else {
-                      val estimateQs = blockLevelTags.flatMap {
-                        case (_, blockLevelTag) =>
-                          if (blockLevelTag.blockLevel >= 1) {
-                            blockLevelTag.estimateQ.some
-                          } else {
-                            None
-                          }
-                      }
                       Committee(prunedCommittee, q).some.pure[F]
                     }
                   } else {
@@ -465,7 +457,7 @@ object BlockScoreAccumulator {
             0L
       }).sum
       if (totalWeightOfSupporters >= q) {
-        Some(k, totalWeightOfSupporters)
+        Some((k, totalWeightOfSupporters))
       } else {
         calculateLevelAndQ(self, k - 1, q, effectiveWeight)
       }

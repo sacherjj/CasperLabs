@@ -3,6 +3,7 @@ package io.casperlabs.casper
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
+import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
@@ -107,11 +108,10 @@ sealed abstract class MultiParentCasperInstances {
       genesisEffects: ExecEngineUtil.TransformMap
   ) =
     for {
-      dag <- BlockDagStorage[F].getRepresentation
       _ <- {
-        implicit val functorRaiseInvalidBlock =
+        implicit val functorRaiseInvalidBlock: FunctorRaise[F, InvalidBlock] =
           Validate.raiseValidateErrorThroughApplicativeError[F]
-        Validate.transactions[F](genesis, dag, genesisPreState, genesisEffects)
+        Validate.transactions[F](genesis, genesisPreState, genesisEffects)
       }
       blockProcessingLock <- Semaphore[F](1)
       casperState <- Cell.mvarCell[F, CasperState](

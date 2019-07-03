@@ -4,10 +4,12 @@ import java.io.File
 import java.nio.file.{Files, Path}
 import java.nio.charset.StandardCharsets
 import java.util.Base64
+
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad, MonadError}
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.casper.consensus._
@@ -38,6 +40,7 @@ object Genesis {
   val protocolVersion = 1L
 
   /** Construct deploys that will set up the system contracts. */
+  @silent("is never used")
   def defaultBlessedTerms[F[_]: MonadThrowable: FilesAPI: Log](
       accountPublicKeyPath: Option[Path],
       initialTokens: BigInt,
@@ -65,21 +68,22 @@ object Genesis {
                            readAccountPublicKey[F](accountPublicKeyPath),
                            "Genesis account key is missing."
                          )
-      mintCode     <- read(readCode(mintCodePath), "Mint code is missing.")
-      maybePosCode <- EitherT.right[String](readCode(posCodePath))
+      mintCode <- read(readCode(mintCodePath), "Mint code is missing.")
+      posCode  <- read(readCode(posCodePath), "PoS code is missing.")
 
-      request = ipc.GenesisRequest(
-        address = ByteString.copyFrom(accountPublicKey),
-        initialTokens = state
-          .BigInt(
-            initialTokens.toString,
-            bitWidth = 512 // We could use `initialTokens.bitLength` to map to the closest of 128, 256 or 512 but this is what the EE expects.
-          )
-          .some,
-        mintCode = mintCode.some,
-        proofOfStakeCode = maybePosCode,
-        protocolVersion = state.ProtocolVersion(protocolVersion).some
-      )
+      request = ipc
+        .GenesisRequest()
+        .withAddress(ByteString.copyFrom(accountPublicKey))
+        .withInitialTokens(
+          state
+            .BigInt(
+              initialTokens.toString,
+              bitWidth = 512 // We could use `initialTokens.bitLength` to map to the closest of 128, 256 or 512 but this is what the EE expects.
+            )
+        )
+        .withMintCode(mintCode)
+        .withProofOfStakeCode(posCode)
+        .withProtocolVersion(state.ProtocolVersion(protocolVersion))
 
       deploy = ProtoUtil.basicDeploy(
         timestamp = 0L,
@@ -242,7 +246,7 @@ object Genesis {
       case Some(path) =>
         FilesAPI[F]
           .readString(path)
-          .map(Ed25519.tryParsePublicKey(_))
+          .map(Ed25519.tryParsePublicKey)
           .flatMap {
             case None =>
               MonadThrowable[F].raiseError(

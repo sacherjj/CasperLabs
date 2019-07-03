@@ -5,6 +5,7 @@ import java.nio.file.Path
 import cats.Show
 import cats.syntax.either._
 import cats.syntax.option._
+import com.github.ghik.silencer.silent
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.configuration.cli.scallop
 import io.casperlabs.node.BuildInfo
@@ -90,9 +91,12 @@ private[configuration] final case class Options private (
   import io.casperlabs.comm.discovery.NodeUtils
   import Options.Flag
 
+  //Used in @scallop macro
+  @silent("is never used")
   private implicit def show[T: NotNode]: Show[T] = Show.show(_.toString)
 
   //Needed only for eliminating red code from IntelliJ IDEA, see @scallop definition
+  @silent("is never used")
   private def gen[A](descr: String, short: Char = '\u0000'): ScallopOption[A] =
     sys.error("Add @scallop macro annotation")
 

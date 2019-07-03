@@ -37,8 +37,7 @@ class GossipServiceCasperTestNode[F[_]](
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainId: String = "casperlabs",
     relaying: Relaying[F],
-    gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F],
-    validatorToNode: Map[ByteString, Node]
+    gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F]
 )(
     implicit
     concurrentF: Concurrent[F],
@@ -143,8 +142,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             blockProcessingLock,
             faultToleranceThreshold,
             relaying = relaying,
-            gossipService = new TestGossipService[F](name),
-            validatorToNode = Map.empty // Shouldn't need it.
+            gossipService = new TestGossipService[F]()
           )(
             concurrentF,
             blockStore,
@@ -179,14 +177,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
     var gossipServices = Map.empty[Node, TestGossipService[F]]
 
-    val validatorToNode = peers
-      .zip(sks)
-      .map {
-        case (node, sk) =>
-          ByteString.copyFrom(Ed25519.tryToPublic(sk).get) -> node
-      }
-      .toMap
-
     val nodesF = peers
       .zip(sks)
       .toList
@@ -197,7 +187,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           implicit val metricEff = new Metrics.MetricsNOP[F]
           implicit val nodeAsk   = makeNodeAsk(peer)(concurrentF)
 
-          val gossipService = new TestGossipService[F](peer.host)
+          val gossipService = new TestGossipService[F]()
           gossipServices += peer -> gossipService
 
           // Simulate the broadcast semantics.
@@ -230,7 +220,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
-                  validatorToNode = validatorToNode,
                   validateNonces = validateNonces,
                   maybeMakeEE = maybeMakeEE
                 )(
@@ -273,8 +262,7 @@ object GossipServiceCasperTestNodeFactory {
     }
 
   /** Accumulate messages until receive is called by the test. */
-  class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log](host: String)
-      extends GossipService[F] {
+  class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log]() extends GossipService[F] {
 
     implicit val metrics = new Metrics.MetricsNOP[F]
 
@@ -365,7 +353,6 @@ object GossipServiceCasperTestNodeFactory {
               implicit val functorRaiseInvalidBlock =
                 Validate.raiseValidateErrorThroughApplicativeError[F]
               for {
-                dag <- casper.blockDag
                 _ <- Log[F].debug(
                       s"Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
                     )

@@ -101,7 +101,6 @@ package object transport {
                               .of[Effect](
                                 conf.casper,
                                 defaultTimeout,
-                                executionEngineService,
                                 _.value
                               )(
                                 labEff,

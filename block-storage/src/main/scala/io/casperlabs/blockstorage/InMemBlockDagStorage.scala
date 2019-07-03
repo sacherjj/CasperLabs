@@ -4,6 +4,7 @@ import cats.Apply
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockDagStorage.MeteredBlockDagStorage
@@ -17,6 +18,7 @@ import io.casperlabs.shared.Log
 
 import scala.collection.immutable.HashSet
 
+@silent("The outer reference in this type test cannot be checked at run time.")
 class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],

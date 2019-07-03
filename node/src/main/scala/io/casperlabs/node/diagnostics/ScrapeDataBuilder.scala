@@ -4,6 +4,7 @@ import java.lang.StringBuilder
 import java.text.{DecimalFormat, DecimalFormatSymbols}
 import java.util.Locale
 
+import Numeric.Implicits._
 import kamon.metric.MeasurementUnit.Dimension._
 import kamon.metric.MeasurementUnit.{information, none, time}
 import kamon.metric.{MeasurementUnit, MetricDistribution, MetricValue}
@@ -84,7 +85,7 @@ class ScrapeDataBuilder(
       name: String,
       tags: Map[String, String],
       value: String,
-      suffix: String = ""
+      suffix: String
   ): Unit = {
     append(name)
     append(suffix)
@@ -177,15 +178,15 @@ class ScrapeDataBuilder(
   private def charOrUnderscore(char: Char): Char =
     if (char.isLetterOrDigit || char == '_') char else '_'
 
-  private def format(value: Double): String =
-    numberFormat.format(value)
+  private def format[A: Numeric](value: A): String =
+    numberFormat.format(value.toDouble)
 
   private def scale(value: Long, unit: MeasurementUnit): Double = unit.dimension match {
     case Time if unit.magnitude != time.seconds.magnitude =>
       MeasurementUnit.scale(value, unit, time.seconds)
     case Information if unit.magnitude != information.bytes.magnitude =>
       MeasurementUnit.scale(value, unit, information.bytes)
-    case _ => value
+    case _ => value.toDouble
   }
 
 }

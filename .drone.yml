@@ -101,7 +101,8 @@ pipeline:
 # This section is for bors' branches only
   sbt-test-docker-bors:
     commands:
-      - "sbt test node/docker:publishLocal client/docker:publishLocal"
+      - "sbt test"
+      - "make docker-build/node docker-build/client"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
@@ -181,6 +182,7 @@ pipeline:
   docker-build-ee-int-bors:
     commands:
       - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "./integration-testing/contracts/build_contracts.sh"
       - "make docker-build/execution-engine"
       - "make docker-build/integration-testing"
       - "make docker-build/key-generator"
@@ -213,7 +215,7 @@ pipeline:
       - "apt-get update && apt-get -y install gcc"
       - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2"
       - "cd integration-testing"
-      - ./docker_run_tests.sh
+      - "./docker_run_tests.sh"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"

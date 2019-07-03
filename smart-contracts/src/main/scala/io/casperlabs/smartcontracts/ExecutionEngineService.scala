@@ -41,7 +41,6 @@ import io.casperlabs.catscontrib.MonadThrowable
 
 class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
     addr: Path,
-    maxMessageSize: Int,
     initialBonds: Map[Array[Byte], Long],
     stub: Stub
 ) extends ExecutionEngineService[F] {
@@ -149,7 +148,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   ): F[Either[Throwable, ByteString]] =
     sendMessage(CommitRequest(prestate, effects), _.commit) {
       _.result match {
-        case CommitResponse.Result.Success(CommitResult(poststateHash)) =>
+        case CommitResponse.Result.Success(CommitResult(poststateHash, _)) =>
           Right(poststateHash)
         case CommitResponse.Result.Empty =>
           Left(SmartContractEngineError("empty response"))

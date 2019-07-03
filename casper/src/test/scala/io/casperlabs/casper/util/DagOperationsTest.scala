@@ -1,6 +1,7 @@
 package io.casperlabs.casper.util
 
 import cats.{Id, Monad}
+import com.github.ghik.silencer.silent
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
@@ -11,6 +12,8 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 
+@silent("deprecated")
+@silent("is never used")
 class DagOperationsTest
     extends FlatSpec
     with Matchers

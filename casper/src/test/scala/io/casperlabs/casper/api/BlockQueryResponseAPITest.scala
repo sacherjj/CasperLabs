@@ -3,6 +3,7 @@ package io.casperlabs.casper.api
 import cats._
 import cats.effect.Sync
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
@@ -10,7 +11,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper._
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.protocol.{BlockQuery}
+import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import org.scalatest.{FlatSpec, Matchers}
@@ -20,6 +21,7 @@ import monix.eval.Task
 
 import scala.collection.immutable.HashMap
 
+@silent("deprecated")
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Task]
   val secondBlockQuery = "1234"
@@ -53,9 +55,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   val blockNumber          = 1L
   val timestamp            = 1527191665L
   val ps                   = Block.GlobalState()
-  val deployCount          = 10
+  val deployCount          = 10L
   val randomDeploys =
-    (0 until deployCount).toList
+    (0L until deployCount).toList
       .traverse(ProtoUtil.basicProcessedDeploy[Task])
       .unsafeRunSync(scheduler)
   val body                             = Block.Body().withDeploys(randomDeploys)

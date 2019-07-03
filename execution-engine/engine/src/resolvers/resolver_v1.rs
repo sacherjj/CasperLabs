@@ -102,7 +102,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::GetCallResultFuncIndex.into(),
             ),
             "get_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 3][..], None),
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::GetURefFuncIndex.into(),
             ),
             "has_uref_name" => FuncInstance::alloc_host(
@@ -154,7 +154,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::RemoveURef.into(),
             ),
             "get_caller" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GetCallerIndex.into(),
             ),
             "get_blocktime" => FuncInstance::alloc_host(

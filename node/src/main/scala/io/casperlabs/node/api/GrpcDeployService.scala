@@ -3,6 +3,7 @@ package io.casperlabs.node.api
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
@@ -21,6 +22,7 @@ import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
+@silent("deprecated")
 object GrpcDeployService {
 
   def splitPath(path: String): Seq[String] =
