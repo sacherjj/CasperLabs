@@ -38,7 +38,7 @@ trait FinalityDetector[F[_]] {
 object FinalityDetector {
   def apply[F[_]](implicit ev: FinalityDetector[F]): FinalityDetector[F] = ev
 
-  case class Committee(validators: Set[Validator], bestQ: Long)
+  case class Committee(validators: Set[Validator], quorum: Long)
 }
 
 class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F] {
@@ -59,7 +59,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
       t = committeeOpt
         .map(committee => {
           val totalWeight = weights.values.sum
-          (2 * committee.bestQ - totalWeight) * 1.0f / (2 * totalWeight)
+          (2 * committee.quorum - totalWeight) * 1.0f / (2 * totalWeight)
         })
         .getOrElse(0f)
     } yield t
@@ -178,7 +178,19 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                     if (prunedCommittee.isEmpty) {
                       none[Committee].pure[F]
                     } else {
-                      Committee(prunedCommittee, q).some.pure[F]
+                      val quorum = blockLevelTags
+                        .filter {
+                          case (_, blockScoreAccumulator: BlockScoreAccumulator) =>
+                            blockScoreAccumulator.blockLevel >= 1 && prunedCommittee.contains(
+                              blockScoreAccumulator.block.validatorPublicKey
+                            )
+                        }
+                        .map {
+                          case (_, blockScoreAccumulator: BlockScoreAccumulator) =>
+                            blockScoreAccumulator.estimateQ
+                        }
+                        .min
+                      Committee(prunedCommittee, quorum).some.pure[F]
                     }
                   } else {
                     pruningLoop(blockDag, prunedCommittee, levelZeroMsgs, weightMap, q, k)
@@ -211,7 +223,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                      committee.validators,
                      levelZeroMsgs,
                      weightMap,
-                     committee.bestQ + 1,
+                     committee.quorum + 1,
                      k,
                      committee.some
                    )
