@@ -41,6 +41,9 @@ impl StakesProvider for ContractStakes {
                 .ok_or(Error::StakesDeserializationFailed)?;
             stakes.insert(pub_key, balance);
         }
+        if stakes.is_empty() {
+            return Err(Error::StakesNotFound);
+        }
         Ok(Stakes(stakes))
     }
 

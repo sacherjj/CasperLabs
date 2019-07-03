@@ -17,6 +17,7 @@ pub enum Error {
     UnbondTransferFailed,
     // System errors
     TimeWentBackwards,
+    StakesNotFound,
     // TODO: Put these in their own enum, and wrap them separately in `BondingError` and
     // `UnbondingError`.
     QueueNotStoredAsByteArray,
@@ -42,6 +43,7 @@ impl Into<u32> for Error {
             Error::UnbondTransferFailed => 8,
             // System errors
             Error::TimeWentBackwards => 0x100,
+            Error::StakesNotFound => 0x100 + 1,
             Error::QueueNotStoredAsByteArray => 0x200,
             Error::QueueDeserializationFailed => 0x200 + 1,
             Error::QueueDeserializationExtraBytes => 0x200 + 2,
