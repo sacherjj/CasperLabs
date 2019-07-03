@@ -149,30 +149,11 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     }
   }
 
-  def constructJDagFromLevelZeroMsgs(
-      levelZeroMsgs: Map[Validator, List[BlockMetadata]]
-  ): DoublyLinkedDag[BlockHash] =
-    levelZeroMsgs.values.foldLeft(BlockDependencyDag.empty: DoublyLinkedDag[BlockHash]) {
-      case (jDag, msgs) =>
-        msgs.foldLeft(jDag) {
-          case (jDag, msg) =>
-            msg.justifications.foldLeft(jDag) {
-              case (jDag, justification) =>
-                DoublyLinkedDagOperations.add(
-                  jDag,
-                  parent = justification.latestBlockHash,
-                  child = msg.blockHash
-                )
-            }
-        }
-    }
-
   // Reducing L to a committee with quorum q
   // In a loop, prune L to quorum q, and prune L to the set of validators with a block in L_k,
   // until both steps don't change L anymore.
   def pruningLoop(
       blockDag: BlockDagRepresentation[F],
-      jDag: DoublyLinkedDag[BlockHash],
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[BlockMetadata]],
       weightMap: Map[Validator, Long],
@@ -182,7 +163,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     for {
       sweepResult <- sweep(
                       blockDag,
-                      jDag,
                       committeeApproximation,
                       levelZeroMsgs,
                       q,
@@ -201,13 +181,12 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                       Committee(prunedCommittee, q).some.pure[F]
                     }
                   } else {
-                    pruningLoop(blockDag, jDag, prunedCommittee, levelZeroMsgs, weightMap, q, k)
+                    pruningLoop(blockDag, prunedCommittee, levelZeroMsgs, weightMap, q, k)
                   }
     } yield committee
 
   def findBestQLoop(
       blockDag: BlockDagRepresentation[F],
-      jDag: DoublyLinkedDag[BlockHash],
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[BlockMetadata]],
       weightMap: Map[Validator, Long],
@@ -218,7 +197,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     for {
       committeeOpt <- pruningLoop(
                        blockDag,
-                       jDag,
                        committeeApproximation,
                        levelZeroMsgs,
                        weightMap,
@@ -230,7 +208,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                  case Some(committee) =>
                    findBestQLoop(
                      blockDag,
-                     jDag,
                      committee.validators,
                      levelZeroMsgs,
                      weightMap,
@@ -244,7 +221,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
   // Tag level information for each block in one-pass
   def sweep(
       blockDag: BlockDagRepresentation[F],
-      jDag: DoublyLinkedDag[BlockHash],
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[BlockMetadata]],
       q: Long,
@@ -256,15 +232,20 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
       .toList
     val stream = DagOperations.bfToposortTraverseF(lowestLevelZeroMsgs)(
       b =>
-        jDag.parentToChildAdjacencyList
-          .getOrElse(b.blockHash, Set.empty)
-          .toList
-          .traverse(
-            blockDag
-              .lookup(_)
-              .map(_.filter(b => committeeApproximation.contains(b.validatorPublicKey)))
-          )
-          .map(_.flatten)
+        for {
+          bsOpt <- blockDag.justificationToBlocks(b.blockHash)
+          filterBs <- bsOpt
+                       .getOrElse(Set.empty)
+                       .toList
+                       .traverse(
+                         blockDag
+                           .lookup(_)
+                           .map(
+                             _.filter(b => committeeApproximation.contains(b.validatorPublicKey))
+                           )
+                       )
+                       .map(_.flatten)
+        } yield filterBs
     )
 
     val blockLevelTags =
@@ -287,8 +268,9 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
           for {
             // after update current block's tag information,
             // we need update its children seen blocks's level information as well
-            updatedBlockLevelTags <- jDag.parentToChildAdjacencyList
-                                      .getOrElse(b.blockHash, Set.empty)
+            blockWithSpecifiedJustification <- blockDag.justificationToBlocks(b.blockHash)
+            updatedBlockLevelTags <- blockWithSpecifiedJustification
+                                      .getOrElse(Set.empty)
                                       .toList
                                       .foldLeftM(updatedBlockLevelTags) {
                                         case (acc, child) =>
@@ -353,11 +335,8 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                                      candidateBlockHash,
                                      committeeApproximation
                                    )
-                   jDag = constructJDagFromLevelZeroMsgs(levelZeroMsgs)
-
                    committeeMembersAfterPruning <- findBestQLoop(
                                                     blockDag,
-                                                    jDag,
                                                     committeeApproximation.toSet,
                                                     levelZeroMsgs,
                                                     weights,

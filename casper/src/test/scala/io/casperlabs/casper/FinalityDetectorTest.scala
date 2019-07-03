@@ -8,6 +8,7 @@ import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.FinalityDetector.Committee
+import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 
@@ -20,7 +21,7 @@ class FinalityDetectorTest
     with BlockGenerator
     with BlockDagStorageFixture {
 
-  behavior of "Clique Oracle"
+  behavior of "Finality Detector"
 
   implicit val logEff = new LogStub[Task]
 
@@ -103,14 +104,16 @@ class FinalityDetectorTest
           lowestLevelZeroMsgs = levelZeroMsgs.flatMap {
             case (_, msgs) => msgs.lastOption.map(_.blockHash)
           }.toSet
-          _    = lowestLevelZeroMsgs shouldBe Set(b2.blockHash, b3.blockHash)
-          jDag = finalityDetectorEffect.constructJDagFromLevelZeroMsgs(levelZeroMsgs)
-          _    = jDag.parentToChildAdjacencyList(b2.blockHash) shouldBe Set(b4.blockHash)
-          _    = jDag.parentToChildAdjacencyList(b3.blockHash) shouldBe Set(b4.blockHash, b5.blockHash)
-          _    = jDag.parentToChildAdjacencyList(b4.blockHash) shouldBe Set(b6.blockHash, b7.blockHash)
+          _ = lowestLevelZeroMsgs shouldBe Set(b2.blockHash, b3.blockHash)
+          _ <- dag.justificationToBlocks(b2.blockHash) shouldBeF Some(Set(b4.blockHash))
+          _ <- dag.justificationToBlocks(b3.blockHash) shouldBeF Some(
+                Set(b4.blockHash, b5.blockHash)
+              )
+          _ <- dag.justificationToBlocks(b4.blockHash) shouldBeF Some(
+                Set(b6.blockHash, b7.blockHash)
+              )
           sweepResult <- finalityDetectorEffect.sweep(
                           dag,
-                          jDag,
                           Set(v1, v2),
                           levelZeroMsgs,
                           2,
@@ -119,7 +122,6 @@ class FinalityDetectorTest
                         )
           committeeOpt <- finalityDetectorEffect.pruningLoop(
                            dag,
-                           jDag,
                            Set.empty,
                            levelZeroMsgs,
                            HashMap(v1 -> 1, v2 -> 1),
@@ -128,7 +130,6 @@ class FinalityDetectorTest
           _ = committeeOpt shouldBe None
           committeeopt <- finalityDetectorEffect.pruningLoop(
                            dag,
-                           jDag,
                            Set(v1, v2),
                            levelZeroMsgs,
                            HashMap(v1 -> 1, v2 -> 1),
@@ -137,7 +138,6 @@ class FinalityDetectorTest
           _ = committeeopt shouldBe Some(Committee(Set(v1, v2), 1L))
           committeeopt <- finalityDetectorEffect.pruningLoop(
                            dag,
-                           jDag,
                            Set(v1, v2),
                            levelZeroMsgs,
                            HashMap(v1 -> 1, v2 -> 1),
