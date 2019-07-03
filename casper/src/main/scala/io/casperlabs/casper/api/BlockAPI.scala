@@ -186,7 +186,7 @@ object BlockAPI {
                                      block.blockHash.pure[F]
                                    case _: InvalidBlock =>
                                      raise(InvalidArgument(s"Invalid block: $status"))
-                                   case BlockException(ex) =>
+                                   case UnexpectedBlockException(ex) =>
                                      raise(Internal(s"Error during block processing: $ex"))
                                    case Processing | Processed =>
                                      raise(

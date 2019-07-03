@@ -9,10 +9,10 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.hash.Blake2b256
@@ -660,10 +660,7 @@ object Validate {
     } yield result
   }
 
-  private def justificationRegressionsAux[F[_]: MonadThrowable: Log: BlockStore: FunctorRaise[
-    ?[_],
-    InvalidBlock
-  ]](
+  private def justificationRegressionsAux[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockSummary,
       latestMessagesOfBlock: Map[Validator, BlockHash],
       latestMessagesFromSenderView: Map[Validator, BlockHash],
@@ -718,10 +715,7 @@ object Validate {
   // 2) Runs deploys from the block
   // 3) Validates whether post state hashes match
   // 4) Validates whether bonded validators, as at the end of executing the block, match.
-  def transactions[F[_]: Monad: Log: BlockStore: ExecutionEngineService: FunctorRaise[
-    ?[_],
-    InvalidBlock
-  ]](
+  def transactions[F[_]: Monad: Log: BlockStore: ExecutionEngineService: RaiseValidationError](
       block: Block,
       preStateHash: StateHash,
       effects: Seq[ipc.TransformEntry]
