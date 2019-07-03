@@ -250,11 +250,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                        .getOrElse(Set.empty)
                        .toList
                        .traverse(
-                         blockDag
-                           .lookup(_)
-                           .map(
-                             _.filter(b => committeeApproximation.contains(b.validatorPublicKey))
-                           )
+                         blockDag.lookup
                        )
                        .map(_.flatten)
         } yield filterBs
