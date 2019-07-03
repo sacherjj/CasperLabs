@@ -59,10 +59,10 @@ impl ToBytes for QueueEntry {
 
 pub trait QueueProvider {
     /// Reads bonding queue.
-    fn read_bonding() -> Result<Queue>;
+    fn read_bonding() -> Queue;
 
     /// Reads unbonding queue.
-    fn read_unbonding() -> Result<Queue>;
+    fn read_unbonding() -> Queue;
 
     /// Writes bonding queue.
     fn write_bonding(queue: &Queue);
@@ -75,13 +75,13 @@ pub struct QueueLocal;
 
 impl QueueProvider for QueueLocal {
     /// Reads bonding queue from the local state of the contract.
-    fn read_bonding() -> Result<Queue> {
-        contract_api::read_local(BONDING_KEY).ok_or(Error::QueueNotFound)
+    fn read_bonding() -> Queue {
+        contract_api::read_local(BONDING_KEY).unwrap_or_default()
     }
 
     /// Reads unbonding queue from the local state of the contract.
-    fn read_unbonding() -> Result<Queue> {
-        contract_api::read_local(UNBONDING_KEY).ok_or(Error::QueueNotFound)
+    fn read_unbonding() -> Queue {
+        contract_api::read_local(UNBONDING_KEY).unwrap_or_default()
     }
 
     /// Writes bonding queue to the local state of the contract.
@@ -96,6 +96,7 @@ impl QueueProvider for QueueLocal {
 }
 
 /// A queue of bonding or unbonding requests, sorted by timestamp in ascending order.
+#[derive(Default)]
 pub struct Queue(pub Vec<QueueEntry>);
 
 impl Queue {

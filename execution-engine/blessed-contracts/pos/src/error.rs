@@ -21,7 +21,6 @@ pub enum Error {
     QueueNotStoredAsByteArray,
     QueueDeserializationFailed,
     QueueDeserializationExtraBytes,
-    QueueNotFound,
     StakesKeyDeserializationFailed,
     StakesDeserializationFailed,
 }
@@ -44,7 +43,6 @@ impl Into<u32> for Error {
             Error::QueueNotStoredAsByteArray => 0x100,
             Error::QueueDeserializationFailed => 0x100 + 1,
             Error::QueueDeserializationExtraBytes => 0x100 + 2,
-            Error::QueueNotFound => 0x100 + 3,
             Error::StakesKeyDeserializationFailed => 0x200,
             Error::StakesDeserializationFailed => 0x200 + 1,
         }

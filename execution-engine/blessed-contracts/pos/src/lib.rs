@@ -52,7 +52,7 @@ fn bond<Q: QueueProvider, S: StakesProvider>(
     validator: PublicKey,
     timestamp: BlockTime,
 ) -> Result<()> {
-    let mut queue = Q::read_bonding()?;
+    let mut queue = Q::read_bonding();
     if queue.0.len() >= MAX_BOND_LEN {
         return Err(Error::TooManyEventsInQueue);
     }
@@ -77,7 +77,7 @@ fn unbond<Q: QueueProvider, S: StakesProvider>(
     validator: PublicKey,
     timestamp: BlockTime,
 ) -> Result<()> {
-    let mut queue = Q::read_unbonding()?;
+    let mut queue = Q::read_unbonding();
     if queue.0.len() >= MAX_UNBOND_LEN {
         return Err(Error::TooManyEventsInQueue);
     }
@@ -95,8 +95,8 @@ fn unbond<Q: QueueProvider, S: StakesProvider>(
 
 /// Removes all due requests from the queues and applies them.
 fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec<QueueEntry>> {
-    let mut bonding_queue = Q::read_bonding()?;
-    let mut unbonding_queue = Q::read_unbonding()?;
+    let mut bonding_queue = Q::read_bonding();
+    let mut unbonding_queue = Q::read_unbonding();
 
     let bonds = bonding_queue.pop_due(BlockTime(timestamp.0.saturating_sub(BOND_DELAY)));
     let unbonds = unbonding_queue.pop_due(BlockTime(timestamp.0.saturating_sub(UNBOND_DELAY)));
