@@ -11,6 +11,7 @@ import { saveAs } from 'file-saver';
 // https://auth0.com/docs/quickstart/spa/vanillajs
 // https://auth0.com/docs/quickstart/spa/react
 // https://auth0.com/docs/api/management/v2/get-access-tokens-for-spas
+// https://auth0.com/docs/api/management/v2#!/Users/patch_users_by_id
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
 
@@ -20,7 +21,7 @@ export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: UserAccount[] | null = null;
 
-  // An application we wish to start, while we're configuring it.
+  // An account we are creating, while we're configuring it.
   @observable newAccount: NewAccountFormData | null = null;
 
   private auth0: Auth0Client | null = null;
@@ -146,8 +147,7 @@ export class AuthContainer {
       },
       body: JSON.stringify(userMetadata)
     });
-    const user = await response.json();
-    console.log(user);
+    await response.json();
   }
 }
 
