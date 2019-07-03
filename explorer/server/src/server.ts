@@ -5,6 +5,9 @@ import jwksRsa from "jwks-rsa";
 import path from "path";
 import config from "./config.json";
 
+// https://auth0.com/docs/quickstart/spa/vanillajs/02-calling-an-api
+// https://github.com/auth0/express-jwt
+
 // initialize configuration
 dotenv.config();
 
@@ -36,6 +39,7 @@ app.get("/", (_, res) => {
 
 // Faucet endpoint.
 app.get("/api/faucet", checkJwt, (_, res) => {
+  // express-jwt put the token in res.user
   res.send({
     msg: "Your access token was successfully validated!",
   });

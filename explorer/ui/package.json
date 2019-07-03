@@ -63,7 +63,8 @@
     ]
   },
   "devDependencies": {
-    "husky": "^2.7.0"
+    "husky": "^2.7.0",
+    "ts-protoc-gen": "^0.10.0"
   },
   "proxy": "http://localhost:8001/"
 }

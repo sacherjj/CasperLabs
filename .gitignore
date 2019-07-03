@@ -66,4 +66,7 @@ execution-engine/tests/*.lock
 execution-engine/gens/*.lock
 execution-engine/blessed-contracts/mint-token/*.lock
 
+# TypeScript generated from ptotobuf
+explorer/grpc
+
 .make

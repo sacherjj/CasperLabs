@@ -13,6 +13,7 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v target \
 	| grep -v -e ipc.*\.rs)
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
+PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
 TS_SRC := $(shell find explorer/ui/src explorer/server/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "package.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
@@ -195,13 +196,13 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		$(MAKE) .make/npm-native/explorer ; \
 	fi
 
-.make/npm-native/explorer: $(TS_SRC)
+.make/npm-native/explorer: $(TS_SRC) .make/protoc/explorer
 	# CI=false so on Drone it won't fail on warnings (currently about href).
 	cd explorer/ui && npm install && CI=false npm run build
 	cd explorer/server && npm install && npm run build
 	mkdir -p $(dir $@) && touch $@
 
-.make/npm-docker/explorer: $(TS_SRC)
+.make/npm-docker/explorer: $(TS_SRC) .make/protoc/explorer
 	$(eval USERID = $(shell id -u))
 	docker pull $(DOCKER_USERNAME)/buildenv:latest
 	docker run --rm --entrypoint sh \
@@ -219,6 +220,35 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		'"
 	mkdir -p $(dir $@) && touch $@
 
+# Generate UI client code from Protobuf.
+# Installed via `npm install ts-protoc-gen --no-bin-links --save-dev`
+.make/protoc/explorer: .make/install/protoc $(PROTO_SRC)
+	$(eval DIR_IN = ./protobuf)
+	$(eval DIR_OUT = ./explorer/grpc)
+	rm -rf $(DIR_OUT)
+	mkdir -p $(DIR_OUT)
+	# First the pure data packages, so it doesn't create empty _pb_service.d.ts files.
+	protoc \
+	    -I=$(DIR_IN) \
+		--plugin=protoc-gen-ts=./explorer/ui/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
+		--js_out=import_style=commonjs,binary:$(DIR_OUT) \
+		--ts_out=service=false:$(DIR_OUT) \
+		$(DIR_IN)/google/protobuf/empty.proto \
+		$(DIR_IN)/io/casperlabs/casper/consensus/consensus.proto \
+		$(DIR_IN)/io/casperlabs/casper/consensus/info.proto \
+		$(DIR_IN)/io/casperlabs/casper/consensus/state.proto
+	# Now the service we'll invoke.
+	protoc \
+	    -I=$(DIR_IN) \
+		--plugin=protoc-gen-ts=./explorer/ui/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
+		--js_out=import_style=commonjs,binary:$(DIR_OUT) \
+		--ts_out=service=true:$(DIR_OUT) \
+		$(DIR_IN)/io/casperlabs/node/api/casper.proto
+	# Annotations were only required for the REST gateway. Remove them from Typescript.
+	for f in $(DIR_OUT)/io/casperlabs/node/api/casper_pb* ; do \
+		sed -i '/google_api_annotations_pb/d' $$f ; \
+	done
+	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
 .make/sbt-stage/%: $(SCALA_SRC)
@@ -324,6 +354,7 @@ execution-engine/target/release/casperlabs-engine-grpc-server: \
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.
+.PHONY: protobuf/google/api
 protobuf/google/api:
 	$(eval DIR = protobuf/google/api)
 	$(eval SRC = https://raw.githubusercontent.com/googleapis/googleapis/master/google/api)
@@ -331,6 +362,14 @@ protobuf/google/api:
 	cd $(DIR) && \
 	curl -s -O $(SRC)/annotations.proto && \
 	curl -s -O $(SRC)/http.proto
+
+.PHONY: protobuf/google
+protobuf/google:
+	$(eval DIR = protobuf/google/protobuf)
+	$(eval SRC = https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf)
+	mkdir -p $(DIR)
+	cd $(DIR) && \
+	curl -s -O $(SRC)/empty.proto
 
 # Miscellaneous tools to install once.
 

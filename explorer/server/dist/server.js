@@ -9,6 +9,8 @@ const express_jwt_1 = __importDefault(require("express-jwt"));
 const jwks_rsa_1 = __importDefault(require("jwks-rsa"));
 const path_1 = __importDefault(require("path"));
 const config_json_1 = __importDefault(require("./config.json"));
+// https://auth0.com/docs/quickstart/spa/vanillajs/02-calling-an-api
+// https://github.com/auth0/express-jwt
 // initialize configuration
 dotenv_1.default.config();
 // port is now available to the Node.js runtime
@@ -34,6 +36,7 @@ app.get("/", (_, res) => {
 });
 // Faucet endpoint.
 app.get("/api/faucet", checkJwt, (_, res) => {
+    // express-jwt put the token in res.user
     res.send({
         msg: "Your access token was successfully validated!",
     });
