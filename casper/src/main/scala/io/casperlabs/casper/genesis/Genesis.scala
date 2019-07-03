@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.{Files, Path}
 import java.nio.charset.StandardCharsets
 import java.util.Base64
+
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
@@ -179,6 +180,7 @@ object Genesis {
       conf: CasperConf
   ): F[BlockMsgWithTransform] = apply[F](
     conf.walletsFile,
+    conf.bondsFile,
     conf.minimumBond,
     conf.maximumBond,
     conf.chainId,
@@ -191,6 +193,7 @@ object Genesis {
 
   def apply[F[_]: MonadThrowable: Log: FilesAPI: ExecutionEngineService](
       walletsPath: Path,
+      bondsPath: Path,
       minimumBond: Long,
       maximumBond: Long,
       chainId: String,
@@ -202,8 +205,7 @@ object Genesis {
   ): F[BlockMsgWithTransform] =
     for {
       wallets   <- getWallets[F](walletsPath)
-      bonds     <- ExecutionEngineService[F].computeBonds(ExecutionEngineService[F].emptyStateHash)
-      bondsMap  = bonds.map(b => PublicKey(b.validatorPublicKey.toByteArray) -> b.stake).toMap
+      bondsMap  <- getBonds[F](bondsPath)
       timestamp = deployTimestamp.getOrElse(0L)
       initial = withoutContracts(
         bonds = bondsMap,
@@ -319,38 +321,35 @@ object Genesis {
           }
     }
 
-  def getBonds[F[_]: Sync: Log](
+  def getBonds[F[_]: MonadThrowable: FilesAPI: Log](
       bonds: Path
   ): F[Map[PublicKey, Long]] =
     for {
-      bondsFile <- toFile[F](bonds)
-      bonds <- bondsFile match {
-                case Some(file) =>
-                  Sync[F]
-                    .delay {
-                      Try {
-                        Source
-                          .fromFile(file)
-                          .getLines()
-                          .map(line => {
-                            val Array(pk, stake) = line.trim.split(" ")
-                            PublicKey(Base64.getDecoder.decode(pk)) -> (stake.toLong)
-                          })
-                          .toMap
-                      }
-                    }
-                    .flatMap {
-                      case Success(bonds) =>
-                        bonds.pure[F]
-                      case Failure(_) =>
-                        val message = s"Bonds file ${file.getPath} cannot be parsed."
-                        Log[F].error(message) *> Sync[F].raiseError[Map[PublicKey, Long]](
+      maybeLines <- FilesAPI[F].readString(bonds).map(_.split('\n').toList).attempt
+      bonds <- maybeLines match {
+                case Right(lines) =>
+                  MonadThrowable[F]
+                    .fromTry(
+                      lines
+                        .traverse(
+                          line =>
+                            Try {
+                              val Array(pk, stake) = line.trim.split(" ")
+                              PublicKey(Base64.getDecoder.decode(pk)) -> stake.toLong
+                            }
+                        )
+                    )
+                    .map(_.toMap)
+                    .handleErrorWith { ex =>
+                      val message = s"Bonds file $bonds cannot be parsed."
+                      Log[F].error(message, ex) *> MonadThrowable[F]
+                        .raiseError[Map[PublicKey, Long]](
                           new IllegalArgumentException(message) with NoStackTrace
                         )
                     }
-                case None =>
+                case Left(ex) =>
                   val message = s"Specified bonds file $bonds does not exist."
-                  Log[F].error(message) *> Sync[F]
+                  Log[F].error(message, ex) *> MonadThrowable[F]
                     .raiseError[Map[PublicKey, Long]](
                       new IllegalArgumentException(message) with NoStackTrace
                     )

@@ -214,10 +214,9 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             implicit val filesApi                  = FilesAPI.create[Task]
 
             for {
-              bonds <- Genesis.getBonds[Task](bondsFile)
-              _     <- ExecutionEngineService[Task].setBonds(bonds)
               genesisWithTransform <- Genesis[Task](
                                        walletsPath = nonExistentPath,
+                                       bondsPath = bondsFile,
                                        minimumBond = 1L,
                                        maximumBond = Long.MaxValue,
                                        chainId = casperlabsChainId,
@@ -260,10 +259,9 @@ object GenesisTest {
       time: LogicalTime[Task]
   ): Task[BlockMsgWithTransform] =
     for {
-      bonds <- Genesis.getBonds[Task](bondsPath)
-      _     <- ExecutionEngineService[Task].setBonds(bonds)
       genesis <- Genesis[Task](
                   walletsPath = nonExistentPath,
+                  bondsPath = bondsPath,
                   minimumBond = 1L,
                   maximumBond = Long.MaxValue,
                   chainId = casperlabsChainId,

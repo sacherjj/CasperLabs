@@ -52,7 +52,6 @@ object ExecutionEngineServiceStub {
           Seq[TransformEntry]
       ) => F[Either[Throwable, ExecutionEngineService.CommitResult]],
       queryFunc: (ByteString, Key, Seq[String]) => F[Either[Throwable, Value]],
-      computeBondsFunc: ByteString => F[Seq[Bond]],
       setBondsFunc: Bonds => F[Unit],
       verifyWasmFunc: ValidateRequest => F[Either[String, Unit]]
   ): ExecutionEngineService[F] = new ExecutionEngineService[F] {
@@ -73,8 +72,6 @@ object ExecutionEngineServiceStub {
         prestate: ByteString,
         effects: Seq[TransformEntry]
     ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = commitFunc(prestate, effects)
-    override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-      computeBondsFunc(hash)
     override def setBonds(bonds: Map[PublicKey, Long]): F[Unit] =
       setBondsFunc(bonds)
     override def query(
@@ -98,7 +95,6 @@ object ExecutionEngineServiceStub {
       (_, _, _) =>
         Applicative[F]
           .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented"))),
-      _ => Seq.empty[Bond].pure[F],
       _ => Applicative[F].unit,
       _ => ().asRight[String].pure[F]
     )

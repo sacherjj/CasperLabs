@@ -92,7 +92,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     establishMetrics[F] *> handler
   }
 
-  private def defaultMode[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+  private def defaultMode[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI](
       conf: CasperConf,
       delay: FiniteDuration,
       toTask: F[_] => Task[_]
@@ -189,7 +189,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
            )
     } yield new CasperPacketHandlerImpl[F](gv, validatorId)
 
-  private def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+  private def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI](
       conf: CasperConf,
       approvedBlockWithTransforms: ApprovedBlockWithTransforms
   ): F[CasperPacketHandler[F]] = {

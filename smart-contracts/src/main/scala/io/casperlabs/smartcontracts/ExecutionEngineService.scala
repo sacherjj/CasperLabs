@@ -36,7 +36,6 @@ import io.casperlabs.catscontrib.MonadThrowable
       prestate: ByteString,
       effects: Seq[TransformEntry]
   ): F[Either[Throwable, ExecutionEngineService.CommitResult]]
-  def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
   def setBonds(bonds: Map[PublicKey, Long]): F[Unit]
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
@@ -179,10 +178,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
         case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
       }
     }
-
-  override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-    // FIXME: Implement bonds!
-    bonds.pure[F]
 
   // Todo Pass in the genesis bonds until we have a solution based on the BlockStore.
   override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =

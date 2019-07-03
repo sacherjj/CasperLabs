@@ -385,8 +385,6 @@ object HashSetCasperTestNode {
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
-      override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-        bonds.pure[F]
       override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =
         Defer[F].defer(Applicative[F].unit.map { _ =>
           bonds = newBonds.map {

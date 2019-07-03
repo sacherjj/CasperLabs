@@ -202,17 +202,11 @@ object BlockApproverProtocol {
               .or("GlobalState root hash mismatch.")
               .pure[F]
           )
-      tuplespaceBonds <- EitherT(
-                          MonadThrowable[F]
-                            .attempt(
-                              ExecutionEngineService[F].computeBonds(postState.postStateHash)
-                            )
-                        ).leftMap(_.getMessage)
-      tuplespaceBondsMap = tuplespaceBonds.map {
+      bondedValidators = commitResult.bondedValidators.map {
         case consensus.Bond(validator, stake) => validator -> stake
       }.toMap
       _ <- EitherT(
-            (tuplespaceBondsMap == bonds)
+            (bondedValidators == bonds)
               .either(())
               .or("Tuplespace bonds don't match expected ones.")
               .pure[F]
