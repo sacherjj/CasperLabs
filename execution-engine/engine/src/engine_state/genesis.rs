@@ -742,7 +742,9 @@ mod tests {
         // rustc isn't smart enough to figure that out
         let pos_contract_raw: Vec<u8> = pos_contract_bytes.into();
         assert_eq!(pos_contract.bytes().to_vec(), pos_contract_raw);
-        assert_eq!(pos_contract.urefs_lookup().len(), 3); // 2 for bonded validators, 1 for PoS purse.
+        // 2 for bonded validators, 1 for PoS purse, 2 for mint
+        let expected_num_known_urefs = 5;
+        assert_eq!(pos_contract.urefs_lookup().len(), expected_num_known_urefs);
 
         let validator_a_name: String =
             pos_validator_key(genesis_validator_a_public_key, genesis_validator_a_stake);
