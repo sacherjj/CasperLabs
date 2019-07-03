@@ -237,8 +237,14 @@ fn create_pos_effects(
         .map(|key| (key, Key::Hash([0u8; 32])))
         .collect();
 
-    let pos_purse = rng.get_uref(POS_PURSE);
+    // Include the mint contract in its known_urefs
+    let mint_public = rng.get_uref(MINT_PUBLIC_ADDRESS);
+    let mint_private = rng.get_uref(MINT_PRIVATE_ADDRESS);
+    known_urefs.insert(String::from(execution::MINT_NAME), Key::URef(mint_public));
+    known_urefs.insert(mint_private.as_string(), Key::URef(mint_private));
 
+    // Include PoS purse in its known_urefs
+    let pos_purse = rng.get_uref(POS_PURSE);
     known_urefs.insert(POS_PURSE.to_string(), Key::URef(pos_purse));
 
     // Create PoS Contract object.

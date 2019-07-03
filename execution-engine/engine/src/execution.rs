@@ -40,7 +40,7 @@ use storage::global_state::StateReader;
 use tracking_copy::TrackingCopy;
 use URefAddr;
 
-const MINT_NAME: &str = "mint";
+pub const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
 
 #[derive(Debug)]
