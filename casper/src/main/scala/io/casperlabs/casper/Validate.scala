@@ -732,7 +732,7 @@ object Validate {
                 for {
                   _ <- RaiseValidationError[F]
                         .raise[Unit](InvalidPostStateHash)
-                        .whenA(!(commitResult.postStateHash == blockPostState))
+                        .whenA(commitResult.postStateHash != blockPostState)
                   _ <- Validate.bondsCache[F](block, commitResult.bondedValidators)
                 } yield ()
             }
