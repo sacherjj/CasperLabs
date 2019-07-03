@@ -42,7 +42,6 @@ import io.casperlabs.catscontrib.MonadThrowable
 
 class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
     addr: Path,
-    initialBonds: Map[Array[Byte], Long],
     stub: Stub
 ) extends ExecutionEngineService[F] {
   import GrpcExecutionEngineService.EngineMetricsSource
@@ -215,8 +214,7 @@ object GrpcExecutionEngineService {
 
   def apply[F[_]: Sync: Log: TaskLift: Metrics](
       addr: Path,
-      maxMessageSize: Int,
-      initBonds: Map[Array[Byte], Long]
+      maxMessageSize: Int
   ): Resource[F, GrpcExecutionEngineService[F]] =
-    new ExecutionEngineConf[F](addr, maxMessageSize, initBonds).apply
+    new ExecutionEngineConf[F](addr, maxMessageSize).apply
 }

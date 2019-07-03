@@ -168,7 +168,6 @@ class ExecEngineUtilTest
           (_, _, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
-          _ => Task.unit,
           _ => ().asRight[String].pure[Task]
         )
 
@@ -199,7 +198,6 @@ class ExecEngineUtilTest
             },
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
-          _ => Task.unit,
           _ => ().asRight[String].pure[Task]
         )
 

@@ -277,7 +277,7 @@ object HashSetCasperTestNode {
         MutMap.empty.withDefaultValue(0)
 
       private val zero  = Array.fill(32)(0.toByte)
-      private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
+      private val bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
       private def getExecutionEffect(deploy: Deploy) = {
         // The real execution engine will get the keys from what the code changes, which will include

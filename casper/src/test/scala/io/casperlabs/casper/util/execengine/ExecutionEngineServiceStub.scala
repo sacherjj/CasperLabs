@@ -53,7 +53,6 @@ object ExecutionEngineServiceStub {
           Seq[TransformEntry]
       ) => F[Either[Throwable, ExecutionEngineService.CommitResult]],
       queryFunc: (ByteString, Key, Seq[String]) => F[Either[Throwable, Value]],
-      setBondsFunc: Bonds => F[Unit],
       verifyWasmFunc: ValidateRequest => F[Either[String, Unit]]
   ): ExecutionEngineService[F] = new ExecutionEngineService[F] {
     override def emptyStateHash: ByteString = ByteString.EMPTY
@@ -95,7 +94,6 @@ object ExecutionEngineServiceStub {
       (_, _, _) =>
         Applicative[F]
           .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented"))),
-      _ => Applicative[F].unit,
       _ => ().asRight[String].pure[F]
     )
 

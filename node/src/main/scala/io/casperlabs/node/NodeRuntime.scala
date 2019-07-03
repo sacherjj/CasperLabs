@@ -101,8 +101,7 @@ class NodeRuntime private[node] (
                                                                               Effect
                                                                             ](
                                                                               conf.grpc.socket,
-                                                                              conf.server.maxMessageSize,
-                                                                              initBonds = Map.empty
+                                                                              conf.server.maxMessageSize
                                                                             )
 
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
