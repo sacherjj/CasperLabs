@@ -358,13 +358,13 @@ object HashSetCasperTestNode {
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, GenesisResult]] =
         commit(emptyStateHash, Seq.empty).map {
-          _.map(GenesisResult(_).withEffect(ExecutionEffect()))
+          _.map(cr => GenesisResult(cr.postStateHash).withEffect(ExecutionEffect()))
         }
 
       override def commit(
           prestate: ByteString,
           effects: Seq[TransformEntry]
-      ): F[Either[Throwable, ByteString]] = {
+      ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = {
         //This function increments the prestate by interpreting as an integer and adding 1.
         //The purpose of this is simply to have the output post-state be different
         //than the input pre-state. `effects` is not used.
@@ -372,7 +372,9 @@ object HashSetCasperTestNode {
         val n      = BigInt(arr)
         val newArr = pad((n + 1).toByteArray, 32)
 
-        ByteString.copyFrom(newArr).asRight[Throwable].pure[F]
+        val pk = ByteString.copyFrom(newArr)
+
+        ExecutionEngineService.CommitResult(pk, bonds).asRight[Throwable].pure[F]
       }
 
       override def query(

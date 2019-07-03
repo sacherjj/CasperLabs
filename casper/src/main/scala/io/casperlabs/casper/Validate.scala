@@ -723,20 +723,20 @@ object Validate {
     val blockPostState = ProtoUtil.postStateHash(block)
     if (preStateHash == blockPreState) {
       for {
-        possiblePostState <- ExecutionEngineService[F].commit(
-                              preStateHash,
-                              effects
-                            )
+        possibleCommitResult <- ExecutionEngineService[F].commit(
+                                 preStateHash,
+                                 effects
+                               )
         //TODO: distinguish "internal errors" and "user errors"
-        _ <- possiblePostState match {
+        _ <- possibleCommitResult match {
               case Left(ex) =>
                 Log[F].error(
                   s"Could not commit effects of block ${PrettyPrinter.buildString(block)}: $ex",
                   ex
                 ) *>
                   RaiseValidationError[F].raise[Unit](InvalidTransaction)
-              case Right(postStateHash) =>
-                if (postStateHash == blockPostState) {
+              case Right(commitResult) =>
+                if (commitResult.postStateHash == blockPostState) {
                   Applicative[F].unit
                 } else {
                   RaiseValidationError[F].raise[Unit](InvalidPostStateHash)

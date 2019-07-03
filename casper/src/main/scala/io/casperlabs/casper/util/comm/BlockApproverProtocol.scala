@@ -192,14 +192,14 @@ object BlockApproverProtocol {
       processedDeployResults = ExecEngineUtil.zipDeploysResults(deploys, processedDeploys)
       deployEffects          = ExecEngineUtil.findCommutingEffects(processedDeployResults)
       transforms             = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).flatMap(_._2)
-      postStateHash <- EitherT(
-                        ExecutionEngineService[F]
-                          .commit(ExecutionEngineService[F].emptyStateHash, transforms)
-                      ).leftMap(_.getMessage)
+      commitResult <- EitherT(
+                       ExecutionEngineService[F]
+                         .commit(ExecutionEngineService[F].emptyStateHash, transforms)
+                     ).leftMap(_.getMessage)
       _ <- EitherT(
-            (postStateHash == postState.postStateHash)
+            (commitResult.postStateHash == postState.postStateHash)
               .either(())
-              .or("Tuplespace hash mismatch.")
+              .or("GlobalState root hash mismatch.")
               .pure[F]
           )
       tuplespaceBonds <- EitherT(

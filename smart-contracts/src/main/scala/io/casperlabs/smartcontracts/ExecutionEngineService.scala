@@ -32,7 +32,10 @@ import io.casperlabs.catscontrib.MonadThrowable
       deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]]
-  def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
+  def commit(
+      prestate: ByteString,
+      effects: Seq[TransformEntry]
+  ): F[Either[Throwable, ExecutionEngineService.CommitResult]]
   def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
   def setBonds(bonds: Map[PublicKey, Long]): F[Unit]
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
@@ -146,11 +149,11 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   override def commit(
       prestate: ByteString,
       effects: Seq[TransformEntry]
-  ): F[Either[Throwable, ByteString]] =
+  ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
     sendMessage(CommitRequest(prestate, effects), _.commit) {
       _.result match {
-        case CommitResponse.Result.Success(CommitResult(poststateHash, _)) =>
-          Right(poststateHash)
+        case CommitResponse.Result.Success(commitResult) =>
+          Right(ExecutionEngineService.CommitResult(commitResult))
         case CommitResponse.Result.Empty =>
           Left(SmartContractEngineError("empty response"))
         case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
@@ -205,6 +208,20 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
 
 object ExecutionEngineService {
   type Stub = IpcGrpcMonix.ExecutionEngineServiceStub
+
+  class CommitResult private (val postStateHash: ByteString, val bondedValidators: Seq[Bond])
+
+  object CommitResult {
+    def apply(ipcCommitResult: io.casperlabs.ipc.CommitResult): CommitResult = {
+      val validators = ipcCommitResult.bondedValidators.map(
+        b => Bond(b.validatorPublicKey, b.getStake.value.toLong)
+      )
+      new CommitResult(ipcCommitResult.poststateHash, validators)
+    }
+
+    def apply(postStateHash: ByteString, bonds: Seq[Bond]): CommitResult =
+      new CommitResult(postStateHash, bonds)
+  }
 
 }
 

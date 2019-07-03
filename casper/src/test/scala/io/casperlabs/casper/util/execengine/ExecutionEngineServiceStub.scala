@@ -47,7 +47,10 @@ object ExecutionEngineServiceStub {
           Seq[Deploy],
           ProtocolVersion
       ) => F[Either[Throwable, Seq[DeployResult]]],
-      commitFunc: (ByteString, Seq[TransformEntry]) => F[Either[Throwable, ByteString]],
+      commitFunc: (
+          ByteString,
+          Seq[TransformEntry]
+      ) => F[Either[Throwable, ExecutionEngineService.CommitResult]],
       queryFunc: (ByteString, Key, Seq[String]) => F[Either[Throwable, Value]],
       computeBondsFunc: ByteString => F[Seq[Bond]],
       setBondsFunc: Bonds => F[Unit],
@@ -69,7 +72,7 @@ object ExecutionEngineServiceStub {
     override def commit(
         prestate: ByteString,
         effects: Seq[TransformEntry]
-    ): F[Either[Throwable, ByteString]] = commitFunc(prestate, effects)
+    ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = commitFunc(prestate, effects)
     override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
       computeBondsFunc(hash)
     override def setBonds(bonds: Map[PublicKey, Long]): F[Unit] =
@@ -87,7 +90,11 @@ object ExecutionEngineServiceStub {
     mock[F](
       (_, _) => GenesisResult().asRight[Throwable].pure[F],
       (_, _, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
-      (_, _) => ByteString.EMPTY.asRight[Throwable].pure[F],
+      (_, _) =>
+        ExecutionEngineService
+          .CommitResult(ByteString.EMPTY, Seq.empty[Bond])
+          .asRight[Throwable]
+          .pure[F],
       (_, _, _) =>
         Applicative[F]
           .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented"))),
