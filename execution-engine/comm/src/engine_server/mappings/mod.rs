@@ -902,22 +902,14 @@ fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::Depl
     deploy_result
 }
 
-// TODO: Split into atomic functions and improve errors.
 pub fn to_domain_validators(bond: &ipc::Bond) -> Result<(PublicKey, U512), String> {
-    let address = bond.get_validator_public_key();
-    if address.len() != 32 {
-        let err_msg = "Validator public key has to be exactly 32 bytes long".to_string();
-        Err(err_msg)
-    } else {
-        let mut buff = [0u8; 32];
-        buff.copy_from_slice(&address);
-        let pk = PublicKey::new(buff);
-        match bond.get_stake().try_into() {
-            Ok(bond) => Ok((pk, bond)),
-            Err(err) => {
-                let err_msg = format!("{:?}", err);
-                Err(err_msg)
-            }
+    let pk = PublicKey::from_slice(bond.get_validator_public_key())
+        .ok_or("Public key has to be exactly 32 bytes long.")?;
+    match bond.get_stake().try_into() {
+        Ok(bond) => Ok((pk, bond)),
+        Err(err) => {
+            let err_msg = format!("{:?}", err);
+            Err(err_msg)
         }
     }
 }
