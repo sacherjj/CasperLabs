@@ -185,7 +185,7 @@ mod tests {
     const KEY1: [u8; 32] = [1; 32];
     const KEY2: [u8; 32] = [2; 32];
 
-    fn new_stakes(stakes: &[([u8; 32], usize)]) -> Stakes {
+    fn new_stakes(stakes: &[([u8; 32], u64)]) -> Stakes {
         Stakes(
             stakes
                 .iter()
@@ -224,11 +224,24 @@ mod tests {
     }
 
     #[test]
-    fn test_unbond_too_much() {
-        let mut stakes = new_stakes(&[(KEY1, 50)]);
+    fn test_unbond_too_much_rel() {
+        let amount: u64 = 2000;
+        let mut stakes = new_stakes(&[(KEY1, amount)]);
         assert_eq!(
             Err(Error::UnbondTooLarge),
-            stakes.unbond(&PublicKey::new(KEY1), Some(U512::from(6)))
+            stakes.unbond(
+                &PublicKey::new(KEY1),
+                Some(U512::from(crate::MAX_REL_DECREASE * amount / 1_000_000 + 1))
+            ),
+            "Successfully unbonded more than the maximum amount."
+        );
+        assert_eq!(
+            Ok(U512::from(crate::MAX_REL_DECREASE * amount / 1_000_000)),
+            stakes.unbond(
+                &PublicKey::new(KEY1),
+                Some(U512::from(crate::MAX_REL_DECREASE * amount / 1_000_000))
+            ),
+            "Failed to unbond the maximum amount."
         );
     }
 }
