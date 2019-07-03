@@ -16,6 +16,7 @@ pub enum Error {
     BondTransferFailed,
     UnbondTransferFailed,
     // System errors
+    TimeWentBackwards,
     // TODO: Put these in their own enum, and wrap them separately in `BondingError` and
     // `UnbondingError`.
     QueueNotStoredAsByteArray,
@@ -40,11 +41,12 @@ impl Into<u32> for Error {
             Error::BondTransferFailed => 7,
             Error::UnbondTransferFailed => 8,
             // System errors
-            Error::QueueNotStoredAsByteArray => 0x100,
-            Error::QueueDeserializationFailed => 0x100 + 1,
-            Error::QueueDeserializationExtraBytes => 0x100 + 2,
-            Error::StakesKeyDeserializationFailed => 0x200,
-            Error::StakesDeserializationFailed => 0x200 + 1,
+            Error::TimeWentBackwards => 0x100,
+            Error::QueueNotStoredAsByteArray => 0x200,
+            Error::QueueDeserializationFailed => 0x200 + 1,
+            Error::QueueDeserializationExtraBytes => 0x200 + 2,
+            Error::StakesKeyDeserializationFailed => 0x300,
+            Error::StakesDeserializationFailed => 0x300 + 1,
         }
     }
 }

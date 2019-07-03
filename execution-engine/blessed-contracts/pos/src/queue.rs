@@ -13,7 +13,7 @@ const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
 
 /// A pending entry in the bonding or unbonding queue.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct QueueEntry {
     /// The validator who is bonding or unbonding.
     pub validator: PublicKey,
@@ -107,6 +107,11 @@ impl Queue {
         if self.0.iter().any(|entry| entry.validator == validator) {
             return Err(Error::MultipleRequests);
         }
+        if let Some(entry) = self.0.last() {
+            if entry.timestamp > timestamp {
+                return Err(Error::TimeWentBackwards);
+            }
+        }
         self.0.push(QueueEntry::new(validator, amount, timestamp));
         Ok(())
     }
@@ -165,5 +170,58 @@ impl ToBytes for Queue {
             bytes.extend(entry.to_bytes()?);
         }
         Ok(bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use cl_std::value::account::{BlockTime, PublicKey};
+    use cl_std::value::U512;
+
+    use crate::error::Error;
+    use crate::queue::{Queue, QueueEntry};
+
+    const KEY1: [u8; 32] = [1; 32];
+    const KEY2: [u8; 32] = [2; 32];
+    const KEY3: [u8; 32] = [3; 32];
+
+    #[test]
+    fn test_push() {
+        let val1 = PublicKey::new(KEY1);
+        let val2 = PublicKey::new(KEY2);
+        let val3 = PublicKey::new(KEY3);
+        let mut queue: Queue = Default::default();
+        assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime(100)));
+        assert_eq!(Ok(()), queue.push(val2, U512::from(5), BlockTime(101)));
+        assert_eq!(
+            Err(Error::MultipleRequests),
+            queue.push(val1, U512::from(5), BlockTime(102))
+        );
+        assert_eq!(
+            Err(Error::TimeWentBackwards),
+            queue.push(val3, U512::from(5), BlockTime(100))
+        );
+    }
+
+    #[test]
+    fn test_pop_due() {
+        let val1 = PublicKey::new(KEY1);
+        let val2 = PublicKey::new(KEY2);
+        let val3 = PublicKey::new(KEY3);
+        let mut queue: Queue = Default::default();
+        assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime(100)));
+        assert_eq!(Ok(()), queue.push(val2, U512::from(6), BlockTime(101)));
+        assert_eq!(Ok(()), queue.push(val3, U512::from(7), BlockTime(102)));
+        assert_eq!(
+            vec![
+                QueueEntry::new(val1, U512::from(5), BlockTime(100)),
+                QueueEntry::new(val2, U512::from(6), BlockTime(101)),
+            ],
+            queue.pop_due(BlockTime(101))
+        );
+        assert_eq!(
+            vec![QueueEntry::new(val3, U512::from(7), BlockTime(102)),],
+            queue.pop_due(BlockTime(105))
+        );
     }
 }

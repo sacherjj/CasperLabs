@@ -1,6 +1,7 @@
 #![no_std]
 #![feature(alloc)]
 
+#[cfg_attr(test, macro_use)]
 extern crate alloc;
 
 mod error;
