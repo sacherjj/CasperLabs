@@ -1,4 +1,4 @@
-# CasperLabs User Interface
+# CasperLabs Explorer User Interface
 
 The purpose of the web UI is help users interact with the CasperLabs blockchain:
 * Sign up to participate in devnet

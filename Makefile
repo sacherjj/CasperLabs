@@ -13,7 +13,7 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v target \
 	| grep -v -e ipc.*\.rs)
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
-TS_SRC := $(shell find explorer/ui/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "package.json" \))
+TS_SRC := $(shell find explorer/ui/src explorer/server/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "package.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
@@ -38,6 +38,7 @@ publish: \
 clean: cargo/clean
 	sbt clean
 	cd explorer/ui && rm -rf node_modules build
+	cd explorer/server && rm -rf node_modules dist
 	rm -rf .make
 
 
@@ -197,6 +198,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 .make/npm-native/explorer: $(TS_SRC)
 	# CI=false so on Drone it won't fail on warnings (currently about href).
 	cd explorer/ui && npm install && CI=false npm run build
+	cd explorer/server && npm install && npm run build
 	mkdir -p $(dir $@) && touch $@
 
 .make/npm-docker/explorer: $(TS_SRC)
@@ -212,8 +214,8 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		chown -R builder /home/builder ; \
 		sudo -u builder bash -c '\
 			export HOME=/home/builder ; \
-			cd /CasperLabs/explorer/ui ; \
-			npm install && npm run build ; \
+			cd /CasperLabs/explorer/ui ; npm install && npm run build ; cd - ; \
+			cd /CasperLabs/explorer/server ; npm install && npm run build ; cd - ; \
 		'"
 	mkdir -p $(dir $@) && touch $@
 
