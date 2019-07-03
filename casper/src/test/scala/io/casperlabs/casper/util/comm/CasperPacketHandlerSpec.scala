@@ -79,7 +79,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
         genesisAccountPublicKeyPath = None,
         initialTokens = 0L,
         mintCodePath = None,
-        posCodePath = None
+        posCodePath = None,
+        bondsPath = None
       )
     )
     val local: Node = peerNode("src", 40400)

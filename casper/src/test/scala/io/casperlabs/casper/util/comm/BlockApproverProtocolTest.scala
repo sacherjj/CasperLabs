@@ -117,7 +117,8 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
         genesisAccountPublicKeyPath = None,
         initialTokens = 0L,
         mintCodePath = None,
-        posCodePath = None
+        posCodePath = None,
+        bondsPath = None
       )
     ) -> node
   }

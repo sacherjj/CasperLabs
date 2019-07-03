@@ -46,6 +46,7 @@ object Genesis {
       initialTokens: BigInt,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
+      bondsFile: Option[Path],
       mintCodePath: Option[Path],
       posCodePath: Option[Path]
   ): F[List[Deploy]] = {
@@ -64,6 +65,17 @@ object Genesis {
       EitherT.fromOptionF[F, String, A](a, ifNone)
 
     val maybeDeploy = for {
+      bondsMap <- read(
+                   bondsFile.fold(none[Map[PublicKey, Long]].pure[F])(getBonds[F](_).map(Some(_))),
+                   "Bonds file is missing."
+                 )
+      genesisValidators = bondsMap.map {
+        case (publicKey, stake) =>
+          ipc
+            .Bond()
+            .withValidatorPublicKey(ByteString.copyFrom(publicKey))
+            .withStake(state.BigInt(stake.toString, 512))
+      }.toSeq
       accountPublicKey <- read(
                            readAccountPublicKey[F](accountPublicKeyPath),
                            "Genesis account key is missing."
@@ -84,6 +96,7 @@ object Genesis {
         .withMintCode(mintCode)
         .withProofOfStakeCode(posCode)
         .withProtocolVersion(state.ProtocolVersion(protocolVersion))
+        .withGenesisValidators(genesisValidators)
 
       deploy = ProtoUtil.basicDeploy(
         timestamp = 0L,
@@ -221,7 +234,8 @@ object Genesis {
                            posParams = ProofOfStakeParams(minimumBond, maximumBond, validators),
                            wallets = wallets,
                            mintCodePath = mintCodePath,
-                           posCodePath = posCodePath
+                           posCodePath = posCodePath,
+                           bondsFile = Some(bondsPath)
                          )
       withContr <- withContracts(
                     initial,

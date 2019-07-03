@@ -88,6 +88,7 @@ object BlockApproverProtocol {
       requiredSigs: Int,
       genesisAccountPublicKeyPath: Option[Path],
       initialTokens: BigInt,
+      bondsPath: Option[Path],
       mintCodePath: Option[Path],
       posCodePath: Option[Path]
   )
@@ -99,6 +100,7 @@ object BlockApproverProtocol {
         conf.requiredSigs,
         conf.genesisAccountPublicKeyPath,
         conf.initialTokens,
+        Some(conf.bondsFile),
         conf.mintCodePath,
         conf.posCodePath
       )
@@ -152,6 +154,7 @@ object BlockApproverProtocol {
                                         conf.initialTokens,
                                         posParams,
                                         wallets,
+                                        conf.bondsPath,
                                         conf.mintCodePath,
                                         conf.posCodePath
                                       )
