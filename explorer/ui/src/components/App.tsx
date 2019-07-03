@@ -202,11 +202,11 @@ class _Navigation extends React.Component<
             <li className="nav-item">
               {this.props.auth.user ? (
                 <a className="nav-link" onClick={_ => this.props.auth.logout()}>
-                  <i className="fa fa-fw fa-sign-out-alt"></i>Sign out
+                  <i className="fa fa-fw fa-sign-out-alt"></i>Sign Out
                 </a>
               ) : (
                 <a className="nav-link" onClick={_ => this.props.auth.login()}>
-                  <i className="fa fa-fw fa-sign-in-alt"></i>Sign in
+                  <i className="fa fa-fw fa-sign-in-alt"></i>Sign In
                 </a>
               )}
             </li>

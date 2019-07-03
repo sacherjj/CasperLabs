@@ -12,7 +12,7 @@ export const Loading = () => (
 
 export const RefreshButton = (props: { refresh: () => void }) => (
   <a onClick={_ => props.refresh()} title="Refresh" className="icon-button">
-    <i className="fa fa-fw fa-sync-alt" />
+    <i className="fa fa-fw fa-redo" />
   </a>
 );
 
