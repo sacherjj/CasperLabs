@@ -124,7 +124,8 @@ object DeployRuntime {
       sessionCode: File,
       paymentCode: File,
       maybePublicKeyFile: Option[File],
-      maybePrivateKeyFile: Option[File]
+      maybePrivateKeyFile: Option[File],
+      gasPrice: Long
   ): F[Unit] = {
     def readFile(file: File): F[ByteString] =
       Sync[F].fromTry(
@@ -170,6 +171,7 @@ object DeployRuntime {
             .withTimestamp(System.currentTimeMillis)
             .withAccountPublicKey(accountPublicKey)
             .withNonce(nonce)
+            .withGasPrice(gasPrice)
         )
         .withBody(
           consensus.Deploy

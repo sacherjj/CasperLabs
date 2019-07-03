@@ -428,7 +428,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
       TestFixture.fromGenesis(
         relayFactor = 3,
         gossipService = service
-      ) { approver =>
+      ) { _ =>
         for {
           _ <- Task.sleep(100.millis)
           _ = service.received shouldBe (1 + 3)
@@ -447,7 +447,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
           r0 <- approver.awaitApproval.timeout(Duration.Zero).attempt
           _  = r0.isLeft shouldBe true
           _  <- approver.addApproval(genesis.blockHash, correctApproval)
-          r1 <- approver.awaitApproval
+          _  <- approver.awaitApproval
         } yield ()
       }
     }

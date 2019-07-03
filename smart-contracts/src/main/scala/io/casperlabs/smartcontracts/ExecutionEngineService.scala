@@ -42,7 +42,6 @@ import io.casperlabs.catscontrib.MonadThrowable
 
 class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
     addr: Path,
-    maxMessageSize: Int,
     initialBonds: Map[Array[Byte], Long],
     stub: Stub
 ) extends ExecutionEngineService[F] {

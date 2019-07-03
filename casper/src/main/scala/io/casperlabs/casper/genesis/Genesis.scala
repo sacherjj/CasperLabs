@@ -9,6 +9,7 @@ import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad, MonadError}
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.casper.consensus._
@@ -39,6 +40,7 @@ object Genesis {
   val protocolVersion = 1L
 
   /** Construct deploys that will set up the system contracts. */
+  @silent("is never used")
   def defaultBlessedTerms[F[_]: MonadThrowable: FilesAPI: Log](
       accountPublicKeyPath: Option[Path],
       initialTokens: BigInt,
@@ -245,7 +247,7 @@ object Genesis {
       case Some(path) =>
         FilesAPI[F]
           .readString(path)
-          .map(Ed25519.tryParsePublicKey(_))
+          .map(Ed25519.tryParsePublicKey)
           .flatMap {
             case None =>
               MonadThrowable[F].raiseError(

@@ -133,6 +133,7 @@ object ExecEngineUtil {
                 (next :: acc, totalOps + ops)
               else
                 unchanged
+            case _ => ???
           }
 
         result
@@ -178,13 +179,11 @@ object ExecEngineUtil {
     *
     * @param block Block to run.
     * @param prestate prestate hash of the GlobalState on top of which to run deploys.
-    * @param dag Representation of the DAG.
     * @return Effects of running deploys from the block.
     */
   def effectsForBlock[F[_]: MonadThrowable: BlockStore: ExecutionEngineService](
       block: Block,
-      prestate: StateHash,
-      dag: BlockDagRepresentation[F]
+      prestate: StateHash
   ): F[Seq[TransformEntry]] = {
     val deploys         = ProtoUtil.deploys(block).flatMap(_.deploy)
     val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(block)

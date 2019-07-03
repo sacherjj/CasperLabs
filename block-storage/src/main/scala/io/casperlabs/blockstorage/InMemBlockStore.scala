@@ -33,7 +33,7 @@ class InMemBlockStore[F[_]] private (
   ): F[Unit] =
     refF
       .update(
-        _ + (blockHash -> (blockMsgWithTransform, blockMsgWithTransform.toBlockSummary))
+        _.updated(blockHash, (blockMsgWithTransform, blockMsgWithTransform.toBlockSummary))
       ) *>
       reverseIdxRefF.update { m =>
         blockMsgWithTransform.getBlockMessage.getBody.deploys.foldLeft(m) { (m, d) =>

@@ -306,7 +306,7 @@ object HashSetCasperTestNode {
 
       // Validate that account's nonces increment monotonically by 1.
       // Assumes that any account address already exists in the GlobalState with nonce = 0.
-      private def validateNonce(prestate: ByteString, deploy: Deploy): Int = synchronized {
+      private def validateNonce(deploy: Deploy): Int = synchronized {
         if (!validateNonces) {
           0
         } else {
@@ -333,7 +333,7 @@ object HashSetCasperTestNode {
         //but it doesn't really; it just returns the same result no matter what.
         deploys
           .map { d =>
-            validateNonce(prestate, d) match {
+            validateNonce(d) match {
               case 0 =>
                 DeployResult(
                   ExecutionResult(

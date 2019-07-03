@@ -577,7 +577,7 @@ fn should_create_purse() {
     let genesis_account_key = Key::Account(GENESIS_ADDR);
     let account_key = Key::Account(ACCOUNT_1_ADDR);
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state, true);
 
     // Run genesis & set up an account
 

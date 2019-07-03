@@ -40,14 +40,23 @@ object Main {
       case ShowDeploys(hash) => DeployRuntime.showDeploys(hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
 
-      case Deploy(from, nonce, sessionCode, paymentCode, maybePublicKey, maybePrivateKey) =>
+      case Deploy(
+          from,
+          nonce,
+          sessionCode,
+          paymentCode,
+          maybePublicKey,
+          maybePrivateKey,
+          gasPrice
+          ) =>
         DeployRuntime.deployFileProgram(
           from,
           nonce,
           sessionCode,
           paymentCode,
           maybePublicKey,
-          maybePrivateKey
+          maybePrivateKey,
+          gasPrice
         )
 
       case Propose =>

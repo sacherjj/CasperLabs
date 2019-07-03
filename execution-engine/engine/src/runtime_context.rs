@@ -35,8 +35,6 @@ pub struct RuntimeContext<'a, R> {
     // Original account for read only tasks taken before execution
     account: &'a Account,
     args: Vec<Vec<u8>>,
-    // Key of the caller.
-    caller_key: Option<PublicKey>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
@@ -60,7 +58,6 @@ where
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
         account: &'a Account,
-        caller_key: Option<PublicKey>,
         base_key: Key,
         blocktime: BlockTime,
         gas_limit: u64,
@@ -75,7 +72,6 @@ where
             uref_lookup,
             known_urefs,
             args,
-            caller_key,
             account,
             blocktime,
             base_key,
@@ -160,8 +156,8 @@ where
         }
     }
 
-    pub fn get_caller(&self) -> Option<PublicKey> {
-        self.caller_key
+    pub fn get_caller(&self) -> PublicKey {
+        self.account.pub_key().into()
     }
 
     pub fn get_blocktime(&self) -> BlockTime {
@@ -232,12 +228,9 @@ where
     /// then all function addresses generated within one deploy would have been the same.
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
-        {
-            let account = self.account();
-            pre_hash_bytes.extend_from_slice(&account.pub_key());
-            pre_hash_bytes.append(&mut account.nonce().to_bytes()?);
-            pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
-        }
+        pre_hash_bytes.extend_from_slice(&self.account().pub_key());
+        pre_hash_bytes.append(&mut self.account().nonce().to_bytes()?);
+        pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
 
         self.inc_fn_store_id();
 
@@ -431,6 +424,19 @@ where
     }
 
     pub fn validate_uref(&self, uref: &URef) -> Result<(), Error> {
+        if self.account.purse_id().value().addr() == uref.addr() {
+            // If passed uref matches account's purse then we have to also validate their access
+            // rights.
+            if let Some(rights) = self.account.purse_id().value().access_rights() {
+                if let Some(uref_rights) = uref.access_rights() {
+                    // Access rights of the passed uref, and the account's purse_id should match
+                    if rights & uref_rights == uref_rights {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
         if let Some(new_rights) = uref.access_rights() {
             self.known_urefs
                 .get(&uref.addr()) // Check if the `key` is known
@@ -684,13 +690,13 @@ mod tests {
         TrackingCopy::new(reader)
     }
 
-    fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
+    fn mock_account_with_purse_id(addr: [u8; 32], purse_id: [u8; 32]) -> (Key, value::Account) {
         let associated_keys = AssociatedKeys::new(PublicKey::new(addr), Weight::new(1));
         let account = value::account::Account::new(
             addr,
             0,
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            PurseId::new(URef::new(purse_id, AccessRights::READ_ADD_WRITE)),
             associated_keys,
             Default::default(),
             AccountActivity::new(BlockTime(0), BlockTime(100)),
@@ -698,6 +704,10 @@ mod tests {
         let key = Key::Account(addr);
 
         (key, account)
+    }
+
+    fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
+        mock_account_with_purse_id(addr, [0; 32])
     }
 
     // create random account key.
@@ -741,7 +751,6 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
-            None,
             base_key,
             BlockTime(0),
             0,
@@ -1037,7 +1046,6 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
-            None,
             contract_key,
             BlockTime(0),
             0,
@@ -1090,7 +1098,6 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
-            None,
             other_contract_key,
             BlockTime(0),
             0,
@@ -1451,5 +1458,36 @@ mod tests {
             _ => panic!("Invalid transform operation found"),
         };
         assert!(!account.urefs_lookup().contains_key(&uref_name));
+    }
+
+    #[test]
+    fn validate_valid_purse_id_of_an_account() {
+        // Tests that URef which matches a purse_id of a given context gets validated
+        let mock_purse_id = [42u8; 32];
+        let known_urefs = HashMap::new();
+        let base_acc_addr = [0u8; 32];
+        let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
+        let chacha_rng = create_rng(base_acc_addr, 0);
+        let mut uref_map = BTreeMap::new();
+        let runtime_context =
+            mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
+
+        // URef that has the same id as purse_id of an account gets validated successfully.
+        let purse_id = URef::new(mock_purse_id, AccessRights::READ_ADD_WRITE);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+
+        // URef that has the same id as purse_id of an account gets validated successfully
+        // as the passed purse has only subset of the privileges
+        let purse_id = URef::new(mock_purse_id, AccessRights::READ);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+        let purse_id = URef::new(mock_purse_id, AccessRights::ADD);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+        let purse_id = URef::new(mock_purse_id, AccessRights::WRITE);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+
+        // Purse ID that doesn't match account's purse_id should fail as it's also not in known
+        // urefs.
+        let purse_id = URef::new([53; 32], AccessRights::READ_ADD_WRITE);
+        assert!(runtime_context.validate_uref(&purse_id).is_err());
     }
 }

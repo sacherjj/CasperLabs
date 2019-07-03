@@ -5,6 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad}
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.Validator
@@ -37,6 +38,7 @@ import monix.execution.Scheduler
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
+@silent()
 object CasperPacketHandler extends CasperPacketHandlerInstances {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -55,7 +57,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI](
       conf: CasperConf,
       delay: FiniteDuration,
-      executionEngineService: ExecutionEngineService[F],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] = {
     val approvedBlockWithTransformsOpt = for {
@@ -112,7 +113,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       _ <- Sync[F].delay {
             implicit val ph: PacketHandler[F] =
               PacketHandler.pf[F](casperPacketHandler.handle)
-            val rb = CommUtil.requestApprovedBlock[F](delay)
+            val rb = CommUtil.requestApprovedBlock[F]()
             toTask(rb).forkAndForget.runToFuture
             ().pure[F]
           }
@@ -650,8 +651,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    prestate <- ExecEngineUtil.computePrestate[F](merged)
                    transforms <- ExecEngineUtil.effectsForBlock[F](
                                   genesis,
-                                  prestate,
-                                  dag
+                                  prestate
                                 )
                    _ <- insertIntoBlockAndDagStore[F](genesis, transforms, b)
                    _ <- LastApprovedBlock[F].set(ApprovedBlockWithTransforms(b, transforms))

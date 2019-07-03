@@ -455,7 +455,8 @@ package object gossiping {
                    for {
                      genesis <- Resource.liftF {
                                  for {
-                                   bonds   <- readBondsFile
+                                   //TODO: Use bonds
+                                   _       <- readBondsFile
                                    _       <- Log[F].info("Constructing Genesis candidate...")
                                    genesis <- Genesis[F](conf.casper).map(_.getBlockMessage)
                                    // Store it so others can pull it from the bootstrap node.

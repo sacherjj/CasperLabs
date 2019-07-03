@@ -16,6 +16,9 @@ SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sb
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
+$(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test; else echo DRONE-${DRONE_BUILD_NUMBER}; fi))
+
+
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
 # https://stackoverflow.com/questions/5426934/why-this-makefile-removes-my-goal
@@ -41,19 +44,22 @@ docker-build-all: \
 	docker-build/client \
 	docker-build/execution-engine \
 	docker-build/integration-testing \
-	docker-build/key-generator
+	docker-build/key-generator \
+	docker-build/explorer
 
 docker-push-all: \
 	docker-push/node \
 	docker-push/client \
 	docker-push/execution-engine \
-	docker-push/key-generator
+	docker-push/key-generator \
+	docker-push/explorer
 
 docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
 docker-build/client: .make/docker-build/universal/client .make/docker-build/test/client
 docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
 docker-build/key-generator: .make/docker-build/key-generator
+docker-build/explorer: .make/docker-build/explorer
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -117,7 +123,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		integration-testing/Dockerfile
 	$(eval IT_PATH = integration-testing)
 	cp -r protobuf $(IT_PATH)/
-	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
+	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_TEST_TAG) $(IT_PATH)/
 	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@
 
@@ -142,26 +148,26 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	# For live tests we should mount them from a real source.
 	mkdir -p hack/docker/.genesis/blessed-contracts
 	tar -xvzf execution-engine/target/blessed-contracts.tar.gz -C hack/docker/.genesis/blessed-contracts
-	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test hack/docker
+	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG) hack/docker
 	rm -rf hack/docker/.genesis
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test version for the execution engine as well just so we can swith version easily.
 .make/docker-build/test/execution-engine: \
 		.make/docker-build/execution-engine
-	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:test
+	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test tagged version of client so all tags exist for integration-testing.
 .make/docker-build/test/client: \
 		.make/docker-build/universal/client
-	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:test
+	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make an image to run Python tests under integration-testing.
 .make/docker-build/test/integration-testing: \
 		.make/docker-build/integration-testing
-	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:test
+	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make an image for keys generation
@@ -169,6 +175,17 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	hack/key-management/Dockerfile \
 	hack/key-management/gen-keys.sh
 	docker build -f hack/key-management/Dockerfile -t $(DOCKER_USERNAME)/key-generator:$(DOCKER_LATEST_TAG) hack/key-management
+	mkdir -p $(dir $@) && touch $@
+
+# Make an image to host the Casper Explorer UI and the faucet microservice.
+.make/docker-build/explorer: \
+		explorer/Dockerfile \
+		$(shell find explorer/ui/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" \)) \
+		explorer/ui/package.json
+	cd explorer/ui && \
+	npm install && \
+	npm run build
+	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
