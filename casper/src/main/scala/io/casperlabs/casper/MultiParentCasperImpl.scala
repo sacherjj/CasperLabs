@@ -346,13 +346,13 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
         //which are bonded validators in the chosen parent. This is safe because
         //any latest message not from a bonded validator will not change the
         //final fork-choice.
-        latestMessages <- dag.latestMessages
-        justifications = toJustification(latestMessages)
-          .filter(j => bondedValidators.contains(j.validatorPublicKey))
-        maxBlockNumber = parents.foldLeft(-1L) {
-          case (acc, b) => math.max(acc, blockNumber(b))
+        latestMessages   <- dag.latestMessages
+        bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
+        justifications   = toJustification(bondedLatestMsgs)
+        maxRank = bondedLatestMsgs.values.foldLeft(-1L) {
+          case (acc, b) => math.max(acc, b.rank)
         }
-        number          = maxBlockNumber + 1
+        number          = maxRank + 1
         protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(number)
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
                      createProposal(
@@ -501,9 +501,14 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
         // put them back into the buffer explicitly.
         invalidNonceDeploys,
         deploysToDiscard,
-        number,
         protocolVersion
-      ) = result
+      )                 = result
+      dag               <- blockDag
+      justificationMsgs <- justifications.toList.traverse(j => dag.lookup(j.latestBlockHash))
+      maxRank = justificationMsgs.flatten.foldLeft(-1L) {
+        case (acc, b) => math.max(b.rank, acc)
+      }
+      number = maxRank + 1
       status = if (deploysForBlock.isEmpty) {
         CreateBlockStatus.noNewDeploys
       } else {

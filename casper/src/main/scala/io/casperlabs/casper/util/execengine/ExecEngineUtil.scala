@@ -25,7 +25,6 @@ case class DeploysCheckpoint(
     deploysForBlock: Seq[Block.ProcessedDeploy],
     invalidNonceDeploys: Seq[InvalidNonceDeploy],
     deploysToDiscard: Seq[PreconditionFailure],
-    blockNumber: Long,
     protocolVersion: state.ProtocolVersion
 )
 
@@ -68,10 +67,6 @@ object ExecEngineUtil {
       deployEffects                 = findCommutingEffects(processedDeployResults)
       (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
       postStateHash                 <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
-      maxBlockNumber = merged.parents.foldl(-1L) {
-        case (acc, b) => math.max(acc, blockNumber(b))
-      }
-      number = maxBlockNumber + 1
       //TODO: Remove this logging at some point
       msgBody = transforms.flatten
         .map(t => {
@@ -81,14 +76,13 @@ object ExecEngineUtil {
         })
         .mkString("\n")
       _ <- Log[F]
-            .info(s"Block #$number created with effects:\n$msgBody")
+            .info(s"Block created with effects:\n$msgBody")
     } yield DeploysCheckpoint(
       preStateHash,
       postStateHash,
       deploysForBlock,
       invalidDeploys.invalidNonceDeploys,
       invalidDeploys.preconditionFailures,
-      number,
       protocolVersion
     )
 
