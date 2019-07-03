@@ -2,15 +2,19 @@
 
 PYTEST_ARGS=""
 
-# We only want to limit maxfail in CI
 # $TAG_NAME should have value of "DRONE-####" from docker_run_tests.sh in CI
 if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "test" ]]; then
+    # We only want to limit maxfail in CI
     PYTEST_ARGS="--maxfail=3"
+else
+    # We want to compile contracts if run locally
+    ./contracts/build_contracts.sh
 fi
 
 if [[ "$TEST_RUN_ARGS" == "" ]]; then
     TEST_RUN_ARGS=$@
 fi
+
 
 ls -l resources/*.wasm
 
