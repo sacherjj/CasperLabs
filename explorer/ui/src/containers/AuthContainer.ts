@@ -121,7 +121,7 @@ export class AuthContainer {
   }
 
   async deleteAccount(name: String) {
-    this.accounts = this.accounts!.filter(x => x.name != name);
+    this.accounts = this.accounts!.filter(x => x.name !== name);
     await this.errors.capture(this.saveAccounts());
   }
 

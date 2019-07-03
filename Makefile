@@ -13,6 +13,7 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v target \
 	| grep -v -e ipc.*\.rs)
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
+TS_SRC := $(shell find explorer/ui/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "package.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
@@ -181,13 +182,41 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Make an image to host the Casper Explorer UI and the faucet microservice.
 .make/docker-build/explorer: \
 		explorer/Dockerfile \
-		$(shell find explorer/ui/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" \)) \
-		explorer/ui/package.json
-	cd explorer/ui && \
-	npm install && \
-	npm run build
+		$(TS_SRC) \
+		.make/npm/explorer
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
+
+.make/npm/explorer:
+	if [ -z "${DRONE_BRANCH}" ]; then \
+		$(MAKE) .make/npm-docker/explorer ; \
+	else \
+		$(MAKE) .make/npm-native/explorer ; \
+	fi
+
+.make/npm-native/explorer: $(TS_SRC)
+	# CI=false so on Drone it won't fail on warnings (currently about href).
+	cd explorer/ui && npm install && CI=false npm run build
+	mkdir -p $(dir $@) && touch $@
+
+.make/npm-docker/explorer: $(TS_SRC)
+	$(eval USERID = $(shell id -u))
+	docker pull $(DOCKER_USERNAME)/buildenv:latest
+	docker run --rm --entrypoint sh \
+		-v ${PWD}:/CasperLabs \
+		$(DOCKER_USERNAME)/buildenv:latest \
+		-c "\
+		apt-get install sudo ; \
+		useradd -u $(USERID) -m builder ; \
+		cp -r /root/. /home/builder/ ; \
+		chown -R builder /home/builder ; \
+		sudo -u builder bash -c '\
+			export HOME=/home/builder ; \
+			cd /CasperLabs/explorer/ui ; \
+			npm install && npm run build ; \
+		'"
+	mkdir -p $(dir $@) && touch $@
+
 
 # Refresh Scala build artifacts if source was changed.
 .make/sbt-stage/%: $(SCALA_SRC)
