@@ -119,7 +119,7 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec
 }
 
 #[no_mangle]
-pub extern "C" fn pos_ext() {
+pub extern "C" fn call() {
     let method_name: String = contract_api::get_arg(0);
     let timestamp = contract_api::get_blocktime();
     let pos_purse = match contract_api::get_uref(PURSE_KEY) {
@@ -193,9 +193,4 @@ pub extern "C" fn pos_ext() {
         }
         _ => {}
     }
-}
-
-#[no_mangle]
-pub extern "C" fn call() {
-    let _hash = contract_api::store_function("pos_ext", Default::default());
 }
