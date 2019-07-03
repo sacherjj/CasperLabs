@@ -141,6 +141,7 @@ pub fn create_exec_request(
     address: [u8; 32],
     contract_file_name: &str,
     pre_state_hash: &[u8],
+    nonce: u64,
 ) -> ExecRequest {
     let bytes_to_deploy = read_wasm_file_bytes(contract_file_name);
 
@@ -148,7 +149,7 @@ pub fn create_exec_request(
     deploy.set_address(address.to_vec());
     deploy.set_gas_limit(1_000_000_000);
     deploy.set_gas_price(1);
-    deploy.set_nonce(1);
+    deploy.set_nonce(nonce);
     let mut deploy_code = DeployCode::new();
     deploy_code.set_code(bytes_to_deploy);
     deploy.set_session(deploy_code);
@@ -299,7 +300,7 @@ impl Default for WasmTestBuilder {
 impl WasmTestBuilder {
     pub fn new() -> WasmTestBuilder {
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
-        let engine_state = EngineState::new(global_state, false);
+        let engine_state = EngineState::new(global_state);
         WasmTestBuilder {
             engine_state,
             exec_responses: Vec::new(),
@@ -342,13 +343,14 @@ impl WasmTestBuilder {
 
     /// Runs a contract and after that runs actual WASM contract and expects
     /// transformations to happen at the end of execution.
-    pub fn exec(&mut self, address: [u8; 32], wasm_file: &str) -> &mut WasmTestBuilder {
+    pub fn exec(&mut self, address: [u8; 32], wasm_file: &str, nonce: u64) -> &mut WasmTestBuilder {
         let exec_request = create_exec_request(
             address,
             &wasm_file,
             self.post_state_hash
                 .as_ref()
                 .expect("Should have post state hash"),
+            nonce,
         );
 
         let exec_response = self

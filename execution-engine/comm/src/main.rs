@@ -73,8 +73,6 @@ const ARG_SOCKET_EXPECT: &str = "socket required";
 const REMOVING_SOCKET_FILE_MESSAGE: &str = "removing old socket file";
 const REMOVING_SOCKET_FILE_EXPECT: &str = "failed to remove old socket file";
 
-const VALIDATE_NONCE: &str = "validate-nonce";
-
 // loglevel
 const ARG_LOG_LEVEL: &str = "loglevel";
 const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
@@ -114,9 +112,7 @@ fn main() {
 
     let map_size = get_map_size(matches);
 
-    let nonce_check = get_nonce_check(matches);
-
-    let _server = get_grpc_server(&socket, data_dir, map_size, nonce_check);
+    let _server = get_grpc_server(&socket, data_dir, map_size);
 
     log_listening_message(&socket);
 
@@ -184,7 +180,6 @@ fn get_args() -> ArgMatches<'static> {
                 .help(ARG_SOCKET_HELP)
                 .index(1),
         )
-        .arg(Arg::with_name(VALIDATE_NONCE).required(false))
         .get_matches()
 }
 
@@ -231,18 +226,9 @@ fn get_map_size(matches: &ArgMatches) -> usize {
     page_size * pages
 }
 
-fn get_nonce_check(matches: &ArgMatches) -> bool {
-    matches.is_present(VALIDATE_NONCE)
-}
-
 /// Builds and returns a gRPC server.
-fn get_grpc_server(
-    socket: &socket::Socket,
-    data_dir: PathBuf,
-    map_size: usize,
-    nonce_check: bool,
-) -> grpc::Server {
-    let engine_state = get_engine_state(data_dir, map_size, nonce_check);
+fn get_grpc_server(socket: &socket::Socket, data_dir: PathBuf, map_size: usize) -> grpc::Server {
+    let engine_state = get_engine_state(data_dir, map_size);
 
     engine_server::new(socket.as_str(), engine_state)
         .build()
@@ -250,11 +236,7 @@ fn get_grpc_server(
 }
 
 /// Builds and returns engine global state
-fn get_engine_state(
-    data_dir: PathBuf,
-    map_size: usize,
-    nonce_check: bool,
-) -> EngineState<LmdbGlobalState> {
+fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGlobalState> {
     let environment = {
         let ret = LmdbEnvironment::new(&data_dir, map_size).expect(LMDB_ENVIRONMENT_EXPECT);
         Arc::new(ret)
@@ -277,7 +259,7 @@ fn get_engine_state(
         .expect(LMDB_GLOBAL_STATE_EXPECT)
     };
 
-    EngineState::new(global_state, nonce_check)
+    EngineState::new(global_state)
 }
 
 /// Builds and returns log_settings
