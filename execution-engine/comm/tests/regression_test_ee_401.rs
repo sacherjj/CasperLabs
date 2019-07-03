@@ -1,21 +1,20 @@
-extern crate grpc;
-
+extern crate casperlabs_engine_grpc_server;
 extern crate common;
 extern crate execution_engine;
+extern crate grpc;
 extern crate shared;
 extern crate storage;
 
-extern crate casperlabs_engine_grpc_server;
-
-#[allow(unused)]
-mod test_support;
+use std::collections::HashMap;
 
 use grpc::RequestOptions;
 
+use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use execution_engine::engine_state::EngineState;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
-use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+#[allow(unused)]
+mod test_support;
 
 const GENESIS_ADDR: [u8; 32] = [0u8; 32];
 
@@ -27,7 +26,7 @@ fn should_execute_contracts_which_provide_extra_urefs() {
 
     // run genesis
 
-    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR);
+    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)

@@ -7,12 +7,12 @@ use parking_lot::Mutex;
 
 use common::key::Key;
 use common::value::account::{BlockTime, PublicKey};
-use common::value::U512;
+use common::value::{Value, U512};
 use engine_state::utils::WasmiBytes;
 use execution::{self, Executor};
 use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::Transform;
-use storage::global_state::{CommitResult, History};
+use storage::global_state::{CommitResult, History, StateReader};
 use tracking_copy::TrackingCopy;
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::Preprocessor;
@@ -143,4 +143,38 @@ where
             .lock()
             .commit(correlation_id, prestate_hash, effects)
     }
+}
+
+pub enum GetBondedValidatorsError<H: History> {
+    StorageErrors(H::Error),
+    PostStateHashNotFound(Blake2bHash),
+    PoSNotFound(Key),
+}
+
+/// Calculates bonded validators at `root_hash` state.
+pub fn get_bonded_validators<H: History>(
+    state: Arc<Mutex<H>>,
+    root_hash: Blake2bHash,
+    pos_key: &Key, // Address of the PoS as currently bonded validators are stored in its known urefs map.
+    correlation_id: CorrelationId,
+) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<H>> {
+    state
+        .lock()
+        .checkout(root_hash)
+        .map_err(GetBondedValidatorsError::StorageErrors)
+        .and_then(|maybe_reader| match maybe_reader {
+            Some(reader) => match reader.read(correlation_id, &pos_key.normalize()) {
+                Ok(Some(Value::Contract(contract))) => {
+                    let bonded_validators = contract
+                        .urefs_lookup()
+                        .keys()
+                        .filter_map(|entry| utils::pos_validator_to_tuple(entry))
+                        .collect::<HashMap<PublicKey, U512>>();
+                    Ok(bonded_validators)
+                }
+                Ok(_) => Err(GetBondedValidatorsError::PoSNotFound(*pos_key)),
+                Err(error) => Err(GetBondedValidatorsError::StorageErrors(error)),
+            },
+            None => Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)),
+        })
 }

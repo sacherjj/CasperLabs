@@ -4,6 +4,8 @@ extern crate grpc;
 extern crate shared;
 extern crate storage;
 
+use std::collections::HashMap;
+
 use grpc::RequestOptions;
 
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
@@ -21,7 +23,7 @@ fn should_run_genesis() {
     let global_state = InMemoryGlobalState::empty().expect("should create global state");
     let engine_state = EngineState::new(global_state, false);
 
-    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR);
+    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let request_options = RequestOptions::new();
 

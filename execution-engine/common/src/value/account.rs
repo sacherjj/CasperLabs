@@ -242,7 +242,7 @@ impl Weight {
 
 pub const WEIGHT_SIZE: usize = U8_SIZE;
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct PublicKey([u8; KEY_SIZE]);
 
 impl Display for PublicKey {
@@ -272,11 +272,34 @@ impl PublicKey {
     pub fn value(self) -> [u8; KEY_SIZE] {
         self.0
     }
+
+    pub fn from_slice(slice: &[u8]) -> Option<PublicKey> {
+        if slice.len() != KEY_SIZE {
+            None
+        } else {
+            let mut buff = [0u8; 32];
+            buff.copy_from_slice(slice);
+            Some(PublicKey::new(buff))
+        }
+    }
 }
 
 impl From<[u8; KEY_SIZE]> for PublicKey {
     fn from(key: [u8; KEY_SIZE]) -> Self {
         PublicKey(key)
+    }
+}
+
+impl ToBytes for PublicKey {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        ToBytes::to_bytes(&self.0)
+    }
+}
+
+impl FromBytes for PublicKey {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (key_bytes, rem): ([u8; KEY_SIZE], &[u8]) = FromBytes::from_bytes(bytes)?;
+        Ok((PublicKey::new(key_bytes), rem))
     }
 }
 
@@ -533,19 +556,6 @@ impl FromBytes for Weight {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (byte, rem): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         Ok((Weight::new(byte), rem))
-    }
-}
-
-impl ToBytes for PublicKey {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        ToBytes::to_bytes(&self.0)
-    }
-}
-
-impl FromBytes for PublicKey {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (key_bytes, rem): ([u8; KEY_SIZE], &[u8]) = FromBytes::from_bytes(bytes)?;
-        Ok((PublicKey::new(key_bytes), rem))
     }
 }
 

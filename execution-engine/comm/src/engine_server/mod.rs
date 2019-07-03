@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::ErrorKind;
@@ -7,15 +8,19 @@ use std::time::Instant;
 use common::key::Key;
 use common::value::account::{BlockTime, PublicKey};
 use common::value::U512;
+use engine_server::ipc::CommitResponse;
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::execution_result::ExecutionResult;
-use execution_engine::engine_state::{genesis::GenesisResult, EngineState};
+use execution_engine::engine_state::genesis::GenesisURefsSource;
+use execution_engine::engine_state::{
+    genesis::GenesisResult, get_bonded_validators, EngineState, GetBondedValidatorsError,
+};
 use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
 use shared::logging;
 use shared::logging::{log_duration, log_info};
 use shared::newtypes::{Blake2bHash, CorrelationId};
-use storage::global_state::History;
+use storage::global_state::{CommitResult, History};
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
@@ -225,10 +230,31 @@ where
                 commit_response.set_failed_transform(err);
                 commit_response
             }
-            Ok(effects) => grpc_response_from_commit_result::<H>(
-                prestate_hash,
-                self.apply_effect(correlation_id, prestate_hash, effects.value()),
-            ),
+
+            Ok(effects) => {
+                let commit_result =
+                    self.apply_effect(correlation_id, prestate_hash, effects.value());
+                if let Ok(storage::global_state::CommitResult::Success(poststate_hash)) =
+                    commit_result
+                {
+                    let pos_key = Key::URef(GenesisURefsSource::default().get_pos_address());
+                    let bonded_validators_res = get_bonded_validators(
+                        self.state(),
+                        poststate_hash,
+                        &pos_key,
+                        correlation_id,
+                    );
+                    bonded_validators_and_commit_result(
+                        prestate_hash,
+                        poststate_hash,
+                        commit_result,
+                        bonded_validators_res,
+                    )
+                } else {
+                    // Commit unsuccessful.
+                    grpc_response_from_commit_result::<H>(prestate_hash, commit_result)
+                }
+            }
         };
 
         log_duration(
@@ -367,32 +393,12 @@ where
             .get_genesis_validators()
             .iter()
             .map(|bond| {
-                let address = bond.get_validator_public_key();
-                if address.len() != 32 {
-                    let err_msg =
-                        "Validator public key has to be exactly 32 bytes long".to_string();
+                to_domain_validators(bond).map_err(|err_msg| {
                     logging::log_error(&err_msg);
-
                     let mut genesis_deploy_error = ipc::GenesisDeployError::new();
                     genesis_deploy_error.set_message(err_msg);
-
-                    Err(genesis_deploy_error)
-                } else {
-                    let mut buff = [0u8; 32];
-                    buff.copy_from_slice(&address);
-                    let pk = PublicKey::new(buff);
-                    match bond.get_stake().try_into() {
-                        Ok(bond) => Ok((pk, bond)),
-                        Err(err) => {
-                            let err_msg = format!("{:?}", err);
-                            logging::log_error(&err_msg);
-
-                            let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                            genesis_deploy_error.set_message(err_msg);
-                            Err(genesis_deploy_error)
-                        }
-                    }
-                }
+                    genesis_deploy_error
+                })
             })
             .collect();
 
@@ -536,6 +542,63 @@ where
                 .map_err(Into::into)
         })
         .collect()
+}
+
+// TODO: Refactor.
+#[allow(clippy::implicit_hasher)]
+pub fn bonded_validators_and_commit_result<H>(
+    prestate_hash: Blake2bHash,
+    poststate_hash: Blake2bHash,
+    commit_result: Result<CommitResult, H::Error>,
+    bonded_validators: Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<H>>,
+) -> CommitResponse
+where
+    H: History,
+    H::Error: Into<EngineError> + std::fmt::Debug,
+{
+    match bonded_validators {
+        Ok(bonded_validators) => {
+            let mut grpc_response =
+                grpc_response_from_commit_result::<H>(prestate_hash, commit_result);
+            let grpc_bonded_validators = bonded_validators
+                .iter()
+                .map(|(pk, bond)| {
+                    let mut ipc_bond = ipc::Bond::new();
+                    ipc_bond.set_stake((*bond).into());
+                    ipc_bond.set_validator_public_key(pk.value().to_vec());
+                    ipc_bond
+                })
+                .collect::<Vec<ipc::Bond>>()
+                .into();
+            grpc_response
+                .mut_success() // We know it's a success because of the check few lines earlier.
+                .set_bonded_validators(grpc_bonded_validators);
+            grpc_response
+        }
+        Err(GetBondedValidatorsError::StorageErrors(error)) => {
+            grpc_response_from_commit_result::<H>(poststate_hash, Err(error))
+        }
+        Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)) => {
+            // I am not sure how to parse this error. It would mean that most probably
+            // we have screwed up something in the trie store because `root_hash` was
+            // calculated by us just a moment ago. It [root_hash] is a `poststate_hash` we return to the node.
+            // There is no proper error variant in the `storage::error::Error` for it though.
+            let error_message = format!(
+                "Post state hash not found {} when calculating bonded validators set.",
+                root_hash
+            );
+            logging::log_error(&error_message);
+            let mut commit_response = ipc::CommitResponse::new();
+            let mut err = ipc::PostEffectsError::new();
+            err.set_message(error_message);
+            commit_response.set_failed_transform(err);
+            commit_response
+        }
+        Err(GetBondedValidatorsError::PoSNotFound(key)) => grpc_response_from_commit_result::<H>(
+            poststate_hash,
+            Ok(CommitResult::KeyNotFound(key)),
+        ),
+    }
 }
 
 // Helper method which returns single DeployResult that is set to be a WasmError.
