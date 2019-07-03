@@ -33,7 +33,10 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
                 <td>{account.publicKey}</td>
                 <td>{base64toHex(account.publicKey)}</td>
                 <td className="text-center">
-                  <a onClick={_ => this.props.auth.deleteAccount(account.name)}>
+                  <a
+                    onClick={_ => this.props.auth.deleteAccount(account.name)}
+                    className="icon-button"
+                  >
                     <i className="fa fa-fw fa-trash-alt" title="Delete" />
                   </a>
                 </td>
