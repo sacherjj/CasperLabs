@@ -129,9 +129,7 @@ pub extern "C" fn pos_ext() {
     match method_name.as_str() {
         // Type of this method: `fn bond(amount: U512, purse: URef)`
         "bond" => {
-            let validator = contract_api::get_caller()
-                .ok_or(Error::NoCaller)
-                .unwrap_or_revert();
+            let validator = contract_api::get_caller();
             let amount = contract_api::get_arg(1);
             let source_uref: URef = contract_api::get_arg(2);
             let source = PurseId::new(source_uref);
@@ -156,9 +154,7 @@ pub extern "C" fn pos_ext() {
         }
         // Type of this method: `fn unbond(amount: U512)`
         "unbond" => {
-            let validator = contract_api::get_caller()
-                .ok_or(Error::NoCaller)
-                .unwrap_or_revert();
+            let validator = contract_api::get_caller();
             let maybe_amount = contract_api::get_arg(1);
             unbond::<QueueLocal, ContractStakes>(maybe_amount, validator, timestamp)
                 .unwrap_or_revert();
