@@ -60,9 +60,9 @@ fn bond<Q: QueueProvider, S: StakesProvider>(
     let mut stakes = S::read()?;
     // Simulate applying all earlier bonds. The modified stakes are not written.
     for entry in &queue.0 {
-        stakes.bond(&entry.validator, &entry.amount);
+        stakes.bond(&entry.validator, entry.amount);
     }
-    stakes.validate_bonding(&validator, &amount)?;
+    stakes.validate_bonding(&validator, amount)?;
 
     queue.push(validator, amount, timestamp)?;
     Q::write_bonding(&queue);
@@ -109,7 +109,7 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec
         Q::write_bonding(&bonding_queue);
         let mut stakes = S::read()?;
         for entry in bonds {
-            stakes.bond(&entry.validator, &entry.amount);
+            stakes.bond(&entry.validator, entry.amount);
         }
         S::write(&stakes);
     }

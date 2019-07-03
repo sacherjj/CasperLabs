@@ -112,22 +112,22 @@ impl Stakes {
         }
         // If the the amount is greater or equal to the stake, remove the validator.
         let stake = self.0.remove(validator).ok_or(Error::NotBonded)?;
-        if stake > min.saturating_add(MAX_DECREASE) && stake > max_decrease {
+        if stake > min.saturating_add(max_decrease) && stake > max_decrease {
             return Err(Error::UnbondTooLarge);
         }
         Ok(stake)
     }
 
     /// Adds `amount` to the validator's stakes.
-    pub fn bond(&mut self, validator: &PublicKey, amount: &U512) {
+    pub fn bond(&mut self, validator: &PublicKey, amount: U512) {
         self.0
             .entry(*validator)
-            .and_modify(|x| *x += *amount)
-            .or_insert(*amount);
+            .and_modify(|x| *x += amount)
+            .or_insert(amount);
     }
 
     /// Returns an error if bonding the specified amount is not allowed.
-    pub fn validate_bonding(&self, validator: &PublicKey, amount: &U512) -> Result<()> {
+    pub fn validate_bonding(&self, validator: &PublicKey, amount: U512) -> Result<()> {
         let max = self
             .min_without(validator)
             .unwrap_or(U512::MAX)
@@ -136,12 +136,12 @@ impl Stakes {
             .max_without(validator)
             .unwrap_or_else(U512::zero)
             .saturating_sub(MAX_SPREAD);
-        let stake = self.0.get(validator).map(|s| s + amount).unwrap_or(*amount);
+        let stake = self.0.get(validator).map(|s| *s + amount).unwrap_or(amount);
         if stake > max || stake < min {
             return Err(Error::SpreadTooHigh);
         }
         let max_increase = MAX_INCREASE.min(self.sum() * MAX_REL_INCREASE / 1_000_000);
-        if stake > min.saturating_add(MAX_INCREASE) && *amount > max_increase {
+        if stake > min.saturating_add(max_increase) && amount > max_increase {
             return Err(Error::BondTooLarge);
         }
         Ok(())
@@ -195,13 +195,57 @@ mod tests {
     }
 
     #[test]
+    fn test_bond() {
+        let mut stakes = new_stakes(&[(KEY2, 100)]);
+        assert_eq!(
+            Ok(()),
+            stakes.validate_bonding(&PublicKey::new(KEY1), U512::from(5))
+        );
+        stakes.bond(&PublicKey::new(KEY1), U512::from(5));
+        assert_eq!(new_stakes(&[(KEY1, 5), (KEY2, 100)]), stakes);
+    }
+
+    #[test]
+    fn test_bond_existing() {
+        let mut stakes = new_stakes(&[(KEY1, 50), (KEY2, 100)]);
+        assert_eq!(
+            Ok(()),
+            stakes.validate_bonding(&PublicKey::new(KEY1), U512::from(4))
+        );
+        stakes.bond(&PublicKey::new(KEY1), U512::from(4));
+        assert_eq!(new_stakes(&[(KEY1, 54), (KEY2, 100)]), stakes);
+    }
+
+    #[test]
+    fn test_bond_too_much_rel() {
+        let stakes = new_stakes(&[(KEY1, 1_000), (KEY2, 1_000)]);
+        let total = 1_000 + 1_000;
+        assert_eq!(
+            Err(Error::BondTooLarge),
+            stakes.validate_bonding(
+                &PublicKey::new(KEY1),
+                U512::from(crate::MAX_REL_INCREASE * total / 1_000_000 + 1)
+            ),
+            "Successfully bonded more than the maximum amount."
+        );
+        assert_eq!(
+            Ok(()),
+            stakes.validate_bonding(
+                &PublicKey::new(KEY1),
+                U512::from(crate::MAX_REL_INCREASE * total / 1_000_000)
+            ),
+            "Failed to bond the maximum amount."
+        );
+    }
+
+    #[test]
     fn test_unbond() {
-        let mut stakes = new_stakes(&[(KEY1, 5), (KEY2, 10)]);
+        let mut stakes = new_stakes(&[(KEY1, 5), (KEY2, 100)]);
         assert_eq!(
             Ok(U512::from(5)),
             stakes.unbond(&PublicKey::new(KEY1), None)
         );
-        assert_eq!(new_stakes(&[(KEY2, 10)]), stakes);
+        assert_eq!(new_stakes(&[(KEY2, 100)]), stakes);
     }
 
     #[test]
@@ -225,21 +269,21 @@ mod tests {
 
     #[test]
     fn test_unbond_too_much_rel() {
-        let amount: u64 = 2000;
-        let mut stakes = new_stakes(&[(KEY1, amount)]);
+        let mut stakes = new_stakes(&[(KEY1, 1_000), (KEY2, 1_000)]);
+        let total = 1_000 + 1_000;
         assert_eq!(
             Err(Error::UnbondTooLarge),
             stakes.unbond(
                 &PublicKey::new(KEY1),
-                Some(U512::from(crate::MAX_REL_DECREASE * amount / 1_000_000 + 1))
+                Some(U512::from(crate::MAX_REL_DECREASE * total / 1_000_000 + 1))
             ),
             "Successfully unbonded more than the maximum amount."
         );
         assert_eq!(
-            Ok(U512::from(crate::MAX_REL_DECREASE * amount / 1_000_000)),
+            Ok(U512::from(crate::MAX_REL_DECREASE * total / 1_000_000)),
             stakes.unbond(
                 &PublicKey::new(KEY1),
-                Some(U512::from(crate::MAX_REL_DECREASE * amount / 1_000_000))
+                Some(U512::from(crate::MAX_REL_DECREASE * total / 1_000_000))
             ),
             "Failed to unbond the maximum amount."
         );
