@@ -182,11 +182,13 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker build -f hack/key-management/Dockerfile -t $(DOCKER_USERNAME)/key-generator:$(DOCKER_LATEST_TAG) hack/key-management
 	mkdir -p $(dir $@) && touch $@
 
+
 # Make an image to host the Casper Explorer UI and the faucet microservice.
 .make/docker-build/explorer: \
 		explorer/Dockerfile \
 		$(TS_SRC) \
-		.make/npm/explorer
+		.make/npm/explorer \
+		.make/faucet-contract
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
@@ -243,6 +245,11 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	for f in $(DIR_OUT)/io/casperlabs/node/api/casper_pb* ; do \
 		sed -i '/google_api_annotations_pb/d' $$f ; \
 	done
+	mkdir -p $(dir $@) && touch $@
+
+.make/faucet-contract: $(RUST_SRC) .make/rustup-update
+	cd explorer/faucet-contract && \
+	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@
 
 

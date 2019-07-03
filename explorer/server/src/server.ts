@@ -15,6 +15,7 @@ dotenv.config();
 // port is now available to the Node.js runtime
 // as if it were an environment variable
 const port = process.env.SERVER_PORT;
+const faucetContract = process.env.FAUCET_CONTRACT;
 
 // TODO: Everything in config.json could come from env vars.
 
@@ -36,17 +37,25 @@ const checkJwt = jwt({
 // Serve the static files of the UI
 app.use(express.static(path.join(__dirname, "static")));
 
+
 app.get("/", (_, res) => {
   res.sendFile(path.join(__dirname, "static", "index.html"));
 });
 
 // TODO: Render the `config.js` file dynamically.
 
+// Parse JSON sent in the body.
+app.use(express.json());
+
 // Faucet endpoint.
-app.get("/api/faucet", checkJwt, (_, res) => {
+app.post("/api/faucet", checkJwt, (req, res) => {
   // express-jwt put the token in res.user
+  const userId = (req as any).user.sub;
+  const publicKey = req.body.publicKey;
   res.send({
     msg: "Your access token was successfully validated!",
+    userId: userId,
+    publicKey: publicKey
   });
 });
 
