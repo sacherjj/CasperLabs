@@ -17,6 +17,7 @@ PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
 TS_SRC := $(shell find explorer/ui/src explorer/server/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "package.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
+NODE_IMAGE := node:12.5.0-stretch-slim
 
 $(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test; else echo DRONE-${DRONE_BUILD_NUMBER}; fi))
 
@@ -222,15 +223,18 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 # Generate UI client code from Protobuf.
 # Installed via `npm install ts-protoc-gen --no-bin-links --save-dev`
-.make/protoc/explorer: .make/install/protoc $(PROTO_SRC)
+.make/protoc/explorer: \
+		.make/install/protoc \
+		.make/install/protoc-ts \
+		$(PROTO_SRC)
 	$(eval DIR_IN = ./protobuf)
-	$(eval DIR_OUT = ./explorer/grpc)
+	$(eval DIR_OUT = ./explorer/grpc/src)
 	rm -rf $(DIR_OUT)
 	mkdir -p $(DIR_OUT)
 	# First the pure data packages, so it doesn't create empty _pb_service.d.ts files.
 	protoc \
 	    -I=$(DIR_IN) \
-		--plugin=protoc-gen-ts=./explorer/ui/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
+		--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
 		--js_out=import_style=commonjs,binary:$(DIR_OUT) \
 		--ts_out=service=false:$(DIR_OUT) \
 		$(DIR_IN)/google/protobuf/empty.proto \
@@ -240,7 +244,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	# Now the service we'll invoke.
 	protoc \
 	    -I=$(DIR_IN) \
-		--plugin=protoc-gen-ts=./explorer/ui/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
+		--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
 		--js_out=import_style=commonjs,binary:$(DIR_OUT) \
 		--ts_out=service=true:$(DIR_OUT) \
 		$(DIR_IN)/io/casperlabs/node/api/casper.proto
@@ -249,6 +253,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		sed -i '/google_api_annotations_pb/d' $$f ; \
 	done
 	mkdir -p $(dir $@) && touch $@
+
 
 # Refresh Scala build artifacts if source was changed.
 .make/sbt-stage/%: $(SCALA_SRC)
@@ -383,6 +388,16 @@ protobuf/google:
 		rm -rf protoc* ; \
 	fi
 	mkdir -p $(dir $@) && touch $@
+
+# Install the protoc plugin to generate TypeScript. Use docker so people don't have to install npm.
+.make/install/protoc-ts: explorer/grpc/package.json
+	docker run --rm \
+		-v $(PWD)/explorer/grpc:/explorer/grpc \
+		-w /explorer/grpc \
+		$(NODE_IMAGE) \
+		npm install
+	mkdir -p $(dir $@) && touch $@
+
 
 .make/install/cargo-native-packager:
 	@# Installs fail if they already exist.

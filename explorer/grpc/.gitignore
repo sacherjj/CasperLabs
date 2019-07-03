@@ -1,0 +1,4 @@
+node_modules
+
+# Everything in src is coming from protoc.
+src
