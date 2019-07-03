@@ -36,7 +36,6 @@ import io.casperlabs.catscontrib.MonadThrowable
       prestate: ByteString,
       effects: Seq[TransformEntry]
   ): F[Either[Throwable, ExecutionEngineService.CommitResult]]
-  def setBonds(bonds: Map[PublicKey, Long]): F[Unit]
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
@@ -48,8 +47,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
     stub: Stub
 ) extends ExecutionEngineService[F] {
   import GrpcExecutionEngineService.EngineMetricsSource
-
-  private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
   override def emptyStateHash: ByteString = {
     val arr: Array[Byte] = Array(
@@ -179,13 +176,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       }
     }
 
-  // Todo Pass in the genesis bonds until we have a solution based on the BlockStore.
-  override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =
-    Defer[F].defer(Applicative[F].pure {
-      bonds = newBonds.map {
-        case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
-      }.toSeq
-    })
   override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
     stub.validate(contracts).to[F] >>= (
       _.result match {

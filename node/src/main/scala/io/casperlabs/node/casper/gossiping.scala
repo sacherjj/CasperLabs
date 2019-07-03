@@ -369,7 +369,6 @@ package object gossiping {
         for {
           _     <- Log[F].info("Taking bonds from file.")
           bonds <- Genesis.getBonds[F](conf.casper.bondsFile)
-          _     <- ExecutionEngineService[F].setBonds(bonds)
         } yield bonds
       }
 
@@ -414,17 +413,8 @@ package object gossiping {
                                  ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
                              } else {
                                // Non-validating nodes. They are okay with everything,
-                               // only checking that the required signatures are present.
-                               // In order to not have to circulate the bonds.txt they set it here.
-                               Log[F].info("Starting in default mode") *> { (genesis: Block) =>
-                                 for {
-                                   _ <- Log[F].info("Taking bonds from the Genesis candidate.")
-                                   bonds = genesis.getHeader.getState.bonds.map { bond =>
-                                     PublicKey(bond.validatorPublicKey.toByteArray) -> bond.stake
-                                   }.toMap
-                                   _ <- ExecutionEngineService[F].setBonds(bonds)
-                                 } yield none[Approval].asRight[Throwable]
-                               }.pure[F]
+                               Log[F].info("Starting in default mode") *>
+                                 ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
                              }
                            }
 

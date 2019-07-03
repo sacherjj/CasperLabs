@@ -72,8 +72,7 @@ object ExecutionEngineServiceStub {
         prestate: ByteString,
         effects: Seq[TransformEntry]
     ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = commitFunc(prestate, effects)
-    override def setBonds(bonds: Map[PublicKey, Long]): F[Unit] =
-      setBondsFunc(bonds)
+
     override def query(
         state: ByteString,
         baseKey: Key,
