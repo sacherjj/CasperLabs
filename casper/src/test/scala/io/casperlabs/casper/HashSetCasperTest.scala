@@ -1032,7 +1032,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  it should "can create valid block when receive a invalid block" in effectTest {
+  it should "create valid block when receives an invalid block" in effectTest {
     for {
       nodes <- networkEff(
                 validatorKeys.take(2),
