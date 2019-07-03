@@ -28,7 +28,7 @@ fn should_return_bonded_validators() {
 
     let bonded_validators = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators.clone())
-        .exec(GENESIS_ADDR, "local_state.wasm")
+        .exec(GENESIS_ADDR, "local_state.wasm", 1)
         .commit()
         .get_bonded_validators();
 

@@ -1368,7 +1368,6 @@ pub trait Executor<A> {
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
-        nonce_check: bool,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -1388,7 +1387,6 @@ impl Executor<Module> for WasmiExecutor {
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
-        nonce_check: bool,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
@@ -1416,32 +1414,30 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
-        if nonce_check {
-            // Check the difference of a request nonce and account nonce.
-            // Since both nonce and account's nonce are unsigned, so line below performs
-            // a checked subtraction, where underflow (or overflow) would be safe.
-            let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
-            // Difference should always be 1 greater than current nonce for a
-            // given account.
-            if delta != 1 {
-                return ExecutionResult::precondition_failure(
-                    Error::InvalidNonce {
-                        deploy_nonce: nonce,
-                        expected_nonce: account.nonce() + 1,
-                    }
-                    .into(),
-                );
-            }
-
-            // Increment nonce in the account that would be later used through the execution
-            // lifecycle.
-            account.increment_nonce();
-            // Store updated account with new nonce
-            tc.borrow_mut().write(
-                validated_key,
-                Validated::new(account.clone().into(), Validated::valid).unwrap(),
+        // Check the difference of a request nonce and account nonce.
+        // Since both nonce and account's nonce are unsigned, so line below performs
+        // a checked subtraction, where underflow (or overflow) would be safe.
+        let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
+        // Difference should always be 1 greater than current nonce for a
+        // given account.
+        if delta != 1 {
+            return ExecutionResult::precondition_failure(
+                Error::InvalidNonce {
+                    deploy_nonce: nonce,
+                    expected_nonce: account.nonce() + 1,
+                }
+                .into(),
             );
         }
+
+        // Increment nonce in the account that would be later used through the execution
+        // lifecycle.
+        account.increment_nonce();
+        // Store updated account with new nonce
+        tc.borrow_mut().write(
+            validated_key,
+            Validated::new(account.clone().into(), Validated::valid).unwrap(),
+        );
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
@@ -1645,7 +1641,6 @@ mod tests {
             1u64,
             CorrelationId::new(),
             tc,
-            true,
         );
 
         match exec_result {

@@ -32,7 +32,6 @@ pub struct EngineState<H> {
     // Tracks the "state" of the blockchain (or is an interface to it).
     // I think it should be constrained with a lifetime parameter.
     state: Arc<Mutex<H>>,
-    nonce_check: bool,
 }
 
 impl<H> EngineState<H>
@@ -40,9 +39,9 @@ where
     H: History,
     H::Error: Into<execution::Error>,
 {
-    pub fn new(state: H, nonce_check: bool) -> EngineState<H> {
+    pub fn new(state: H) -> EngineState<H> {
         let state = Arc::new(Mutex::new(state));
-        EngineState { state, nonce_check }
+        EngineState { state }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -129,7 +128,6 @@ where
             protocol_version,
             correlation_id,
             tracking_copy,
-            self.nonce_check,
         ))
     }
 

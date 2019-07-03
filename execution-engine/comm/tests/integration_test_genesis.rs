@@ -21,7 +21,7 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 #[test]
 fn should_run_genesis() {
     let global_state = InMemoryGlobalState::empty().expect("should create global state");
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state);
 
     let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
