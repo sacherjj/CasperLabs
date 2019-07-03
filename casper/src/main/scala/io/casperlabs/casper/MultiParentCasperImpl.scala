@@ -757,15 +757,13 @@ object MultiParentCasperImpl {
               preStateHash,
               blockEffects
             )
-        _ <- Log[F].debug(s"Validating the bonds in $hashPrefix")
         _ <- maybeContext.fold(().pure[F]) { ctx =>
-              Validate.bondsCache[F](block, ProtoUtil.bonds(ctx.genesis)) >>
-                EquivocationDetector
-                  .checkNeglectedEquivocationsWithUpdate[F](
-                    block,
-                    dag,
-                    ctx.genesis
-                  )
+              EquivocationDetector
+                .checkNeglectedEquivocationsWithUpdate[F](
+                  block,
+                  dag,
+                  ctx.genesis
+                )
             }
         _ <- Log[F].debug(s"Validating neglection for $hashPrefix")
         _ <- Validate

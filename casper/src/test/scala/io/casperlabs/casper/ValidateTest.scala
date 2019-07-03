@@ -710,7 +710,6 @@ class ValidateTest
       implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
       implicit val log                     = new LogStub[Task]
       for {
-        _   <- casperSmartContractsApi.setBonds(bonds)
         dag <- blockDagStorage.getRepresentation
         _ <- ExecutionEngineServiceStub
               .validateBlockCheckpoint[Task](
