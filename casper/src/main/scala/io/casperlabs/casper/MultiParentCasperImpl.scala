@@ -865,7 +865,7 @@ object MultiParentCasperImpl {
             NeglectedEquivocation | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
             InvalidChainId | InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash |
             InvalidPostStateHash =>
-          handleInvalidBlockEffect(status, block, transforms)
+          handleInvalidBlockEffect(status, block) *> dag.pure[F]
 
         case Processing | Processed =>
           throw new RuntimeException(s"A block should not be processing at this stage.")
@@ -878,19 +878,18 @@ object MultiParentCasperImpl {
     /** Remember a block as being invalid, then save it to storage. */
     private def handleInvalidBlockEffect(
         status: BlockStatus,
-        block: Block,
-        effects: Seq[ipc.TransformEntry]
-    )(implicit state: Cell[F, CasperState]): F[BlockDagRepresentation[F]] =
+        block: Block
+    )(implicit state: Cell[F, CasperState]): F[Unit] =
       for {
         _ <- Log[F].warn(
               s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
             )
         // TODO: Slash block for status except InvalidUnslashableBlock
+        // TODO: Persist invalidBlockTracker into Dag
         _ <- Cell[F, CasperState].modify { s =>
               s.copy(invalidBlockTracker = s.invalidBlockTracker + block.blockHash)
             }
-        updateDag <- addToState(block, effects)
-      } yield updateDag
+      } yield ()
 
     /** Save the block to the block and DAG storage. */
     private def addToState(

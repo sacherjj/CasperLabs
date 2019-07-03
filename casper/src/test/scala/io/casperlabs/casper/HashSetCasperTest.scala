@@ -860,7 +860,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
 
       _ <- nodes(1).casperEff
-            .contains(signedBlock4) shouldBeF true // However, in invalidBlockTracker
+            .contains(signedBlock4) shouldBeF false // Since we have enough evidence that it is equivocation, we no longer add it to dag.
 
       _ = nodes(1).logEff.infos.count(_ contains "Added admissible equivocation") should be(1)
       _ = nodes(2).logEff.warns.size should be(0)
@@ -881,10 +881,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
           }(nodes(0).metricEff, nodes(0).logEff)
       _ <- validateBlockStore(nodes(1)) { blockStore =>
             for {
-              _ <- blockStore.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-              result <- blockStore.getBlockMessage(signedBlock4.blockHash) shouldBeF Some(
-                         signedBlock4
-                       )
+              _      <- blockStore.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+              result <- blockStore.getBlockMessage(signedBlock4.blockHash) shouldBeF None
             } yield result
           }(nodes(1).metricEff, nodes(1).logEff)
       result <- validateBlockStore(nodes(2)) { blockStore =>
@@ -939,7 +937,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  it should "prepare to slash a block that includes a invalid block pointer" in effectTest {
+  it should "reject blocks that include a invalid block pointer" in effectTest {
     for {
       nodes           <- networkEff(validatorKeys.take(3), genesis, transforms)
       deploys         <- (1L to 6L).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
@@ -978,9 +976,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).casperEff
             .addBlock(signedInvalidBlock)
 
-      result = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
-      _      <- nodes.map(_.tearDown()).toList.sequence
-    } yield result
+      _ = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+      _ <- nodes(1).casperEff.contains(signedInvalidBlock) shouldBeF false
+      _ <- nodes.map(_.tearDown()).toList.sequence
+    } yield ()
   }
 
   it should "handle a long chain of block requests appropriately" in effectTest {
@@ -1030,6 +1029,63 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ = resCnt shouldBe reqCnt
 
       _ <- nodes.map(_.tearDown()).toList.sequence
+    } yield ()
+  }
+
+  it should "can create valid block when receive a invalid block" in effectTest {
+    for {
+      nodes <- networkEff(
+                validatorKeys.take(2),
+                genesis,
+                transforms,
+                validateNonces = false
+              )
+
+      _ <- (1L to 6L).toList.traverse_[Effect, Unit] { i =>
+            for {
+              deploy <- ProtoUtil.basicDeploy[Effect](i)
+              createBlockResult <- nodes(0).casperEff
+                                    .deploy(deploy) *> nodes(0).casperEff.createBlock
+              Created(block) = createBlockResult
+
+              _ <- nodes(0).casperEff.addBlock(block)
+              _ <- nodes(1).receive()
+            } yield ()
+          }
+      deployData7 <- ProtoUtil.basicDeploy[Effect](7L)
+      createBlock8Result <- nodes(0).casperEff
+                             .deploy(deployData7) *> nodes(0).casperEff.createBlock
+      Created(block8) = createBlock8Result
+      invalidBlock8 = BlockUtil.resignBlock(
+        block8.withHeader(block8.getHeader.withTimestamp(Long.MaxValue)),
+        nodes(0).validatorId.privateKey
+      )
+      _ <- nodes(0).casperEff.addBlock(invalidBlock8)
+      _ <- nodes(1).receive()
+      _ = nodes(0).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+
+      // now nodes(0) has proposed a invalid block, and it should be able to propose valid blocks
+      createValidBlock8Result <- nodes(0).casperEff.createBlock // re-propose orphaned deployData7
+      Created(validBlock8)    = createValidBlock8Result
+      _                       <- nodes(0).casperEff.addBlock(validBlock8)
+
+      deployData8 <- ProtoUtil.basicDeploy[Effect](8L)
+      createBlock9Result <- nodes(0).casperEff
+                             .deploy(deployData8) *> nodes(0).casperEff.createBlock
+      Created(block9) = createBlock9Result
+      _               <- nodes(0).casperEff.addBlock(block9)
+      _               <- nodes(1).receive()
+      _               = nodes(0).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+      _               <- nodes.map(_.tearDownNode()).toList.sequence
+      _ = nodes.toList.traverse_[Effect, Assertion] { node =>
+        validateBlockStore(node) { blockStore =>
+          for {
+            _      <- blockStore.getBlockMessage(invalidBlock8.blockHash) shouldBeF None
+            _      <- blockStore.getBlockMessage(validBlock8.blockHash) shouldBeF None
+            result <- blockStore.getBlockMessage(block9.blockHash) shouldBeF None
+          } yield result
+        }(nodes(0).metricEff, nodes(0).logEff)
+      }
     } yield ()
   }
 

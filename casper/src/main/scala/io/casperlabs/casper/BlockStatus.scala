@@ -18,7 +18,7 @@ sealed trait ValidBlock extends BlockStatus {
   override val inDag: Boolean = true
 }
 sealed trait InvalidBlock extends BlockStatus {
-  override val inDag: Boolean = true
+  override val inDag: Boolean = false
 }
 sealed trait Slashable
 
