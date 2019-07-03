@@ -63,24 +63,15 @@ def test_neglected_invalid_block(three_node_network):
 
         boot_deploy = DeployTimedTread(bootstrap,
                                        {'session_contract': CONTRACT_1,
-                                        'payment_contract': PAYMENT_CONTRACT,
-                                        # 'private_key': 'validator-0-private.pem',
-                                        # 'public_key': 'validator-0-public.pem'
-                                        },
+                                        'payment_contract': PAYMENT_CONTRACT},
                                        start_time)
         node1_deploy = DeployTimedTread(node1,
                                         {'session_contract': CONTRACT_2,
-                                         'payment_contract': PAYMENT_CONTRACT,
-                                         # 'private_key': 'validator-1-private.pem',
-                                         # 'public_key': 'validator-1-public.pem'
-                                         },
+                                         'payment_contract': PAYMENT_CONTRACT},
                                         start_time)
         node2_deploy = DeployTimedTread(node2,
                                         {'session_contract': CONTRACT_2,
-                                         'payment_contract': PAYMENT_CONTRACT,
-                                         # 'private_key': 'validator-2-private.pem',
-                                         # 'public_key': 'validator-2-public.pem'
-                                         },
+                                         'payment_contract': PAYMENT_CONTRACT},
                                         start_time)
 
         # Simultaneous Deploy
