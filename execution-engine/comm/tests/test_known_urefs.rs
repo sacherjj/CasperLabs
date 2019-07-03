@@ -8,7 +8,7 @@ extern crate storage;
 use std::collections::HashMap;
 
 use common::key::Key;
-use common::value::{U512, Value};
+use common::value::{Value, U512};
 use shared::transform::Transform;
 use test_support::WasmTestBuilder;
 

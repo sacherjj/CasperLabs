@@ -6,16 +6,16 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use common::key::Key;
-use common::value::{U512, Value};
 use common::value::account::{BlockTime, PublicKey};
+use common::value::{Value, U512};
 use engine_state::utils::WasmiBytes;
 use execution::{self, Executor};
 use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::Transform;
 use storage::global_state::{CommitResult, History, StateReader};
 use tracking_copy::TrackingCopy;
-use wasm_prep::Preprocessor;
 use wasm_prep::wasm_costs::WasmCosts;
+use wasm_prep::Preprocessor;
 
 use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;

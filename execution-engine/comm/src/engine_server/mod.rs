@@ -9,20 +9,20 @@ use common::key::Key;
 use common::value::account::{BlockTime, PublicKey};
 use common::value::U512;
 use engine_server::ipc::CommitResponse;
-use execution_engine::engine_state::{
-    EngineState, genesis::GenesisResult, get_bonded_validators, GetBondedValidatorsError,
-};
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::genesis::GenesisURefsSource;
+use execution_engine::engine_state::{
+    genesis::GenesisResult, get_bonded_validators, EngineState, GetBondedValidatorsError,
+};
 use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
 use shared::logging;
 use shared::logging::{log_duration, log_info};
 use shared::newtypes::{Blake2bHash, CorrelationId};
 use storage::global_state::{CommitResult, History};
-use wasm_prep::{Preprocessor, WasmiPreprocessor};
 use wasm_prep::wasm_costs::WasmCosts;
+use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 use self::ipc_grpc::ExecutionEngineService;
 use self::mappings::*;
@@ -545,6 +545,7 @@ where
 }
 
 // TODO: Refactor.
+#[allow(clippy::implicit_hasher)]
 pub fn bonded_validators_and_commit_result<H>(
     prestate_hash: Blake2bHash,
     poststate_hash: Blake2bHash,

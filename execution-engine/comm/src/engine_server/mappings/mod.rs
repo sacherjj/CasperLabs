@@ -925,8 +925,8 @@ mod tests {
     use common::key::Key;
     use common::uref::{AccessRights, URef};
     use engine_server::mappings::CommitTransforms;
-    use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
     use execution_engine::engine_state::error::Error::ExecError;
+    use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
     use execution_engine::engine_state::execution_effect::ExecutionEffect;
     use execution_engine::engine_state::execution_result::ExecutionResult;
     use execution_engine::execution::Error;

@@ -19,11 +19,11 @@ use casperlabs_engine_grpc_server::engine_server::ipc::{
 };
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use casperlabs_engine_grpc_server::engine_server::mappings::{
-    CommitTransforms, to_domain_validators,
+    to_domain_validators, CommitTransforms,
 };
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
-use execution_engine::engine_state::EngineState;
 use execution_engine::engine_state::utils::WasmiBytes;
+use execution_engine::engine_state::EngineState;
 use shared::test_utils;
 use shared::transform::Transform;
 use storage::global_state::in_memory::InMemoryGlobalState;
@@ -74,6 +74,7 @@ pub enum SystemContractType {
     ProofOfStake,
 }
 
+#[allow(clippy::implicit_hasher)]
 pub fn create_genesis_request(
     address: [u8; 32],
     genesis_validators: HashMap<common::value::account::PublicKey, common::value::U512>,
