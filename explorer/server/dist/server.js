@@ -16,6 +16,7 @@ dotenv_1.default.config();
 // port is now available to the Node.js runtime
 // as if it were an environment variable
 const port = process.env.SERVER_PORT;
+// TODO: Everything in config.json could come from env vars.
 const app = express_1.default();
 // create the JWT middleware
 const checkJwt = express_jwt_1.default({
@@ -34,6 +35,7 @@ app.use(express_1.default.static(path_1.default.join(__dirname, "static")));
 app.get("/", (_, res) => {
     res.sendFile(path_1.default.join(__dirname, "static", "index.html"));
 });
+// TODO: Render the `config.js` file dynamically.
 // Faucet endpoint.
 app.get("/api/faucet", checkJwt, (_, res) => {
     // express-jwt put the token in res.user

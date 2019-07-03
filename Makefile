@@ -14,7 +14,7 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v -e ipc.*\.rs)
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
-TS_SRC := $(shell find explorer/ui/src explorer/server/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "package.json" \))
+TS_SRC := $(shell find explorer/ui/src explorer/server/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 NODE_IMAGE := node:12.5.0-stretch-slim
@@ -204,21 +204,12 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	mkdir -p $(dir $@) && touch $@
 
 .make/npm-docker/explorer: $(TS_SRC) .make/protoc/explorer
-	$(eval USERID = $(shell id -u))
-	docker pull $(DOCKER_USERNAME)/buildenv:latest
 	docker run --rm --entrypoint sh \
-		-v ${PWD}:/CasperLabs \
-		$(DOCKER_USERNAME)/buildenv:latest \
-		-c "\
-		apt-get install sudo ; \
-		useradd -u $(USERID) -m builder ; \
-		cp -r /root/. /home/builder/ ; \
-		chown -R builder /home/builder ; \
-		sudo -u builder bash -c '\
-			export HOME=/home/builder ; \
-			cd /CasperLabs/explorer/ui ; npm install && npm run build ; cd - ; \
-			cd /CasperLabs/explorer/server ; npm install && npm run build ; cd - ; \
-		'"
+		-v $(PWD)/explorer:/explorer -w /explorer \
+		$(NODE_IMAGE) -c "\
+			cd ui     && npm install && npm run build && cd - && \
+			cd server && npm install && npm run build && cd - \
+		"
 	mkdir -p $(dir $@) && touch $@
 
 # Generate UI client code from Protobuf.
@@ -392,10 +383,8 @@ protobuf/google:
 # Install the protoc plugin to generate TypeScript. Use docker so people don't have to install npm.
 .make/install/protoc-ts: explorer/grpc/package.json
 	docker run --rm \
-		-v $(PWD)/explorer/grpc:/explorer/grpc \
-		-w /explorer/grpc \
-		$(NODE_IMAGE) \
-		npm install
+		-v $(PWD)/explorer/grpc:/explorer/grpc -w /explorer/grpc \
+		$(NODE_IMAGE) npm install
 	mkdir -p $(dir $@) && touch $@
 
 

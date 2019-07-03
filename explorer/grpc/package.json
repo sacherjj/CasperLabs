@@ -11,5 +11,9 @@
   "license": "ISC",
   "devDependencies": {
     "ts-protoc-gen": "^0.10.0"
+  },
+  "dependencies": {
+    "@improbable-eng/grpc-web": "^0.9.6",
+    "@types/google-protobuf": "^3.7.1"
   }
 }
