@@ -251,15 +251,28 @@ class BlocksCountAtLeast:
         return actual_blocks_count >= self.blocks_count
 
 
-class AllNodesHaveBlockWithBlockHash:
-    def __init__(self, nodes, block_hash: str) -> None:
+class AllNodesHaveBlockHashes:
+    """
+    See if all nodes have all blocks with given hashes.
+    """
+
+    def __init__(self, nodes, block_hashes):
+        """
+        :param nodes:          Nodes that you want the blocks to propagate to.
+        :param block_hashes:   Block hashes or prefixes of block hashes. All prefixes must have the same length.
+        """
         self.nodes = nodes
-        self.block_hash = block_hash
+        self.block_hashes = set(block_hashes)
+        assert len(set(len(h) for h in list(self.block_hashes))) == 1, 'All block hash prefixes must have the same length'
+        self.prefix_length = len(list(self.block_hashes)[0])
+
+    def __str__(self) -> str:
+        return f'<{self.__class__.__name__}({self.block_hashes})>'
 
     def is_satisfied(self) -> bool:
-        prefix_length = len(self.block_hash)
-        return all((self.block_hash in set(b.summary.block_hash[:prefix_length] for b in parse_show_blocks(node.d_client.show_blocks(1000))))
-                   for node in self.nodes)
+        n = self.prefix_length
+        return all((self.block_hashes.issubset(set(b.summary.block_hash[:n] for b in parse_show_blocks(node.d_client.show_blocks(1000))))
+                   for node in self.nodes))
 
 
 def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout_seconds: int) -> None:
@@ -309,7 +322,11 @@ def wait_for_blocks_count_at_least(node: 'Node', expected_blocks_count: int, max
 
 
 def wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash, timeout_seconds: int = 60 * 2):
-    wait_on_using_wall_clock_time(AllNodesHaveBlockWithBlockHash(nodes, block_hash), timeout_seconds)
+    wait_on_using_wall_clock_time(AllNodesHaveBlockHashes(nodes, [block_hash]), timeout_seconds)
+
+
+def wait_for_block_hashes_propagated_to_all_nodes(nodes, block_hashes, timeout_seconds: int = 60 * 2):
+    wait_on_using_wall_clock_time(AllNodesHaveBlockHashes(nodes, block_hashes), timeout_seconds)
 
 
 def wait_for_node_started(node: 'Node', startup_timeout: int, times: int = 1):
