@@ -99,32 +99,30 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
       } yield result
 
     def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
-      for {
-        result <- justificationMap.get(blockHash) match {
-                   case Some(blocks) =>
-                     Option(blocks).pure[F]
-                   case None =>
-                     for {
-                       blockOpt <- BlockStore[F].getBlockMessage(blockHash)
-                       result <- blockOpt match {
-                                  case Some(block) =>
-                                    val number = block.getHeader.rank
-                                    if (number >= sortOffset) {
-                                      none[Set[BlockHash]].pure[F]
-                                    } else {
-                                      lock.withPermit(
-                                        for {
-                                          oldDagInfo <- loadCheckpoint(number)
-                                        } yield oldDagInfo.flatMap(
-                                          _.justificationMap.get(blockHash)
-                                        )
-                                      )
-                                    }
-                                  case None => none[Set[BlockHash]].pure[F]
-                                }
-                     } yield result
-                 }
-      } yield result
+      justificationMap.get(blockHash) match {
+        case Some(blocks) =>
+          Option(blocks).pure[F]
+        case None =>
+          for {
+            blockOpt <- BlockStore[F].getBlockMessage(blockHash)
+            result <- blockOpt match {
+                       case Some(block) =>
+                         val number = block.getHeader.rank
+                         if (number >= sortOffset) {
+                           none[Set[BlockHash]].pure[F]
+                         } else {
+                           lock.withPermit(
+                             for {
+                               oldDagInfo <- loadCheckpoint(number)
+                             } yield oldDagInfo.flatMap(
+                               _.justificationMap.get(blockHash)
+                             )
+                           )
+                         }
+                       case None => none[Set[BlockHash]].pure[F]
+                     }
+          } yield result
+      }
 
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
       dataLookup

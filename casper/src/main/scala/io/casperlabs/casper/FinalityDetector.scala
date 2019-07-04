@@ -143,9 +143,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
 
     validators.foldLeftM(Map.empty[Validator, List[BlockMetadata]]) {
       case (acc, v) =>
-        for {
-          value <- levelZeroMsgsOfValidator(v)
-        } yield acc.updated(v, value)
+        levelZeroMsgsOfValidator(v).map(acc.updated(v, _))
     }
   }
 
@@ -178,18 +176,16 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                     if (prunedCommittee.isEmpty) {
                       none[Committee].pure[F]
                     } else {
-                      val quorum = blockLevelTags
-                        .filter {
-                          case (_, blockScoreAccumulator: BlockScoreAccumulator) =>
-                            blockScoreAccumulator.blockLevel >= 1 && prunedCommittee.contains(
-                              blockScoreAccumulator.block.validatorPublicKey
-                            )
-                        }
-                        .map {
-                          case (_, blockScoreAccumulator: BlockScoreAccumulator) =>
-                            blockScoreAccumulator.estimateQ
-                        }
-                        .min
+                      val quorum = blockLevelTags.values.flatMap {
+                        case blockScoreAccumulator =>
+                          if (blockScoreAccumulator.blockLevel >= 1 && prunedCommittee.contains(
+                                blockScoreAccumulator.block.validatorPublicKey
+                              )) {
+                            blockScoreAccumulator.estimateQ.some
+                          } else {
+                            None
+                          }
+                      }.min
                       Committee(prunedCommittee, quorum).some.pure[F]
                     }
                   } else {
