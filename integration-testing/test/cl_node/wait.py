@@ -8,6 +8,7 @@ import pytest
 import typing_extensions
 
 from .common import Network, WaitTimeoutError
+from test.cl_node.client_parser import parse_show_blocks
 
 
 class PredicateProtocol(typing_extensions.Protocol):
@@ -250,6 +251,17 @@ class BlocksCountAtLeast:
         return actual_blocks_count >= self.blocks_count
 
 
+class AllNodesHaveBlockWithBlockHash:
+    def __init__(self, nodes, block_hash: str) -> None:
+        self.nodes = nodes
+        self.block_hash = block_hash
+
+    def is_satisfied(self) -> bool:
+        prefix_length = len(self.block_hash)
+        return all((self.block_hash in set(b.summary.block_hash[:prefix_length] for b in parse_show_blocks(node.d_client.show_blocks(1000))))
+                   for node in self.nodes)
+
+
 def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout_seconds: int) -> None:
     logging.info("AWAITING {}".format(predicate))
 
@@ -294,6 +306,10 @@ def wait_for_new_fork_choice_tip_block(node: 'Node', block: str, timeout_seconds
 def wait_for_blocks_count_at_least(node: 'Node', expected_blocks_count: int, max_retrieved_blocks: int, timeout_seconds: int = 60):
     predicate = BlocksCountAtLeast(node, expected_blocks_count, max_retrieved_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
+
+
+def wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash, timeout_seconds: int = 60 * 2):
+    wait_on_using_wall_clock_time(AllNodesHaveBlockWithBlockHash(nodes, block_hash), timeout_seconds)
 
 
 def wait_for_node_started(node: 'Node', startup_timeout: int, times: int = 1):
