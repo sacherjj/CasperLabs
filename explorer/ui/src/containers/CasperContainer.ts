@@ -1,11 +1,12 @@
-import { observable } from 'mobx';
+import { computed } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
+import Cell from '../lib/Cell';
 
 // CasperContainer talks to the API on behalf of React
 // components and exposes the state in MobX observables.
 export class CasperContainer {
-  @observable faucetRequests: FaucetRequest[] = [];
+  _faucetRequests = new Cell<FaucetRequest[]>('faucet-requests', []);
 
   constructor(private errors: ErrorContainer) {}
 
@@ -14,9 +15,14 @@ export class CasperContainer {
     this.monitorFaucetRequest(account, deployHash);
   }
 
+  @computed get faucetRequests() {
+    return this._faucetRequests.get;
+  }
+
   private monitorFaucetRequest(account: UserAccount, deployHash: ByteArray) {
-    // TODO: This should eventually be persisted on the server, so a page refresh doesn't cause it to forget.
-    this.faucetRequests.push({ timestamp: new Date(), account, deployHash });
+    const request = { timestamp: new Date(), account, deployHash };
+    const requests = this._faucetRequests.get.concat(request);
+    this._faucetRequests.set(requests);
   }
 }
 
