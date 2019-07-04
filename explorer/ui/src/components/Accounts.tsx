@@ -2,7 +2,7 @@ import React from 'react';
 import { observer } from 'mobx-react';
 
 import AuthContainer from '../containers/AuthContainer';
-import { RefreshableComponent, Button, ListInline } from './Utils';
+import { RefreshableComponent, Button, IconButton, ListInline } from './Utils';
 import DataTable from './DataTable';
 import Modal from './Modal';
 import { Form, TextField } from './Forms';
@@ -33,12 +33,11 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
                 <td>{account.publicKey}</td>
                 <td>{base64toHex(account.publicKey)}</td>
                 <td className="text-center">
-                  <a
-                    onClick={_ => this.props.auth.deleteAccount(account.name)}
-                    className="icon-button"
-                  >
-                    <i className="fa fa-fw fa-trash-alt" title="Delete" />
-                  </a>
+                  <IconButton
+                    onClick={() => this.props.auth.deleteAccount(account.name)}
+                    title="Delete"
+                    icon="trash-alt"
+                  />
                 </td>
               </tr>
             );

@@ -10,10 +10,18 @@ export const Loading = () => (
   </div>
 );
 
-export const RefreshButton = (props: { refresh: () => void }) => (
-  <a onClick={_ => props.refresh()} title="Refresh" className="icon-button">
-    <i className="fa fa-fw fa-redo" />
+export const IconButton = (props: {
+  onClick: () => void;
+  title: string;
+  icon: string;
+}) => (
+  <a onClick={_ => props.onClick()} title={props.title} className="icon-button">
+    <i className={'fa fa-fw fa-' + props.icon} />
   </a>
+);
+
+export const RefreshButton = (props: { refresh: () => void }) => (
+  <IconButton onClick={() => props.refresh()} title="Refresh" icon="redo" />
 );
 
 export const Button = (props: { onClick: () => void; title: string }) => (
