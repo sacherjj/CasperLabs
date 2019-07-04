@@ -53,9 +53,9 @@ app.use(express.json());
 // Faucet endpoint.
 app.post("/api/faucet", checkJwt, (req, res) => {
   // express-jwt put the token in res.user
-  const userId = (req as any).user.sub;
+  // const userId = (req as any).user.sub;
   const publicKey = req.body.publicKey;
-  const deploy = faucet.makeDeploy(userId, publicKey);
+  const deploy = faucet.makeDeploy(publicKey);
   // TODO: Send the deploy to the node and return the deploy hash to the browser.
   res.send(deploy.toObject());
 });

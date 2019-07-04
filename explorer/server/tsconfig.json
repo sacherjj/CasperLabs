@@ -9,6 +9,7 @@
     "noImplicitReturns": true,
     "noImplicitThis": true,
     "noUnusedParameters": true,
+    "noUnusedLocals": true,
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,

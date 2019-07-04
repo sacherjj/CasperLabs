@@ -1,1 +1,1 @@
-type ByteArray = Uint8Array
+type ByteArray = Uint8Array;
