@@ -12,6 +12,8 @@ CONTRACTS=(
     "transfer-to-account-02"
     "local-state"
     "known-urefs"
+    "ee-441-rng-state"
+    "ee-441-rng-state-call"
 )
 
 source "${HOME}/.cargo/env"
