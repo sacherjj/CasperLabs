@@ -7,5 +7,6 @@ COPY ui/build /app/static
 
 WORKDIR /app
 ENV SERVER_PORT=8080
-ENV FAUCET_CONTRACT=/app/contracts/faucet_contract.wasm
+ENV FAUCET_CONTRACT_PATH=/app/contracts/faucet_contract.wasm
+ENV FAUCET_NONCE_PATH=/app/nonce.txt
 ENTRYPOINT node server.js

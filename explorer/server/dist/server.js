@@ -9,6 +9,7 @@ const express_jwt_1 = __importDefault(require("express-jwt"));
 const jwks_rsa_1 = __importDefault(require("jwks-rsa"));
 const path_1 = __importDefault(require("path"));
 const config_json_1 = __importDefault(require("./config.json"));
+const faucet_1 = __importDefault(require("./faucet"));
 // https://auth0.com/docs/quickstart/spa/vanillajs/02-calling-an-api
 // https://github.com/auth0/express-jwt
 // initialize configuration
@@ -16,6 +17,7 @@ dotenv_1.default.config();
 // port is now available to the Node.js runtime
 // as if it were an environment variable
 const port = process.env.SERVER_PORT;
+const faucet = new faucet_1.default(process.env.FAUCET_CONTRACT);
 // TODO: Everything in config.json could come from env vars.
 const app = express_1.default();
 // create the JWT middleware
@@ -36,11 +38,17 @@ app.get("/", (_, res) => {
     res.sendFile(path_1.default.join(__dirname, "static", "index.html"));
 });
 // TODO: Render the `config.js` file dynamically.
+// Parse JSON sent in the body.
+app.use(express_1.default.json());
 // Faucet endpoint.
-app.get("/api/faucet", checkJwt, (_, res) => {
+app.post("/api/faucet", checkJwt, (req, res) => {
     // express-jwt put the token in res.user
+    const userId = req.user.sub;
+    const publicKey = req.body.publicKey;
     res.send({
         msg: "Your access token was successfully validated!",
+        publicKey,
+        userId,
     });
 });
 // Error report in JSON.
