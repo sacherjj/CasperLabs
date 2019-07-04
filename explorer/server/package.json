@@ -6,6 +6,7 @@
   "scripts": {
     "prebuild": "tslint -c tslint.json -p tsconfig.json --fix",
     "build": "tsc",
+    "~build": "tsc --watch",
     "prestart": "npm run build",
     "start": "node .",
     "dev": "nodemon -e ts --watch src --exec \"npm run build && npm run start\"",
@@ -29,12 +30,16 @@
     "typescript": "^3.5.2"
   },
   "dependencies": {
+    "@improbable-eng/grpc-web": "^0.9.6",
+    "@improbable-eng/grpc-web-node-http-transport": "^0.9.6",
     "@types/dotenv": "^6.1.1",
     "@types/express-jwt": "0.0.42",
+    "@types/google-protobuf": "^3.7.1",
     "blakejs": "^1.1.0",
     "dotenv": "^8.0.0",
     "express": "^4.17.1",
     "express-jwt": "^5.3.1",
+    "google-protobuf": "^3.9.0-rc.1",
     "jwks-rsa": "^1.5.1",
     "tweetnacl-ts": "^1.0.3",
     "tweetnacl-util": "^0.15.0"

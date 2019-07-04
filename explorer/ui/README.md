@@ -1,12 +1,6 @@
 # CasperLabs Explorer User Interface
 
-The purpose of the web UI is help users interact with the CasperLabs blockchain:
-* Sign up to participate in devnet
-* Create accounts (public/private key pairs)
-* Ask the faucet for tokens on devnet
-* Explore the block DAG
-
-To build you'll need [npm](https://github.com/nodesource/distributions#installation-instructions).
+To build the client and the server you'll need [npm](https://github.com/nodesource/distributions#installation-instructions).
 
 ```console
 $ npm --version

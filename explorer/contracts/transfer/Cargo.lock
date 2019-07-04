@@ -99,13 +99,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "faucet-contract"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.8.0",
-]
-
-[[package]]
 name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -374,6 +367,13 @@ dependencies = [
  "quote 0.6.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 0.15.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-xid 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "transfer"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
 ]
 
 [[package]]

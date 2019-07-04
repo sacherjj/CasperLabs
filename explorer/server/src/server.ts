@@ -3,8 +3,10 @@ import express from "express";
 import jwt from "express-jwt";
 import jwksRsa from "jwks-rsa";
 import path from "path";
+// TODO: Everything in config.json could come from env vars.
 import config from "./config.json";
 import Faucet from "./lib/Faucet";
+import DeployService from "./services/DeployService.js";
 
 // https://auth0.com/docs/quickstart/spa/vanillajs/02-calling-an-api
 // https://github.com/auth0/express-jwt
@@ -16,12 +18,14 @@ dotenv.config();
 // as if it were an environment variable
 const port = process.env.SERVER_PORT!;
 
+// Faucet contract and deploy factory.
 const faucet = new Faucet(
   process.env.FAUCET_CONTRACT_PATH!,
   process.env.FAUCET_ACCOUNT_PRIVATE_KEY_PATH!,
   process.env.FAUCET_NONCE_PATH!);
 
-// TODO: Everything in config.json could come from env vars.
+// gRPC client to the node.
+const deployService = new DeployService(process.env.CASPER_SERVICE_URL!);
 
 const app = express();
 
@@ -58,12 +62,23 @@ app.post("/api/faucet", checkJwt, (req, res) => {
   if (key === "") {
     throw Error("The 'accountPublicKeyBase64' is missing.");
   }
+
+  // Prepare the signed deploy.
   const deploy = faucet.makeDeploy(key);
-  // TODO: Send the deploy to the node and return the deploy hash to the browser.
-  const response = {
-    deployHashBase16: Buffer.from(deploy.getDeployHash_asU8()).toString("hex")
-  };
-  res.send(response);
+
+  // Send the deploy to the node and return the deploy hash to the browser.
+  deployService
+    .deploy(deploy)
+    .then(() => {
+      const response = {
+        deployHashBase16: Buffer.from(deploy.getDeployHash_asU8()).toString("hex")
+      };
+      res.send(response);
+    })
+    .catch((err) => {
+      // TODO: Rollback nonce?
+      res.status(500).send({ error: err });
+    });
 });
 
 // Error report in JSON.

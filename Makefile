@@ -188,7 +188,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		explorer/Dockerfile \
 		$(TS_SRC) \
 		.make/npm/explorer \
-		.make/faucet-contract
+		.make/explorer/contracts
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
@@ -247,8 +247,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	done
 	mkdir -p $(dir $@) && touch $@
 
-.make/faucet-contract: $(RUST_SRC) .make/rustup-update
-	cd explorer/faucet-contract && \
+.make/explorer/contracts: $(RUST_SRC) .make/rustup-update
+	# Compile the faucet contract that grants tokens.
+	cd explorer/contracts && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@
 
