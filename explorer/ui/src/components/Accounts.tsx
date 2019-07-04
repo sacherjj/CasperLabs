@@ -45,7 +45,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
           }}
           footerMessage={
             <span>
-              You can create new account here, which is basically an Ed25519
+              You can create a new account here, which is basically an Ed25519
               public key. Don't worry, the private key will never leave the
               browser, we'll save it straight to disk on your machine.
             </span>
