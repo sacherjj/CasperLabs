@@ -1,11 +1,11 @@
 // Declared so we can get it from the `window` object.
 interface Window {
   origin: string;
-  config: Config
+  config: Config;
 }
 
 interface Config {
-  auth0: Auth0Config
+  auth0: Auth0Config;
 }
 
 interface Auth0Config {
@@ -13,12 +13,20 @@ interface Auth0Config {
   clientId: string;
 }
 
-interface Account {
-  alias: string;
+interface UserAccount {
+  // Human readable name.
+  name: string;
+  // Public key in PEM format.
   publicKey: string;
 }
 
+interface UserMetadata {
+  accounts?: UserAccount[];
+}
+
 interface User {
+  // The User ID in Auth0.
+  sub: string;
   name: string;
   email?: string;
 }
