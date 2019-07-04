@@ -301,7 +301,8 @@ package-blessed-contracts: \
 
 # Package all blessed contracts that we have to make available for download.
 execution-engine/target/blessed-contracts.tar.gz: \
-	.make/blessed-contracts/mint-token
+	.make/blessed-contracts/mint-token \
+	.make/blessed-contracts/pos
 	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))
 	rm -rf $(ARCHIVE) $(ARCHIVE).gz
 	mkdir -p $(dir $@)
