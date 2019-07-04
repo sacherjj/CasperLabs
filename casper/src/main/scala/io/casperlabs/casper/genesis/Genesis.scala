@@ -311,32 +311,6 @@ object Genesis {
     } yield wallets
   }
 
-  def getBondedValidators[F[_]: Monad: Sync: Log](bondsFile: Option[String]): F[Set[PublicKeyBS]] =
-    bondsFile match {
-      case None => Set.empty[PublicKeyBS].pure[F]
-      case Some(file) =>
-        Sync[F]
-          .delay {
-            Try {
-              Source
-                .fromFile(file)
-                .getLines()
-                .map(line => {
-                  val Array(pk, _) = line.trim.split(" ")
-                  PublicKey(ByteString.copyFrom(Base64.getDecoder.decode(pk)))
-                })
-                .toSet
-            }
-          }
-          .flatMap {
-            case Failure(th) =>
-              Log[F]
-                .warn(s"Failed to parse bonded validators file $file for reason ${th.getMessage}")
-                .map(_ => Set.empty)
-            case Success(x) => x.pure[F]
-          }
-    }
-
   def getBonds[F[_]: MonadThrowable: FilesAPI: Log](
       bonds: Path
   ): F[Map[PublicKey, Long]] =
