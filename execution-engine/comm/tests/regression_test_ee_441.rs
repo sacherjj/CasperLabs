@@ -9,8 +9,8 @@ use std::collections::HashMap;
 
 use common::bytesrepr::ToBytes;
 use common::key::Key;
-use common::value::Value;
 use common::uref::URef;
+use common::value::Value;
 use shared::transform::Transform;
 use test_support::WasmTestBuilder;
 
@@ -33,7 +33,12 @@ fn do_pass(pass: &str) -> (URef, URef) {
         .exec(GENESIS_ADDR, "ee_441_rng_state.wasm", 1, vec![])
         .expect_success()
         .commit()
-        .exec(GENESIS_ADDR, "ee_441_rng_state_call.wasm", 2, vec![pass.to_string().to_bytes().unwrap()])
+        .exec(
+            GENESIS_ADDR,
+            "ee_441_rng_state_call.wasm",
+            2,
+            vec![pass.to_string().to_bytes().unwrap()],
+        )
         .expect_success()
         .commit()
         .get_transforms();
@@ -43,9 +48,11 @@ fn do_pass(pass: &str) -> (URef, URef) {
 
     let account = if let Transform::Write(Value::Account(account)) = account_transform {
         account
-    }
-    else {
-        panic!("Transform for account is expected to be of type Value but got {:?}", account_transform);
+    } else {
+        panic!(
+            "Transform for account is expected to be of type Value but got {:?}",
+            account_transform
+        );
     };
 
     (

@@ -27,10 +27,11 @@ pub extern "C" fn do_something() {
     contract_api::ret(&test_uref, &vec![test_uref])
 }
 
-
 #[no_mangle]
 pub extern "C" fn call() {
     // Export two functions
-    let _contract_pointer: ContractPointer = contract_api::store_function("do_nothing", BTreeMap::new());
-    let _contract_pointer: ContractPointer = contract_api::store_function("do_something", BTreeMap::new());
+    let _contract_pointer: ContractPointer =
+        contract_api::store_function("do_nothing", BTreeMap::new());
+    let _contract_pointer: ContractPointer =
+        contract_api::store_function("do_something", BTreeMap::new());
 }
