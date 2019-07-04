@@ -1040,52 +1040,39 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                 transforms,
                 validateNonces = false
               )
-
-      _ <- (1L to 6L).toList.traverse_[Effect, Unit] { i =>
-            for {
-              deploy <- ProtoUtil.basicDeploy[Effect](i)
-              createBlockResult <- nodes(0).casperEff
-                                    .deploy(deploy) *> nodes(0).casperEff.createBlock
-              Created(block) = createBlockResult
-
-              _ <- nodes(0).casperEff.addBlock(block)
-              _ <- nodes(1).receive()
-            } yield ()
-          }
-      deployData7 <- ProtoUtil.basicDeploy[Effect](7L)
-      createBlock8Result <- nodes(0).casperEff
-                             .deploy(deployData7) *> nodes(0).casperEff.createBlock
-      Created(block8) = createBlock8Result
-      invalidBlock8 = BlockUtil.resignBlock(
-        block8.withHeader(block8.getHeader.withTimestamp(Long.MaxValue)),
+      deployData1 <- ProtoUtil.basicDeploy[Effect](1L)
+      createBlock1Result <- nodes(0).casperEff
+                             .deploy(deployData1) *> nodes(0).casperEff.createBlock
+      Created(block1) = createBlock1Result
+      invalidBlock1 = BlockUtil.resignBlock(
+        block1.withHeader(block1.getHeader.withTimestamp(Long.MaxValue)),
         nodes(0).validatorId.privateKey
       )
-      _ <- nodes(0).casperEff.addBlock(invalidBlock8)
-      _ <- nodes(1).receive()
+      _ <- nodes(0).casperEff.addBlock(invalidBlock1)
       _ = nodes(0).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
-
-      // now nodes(0) has proposed a invalid block, and it should be able to propose valid blocks
-      createValidBlock8Result <- nodes(0).casperEff.createBlock // re-propose orphaned deployData7
-      Created(validBlock8)    = createValidBlock8Result
-      _                       <- nodes(0).casperEff.addBlock(validBlock8)
-
-      deployData8 <- ProtoUtil.basicDeploy[Effect](8L)
-      createBlock9Result <- nodes(0).casperEff
-                             .deploy(deployData8) *> nodes(0).casperEff.createBlock
-      Created(block9) = createBlock9Result
-      _               <- nodes(0).casperEff.addBlock(block9)
-      _               <- nodes(1).receive()
-      _               = nodes(0).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+      // nodes(0) won't send invalid blocks
+      _ <- nodes(1).receive()
+      _ <- nodes(1).casperEff
+            .contains(invalidBlock1) shouldBeF false
+      // we manually add this invalid block to node1
+      _ <- nodes(1).casperEff.addBlock(invalidBlock1)
+      _ <- nodes(1).casperEff
+            .contains(invalidBlock1) shouldBeF false
+      deployData2 <- ProtoUtil.basicDeploy[Effect](2L)
+      createBlock2Result <- nodes(1).casperEff
+                             .deploy(deployData2) *> nodes(1).casperEff.createBlock
+      Created(block2) = createBlock2Result
+      _               <- nodes(1).casperEff.addBlock(block2)
+      _               <- nodes(0).receive()
       _               <- nodes.map(_.tearDownNode()).toList.sequence
-      _ = nodes.toList.traverse_[Effect, Assertion] { node =>
-        validateBlockStore(node) { blockStore =>
-          for {
-            _      <- blockStore.getBlockMessage(invalidBlock8.blockHash) shouldBeF None
-            _      <- blockStore.getBlockMessage(validBlock8.blockHash) shouldBeF None
-            result <- blockStore.getBlockMessage(block9.blockHash) shouldBeF None
-          } yield result
-        }(nodes(0).metricEff, nodes(0).logEff)
-      }
+      _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
+            validateBlockStore(node) { blockStore =>
+              for {
+                _      <- blockStore.getBlockMessage(invalidBlock1.blockHash) shouldBeF None
+                result <- blockStore.getBlockMessage(block2.blockHash) shouldBeF Some(block2)
+              } yield result
+            }(nodes(0).metricEff, nodes(0).logEff)
+          }
     } yield ()
   }
 
