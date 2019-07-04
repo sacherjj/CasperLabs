@@ -255,11 +255,17 @@ where
 
     /// Adds `key` to the map of named keys of current context.
     pub fn add_uref(&mut self, name: String, key: Key) -> Result<(), Error> {
-        // No need to perform actual validation here because an account or contract (i.e. the
+        // No need to perform actual validation on the base key because an account or contract (i.e. the
         // element stored under `base_key`) is allowed to add new named keys to itself.
-        let validated_key = Validated::new(self.base_key(), Validated::valid)?;
-        let validated_value = Validated::new(Value::NamedKey(name.clone(), key), Validated::valid)?;
-        self.add_gs_validated(validated_key.clone(), validated_value)?;
+        let base_key = Validated::new(self.base_key(), Validated::valid)?;
+
+        let validated_value = Validated::new(Value::NamedKey(name.clone(), key), |v| {
+            self.validate_keys(&v)
+        })?;
+        self.add_gs_validated(base_key, validated_value)?;
+
+        // key was already validated successfully as part of validated_value above
+        let validated_key = Validated::new(key, Validated::valid)?;
         self.insert_named_uref(name, validated_key);
         Ok(())
     }
