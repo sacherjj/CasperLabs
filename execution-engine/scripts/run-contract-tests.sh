@@ -12,6 +12,7 @@ CONTRACTS=(
     "transfer-to-account-02"
     "local-state"
     "known-urefs"
+    "transfer-purse-to-purse"
 )
 
 source "${HOME}/.cargo/env"

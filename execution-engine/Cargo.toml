@@ -16,5 +16,6 @@ members = [
     "test-contracts/transfer-to-account-02",
     "test-contracts/local-state",
     "test-contracts/known-urefs",
+    "test-contracts/transfer-purse-to-purse",
     "wasm-prep",
 ]

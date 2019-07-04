@@ -301,6 +301,8 @@ pub struct WasmTestBuilder {
     pub bonded_validators: Vec<HashMap<common::value::account::PublicKey, common::value::U512>>,
     /// Cached genesis transforms
     pub genesis_account: Option<common::value::Account>,
+    /// Mint contract uref
+    pub mint_contract_uref: Option<common::uref::URef>,
 }
 
 impl Default for WasmTestBuilder {
@@ -330,6 +332,7 @@ impl WasmTestBuilder {
             transforms: Vec::new(),
             bonded_validators: result.0.bonded_validators,
             genesis_account: result.0.genesis_account,
+            mint_contract_uref: result.0.mint_contract_uref,
         }
     }
 
@@ -344,6 +347,7 @@ impl WasmTestBuilder {
             transforms: Vec::new(),
             bonded_validators: Vec::new(),
             genesis_account: None,
+            mint_contract_uref: None,
         }
     }
 
@@ -352,7 +356,7 @@ impl WasmTestBuilder {
         genesis_addr: [u8; 32],
         genesis_validators: HashMap<common::value::account::PublicKey, common::value::U512>,
     ) -> &mut WasmTestBuilder {
-        let (genesis_request, _contracts) =
+        let (genesis_request, contracts) =
             create_genesis_request(genesis_addr, genesis_validators.clone());
 
         let genesis_response = self
@@ -363,6 +367,13 @@ impl WasmTestBuilder {
 
         // Cache genesis response transforms for easy access later
         let genesis_transforms = get_genesis_transforms(&genesis_response);
+
+        let mint_contract_uref = get_mint_contract_uref(&genesis_transforms, &contracts)
+            .expect("Unable to get mint contract uref");
+
+        // Cache mint uref
+        self.mint_contract_uref = Some(mint_contract_uref);
+
         // Cache the account
         self.genesis_account = Some(
             get_account(
