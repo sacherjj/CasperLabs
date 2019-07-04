@@ -108,9 +108,9 @@ where
         name: &str,
     ) -> Result<(), Error> {
         contract.get_urefs_lookup_mut().remove(name);
+        // By this point in the code path, there is no further validation needed.
         let validated_uref = Validated::new(contract_key, Validated::valid)?;
-        let validated_value =
-            Validated::new(Value::Contract(contract), |value| self.validate_keys(value))?;
+        let validated_value = Validated::new(Value::Contract(contract), Validated::valid)?;
 
         self.state
             .borrow_mut()
@@ -139,7 +139,26 @@ where
                 Ok(())
             }
             contract_uref @ Key::URef(_) => {
-                let mut contract: Contract = self.read_gs_typed(&contract_uref)?;
+                // We do not need to validate the base key because a contract
+                // is always able to remove keys from its own known_urefs.
+                let contract_key = Validated::new(contract_uref, Validated::valid)?;
+
+                let mut contract: Contract = {
+                    let value: Value = self
+                        .state
+                        .borrow_mut()
+                        .read(self.correlation_id, &contract_key)
+                        .map_err(Into::into)?
+                        .ok_or_else(|| Error::KeyNotFound(contract_uref))?;
+
+                    value.try_into().map_err(|found| {
+                        Error::TypeMismatch(shared::transform::TypeMismatch {
+                            expected: "Contract".to_owned(),
+                            found,
+                        })
+                    })?
+                };
+
                 self.uref_lookup.remove(name);
                 self.remove_uref_from_contract(contract_uref, contract, name)
             }
