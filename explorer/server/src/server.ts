@@ -4,7 +4,7 @@ import jwt from "express-jwt";
 import jwksRsa from "jwks-rsa";
 import path from "path";
 import config from "./config.json";
-import Faucet from "./Faucet";
+import Faucet from "./lib/Faucet";
 
 // https://auth0.com/docs/quickstart/spa/vanillajs/02-calling-an-api
 // https://github.com/auth0/express-jwt

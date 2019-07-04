@@ -18,11 +18,15 @@
     "jsx": "react",
     "typeRoots": [
       "@types",
-      "./@types"
+      "./@types",
+      "./node_modules/@types"
     ],
   },
   "include": [
     "./src/**/*",
     "../grpc/src/**/*"
+  ],
+  "exclude": [
+    "./src/**/*.test.ts"
   ]
 }
