@@ -34,8 +34,8 @@ const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
 // This value was acquired by observing the output of an execution of "create_purse_01.wasm"
 // made by ACCOUNT_1.
 const EXPECTED_UREF_BYTES: [u8; 32] = [
-    73, 143, 110, 138, 106, 168, 247, 100, 112, 181, 14, 171, 133, 47, 108, 16, 3, 147, 232, 172,
-    251, 67, 247, 26, 160, 197, 79, 100, 233, 232, 174, 118,
+    0xb9, 0x8a, 0x1b, 0xee, 0xd7, 0x95, 0x99, 0x1f, 0x3a, 0x54, 0xdf, 0xb1, 0xad, 0xc8, 0x48, 0x0b,
+    0x16, 0x20, 0x14, 0x25, 0x58, 0xb1, 0x4c, 0x09, 0x16, 0x1f, 0xf1, 0xe7, 0x69, 0xbd, 0x8f, 0xc9,
 ];
 
 struct TestContext {
@@ -677,16 +677,17 @@ fn should_create_purse() {
         .wait_drop_metadata()
         .unwrap();
 
+    println!("{:?}", exec_response);
     let exec_transforms = &test_support::get_exec_transforms(&exec_response)[0];
+    println!("{:?}", exec_transforms);
 
-    let expected_purse_id =
-        PurseId::new(URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE));
-
+    let expected_purse_id = PurseId::new(
+        URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE).remove_access_rights(),
+    );
+    println!("looking for {:?}", expected_purse_id);
     test_context.track(&exec_transforms, expected_purse_id);
 
-    let account = test_context
-        .lookup(&exec_transforms, expected_purse_id)
-        .expect("should lookup");
-
-    assert_eq!(account, Transform::Write(Value::UInt512(U512::from(0))));
+    let account = &exec_transforms
+        [&Key::URef(URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE)).normalize()];
+    assert_eq!(account, &Transform::Write(Value::UInt512(U512::from(0))));
 }

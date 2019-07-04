@@ -1209,7 +1209,6 @@ where
     let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
 
     let known_urefs = extract_access_rights_from_keys(refs.values().cloned().chain(extra_urefs));
-    let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
 
     let mut runtime = Runtime {
         memory,
@@ -1227,7 +1226,7 @@ where
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
-            rng,
+            current_runtime.context.rng(),
             protocol_version,
             current_runtime.context.correlation_id(),
         ),
@@ -1470,7 +1469,7 @@ impl Executor<Module> for WasmiExecutor {
             gas_limit,
             gas_counter,
             fn_store_id,
-            rng,
+            Rc::new(RefCell::new(rng)),
             protocol_version,
             correlation_id,
         );
