@@ -179,10 +179,6 @@ fn create_mint_effects(
         ret.insert(balance_uref.as_string(), balance_uref_key);
         // Insert PoS balance URef and its initial stakes so that PoS.
         ret.insert(pos_balance_uref.as_string(), pos_balance_uref_key);
-        ret.insert(
-            mint_contract_uref.as_string(),
-            Key::URef(mint_contract_uref),
-        );
         ret
     };
 
@@ -521,10 +517,6 @@ mod tests {
 
         let mint_known_urefs = {
             let mut ret: BTreeMap<String, Key> = BTreeMap::new();
-            ret.insert(
-                mint_contract_uref.as_string(),
-                Key::URef(mint_contract_uref),
-            );
             ret.insert(pos_balance_uref.as_string(), pos_balance_uref_key);
             ret.insert(balance_uref.as_string(), balance_uref_key);
             ret
