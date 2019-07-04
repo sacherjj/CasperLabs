@@ -149,7 +149,7 @@ where
                         .borrow_mut()
                         .read(self.correlation_id, &contract_key)
                         .map_err(Into::into)?
-                        .ok_or(Error::KeyNotFound(contract_uref))?;
+                        .ok_or_else(|| Error::KeyNotFound(contract_uref))?;
 
                     value.try_into().map_err(|found| {
                         Error::TypeMismatch(shared::transform::TypeMismatch {
