@@ -3,7 +3,6 @@ package io.casperlabs.casper
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
-import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
@@ -11,8 +10,9 @@ import io.casperlabs.casper.FinalityDetector.Committee
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
+import org.scalatest.{FlatSpec, Matchers}
 
-import scala.collection.immutable.{HashMap, HashSet}
+import scala.collection.immutable.HashMap
 
 @silent("is never used")
 class FinalityDetectorTest
@@ -161,6 +161,221 @@ class FinalityDetectorTest
                       )
           _ = committee shouldBe Some(Committee(Set(v1, v2), 2))
         } yield result
+  }
+
+  // See [[/docs/casper/images/transitive_justification.png]]
+  it should "see " in withStorage { implicit blockStore => implicit blockDagStorage =>
+    val v0                              = generateValidator("Validator 0")
+    val v1                              = generateValidator("Validator 1")
+    val v2                              = generateValidator("Validator 2")
+    val v3                              = generateValidator("Validator 3")
+    val v4                              = generateValidator("Validator 4")
+    val validators                      = Seq(v0, v1, v2, v3, v4)
+    val bonds                           = validators.map(Bond(_, 1))
+    implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
+
+    for {
+      genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+      candidate0 <- createBlock[Task](
+                     Seq(genesis.blockHash),
+                     v0,
+                     bonds,
+                     Map(v0 -> genesis.blockHash)
+                   )
+      candidate1 <- createBlock[Task](
+                     Seq(genesis.blockHash),
+                     v1,
+                     bonds,
+                     Map(v1 -> genesis.blockHash)
+                   )
+      b1 <- createBlock[Task](
+             Seq(candidate0.blockHash),
+             v0,
+             bonds,
+             Map(v0 -> candidate0.blockHash)
+           )
+      b2 <- createBlock[Task](
+             Seq(candidate1.blockHash),
+             v1,
+             bonds,
+             Map(v1 -> candidate1.blockHash)
+           )
+      b3 <- createBlock[Task](
+             Seq(candidate0.blockHash),
+             v2,
+             bonds,
+             Map(v0 -> candidate0.blockHash, v2 -> genesis.blockHash)
+           )
+      b4 <- createBlock[Task](
+             Seq(candidate0.blockHash),
+             v3,
+             bonds,
+             Map(v0 -> candidate0.blockHash, v3 -> genesis.blockHash)
+           )
+      b5 <- createBlock[Task](
+             Seq(candidate0.blockHash),
+             v4,
+             bonds,
+             Map(v0 -> candidate0.blockHash, v4 -> genesis.blockHash)
+           )
+      b6 <- createBlock[Task](
+             Seq(b2.blockHash),
+             v4,
+             bonds,
+             Map(v1 -> b2.blockHash, v4 -> b5.blockHash)
+           )
+      b7 <- createBlock[Task](
+             Seq(b6.blockHash),
+             v0,
+             bonds,
+             Map(v0 -> b1.blockHash, v3 -> b4.blockHash, v4 -> b6.blockHash)
+           )
+      b8 <- createBlock[Task](
+             Seq(b7.blockHash),
+             v0,
+             bonds,
+             Map(v0 -> b7.blockHash, v2 -> b3.blockHash)
+           )
+      b9 <- createBlock[Task](
+             Seq(b4.blockHash),
+             v2,
+             bonds,
+             Map(v0 -> b1.blockHash, v2 -> b3.blockHash, v3 -> b4.blockHash, v4 -> b6.blockHash)
+           )
+      b10 <- createBlock[Task](
+              Seq(b8.blockHash),
+              v0,
+              bonds,
+              Map(v0 -> b8.blockHash, v2 -> b9.blockHash)
+            )
+      b11 <- createBlock[Task](
+              Seq(b7.blockHash),
+              v4,
+              bonds,
+              Map(v0 -> b7.blockHash, v2 -> b9.blockHash, v4 -> b6.blockHash)
+            )
+      b12 <- createBlock[Task](
+              Seq(b11.blockHash),
+              v4,
+              bonds,
+              Map(v4 -> b11.blockHash)
+            )
+      b13 <- createBlock[Task](
+              Seq(b10.blockHash),
+              v0,
+              bonds,
+              Map(v0 -> b10.blockHash, v4 -> b11.blockHash)
+            )
+      b14 <- createBlock[Task](
+              Seq(b7.blockHash),
+              v2,
+              bonds,
+              Map(v0 -> b7.blockHash, v2 -> b9.blockHash)
+            )
+      b15 <- createBlock[Task](
+              Seq(b13.blockHash),
+              v0,
+              bonds,
+              Map(
+                v0 -> b13.blockHash,
+                v1 -> b2.blockHash,
+                v2 -> b9.blockHash,
+                v3 -> b4.blockHash,
+                v4 -> b11.blockHash
+              )
+            )
+      b16 <- createBlock[Task](
+              Seq(b12.blockHash),
+              v4,
+              bonds,
+              Map(
+                v0 -> b10.blockHash,
+                v1 -> b2.blockHash,
+                v2 -> b9.blockHash,
+                v3 -> b4.blockHash,
+                v4 -> b12.blockHash
+              )
+            )
+      b17 <- createBlock[Task](
+              Seq(b12.blockHash),
+              v1,
+              bonds,
+              Map(
+                v0 -> b10.blockHash,
+                v1 -> b2.blockHash,
+                v2 -> b9.blockHash,
+                v3 -> b4.blockHash,
+                v4 -> b12.blockHash
+              )
+            )
+      b18 <- createBlock[Task](
+              Seq(b17.blockHash),
+              v1,
+              bonds,
+              Map(
+                v0 -> b13.blockHash,
+                v1 -> b17.blockHash,
+                v2 -> b9.blockHash,
+                v3 -> b4.blockHash,
+                v4 -> b16.blockHash
+              )
+            )
+      b19 <- createBlock[Task](
+              Seq(b16.blockHash),
+              v4,
+              bonds,
+              Map(
+                v0 -> b13.blockHash,
+                v1 -> b2.blockHash,
+                v2 -> b9.blockHash,
+                v3 -> b4.blockHash,
+                v4 -> b16.blockHash
+              )
+            )
+      b20 <- createBlock[Task](
+              Seq(b12.blockHash),
+              v3,
+              bonds,
+              Map(
+                v0 -> b8.blockHash,
+                v1 -> b2.blockHash,
+                v2 -> b14.blockHash,
+                v3 -> b4.blockHash,
+                v4 -> b12.blockHash
+              )
+            )
+
+      dag <- blockDagStorage.getRepresentation
+      levelZeroMsgs <- finalityDetectorEffect.levelZeroMsgs(
+                        dag,
+                        candidate1.blockHash,
+                        bonds.map(_.validatorPublicKey).toList
+                      )
+      lowestLevelZeroMsgs = validators
+        .flatMap(v => levelZeroMsgs(v).lastOption)
+      _ = lowestLevelZeroMsgs.map(_.blockHash) shouldBe Seq(
+        b7.blockHash,
+        candidate1.blockHash, // though it is not show in the image
+        b14.blockHash,
+        b20.blockHash,
+        b6.blockHash
+      )
+      sweepResult <- finalityDetectorEffect.sweep(
+                      dag,
+                      validators.toSet,
+                      levelZeroMsgs,
+                      3,
+                      3,
+                      bonds.map(bond => (bond.validatorPublicKey, bond.stake)).toMap
+                    )
+      (blockLevelTags, _) = sweepResult
+      b14LevelTags        = blockLevelTags(b14.blockHash)
+      // b14 doesn't have direct zero-level justification b6 and b2, but its non-level-zero justification b9 has seen them
+      _ = b14LevelTags.blockLevel shouldBe 1
+      _ = b14LevelTags.highestLevelBySeenBlocks(v4) shouldBe 0
+      _ = b14LevelTags.highestLevelBySeenBlocks(v1) shouldBe 0
+
+    } yield ()
   }
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
