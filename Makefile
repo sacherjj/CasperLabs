@@ -221,7 +221,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		.make/install/protoc-ts \
 		$(PROTO_SRC)
 	$(eval DIR_IN = ./protobuf)
-	$(eval DIR_OUT = ./explorer/grpc/src)
+	$(eval DIR_OUT = ./explorer/grpc/generated)
 	rm -rf $(DIR_OUT)
 	mkdir -p $(DIR_OUT)
 	# First the pure data packages, so it doesn't create empty _pb_service.d.ts files.

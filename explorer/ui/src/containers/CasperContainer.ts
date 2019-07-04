@@ -2,16 +2,22 @@ import { computed } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import Cell from '../lib/Cell';
+import FaucetService from '../services/FaucetService';
 
 // CasperContainer talks to the API on behalf of React
 // components and exposes the state in MobX observables.
 export class CasperContainer {
   _faucetRequests = new Cell<FaucetRequest[]>('faucet-requests', []);
 
-  constructor(private errors: ErrorContainer) {}
+  constructor(
+    private errors: ErrorContainer,
+    private faucetService: FaucetService
+  ) {}
 
-  requestTokens(account: UserAccount) {
-    const deployHash = Buffer.alloc(0);
+  async requestTokens(account: UserAccount) {
+    const deployHash = await this.errors.capture(
+      this.faucetService.requestTokens(account.publicKeyBase64)
+    );
     this.monitorFaucetRequest(account, deployHash);
   }
 
@@ -19,10 +25,11 @@ export class CasperContainer {
     return this._faucetRequests.get;
   }
 
-  private monitorFaucetRequest(account: UserAccount, deployHash: ByteArray) {
+  private monitorFaucetRequest(account: UserAccount, deployHash: DeployHash) {
     const request = { timestamp: new Date(), account, deployHash };
     const requests = this._faucetRequests.get.concat(request);
     this._faucetRequests.set(requests);
+    // TODO: Start polling for the deploy status.
   }
 }
 
@@ -30,7 +37,7 @@ export class CasperContainer {
 export interface FaucetRequest {
   timestamp: Date;
   account: UserAccount;
-  deployHash: ByteArray;
+  deployHash: DeployHash;
 }
 
 export default CasperContainer;

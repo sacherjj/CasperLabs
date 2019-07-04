@@ -24,7 +24,7 @@
   },
   "include": [
     "./src/**/*",
-    "../grpc/src/**/*"
+    "../grpc/generated/**/*"
   ],
   "exclude": [
     "./src/**/*.test.ts"

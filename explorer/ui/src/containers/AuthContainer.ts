@@ -1,11 +1,10 @@
 import { observable } from 'mobx';
-import createAuth0Client from '@auth0/auth0-spa-js';
-import Auth0Client from '@auth0/auth0-spa-js/dist/typings/Auth0Client';
+import * as nacl from 'tweetnacl-ts';
+import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
 import FormData from './FormData';
-import * as nacl from 'tweetnacl-ts';
+import Auth0Service from '../services/Auth0Service';
 import { encodeBase64 } from '../lib/Conversions';
-import { saveAs } from 'file-saver';
 
 // https://github.com/auth0/auth0-spa-js/issues/41
 // https://auth0.com/docs/quickstart/spa/vanillajs
@@ -14,8 +13,6 @@ import { saveAs } from 'file-saver';
 // https://auth0.com/docs/api/management/v2#!/Users/patch_users_by_id
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
-
-const Auth0ApiUrl = 'https://casperlabs.auth0.com/api/v2/';
 
 export class AuthContainer {
   @observable user: User | null = null;
@@ -26,10 +23,15 @@ export class AuthContainer {
 
   @observable selectedAccount: UserAccount | null = null;
 
-  private auth0: Auth0Client | null = null;
-
-  constructor(private conf: Auth0Config, private errors: ErrorContainer) {
+  constructor(
+    private errors: ErrorContainer,
+    private auth0Service: Auth0Service
+  ) {
     this.init();
+  }
+
+  private getAuth0() {
+    return this.auth0Service.getAuth0();
   }
 
   private async init() {
@@ -47,28 +49,11 @@ export class AuthContainer {
     this.fetchUser();
   }
 
-  private async getAuth0() {
-    if (this.auth0 != null) return this.auth0;
-
-    const auth0 = await createAuth0Client({
-      domain: this.conf.domain,
-      client_id: this.conf.clientId,
-      redirect_uri: window.location.origin,
-      // This is needed so that we can query and update the `user_metadata` from here.
-      audience: Auth0ApiUrl,
-      scope:
-        'read:current_user, create:current_user_metadata, update:current_user_metadata'
-    });
-
-    this.auth0 = auth0;
-    return auth0;
-  }
-
   async login() {
     const auth0 = await this.getAuth0();
     const isAuthenticated = await auth0.isAuthenticated();
     if (!isAuthenticated) {
-      await this.auth0!.loginWithPopup({
+      await auth0.loginWithPopup({
         response_type: 'token id_token'
       } as PopupLoginOptions);
     }
@@ -77,9 +62,10 @@ export class AuthContainer {
 
   async logout() {
     const auth0 = await this.getAuth0();
-    auth0.logout({ returnTo: window.location.origin });
     this.user = null;
     this.accounts = null;
+    sessionStorage.clear();
+    auth0.logout({ returnTo: window.location.origin });
   }
 
   private async fetchUser() {
@@ -91,15 +77,9 @@ export class AuthContainer {
 
   async refreshAccounts() {
     if (this.user != null) {
-      const auth0 = await this.getAuth0();
-      const token = await auth0.getTokenSilently();
-      const response = await fetch(
-        `${Auth0ApiUrl}users/${this.user.sub}?fields=user_metadata`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const meta: UserMetadata = await this.auth0Service.getUserMetadata(
+        this.user.sub
       );
-
-      const fields = await response.json();
-      const meta: UserMetadata = fields.user_metadata || {};
       this.accounts = meta.accounts || [];
     }
   }
@@ -139,20 +119,9 @@ export class AuthContainer {
   }
 
   private async saveAccounts() {
-    const userMetadata = {
-      user_metadata: { accounts: this.accounts }
-    };
-    const auth0 = await this.getAuth0();
-    const token = await auth0.getTokenSilently();
-    const response = await fetch(`${Auth0ApiUrl}users/${this.user!.sub}`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(userMetadata)
+    await this.auth0Service.updateUserMetadata(this.user!.sub, {
+      accounts: this.accounts || undefined
     });
-    await response.json();
   }
 
   selectAccountByName(name: string) {

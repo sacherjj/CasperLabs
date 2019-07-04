@@ -30,6 +30,6 @@
   },
   "include": [
     "src",
-    "../grpc/src/**/*"
+    "../grpc/generated/**/*"
   ]
 }

@@ -17,3 +17,4 @@ interface User {
 }
 
 type ByteArray = Uint8Array;
+type DeployHash = ByteArray;

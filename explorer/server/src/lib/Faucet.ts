@@ -2,7 +2,7 @@ import blake from "blakejs";
 import fs from "fs";
 import * as nacl from "tweetnacl-ts";
 import { decodeBase64 } from "tweetnacl-util";
-import { Approval, Deploy, Signature } from "../../../grpc/src/io/casperlabs/casper/consensus/consensus_pb";
+import { Approval, Deploy, Signature } from "../../../grpc/generated/io/casperlabs/casper/consensus/consensus_pb";
 import * as Ser from "./Serialization";
 
 // https://www.npmjs.com/package/tweetnacl-ts

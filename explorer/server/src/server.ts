@@ -54,16 +54,25 @@ app.use(express.json());
 app.post("/api/faucet", checkJwt, (req, res) => {
   // express-jwt put the token in res.user
   // const userId = (req as any).user.sub;
-  const publicKey = req.body.publicKey;
-  const deploy = faucet.makeDeploy(publicKey);
+  const key = req.body.accountPublicKeyBase64 || "";
+  if (key === "") {
+    throw Error("The 'accountPublicKeyBase64' is missing.");
+  }
+  const deploy = faucet.makeDeploy(key);
   // TODO: Send the deploy to the node and return the deploy hash to the browser.
-  res.send(deploy.toObject());
+  const response = {
+    deployHashBase16: Buffer.from(deploy.getDeployHash_asU8()).toString("hex")
+  };
+  res.send(response);
 });
 
 // Error report in JSON.
 app.use((err: any, req: any, res: any, next: any) => {
   if (err.name === "UnauthorizedError") {
     return res.status(401).send({ msg: "Invalid token" });
+  }
+  if (req.path === "/api/faucet") {
+    return res.status(500).send({ error: err });
   }
   next(err, req, res);
 });
