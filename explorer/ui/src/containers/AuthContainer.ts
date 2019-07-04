@@ -4,7 +4,7 @@ import Auth0Client from '@auth0/auth0-spa-js/dist/typings/Auth0Client';
 import ErrorContainer from './ErrorContainer';
 import FormData from './FormData';
 import * as nacl from 'tweetnacl-ts';
-import { encodeBase64 } from 'tweetnacl-util';
+import { encodeBase64 } from '../lib/Conversions';
 import { saveAs } from 'file-saver';
 
 // https://github.com/auth0/auth0-spa-js/issues/41
@@ -23,6 +23,8 @@ export class AuthContainer {
 
   // An account we are creating, while we're configuring it.
   @observable newAccount: NewAccountFormData | null = null;
+
+  @observable selectedAccount: UserAccount | null = null;
 
   private auth0: Auth0Client | null = null;
 
@@ -111,10 +113,13 @@ export class AuthContainer {
     let form = this.newAccount!;
     if (form.clean()) {
       // Save the private and public keys to disk.
-      saveToFile(form.privateKey, `${form.name}.private.key`);
-      saveToFile(form.publicKey, `${form.name}.public.key`);
+      saveToFile(form.privateKeyBase64, `${form.name}.private.key`);
+      saveToFile(form.publicKeyBase64, `${form.name}.public.key`);
       // Add the public key to the accounts and save it to Auth0.
-      await this.addAccount({ name: form.name, publicKey: form.publicKey });
+      await this.addAccount({
+        name: form.name,
+        publicKeyBase64: form.publicKeyBase64
+      });
       return true;
     } else {
       return false;
@@ -129,7 +134,7 @@ export class AuthContainer {
   }
 
   private async addAccount(account: UserAccount) {
-    this.accounts = this.accounts!.concat(account);
+    this.accounts!.push(account);
     await this.errors.capture(this.saveAccounts());
   }
 
@@ -149,6 +154,10 @@ export class AuthContainer {
     });
     await response.json();
   }
+
+  selectAccountByName(name: string) {
+    this.selectedAccount = this.accounts!.find(x => x.name === name) || null;
+  }
 }
 
 function saveToFile(content: string, filename: string) {
@@ -156,18 +165,18 @@ function saveToFile(content: string, filename: string) {
   saveAs(blob, filename);
 }
 
-export class NewAccountFormData extends FormData {
+class NewAccountFormData extends FormData {
   constructor(private accounts: UserAccount[]) {
     super();
     // Generate key pair and assign to public and private keys.
     const keys = nacl.sign_keyPair();
-    this.publicKey = encodeBase64(keys.publicKey);
-    this.privateKey = encodeBase64(keys.secretKey);
+    this.publicKeyBase64 = encodeBase64(keys.publicKey);
+    this.privateKeyBase64 = encodeBase64(keys.secretKey);
   }
 
   @observable name: string = '';
-  @observable publicKey: string = '';
-  @observable privateKey: string = '';
+  @observable publicKeyBase64: string = '';
+  @observable privateKeyBase64: string = '';
 
   protected check() {
     if (this.name === '') return 'Name cannot be empty!';
@@ -175,7 +184,7 @@ export class NewAccountFormData extends FormData {
     if (this.accounts.some(x => x.name === this.name))
       return `An account with name '${this.name}' already exists.`;
 
-    if (this.accounts.some(x => x.publicKey === this.publicKey))
+    if (this.accounts.some(x => x.publicKeyBase64 === this.publicKeyBase64))
       return 'An account with this public key already exists.';
 
     return null;

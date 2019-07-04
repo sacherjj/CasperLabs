@@ -3,12 +3,14 @@ import { Route, RouteProps } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import AuthContainer from '../containers/AuthContainer';
 
-export const Loading = () => (
+export const Spinner = (msg: String) => (
   <div className="text-center">
     <i className="fa fa-fw fa-spin fa-spinner" />
-    Loading...
+    {msg}...
   </div>
 );
+
+export const Loading = () => Spinner('Loading');
 
 export const IconButton = (props: {
   onClick: () => void;
@@ -24,11 +26,16 @@ export const RefreshButton = (props: { refresh: () => void }) => (
   <IconButton onClick={() => props.refresh()} title="Refresh" icon="redo" />
 );
 
-export const Button = (props: { onClick: () => void; title: string }) => (
+export const Button = (props: {
+  onClick: () => void;
+  title: string;
+  disabled?: boolean;
+}) => (
   <button
     type="button"
     onClick={_ => props.onClick()}
     className="btn btn-primary"
+    disabled={props.disabled || false}
   >
     {props.title}
   </button>
@@ -100,7 +107,7 @@ export class PrivateRoute extends React.Component<PrivateRouteProps, {}> {
   render() {
     if (this.props.auth.user == null) {
       this.props.auth.login();
-      return Loading();
+      return Spinner('Logging in');
     }
     return <Route {...this.props} />;
   }

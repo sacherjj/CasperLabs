@@ -32,6 +32,9 @@ You can change the port in the `.env` file or by setting the `PORT` env var.
 The page will reload if you make edits.<br>
 You will also see any lint errors in the console.
 
+If we add `"proxy": "http://localhost:8001/"` to `package.json` we get transparent proxying to the server, but it seems to clash with auto-reloading in Firefox; works
+in Chrome.
+
 ### `npm test`
 
 Launches the test runner in the interactive watch mode.<br>
