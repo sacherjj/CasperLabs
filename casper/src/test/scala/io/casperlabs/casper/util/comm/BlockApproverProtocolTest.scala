@@ -107,7 +107,6 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
       node  = nodes.head
     } yield new BlockApproverProtocol(
       node.validatorId,
-      deployTimestamp,
       bonds,
       wallets,
       BlockApproverProtocol.GenesisConf(

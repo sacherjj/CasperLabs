@@ -377,9 +377,7 @@ package object gossiping {
                                // This is the case of a validator that will pull the genesis from the bootstrap, validate and approve it.
                                // Based on `CasperPacketHandler.of`.
                                for {
-                                 _ <- Log[F].info("Starting in approve genesis mode")
-                                 timestamp <- conf.casper.deployTimestamp
-                                               .fold(Time[F].currentMillis)(_.pure[F])
+                                 _       <- Log[F].info("Starting in approve genesis mode")
                                  wallets <- Genesis.getWallets[F](conf.casper.walletsFile)
                                  bonds   <- readBondsFile
                                  bondsMap = bonds.map {
@@ -394,7 +392,6 @@ package object gossiping {
 
                                    BlockApproverProtocol.validateCandidate[F](
                                      candidate,
-                                     timestamp,
                                      wallets,
                                      bondsMap,
                                      BlockApproverProtocol.GenesisConf.fromCasperConf(conf.casper)

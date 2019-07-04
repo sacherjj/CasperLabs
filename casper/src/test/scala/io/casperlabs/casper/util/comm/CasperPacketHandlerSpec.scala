@@ -69,7 +69,6 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
     val bap = new BlockApproverProtocol(
       validatorId,
-      deployTimestamp,
       bonds,
       Seq.empty,
       BlockApproverProtocol.GenesisConf(

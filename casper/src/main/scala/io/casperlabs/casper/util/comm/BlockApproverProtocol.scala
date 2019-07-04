@@ -35,7 +35,6 @@ import scala.math.BigInt
   */
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
-    deployTimestamp: Long,
     bonds: Map[PublicKey, Long],
     wallets: Seq[PreWallet],
     conf: BlockApproverProtocol.GenesisConf
@@ -56,7 +55,6 @@ class BlockApproverProtocol(
       BlockApproverProtocol
         .validateCandidate[F](
           candidate,
-          deployTimestamp,
           wallets,
           _bonds,
           conf
@@ -123,7 +121,6 @@ object BlockApproverProtocol {
 
   def validateCandidate[F[_]: MonadThrowable: Log: ExecutionEngineService: FilesAPI](
       candidate: ApprovedBlockCandidate,
-      timestamp: Long,
       wallets: Seq[PreWallet],
       bonds: Map[ByteString, Long],
       conf: GenesisConf
@@ -183,35 +180,17 @@ object BlockApproverProtocol {
       protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
         postState.blockNumber
       )
-      processedDeploys <- EitherT(
-                           ExecutionEngineService[F].exec(
-                             ExecutionEngineService[F].emptyStateHash,
-                             timestamp,
-                             deploys
-                               .map(ProtoUtil.deployDataToEEDeploy),
-                             protocolVersion
-                           )
-                         ).leftMap(_.getMessage)
-      processedDeployResults = ExecEngineUtil.zipDeploysResults(deploys, processedDeploys)
-      deployEffects          = ExecEngineUtil.findCommutingEffects(processedDeployResults)
-      transforms             = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).flatMap(_._2)
-      commitResult <- EitherT(
-                       ExecutionEngineService[F]
-                         .commit(ExecutionEngineService[F].emptyStateHash, transforms)
-                     ).leftMap(_.getMessage)
+      genesisResult <- EitherT(
+                        ExecutionEngineService[F].runGenesis(
+                          deploys
+                            .map(ProtoUtil.deployDataToEEDeploy),
+                          protocolVersion
+                        )
+                      ).leftMap(_.getMessage)
       _ <- EitherT(
-            (commitResult.postStateHash == postState.postStateHash)
+            (genesisResult.poststateHash == postState.postStateHash)
               .either(())
               .or("GlobalState root hash mismatch.")
-              .pure[F]
-          )
-      bondedValidators = commitResult.bondedValidators.map {
-        case consensus.Bond(validator, stake) => validator -> stake
-      }.toMap
-      _ <- EitherT(
-            (bondedValidators == bonds)
-              .either(())
-              .or("Tuplespace bonds don't match expected ones.")
               .pure[F]
           )
     } yield ()).value
