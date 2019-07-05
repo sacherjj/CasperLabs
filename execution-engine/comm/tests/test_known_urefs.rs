@@ -27,7 +27,7 @@ fn should_run_known_urefs_contract() {
         .expect_success()
         .finish();
 
-    let transforms = result.get_transforms();
+    let transforms = result.builder().get_transforms();
 
     assert_eq!(transforms.len(), 1);
 

@@ -32,7 +32,7 @@ fn should_run_local_state_contract() {
         .commit()
         .finish();
 
-    let transforms = result.get_transforms();
+    let transforms = result.builder().get_transforms();
 
     let expected_local_key = Key::local(GENESIS_ADDR, &[66u8; 32].to_bytes().unwrap());
 

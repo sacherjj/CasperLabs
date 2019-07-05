@@ -26,6 +26,7 @@ fn should_run_purse_to_purse_transfer() {
         .finish();
 
     let mint_contract_uref = genesis_test_result
+        .builder()
         .mint_contract_uref
         .expect("Unable to get mint contract uref");
 
@@ -43,7 +44,7 @@ fn should_run_purse_to_purse_transfer() {
         .commit()
         .finish();
 
-    let transforms = transfer_result.get_transforms();
+    let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[0];
 
     // Get transforms output for genesis account
@@ -126,7 +127,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .finish();
 
-    let mint_contract_uref = genesis_test_result
+    let mint_contract_uref = genesis_test_result.builder()
         .mint_contract_uref
         .expect("Unable to get mint contract uref");
 
@@ -149,7 +150,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
         .commit()
         .finish();
 
-    let transforms = transfer_result.get_transforms();
+    let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[0];
 
     // Get transforms output for genesis account

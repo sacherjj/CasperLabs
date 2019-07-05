@@ -27,7 +27,6 @@ use execution_engine::engine_state::utils::WasmiBytes;
 use execution_engine::engine_state::EngineState;
 use shared::test_utils;
 use shared::transform::Transform;
-use std::ops::Deref;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
 //use common::bytesrepr::ToBytes;
@@ -314,9 +313,9 @@ impl Default for WasmTestBuilder {
 /// A wrapper type to disambiguate builder from an actual result
 pub struct WasmTestResult(WasmTestBuilder);
 
-impl Deref for WasmTestResult {
-    type Target = WasmTestBuilder;
-    fn deref(&self) -> &Self::Target {
+impl WasmTestResult {
+    /// Access the builder
+    pub fn builder(&self) -> &WasmTestBuilder {
         &self.0
     }
 }
