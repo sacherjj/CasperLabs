@@ -21,7 +21,7 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 fn get_uref(key: Key) -> URef {
     match key {
         Key::URef(uref) => uref,
-        _ => panic!("Key {:?} is not an Account", key),
+        _ => panic!("Key {:?} is not an URef", key),
     }
 }
 
@@ -45,7 +45,7 @@ fn do_pass(pass: &str) -> (URef, URef) {
         account
     } else {
         panic!(
-            "Transform for account is expected to be of type Value but got {:?}",
+            "Transform for account is expected to be of type Write(Account) but got {:?}",
             account_transform
         );
     };
