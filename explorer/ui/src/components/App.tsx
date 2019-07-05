@@ -5,17 +5,16 @@ import { observer } from 'mobx-react';
 import { Switch, Route, Link, withRouter } from 'react-router-dom';
 import { RouteComponentProps } from 'react-router';
 
-import CasperContainer from '../containers/CasperContainer';
-import AuthContainer from '../containers/AuthContainer';
-
-import * as Pages from './Pages';
+import logo from '../img/logo-full.png';
+import Pages from './Pages';
 import Home from './Home';
 import Accounts from './Accounts';
 import Faucet from './Faucet';
 import Explorer from './Explorer';
 import { PrivateRoute } from './Utils';
-
-import logo from '../img/logo-full.png';
+import CasperContainer from '../containers/CasperContainer';
+import AuthContainer from '../containers/AuthContainer';
+import ErrorContainer from '../containers/ErrorContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -39,6 +38,7 @@ const SideMenuItems: MenuItem[] = [
 export interface AppProps {
   casper: CasperContainer;
   auth: AuthContainer;
+  errors: ErrorContainer;
 }
 
 // The entry point for rendering.
@@ -202,11 +202,11 @@ class _Navigation extends React.Component<
             <li className="nav-item">
               {this.props.auth.user ? (
                 <a className="nav-link" onClick={_ => this.props.auth.logout()}>
-                  <i className="fa fa-fw fa-sign-out-alt"></i>Sign out
+                  <i className="fa fa-fw fa-sign-out-alt"></i>Sign Out
                 </a>
               ) : (
                 <a className="nav-link" onClick={_ => this.props.auth.login()}>
-                  <i className="fa fa-fw fa-sign-in-alt"></i>Sign in
+                  <i className="fa fa-fw fa-sign-in-alt"></i>Sign In
                 </a>
               )}
             </li>
@@ -233,7 +233,7 @@ const Content = (props: AppProps) => (
           <PrivateRoute
             path={Pages.Accounts}
             auth={props.auth}
-            render={_ => <Accounts />}
+            render={_ => <Accounts {...props} />}
           />
           <PrivateRoute
             path={Pages.Faucet}
@@ -250,7 +250,7 @@ const Content = (props: AppProps) => (
 // Alerts displays the outcome of the last async error on the top of the page.
 // Dismissing the error clears the state and removes the element.
 const Alerts = observer((props: AppProps) => {
-  if (props.casper.error == null) return null;
+  if (props.errors.lastError == null) return null;
   // Not using the `data-dismiss="alert"` to dismiss via Bootstrap JS
   // becuase then it doesn't re-render when there's a new error.
   return (
@@ -263,11 +263,11 @@ const Alerts = observer((props: AppProps) => {
           type="button"
           className="close"
           aria-label="Close"
-          onClick={_ => (props.casper.error = null)}
+          onClick={_ => props.errors.dismissLast()}
         >
           <span aria-hidden="true">&times;</span>
         </button>
-        <strong>Error!</strong> {props.casper.error}
+        <strong>Error!</strong> {props.errors.lastError}
       </div>
     </div>
   );

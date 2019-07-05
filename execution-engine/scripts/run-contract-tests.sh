@@ -13,6 +13,8 @@ CONTRACTS=(
     "local-state"
     "known-urefs"
     "transfer-purse-to-purse"
+    "get-caller"
+    "get-caller-subcall"
 )
 
 source "${HOME}/.cargo/env"

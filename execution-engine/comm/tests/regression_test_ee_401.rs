@@ -42,7 +42,7 @@ fn should_execute_contracts_which_provide_extra_urefs() {
         "ee_401_regression.wasm",
         genesis_hash,
         1,
-        vec![],
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -70,7 +70,7 @@ fn should_execute_contracts_which_provide_extra_urefs() {
         "ee_401_regression_call.wasm",
         commit_hash,
         1,
-        vec![],
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
