@@ -17,7 +17,6 @@ PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
 TS_SRC := $(shell find explorer/ui/src explorer/server/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
-NODE_IMAGE := node:12.5.0-stretch-slim
 
 $(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test; else echo DRONE-${DRONE_BUILD_NUMBER}; fi))
 
@@ -206,11 +205,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	mkdir -p $(dir $@) && touch $@
 
 .make/npm-docker/explorer: $(TS_SRC) .make/protoc/explorer
-	docker run --rm --entrypoint sh \
-		-v $(PWD)/explorer:/explorer -w /explorer \
-		$(NODE_IMAGE) -c "\
-			cd ui     && npm install && npm run build && cd - && \
-			cd server && npm install && npm run clean:dist && npm run build && cd - \
+	./hack/build/docker-buildenv.sh "\
+			cd explorer/ui     && npm install && npm run build && cd - && \
+			cd explorer/server && npm install && npm run clean:dist && npm run build && cd - \
 		"
 	mkdir -p $(dir $@) && touch $@
 
@@ -390,9 +387,9 @@ protobuf/google:
 
 # Install the protoc plugin to generate TypeScript. Use docker so people don't have to install npm.
 .make/install/protoc-ts: explorer/grpc/package.json
-	docker run --rm \
-		-v $(PWD)/explorer/grpc:/explorer/grpc -w /explorer/grpc \
-		$(NODE_IMAGE) npm install
+	./hack/build/docker-buildenv.sh "\
+		cd explorer/grpc && npm install \
+	"
 	mkdir -p $(dir $@) && touch $@
 
 
