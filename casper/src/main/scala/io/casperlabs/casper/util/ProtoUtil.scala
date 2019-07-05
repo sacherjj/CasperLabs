@@ -28,20 +28,24 @@ object ProtoUtil {
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
   def isInMainChain[F[_]: Monad](
       dag: BlockDagRepresentation[F],
-      candidateBlockHash: BlockHash,
+      candidateBlockMetadata: BlockMetadata,
       targetBlockHash: BlockHash
   ): F[Boolean] =
-    if (candidateBlockHash == targetBlockHash) {
+    if (candidateBlockMetadata.blockHash == targetBlockHash) {
       true.pure[F]
     } else {
       for {
         targetBlockOpt <- dag.lookup(targetBlockHash)
         result <- targetBlockOpt match {
                    case Some(targetBlockMeta) =>
-                     targetBlockMeta.parents.headOption match {
-                       case Some(mainParentHash) =>
-                         isInMainChain(dag, candidateBlockHash, mainParentHash)
-                       case None => false.pure[F]
+                     if (targetBlockMeta.rank <= candidateBlockMetadata.rank)
+                       false.pure[F]
+                     else {
+                       targetBlockMeta.parents.headOption match {
+                         case Some(mainParentHash) =>
+                           isInMainChain(dag, candidateBlockMetadata, mainParentHash)
+                         case None => false.pure[F]
+                       }
                      }
                    case None => false.pure[F]
                  }

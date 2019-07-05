@@ -301,13 +301,14 @@ package-blessed-contracts: \
 
 # Package all blessed contracts that we have to make available for download.
 execution-engine/target/blessed-contracts.tar.gz: \
-	.make/blessed-contracts/mint-token
+	.make/blessed-contracts/mint-token \
+	.make/blessed-contracts/pos
 	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))
 	rm -rf $(ARCHIVE) $(ARCHIVE).gz
 	mkdir -p $(dir $@)
 	tar -cvf $(ARCHIVE) -T /dev/null
 	find execution-engine/blessed-contracts -wholename *.wasm | grep -v /release/deps/ | while read file; do \
-		cd $$(dirname $$file); tar -rvf $(ARCHIVE) $$(basename $$file); \
+		cd $$(dirname $$file); tar -rvf $(ARCHIVE) $$(basename $$file); cd -; \
 	done
 	gzip $(ARCHIVE)
 

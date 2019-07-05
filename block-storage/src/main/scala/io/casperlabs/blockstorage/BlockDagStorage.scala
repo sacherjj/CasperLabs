@@ -34,6 +34,9 @@ object BlockDagStorage {
 
 trait BlockDagRepresentation[F[_]] {
   def children(blockHash: BlockHash): F[Option[Set[BlockHash]]]
+
+  /** Return blocks that having a specify justification */
+  def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]]
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
 

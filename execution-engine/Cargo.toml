@@ -2,6 +2,7 @@
 
 members = [
     "blessed-contracts/mint-token",
+    "blessed-contracts/pos",
     "blessed-contracts/test-mint-token",
     "comm",
     "common",
@@ -17,6 +18,7 @@ members = [
     "test-contracts/local-state",
     "test-contracts/known-urefs",
     "test-contracts/transfer-purse-to-purse",
+    "test-contracts/ee-441-rng-state",
     "test-contracts/get-caller",
     "test-contracts/get-caller-subcall",
     "wasm-prep",
