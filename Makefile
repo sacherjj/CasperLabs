@@ -191,22 +191,10 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
-.make/npm/explorer:
-	if [ -z "${DRONE_BRANCH}" ]; then \
-		$(MAKE) .make/npm-docker/explorer ; \
-	else \
-		$(MAKE) .make/npm-native/explorer ; \
-	fi
-
-.make/npm-native/explorer: $(TS_SRC) .make/protoc/explorer
+.make/npm/explorer: $(TS_SRC) .make/protoc/explorer
 	# CI=false so on Drone it won't fail on warnings (currently about href).
-	cd explorer/ui && npm install && CI=false npm run build
-	cd explorer/server && npm install && npm run clean:dist && npm run build
-	mkdir -p $(dir $@) && touch $@
-
-.make/npm-docker/explorer: $(TS_SRC) .make/protoc/explorer
 	./hack/build/docker-buildenv.sh "\
-			cd explorer/ui     && npm install && npm run build && cd - && \
+			cd explorer/ui     && npm install && CI=false npm run build && cd - && \
 			cd explorer/server && npm install && npm run clean:dist && npm run build && cd - \
 		"
 	mkdir -p $(dir $@) && touch $@
