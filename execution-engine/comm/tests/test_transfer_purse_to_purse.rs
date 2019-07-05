@@ -9,15 +9,10 @@ extern crate storage;
 #[allow(dead_code)]
 mod test_support;
 
-use common::bytesrepr::ToBytes;
 use common::key::Key;
-use common::uref::{AccessRights, URef};
 use common::value::{Value, U512};
 use shared::transform::Transform;
 
-use casperlabs_engine_grpc_server::engine_server::ipc::Transform_oneof_transform_instance::add_keys;
-use common::gens::value_arb;
-use common::value::account::PurseId;
 use std::collections::HashMap;
 use test_support::WasmTestBuilder;
 
@@ -30,7 +25,7 @@ fn should_run_purse_to_purse_transfer() {
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .finish();
 
-    let genesis_account = genesis_test_result.genesis_account.clone();
+    let _genesis_account = genesis_test_result.genesis_account.clone();
     let mint_contract_uref = genesis_test_result
         .mint_contract_uref
         .expect("Unable to get mint contract uref");
@@ -91,7 +86,7 @@ fn should_run_purse_to_purse_transfer() {
 
     // Assert secondary purse value after successful transfer
     let purse_secondary_key = modified_account.urefs_lookup()["purse:secondary"];
-    let purse_main_key = modified_account.urefs_lookup()["purse:main"];
+    let _purse_main_key = modified_account.urefs_lookup()["purse:main"];
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent
@@ -121,7 +116,7 @@ fn should_run_purse_to_purse_transfer() {
 
     // Final balance of the destination purse
     assert_eq!(purse_secondary_balance, &U512::from(42));
-    assert_eq!(main_purse_balance, &U512::from(999958));
+    assert_eq!(main_purse_balance, &U512::from(999_958));
 }
 
 #[ignore]
@@ -132,7 +127,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .finish();
 
-    let genesis_account = genesis_test_result.genesis_account.clone();
+    let _genesis_account = genesis_test_result.genesis_account.clone();
     let mint_contract_uref = genesis_test_result
         .mint_contract_uref
         .expect("Unable to get mint contract uref");
@@ -151,7 +146,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
                 // dest
                 target,
                 // amount
-                U512::from(9999999),
+                U512::from(9_999_999),
             ),
         )
         .expect_success()
@@ -213,7 +208,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Assert secondary purse value after successful transfer
     let purse_secondary_key = modified_account.urefs_lookup()["purse:secondary"];
-    let purse_main_key = modified_account.urefs_lookup()["purse:main"];
+    let _purse_main_key = modified_account.urefs_lookup()["purse:main"];
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent
@@ -231,5 +226,5 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Final balance of the destination purse equals to 0 as this purse is created as new.
     assert_eq!(purse_secondary_balance, &U512::from(0));
-    assert_eq!(main_purse_balance, &U512::from(1000000));
+    assert_eq!(main_purse_balance, &U512::from(1_000_000));
 }
