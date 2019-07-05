@@ -40,4 +40,17 @@ describe('Args', () => {
     expect(buffer.slice(12, 12 + 32).equals(a)).to.equal(true);
     expect(buffer.readBigInt64LE(48)).to.equal(b);
   });
+
+  it('should work with the hardcoded example', () => {
+    const a = Buffer.alloc(32, 1);
+    const b = BigInt(67305985);
+    const result = Args(PublicKeyArg(a), UInt64Arg(b));
+    const expected = Buffer.from([
+      2, 0, 0, 0,
+      36, 0, 0, 0,
+      32, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+      8, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 0
+    ]);
+    expect(Buffer.from(result).equals(expected)).to.equal(true);
+  });
 });
