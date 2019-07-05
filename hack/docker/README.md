@@ -70,13 +70,16 @@ After connection is complete, all node logs will show `Peers: 2`.
 Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
 
 ```console
+ACCOUNT_ID="$(cat .casperlabs/genesis/system-account/account-id-hex)"
 ./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
-     --from 3030303030303030303030303030303030303030303030303030303030303030 \
+     --from "$ACCOUNT_ID" \
      --gas-price 1 \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
      --nonce 1
 ```
+
+As you may notice we make use of the `system-account` for deploys signing. This is temporal until we the add ability to create new custom accounts.
 
 After a successful deploy, you should see the following response:
 
@@ -103,15 +106,21 @@ If you check the log output, each node should get the block and provide some fee
 To sign deploy you'll need to [generate and ed25519 keypair](/VALIDATOR.md#setting-up-keys) and save them into `docker/keys`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments, for example:
 
 ```console
+ACCOUNT_ID="$(cat .casperlabs/genesis/system-account/account-id-hex)"
+mkdir keys
+cp .casperlabs/genesis/system-account/account-private.pem keys
+cp .casperlabs/genesis/system-account/account-public.pem keys
 ./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --gas-price 1 \
-     --from 3030303030303030303030303030303030303030303030303030303030303030 \
+     --from "$ACCOUNT_ID" \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
      --nonce 1 \
      --public-key /keys/account-0/account-public.pem \
      --private-key /keys/account-0/account-private.pem
 ```
+
+As you may notice we make use of the `system-account` for deploys signing. This is temporal until we the add ability to create new custom accounts.
 
 ## Monitoring
 

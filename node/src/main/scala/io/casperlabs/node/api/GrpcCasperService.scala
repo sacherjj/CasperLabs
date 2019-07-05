@@ -6,7 +6,7 @@ import com.google.protobuf.empty.Empty
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.SafetyOracle
+import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info._
@@ -24,7 +24,7 @@ import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: SafetyOracle: BlockStore: ExecutionEngineService](
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStore: ExecutionEngineService](
       ignoreDeploySignature: Boolean
   ): F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {

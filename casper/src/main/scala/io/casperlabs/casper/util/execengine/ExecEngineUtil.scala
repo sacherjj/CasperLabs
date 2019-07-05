@@ -22,10 +22,10 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 case class DeploysCheckpoint(
     preStateHash: StateHash,
     postStateHash: StateHash,
+    bondedValidators: Seq[io.casperlabs.casper.consensus.Bond],
     deploysForBlock: Seq[Block.ProcessedDeploy],
     invalidNonceDeploys: Seq[InvalidNonceDeploy],
     deploysToDiscard: Seq[PreconditionFailure],
-    blockNumber: Long,
     protocolVersion: state.ProtocolVersion
 )
 
@@ -67,11 +67,7 @@ object ExecEngineUtil {
                        }
       deployEffects                 = findCommutingEffects(processedDeployResults)
       (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
-      postStateHash                 <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
-      maxBlockNumber = merged.parents.foldl(-1L) {
-        case (acc, b) => math.max(acc, blockNumber(b))
-      }
-      number = maxBlockNumber + 1
+      commitResult                  <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       //TODO: Remove this logging at some point
       msgBody = transforms.flatten
         .map(t => {
@@ -81,14 +77,14 @@ object ExecEngineUtil {
         })
         .mkString("\n")
       _ <- Log[F]
-            .info(s"Block #$number created with effects:\n$msgBody")
+            .info(s"Block created with effects:\n$msgBody")
     } yield DeploysCheckpoint(
       preStateHash,
-      postStateHash,
+      commitResult.postStateHash,
+      commitResult.bondedValidators,
       deploysForBlock,
       invalidDeploys.invalidNonceDeploys,
       invalidDeploys.preconditionFailures,
-      number,
       protocolVersion
     )
 
@@ -215,9 +211,11 @@ object ExecEngineUtil {
       ProtoUtil.postStateHash(soleParent).pure[F] //single parent
     case MergeResult.Result(initParent, nonFirstParentsCombinedEffect, _) => //multiple parents
       val prestate = ProtoUtil.postStateHash(initParent)
-      MonadError[F, Throwable].rethrow(
-        ExecutionEngineService[F].commit(prestate, nonFirstParentsCombinedEffect)
-      )
+      MonadError[F, Throwable]
+        .rethrow(
+          ExecutionEngineService[F].commit(prestate, nonFirstParentsCombinedEffect)
+        )
+        .map(_.postStateHash)
   }
 
   type TransformMap = Seq[TransformEntry]

@@ -377,35 +377,35 @@ object Validate {
           }
     } yield ()
 
-  // Agnostic of non-parent justifications
+  // Block number is 1 plus the maximum of block number of its justifications.
   def blockNumber[F[_]: MonadThrowable: Log: RaiseValidationError](
       b: BlockSummary,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
-      parents <- b.getHeader.parentHashes.toList.traverse { parentHash =>
-                  dag.lookup(parentHash).flatMap {
-                    MonadThrowable[F].fromOption(
-                      _,
-                      new Exception(
-                        s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
-                      )
-                    )
-                  }
-                }
-      maxBlockNumber = parents.foldLeft(-1L) {
-        case (acc, p) => math.max(acc, p.rank)
+      justificationMsgs <- b.getHeader.justifications.toList.traverse { justification =>
+                            dag.lookup(justification.latestBlockHash).flatMap {
+                              MonadThrowable[F].fromOption(
+                                _,
+                                new Exception(
+                                  s"Block dag store was missing ${PrettyPrinter.buildString(justification.latestBlockHash)}."
+                                )
+                              )
+                            }
+                          }
+      maxRank = justificationMsgs.foldLeft(-1L) {
+        case (acc, blockMetadata) => math.max(acc, blockMetadata.rank)
       }
       number = b.getHeader.rank
-      result = maxBlockNumber + 1 == number
+      result = maxRank + 1 == number
       _ <- if (result) {
             Applicative[F].unit
           } else {
             val logMessage =
-              if (parents.isEmpty)
-                s"block number $number is not zero, but block has no parents."
+              if (justificationMsgs.isEmpty)
+                s"block number $number is not zero, but block has no justifications."
               else
-                s"block number $number is not one more than maximum parent number $maxBlockNumber."
+                s"block number $number is not one more than the maximum justification's number $maxRank."
             for {
               _ <- Log[F].warn(ignore(b, logMessage))
               _ <- RaiseValidationError[F].raise[Unit](InvalidBlockNumber)
@@ -713,6 +713,11 @@ object Validate {
         false
       }
 
+  // Validates whether received block is valid (according to that nodes logic):
+  // 1) Validates whether pre state hashes match
+  // 2) Runs deploys from the block
+  // 3) Validates whether post state hashes match
+  // 4) Validates whether bonded validators, as at the end of executing the block, match.
   def transactions[F[_]: Monad: Log: BlockStore: ExecutionEngineService: FunctorRaise[
     ?[_],
     InvalidBlock
@@ -725,24 +730,25 @@ object Validate {
     val blockPostState = ProtoUtil.postStateHash(block)
     if (preStateHash == blockPreState) {
       for {
-        possiblePostState <- ExecutionEngineService[F].commit(
-                              preStateHash,
-                              effects
-                            )
+        possibleCommitResult <- ExecutionEngineService[F].commit(
+                                 preStateHash,
+                                 effects
+                               )
         //TODO: distinguish "internal errors" and "user errors"
-        _ <- possiblePostState match {
+        _ <- possibleCommitResult match {
               case Left(ex) =>
                 Log[F].error(
                   s"Could not commit effects of block ${PrettyPrinter.buildString(block)}: $ex",
                   ex
                 ) *>
                   RaiseValidationError[F].raise[Unit](InvalidTransaction)
-              case Right(postStateHash) =>
-                if (postStateHash == blockPostState) {
-                  Applicative[F].unit
-                } else {
-                  RaiseValidationError[F].raise[Unit](InvalidPostStateHash)
-                }
+              case Right(commitResult) =>
+                for {
+                  _ <- RaiseValidationError[F]
+                        .raise[Unit](InvalidPostStateHash)
+                        .whenA(commitResult.postStateHash != blockPostState)
+                  _ <- Validate.bondsCache[F](block, commitResult.bondedValidators)
+                } yield ()
             }
       } yield ()
     } else {
