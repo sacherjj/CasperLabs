@@ -44,17 +44,47 @@ services:
     networks:
       - casperlabs
 
-  envoy:
-    image: envoyproxy/envoy:latest
-    container_name: envoy
+  # envoy:
+  #   image: envoyproxy/envoy:latest
+  #   container_name: envoy
+  #   ports:
+  #     # TODO: Configure envoy to reverse proxy to the explorer backend and the node-grpc on 8080
+  #     - ${CL_EXPLORER_GRPC_PORT}:40401
+  #   volumes:
+  #     - ${PWD}/envoy.yaml:/etc/envoy.yaml
+  #   command: "envoy -c /etc/envoy.yaml --log-level trace"
+  #   networks:
+  #     - casperlabs
+
+
+  # According to https://github.com/improbable-eng/grpc-web/issues/199
+  # grpc/grpc-web has a client that works with envoy and
+  # improbably-eng/grpc-web works with with grpcwebproxy
+  # https://github.com/grpc/grpc-web#proxy-interoperability
+  # https://github.com/improbable-eng/grpc-web/tree/master/go/grpcwebproxy
+  grpcwebproxy:
+    build:
+      context: ./
+      dockerfile: ./grpcwebproxy/Dockerfile
+    image: casperlabs/grpcwebproxy
+    container_name: grpcwebproxy
     ports:
-      # TODO: Configure envoy to reverse proxy to the explorer backend and the node-grpc on 8080
-      - ${CL_EXPLORER_GRPC_PORT}:40401
+      - ${CL_EXPLORER_GRPC_PORT}:8080
     volumes:
-      - ${PWD}/envoy.yaml:/etc/envoy.yaml
-    command: "envoy -c /etc/envoy.yaml --log-level trace"
+      - ${PWD}/grpcwebproxy/certificate.pem:/etc/tls/certificate.pem
+      - ${PWD}/grpcwebproxy/key.pem:/etc/tls/key.pem
+    command:
+      - /grpcwebproxy
+      - --backend_addr=node-0:40401
+      - --backend_tls=true
+      - --backend_tls_noverify
+      - --backend_max_call_recv_msg_size=16777216
+      - --allow_all_origins
+      - --server_tls_cert_file=/etc/tls/certificate.pem
+      - --server_tls_key_file=/etc/tls/key.pem
     networks:
       - casperlabs
+
 
   explorer:
     image: casperlabs/explorer:latest
