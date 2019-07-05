@@ -13,6 +13,7 @@ CONTRACTS=(
     "local-state"
     "known-urefs"
     "transfer-purse-to-purse"
+    "get-blocktime"
     "get-caller"
     "get-caller-subcall"
 )

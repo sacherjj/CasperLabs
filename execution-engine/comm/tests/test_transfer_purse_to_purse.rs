@@ -6,15 +6,16 @@ extern crate execution_engine;
 extern crate shared;
 extern crate storage;
 
-#[allow(dead_code)]
-mod test_support;
+use std::collections::HashMap;
 
 use common::key::Key;
 use common::value::{Value, U512};
 use shared::transform::Transform;
 
-use std::collections::HashMap;
-use test_support::WasmTestBuilder;
+use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+
+#[allow(dead_code)]
+mod test_support;
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
 
@@ -29,6 +30,7 @@ fn should_run_purse_to_purse_transfer() {
         .exec_with_args(
             GENESIS_ADDR,
             "transfer_purse_to_purse.wasm",
+            DEFAULT_BLOCK_TIME,
             1,
             (source, target, U512::from(42)),
         )
@@ -124,6 +126,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
         .exec_with_args(
             GENESIS_ADDR,
             "transfer_purse_to_purse.wasm",
+            DEFAULT_BLOCK_TIME,
             1,
             (
                 source,

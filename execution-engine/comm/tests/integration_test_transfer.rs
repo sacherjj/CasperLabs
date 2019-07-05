@@ -19,6 +19,8 @@ use execution_engine::engine_state::EngineState;
 use shared::transform::Transform;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
+use test_support::DEFAULT_BLOCK_TIME;
+
 #[allow(unused)]
 mod test_support;
 
@@ -131,6 +133,7 @@ fn should_transfer_to_account() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );
@@ -217,6 +220,7 @@ fn should_transfer_from_account_to_account() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );
@@ -280,6 +284,7 @@ fn should_transfer_from_account_to_account() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );
@@ -375,6 +380,7 @@ fn should_transfer_to_existing_account() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );
@@ -438,6 +444,7 @@ fn should_transfer_to_existing_account() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );
@@ -502,6 +509,7 @@ fn should_fail_when_insufficient_funds() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );
@@ -536,6 +544,7 @@ fn should_fail_when_insufficient_funds() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );
@@ -564,6 +573,7 @@ fn should_fail_when_insufficient_funds() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        DEFAULT_BLOCK_TIME,
         2,
         (),
     );
@@ -627,6 +637,7 @@ fn should_create_purse() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );
@@ -668,6 +679,7 @@ fn should_create_purse() {
         ACCOUNT_1_ADDR,
         "create_purse_01.wasm",
         commit_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );

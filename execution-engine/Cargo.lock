@@ -432,6 +432,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "get-blocktime"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
+]
+
+[[package]]
 name = "get-caller"
 version = "0.1.0"
 dependencies = [
