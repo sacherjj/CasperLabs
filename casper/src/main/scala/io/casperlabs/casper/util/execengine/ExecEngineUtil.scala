@@ -49,7 +49,8 @@ object ExecEngineUtil {
                            preStateHash,
                            blocktime,
                            deploys,
-                           protocolVersion
+                           protocolVersion,
+                           ignoreGasCount = true
                          )
       processedDeployResults = zipDeploysResults(deploys, processedDeploys).toList
       invalidDeploys <- processedDeployResults.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
@@ -92,10 +93,17 @@ object ExecEngineUtil {
       prestate: StateHash,
       blocktime: Long,
       deploys: Seq[Deploy],
-      protocolVersion: state.ProtocolVersion
+      protocolVersion: state.ProtocolVersion,
+      ignoreGasCount: Boolean
   ): F[Seq[DeployResult]] =
     ExecutionEngineService[F]
-      .exec(prestate, blocktime, deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
+      .exec(
+        prestate,
+        blocktime,
+        deploys.map(ProtoUtil.deployDataToEEDeploy),
+        protocolVersion,
+        ignoreGasCount
+      )
       .rethrow
 
   private def processGenesisDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
@@ -194,7 +202,8 @@ object ExecEngineUtil {
                              prestate,
                              blocktime,
                              deploys,
-                             protocolVersion
+                             protocolVersion,
+                             ignoreGasCount = false
                            )
         deployEffects = zipDeploysResults(deploys, processedDeploys)
         transformMap = (findCommutingEffects _ andThen unzipEffectsAndDeploys)(deployEffects)
