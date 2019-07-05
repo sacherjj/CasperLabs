@@ -677,14 +677,11 @@ fn should_create_purse() {
         .wait_drop_metadata()
         .unwrap();
 
-    println!("{:?}", exec_response);
     let exec_transforms = &test_support::get_exec_transforms(&exec_response)[0];
-    println!("{:?}", exec_transforms);
 
     let expected_purse_id = PurseId::new(
         URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE).remove_access_rights(),
     );
-    println!("looking for {:?}", expected_purse_id);
     test_context.track(&exec_transforms, expected_purse_id);
 
     let account = &exec_transforms
