@@ -184,8 +184,12 @@ class NodeRuntime private[node] (
                                                                             .of[Effect]
                                                                         )
 
-        implicit0(safetyOracle: SafetyOracle[Effect]) = SafetyOracle
-          .cliqueOracle[Effect](Monad[Effect], logEff)
+        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorInstancesImpl[
+          Effect
+        ]()(
+          Monad[Effect],
+          logEff
+        )
 
         blockApiLock <- Resource.liftF(Semaphore[Effect](1))
 
