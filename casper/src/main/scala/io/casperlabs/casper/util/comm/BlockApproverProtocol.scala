@@ -35,7 +35,6 @@ import scala.math.BigInt
   */
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
-    deployTimestamp: Long,
     bonds: Map[PublicKey, Long],
     wallets: Seq[PreWallet],
     conf: BlockApproverProtocol.GenesisConf
@@ -56,7 +55,6 @@ class BlockApproverProtocol(
       BlockApproverProtocol
         .validateCandidate[F](
           candidate,
-          deployTimestamp,
           wallets,
           _bonds,
           conf
@@ -88,6 +86,7 @@ object BlockApproverProtocol {
       requiredSigs: Int,
       genesisAccountPublicKeyPath: Option[Path],
       initialTokens: BigInt,
+      bondsPath: Option[Path],
       mintCodePath: Option[Path],
       posCodePath: Option[Path]
   )
@@ -99,6 +98,7 @@ object BlockApproverProtocol {
         conf.requiredSigs,
         conf.genesisAccountPublicKeyPath,
         conf.initialTokens,
+        Some(conf.bondsFile),
         conf.mintCodePath,
         conf.posCodePath
       )
@@ -121,7 +121,6 @@ object BlockApproverProtocol {
 
   def validateCandidate[F[_]: MonadThrowable: Log: ExecutionEngineService: FilesAPI](
       candidate: ApprovedBlockCandidate,
-      timestamp: Long,
       wallets: Seq[PreWallet],
       bonds: Map[ByteString, Long],
       conf: GenesisConf
@@ -152,6 +151,7 @@ object BlockApproverProtocol {
                                         conf.initialTokens,
                                         posParams,
                                         wallets,
+                                        conf.bondsPath,
                                         conf.mintCodePath,
                                         conf.posCodePath
                                       )
@@ -180,41 +180,17 @@ object BlockApproverProtocol {
       protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
         postState.blockNumber
       )
-      processedDeploys <- EitherT(
-                           ExecutionEngineService[F].exec(
-                             ExecutionEngineService[F].emptyStateHash,
-                             timestamp,
-                             deploys
-                               .map(ProtoUtil.deployDataToEEDeploy),
-                             protocolVersion
-                           )
-                         ).leftMap(_.getMessage)
-      processedDeployResults = ExecEngineUtil.zipDeploysResults(deploys, processedDeploys)
-      deployEffects          = ExecEngineUtil.findCommutingEffects(processedDeployResults)
-      transforms             = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).flatMap(_._2)
-      postStateHash <- EitherT(
-                        ExecutionEngineService[F]
-                          .commit(ExecutionEngineService[F].emptyStateHash, transforms)
+      genesisResult <- EitherT(
+                        ExecutionEngineService[F].runGenesis(
+                          deploys
+                            .map(ProtoUtil.deployDataToEEDeploy),
+                          protocolVersion
+                        )
                       ).leftMap(_.getMessage)
       _ <- EitherT(
-            (postStateHash == postState.postStateHash)
+            (genesisResult.poststateHash == postState.postStateHash)
               .either(())
-              .or("Tuplespace hash mismatch.")
-              .pure[F]
-          )
-      tuplespaceBonds <- EitherT(
-                          MonadThrowable[F]
-                            .attempt(
-                              ExecutionEngineService[F].computeBonds(postState.postStateHash)
-                            )
-                        ).leftMap(_.getMessage)
-      tuplespaceBondsMap = tuplespaceBonds.map {
-        case consensus.Bond(validator, stake) => validator -> stake
-      }.toMap
-      _ <- EitherT(
-            (tuplespaceBondsMap == bonds)
-              .either(())
-              .or("Tuplespace bonds don't match expected ones.")
+              .or("GlobalState root hash mismatch.")
               .pure[F]
           )
     } yield ()).value

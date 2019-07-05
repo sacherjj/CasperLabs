@@ -101,8 +101,7 @@ class NodeRuntime private[node] (
                                                                               Effect
                                                                             ](
                                                                               conf.grpc.socket,
-                                                                              conf.server.maxMessageSize,
-                                                                              initBonds = Map.empty
+                                                                              conf.server.maxMessageSize
                                                                             )
 
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
@@ -184,8 +183,12 @@ class NodeRuntime private[node] (
                                                                             .of[Effect]
                                                                         )
 
-        implicit0(safetyOracle: SafetyOracle[Effect]) = SafetyOracle
-          .cliqueOracle[Effect](Monad[Effect], logEff)
+        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorInstancesImpl[
+          Effect
+        ]()(
+          Monad[Effect],
+          logEff
+        )
 
         blockApiLock <- Resource.liftF(Semaphore[Effect](1))
 

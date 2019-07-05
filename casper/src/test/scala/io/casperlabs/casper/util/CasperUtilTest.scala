@@ -11,7 +11,7 @@ import cats.effect.Bracket
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -47,10 +47,10 @@ class CasperUtilTest
 
         dag <- blockDagStorage.getRepresentation
 
-        _      <- isInMainChain(dag, genesis.blockHash, b3.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, b2.blockHash, b3.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, b3.blockHash, b2.blockHash) shouldBeF false
-        result <- isInMainChain(dag, b3.blockHash, genesis.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b3.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b2.blockHash) shouldBeF false
+        result <- isInMainChain(dag, BlockMetadata.fromBlock(b3), genesis.blockHash) shouldBeF false
       } yield result
   }
 
@@ -64,11 +64,11 @@ class CasperUtilTest
 
         dag <- blockDagStorage.getRepresentation
 
-        _      <- isInMainChain(dag, genesis.blockHash, b2.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, genesis.blockHash, b3.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, genesis.blockHash, b4.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, b2.blockHash, b4.blockHash) shouldBeF true
-        result <- isInMainChain(dag, b3.blockHash, b4.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b2.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b4.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b4.blockHash) shouldBeF true
+        result <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b4.blockHash) shouldBeF false
       } yield result
   }
 
@@ -90,16 +90,16 @@ class CasperUtilTest
 
         dag <- blockDagStorage.getRepresentation
 
-        _      <- isInMainChain(dag, genesis.blockHash, b2.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, b2.blockHash, b3.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, b3.blockHash, b4.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, b4.blockHash, b5.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, b5.blockHash, b6.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, b6.blockHash, b7.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, b7.blockHash, b8.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, b2.blockHash, b6.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, b2.blockHash, b8.blockHash) shouldBeF true
-        result <- isInMainChain(dag, b4.blockHash, b2.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b2.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b3.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b4.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b4), b5.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b5), b6.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b6), b7.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b7), b8.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b6.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b8.blockHash) shouldBeF true
+        result <- isInMainChain(dag, BlockMetadata.fromBlock(b4), b2.blockHash) shouldBeF false
       } yield result
   }
 }

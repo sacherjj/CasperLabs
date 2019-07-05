@@ -1057,7 +1057,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                 transformsWithEqualBonds,
                 faultToleranceThreshold = 0f // With equal bonds this should allow the final block to move as expected.
               )
-      deployDatas <- (1L to 8L).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
+      deployDatas <- (1L to 10L).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
 
       createBlock1Result <- nodes(0).casperEff
                              .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
@@ -1093,11 +1093,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- nodes(1).casperEff.addBlock(block5)
       _               <- nodes(0).receive()
       _               <- nodes(2).receive()
-
-      _     <- checkLastFinalizedBlock(nodes(0), block1)
-      state <- nodes(0).casperState.read
-      _     = state.deployBuffer.size should be(1)
-
       createBlock6Result <- nodes(2).casperEff
                              .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
       Created(block6) = createBlock6Result
@@ -1105,7 +1100,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- nodes(0).receive()
       _               <- nodes(1).receive()
 
-      _     <- checkLastFinalizedBlock(nodes(0), block2)
+      _     <- checkLastFinalizedBlock(nodes(0), block1)
       state <- nodes(0).casperState.read
       _     = state.deployBuffer.size should be(1)
 
@@ -1116,8 +1111,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- nodes(1).receive()
       _               <- nodes(2).receive()
 
-      _ <- checkLastFinalizedBlock(nodes(0), block3)
-      _ = state.deployBuffer.size should be(1)
+      _     <- checkLastFinalizedBlock(nodes(0), block2)
+      state <- nodes(0).casperState.read
+      _     = state.deployBuffer.size should be(2) // deploys contained in block 4 and block 7
 
       createBlock8Result <- nodes(1).casperEff
                              .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
@@ -1126,9 +1122,30 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- nodes(0).receive()
       _               <- nodes(2).receive()
 
+      _ <- checkLastFinalizedBlock(nodes(0), block3)
+      _ = state.deployBuffer.size should be(2) // deploys contained in block 4 and block 7
+
+      createBlock9Result <- nodes(2).casperEff
+                             .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
+      Created(block9) = createBlock9Result
+      _               <- nodes(2).casperEff.addBlock(block9)
+      _               <- nodes(0).receive()
+      _               <- nodes(1).receive()
+
       _     <- checkLastFinalizedBlock(nodes(0), block4)
       state <- nodes(0).casperState.read
-      _     = state.deployBuffer.size should be(1)
+      _     = state.deployBuffer.size should be(1) // deploys contained in block 7
+
+      createBlock10Result <- nodes(0).casperEff
+                              .deploy(deployDatas(9)) *> nodes(0).casperEff.createBlock
+      Created(block10) = createBlock10Result
+      _                <- nodes(0).casperEff.addBlock(block10)
+      _                <- nodes(1).receive()
+      _                <- nodes(2).receive()
+
+      _     <- checkLastFinalizedBlock(nodes(0), block5)
+      state <- nodes(0).casperState.read
+      _     = state.deployBuffer.size should be(2) // deploys contained in block 7 and block 10
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
@@ -1410,7 +1427,8 @@ object HashSetCasperTest {
                   ProofOfStakeParams(minimumBond, maximumBond, validators),
                   wallets,
                   mintCodePath = None,
-                  posCodePath = None
+                  posCodePath = None,
+                  bondsFile = None
                 )
       genenis <- Genesis
                   .withContracts[Task](

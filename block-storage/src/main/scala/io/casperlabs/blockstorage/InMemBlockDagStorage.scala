@@ -23,17 +23,21 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
+    justificationMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
     dataLookupRef: Ref[F, Map[BlockHash, BlockMetadata]],
     topoSortRef: Ref[F, Vector[Vector[BlockHash]]]
 ) extends BlockDagStorage[F] {
   final case class InMemBlockDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
+      justificationMap: Map[BlockHash, Set[BlockHash]],
       dataLookup: Map[BlockHash, BlockMetadata],
       topoSortVector: Vector[Vector[BlockHash]]
   ) extends BlockDagRepresentation[F] {
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
       childMap.get(blockHash).pure[F]
+    def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
+      justificationMap.get(blockHash).pure[F]
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
       dataLookup.get(blockHash).pure[F]
     def contains(blockHash: BlockHash): F[Boolean] =
@@ -67,13 +71,20 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
 
   override def getRepresentation: F[BlockDagRepresentation[F]] =
     for {
-      _              <- lock.acquire
-      latestMessages <- latestMessagesRef.get
-      childMap       <- childMapRef.get
-      dataLookup     <- dataLookupRef.get
-      topoSort       <- topoSortRef.get
-      _              <- lock.release
-    } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
+      _                <- lock.acquire
+      latestMessages   <- latestMessagesRef.get
+      childMap         <- childMapRef.get
+      justificationMap <- justificationMapRef.get
+      dataLookup       <- dataLookupRef.get
+      topoSort         <- topoSortRef.get
+      _                <- lock.release
+    } yield InMemBlockDagRepresentation(
+      latestMessages,
+      childMap,
+      justificationMap,
+      dataLookup,
+      topoSort
+    )
 
   override def insert(block: Block): F[BlockDagRepresentation[F]] =
     for {
@@ -85,6 +96,18 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
                 case (acc, p) =>
                   val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
                   acc.updated(p, currChildren + block.blockHash)
+              }
+          )
+      _ <- justificationMapRef.update(
+            justificationMap =>
+              block.getHeader.justifications.foldLeft(justificationMap) {
+                case (acc, justification) =>
+                  val currBlocksWithJustification =
+                    acc.getOrElse(justification.latestBlockHash, HashSet.empty[BlockHash])
+                  acc.updated(
+                    justification.latestBlockHash,
+                    currBlocksWithJustification + block.blockHash
+                  )
               }
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
@@ -134,15 +157,17 @@ object InMemBlockDagStorage {
       implicit met: Metrics[F]
   ): F[InMemBlockDagStorage[F]] =
     for {
-      lock              <- Semaphore[F](1)
-      latestMessagesRef <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)
-      childMapRef       <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
-      dataLookupRef     <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
-      topoSortRef       <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
+      lock                        <- Semaphore[F](1)
+      latestMessagesRef           <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)
+      childMapRef                 <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
+      justificationToBlocksMapRef <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
+      dataLookupRef               <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
+      topoSortRef                 <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
     } yield new InMemBlockDagStorage[F](
       lock,
       latestMessagesRef,
       childMapRef,
+      justificationToBlocksMapRef,
       dataLookupRef,
       topoSortRef
     ) with MeteredBlockDagStorage[F] {

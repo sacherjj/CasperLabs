@@ -128,7 +128,7 @@ class ExecEngineUtilTest
                           blocktime,
                           protocolVersion
                         )
-      DeploysCheckpoint(_, _, result, _, _, _, _) = computeResult
+      DeploysCheckpoint(_, _, _, result, _, _, _) = computeResult
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
@@ -168,8 +168,6 @@ class ExecEngineUtilTest
           (_, _, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
-          _ => Seq.empty[Bond].pure[Task],
-          _ => Task.unit,
           _ => ().asRight[String].pure[Task]
         )
 
@@ -200,8 +198,6 @@ class ExecEngineUtilTest
             },
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
-          _ => Seq.empty[Bond].pure[Task],
-          _ => Task.unit,
           _ => ().asRight[String].pure[Task]
         )
 

@@ -42,7 +42,7 @@ pub struct RuntimeContext<'a, R> {
     gas_limit: u64,
     gas_counter: u64,
     fn_store_id: u32,
-    rng: ChaChaRng,
+    rng: Rc<RefCell<ChaChaRng>>,
     protocol_version: u64,
     correlation_id: CorrelationId,
 }
@@ -63,7 +63,7 @@ where
         gas_limit: u64,
         gas_counter: u64,
         fn_store_id: u32,
-        rng: ChaChaRng,
+        rng: Rc<RefCell<ChaChaRng>>,
         protocol_version: u64,
         correlation_id: CorrelationId,
     ) -> Self {
@@ -195,8 +195,8 @@ where
         &self.args
     }
 
-    pub fn rng(&mut self) -> &mut ChaChaRng {
-        &mut self.rng
+    pub fn rng(&self) -> Rc<RefCell<ChaChaRng>> {
+        Rc::clone(&self.rng)
     }
 
     pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
@@ -263,7 +263,7 @@ where
     pub fn new_uref(&mut self, value: Value) -> Result<Key, Error> {
         let uref = {
             let mut addr = [0u8; 32];
-            self.rng.fill_bytes(&mut addr);
+            self.rng.borrow_mut().fill_bytes(&mut addr);
             URef::new(addr, AccessRights::READ_ADD_WRITE)
         };
         let key = Key::URef(uref);
@@ -791,7 +791,7 @@ mod tests {
             0,
             0,
             0,
-            rng,
+            Rc::new(RefCell::new(rng)),
             1,
             CorrelationId::new(),
         )
@@ -1086,7 +1086,7 @@ mod tests {
             0,
             0,
             0,
-            chacha_rng,
+            Rc::new(RefCell::new(chacha_rng)),
             1,
             CorrelationId::new(),
         );
@@ -1138,7 +1138,7 @@ mod tests {
             0,
             0,
             0,
-            chacha_rng,
+            Rc::new(RefCell::new(chacha_rng)),
             1,
             CorrelationId::new(),
         );

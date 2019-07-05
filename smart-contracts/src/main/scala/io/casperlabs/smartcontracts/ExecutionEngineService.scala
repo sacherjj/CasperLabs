@@ -32,21 +32,19 @@ import io.casperlabs.catscontrib.MonadThrowable
       deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]]
-  def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
-  def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
-  def setBonds(bonds: Map[PublicKey, Long]): F[Unit]
+  def commit(
+      prestate: ByteString,
+      effects: Seq[TransformEntry]
+  ): F[Either[Throwable, ExecutionEngineService.CommitResult]]
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
 
 class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
     addr: Path,
-    initialBonds: Map[Array[Byte], Long],
     stub: Stub
 ) extends ExecutionEngineService[F] {
   import GrpcExecutionEngineService.EngineMetricsSource
-
-  private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
   override def emptyStateHash: ByteString = {
     val arr: Array[Byte] = Array(
@@ -145,11 +143,11 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   override def commit(
       prestate: ByteString,
       effects: Seq[TransformEntry]
-  ): F[Either[Throwable, ByteString]] =
+  ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
     sendMessage(CommitRequest(prestate, effects), _.commit) {
       _.result match {
-        case CommitResponse.Result.Success(CommitResult(poststateHash, _)) =>
-          Right(poststateHash)
+        case CommitResponse.Result.Success(commitResult) =>
+          Right(ExecutionEngineService.CommitResult(commitResult))
         case CommitResponse.Result.Empty =>
           Left(SmartContractEngineError("empty response"))
         case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
@@ -176,17 +174,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       }
     }
 
-  override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-    // FIXME: Implement bonds!
-    bonds.pure[F]
-
-  // Todo Pass in the genesis bonds until we have a solution based on the BlockStore.
-  override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =
-    Defer[F].defer(Applicative[F].pure {
-      bonds = newBonds.map {
-        case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
-      }.toSeq
-    })
   override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
     stub.validate(contracts).to[F] >>= (
       _.result match {
@@ -205,6 +192,20 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
 object ExecutionEngineService {
   type Stub = IpcGrpcMonix.ExecutionEngineServiceStub
 
+  class CommitResult private (val postStateHash: ByteString, val bondedValidators: Seq[Bond])
+
+  object CommitResult {
+    def apply(ipcCommitResult: io.casperlabs.ipc.CommitResult): CommitResult = {
+      val validators = ipcCommitResult.bondedValidators.map(
+        b => Bond(b.validatorPublicKey, b.getStake.value.toLong)
+      )
+      new CommitResult(ipcCommitResult.poststateHash, validators)
+    }
+
+    def apply(postStateHash: ByteString, bonds: Seq[Bond]): CommitResult =
+      new CommitResult(postStateHash, bonds)
+  }
+
 }
 
 object GrpcExecutionEngineService {
@@ -213,8 +214,7 @@ object GrpcExecutionEngineService {
 
   def apply[F[_]: Sync: Log: TaskLift: Metrics](
       addr: Path,
-      maxMessageSize: Int,
-      initBonds: Map[Array[Byte], Long]
+      maxMessageSize: Int
   ): Resource[F, GrpcExecutionEngineService[F]] =
-    new ExecutionEngineConf[F](addr, maxMessageSize, initBonds).apply
+    new ExecutionEngineConf[F](addr, maxMessageSize).apply
 }

@@ -7,4 +7,4 @@ RUN (apt-get update || apt-get update) && apt-get install -yq iproute2 iptables 
 
 COPY .genesis/blessed-contracts /opt/docker/blessed-contracts
 ENV CL_CASPER_MINT_CODE_PATH /opt/docker/blessed-contracts/mint_token.wasm
-ENV CL_CASPER_POS_CODE_PATH /opt/docker/blessed-contracts/mint_token.wasm
+ENV CL_CASPER_POS_CODE_PATH /opt/docker/blessed-contracts/pos.wasm

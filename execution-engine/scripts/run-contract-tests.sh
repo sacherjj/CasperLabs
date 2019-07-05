@@ -13,6 +13,7 @@ CONTRACTS=(
     "local-state"
     "known-urefs"
     "transfer-purse-to-purse"
+    "ee-441-rng-state"
     "get-blocktime"
     "get-caller"
     "get-caller-subcall"

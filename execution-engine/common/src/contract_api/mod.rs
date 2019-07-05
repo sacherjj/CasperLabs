@@ -205,7 +205,7 @@ pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: U
 }
 
 /// Return the i-th argument passed to the host for the current module
-/// invokation. Note that this is only relevent to contracts stored on-chain
+/// invocation. Note that this is only relevant to contracts stored on-chain
 /// since a contract deployed directly is not invoked with any arguments.
 pub fn get_arg<T: FromBytes>(i: u32) -> T {
     let arg_size = unsafe { ext_ffi::load_arg(i) };
@@ -276,7 +276,7 @@ pub fn get_blocktime() -> BlockTime {
 }
 
 /// Return `t` to the host, terminating the currently running module.
-/// Note this function is only relevent to contracts stored on chain which
+/// Note this function is only relevant to contracts stored on chain which
 /// return a value to their caller. The return value of a directly deployed
 /// contract is never looked at.
 #[allow(clippy::ptr_arg)]

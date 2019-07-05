@@ -167,7 +167,7 @@ impl Default for ActionThresholds {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub struct BlockTime(pub u64);
 
 /// Holds information about last usage time of specific action.
