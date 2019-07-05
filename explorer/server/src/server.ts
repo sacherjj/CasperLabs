@@ -3,9 +3,11 @@ import express from "express";
 import jwt from "express-jwt";
 import jwksRsa from "jwks-rsa";
 import path from "path";
+import { decodeBase64 } from "tweetnacl-util";
 // TODO: Everything in config.json could come from env vars.
 import config from "./config.json";
-import Faucet from "./lib/Faucet";
+import { Contract, Faucet, FileNonceContract } from "./lib/Contracts";
+import { Ed25519 } from "./lib/Keys";
 import DeployService from "./services/DeployService.js";
 
 // https://auth0.com/docs/quickstart/spa/vanillajs/02-calling-an-api
@@ -18,10 +20,14 @@ dotenv.config();
 // as if it were an environment variable
 const port = process.env.SERVER_PORT!;
 
+const contractKeys =
+  Ed25519.parseKeyFiles(
+    process.env.FAUCET_ACCOUNT_PUBLIC_KEY_PATH!,
+    process.env.FAUCET_ACCOUNT_PRIVATE_KEY_PATH!);
+
 // Faucet contract and deploy factory.
-const faucet = new Faucet(
-  process.env.FAUCET_CONTRACT_PATH!,
-  process.env.FAUCET_ACCOUNT_PRIVATE_KEY_PATH!,
+const faucet = new FileNonceContract(
+  new Contract(process.env.FAUCET_CONTRACT_PATH!, contractKeys),
   process.env.FAUCET_NONCE_PATH!);
 
 // gRPC client to the node.
@@ -58,13 +64,14 @@ app.use(express.json());
 app.post("/api/faucet", checkJwt, (req, res) => {
   // express-jwt put the token in res.user
   // const userId = (req as any).user.sub;
-  const key = req.body.accountPublicKeyBase64 || "";
-  if (key === "") {
+  const accountPublicKeyBase64 = req.body.accountPublicKeyBase64 || "";
+  if (accountPublicKeyBase64 === "") {
     throw Error("The 'accountPublicKeyBase64' is missing.");
   }
 
   // Prepare the signed deploy.
-  const deploy = faucet.makeDeploy(key);
+  const accountPublicKey = decodeBase64(accountPublicKeyBase64);
+  const deploy = faucet.deploy(Faucet.args(accountPublicKey));
 
   // Send the deploy to the node and return the deploy hash to the browser.
   deployService

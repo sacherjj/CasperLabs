@@ -44,8 +44,17 @@ services:
     networks:
       - casperlabs
 
+  proxy-node-external:
+    image: alpine/socat
+    container_name: proxy-node-external
+    ports:
+      - ${CL_SERVER_EXTERNAL_PORT}:40401
+    command: "tcp-listen:40401,fork,reuseaddr tcp-connect:node-0:40401"
+    networks:
+      - casperlabs
+
   explorer:
-    image: casperlabs/explorer:${CL_VERSION}
+    image: casperlabs/explorer:latest
     container_name: explorer
     networks:
       - casperlabs

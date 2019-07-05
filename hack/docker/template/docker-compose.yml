@@ -45,6 +45,7 @@ services:
       CL_SERVER_NO_UPNP: "true"
       CL_LOG_LEVEL: $CL_LOG_LEVEL
       CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH: /root/.casperlabs/genesis/system-account/account-public.pem
+      CL_CASPER_INITIAL_TOKENS: 1000000
       CL_CASPER_VALIDATOR_PUBLIC_KEY_PATH: /root/.casperlabs/node/validator-public.pem
       CL_CASPER_VALIDATOR_PRIVATE_KEY_PATH: /root/.casperlabs/node/validator-private.pem
       CL_TLS_CERTIFICATE: /root/.casperlabs/node/node.certificate.pem

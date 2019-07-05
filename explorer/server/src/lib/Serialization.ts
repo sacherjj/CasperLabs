@@ -1,5 +1,5 @@
 
-// https://nodejs.org/api/buffer.html
+// Functions to convert data to the FFI
 
 // it's size ++ bytes
 // It's `[u8; 32]` (32 element byte array) but serializes to `(32.toBytes() ++ array.toBytes())`
