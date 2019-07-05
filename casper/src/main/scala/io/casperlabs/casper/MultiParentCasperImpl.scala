@@ -494,6 +494,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
       DeploysCheckpoint(
         preStateHash,
         postStateHash,
+        bondedValidators,
         deploysForBlock,
         // We don't have to put InvalidNonce deploys back to the buffer,
         // as by default buffer is cleared when deploy gets included in
@@ -512,13 +513,12 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
       status = if (deploysForBlock.isEmpty) {
         CreateBlockStatus.noNewDeploys
       } else {
-        val newBonds = ProtoUtil.bonds(parents.head)
 
         val postState = Block
           .GlobalState()
           .withPreStateHash(preStateHash)
           .withPostStateHash(postStateHash)
-          .withBonds(newBonds)
+          .withBonds(bondedValidators)
 
         val body = Block
           .Body()
@@ -757,14 +757,12 @@ object MultiParentCasperImpl {
               preStateHash,
               blockEffects
             )
-        _ <- Log[F].debug(s"Validating the bonds in $hashPrefix")
         _ <- maybeContext.fold(().pure[F]) { ctx =>
-              Validate.bondsCache[F](block, ProtoUtil.bonds(ctx.genesis)) >>
-                EquivocationDetector
-                  .checkNeglectedEquivocationsWithUpdate[F](
-                    block,
-                    ctx.genesis
-                  )
+              EquivocationDetector
+                .checkNeglectedEquivocationsWithUpdate[F](
+                  block,
+                  ctx.genesis
+                )
             }
         _ <- Log[F].debug(s"Validating neglection for $hashPrefix")
         _ <- Validate

@@ -1427,7 +1427,8 @@ object HashSetCasperTest {
                   ProofOfStakeParams(minimumBond, maximumBond, validators),
                   wallets,
                   mintCodePath = None,
-                  posCodePath = None
+                  posCodePath = None,
+                  bondsFile = None
                 )
       genenis <- Genesis
                   .withContracts[Task](

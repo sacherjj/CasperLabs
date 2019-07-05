@@ -713,7 +713,6 @@ class ValidateTest
       implicit val casperSmartContractsApi        = ExecutionEngineServiceStub.noOpApi[Task]()
       implicit val log                            = new LogStub[Task]
       for {
-        _   <- casperSmartContractsApi.setBonds(bonds)
         dag <- blockDagStorage.getRepresentation
         _ <- ExecutionEngineServiceStub
               .validateBlockCheckpoint[Task](
@@ -911,12 +910,21 @@ class ValidateTest
                               System.currentTimeMillis,
                               ProtocolVersion(1)
                             )
-        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _, _) = deploysCheckpoint
+        DeploysCheckpoint(
+          preStateHash,
+          computedPostStateHash,
+          bondedValidators,
+          processedDeploys,
+          _,
+          _,
+          _
+        ) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq.empty,
                   deploys = processedDeploys,
                   postStateHash = computedPostStateHash,
-                  preStateHash = preStateHash
+                  preStateHash = preStateHash,
+                  bonds = bondedValidators
                 )
         dag2 <- blockDagStorage.getRepresentation
 

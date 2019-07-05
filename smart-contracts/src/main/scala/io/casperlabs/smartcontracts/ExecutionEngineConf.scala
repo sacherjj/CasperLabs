@@ -21,8 +21,7 @@ import monix.eval.TaskLift
 
 class ExecutionEngineConf[F[_]: Sync: Log: TaskLift: Metrics](
     addr: Path,
-    maxMessageSize: Int,
-    initBonds: Map[Array[Byte], Long]
+    maxMessageSize: Int
 ) {
   val channelType =
     if (Epoll.isAvailable) classOf[EpollDomainSocketChannel] else classOf[KQueueDomainSocketChannel]
@@ -63,7 +62,7 @@ class ExecutionEngineConf[F[_]: Sync: Log: TaskLift: Metrics](
       stub    <- Sync[F].delay(IpcGrpcMonix.stub(channel))
     } yield Resource.make(
       Sync[F].delay(
-        new GrpcExecutionEngineService[F](addr, initBonds, stub)
+        new GrpcExecutionEngineService[F](addr, stub)
       )
     )(_ => stop(channel))
 

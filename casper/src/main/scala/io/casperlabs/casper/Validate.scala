@@ -699,6 +699,11 @@ object Validate {
         false
       }
 
+  // Validates whether received block is valid (according to that nodes logic):
+  // 1) Validates whether pre state hashes match
+  // 2) Runs deploys from the block
+  // 3) Validates whether post state hashes match
+  // 4) Validates whether bonded validators, as at the end of executing the block, match.
   def transactions[F[_]: Monad: Log: BlockStore: ExecutionEngineService: FunctorRaise[
     ?[_],
     InvalidBlock
@@ -711,24 +716,25 @@ object Validate {
     val blockPostState = ProtoUtil.postStateHash(block)
     if (preStateHash == blockPreState) {
       for {
-        possiblePostState <- ExecutionEngineService[F].commit(
-                              preStateHash,
-                              effects
-                            )
+        possibleCommitResult <- ExecutionEngineService[F].commit(
+                                 preStateHash,
+                                 effects
+                               )
         //TODO: distinguish "internal errors" and "user errors"
-        _ <- possiblePostState match {
+        _ <- possibleCommitResult match {
               case Left(ex) =>
                 Log[F].error(
                   s"Could not commit effects of block ${PrettyPrinter.buildString(block)}: $ex",
                   ex
                 ) *>
                   RaiseValidationError[F].raise[Unit](InvalidTransaction)
-              case Right(postStateHash) =>
-                if (postStateHash == blockPostState) {
-                  Applicative[F].unit
-                } else {
-                  RaiseValidationError[F].raise[Unit](InvalidPostStateHash)
-                }
+              case Right(commitResult) =>
+                for {
+                  _ <- RaiseValidationError[F]
+                        .raise[Unit](InvalidPostStateHash)
+                        .whenA(commitResult.postStateHash != blockPostState)
+                  _ <- Validate.bondsCache[F](block, commitResult.bondedValidators)
+                } yield ()
             }
       } yield ()
     } else {
