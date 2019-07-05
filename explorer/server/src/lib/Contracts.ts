@@ -99,7 +99,9 @@ export class BoundContract {
 
 export class Faucet {
   public static args(accountPublicKey: ByteArray): ByteArray {
-    return PublicKeyArg(accountPublicKey);
+    return Args(
+      PublicKeyArg(accountPublicKey)
+    );
   }
 }
 
