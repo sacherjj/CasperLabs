@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 #![feature(alloc)]
 
 #[cfg_attr(test, macro_use)]
@@ -153,7 +153,7 @@ pub extern "C" fn call() {
                 );
             }
         }
-        // Type of this method: `fn unbond(amount: U512)`
+        // Type of this method: `fn unbond(amount: Option<U512>)`
         "unbond" => {
             let validator = contract_api::get_caller();
             let maybe_amount = contract_api::get_arg(1);
@@ -192,5 +192,95 @@ pub extern "C" fn call() {
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+    use std::iter;
+
+    use cl_std::value::{
+        account::{BlockTime, PublicKey},
+        U512,
+    };
+
+    use crate::error::Result;
+    use crate::queue::{Queue, QueueProvider};
+    use crate::stakes::{Stakes, StakesProvider};
+    use crate::{bond, step, unbond, BOND_DELAY, UNBOND_DELAY};
+
+    const KEY1: [u8; 32] = [1; 32];
+    const KEY2: [u8; 32] = [2; 32];
+
+    thread_local! {
+        static BONDING: RefCell<Queue> = RefCell::new(Queue(Default::default()));
+        static UNBONDING: RefCell<Queue> = RefCell::new(Queue(Default::default()));
+        static STAKES: RefCell<Stakes> = RefCell::new(
+            Stakes(iter::once((PublicKey::new(KEY1), U512::from(1_000))).collect())
+        );
+    }
+
+    struct TestQueues;
+
+    impl QueueProvider for TestQueues {
+        fn read_bonding() -> Queue {
+            BONDING.with(|b| b.borrow().clone())
+        }
+
+        fn read_unbonding() -> Queue {
+            UNBONDING.with(|ub| ub.borrow().clone())
+        }
+
+        fn write_bonding(queue: &Queue) {
+            BONDING.with(|b| b.replace(queue.clone()));
+        }
+
+        fn write_unbonding(queue: &Queue) {
+            UNBONDING.with(|ub| ub.replace(queue.clone()));
+        }
+    }
+
+    struct TestStakes;
+
+    impl StakesProvider for TestStakes {
+        fn read() -> Result<Stakes> {
+            STAKES.with(|s| Ok(s.borrow().clone()))
+        }
+
+        fn write(stakes: &Stakes) {
+            STAKES.with(|s| s.replace(stakes.clone()));
+        }
+    }
+
+    fn assert_stakes(stakes: &[([u8; 32], usize)]) {
+        let expected = Stakes(
+            stakes
+                .iter()
+                .map(|(key, amount)| (PublicKey::new(*key), U512::from(*amount)))
+                .collect(),
+        );
+        assert_eq!(Ok(expected), TestStakes::read());
+    }
+
+    #[test]
+    fn test_bond_step_unbond() {
+        bond::<TestQueues, TestStakes>(U512::from(500), PublicKey::new(KEY2), BlockTime(1))
+            .expect("bond validator 2");
+
+        // Bonding becomes effective only after the delay.
+        assert_stakes(&[(KEY1, 1_000)]);
+        step::<TestQueues, TestStakes>(BlockTime(BOND_DELAY)).expect("step 1");
+        assert_stakes(&[(KEY1, 1_000)]);
+        step::<TestQueues, TestStakes>(BlockTime(1 + BOND_DELAY)).expect("step 2");
+        assert_stakes(&[(KEY1, 1_000), (KEY2, 500)]);
+
+        unbond::<TestQueues, TestStakes>(Some(U512::from(500)), PublicKey::new(KEY1), BlockTime(2))
+            .expect("partly unbond validator 1");
+
+        // Unbonding becomes effective immediately.
+        assert_stakes(&[(KEY1, 500), (KEY2, 500)]);
+        step::<TestQueues, TestStakes>(BlockTime(2 + UNBOND_DELAY)).expect("step 3");
+        assert_stakes(&[(KEY1, 500), (KEY2, 500)]);
     }
 }

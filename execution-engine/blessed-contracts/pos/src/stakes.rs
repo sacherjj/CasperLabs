@@ -15,6 +15,7 @@ pub trait StakesProvider {
     fn write(stakes: &Stakes);
 }
 
+/// A `StakesProvider` that reads and writes the stakes to/from the contract's known urefs.
 pub struct ContractStakes;
 
 impl StakesProvider for ContractStakes {
@@ -77,7 +78,8 @@ impl StakesProvider for ContractStakes {
     }
 }
 
-#[derive(Debug, PartialEq)]
+/// The stakes map, assigning the staked amount of tokens to each bonded validator.
+#[derive(Clone, Debug, PartialEq)]
 pub struct Stakes(pub BTreeMap<PublicKey, U512>);
 
 impl Stakes {

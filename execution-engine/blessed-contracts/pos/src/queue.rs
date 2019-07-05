@@ -71,6 +71,7 @@ pub trait QueueProvider {
     fn write_unbonding(queue: &Queue);
 }
 
+/// A `QueueProvider` that reads and writes the queue to/from the contract's local state.
 pub struct QueueLocal;
 
 impl QueueProvider for QueueLocal {
@@ -96,7 +97,7 @@ impl QueueProvider for QueueLocal {
 }
 
 /// A queue of bonding or unbonding requests, sorted by timestamp in ascending order.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Queue(pub Vec<QueueEntry>);
 
 impl Queue {
