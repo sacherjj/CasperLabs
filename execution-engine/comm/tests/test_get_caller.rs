@@ -26,7 +26,7 @@ fn should_run_get_caller_contract() {
             GENESIS_ADDR,
             "get_caller.wasm",
             1,
-            vec![PublicKey::new(GENESIS_ADDR)],
+            PublicKey::new(GENESIS_ADDR),
         )
         .commit()
         .expect_success();
@@ -40,7 +40,7 @@ fn should_run_get_caller_contract() {
             ACCOUNT_1_ADDR,
             "get_caller.wasm",
             1,
-            vec![PublicKey::new(ACCOUNT_1_ADDR)],
+            PublicKey::new(ACCOUNT_1_ADDR),
         )
         .commit()
         .expect_success();
@@ -55,7 +55,7 @@ fn should_run_get_caller_subcall_contract() {
             GENESIS_ADDR,
             "get_caller_subcall.wasm",
             1,
-            vec![PublicKey::new(GENESIS_ADDR)],
+            PublicKey::new(GENESIS_ADDR),
         )
         .commit()
         .expect_success();
@@ -69,7 +69,7 @@ fn should_run_get_caller_subcall_contract() {
             ACCOUNT_1_ADDR,
             "get_caller_subcall.wasm",
             1,
-            vec![PublicKey::new(ACCOUNT_1_ADDR)],
+            PublicKey::new(ACCOUNT_1_ADDR),
         )
         .commit()
         .expect_success();

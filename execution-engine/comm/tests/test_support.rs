@@ -139,20 +139,17 @@ pub fn create_genesis_request(
     (ret, contracts)
 }
 
-pub fn create_exec_request<T: common::bytesrepr::ToBytes>(
+pub fn create_exec_request(
     address: [u8; 32],
     contract_file_name: &str,
     pre_state_hash: &[u8],
     nonce: u64,
-    arguments: Vec<T>,
+    arguments: impl common::contract_api::argsparser::ArgsParser,
 ) -> ExecRequest {
-    let args: Vec<u8> = arguments
-        .iter()
-        .map(common::bytesrepr::ToBytes::to_bytes)
-        .collect::<Result<Vec<Vec<u8>>, _>>()
+    let args = arguments
+        .parse()
         .and_then(|args_bytes| common::bytesrepr::ToBytes::to_bytes(&args_bytes))
         .expect("should serialize args");
-
     let bytes_to_deploy = read_wasm_file_bytes(contract_file_name);
 
     let mut deploy = Deploy::new();
@@ -409,12 +406,12 @@ impl WasmTestBuilder {
 
     /// Runs a contract and after that runs actual WASM contract and expects
     /// transformations to happen at the end of execution.
-    pub fn exec_with_args<T: common::bytesrepr::ToBytes>(
+    pub fn exec_with_args(
         &mut self,
         address: [u8; 32],
         wasm_file: &str,
         nonce: u64,
-        args: Vec<T>,
+        args: impl common::contract_api::argsparser::ArgsParser,
     ) -> &mut WasmTestBuilder {
         let exec_request = create_exec_request(
             address,
@@ -452,7 +449,7 @@ impl WasmTestBuilder {
     }
 
     pub fn exec(&mut self, address: [u8; 32], wasm_file: &str, nonce: u64) -> &mut WasmTestBuilder {
-        self.exec_with_args(address, wasm_file, nonce, Vec::<()>::new())
+        self.exec_with_args(address, wasm_file, nonce, ())
     }
 
     /// Runs a commit request, expects a successful response, and

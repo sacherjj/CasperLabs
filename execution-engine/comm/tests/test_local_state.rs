@@ -24,10 +24,10 @@ fn should_run_local_state_contract() {
     // This test runs a contract that's after every call extends the same key with more data
     let result = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, "local_state.wasm", 1, vec![])
+        .exec(GENESIS_ADDR, "local_state.wasm", 1)
         .expect_success()
         .commit()
-        .exec(GENESIS_ADDR, "local_state.wasm", 2, vec![])
+        .exec(GENESIS_ADDR, "local_state.wasm", 2)
         .expect_success()
         .commit()
         .finish();

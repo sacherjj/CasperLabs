@@ -39,23 +39,11 @@ fn should_run_purse_to_purse_transfer() {
     let target = "purse:secondary".to_string();
 
     let transfer_result = WasmTestBuilder::from_result(genesis_test_result)
-        .exec(
+        .exec_with_args(
             GENESIS_ADDR,
             "transfer_purse_to_purse.wasm",
             1,
-            vec![
-                source
-                    .to_bytes()
-                    .expect("Unable to serialize source purse name"),
-                // dest
-                target
-                    .to_bytes()
-                    .expect("Unable to serialize dest purse name"),
-                // amount
-                U512::from(42)
-                    .to_bytes()
-                    .expect("Unable to serialize amount"),
-            ],
+            (source, target, U512::from(42)),
         )
         .expect_success()
         .commit()
@@ -153,23 +141,18 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let target = "purse:secondary".to_string();
 
     let transfer_result = WasmTestBuilder::from_result(genesis_test_result)
-        .exec(
+        .exec_with_args(
             GENESIS_ADDR,
             "transfer_purse_to_purse.wasm",
             1,
-            vec![
-                source
-                    .to_bytes()
-                    .expect("Unable to serialize source purse name"),
+            (
+                // source
+                source,
                 // dest
-                target
-                    .to_bytes()
-                    .expect("Unable to serialize dest purse name"),
+                target,
                 // amount
-                U512::from(9999999)
-                    .to_bytes()
-                    .expect("Unable to serialize amount"),
-            ],
+                U512::from(9999999),
+            ),
         )
         .expect_success()
         .commit()
