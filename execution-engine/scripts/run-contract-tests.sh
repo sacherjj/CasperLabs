@@ -16,6 +16,7 @@ CONTRACTS=(
     "ee-441-rng-state"
     "get-caller"
     "get-caller-subcall"
+    "main-purse"
 )
 
 source "${HOME}/.cargo/env"

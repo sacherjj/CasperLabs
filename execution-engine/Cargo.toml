@@ -21,5 +21,6 @@ members = [
     "test-contracts/ee-441-rng-state",
     "test-contracts/get-caller",
     "test-contracts/get-caller-subcall",
+    "test-contracts/main-purse",
     "wasm-prep",
 ]
