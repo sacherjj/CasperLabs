@@ -67,13 +67,22 @@ class ValidateTest
 
   def createChain[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
       length: Int,
-      bonds: Seq[Bond] = Seq.empty[Bond]
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      creator: Validator = ByteString.EMPTY
   ): F[Block] =
     (0 until length).foldLeft(createBlock[F](Seq.empty, bonds = bonds)) {
       case (block, _) =>
         for {
-          bprev <- block
-          bnext <- createBlock[F](Seq(bprev.blockHash), bonds = bonds)
+          bprev         <- block
+          dag           <- IndexedBlockDagStorage[F].getRepresentation
+          latestMsgs    <- dag.latestMessages
+          justification = latestMsgs.map { case (v, b) => (v, b.blockHash) }
+          bnext <- createBlock[F](
+                    Seq(bprev.blockHash),
+                    creator = creator,
+                    bonds = bonds,
+                    justifications = justification
+                  )
         } yield bnext
     }
 
@@ -313,17 +322,20 @@ class ValidateTest
         _ <- Validate.blockNumber[Task](block.changeBlockNumber(1), dag).attempt shouldBeF Left(
               InvalidBlockNumber
             )
-        _      <- Validate.blockNumber[Task](block, dag) shouldBeF Unit
-        _      = log.warns.size should be(1)
-        result = log.warns.head.contains("not zero, but block has no parents") should be(true)
+        _ <- Validate.blockNumber[Task](block, dag) shouldBeF Unit
+        _ = log.warns.size should be(1)
+        result = log.warns.head.contains("not zero, but block has no justifications") should be(
+          true
+        )
       } yield result
   }
 
   it should "return true for sequential numbering" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val n = 6
+      val n         = 6
+      val validator = generateValidator("Validator")
       for {
-        _   <- createChain[Task](n.toInt)
+        _   <- createChain[Task](n.toInt, bonds = List(Bond(validator, 1)), creator = validator)
         dag <- blockDagStorage.getRepresentation
         _   <- blockDagStorage.lookupByIdUnsafe(0) >>= (b => Validate.blockNumber[Task](b, dag))
         _   <- blockDagStorage.lookupByIdUnsafe(1) >>= (b => Validate.blockNumber[Task](b, dag))
@@ -343,21 +355,25 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       def createBlockWithNumber(
           n: Long,
-          parentHashes: Seq[ByteString] = Nil
+          justificationBlocks: Seq[Block] = Nil
       ): Task[Block] = {
         val blockWithNumber = Block().changeBlockNumber(n)
-        val header          = blockWithNumber.getHeader.withParentHashes(parentHashes)
-        val block           = ProtoUtil.unsignedBlockProto(blockWithNumber.getBody, header)
+        val header = blockWithNumber.getHeader
+          .withJustifications(
+            justificationBlocks.map(b => Justification(b.getHeader.validatorPublicKey, b.blockHash))
+          )
+        val block = ProtoUtil.unsignedBlockProto(blockWithNumber.getBody, header)
         blockStore.put(block.blockHash, block, Seq.empty) *>
           blockDagStorage.insert(block) *>
           block.pure[Task]
       }
+      val validator = generateValidator("Validator")
 
       for {
-        _   <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
+        _   <- createChain[Task](8, bonds = List(Bond(validator, 1)), creator = validator) // Note we need to create a useless chain to satisfy the assert in TopoSort
         b1  <- createBlockWithNumber(3)
         b2  <- createBlockWithNumber(7)
-        b3  <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
+        b3  <- createBlockWithNumber(8, Seq(b1, b2))
         dag <- blockDagStorage.getRepresentation
         _   <- Validate.blockNumber[Task](b3, dag) shouldBeF Unit
         result <- Validate.blockNumber[Task](b3.changeBlockNumber(4), dag).attempt shouldBeF Left(
@@ -899,7 +915,6 @@ class ValidateTest
           computedPostStateHash,
           bondedValidators,
           processedDeploys,
-          _,
           _,
           _,
           _

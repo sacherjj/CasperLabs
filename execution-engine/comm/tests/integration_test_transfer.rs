@@ -86,7 +86,7 @@ fn should_transfer_to_account() {
     let account_key = Key::Account(ACCOUNT_1_ADDR);
 
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state);
 
     // Run genesis
 
@@ -131,6 +131,8 @@ fn should_transfer_to_account() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -181,7 +183,7 @@ fn should_transfer_from_account_to_account() {
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state);
 
     // Run genesis
 
@@ -215,6 +217,8 @@ fn should_transfer_from_account_to_account() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        1,
+        Vec::<()>::new(),
     );
 
     let exec_1_response = engine_state
@@ -276,6 +280,8 @@ fn should_transfer_from_account_to_account() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        1,
+        Vec::<()>::new(),
     );
 
     let exec_2_response = engine_state
@@ -324,7 +330,7 @@ fn should_transfer_to_existing_account() {
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state);
 
     // Run genesis
 
@@ -369,6 +375,8 @@ fn should_transfer_to_existing_account() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -430,6 +438,8 @@ fn should_transfer_to_existing_account() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -473,7 +483,7 @@ fn should_transfer_to_existing_account() {
 #[test]
 fn should_fail_when_insufficient_funds() {
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state);
 
     // Run genesis
 
@@ -492,6 +502,8 @@ fn should_fail_when_insufficient_funds() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -524,6 +536,8 @@ fn should_fail_when_insufficient_funds() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -550,6 +564,8 @@ fn should_fail_when_insufficient_funds() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        2,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -577,7 +593,7 @@ fn should_create_purse() {
     let genesis_account_key = Key::Account(GENESIS_ADDR);
     let account_key = Key::Account(ACCOUNT_1_ADDR);
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, true);
+    let engine_state = EngineState::new(global_state);
 
     // Run genesis & set up an account
 
@@ -611,6 +627,8 @@ fn should_create_purse() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -646,8 +664,13 @@ fn should_create_purse() {
 
     // Create purse
 
-    let exec_request =
-        test_support::create_exec_request(ACCOUNT_1_ADDR, "create_purse_01.wasm", commit_hash);
+    let exec_request = test_support::create_exec_request(
+        ACCOUNT_1_ADDR,
+        "create_purse_01.wasm",
+        commit_hash,
+        1,
+        Vec::<()>::new(),
+    );
 
     let exec_response = engine_state
         .exec(RequestOptions::new(), exec_request)

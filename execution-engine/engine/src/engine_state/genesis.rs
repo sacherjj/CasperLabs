@@ -179,10 +179,6 @@ fn create_mint_effects(
         ret.insert(balance_uref.as_string(), balance_uref_key);
         // Insert PoS balance URef and its initial stakes so that PoS.
         ret.insert(pos_balance_uref.as_string(), pos_balance_uref_key);
-        ret.insert(
-            mint_contract_uref.as_string(),
-            Key::URef(mint_contract_uref),
-        );
         ret
     };
 
@@ -237,8 +233,14 @@ fn create_pos_effects(
         .map(|key| (key, Key::Hash([0u8; 32])))
         .collect();
 
-    let pos_purse = rng.get_uref(POS_PURSE);
+    // Include the mint contract in its known_urefs
+    let mint_public = rng.get_uref(MINT_PUBLIC_ADDRESS);
+    let mint_private = rng.get_uref(MINT_PRIVATE_ADDRESS);
+    known_urefs.insert(String::from(execution::MINT_NAME), Key::URef(mint_public));
+    known_urefs.insert(mint_private.as_string(), Key::URef(mint_private));
 
+    // Include PoS purse in its known_urefs
+    let pos_purse = rng.get_uref(POS_PURSE);
     known_urefs.insert(POS_PURSE.to_string(), Key::URef(pos_purse));
 
     // Create PoS Contract object.
@@ -515,10 +517,6 @@ mod tests {
 
         let mint_known_urefs = {
             let mut ret: BTreeMap<String, Key> = BTreeMap::new();
-            ret.insert(
-                mint_contract_uref.as_string(),
-                Key::URef(mint_contract_uref),
-            );
             ret.insert(pos_balance_uref.as_string(), pos_balance_uref_key);
             ret.insert(balance_uref.as_string(), balance_uref_key);
             ret
@@ -736,7 +734,9 @@ mod tests {
         // rustc isn't smart enough to figure that out
         let pos_contract_raw: Vec<u8> = pos_contract_bytes.into();
         assert_eq!(pos_contract.bytes().to_vec(), pos_contract_raw);
-        assert_eq!(pos_contract.urefs_lookup().len(), 3); // 2 for bonded validators, 1 for PoS purse.
+        // 2 for bonded validators, 1 for PoS purse, 2 for mint
+        let expected_num_known_urefs = 5;
+        assert_eq!(pos_contract.urefs_lookup().len(), expected_num_known_urefs);
 
         let validator_a_name: String =
             pos_validator_key(genesis_validator_a_public_key, genesis_validator_a_stake);

@@ -12,6 +12,8 @@ CONTRACTS=(
     "transfer-to-account-02"
     "local-state"
     "known-urefs"
+    "get-caller"
+    "get-caller-subcall"
 )
 
 source "${HOME}/.cargo/env"

@@ -50,7 +50,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
+class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: FinalityDetector: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -241,7 +241,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
       blockHash: BlockHash
   ): F[Boolean] =
     for {
-      faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
+      faultTolerance <- FinalityDetector[F].normalizedFaultTolerance(dag, blockHash)
       _ <- Log[F].info(
             s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance; threshold is $faultToleranceThreshold"
           )
@@ -346,13 +346,13 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
         //which are bonded validators in the chosen parent. This is safe because
         //any latest message not from a bonded validator will not change the
         //final fork-choice.
-        latestMessages <- dag.latestMessages
-        justifications = toJustification(latestMessages)
-          .filter(j => bondedValidators.contains(j.validatorPublicKey))
-        maxBlockNumber = parents.foldLeft(-1L) {
-          case (acc, b) => math.max(acc, blockNumber(b))
+        latestMessages   <- dag.latestMessages
+        bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
+        justifications   = toJustification(bondedLatestMsgs)
+        maxRank = bondedLatestMsgs.values.foldLeft(-1L) {
+          case (acc, b) => math.max(acc, b.rank)
         }
-        number          = maxBlockNumber + 1
+        number          = maxRank + 1
         protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(number)
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
                      createProposal(
@@ -502,9 +502,14 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
         // put them back into the buffer explicitly.
         invalidNonceDeploys,
         deploysToDiscard,
-        number,
         protocolVersion
-      ) = result
+      )                 = result
+      dag               <- blockDag
+      justificationMsgs <- justifications.toList.traverse(j => dag.lookup(j.latestBlockHash))
+      maxRank = justificationMsgs.flatten.foldLeft(-1L) {
+        case (acc, b) => math.max(b.rank, acc)
+      }
+      number = maxRank + 1
       status = if (deploysForBlock.isEmpty) {
         CreateBlockStatus.noNewDeploys
       } else {
@@ -669,7 +674,7 @@ object MultiParentCasperImpl {
       _ <- Metrics[F].incrementGauge("processed_deploys", 0)
     } yield ()
 
-  def create[F[_]: Sync: Log: Time: Metrics: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Cell[
+  def create[F[_]: Sync: Log: Time: Metrics: FinalityDetector: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Cell[
     ?[_],
     CasperState
   ]](

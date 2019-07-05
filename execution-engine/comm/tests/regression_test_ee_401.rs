@@ -22,7 +22,7 @@ const GENESIS_ADDR: [u8; 32] = [0u8; 32];
 #[test]
 fn should_execute_contracts_which_provide_extra_urefs() {
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state);
 
     // run genesis
 
@@ -37,8 +37,13 @@ fn should_execute_contracts_which_provide_extra_urefs() {
 
     // exec 1
 
-    let exec_request =
-        test_support::create_exec_request(GENESIS_ADDR, "ee_401_regression.wasm", genesis_hash);
+    let exec_request = test_support::create_exec_request(
+        GENESIS_ADDR,
+        "ee_401_regression.wasm",
+        genesis_hash,
+        1,
+        Vec::<()>::new(),
+    );
 
     let exec_response = engine_state
         .exec(RequestOptions::new(), exec_request)
@@ -60,8 +65,13 @@ fn should_execute_contracts_which_provide_extra_urefs() {
 
     // exec 2
 
-    let exec_request =
-        test_support::create_exec_request(GENESIS_ADDR, "ee_401_regression_call.wasm", commit_hash);
+    let exec_request = test_support::create_exec_request(
+        GENESIS_ADDR,
+        "ee_401_regression_call.wasm",
+        commit_hash,
+        1,
+        Vec::<()>::new(),
+    );
 
     let exec_response = engine_state
         .exec(RequestOptions::new(), exec_request)

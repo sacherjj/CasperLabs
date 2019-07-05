@@ -26,6 +26,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   StandaloneCasperHandler
 }
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
+import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.catscontrib.ApplicativeError_
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.comm.discovery.Node
@@ -115,7 +116,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
-    implicit val safetyOracle = new SafetyOracle[Task] {
+    implicit val safetyOracle = new FinalityDetector[Task] {
       override def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[Task],
           estimateBlockHash: BlockHash
