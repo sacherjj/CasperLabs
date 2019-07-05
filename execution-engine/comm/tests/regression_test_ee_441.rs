@@ -7,7 +7,6 @@ extern crate storage;
 
 use std::collections::HashMap;
 
-use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::uref::URef;
 use common::value::Value;
@@ -30,22 +29,18 @@ fn do_pass(pass: &str) -> (URef, URef) {
     // This test runs a contract that's after every call extends the same key with more data
     let transforms = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, "ee_441_rng_state.wasm", 1)
-        .expect_success()
-        .commit()
         .exec_with_args(
             GENESIS_ADDR,
-            "ee_441_rng_state_call.wasm",
-            2,
+            "ee_441_rng_state.wasm",
+            1,
             vec![pass.to_string()],
         )
         .expect_success()
         .commit()
         .get_transforms();
 
-    let transform = &transforms[1];
+    let transform = &transforms[0];
     let account_transform = &transform[&Key::Account(GENESIS_ADDR)];
-
     let account = if let Transform::Write(Value::Account(account)) = account_transform {
         account
     } else {
