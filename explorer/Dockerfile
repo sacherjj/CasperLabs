@@ -2,6 +2,7 @@ FROM node:12.5.0-stretch-slim
 
 COPY server/node_modules /app/node_modules
 COPY contracts/target/wasm32-unknown-unknown/release/faucet.wasm /app/contracts/faucet.wasm
+COPY contracts/target/wasm32-unknown-unknown/release/transfer.wasm /app/contracts/transfer.wasm
 COPY server/dist /app/server
 COPY ui/build /app/ui
 
