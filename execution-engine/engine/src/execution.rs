@@ -693,8 +693,6 @@ where
             return Ok(TransferResult::TransferError);
         }
 
-        self.context.insert_uref(target_purse_id.value());
-
         if self.mint_transfer(mint_contract_key, source, target_purse_id, amount)? {
             let known_urefs = &[
                 (
@@ -727,6 +725,7 @@ where
     ) -> Result<TransferResult, Error> {
         let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
 
+        // This appears to be a load-bearing use of `RuntimeContext::insert_uref`.
         self.context.insert_uref(target.value());
 
         if self.mint_transfer(mint_contract_key, source, target, amount)? {
