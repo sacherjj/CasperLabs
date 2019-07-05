@@ -272,8 +272,8 @@ mod tests {
 
     #[test]
     fn test_unbond_too_much_rel() {
-        let mut stakes = new_stakes(&[(KEY1, 1_000), (KEY2, 1_000)]);
-        let total = 1_000 + 1_000;
+        let mut stakes = new_stakes(&[(KEY1, 999), (KEY2, 1)]);
+        let total = 999 + 1;
         assert_eq!(
             Err(Error::UnbondTooLarge),
             stakes.unbond(

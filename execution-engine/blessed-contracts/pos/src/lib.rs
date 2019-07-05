@@ -30,9 +30,9 @@ const BOND_DELAY: u64 = 0;
 /// The time from an unbonding request until the stakes are paid out.
 const UNBOND_DELAY: u64 = 0;
 /// The maximum number of pending bonding requests.
-const MAX_BOND_LEN: usize = 10;
+const MAX_BOND_LEN: usize = 100;
 /// The maximum number of pending unbonding requests.
-const MAX_UNBOND_LEN: usize = 100;
+const MAX_UNBOND_LEN: usize = 1000;
 /// The maximum difference between the largest and the smallest stakes.
 // TODO: Should this be a percentage instead?
 // TODO: Pick a reasonable value.
@@ -42,9 +42,9 @@ const MAX_INCREASE: U512 = U512::MAX;
 /// The maximum decrease of stakes in a single unbonding request.
 const MAX_DECREASE: U512 = U512::MAX;
 /// The maximum increase of stakes in millionths of the total stakes in a single bonding request.
-const MAX_REL_INCREASE: u64 = 500_000;
+const MAX_REL_INCREASE: u64 = 1_000_000_000;
 /// The maximum decrease of stakes in millionths of the total stakes in a single unbonding request.
-const MAX_REL_DECREASE: u64 = 100_000;
+const MAX_REL_DECREASE: u64 = 900_000;
 
 /// Enqueues the deploy's creator for becoming a validator. The bond `amount` is paid from the
 /// purse `source`.
