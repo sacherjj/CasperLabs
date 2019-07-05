@@ -12,6 +12,7 @@ CONTRACTS=(
     "transfer-to-account-02"
     "local-state"
     "known-urefs"
+    "ee-441-rng-state"
     "get-caller"
     "get-caller-subcall"
 )

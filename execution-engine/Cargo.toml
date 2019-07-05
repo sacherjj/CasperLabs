@@ -16,6 +16,7 @@ members = [
     "test-contracts/transfer-to-account-02",
     "test-contracts/local-state",
     "test-contracts/known-urefs",
+    "test-contracts/ee-441-rng-state",
     "test-contracts/get-caller",
     "test-contracts/get-caller-subcall",
     "wasm-prep",
