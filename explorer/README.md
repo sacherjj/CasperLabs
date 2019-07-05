@@ -38,7 +38,7 @@ Run the transfer from the genesis account to our test faucet account.
 
 ```console
 cd server
-node ./dist/transfer.js \
+node ./dist/server/src/transfer.js \
   --host-url http://localhost:8401 \
   --transfer-contract-path ../contracts/target/wasm32-unknown-unknown/release/transfer.wasm \
   --from-private-key-path ../../hack/docker/.casperlabs/genesis/system-account/account-private.pem \

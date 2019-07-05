@@ -44,12 +44,15 @@ services:
     networks:
       - casperlabs
 
-  proxy-node-external:
-    image: alpine/socat
-    container_name: proxy-node-external
+  envoy:
+    image: envoyproxy/envoy:latest
+    container_name: envoy
     ports:
-      - ${CL_SERVER_EXTERNAL_PORT}:40401
-    command: "tcp-listen:40401,fork,reuseaddr tcp-connect:node-0:40401"
+      # TODO: Configure envoy to reverse proxy to the explorer backend and the node-grpc on 8080
+      - ${CL_EXPLORER_GRPC_PORT}:40401
+    volumes:
+      - ${PWD}/envoy.yaml:/etc/envoy.yaml
+    command: "envoy -c /etc/envoy.yaml --log-level trace"
     networks:
       - casperlabs
 
@@ -60,3 +63,9 @@ services:
       - casperlabs
     ports:
       - ${CL_EXPLORER_HTTP_PORT}:8080
+    volumes:
+      - ${PWD}/.casperlabs/genesis/system-account/account-public.pem:/app/keys/public.key
+      - ${PWD}/.casperlabs/genesis/system-account/account-private.pem:/app/keys/private.key
+    environment:
+      FAUCET_ACCOUNT_PUBLIC_KEY_PATH: /app/keys/public.key
+      FAUCET_ACCOUNT_PRIVATE_KEY_PATH: /app/keys/private.key

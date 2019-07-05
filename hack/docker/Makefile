@@ -52,7 +52,7 @@ node-%/metrics:
 # Start common components.
 up: .make/docker/network
 	$(REFRESH_TARGETS)
-	docker-compose -p casperlabs up -d
+	docker-compose -p casperlabs up -d --remove-orphans
 
 # Stop common components.
 down:
