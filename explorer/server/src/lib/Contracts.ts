@@ -2,7 +2,7 @@ import blake from "blakejs";
 import fs from "fs";
 import * as nacl from "tweetnacl-ts";
 import { Approval, Deploy, Signature } from "../../../grpc/generated/io/casperlabs/casper/consensus/consensus_pb";
-import { Args, PublicKey, UInt64 } from "./Serialization";
+import { Args, PublicKeyArg, UInt64Arg } from "./Serialization";
 
 // https://www.npmjs.com/package/tweetnacl-ts
 // https://github.com/dcposch/blakejs
@@ -90,14 +90,14 @@ export class BoundContract {
 
 export class Faucet {
   public static args(accountPublicKey: ByteArray): ByteArray {
-    return PublicKey(accountPublicKey);
+    return PublicKeyArg(accountPublicKey);
   }
 }
 
 export class Transfer {
   public static args(accountPublicKey: ByteArray, amount: bigint): ByteArray {
     return Args(
-      PublicKey(accountPublicKey),
-      UInt64(amount));
+      PublicKeyArg(accountPublicKey),
+      UInt64Arg(amount));
   }
 }
