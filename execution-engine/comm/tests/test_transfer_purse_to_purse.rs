@@ -64,7 +64,7 @@ fn should_run_purse_to_purse_transfer() {
 
     // Get the `purse_transfer_result` for a given
     let purse_transfer_result =
-        &transform[&modified_account.urefs_lookup()["purse_transfer_result"].normalize()]; //addkeys["purse_transfer_result"].as_uref().unwrap();
+        &transform[&modified_account.urefs_lookup()["purse_transfer_result"].normalize()];
     let purse_transfer_result = if let Transform::Write(Value::String(s)) = purse_transfer_result {
         s
     } else {
