@@ -18,6 +18,13 @@ Runs the server and the UI in development mode. The UI will proxy to the server 
 
 Build artifacts into the `dist` directory.
 
+The `grpc` directory contains auto-generated files, they were addes as follows:
+
+```console
+cd src
+ln -s ../../grpc/generated grpc
+```
+
 ## Useful links:
 * https://facebook.github.io/create-react-app/docs/deployment
 * https://www.fullstackreact.com/articles/using-create-react-app-with-a-server/

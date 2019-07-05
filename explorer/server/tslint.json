@@ -13,7 +13,7 @@
   "rulesDirectory": [],
   "linterOptions": {
     "exclude": [
-      "../grpc/generated/**/*.js"
+      "src/grpc/**/*.js"
     ]
   }
 }

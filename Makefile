@@ -202,7 +202,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 .make/npm-native/explorer: $(TS_SRC) .make/protoc/explorer
 	# CI=false so on Drone it won't fail on warnings (currently about href).
 	cd explorer/ui && npm install && CI=false npm run build
-	cd explorer/server && npm install && npm run build
+	cd explorer/server && npm install && npm run clean:dist && npm run build
 	mkdir -p $(dir $@) && touch $@
 
 .make/npm-docker/explorer: $(TS_SRC) .make/protoc/explorer
@@ -210,7 +210,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		-v $(PWD)/explorer:/explorer -w /explorer \
 		$(NODE_IMAGE) -c "\
 			cd ui     && npm install && npm run build && cd - && \
-			cd server && npm install && npm run build && cd - \
+			cd server && npm install && npm run clean:dist && npm run build && cd - \
 		"
 	mkdir -p $(dir $@) && touch $@
 

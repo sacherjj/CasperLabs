@@ -23,8 +23,7 @@
     ],
   },
   "include": [
-    "./src/**/*",
-    "../grpc/generated/**/*"
+    "./src/**/*"
   ],
   "exclude": [
     "./src/**/*.test.ts"

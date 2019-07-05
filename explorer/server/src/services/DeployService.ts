@@ -1,9 +1,9 @@
 import { grpc } from "@improbable-eng/grpc-web";
 import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport";
 import { ProtobufMessage } from "@improbable-eng/grpc-web/dist/typings/message";
-import { Deploy } from "../../../grpc/generated/io/casperlabs/casper/consensus/consensus_pb";
-import { DeployRequest } from "../../../grpc/generated/io/casperlabs/node/api/casper_pb";
-import { CasperService } from "../../../grpc/generated/io/casperlabs/node/api/casper_pb_service";
+import { Deploy } from "../grpc/io/casperlabs/casper/consensus/consensus_pb";
+import { DeployRequest } from "../grpc/io/casperlabs/node/api/casper_pb";
+import { CasperService } from "../grpc/io/casperlabs/node/api/casper_pb_service";
 
 // https://github.com/improbable-eng/grpc-web/tree/master/client/grpc-web
 // https://www.npmjs.com/package/@improbable-eng/grpc-web-node-http-transport
