@@ -25,7 +25,6 @@ fn should_run_purse_to_purse_transfer() {
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .finish();
 
-    let _genesis_account = genesis_test_result.genesis_account.clone();
     let mint_contract_uref = genesis_test_result
         .mint_contract_uref
         .expect("Unable to get mint contract uref");
@@ -127,7 +126,6 @@ fn should_run_purse_to_purse_transfer_with_error() {
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .finish();
 
-    let _genesis_account = genesis_test_result.genesis_account.clone();
     let mint_contract_uref = genesis_test_result
         .mint_contract_uref
         .expect("Unable to get mint contract uref");
@@ -141,9 +139,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
             "transfer_purse_to_purse.wasm",
             1,
             (
-                // source
                 source,
-                // dest
                 target,
                 // amount
                 U512::from(9_999_999),

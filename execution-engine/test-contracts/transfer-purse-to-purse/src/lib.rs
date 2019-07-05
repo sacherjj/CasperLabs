@@ -4,22 +4,16 @@
 #[macro_use]
 extern crate alloc;
 extern crate cl_std;
-#[macro_use]
-extern crate core;
 
 use alloc::string::String;
 use cl_std::contract_api::{
-    add_uref, call_contract, create_purse, get_arg, get_uref, has_uref, is_valid, main_purse,
-    new_uref, read, revert, transfer_from_purse_to_purse, PurseTransferResult,
+    add_uref, call_contract, create_purse, get_arg, get_uref, has_uref, main_purse, new_uref, read,
+    revert, transfer_from_purse_to_purse,
 };
 use cl_std::key::Key;
-use cl_std::uref::AccessRights;
 use cl_std::uref::URef;
-use cl_std::value::account::{PublicKey, PurseId};
-use cl_std::value::{Value, U512};
-use core::convert::TryInto;
-
-const PURSE_ID: [u8; 32] = [42; 32];
+use cl_std::value::account::PurseId;
+use cl_std::value::U512;
 
 fn get_balance(purse_id: PurseId) -> Option<U512> {
     let mint_public_hash = get_uref("mint");
@@ -47,7 +41,7 @@ pub extern "C" fn call() {
 
     let src_purse_name: String = get_arg(0);
     let src_purse = match get_uref(&src_purse_name).as_uref() {
-        Some(uref) => PurseId::new(uref.clone()),
+        Some(uref) => PurseId::new(*uref),
         None => revert(101),
     };
     //    let initial_balance = get_balance(src_purse).unwrap_or_else(||revert(100));
@@ -63,13 +57,12 @@ pub extern "C" fn call() {
     } else {
         let uref_key = get_uref(&dst_purse_name);
         match uref_key.as_uref() {
-            Some(uref) => PurseId::new(uref.clone()),
+            Some(uref) => PurseId::new(*uref),
             None => revert(102),
         }
     };
     let amount: U512 = get_arg(2);
 
-    let initial_balance = get_balance(main_purse).unwrap_or_else(|| revert(103));
     let transfer_result = transfer_from_purse_to_purse(src_purse, dst_purse, amount);
 
     // Assert is done here
