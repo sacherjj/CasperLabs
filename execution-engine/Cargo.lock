@@ -1692,6 +1692,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "transfer-purse-to-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
+]
+
+[[package]]
 name = "transfer-to-account-01"
 version = "0.1.0"
 dependencies = [
