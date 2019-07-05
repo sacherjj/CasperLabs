@@ -44,18 +44,6 @@ services:
     networks:
       - casperlabs
 
-  # envoy:
-  #   image: envoyproxy/envoy:latest
-  #   container_name: envoy
-  #   ports:
-  #     # TODO: Configure envoy to reverse proxy to the explorer backend and the node-grpc on 8080
-  #     - ${CL_EXPLORER_GRPC_PORT}:40401
-  #   volumes:
-  #     - ${PWD}/envoy.yaml:/etc/envoy.yaml
-  #   command: "envoy -c /etc/envoy.yaml --log-level trace"
-  #   networks:
-  #     - casperlabs
-
 
   # According to https://github.com/improbable-eng/grpc-web/issues/199
   # grpc/grpc-web has a client that works with envoy and
