@@ -31,6 +31,7 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.control.NonFatal
 
 /**
@@ -72,60 +73,117 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
   /** Add a block if it hasn't been added yet. */
   def addBlock(
       block: Block
-  ): F[BlockStatus] =
-    Resource
-      .make(blockProcessingLock.acquire)(_ => blockProcessingLock.release)
-      .use(
-        _ =>
-          for {
-            dag       <- blockDag
-            blockHash = block.blockHash
-            inDag     <- dag.contains(blockHash)
-            inBuffer <- Cell[F, CasperState].read
-                         .map(casperState => casperState.blockBuffer.contains(blockHash))
-            attempts <- if (inDag) {
-                         Log[F]
-                           .info(
-                             s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
-                           ) *>
-                           List(block -> BlockStatus.processed).pure[F]
-                       } else if (inBuffer) {
-                         // Waiting for dependencies to become available.
-                         Log[F]
-                           .info(
-                             s"Block ${PrettyPrinter.buildString(blockHash)} is already in the buffer."
-                           ) *>
-                           List(block -> BlockStatus.processing).pure[F]
-                       } else {
-                         // This might be the first time we see this block, or it may not have been added to the state
-                         // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
-                         internalAddBlock(block, dag)
-                       }
-            // This method could just return the block hashes it created,
-            // but for now it does gossiping as well. The methods return the full blocks
-            // because for missing blocks it's not yet saved to the database.
-            _ <- attempts.traverse {
-                  case (attemptedBlock, status) =>
-                    broadcaster.networkEffects(attemptedBlock, status)
-                }
-          } yield attempts.head._2
-      )
+  ): F[BlockStatus] = {
+    def addBlockEffect(validateAndAddBlock: F[(BlockStatus, BlockDagRepresentation[F])]) =
+      Resource
+        .make(blockProcessingLock.acquire)(_ => blockProcessingLock.release)
+        .use(
+          _ =>
+            for {
+              dag       <- blockDag
+              blockHash = block.blockHash
+              inDag     <- dag.contains(blockHash)
+              inBuffer <- Cell[F, CasperState].read
+                           .map(casperState => casperState.blockBuffer.contains(blockHash))
+              attempts <- if (inDag) {
+                           Log[F]
+                             .info(
+                               s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
+                             ) *>
+                             List(block -> BlockStatus.processed).pure[F]
+                         } else if (inBuffer) {
+                           // Waiting for dependencies to become available.
+                           Log[F]
+                             .info(
+                               s"Block ${PrettyPrinter.buildString(blockHash)} is already in the buffer."
+                             ) *>
+                             List(block -> BlockStatus.processing).pure[F]
+                         } else {
+                           // This might be the first time we see this block, or it may not have been added to the state
+                           // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
+                           internalAddBlock(block, dag, validateAndAddBlock)
+                         }
+              // This method could just return the block hashes it created,
+              // but for now it does gossiping as well. The methods return the full blocks
+              // because for missing blocks it's not yet saved to the database.
+              _ <- attempts.traverse {
+                    case (attemptedBlock, status) =>
+                      broadcaster.networkEffects(attemptedBlock, status)
+                  }
+            } yield attempts.head._2
+        )
+
+    val defaultValidateAndAddBlock = for {
+      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
+      dag                    <- blockDag
+      res <- statelessExecutor.validateAndAddBlock(
+              StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
+              dag,
+              block
+            )
+    } yield res
+
+    val handleInvalidTimestamp =
+      for {
+        _ <- Log[F].warn(
+              Validate.ignore(
+                block,
+                s"block timestamp ${block.getHeader.timestamp} is greater than current time + DRIFT(${Validate.DRIFT} ms)"
+              )
+            )
+        _ <- Log[F].warn(
+              s"Recording invalid block ${PrettyPrinter
+                .buildString(block.blockHash)} for $InvalidUnslashableBlock."
+            )
+        _ <- Cell[F, CasperState].modify { s =>
+              s.copy(
+                invalidBlockTracker = s.invalidBlockTracker + block.blockHash
+              )
+            }
+        _ <- BlockStore[F].put(
+              block.blockHash,
+              BlockMsgWithTransform(Some(block), Seq.empty)
+            )
+        updatedDag <- BlockDagStorage[F].insert(block)
+      } yield (InvalidUnslashableBlock: BlockStatus, updatedDag)
+
+    for {
+      // If we receive block from future then we may fail to propose new block on top of it because of Validation.timestamp
+      currentMillis <- Time[F].currentMillis
+      maybeFutureTimeDiff = Option(math.max(0L, block.getHeader.timestamp - currentMillis))
+        .filter(diff => diff > 0L)
+        .map { diff =>
+          // Sleep for a little bit more time to ensure we won't propose block on top of block from future
+          FiniteDuration(diff + 500, MILLISECONDS)
+        }
+      blockStatus <- maybeFutureTimeDiff.fold(
+                      addBlockEffect(defaultValidateAndAddBlock)
+                    ) { diff =>
+                      // Prevent sleeping too much time
+                      if (diff.toMillis > Validate.DRIFT) {
+                        addBlockEffect(handleInvalidTimestamp)
+                      } else {
+                        for {
+                          _           <- Time[F].sleep(diff)
+                          blockStatus <- addBlock(block)
+                        } yield blockStatus
+                      }
+                    }
+    } yield blockStatus
+  }
 
   /** Validate the block, try to execute and store it,
     * execute any other block that depended on it,
     * update the finalized block reference. */
   private def internalAddBlock(
       block: Block,
-      dag: BlockDagRepresentation[F]
+      dag: BlockDagRepresentation[F],
+      validateAndAddBlock: F[(BlockStatus, BlockDagRepresentation[F])]
   ): F[List[(Block, BlockStatus)]] =
     for {
       lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
-      (status, updatedDag) <- statelessExecutor.validateAndAddBlock(
-                               StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
-                               dag,
-                               block
-                             )
-      _ <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
+      (status, updatedDag)   <- validateAndAddBlock
+      _                      <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       furtherAttempts <- status match {
                           case MissingBlocks           => List.empty[(Block, BlockStatus)].pure[F]
                           case IgnorableEquivocation   => List.empty[(Block, BlockStatus)].pure[F]
