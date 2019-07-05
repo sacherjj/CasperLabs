@@ -44,8 +44,6 @@ pub extern "C" fn call() {
         Some(uref) => PurseId::new(*uref),
         None => revert(101),
     };
-    //    let initial_balance = get_balance(src_purse).unwrap_or_else(||revert(100));
-
     let dst_purse_name: String = get_arg(1);
 
     let dst_purse = if !has_uref(&dst_purse_name) {
