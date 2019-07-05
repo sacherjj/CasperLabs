@@ -1,13 +1,13 @@
 import { computed } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import Cell from '../lib/Cell';
+import StorageCell from '../lib/StorageCell';
 import FaucetService from '../services/FaucetService';
 
 // CasperContainer talks to the API on behalf of React
 // components and exposes the state in MobX observables.
 export class CasperContainer {
-  _faucetRequests = new Cell<FaucetRequest[]>('faucet-requests', []);
+  _faucetRequests = new StorageCell<FaucetRequest[]>('faucet-requests', []);
 
   constructor(
     private errors: ErrorContainer,

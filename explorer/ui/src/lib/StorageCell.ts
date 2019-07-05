@@ -1,7 +1,7 @@
 import { observable, computed } from 'mobx';
 
 // Store data in session storage.
-export default class Cell<T> {
+export default class StorageCell<T> {
   @observable private _value: T;
 
   constructor(private key: string, defaultValue: T) {
