@@ -2,7 +2,7 @@ import blake from "blakejs";
 import fs from "fs";
 import * as nacl from "tweetnacl-ts";
 import { Approval, Deploy, Signature } from "../../../grpc/generated/io/casperlabs/casper/consensus/consensus_pb";
-import { PublicKey } from "./Serialization";
+import { Args, PublicKey, UInt64 } from "./Serialization";
 
 // https://www.npmjs.com/package/tweetnacl-ts
 // https://github.com/dcposch/blakejs
@@ -84,8 +84,8 @@ export class Faucet {
 
 export class Transfer {
   public static args(accountPublicKey: ByteArray, amount: bigint): ByteArray {
-    const u64Buffer = Buffer.alloc(8);
-    u64Buffer.writeBigUInt64LE(amount);
-    return Buffer.concat([PublicKey(accountPublicKey), u64Buffer]);
+    return Args(
+      PublicKey(accountPublicKey),
+      UInt64(amount));
   }
 }

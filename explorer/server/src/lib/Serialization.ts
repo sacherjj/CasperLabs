@@ -11,3 +11,14 @@ export function PublicKey(bytes: ByteArray): ByteArray {
   size.writeInt32LE(bytes.length, 0);
   return Buffer.concat([size, bytes]);
 }
+
+export function UInt64(value: bigint): ByteArray {
+  const u64Buffer = Buffer.alloc(8);
+  u64Buffer.writeBigUInt64LE(value);
+  return u64Buffer;
+}
+
+/** Combine multiple arguments. */
+export function Args(...args: ByteArray[]): ByteArray {
+  return Buffer.concat(args);
+}
