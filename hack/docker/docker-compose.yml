@@ -82,6 +82,7 @@ services:
     ports:
       - ${CL_EXPLORER_HTTP_PORT}:8080
     volumes:
+      # NOTE: This is using the system account, so no need for giving funds to the faucet.
       - ${PWD}/.casperlabs/genesis/system-account/account-public.pem:/app/keys/public.key
       - ${PWD}/.casperlabs/genesis/system-account/account-private.pem:/app/keys/private.key
     environment:
