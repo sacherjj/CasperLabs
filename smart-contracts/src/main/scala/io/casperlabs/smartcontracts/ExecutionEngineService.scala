@@ -48,8 +48,8 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
 
   override def emptyStateHash: ByteString = {
     val arr: Array[Byte] = Array(
-      202, 169, 195, 180, 73, 241, 1, 207, 158, 155, 105, 130, 222, 149, 113, 83, 244, 33, 11, 132,
-      57, 102, 129, 52, 188, 253, 43, 243, 67, 176, 41, 151
+      51, 7, 165, 76, 166, 213, 191, 186, 252, 14, 241, 176, 3, 243, 236, 73, 65, 192, 17, 238, 127,
+      121, 136, 158, 68, 65, 103, 84, 222, 47, 9, 29
     ).map(_.toByte)
     ByteString.copyFrom(arr)
   }

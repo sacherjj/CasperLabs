@@ -26,9 +26,8 @@ use lmdb::DatabaseFlags;
 
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
 use shared::logging::{log_level, log_settings};
-use shared::newtypes::CorrelationId;
 use shared::os::get_page_size;
-use shared::{init, logging, socket};
+use shared::{logging, socket};
 use storage::global_state::lmdb::LmdbGlobalState;
 use storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
@@ -248,16 +247,8 @@ fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGloba
         Arc::new(ret)
     };
 
-    let global_state = {
-        let init_state = init::mocked_account([48u8; 32]);
-        LmdbGlobalState::from_pairs(
-            CorrelationId::new(),
-            Arc::clone(&environment),
-            Arc::clone(&trie_store),
-            &init_state,
-        )
-        .expect(LMDB_GLOBAL_STATE_EXPECT)
-    };
+    let global_state = LmdbGlobalState::empty(Arc::clone(&environment), Arc::clone(&trie_store))
+        .expect(LMDB_GLOBAL_STATE_EXPECT);
 
     EngineState::new(global_state)
 }
