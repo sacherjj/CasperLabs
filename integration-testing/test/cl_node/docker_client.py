@@ -36,14 +36,14 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         command = f'--host {self.node.container_name} {command}'
         self.logger.info(f"COMMAND {command}")
         container = self.docker_client.containers.run(
-            image = f"casperlabs/client:{self.node.docker_tag}",
-            name = f"client-{self.node.config.number}-{random_string(5)}",
-            command = command,
-            network = self.node.network,
-            volumes = volumes,
-            detach = True,
-            stderr = True,
-            stdout = True,
+            image=f"casperlabs/client:{self.node.docker_tag}",
+            name=f"client-{self.node.config.number}-{random_string(5)}",
+            command=command,
+            network=self.node.network,
+            volumes=volumes,
+            detach=True,
+            stderr=True,
+            stdout=True,
         )
         r = container.wait()
         error, status_code = r['Error'], r['StatusCode']
