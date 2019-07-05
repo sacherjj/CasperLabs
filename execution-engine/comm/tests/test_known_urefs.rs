@@ -10,7 +10,8 @@ use std::collections::HashMap;
 use common::key::Key;
 use common::value::{Value, U512};
 use shared::transform::Transform;
-use test_support::WasmTestBuilder;
+
+use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 #[allow(dead_code)]
 mod test_support;
@@ -22,7 +23,7 @@ const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 fn should_run_known_urefs_contract() {
     let result = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, "known_urefs.wasm", 1)
+        .exec(GENESIS_ADDR, "known_urefs.wasm", DEFAULT_BLOCK_TIME, 1)
         .commit()
         .expect_success()
         .finish();

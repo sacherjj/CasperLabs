@@ -13,6 +13,8 @@ use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineServi
 use execution_engine::engine_state::EngineState;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
+use test_support::DEFAULT_BLOCK_TIME;
+
 #[allow(unused)]
 mod test_support;
 
@@ -41,6 +43,7 @@ fn should_execute_contracts_which_provide_extra_urefs() {
         GENESIS_ADDR,
         "ee_401_regression.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );
@@ -69,6 +72,7 @@ fn should_execute_contracts_which_provide_extra_urefs() {
         GENESIS_ADDR,
         "ee_401_regression_call.wasm",
         commit_hash,
+        DEFAULT_BLOCK_TIME,
         1,
         (),
     );

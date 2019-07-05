@@ -19,6 +19,7 @@ members = [
     "test-contracts/known-urefs",
     "test-contracts/transfer-purse-to-purse",
     "test-contracts/ee-441-rng-state",
+    "test-contracts/get-blocktime",
     "test-contracts/get-caller",
     "test-contracts/get-caller-subcall",
     "wasm-prep",

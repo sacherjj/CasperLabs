@@ -11,7 +11,7 @@ use common::key::Key;
 use common::uref::URef;
 use common::value::Value;
 use shared::transform::Transform;
-use test_support::WasmTestBuilder;
+use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 #[allow(dead_code)]
 mod test_support;
@@ -29,7 +29,13 @@ fn do_pass(pass: &str) -> (URef, URef) {
     // This test runs a contract that's after every call extends the same key with more data
     let transforms = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec_with_args(GENESIS_ADDR, "ee_441_rng_state.wasm", 1, pass.to_string())
+        .exec_with_args(
+            GENESIS_ADDR,
+            "ee_441_rng_state.wasm",
+            DEFAULT_BLOCK_TIME,
+            1,
+            pass.to_string(),
+        )
         .expect_success()
         .commit()
         .get_transforms();
