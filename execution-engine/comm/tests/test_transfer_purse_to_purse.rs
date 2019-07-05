@@ -57,7 +57,7 @@ fn should_run_purse_to_purse_transfer() {
         account
     } else {
         panic!(
-            "Transform {:?} is not a Transform with a Value of Account type",
+            "Transform {:?} is not a Transform with a Value(Account)",
             account_transforms
         );
     };
