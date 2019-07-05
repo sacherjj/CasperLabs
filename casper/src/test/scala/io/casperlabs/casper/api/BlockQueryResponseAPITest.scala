@@ -83,21 +83,21 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       .withHeader(header.withValidatorPublicKey(secondBlockSender).withChainId(chainId))
       .withBody(body)
 
-  val faultTolerance = -1f
+  val faultTolerance = 0
 
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "showBlock" should "return successful block info response" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
-        (logEff, casperRef, cliqueOracleEffect) = effects
-        q                                       = BlockQuery(hash = secondBlockQuery)
+        effects                                     <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        (logEff, casperRef, finalityDetectorEffect) = effects
+        q                                           = BlockQuery(hash = secondBlockQuery)
         blockQueryResponse <- BlockAPI.showBlock[Task](q)(
                                Sync[Task],
                                casperRef,
                                logEff,
-                               cliqueOracleEffect,
+                               finalityDetectorEffect,
                                blockStore
                              )
         blockInfo = blockQueryResponse.blockInfo.get
@@ -118,14 +118,14 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   it should "return error when no block exists" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                 <- emptyEffects(blockStore, blockDagStorage)
-        (logEff, casperRef, cliqueOracleEffect) = effects
-        q                                       = BlockQuery(hash = badTestHashQuery)
+        effects                                     <- emptyEffects(blockStore, blockDagStorage)
+        (logEff, casperRef, finalityDetectorEffect) = effects
+        q                                           = BlockQuery(hash = badTestHashQuery)
         blockQueryResponse <- BlockAPI.showBlock[Task](q)(
                                Sync[Task],
                                casperRef,
                                logEff,
-                               cliqueOracleEffect,
+                               finalityDetectorEffect,
                                blockStore
                              )
       } yield blockQueryResponse.status should be(
@@ -136,15 +136,15 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   "findBlockWithDeploy" should "return successful block info response" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
-        (logEff, casperRef, cliqueOracleEffect) = effects
-        user                                    = ByteString.EMPTY
-        timestamp                               = 1L
+        effects                                     <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        (logEff, casperRef, finalityDetectorEffect) = effects
+        user                                        = ByteString.EMPTY
+        timestamp                                   = 1L
         blockQueryResponse <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
                                Sync[Task],
                                casperRef,
                                logEff,
-                               cliqueOracleEffect,
+                               finalityDetectorEffect,
                                blockStore
                              )
         blockInfo = blockQueryResponse.blockInfo.get
@@ -165,15 +165,15 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   it should "return error when no block matching query exists" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                 <- emptyEffects(blockStore, blockDagStorage)
-        (logEff, casperRef, cliqueOracleEffect) = effects
-        user                                    = ByteString.EMPTY
-        timestamp                               = 0L
+        effects                                     <- emptyEffects(blockStore, blockDagStorage)
+        (logEff, casperRef, finalityDetectorEffect) = effects
+        user                                        = ByteString.EMPTY
+        timestamp                                   = 0L
         blockQueryResponse <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
                                Sync[Task],
                                casperRef,
                                logEff,
-                               cliqueOracleEffect,
+                               finalityDetectorEffect,
                                blockStore
                              )
       } yield blockQueryResponse.status should be(
@@ -184,7 +184,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   private def effectsForSimpleCasperSetup(
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
-  ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
+  ): Task[(LogStub[Task], MultiParentCasperRef[Task], FinalityDetector[Task])] =
     for {
       _ <- blockDagStorage.insert(genesisBlock)
       _ <- blockDagStorage.insert(secondBlock)
@@ -200,16 +200,16 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
                          )
                        )
                      )(Sync[Task], blockStore, blockDagStorage)
-      logEff             = new LogStub[Task]()
-      casperRef          <- MultiParentCasperRef.of[Task]
-      _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
-    } yield (logEff, casperRef, cliqueOracleEffect)
+      logEff                 = new LogStub[Task]()
+      casperRef              <- MultiParentCasperRef.of[Task]
+      _                      <- casperRef.set(casperEffect)
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
+    } yield (logEff, casperRef, finalityDetectorEffect)
 
   private def emptyEffects(
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
-  ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
+  ): Task[(LogStub[Task], MultiParentCasperRef[Task], FinalityDetector[Task])] =
     for {
       casperEffect <- NoOpsCasperEffect(
                        HashMap[BlockHash, BlockMsgWithTransform](
@@ -223,9 +223,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
                          )
                        )
                      )(Sync[Task], blockStore, blockDagStorage)
-      logEff             = new LogStub[Task]()
-      casperRef          <- MultiParentCasperRef.of[Task]
-      _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
-    } yield (logEff, casperRef, cliqueOracleEffect)
+      logEff                 = new LogStub[Task]()
+      casperRef              <- MultiParentCasperRef.of[Task]
+      _                      <- casperRef.set(casperEffect)
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
+    } yield (logEff, casperRef, finalityDetectorEffect)
 }

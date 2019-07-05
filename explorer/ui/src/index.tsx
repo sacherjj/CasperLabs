@@ -4,8 +4,6 @@ import { HashRouter } from 'react-router-dom';
 
 import * as serviceWorker from './serviceWorker';
 import App from './components/App';
-import CasperContainer from './containers/CasperContainer';
-import AuthContainer from './containers/AuthContainer';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
@@ -15,12 +13,21 @@ import './styles/custom.scss';
 
 // Make `jQuery` available in the window in case any Javascript we import directly uses it.
 import * as jQuery from 'jquery';
+
+import CasperContainer from './containers/CasperContainer';
+import AuthContainer from './containers/AuthContainer';
+import ErrorContainer from './containers/ErrorContainer';
+
 let w = window as any;
 w.$ = w.jQuery = jQuery;
 
+const errors = new ErrorContainer();
+const casper = new CasperContainer(errors);
+const auth = new AuthContainer(window.config.auth0, errors);
+
 ReactDOM.render(
   <HashRouter>
-    <App casper={new CasperContainer()} auth={new AuthContainer(window.config.auth0)} />
+    <App casper={casper} auth={auth} errors={errors} />
   </HashRouter>,
   document.getElementById('root')
 );

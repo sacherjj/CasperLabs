@@ -154,6 +154,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
               Option[BlockHash],
               Option[BlockMetadata],
               Option[Set[BlockHash]],
+              Option[Set[BlockHash]],
               Boolean
           )
         ],
@@ -174,12 +175,20 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       list <- blockElements.traverse {
                case BlockMsgWithTransform(Some(b), _) =>
                  for {
-                   blockMetadata     <- dag.lookup(b.blockHash)
-                   latestMessageHash <- dag.latestMessageHash(b.getHeader.validatorPublicKey)
-                   latestMessage     <- dag.latestMessage(b.getHeader.validatorPublicKey)
-                   children          <- dag.children(b.blockHash)
-                   contains          <- dag.contains(b.blockHash)
-                 } yield (blockMetadata, latestMessageHash, latestMessage, children, contains)
+                   blockMetadata                    <- dag.lookup(b.blockHash)
+                   latestMessageHash                <- dag.latestMessageHash(b.getHeader.validatorPublicKey)
+                   latestMessage                    <- dag.latestMessage(b.getHeader.validatorPublicKey)
+                   children                         <- dag.children(b.blockHash)
+                   blocksWithSpecifiedJustification <- dag.justificationToBlocks(b.blockHash)
+                   contains                         <- dag.contains(b.blockHash)
+                 } yield (
+                   blockMetadata,
+                   latestMessageHash,
+                   latestMessage,
+                   children,
+                   blocksWithSpecifiedJustification,
+                   contains
+                 )
              }
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
@@ -203,7 +212,17 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           lm
     }
     list.zip(blockElements).foreach {
-      case ((blockMetadata, latestMessageHash, latestMessage, children, contains), b) =>
+      case (
+          (
+            blockMetadata,
+            latestMessageHash,
+            latestMessage,
+            children,
+            blocksWithSpecifiedJustification,
+            contains
+          ),
+          b
+          ) =>
         blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
         latestMessageHash shouldBe realLatestMessages
           .get(b.getHeader.validatorPublicKey)
@@ -213,6 +232,13 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           Some(
             blockElements
               .filter(_.getHeader.parentHashes.contains(b.blockHash))
+              .map(_.blockHash)
+              .toSet
+          )
+        blocksWithSpecifiedJustification shouldBe
+          Some(
+            blockElements
+              .filter(_.getHeader.justifications.map(_.latestBlockHash).contains(b.blockHash))
               .map(_.blockHash)
               .toSet
           )
@@ -441,7 +467,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           _      <- secondStorage.close()
         } yield result match {
           case (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) => {
-            list.foreach(_ shouldBe ((None, None, None, None, false)))
+            list.foreach(_ shouldBe ((None, None, None, None, None, false)))
             latestMessageHashes shouldBe Map()
             latestMessages shouldBe Map()
             topoSort shouldBe Vector()

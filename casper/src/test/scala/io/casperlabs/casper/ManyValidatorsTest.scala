@@ -79,15 +79,15 @@ class ManyValidatorsTest
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips.toIndexedSeq
                      )(Sync[Task], blockStore, newIndexedBlockDagStorage)
-      logEff             = new LogStub[Task]
-      casperRef          <- MultiParentCasperRef.of[Task]
-      _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
+      logEff                 = new LogStub[Task]
+      casperRef              <- MultiParentCasperRef.of[Task]
+      _                      <- casperRef.set(casperEffect)
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
       result <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                  MonadThrowable[Task],
                  casperRef,
                  logEff,
-                 cliqueOracleEffect,
+                 finalityDetectorEffect,
                  blockStore
                )
     } yield result

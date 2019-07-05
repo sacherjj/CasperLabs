@@ -132,6 +132,7 @@ fn should_transfer_to_account() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -217,6 +218,7 @@ fn should_transfer_from_account_to_account() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         1,
+        Vec::<()>::new(),
     );
 
     let exec_1_response = engine_state
@@ -279,6 +281,7 @@ fn should_transfer_from_account_to_account() {
         "transfer_to_account_02.wasm",
         commit_hash,
         1,
+        Vec::<()>::new(),
     );
 
     let exec_2_response = engine_state
@@ -373,6 +376,7 @@ fn should_transfer_to_existing_account() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -435,6 +439,7 @@ fn should_transfer_to_existing_account() {
         "transfer_to_account_02.wasm",
         commit_hash,
         1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -498,6 +503,7 @@ fn should_fail_when_insufficient_funds() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -531,6 +537,7 @@ fn should_fail_when_insufficient_funds() {
         "transfer_to_account_02.wasm",
         commit_hash,
         1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -558,6 +565,7 @@ fn should_fail_when_insufficient_funds() {
         "transfer_to_account_02.wasm",
         commit_hash,
         2,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -620,6 +628,7 @@ fn should_create_purse() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         1,
+        Vec::<()>::new(),
     );
 
     let exec_response = engine_state
@@ -655,8 +664,13 @@ fn should_create_purse() {
 
     // Create purse
 
-    let exec_request =
-        test_support::create_exec_request(ACCOUNT_1_ADDR, "create_purse_01.wasm", commit_hash, 1);
+    let exec_request = test_support::create_exec_request(
+        ACCOUNT_1_ADDR,
+        "create_purse_01.wasm",
+        commit_hash,
+        1,
+        Vec::<()>::new(),
+    );
 
     let exec_response = engine_state
         .exec(RequestOptions::new(), exec_request)

@@ -11,10 +11,33 @@ export const Loading = () => (
 );
 
 export const RefreshButton = (props: { refresh: () => void }) => (
-  <a onClick={_ => props.refresh()} title="Refresh">
-    <i className="fa fa-fw fa-refresh" />
+  <a onClick={_ => props.refresh()} title="Refresh" className="icon-button">
+    <i className="fa fa-fw fa-redo" />
   </a>
 );
+
+export const Button = (props: { onClick: () => void; title: string }) => (
+  <button
+    type="button"
+    onClick={_ => props.onClick()}
+    className="btn btn-primary"
+  >
+    {props.title}
+  </button>
+);
+
+export const ListInline = (props: { children: any }) => {
+  const children = [].concat(props.children);
+  return (
+    <ul className="list-inline">
+      {children.map((child: any, idx: number) => (
+        <li key={idx} className="list-inline-item">
+          {child}
+        </li>
+      ))}
+    </ul>
+  );
+};
 
 // RefreshableComponent calls it's `refresh()` when it
 // has mounted where it should get data from the server.
