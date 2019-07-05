@@ -108,9 +108,9 @@ where
         name: &str,
     ) -> Result<(), Error> {
         contract.get_urefs_lookup_mut().remove(name);
+        // By this point in the code path, there is no further validation needed.
         let validated_uref = Validated::new(contract_key, Validated::valid)?;
-        let validated_value =
-            Validated::new(Value::Contract(contract), |value| self.validate_keys(value))?;
+        let validated_value = Validated::new(Value::Contract(contract), Validated::valid)?;
 
         self.state
             .borrow_mut()
@@ -139,7 +139,26 @@ where
                 Ok(())
             }
             contract_uref @ Key::URef(_) => {
-                let mut contract: Contract = self.read_gs_typed(&contract_uref)?;
+                // We do not need to validate the base key because a contract
+                // is always able to remove keys from its own known_urefs.
+                let contract_key = Validated::new(contract_uref, Validated::valid)?;
+
+                let mut contract: Contract = {
+                    let value: Value = self
+                        .state
+                        .borrow_mut()
+                        .read(self.correlation_id, &contract_key)
+                        .map_err(Into::into)?
+                        .ok_or_else(|| Error::KeyNotFound(contract_uref))?;
+
+                    value.try_into().map_err(|found| {
+                        Error::TypeMismatch(shared::transform::TypeMismatch {
+                            expected: "Contract".to_owned(),
+                            found,
+                        })
+                    })?
+                };
+
                 self.uref_lookup.remove(name);
                 self.remove_uref_from_contract(contract_uref, contract, name)
             }
@@ -255,8 +274,16 @@ where
 
     /// Adds `key` to the map of named keys of current context.
     pub fn add_uref(&mut self, name: String, key: Key) -> Result<(), Error> {
-        let base_key = self.base_key();
-        self.add_gs(base_key, Value::NamedKey(name.clone(), key))?;
+        // No need to perform actual validation on the base key because an account or contract (i.e. the
+        // element stored under `base_key`) is allowed to add new named keys to itself.
+        let base_key = Validated::new(self.base_key(), Validated::valid)?;
+
+        let validated_value = Validated::new(Value::NamedKey(name.clone(), key), |v| {
+            self.validate_keys(&v)
+        })?;
+        self.add_gs_validated(base_key, validated_value)?;
+
+        // key was already validated successfully as part of validated_value above
         let validated_key = Validated::new(key, Validated::valid)?;
         self.insert_named_uref(name, validated_key);
         Ok(())
@@ -531,6 +558,14 @@ where
             self.validate_addable(&k).and(self.validate_key(&k))
         })?;
         let validated_value = Validated::new(value, |v| self.validate_keys(&v))?;
+        self.add_gs_validated(validated_key, validated_value)
+    }
+
+    fn add_gs_validated(
+        &mut self,
+        validated_key: Validated<Key>,
+        validated_value: Validated<Value>,
+    ) -> Result<(), Error> {
         match self
             .state
             .borrow_mut()

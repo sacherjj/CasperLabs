@@ -30,14 +30,14 @@ fn do_pass(pass: &str) -> (URef, URef) {
     // This test runs a contract that's after every call extends the same key with more data
     let transforms = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, "ee_441_rng_state.wasm", 1, vec![])
+        .exec(GENESIS_ADDR, "ee_441_rng_state.wasm", 1)
         .expect_success()
         .commit()
-        .exec(
+        .exec_with_args(
             GENESIS_ADDR,
             "ee_441_rng_state_call.wasm",
             2,
-            vec![pass.to_string().to_bytes().unwrap()],
+            vec![pass.to_string()],
         )
         .expect_success()
         .commit()

@@ -446,6 +446,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "get-caller"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
+]
+
+[[package]]
+name = "get-caller-subcall"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
+]
+
+[[package]]
 name = "glob"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

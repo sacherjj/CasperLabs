@@ -14,6 +14,8 @@ CONTRACTS=(
     "known-urefs"
     "ee-441-rng-state"
     "ee-441-rng-state-call"
+    "get-caller"
+    "get-caller-subcall"
 )
 
 source "${HOME}/.cargo/env"
