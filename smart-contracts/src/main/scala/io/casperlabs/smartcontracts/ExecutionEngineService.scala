@@ -97,10 +97,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
             deployResults => {
               val gasSpent =
                 deployResults.foldLeft(0L)((a, d) => a + d.value.executionResult.fold(0L)(_.cost))
-              Metrics[F].incrementCounter(
-                "gas_spent",
-                gasSpent
-              )
+              Metrics[F].incrementCounter("gas_spent", gasSpent)
             }
           )
     } yield result
@@ -212,9 +209,15 @@ object GrpcExecutionEngineService {
   private implicit val EngineMetricsSource: Metrics.Source =
     Metrics.Source(Metrics.BaseSource, "engine")
 
+  private def initializeMetrics[F[_]: Metrics] =
+    Metrics[F].incrementCounter("gas_spent", 0)
+
   def apply[F[_]: Sync: Log: TaskLift: Metrics](
       addr: Path,
       maxMessageSize: Int
   ): Resource[F, GrpcExecutionEngineService[F]] =
-    new ExecutionEngineConf[F](addr, maxMessageSize).apply
+    for {
+      service <- new ExecutionEngineConf[F](addr, maxMessageSize).apply
+      _       <- Resource.liftF(initializeMetrics)
+    } yield service
 }
