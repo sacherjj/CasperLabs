@@ -99,3 +99,4 @@ services:
     environment:
       FAUCET_ACCOUNT_PUBLIC_KEY_PATH: /app/keys/public.key
       FAUCET_ACCOUNT_PRIVATE_KEY_PATH: /app/keys/private.key
+      CASPER_SERVICE_URL: grpcwebproxy:8080
