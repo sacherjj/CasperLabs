@@ -1,12 +1,11 @@
 package io.casperlabs.casper.genesis
 
 import java.io.File
-import java.nio.file.{Files, Path}
-import java.nio.charset.StandardCharsets
+import java.nio.file.Path
 import java.util.Base64
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Monad, MonadError}
 import com.github.ghik.silencer.silent
@@ -15,23 +14,20 @@ import io.casperlabs.casper.CasperConf
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.util.Sorting._
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil, Sorting}
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.shared.FilesAPI
 import io.casperlabs.ipc
-import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.shared.{Log, LogSource, Resources, Time}
+import io.casperlabs.shared.{FilesAPI, Log, LogSource}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.io.Source
-import scala.util.{Failure, Left, Right, Success, Try}
 import scala.util.control.NoStackTrace
-import io.casperlabs.crypto.Keys
+import scala.util._
 
 object Genesis {
 
@@ -69,13 +65,17 @@ object Genesis {
                    bondsFile.fold(none[Map[PublicKey, Long]].pure[F])(getBonds[F](_).map(Some(_))),
                    "Bonds file is missing."
                  )
-      genesisValidators = bondsMap.map {
-        case (publicKey, stake) =>
-          ipc
-            .Bond()
-            .withValidatorPublicKey(ByteString.copyFrom(publicKey))
-            .withStake(state.BigInt(stake.toString, 512))
-      }.toSeq
+      genesisValidators = bondsMap
+        .map {
+          case (publicKey, stake) =>
+            ipc
+              .Bond()
+              .withValidatorPublicKey(ByteString.copyFrom(publicKey))
+              .withStake(state.BigInt(stake.toString, 512))
+        }
+        .toSeq
+        .sortBy(_.validatorPublicKey)
+
       accountPublicKey <- read(
                            readAccountPublicKey[F](accountPublicKeyPath),
                            "Genesis account key is missing."
@@ -227,7 +227,7 @@ object Genesis {
         timestamp = timestamp,
         chainId = chainId
       )
-      validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+      validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq.sortBy(_.id)
       blessedContracts <- defaultBlessedTerms[F](
                            accountPublicKeyPath = accountPublicKeyPath,
                            initialTokens = initialTokens,
