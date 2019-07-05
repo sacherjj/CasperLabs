@@ -1,6 +1,7 @@
 import commandLineArgs from "command-line-args";
 import { Contract, Transfer } from "./lib/Contracts";
 import { Ed25519 } from "./lib/Keys";
+import DeployService from "./services/DeployService";
 
 // https://www.npmjs.com/package/command-line-args
 
@@ -34,4 +35,11 @@ const transfer = new Contract(options["transfer-contract-path"]);
 const args = Transfer.args(accountPublicKey, options.amount);
 const deploy = transfer.deploy(args, options.nonce, contractKeys.publicKey, contractKeys);
 
-console.log(Buffer.from(deploy.getDeployHash_asU8()).toString("hex"));
+const deployHashBase16 = Buffer.from(deploy.getDeployHash_asU8()).toString("hex");
+console.log(`Deploying ${deployHashBase16} to ${options["host-url"]}`);
+
+const deployService = new DeployService(options["host-url"]);
+
+deployService.deploy(deploy)
+  .then(() => console.log("Done."))
+  .catch((err) => { console.log(err); process.exit(1); });

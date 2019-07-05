@@ -34,7 +34,8 @@ export default class DeployService {
   }
 
   private error<T extends ProtobufMessage>(res: grpc.UnaryOutput<T>) {
-    console.log("gRPC error: ", res.status, res.statusMessage);
-    return new Error(`gRPC error: code=${res.status}, message=${res.statusMessage}`);
+    const msg = `gRPC error: code=${res.status}, message="${res.statusMessage}"`;
+    console.log(msg);
+    return new Error(msg);
   }
 }

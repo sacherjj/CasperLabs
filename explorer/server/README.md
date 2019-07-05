@@ -23,3 +23,5 @@ Build artifacts into the `dist` directory.
 * https://www.fullstackreact.com/articles/using-create-react-app-with-a-server/
 * https://auth0.com/docs/quickstart/spa/vanillajs/02-calling-an-api
 * https://developer.okta.com/blog/2018/11/15/node-express-typescript
+* https://hackernoon.com/interface-grpc-with-web-using-grpc-web-and-envoy-possibly-the-best-way-forward-3ae9671af67
+* https://blog.envoyproxy.io/envoy-and-grpc-web-a-fresh-new-alternative-to-rest-6504ce7eb880

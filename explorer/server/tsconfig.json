@@ -15,7 +15,7 @@
     "resolveJsonModule": true,
     "module": "commonjs",
     "target": "es6",
-    "jsx": "react",
+    "allowJs": true,
     "typeRoots": [
       "@types",
       "./@types",

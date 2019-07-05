@@ -50,10 +50,10 @@ const checkJwt = jwt({
 });
 
 // Serve the static files of the UI
-app.use(express.static(path.join(__dirname, "static")));
-
+const staticRoot = process.env.STATIC_ROOT!;
+app.use(express.static(staticRoot));
 app.get("/", (_, res) => {
-  res.sendFile(path.join(__dirname, "static", "index.html"));
+  res.sendFile(path.join(staticRoot, "index.html"));
 });
 
 // TODO: Render the `config.js` file dynamically.
