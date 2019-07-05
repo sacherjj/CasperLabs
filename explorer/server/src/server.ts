@@ -85,7 +85,9 @@ app.post("/api/faucet", checkJwt, (req, res) => {
     })
     .catch((err) => {
       // TODO: Rollback nonce?
-      res.status(500).send({ error: err });
+      const msg = err.toString();
+      // The service already logged it.
+      res.status(500).send({ error: msg });
     });
 });
 
