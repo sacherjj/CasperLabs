@@ -29,18 +29,19 @@ const contractKeys =
     options["from-public-key-path"],
     options["from-private-key-path"]);
 
+const hex = (x: ByteArray) => Buffer.from(x).toString("hex");
+
 const accountPublicKey = Ed25519.parsePublicKeyFile(options["to-public-key-path"]);
+const accountPublicKeyBase16 = hex(accountPublicKey);
 
 const transfer = new Contract(options["transfer-contract-path"]);
 const args = Transfer.args(accountPublicKey, options.amount);
 const deploy = transfer.deploy(args, options.nonce, contractKeys.publicKey, contractKeys);
 
-const deployHashBase16 = Buffer.from(deploy.getDeployHash_asU8()).toString("hex");
-console.log(`Deploying ${deployHashBase16} to ${options["host-url"]}`);
+const deployHashBase16 = hex(deploy.getDeployHash_asU8());
 
-if (deploy.getDeployHash_asU8().length !== 32) {
-  throw Error("Wrong hash length.");
-}
+console.log(`Transfering tokens to account ${accountPublicKeyBase16}`);
+console.log(`Deploying ${deployHashBase16} to ${options["host-url"]}`);
 
 const deployService = new DeployService(options["host-url"]);
 

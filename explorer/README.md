@@ -21,7 +21,7 @@ We can use the `contracts/transfer` to donate the initial amount of funds to the
 
 Start a local docker network first:
 
-```console
+```sh
 cd ../hack/docker
 export CL_VERSION=test
 make up node-0/up
@@ -36,7 +36,7 @@ cd server && npm run build && cd -
 
 Run the transfer from the genesis account to our test faucet account.
 
-```console
+```sh
 node ./server/dist/transfer.js \
   --host-url http://localhost:8401 \
   --transfer-contract-path contracts/target/wasm32-unknown-unknown/release/transfer.wasm \
@@ -49,7 +49,8 @@ node ./server/dist/transfer.js \
 
 If successful, it should print something like this:
 
-```
+```console
+Transfering tokens to account 045499d51a013e06c6cbb5734843cf3c7f08d66af312d81238ffeb54244f1800
 Deploying 7401ecbe8b2c4e4de2c1e6422fddcfd1ae9d128058e2e6dba97ba62fc51db734 to http://localhost:8401
 Done.
 ```
@@ -64,24 +65,15 @@ The auto-propose feature is by default not enabled in the `hack/docker` setup,
 so you have to manually trigger proposal.
 
 ```console
-./client.sh node-0 propose
+$ ./client.sh node-0 propose
+Response: Success! Block d1d95074f4... created and added.
 ```
 
-It should successfully print the block the deploy is included in:
-
-```
-Response: Success! Block 1a0974a728... created and added.
-```
-
-Following this we can check the status of our deploy:
+Following this we can check the status of our deploy. The result of the processing and the fault tolerance can be found in the output:
 
 ```console
-./client.sh node-0 show-deploy 7401ecbe8b2c4e4de2c1e6422fddcfd1ae9d128058e2e6dba97ba62fc51db734
-```
+$ ./client.sh node-0 show-deploy 7401ecbe8b2c4e4de2c1e6422fddcfd1ae9d128058e2e6dba97ba62fc51db734
 
-The result of the processing and the fault tolerance can be found in the output:
-
-```
 deploy {
   deploy_hash: "7401ecbe8b2c4e4de2c1e6422fddcfd1ae9d128058e2e6dba97ba62fc51db734"
   header {
@@ -96,29 +88,104 @@ deploy {
 processing_results {
   block_info {
     summary {
-      block_hash: "1a0974a72882549122370aeaf36a9a7e8cc782538c932d8a935903346e73afcc"
+      block_hash: "d1d95074f4779c8de1ed851f22f3bb6c71089359b443b46f747606b1fbc0c974"
       ...
     }
     status {
       fault_tolerance: -1.0
       stats {
-        block_size_bytes: 957590
-        deploy_error_count: 1
+        block_size_bytes: 957577
+        deploy_error_count: 0
       }
     }
   }
-  cost: 48
-  is_error: true
-  error_message: "BytesRepr(EarlyEndOfStream)"
+  cost: 20803
+  is_error: false
+  error_message: ""
 }
 ```
 
-If the deploy was successfully executed we can check the balance of our account as follows:
+If the deploy was successfully executed we can check the balance of the account we wished to give the tokens to:
 
 ```console
-./client.sh node-0 query-state \
+$ ./client.sh node-0 query-state \
     -t address \
-    -k f78786150599b50a1353476f5e2f12cd13c214e512096741c48e7ec63639af56 \
-    -p "" \
-    -b 1a0974a72882549122370aeaf36a9a7e8cc782538c932d8a935903346e73afcc
+    -k 045499d51a013e06c6cbb5734843cf3c7f08d66af312d81238ffeb54244f1800 \
+    -p "/" \
+    -b d1d95074f4779c8de1ed851f22f3bb6c71089359b443b46f747606b1fbc0c974
+
+account {
+  public_key: "045499d51a013e06c6cbb5734843cf3c7f08d66af312d81238ffeb54244f1800"
+  nonce: 0
+  purse_id {
+    uref: "e698d314cd8004ca6cdfc5b5ea94b8c930aa3cd108bb32d6a5e9f53bcc201f75"
+    access_rights: READ_ADD_WRITE
+  }
+  known_urefs {
+    name: "URef(9251312d6c8a3d702a0b7e7754074dd920e5d2af1cf25e75fd2225ba845326ef, READ_ADD_WRITE)"
+    key {
+      uref {
+        uref: "9251312d6c8a3d702a0b7e7754074dd920e5d2af1cf25e75fd2225ba845326ef"
+        access_rights: READ_ADD_WRITE
+      }
+    }
+  }
+  known_urefs {
+    name: "URef(c1a7e37cadf6c5d11cec42a3ffb8a6c9d4a6b9e1da56a88c50b33ffd130ad043, READ_ADD_WRITE)"
+    key {
+      uref {
+        uref: "c1a7e37cadf6c5d11cec42a3ffb8a6c9d4a6b9e1da56a88c50b33ffd130ad043"
+        access_rights: READ_ADD_WRITE
+      }
+    }
+  }
+  known_urefs {
+    name: "mint"
+    key {
+      uref {
+        uref: "c40e2456dae1fa259a134fe1baba639066125b53515c888fe3086cc46e9e40b2"
+        access_rights: READ_ADD_WRITE
+      }
+    }
+  }
+  known_urefs {
+    name: "pos"
+    key {
+      uref {
+        uref: "5fcf27e682ed6856c575200740238f24247d178f3703539169631c11ba6fcc7c"
+        access_rights: READ_ADD_WRITE
+      }
+    }
+  }
+  associated_keys {
+    public_key: "045499d51a013e06c6cbb5734843cf3c7f08d66af312d81238ffeb54244f1800"
+    weight: 1
+  }
+  action_thresholds {
+    deployment_threshold: 1
+    key_management_threshold: 1
+  }
+  account_activity {
+    key_management_last_used: 0
+    deployment_last_used: 0
+    inactivity_period_limit: 100
+  }
+}
 ```
+
+Based on the `purse_id` we can issue a followup request to check the balance:
+
+```console
+$ ./client.sh node-0 query-state \
+    -t uref \
+    -k e698d314cd8004ca6cdfc5b5ea94b8c930aa3cd108bb32d6a5e9f53bcc201f75 \
+    -p "/" \
+    -b d1d95074f4779c8de1ed851f22f3bb6c71089359b443b46f747606b1fbc0c974
+
+unit {
+}
+```
+
+Alas, that's not the balance. We'll have to figure out how to get there,
+apparently there's an indirection from the purse to a local address we
+can't easily see.
