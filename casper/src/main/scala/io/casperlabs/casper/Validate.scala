@@ -376,8 +376,7 @@ object Validate {
           }
     } yield ()
 
-  // Agnostic of block number.
-  // Block number should be 1 plus the maximum of block number of its justifications.
+  // Block number is 1 plus the maximum of block number of its justifications.
   def blockNumber[F[_]: MonadThrowable: Log: RaiseValidationError](
       b: BlockSummary,
       dag: BlockDagRepresentation[F]
