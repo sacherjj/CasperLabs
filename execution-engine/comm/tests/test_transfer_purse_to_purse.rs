@@ -21,19 +21,11 @@ const GENESIS_ADDR: [u8; 32] = [12; 32];
 #[ignore]
 #[test]
 fn should_run_purse_to_purse_transfer() {
-    let genesis_test_result = WasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::default())
-        .finish();
-
-    let mint_contract_uref = genesis_test_result
-        .builder()
-        .mint_contract_uref
-        .expect("Unable to get mint contract uref");
-
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
 
-    let transfer_result = WasmTestBuilder::from_result(genesis_test_result)
+    let transfer_result = WasmTestBuilder::default()
+        .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
             "transfer_purse_to_purse.wasm",
@@ -92,6 +84,7 @@ fn should_run_purse_to_purse_transfer() {
     // TODO: This should be more consistent
     let purse_secondary_lookup_key = format!("{:?}", purse_secondary_key.as_uref().unwrap().addr());
 
+    let mint_contract_uref = transfer_result.builder().get_mint_contract_uref();
     // Obtain transforms for a mint account
     let mint_transforms = transform
         .get(&mint_contract_uref.into())
@@ -123,18 +116,11 @@ fn should_run_purse_to_purse_transfer() {
 #[test]
 fn should_run_purse_to_purse_transfer_with_error() {
     // This test runs a contract that's after every call extends the same key with more data
-    let genesis_test_result = WasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::default())
-        .finish();
-
-    let mint_contract_uref = genesis_test_result.builder()
-        .mint_contract_uref
-        .expect("Unable to get mint contract uref");
-
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
 
-    let transfer_result = WasmTestBuilder::from_result(genesis_test_result)
+    let transfer_result = WasmTestBuilder::default()
+        .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
             "transfer_purse_to_purse.wasm",
@@ -190,6 +176,8 @@ fn should_run_purse_to_purse_transfer_with_error() {
             main_purse_balance
         );
     };
+
+    let mint_contract_uref = transfer_result.builder().get_mint_contract_uref();
 
     // Obtain transforms for a mint account
     let mint_transforms = transform

@@ -296,12 +296,12 @@ pub struct WasmTestBuilder {
     post_state_hash: Option<Vec<u8>>,
     /// Cached transform maps after subsequent successful runs
     /// i.e. transforms[0] is for first run() call etc.
-    pub transforms: Vec<HashMap<common::key::Key, Transform>>,
-    pub bonded_validators: Vec<HashMap<common::value::account::PublicKey, common::value::U512>>,
+    transforms: Vec<HashMap<common::key::Key, Transform>>,
+    bonded_validators: Vec<HashMap<common::value::account::PublicKey, common::value::U512>>,
     /// Cached genesis transforms
-    pub genesis_account: Option<common::value::Account>,
+    genesis_account: Option<common::value::Account>,
     /// Mint contract uref
-    pub mint_contract_uref: Option<common::uref::URef>,
+    mint_contract_uref: Option<common::uref::URef>,
 }
 
 impl Default for WasmTestBuilder {
@@ -524,6 +524,11 @@ impl WasmTestBuilder {
         self.genesis_account
             .as_ref()
             .expect("Unable to obtain genesis account. Please run genesis first.")
+    }
+
+    pub fn get_mint_contract_uref(&self) -> common::uref::URef {
+        self.mint_contract_uref
+            .expect("Unable to obtain mint contract uref. Please run genesis first.")
     }
 
     pub fn finish(&self) -> WasmTestResult {
