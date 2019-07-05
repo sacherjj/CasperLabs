@@ -42,9 +42,11 @@ export const UInt64Arg: Serializer<bigint> = (value) => {
 
 // Which gives us:
 // `[2, 0, 0, 0`  - for the number of elements in the external vector
-// `, 36, 0, 0, 0, `  - for the number of bytes in the first element of the vector. Remember, it was serialized public key (`[32, 0, 0, 0, 1, 1, …]`)
+// `, 36, 0, 0, 0, `  - for the number of bytes in the first element of the vector.
+// Remember, it was serialized public key (`[32, 0, 0, 0, 1, 1, …]`)
 // `32, 0, 0, 0, 1, 1, …` - public key
-// `8, 0, 0, 0, ` - for the number of bytes in the second element of the vector. That was serialized `u64` (`[1, 2, 3, 4, 0, 0, 0, 0]`)
+// `8, 0, 0, 0, ` - for the number of bytes in the second element of the vector.
+// That was serialized `u64` (`[1, 2, 3, 4, 0, 0, 0, 0]`)
 // `1, 2, 3, 4, 0, 0, 0, 0]`
 export function Args(...args: ByteArray[]): ByteArray {
   return Buffer.concat([Size(args.length)].concat(args.map(ByteArrayArg)));
