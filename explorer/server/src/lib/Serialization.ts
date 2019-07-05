@@ -31,7 +31,21 @@ export const UInt64Arg: Serializer<bigint> = (value) => {
   return u64Buffer;
 };
 
-/** Combine multiple arguments. */
+// so, what you want to send is`Vec(PublicKey, u64)`:
+// • `PublicKey` serializes to`length ++ byte array of the key`,
+// • `u64` serializes to`8 byte array`,
+//   so, what we have is(for example):
+// • `Vec([32, 0, 0, 0, {public key bytes}], [1, 2, 3, 4, 0, 0, 0, 0])`
+// But this is`Vec[Array[Byte]]` but system expects plain`Array[Byte]`, so it has to serialize that again.Which is:
+// •[length of the whole vector]++ vector.forAll(element => serialize_vector(element))`,
+// where `serialize_vector` first puts its length and then the bytes.
+
+// Which gives us:
+// `[2, 0, 0, 0`  - for the number of elements in the external vector
+// `, 36, 0, 0, 0, `  - for the number of bytes in the first element of the vector. Remember, it was serialized public key (`[32, 0, 0, 0, 1, 1, …]`)
+// `32, 0, 0, 0, 1, 1, …` - public key
+// `8, 0, 0, 0, ` - for the number of bytes in the second element of the vector. That was serialized `u64` (`[1, 2, 3, 4, 0, 0, 0, 0]`)
+// `1, 2, 3, 4, 0, 0, 0, 0]`
 export function Args(...args: ByteArray[]): ByteArray {
-  return Buffer.concat([Size(args.length), ...args]);
+  return Buffer.concat([Size(args.length)].concat(args.map(ByteArrayArg)));
 }

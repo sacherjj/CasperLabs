@@ -33,8 +33,11 @@ describe('Args', () => {
     const buffer = Buffer.from(result);
     expect(result[0]).to.equal(2);
     expect(result[1]).to.equal(0);
-    expect(result[4]).to.equal(32);
-    expect(buffer.slice(4 + 4, 4 + 4 + 32).equals(a)).to.equal(true);
-    expect(buffer.readBigInt64LE(4 + 4 + 32)).to.equal(b);
+    expect(result[4]).to.equal(36);
+    expect(result[5]).to.equal(0);
+    expect(result[8]).to.equal(32);
+    expect(result[44]).to.equal(8);
+    expect(buffer.slice(12, 12 + 32).equals(a)).to.equal(true);
+    expect(buffer.readBigInt64LE(48)).to.equal(b);
   });
 });
