@@ -71,6 +71,8 @@ pipeline:
       - "~/.cargo/bin/cargo build"
       - "~/.cargo/bin/cargo test"
       - "./scripts/run-contract-tests.sh"
+      - "cd ../long-running-tests"
+      - "./build-contracts.sh"
     image: "casperlabs/buildenv:latest"
     when:
       event:
