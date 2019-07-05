@@ -1,11 +1,20 @@
 import blake from "blakejs";
 import fs from "fs";
+import { Message } from "google-protobuf";
 import * as nacl from "tweetnacl-ts";
 import { Approval, Deploy, Signature } from "../grpc/io/casperlabs/casper/consensus/consensus_pb";
 import { Args, PublicKeyArg, UInt64Arg } from "./Serialization";
 
 // https://www.npmjs.com/package/tweetnacl-ts
 // https://github.com/dcposch/blakejs
+
+export function byteHash(x: ByteArray): ByteArray {
+  return blake.blake2b(x, null, 32);
+}
+
+export function protoHash<T extends Message>(x: T): ByteArray {
+  return byteHash(x.serializeBinary());
+}
 
 export class Contract {
   private contractWasm: ByteArray;
@@ -32,12 +41,12 @@ export class Contract {
     header.setAccountPublicKey(accountPublicKey);
     header.setNonce(nonce);
     header.setTimestamp(new Date().getTime());
-    header.setBodyHash(blake.blake2b(body.serializeBinary()));
+    header.setBodyHash(protoHash(body));
 
     const deploy = new Deploy();
     deploy.setBody(body);
     deploy.setHeader(header);
-    deploy.setDeployHash(blake.blake2b(header.serializeBinary()));
+    deploy.setDeployHash(protoHash(header));
 
     const signature = new Signature();
     signature.setSigAlgorithm("ed25519");

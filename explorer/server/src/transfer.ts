@@ -38,6 +38,10 @@ const deploy = transfer.deploy(args, options.nonce, contractKeys.publicKey, cont
 const deployHashBase16 = Buffer.from(deploy.getDeployHash_asU8()).toString("hex");
 console.log(`Deploying ${deployHashBase16} to ${options["host-url"]}`);
 
+if (deploy.getDeployHash_asU8().length !== 32) {
+  throw Error("Wrong hash length.");
+}
+
 const deployService = new DeployService(options["host-url"]);
 
 deployService.deploy(deploy)
