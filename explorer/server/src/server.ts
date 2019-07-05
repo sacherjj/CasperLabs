@@ -6,7 +6,7 @@ import path from "path";
 import { decodeBase64 } from "tweetnacl-util";
 // TODO: Everything in config.json could come from env vars.
 import config from "./config.json";
-import { Contract, Faucet, FileNonceContract } from "./lib/Contracts";
+import { BoundContract, Contract, Faucet } from "./lib/Contracts";
 import { Ed25519 } from "./lib/Keys";
 import DeployService from "./services/DeployService.js";
 
@@ -26,8 +26,9 @@ const contractKeys =
     process.env.FAUCET_ACCOUNT_PRIVATE_KEY_PATH!);
 
 // Faucet contract and deploy factory.
-const faucet = new FileNonceContract(
-  new Contract(process.env.FAUCET_CONTRACT_PATH!, contractKeys),
+const faucet = new BoundContract(
+  new Contract(process.env.FAUCET_CONTRACT_PATH!),
+  contractKeys,
   process.env.FAUCET_NONCE_PATH!);
 
 // gRPC client to the node.

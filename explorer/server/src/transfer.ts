@@ -30,8 +30,8 @@ const contractKeys =
 
 const accountPublicKey = Ed25519.parsePublicKeyFile(options["to-public-key-path"]);
 
-const transfer = new Contract(options["transfer-contract-path"], contractKeys);
+const transfer = new Contract(options["transfer-contract-path"]);
 const args = Transfer.args(accountPublicKey, options.amount);
-const deploy = transfer.deploy(args, options.nonce);
+const deploy = transfer.deploy(args, options.nonce, contractKeys.publicKey, contractKeys);
 
 console.log(Buffer.from(deploy.getDeployHash_asU8()).toString("hex"));

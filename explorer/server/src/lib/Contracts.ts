@@ -10,11 +10,16 @@ import { Args, PublicKey, UInt64 } from "./Serialization";
 export class Contract {
   private contractWasm: ByteArray;
 
-  constructor(contractPath: string, private contractKeyPair: nacl.SignKeyPair) {
+  constructor(contractPath: string) {
     this.contractWasm = fs.readFileSync(contractPath);
   }
 
-  public deploy(args: ByteArray, nonce: number): Deploy {
+  public deploy(
+    args: ByteArray,
+    nonce: number,
+    accountPublicKey: ByteArray,
+    signingKeyPair: nacl.SignKeyPair): Deploy {
+
     const code = new Deploy.Code();
     code.setCode(this.contractWasm);
     code.setArgs(args);
@@ -24,7 +29,7 @@ export class Contract {
     body.setPayment(code);
 
     const header = new Deploy.Header();
-    header.setAccountPublicKey(this.contractKeyPair.publicKey);
+    header.setAccountPublicKey(accountPublicKey);
     header.setNonce(nonce);
     header.setTimestamp(new Date().getTime());
     header.setBodyHash(blake.blake2b(body.serializeBinary()));
@@ -36,10 +41,10 @@ export class Contract {
 
     const signature = new Signature();
     signature.setSigAlgorithm("ed25519");
-    signature.setSig(nacl.sign(deploy.getDeployHash_asU8(), this.contractKeyPair.secretKey));
+    signature.setSig(nacl.sign(deploy.getDeployHash_asU8(), signingKeyPair.secretKey));
 
     const approval = new Approval();
-    approval.setApproverPublicKey(this.contractKeyPair.publicKey);
+    approval.setApproverPublicKey(signingKeyPair.publicKey);
     approval.setSignature(signature);
 
     deploy.addApprovals(approval);
@@ -48,17 +53,24 @@ export class Contract {
   }
 }
 
-export class FileNonceContract {
+/** Always use the same account for deploying and signing, and keep the nonce persisted in a file. */
+export class BoundContract {
   private noncePath: string;
   private nonce: number;
 
-  constructor(private contract: Contract, noncePath: string) {
+  constructor(
+    private contract: Contract,
+    private contractKeyPair: nacl.SignKeyPair,
+    noncePath: string) {
     this.noncePath = noncePath;
     this.initNonce();
   }
 
   public deploy(args: ByteArray): Deploy {
-    return this.contract.deploy(args, this.nextNonce());
+    return this.contract.deploy(
+      args, this.nextNonce(),
+      this.contractKeyPair.publicKey,
+      this.contractKeyPair);
   }
 
   private initNonce() {
