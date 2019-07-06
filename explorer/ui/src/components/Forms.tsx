@@ -75,11 +75,11 @@ export const SelectField = observer((props: SelectProps) => (
     <select
       className={controlClass(props)}
       id={props.id}
-      value={props.value || undefined}
+      value={props.value || ''}
       onChange={e => props.onChange!(e.target.value)}
     >
       {props.placeholder && (
-        <option disabled selected={props.value == null}>
+        <option disabled value="">
           --- {props.placeholder} ---
         </option>
       )}
