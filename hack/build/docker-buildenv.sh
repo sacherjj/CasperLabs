@@ -9,7 +9,7 @@ CMD=$1
 USERID=$(id -u)
 
 if [ ! -z "${DRONE_BRANCH}" ]; then
-	$CMD
+	sh -c "$CMD"
 else
 	docker pull casperlabs/buildenv:latest
 	docker run --rm \

@@ -377,7 +377,7 @@ protobuf/google:
 # Install the protoc plugin to generate TypeScript. Use docker so people don't have to install npm.
 .make/install/protoc-ts: explorer/grpc/package.json
 	./hack/build/docker-buildenv.sh "\
-		cd explorer/grpc && npm install \
+		cd explorer/grpc && npm install && npm install ts-protoc-gen --no-bin-links --save-dev \
 	"
 	mkdir -p $(dir $@) && touch $@
 
