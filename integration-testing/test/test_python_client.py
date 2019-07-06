@@ -5,32 +5,47 @@ import pytest
 import logging
 import ed25519
 
+import logging
+
+
+def write_binary(file_name, b):
+    with open(file_name, 'wb') as f:
+        f.write(b)
+
 
 def test_python_client(one_node_network):
     """
     """
-    # TODO: Use a pregenerated key
-    signing_key_file, verifying_key_file = 'signing_key', 'verifying_key'
-    signing_key, verifying_key = ed25519.create_keypair()
-    with open(signing_key_file, 'wb') as f: f.write(signing_key.to_bytes())
-    with open(verifying_key_file, 'wb') as f: f.write(verifying_key.to_bytes())
-
     node = one_node_network.docker_nodes[0]
     client = node.p_client
 
-    new_account_private_key, new_account_public_key = ed25519.create_keypair()
+    signing_public_key_file, signing_private_key_file = 'signing_key', 'verifying_key'
+
+    write_binary(signing_public_key_file, node.signing_public_key())
+    write_binary(signing_private_key_file, node.signing_private_key())
 
     wasm = "transfer.wasm"
+    amount = 1234
+    new_account_private_key, new_account_public_key = ed25519.create_keypair()
+    target_account = new_account_public_key.to_bytes()
+
+    logging.info(f"=========================================")
+    logging.info(f"Transferring {amount} to {target_account.hex()}") 
+    logging.info(f"=========================================")
+
     response = client.deploy(payment_contract = wasm,
                              session_contract = wasm,
-                             public_key = verifying_key_file,
-                             private_key = signing_key_file,
-                             args = [
-                                     ABI.account(new_account_public_key.to_bytes()), # account
-                                     ABI.u64(1234),                                  # amount
-                                    ],)
+                             public_key = signing_public_key_file,
+                             private_key = signing_private_key_file,
+                             args = [ABI.account(target_account), ABI.u64(1234)])
     response = client.propose()
     assert response.success is True
     # "Success! Block 3c543cb5fa... created and added."
     assert 'Success!' in response.message
+
+    block_hash_prefix = response.message.split()[2][0:10]
+
+    for deploy in node.d_client.show_deploys(block_hash_prefix):
+        #assert deploy.is_error is False
+        logging.info(f"DEPLOY ERROR MESSAGE: {deploy.error_message}") 
 
