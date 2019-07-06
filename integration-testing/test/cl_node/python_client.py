@@ -33,7 +33,8 @@ class PythonClient(CasperLabsClient):
                session_contract: Optional[str] = None,
                payment_contract: Optional[str] = None,
                private_key: Optional[str] = None,
-               public_key: Optional[str] = None) -> str:
+               public_key: Optional[str] = None,
+               args: list = None) -> str:
 
         assert session_contract is not None
         assert payment_contract is not None
@@ -56,7 +57,8 @@ class PythonClient(CasperLabsClient):
                                session_contract_path,
                                deploy_nonce,
                                public_key,
-                               private_key)
+                               private_key,
+                               args)
 
         return r
 

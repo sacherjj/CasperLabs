@@ -10,6 +10,10 @@ import functools
 import pathlib
 from pyblake2 import blake2b
 import ed25519
+import struct
+from operator import add
+from functools import reduce
+
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/protocol/CasperMessage.proto
 from . import CasperMessage_pb2
@@ -25,6 +29,33 @@ from . import consensus_pb2 as consensus
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
+
+
+class ABI:
+    """ Encode deploy args.
+    """
+
+    @staticmethod
+    def u32(n: int):
+        return struct.pack('<I', n)
+
+    @staticmethod
+    def u64(n: int):
+        return struct.pack('<Q', n)
+        
+    @staticmethod
+    def byte_array(a: bytes):
+        return ABI.u32(len(a)) + a
+
+    @staticmethod
+    def account(a: bytes):
+        if len(a) != 32:
+            raise Error('Account must be 32 bytes long')
+        return ABI.byte_array(a)
+
+    @staticmethod
+    def args(l: list):
+        return ABI.u32(len(l)) + reduce(add, map(ABI.byte_array, l))
 
 
 class InternalError(Exception):
@@ -100,7 +131,7 @@ class CasperClient:
     @guarded
     def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
                payment: str = None, session: str = None, nonce: int = 0,
-               public_key: str = None, private_key: str = None):
+               public_key: str = None, private_key: str = None, args: list = None):
         """
         Deploy a smart contract source file to Casper on an existing running node.
         The deploy will be packaged and sent as a block to the network depending
@@ -117,6 +148,7 @@ class CasperClient:
                               transactions that use the same nonce.
         :param public_key:    Path to a file with public key (Ed25519)
         :param private_key:   Path to a file with private key (Ed25519)
+        :param args:          List of ABI encoded arguments
         :return:              deserialized DeployServiceResponse object
         """
 
@@ -129,8 +161,9 @@ class CasperClient:
             with open(file_name, 'rb') as f:
                 return f.read()
 
-        def read_code(file_name: str):
-            return consensus.Deploy.Code(code = read_binary(file_name))
+        def read_code(file_name: str, abi_encoded_args: bytes = None):
+            return consensus.Deploy.Code(code = read_binary(file_name),
+                                         args = abi_encoded_args)
 
 
         def sign(data: bytes):
@@ -141,7 +174,7 @@ class CasperClient:
         def serialize(o) -> bytes:
             return o.SerializeToString()
 
-        body = consensus.Deploy.Body(session = read_code(session),
+        body = consensus.Deploy.Body(session = read_code(session, args and ABI.args(args) or None),
                                      payment = read_code(payment))
 
         account_public_key = public_key and read_binary(public_key)
