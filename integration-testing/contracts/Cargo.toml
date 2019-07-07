@@ -18,4 +18,5 @@ members = [
     "subcall-revert-test/call",
     "subcall-revert-test/define",
     "transfer",
+    "test_args",
 ]

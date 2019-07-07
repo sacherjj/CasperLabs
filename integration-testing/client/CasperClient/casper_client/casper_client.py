@@ -174,8 +174,10 @@ class CasperClient:
         def serialize(o) -> bytes:
             return o.SerializeToString()
 
+        # args must go to payment as well for now cause otherwise we'll get GASLIMIT error:
+        # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
         body = consensus.Deploy.Body(session = read_code(session, args and ABI.args(args) or None),
-                                     payment = read_code(payment))
+                                     payment = read_code(payment, args and ABI.args(args) or None))
 
         account_public_key = public_key and read_binary(public_key)
         header = consensus.Deploy.Header(account_public_key = account_public_key, 

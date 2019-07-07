@@ -1,11 +1,11 @@
 #!/bin/bash -e
 
-PYTEST_ARGS=""
+PYTEST_ARGS="-vv"
 
 # $TAG_NAME should have value of "DRONE-####" from docker_run_tests.sh in CI
 if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "test" ]]; then
     # We only want to limit maxfail in CI
-    PYTEST_ARGS="--maxfail=3"
+    PYTEST_ARGS="${PYTEST_ARGS} --maxfail=3"
 else
     # We want to compile contracts if run locally
     ./contracts/build_contracts.sh
@@ -19,5 +19,5 @@ fi
 pip install pipenv
 pipenv sync
 pipenv run client/CasperClient/install.sh
-pipenv run py.test ${PYTEST_ARGS} -v "$TEST_RUN_ARGS"
+pipenv run py.test ${PYTEST_ARGS} $TEST_RUN_ARGS
 pipenv run python3 ./docker_cleanup_assurance.py
