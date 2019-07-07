@@ -120,29 +120,10 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
         )
 
     val handleInvalidTimestamp =
-      (_: Option[StatelessExecutor.Context], _: BlockDagRepresentation[F], _: Block) =>
-        for {
-          _ <- Log[F].warn(
-                Validate.ignore(
-                  block,
-                  s"block timestamp ${block.getHeader.timestamp} is greater than current time + DRIFT(${Validate.DRIFT} ms)"
-                )
-              )
-          _ <- Log[F].warn(
-                s"Recording invalid block ${PrettyPrinter
-                  .buildString(block.blockHash)} for $InvalidUnslashableBlock."
-              )
-          _ <- Cell[F, CasperState].modify { s =>
-                s.copy(
-                  invalidBlockTracker = s.invalidBlockTracker + block.blockHash
-                )
-              }
-          _ <- BlockStore[F].put(
-                block.blockHash,
-                BlockMsgWithTransform(Some(block), Seq.empty)
-              )
-          updatedDag <- BlockDagStorage[F].insert(block)
-        } yield (InvalidUnslashableBlock: BlockStatus, updatedDag)
+      (_: Option[StatelessExecutor.Context], dag: BlockDagRepresentation[F], block: Block) =>
+        statelessExecutor
+          .addEffects(InvalidUnslashableBlock, block, Seq.empty, dag)
+          .tupleLeft(InvalidUnslashableBlock: BlockStatus)
 
     for {
       // If we receive block from future then we may fail to propose new block on top of it because of Validation.timestamp
@@ -858,7 +839,7 @@ object MultiParentCasperImpl {
     // TODO: Handle slashing
     /** Either store the block with its transformation,
       * or add it to the buffer in case the dependencies are missing. */
-    private def addEffects(
+    def addEffects(
         status: BlockStatus,
         block: Block,
         transforms: Seq[ipc.TransformEntry],
