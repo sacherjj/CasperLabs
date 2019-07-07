@@ -74,7 +74,13 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
   def addBlock(
       block: Block
   ): F[BlockStatus] = {
-    def addBlockEffect(validateAndAddBlock: F[(BlockStatus, BlockDagRepresentation[F])]) =
+    def addBlockEffect(
+        validateAndAddBlock: (
+            Option[StatelessExecutor.Context],
+            BlockDagRepresentation[F],
+            Block
+        ) => F[(BlockStatus, BlockDagRepresentation[F])]
+    ) =
       Resource
         .make(blockProcessingLock.acquire)(_ => blockProcessingLock.release)
         .use(
@@ -113,39 +119,30 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
             } yield attempts.head._2
         )
 
-    val defaultValidateAndAddBlock = for {
-      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
-      dag                    <- blockDag
-      res <- statelessExecutor.validateAndAddBlock(
-              StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
-              dag,
-              block
-            )
-    } yield res
-
     val handleInvalidTimestamp =
-      for {
-        _ <- Log[F].warn(
-              Validate.ignore(
-                block,
-                s"block timestamp ${block.getHeader.timestamp} is greater than current time + DRIFT(${Validate.DRIFT} ms)"
+      (_: Option[StatelessExecutor.Context], _: BlockDagRepresentation[F], _: Block) =>
+        for {
+          _ <- Log[F].warn(
+                Validate.ignore(
+                  block,
+                  s"block timestamp ${block.getHeader.timestamp} is greater than current time + DRIFT(${Validate.DRIFT} ms)"
+                )
               )
-            )
-        _ <- Log[F].warn(
-              s"Recording invalid block ${PrettyPrinter
-                .buildString(block.blockHash)} for $InvalidUnslashableBlock."
-            )
-        _ <- Cell[F, CasperState].modify { s =>
-              s.copy(
-                invalidBlockTracker = s.invalidBlockTracker + block.blockHash
+          _ <- Log[F].warn(
+                s"Recording invalid block ${PrettyPrinter
+                  .buildString(block.blockHash)} for $InvalidUnslashableBlock."
               )
-            }
-        _ <- BlockStore[F].put(
-              block.blockHash,
-              BlockMsgWithTransform(Some(block), Seq.empty)
-            )
-        updatedDag <- BlockDagStorage[F].insert(block)
-      } yield (InvalidUnslashableBlock: BlockStatus, updatedDag)
+          _ <- Cell[F, CasperState].modify { s =>
+                s.copy(
+                  invalidBlockTracker = s.invalidBlockTracker + block.blockHash
+                )
+              }
+          _ <- BlockStore[F].put(
+                block.blockHash,
+                BlockMsgWithTransform(Some(block), Seq.empty)
+              )
+          updatedDag <- BlockDagStorage[F].insert(block)
+        } yield (InvalidUnslashableBlock: BlockStatus, updatedDag)
 
     for {
       // If we receive block from future then we may fail to propose new block on top of it because of Validation.timestamp
@@ -157,7 +154,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
           FiniteDuration(diff + 500, MILLISECONDS)
         }
       blockStatus <- maybeFutureTimeDiff.fold(
-                      addBlockEffect(defaultValidateAndAddBlock)
+                      addBlockEffect(statelessExecutor.validateAndAddBlock)
                     ) { diff =>
                       // Prevent sleeping too much time
                       if (diff.toMillis > Validate.DRIFT) {
@@ -165,7 +162,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
                       } else {
                         for {
                           _           <- Time[F].sleep(diff)
-                          blockStatus <- addBlock(block)
+                          blockStatus <- addBlockEffect(statelessExecutor.validateAndAddBlock)
                         } yield blockStatus
                       }
                     }
@@ -178,12 +175,20 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
   private def internalAddBlock(
       block: Block,
       dag: BlockDagRepresentation[F],
-      validateAndAddBlock: F[(BlockStatus, BlockDagRepresentation[F])]
+      validateAndAddBlock: (
+          Option[StatelessExecutor.Context],
+          BlockDagRepresentation[F],
+          Block
+      ) => F[(BlockStatus, BlockDagRepresentation[F])]
   ): F[List[(Block, BlockStatus)]] =
     for {
       lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
-      (status, updatedDag)   <- validateAndAddBlock
-      _                      <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
+      (status, updatedDag) <- validateAndAddBlock(
+                               StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
+                               dag,
+                               block
+                             )
+      _ <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       furtherAttempts <- status match {
                           case MissingBlocks           => List.empty[(Block, BlockStatus)].pure[F]
                           case IgnorableEquivocation   => List.empty[(Block, BlockStatus)].pure[F]
@@ -194,7 +199,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
                         }
 
       // Update the last finalized block; remove finalized deploys from the buffer
-      _         <- updateLastFinalizedBlock(dag)
+      _         <- updateLastFinalizedBlock(updatedDag)
       tipHashes <- estimator(updatedDag)
       _ <- Log[F].debug(
             s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
