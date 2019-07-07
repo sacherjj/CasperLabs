@@ -359,7 +359,8 @@ protobuf/google:
 	$(eval SRC = https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf)
 	mkdir -p $(DIR)
 	cd $(DIR) && \
-	curl -s -O $(SRC)/empty.proto
+	curl -s -O $(SRC)/empty.proto && \
+	curl -s -O $(SRC)/descriptor.proto
 
 # Miscellaneous tools to install once.
 
