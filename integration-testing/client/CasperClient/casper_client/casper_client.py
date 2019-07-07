@@ -149,7 +149,7 @@ class CasperClient:
         :param public_key:    Path to a file with public key (Ed25519)
         :param private_key:   Path to a file with private key (Ed25519)
         :param args:          List of ABI encoded arguments
-        :return:              deserialized DeployServiceResponse object
+        :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
         def hash(data: bytes) -> bytes:
@@ -186,7 +186,10 @@ class CasperClient:
 
         deploy_hash = hash(serialize(header))
         d = consensus.Deploy(deploy_hash = deploy_hash,
-                             approvals = [consensus.Approval(approver_public_key = account_public_key, signature = sign(deploy_hash))]
+                             approvals = [consensus.Approval(approver_public_key = account_public_key,
+                                                             #signature = sign(deploy_hash)
+                                                            )
+                                         ]
                                          if account_public_key else [],
                              header = header,
                              body = body)
