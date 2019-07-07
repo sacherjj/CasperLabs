@@ -74,7 +74,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
   def addBlock(
       block: Block
   ): F[BlockStatus] = {
-    def addBlockEffect(
+    def addBlock(
         validateAndAddBlock: (
             Option[StatelessExecutor.Context],
             BlockDagRepresentation[F],
@@ -125,29 +125,12 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
           .addEffects(InvalidUnslashableBlock, block, Seq.empty, dag)
           .tupleLeft(InvalidUnslashableBlock: BlockStatus)
 
-    for {
-      // If we receive block from future then we may fail to propose new block on top of it because of Validation.timestamp
-      currentMillis <- Time[F].currentMillis
-      maybeFutureTimeDiff = Option(math.max(0L, block.getHeader.timestamp - currentMillis))
-        .filter(diff => diff > 0L)
-        .map { diff =>
-          // Sleep for a little bit more time to ensure we won't propose block on top of block from future
-          FiniteDuration(diff + 500, MILLISECONDS)
-        }
-      blockStatus <- maybeFutureTimeDiff.fold(
-                      addBlockEffect(statelessExecutor.validateAndAddBlock)
-                    ) { diff =>
-                      // Prevent sleeping too much time
-                      if (diff.toMillis > Validate.DRIFT) {
-                        addBlockEffect(handleInvalidTimestamp)
-                      } else {
-                        for {
-                          _           <- Time[F].sleep(diff)
-                          blockStatus <- addBlockEffect(statelessExecutor.validateAndAddBlock)
-                        } yield blockStatus
-                      }
-                    }
-    } yield blockStatus
+    Validate.preTimestamp[F](block).attempt.flatMap {
+      case Right(None) => addBlock(statelessExecutor.validateAndAddBlock)
+      case Right(Some(delay)) =>
+        Time[F].sleep(delay) >> addBlock(statelessExecutor.validateAndAddBlock)
+      case _ => addBlock(handleInvalidTimestamp)
+    }
   }
 
   /** Validate the block, try to execute and store it,

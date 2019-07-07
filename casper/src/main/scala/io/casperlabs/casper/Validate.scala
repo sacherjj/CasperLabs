@@ -21,7 +21,9 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import simulacrum.typeclass
 
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
 
 object Validate {
@@ -376,6 +378,22 @@ object Validate {
             } yield ()
           }
     } yield ()
+
+  /* If we receive block from future then we may fail to propose new block on top of it because of Validation.timestamp */
+  def preTimestamp[F[_]: MonadThrowable: Log: Time: RaiseValidationError](
+      b: Block
+  ): F[Option[FiniteDuration]] =
+    for {
+      currentMillis <- Time[F].currentMillis
+      delay <- b.getHeader.timestamp - currentMillis match {
+                case n if n <= 0     => none[FiniteDuration].pure[F]
+                case n if n <= DRIFT =>
+                  // Sleep for a little bit more time to ensure we won't propose block on top of block from future
+                  FiniteDuration(n + 500, MILLISECONDS).some.pure[F]
+                case _ =>
+                  RaiseValidationError[F].raise[Option[FiniteDuration]](InvalidUnslashableBlock)
+              }
+    } yield delay
 
   // Block number is 1 plus the maximum of block number of its justifications.
   def blockNumber[F[_]: MonadThrowable: Log: RaiseValidationError](
