@@ -37,8 +37,7 @@ fn should_run_main_purse_contract_genesis_account() {
             genesis_account.purse_id(),
         )
         .expect_success()
-        .commit()
-        .expect_success();
+        .commit();
 }
 
 #[ignore]
@@ -63,6 +62,5 @@ fn should_run_main_purse_contract_account_1() {
     builder
         .exec_with_args(ACCOUNT_1_ADDR, "main_purse.wasm", 1, account_1.purse_id())
         .expect_success()
-        .commit()
-        .expect_success();
+        .commit();
 }
