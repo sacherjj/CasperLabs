@@ -98,6 +98,9 @@ slow:
 	mkdir -p .casperlabs/node-0
 	mkdir -p keys/account-0
 
+	mkdir -p .casperlabs/explorer
+	echo 1 > .casperlabs/explorer/nonce.txt
+
 	./get-blessed-contracts.sh .casperlabs/genesis/blessed-contracts/blessed-contracts.tar.gz
 
 	../key-management/docker-gen-account-keys.sh .casperlabs/genesis/system-account

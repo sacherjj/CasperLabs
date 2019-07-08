@@ -73,19 +73,28 @@ services:
     networks:
       - casperlabs
 
-
+  # CasperLabs Explorer available at https://localhost:8443
+  # The URL needs to be enabled in Auth0 for login/logout to work.
   explorer:
     image: casperlabs/explorer:latest
     container_name: explorer
     networks:
       - casperlabs
     ports:
-      - ${CL_EXPLORER_HTTP_PORT}:8080
+      - ${CL_EXPLORER_HTTP_PORT}:8443
     volumes:
       # NOTE: This is using the system account, so no need for giving funds to the faucet.
       - ${PWD}/.casperlabs/genesis/system-account/account-public.pem:/app/keys/public.key
       - ${PWD}/.casperlabs/genesis/system-account/account-private.pem:/app/keys/private.key
+      - ${PWD}/grpcwebproxy/certificate.pem:/app/tls/certificate.pem
+      - ${PWD}/grpcwebproxy/key.pem:/app/tls/key.pem
+      - ${PWD}/.casperlabs/explorer/nonce.txt:/app/nonce.txt
     environment:
       FAUCET_ACCOUNT_PUBLIC_KEY_PATH: /app/keys/public.key
       FAUCET_ACCOUNT_PRIVATE_KEY_PATH: /app/keys/private.key
+      FAUCET_NONCE_PATH: /app/nonce.txt
       CASPER_SERVICE_URL: http://grpcwebproxy:8080
+      SERVER_USE_TLS: "true"
+      SERVER_PORT: 8443
+      SERVER_TLS_CERT_PATH: /app/tls/certificate.pem
+      SERVER_TLS_KEY_PATH: /app/tls/key.pem
