@@ -9,10 +9,10 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.hash.Blake2b256
@@ -21,7 +21,9 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import simulacrum.typeclass
 
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
 
 object Validate {
@@ -377,6 +379,22 @@ object Validate {
           }
     } yield ()
 
+  /* If we receive block from future then we may fail to propose new block on top of it because of Validation.timestamp */
+  def preTimestamp[F[_]: MonadThrowable: Log: Time: RaiseValidationError](
+      b: Block
+  ): F[Option[FiniteDuration]] =
+    for {
+      currentMillis <- Time[F].currentMillis
+      delay <- b.getHeader.timestamp - currentMillis match {
+                case n if n <= 0     => none[FiniteDuration].pure[F]
+                case n if n <= DRIFT =>
+                  // Sleep for a little bit more time to ensure we won't propose block on top of block from future
+                  FiniteDuration(n + 500, MILLISECONDS).some.pure[F]
+                case _ =>
+                  RaiseValidationError[F].raise[Option[FiniteDuration]](InvalidUnslashableBlock)
+              }
+    } yield delay
+
   // Block number is 1 plus the maximum of block number of its justifications.
   def blockNumber[F[_]: MonadThrowable: Log: RaiseValidationError](
       b: BlockSummary,
@@ -660,10 +678,7 @@ object Validate {
     } yield result
   }
 
-  private def justificationRegressionsAux[F[_]: MonadThrowable: Log: BlockStore: FunctorRaise[
-    ?[_],
-    InvalidBlock
-  ]](
+  private def justificationRegressionsAux[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockSummary,
       latestMessagesOfBlock: Map[Validator, BlockHash],
       latestMessagesFromSenderView: Map[Validator, BlockHash],
@@ -718,10 +733,7 @@ object Validate {
   // 2) Runs deploys from the block
   // 3) Validates whether post state hashes match
   // 4) Validates whether bonded validators, as at the end of executing the block, match.
-  def transactions[F[_]: Monad: Log: BlockStore: ExecutionEngineService: FunctorRaise[
-    ?[_],
-    InvalidBlock
-  ]](
+  def transactions[F[_]: Monad: Log: BlockStore: ExecutionEngineService: RaiseValidationError](
       block: Block,
       preStateHash: StateHash,
       effects: Seq[ipc.TransformEntry]
