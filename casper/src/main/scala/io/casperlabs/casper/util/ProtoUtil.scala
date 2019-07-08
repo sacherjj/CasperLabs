@@ -459,7 +459,7 @@ object ProtoUtil {
     session = d.getBody.session.map { case Deploy.Code(code, args) => ipc.DeployCode(code, args) },
     payment = d.getBody.payment.map { case Deploy.Code(code, args) => ipc.DeployCode(code, args) },
     // The new data type doesn't have a limit field. Remove this once payment is implemented.
-    tokensTransferedInPayment =
+    tokensTransferredInPayment =
       if (d.getBody.getPayment.code.isEmpty || d.getBody.getPayment == d.getBody.getSession) {
         sys.env.get("CL_DEFAULT_GAS_LIMIT").map(_.toLong).getOrElse(GAS_LIMIT)
       } else 0L,
