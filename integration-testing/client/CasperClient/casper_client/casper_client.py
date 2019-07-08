@@ -11,6 +11,7 @@ import pathlib
 from pyblake2 import blake2b
 import ed25519
 import struct
+import json
 from operator import add
 from functools import reduce
 
@@ -83,7 +84,7 @@ class ABI:
                 raise Error("Only one pair {'type', 'value'} allowed.")
             return items[0]
 
-        return ABI.args([encode(*list(only_one(arg))) for arg in args]) 
+        return ABI.args([encode(*only_one(arg)) for arg in args]) 
 
 
 class InternalError(Exception):
@@ -159,7 +160,7 @@ class CasperClient:
     @guarded
     def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
                payment: str = None, session: str = None, nonce: int = 0,
-               public_key: str = None, private_key: str = None, args: list = None):
+               public_key: str = None, private_key: str = None, args: bytes = None):
         """
         Deploy a smart contract source file to Casper on an existing running node.
         The deploy will be packaged and sent as a block to the network depending
@@ -380,8 +381,15 @@ def _show_block(response):
 
 @guarded_command
 def deploy_command(casper_client, args):
-    response, deploy_hash = casper_client.deploy(getattr(args,'from'), args.gas_limit, args.gas_price, 
-                                                 args.payment, args.session, args.nonce)
+    response, deploy_hash = casper_client.deploy(getattr(args,'from'),
+                                                 args.gas_limit,
+                                                 args.gas_price, 
+                                                 args.payment,
+                                                 args.session,
+                                                 args.nonce,
+                                                 args.public_key or None,
+                                                 args.private_key or None,
+                                                 args.args and ABI.args_from_json(args.args) or None)
     print (f'{response.message}. Deploy hash: {deploy_hash}')
     if not response.success:
         return 1
@@ -471,6 +479,7 @@ def command_line_tool():
                        [('-n', '--nonce'), dict(required=False, type=int, default=0, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=True, type=str, help='Path to the file with payment code')],
                        [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
+                       [('--args'), dict(required=False, type=str, help='JSON encoded list of ')],
                        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
                        [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 

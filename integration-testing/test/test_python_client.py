@@ -14,9 +14,9 @@ def write_binary(file_name, b):
 
 def test_args_parser():
     json = """[{"u32":1024}, {"account":"00000000000000000000000000000000"}, {"u64":1234567890}]"""
-    assert args_from_json(json) == ABI.args([ABI.u32(1024),
-                                             ABI.account(b'00000000000000000000000000000000'),
-                                             ABI.u64(1234567890)])
+    assert ABI.args_from_json(json) == ABI.args([ABI.u32(1024),
+                                                 ABI.account(b'00000000000000000000000000000000'),
+                                                 ABI.u64(1234567890)])
 
 
 def test_deploy_with_args(one_node_network):
