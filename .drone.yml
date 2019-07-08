@@ -337,6 +337,7 @@ pipeline:
   package-ee:
     commands:
       - "mkdir -p artifacts/${DRONE_BRANCH}"
+      - "make clean"
       - "make cargo-package-all"
       - "cp execution-engine/target/blessed-contracts.tar.gz artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
