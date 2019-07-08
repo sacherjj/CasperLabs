@@ -943,7 +943,10 @@ object MultiParentCasperImpl {
 
     def create[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Metrics](
         chainId: String
-    ): F[StatelessExecutor[F]] = establishMetrics[F] as new StatelessExecutor[F](chainId)
+    ): F[StatelessExecutor[F]] =
+      for {
+        _ <- establishMetrics[F]
+      } yield new StatelessExecutor[F](chainId)
   }
 
   /** Encapsulating all methods that might use peer-to-peer communication. */
