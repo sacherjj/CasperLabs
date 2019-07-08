@@ -449,10 +449,10 @@ object ProtoUtil {
 
   // https://casperlabs.atlassian.net/browse/EE-283
   // We are hardcoding exchange rate for DEV NET at 10:1
-  // (1 token buys you 10 units of gas).
+  // (1 gas costs you 10 tokens).
   // Later, post DEV NET, conversion rate will be part of a deploy.
-  val GAS_PRICE = 10L
-  val GAS_LIMIT = 100000000L
+  val GAS_PRICE      = 10L
+  val PAYMENT_TOKENS = 1000000000L
 
   def deployDataToEEDeploy(d: Deploy): ipc.Deploy = ipc.Deploy(
     address = d.getHeader.accountPublicKey,
@@ -461,7 +461,7 @@ object ProtoUtil {
     // The new data type doesn't have a limit field. Remove this once payment is implemented.
     tokensTransferredInPayment =
       if (d.getBody.getPayment.code.isEmpty || d.getBody.getPayment == d.getBody.getSession) {
-        sys.env.get("CL_DEFAULT_GAS_LIMIT").map(_.toLong).getOrElse(GAS_LIMIT)
+        sys.env.get("CL_DEFAULT_PAYMENT_TOKENS").map(_.toLong).getOrElse(PAYMENT_TOKENS)
       } else 0L,
     gasPrice = GAS_PRICE,
     nonce = d.getHeader.nonce,
