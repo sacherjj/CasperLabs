@@ -513,6 +513,7 @@ impl WasmTestBuilder {
         if !deploy_result.has_execution_result() {
             panic!("Expected ExecutionResult, got {:?} instead", deploy_result);
         }
+
         if deploy_result.get_execution_result().has_error() {
             panic!(
                 "Expected successful execution result, but instead got: {:?}",
