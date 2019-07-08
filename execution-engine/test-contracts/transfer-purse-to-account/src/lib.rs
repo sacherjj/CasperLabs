@@ -38,33 +38,8 @@ pub extern "C" fn call() {
     let source: PurseId = main_purse();
     let destination: PublicKey = get_arg(0);
     let amount: U512 = get_arg(1);
-    // // add or update `main_purse` if it doesn't exist already
-    // add_uref("purse:main", &Key::from(main_purse.value()));
-
-    // let src_purse_name: String = get_arg(0);
-    // let src_purse = match get_uref(&src_purse_name).as_uref() {
-    //     Some(uref) => PurseId::new(*uref),
-    //     None => revert(101),
-    // };
-    // let dst_purse_name: String = get_arg(1);
-
-    // let dst_purse = if !has_uref(&dst_purse_name) {
-    //     // If `dst_purse_name` is not in known urefs list then create a new purse
-    //     let purse = create_purse();
-    //     // and save it in known urefs
-    //     add_uref(&dst_purse_name, &purse.value().into());
-    //     purse
-    // } else {
-    //     let uref_key = get_uref(&dst_purse_name);
-    //     match uref_key.as_uref() {
-    //         Some(uref) => PurseId::new(*uref),
-    //         None => revert(102),
-    //     }
-    // };
-    // let amount: U512 = get_arg(2);
 
     let transfer_result = transfer_from_purse_to_account(source, destination, amount);
-    // assert_eq!(transfer_result, TransferResult::P)
 
     // // Assert is done here
     let final_balance = get_balance(source).unwrap_or_else(|| revert(104));
