@@ -22,11 +22,11 @@ def test_transfer(one_node_network):
     assert not deploys[0].is_error, f"error_message: {deploys[0].error_message}"
 
     # Response not used, but assures account exist
-    response_acct1 = account_state(block_hash, ACCOUNTS[1].public_key_hex)
+    _ = account_state(block_hash, ACCOUNTS[1].public_key_hex)
 
     # Should error as account doesn't exist.
     with pytest.raises(Exception):
-        response_acct2 = account_state(block_hash, ACCOUNTS[2].public_key_hex)
+        _ = account_state(block_hash, ACCOUNTS[2].public_key_hex)
 
     # No API currently exists for getting balance to check transfer.
     # Transfer 75 from acct1... to acct2...
@@ -39,7 +39,7 @@ def test_transfer(one_node_network):
     assert not deploys[0].is_error, f"error_message: {deploys[0].error_message}"
 
     # Response not used, but assures account exist
-    response_acct2 = account_state(block_hash, ACCOUNTS[2].public_key_hex)
+    _ = account_state(block_hash, ACCOUNTS[2].public_key_hex)
 
     # Transfer 75 from acct1... to acct2...
     # Should fail with acct1 overdrawn.   Requires assert in contract to generate is_error.
