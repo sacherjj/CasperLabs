@@ -1,6 +1,8 @@
 import dotenv from "dotenv";
 import express from "express";
 import jwt from "express-jwt";
+import fs from "fs";
+import https from "https";
 import jwksRsa from "jwks-rsa";
 import path from "path";
 import { decodeBase64 } from "tweetnacl-util";
@@ -103,7 +105,20 @@ app.use((err: any, req: any, res: any, next: any) => {
 });
 
 // start the express server
-app.listen(port, () => {
-  // tslint:disable-next-line:no-console
-  console.log(`server started at http://localhost:${port}`);
-});
+if (process.env.SERVER_USE_TLS) {
+  const cert = process.env.SERVER_TLS_CERT_PATH!;
+  const key = process.env.SERVER_TLS_KEY_PATH!;
+  https.createServer({
+    key: fs.readFileSync(key),
+    cert: fs.readFileSync(cert),
+  }, app)
+    .listen(port, () => {
+      // tslint:disable-next-line:no-console
+      console.log(`server started at https://localhost:${port}`);
+    });
+} else {
+  app.listen(port, () => {
+    // tslint:disable-next-line:no-console
+    console.log(`server started at http://localhost:${port}`);
+  });
+}
