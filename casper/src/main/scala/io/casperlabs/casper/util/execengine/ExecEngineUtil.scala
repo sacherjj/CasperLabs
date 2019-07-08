@@ -173,12 +173,12 @@ object ExecEngineUtil {
     *
     * @param block Block to run.
     * @param prestate prestate hash of the GlobalState on top of which to run deploys.
-    * @return Effects of running deploys from the block.
+    * @return Effects of running deploys from the block and total gas spent
     */
   def effectsForBlock[F[_]: MonadThrowable: BlockStore: ExecutionEngineService](
       block: Block,
       prestate: StateHash
-  ): F[Seq[TransformEntry]] = {
+  ): F[(Seq[TransformEntry], Long)] = {
     val deploys         = ProtoUtil.deploys(block).flatMap(_.deploy)
     val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(block)
     val blocktime       = block.getHeader.timestamp
@@ -187,7 +187,9 @@ object ExecEngineUtil {
       for {
         genesisResult <- processGenesisDeploys[F](deploys, protocolVersion)
         transformMap  = genesisResult.getEffect.transformMap
-      } yield transformMap
+        // Assuming the genesis block as "special" for which we don't calculate total gas spent
+        // Requires changing the EE side to return cost
+      } yield (transformMap, 0L)
     } else {
       for {
         processedDeploys <- processDeploys[F](
@@ -196,10 +198,13 @@ object ExecEngineUtil {
                              deploys,
                              protocolVersion
                            )
+        gasSpent = processedDeploys.foldLeft(0L) {
+          case (acc, next) => acc + next.value.executionResult.fold(0L)(_.cost)
+        }
         deployEffects = zipDeploysResults(deploys, processedDeploys)
         transformMap = (findCommutingEffects _ andThen unzipEffectsAndDeploys)(deployEffects)
           .flatMap(_._2)
-      } yield transformMap
+      } yield (transformMap, gasSpent)
     }
   }
 

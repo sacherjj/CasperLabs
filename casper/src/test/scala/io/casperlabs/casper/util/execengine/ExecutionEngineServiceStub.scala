@@ -33,7 +33,7 @@ object ExecutionEngineServiceStub {
       parents      <- ProtoUtil.unsafeGetParents[F](b)
       merged       <- ExecEngineUtil.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil.computePrestate[F](merged)
-      effects      <- ExecEngineUtil.effectsForBlock[F](b, preStateHash)
+      (effects, _) <- ExecEngineUtil.effectsForBlock[F](b, preStateHash)
       _            <- Validate.transactions[F](b, preStateHash, effects)
     } yield ProtoUtil.postStateHash(b)).attempt
 

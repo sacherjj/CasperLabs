@@ -647,10 +647,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    parents  <- ProtoUtil.unsafeGetParents[F](genesis)
                    merged   <- ExecEngineUtil.merge[F](parents, dag)
                    prestate <- ExecEngineUtil.computePrestate[F](merged)
-                   transforms <- ExecEngineUtil.effectsForBlock[F](
-                                  genesis,
-                                  prestate
-                                )
+                   (transforms, _) <- ExecEngineUtil.effectsForBlock[F](
+                                       genesis,
+                                       prestate
+                                     )
                    _ <- insertIntoBlockAndDagStore[F](genesis, transforms, b)
                    _ <- LastApprovedBlock[F].set(ApprovedBlockWithTransforms(b, transforms))
                    casper <- MultiParentCasper
