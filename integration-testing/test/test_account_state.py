@@ -30,6 +30,7 @@ account {
 
 """
 
+
 @pytest.fixture(scope='module')
 def node(one_node_network_module_scope):
     n = one_node_network_module_scope.docker_nodes[0]
@@ -39,7 +40,7 @@ def node(one_node_network_module_scope):
 def test_account_state(node):
 
     def account_state(block_hash):
-        return node.d_client.query_state(block_hash = block_hash, key_type = 'address', key = node.from_address(), path = '')
+        return node.d_client.query_state(block_hash=block_hash, key_type='address', key=node.from_address(), path='')
 
     blocks = parse_show_blocks(node.d_client.show_blocks(1000))
     assert len(blocks) == 1  # There should be only one block, the genesis block

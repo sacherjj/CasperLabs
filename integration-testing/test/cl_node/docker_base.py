@@ -5,12 +5,13 @@ import threading
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from queue import Empty
-from test.cl_node.common import random_string
-from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
 from typing import Any, Dict, Optional, Tuple, Union
-
 import docker.errors
 from docker import DockerClient
+
+from test.cl_node.casperlabs_accounts import ACCOUNTS
+from test.cl_node.common import random_string
+from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
 
 
 def humanify(line):
@@ -21,7 +22,7 @@ def humanify(line):
 
         {'timestamp': '2019-06-08T17:51:35.308Z', 'process_id': 1, 'process_name': 'casperlabs-engine-grpc-server', 'host_name': 'execution-engine-0-mlgtn', 'log_level': 'Info', 'priority': 5, 'message_type': 'ee-structured', 'message_type_version': '1.0.0', 'message_id': '14039567985248808663', 'description': 'starting Execution Engine Server', 'properties': {'message': 'starting Execution Engine Server', 'message_template': '{message}'}}
     """
-    if not 'execution-engine-' in line:
+    if 'execution-engine-' not in line:
         return line
     try:
         _, payload = line.split('payload=')
@@ -29,7 +30,7 @@ def humanify(line):
         return line
 
     d = json.loads(payload)
-    return ' '.join(str(d[k]) for k in ('log_level', 'description',))
+    return ' '.join(str(d[k]) for k in ('log_level', 'description'))
 
 
 class LoggingThread(threading.Thread):
@@ -72,6 +73,7 @@ class DockerConfig:
     is_signed_deploy: bool = True
     bootstrap_address: Optional[str] = None
     use_new_gossiping: bool = True
+    genesis_public_key_path: str = None
 
     def __post_init__(self):
         if self.rand_str is None:
@@ -99,6 +101,10 @@ class DockerConfig:
         #     options['--casper-validator-public-key-path'] = f'{bootstrap_path}/validator-{self.number}-public.pem'
         if self.bootstrap_address:
             options['--server-bootstrap'] = self.bootstrap_address
+        if self.is_bootstrap:
+            gen_acct_key_file = ACCOUNTS['genesis'].public_key_file
+            options['--casper-genesis-account-public-key-path'] = f"/root/.casperlabs/accounts/{gen_acct_key_file}"
+            options['--casper-initial-tokens'] = 100000000000
         if self.node_public_key:
             options['--casper-validator-public-key'] = self.node_public_key
         if self.use_new_gossiping:
@@ -161,6 +167,10 @@ class DockerBase:
     @property
     def host_bootstrap_dir(self) -> str:
         return f'{self.host_mount_dir}/bootstrap_certificate'
+
+    @property
+    def host_accounts_dir(self) -> str:
+        return f'{self.host_mount_dir}/accounts'
 
     @property
     def docker_client(self) -> DockerClient:

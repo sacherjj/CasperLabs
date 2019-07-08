@@ -15,6 +15,7 @@ from test.cl_node.nonce_registry import NonceRegistry
 
 from docker.errors import ContainerError
 
+
 class DockerClient(CasperLabsClient, LoggingMixin):
 
     def __init__(self, node: 'DockerNode'):
@@ -87,7 +88,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
 
     def deploy(self,
                from_address: str = None,
-               gas_limit: int = 1000000,
+               gas_limit: int = 100000000,
                gas_price: int = 1,
                nonce: Optional[int] = None,
                session_contract: str = None,
@@ -98,7 +99,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         assert session_contract is not None
         assert payment_contract is not None
 
-        address  = from_address or self.node.from_address()
+        address = from_address or self.node.from_address()
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
         payment_contract = payment_contract or session_contract
 
@@ -156,3 +157,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
 
     def show_deploy(self, hash: str):
         return parse(self.invoke_client(f'show-deploy {hash}'))
+
+    def query_purse_balance(self, block_hash: str, purse_id: str) -> Optional[float]:
+        raise NotImplementedError()
+

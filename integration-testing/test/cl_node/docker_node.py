@@ -26,6 +26,7 @@ class DockerNode(LoggingDockerBase):
     CL_GENESIS_DIR = f'{CL_NODE_DIRECTORY}/genesis'
     CL_SOCKETS_DIR = f'{CL_NODE_DIRECTORY}/sockets'
     CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
+    CL_ACCOUNTS_DIR = f"{CL_NODE_DIRECTORY}/accounts"
     CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
     CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_GENESIS_DIR}/system-account/account-public.key"
 
@@ -210,6 +211,10 @@ class DockerNode(LoggingDockerBase):
                 },
                 self.host_bootstrap_dir: {
                     "bind": self.CL_BOOTSTRAP_DIR,
+                    "mode": "rw"
+                },
+                self.host_accounts_dir: {
+                    "bind": self.CL_ACCOUNTS_DIR,
                     "mode": "rw"
                 },
                 self.deploy_dir: {

@@ -8,7 +8,8 @@ use cl_std::contract_api::TransferResult;
 use cl_std::value::account::PublicKey;
 use cl_std::value::U512;
 
-const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
+const ACCOUNT_1_ADDR: [u8; 32] = [157, 57, 183, 251, 164, 125, 7, 193, 175, 111, 113, 30, 254, 96, 74, 17,
+                                  42, 179, 113, 226, 222, 239, 185, 154, 97, 61, 43, 61, 205, 251, 164, 20];
 const TRANSFER_AMOUNT: u32 = 100;
 
 #[no_mangle]
