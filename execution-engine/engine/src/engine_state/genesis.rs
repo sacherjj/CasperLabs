@@ -10,12 +10,11 @@ use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::uref::{AccessRights, URef};
 use common::value::account::{PublicKey, PurseId};
-use common::value::{Contract, Value, U512};
+use common::value::{Account, Contract, Value, U512};
 use engine_state::execution_effect::ExecutionEffect;
 use engine_state::op::Op;
 use engine_state::utils::WasmiBytes;
 use execution;
-use shared::init;
 use shared::newtypes::Blake2bHash;
 use shared::transform::{Transform, TypeMismatch};
 use storage::global_state::CommitResult;
@@ -118,7 +117,7 @@ fn create_mint_effects(
     let genesis_account = {
         // All blessed / system contract public urefs MUST be added to the genesis account's known_urefs
         // TODO: do we need to deal with NamedKey ???
-        let known_urefs = &[
+        let known_urefs = vec![
             (String::from("mint"), Key::URef(public_uref)),
             (String::from("pos"), Key::URef(pos_public_uref)),
             (pos_private_uref.as_string(), Key::URef(pos_private_uref)),
@@ -126,9 +125,11 @@ fn create_mint_effects(
                 mint_contract_uref.as_string(),
                 Key::URef(mint_contract_uref),
             ),
-        ];
+        ]
+        .into_iter()
+        .collect();
         let purse_id = PurseId::new(purse_id_uref);
-        init::create_genesis_account(genesis_account_addr, purse_id, known_urefs)
+        Account::create(genesis_account_addr, known_urefs, purse_id)
     };
 
     // Store (genesis_account_addr, genesis_account) in global state
