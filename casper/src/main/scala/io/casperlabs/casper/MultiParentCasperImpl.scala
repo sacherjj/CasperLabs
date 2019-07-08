@@ -711,7 +711,7 @@ object MultiParentCasperImpl {
       faultToleranceThreshold: Float = 0f
   ): F[MultiParentCasper[F]] =
     LastFinalizedBlockHashContainer[F].set(genesis.blockHash) >>
-      establishMetrics[F] >>
+      MultiParentCasperImpl.establishMetrics[F] >>
       Sync[F].delay(
         new MultiParentCasperImpl[F](
           statelessExecutor,
@@ -726,10 +726,9 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Metrics](
       chainId: String
   ) {
-
     implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughApplicativeError[F]
 
     /* Execute the block to get the effects then do some more validation.
@@ -771,10 +770,16 @@ object MultiParentCasperImpl {
                          .effectsForBlock[F](block, preStateHash)
                          .recoverWith {
                            case NonFatal(ex) =>
-                             Log[F].error(s"Could not calculate effects for block ${PrettyPrinter
-                               .buildString(block)}: $ex", ex) *>
+                             Log[F].error(
+                               s"Could not calculate effects for block ${PrettyPrinter
+                                 .buildString(block)}: $ex",
+                               ex
+                             ) *>
                                FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                          }
+        gasSpent = block.getBody.deploys.foldLeft(0L) { case (acc, next) => acc + next.cost }
+        _ <- Metrics[F]
+              .incrementCounter("gas_spent", gasSpent)(CasperMetricsSource)
         _ <- Log[F].debug(s"Validating the transactions in $hashPrefix")
         _ <- Validate.transactions[F](
               block,
@@ -956,6 +961,16 @@ object MultiParentCasperImpl {
 
   object StatelessExecutor {
     case class Context(genesis: Block, lastFinalizedBlockHash: BlockHash)
+
+    def establishMetrics[F[_]: Metrics]: F[Unit] =
+      Metrics[F].incrementCounter("gas_spent", 0L)(CasperMetricsSource)
+
+    def create[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Metrics](
+        chainId: String
+    ): F[StatelessExecutor[F]] =
+      for {
+        _ <- establishMetrics[F]
+      } yield new StatelessExecutor[F](chainId)
   }
 
   /** Encapsulating all methods that might use peer-to-peer communication. */
