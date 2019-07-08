@@ -366,10 +366,12 @@ pipeline:
       docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:"$REF"
       docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:"$REF"
       docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:"$REF"
+      docker tag casperlabs/explorer:DRONE-${DRONE_BUILD_NUMBER} casperlabs/explorer:"$REF"
       docker push casperlabs/node:"$REF"
       docker push casperlabs/client:"$REF"
       docker push casperlabs/execution-engine:"$REF"
       docker push casperlabs/key-generator:"$REF"
+      docker push casperlabs/explorer:"$REF"
       if [ "${DRONE_BRANCH}" = "master" ]; then
         docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:latest
         docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:latest
@@ -379,6 +381,7 @@ pipeline:
         docker push casperlabs/client:latest
         docker push casperlabs/execution-engine:latest
         docker push casperlabs/key-generator:latest
+        docker push casperlabs/explorer:latest
       fi
       echo "done"
     image: "casperlabs/buildenv:latest"
