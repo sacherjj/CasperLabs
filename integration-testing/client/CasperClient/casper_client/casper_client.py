@@ -57,6 +57,34 @@ class ABI:
     def args(l: list):
         return ABI.u32(len(l)) + reduce(add, map(ABI.byte_array, l))
 
+    @staticmethod
+    def args_from_json(s: str) -> bytes:
+        args = json.loads(s)
+
+        for arg in args:
+            if len(arg) != 1:
+                raise Error(f'Wrong encoding of value in {arg}. Only one pair of type and value allowed.')
+
+        def python_value(typ, value: str):
+            if typ in ('u32', 'u64'):
+                return int(value) 
+            return bytearray(value, 'utf-8')
+
+        def encode(typ: str, value: str) -> bytes:
+            try:
+                v = python_value(typ, value)
+                return getattr(ABI, typ)(v)
+            except KeyError:
+                raise Error(f'Unknown type {typ} in {{typ: value}}')
+
+        def only_one(arg):
+            items = list(arg.items())
+            if len(items) != 1:
+                raise Error("Only one pair {'type', 'value'} allowed.")
+            return items[0]
+
+        return ABI.args([encode(*list(only_one(arg))) for arg in args]) 
+
 
 class InternalError(Exception):
     """
@@ -176,8 +204,8 @@ class CasperClient:
 
         # args must go to payment as well for now cause otherwise we'll get GASLIMIT error:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
-        body = consensus.Deploy.Body(session = read_code(session, args and ABI.args(args) or None),
-                                     payment = read_code(payment, args and ABI.args(args) or None))
+        body = consensus.Deploy.Body(session = read_code(session, args),
+                                     payment = read_code(payment, args))
 
         account_public_key = public_key and read_binary(public_key)
         header = consensus.Deploy.Header(account_public_key = account_public_key, 
