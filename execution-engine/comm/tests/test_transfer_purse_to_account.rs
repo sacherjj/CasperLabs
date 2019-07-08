@@ -215,3 +215,64 @@ fn should_run_purse_to_account_transfer() {
     let updated_balance = &transform[&balance_uref.normalize()];
     assert_eq!(updated_balance, &Transform::AddUInt512(U512::from(1)));
 }
+
+#[ignore]
+#[test]
+fn should_fail_when_sending_too_much_from_purse_to_account() {
+    let account_1_key = PublicKey::new(ACCOUNT_1_ADDR);
+
+    let transfer_result = WasmTestBuilder::default()
+        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .exec_with_args(
+            GENESIS_ADDR,
+            "transfer_purse_to_account.wasm",
+            DEFAULT_BLOCK_TIME,
+            1,
+            (account_1_key, U512::max_value()),
+        )
+        .expect_success()
+        .finish();
+
+    let transforms = transfer_result.builder().get_transforms();
+    let transform = &transforms[0];
+
+    // Get transforms output for genesis account
+    let account_transforms = transform
+        .get(&Key::Account(GENESIS_ADDR))
+        .expect("Unable to find transforms for a genesis account");
+
+    // Inspect AddKeys for that account
+    let modified_account = if let Transform::Write(Value::Account(account)) = account_transforms {
+        account
+    } else {
+        panic!(
+            "Transform {:?} is not a Transform with a Value(Account)",
+            account_transforms
+        );
+    };
+    // Obtain main purse's balance
+    let final_balance = &transform[&modified_account.urefs_lookup()["final_balance"].normalize()];
+    let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
+        balance
+    } else {
+        panic!(
+            "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
+            final_balance
+        );
+    };
+    // When trying to send too much coins the balance is left unchanged
+    assert_eq!(final_balance, &U512::from(1_000_000));
+
+    // Get the `transfer_result` for a given account
+    let transfer_result_transform =
+        &transform[&modified_account.urefs_lookup()["transfer_result"].normalize()];
+    let transfer_result_string =
+        if let Transform::Write(Value::String(s)) = transfer_result_transform {
+            s
+        } else {
+            panic!("Purse transfer result is expected to contain Write with String value");
+        };
+
+    // Main assertion for the result of `transfer_from_purse_to_purse`
+    assert_eq!(transfer_result_string, "TransferError");
+}
