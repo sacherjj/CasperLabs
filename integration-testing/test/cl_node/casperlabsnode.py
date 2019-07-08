@@ -35,6 +35,9 @@ HELLO_WORLD = "test_helloworld.wasm"
 COUNTER_CALL = "test_countercall.wasm"
 MAILING_LIST_CALL = "test_mailinglistcall.wasm"
 COMBINED_CONTRACT = "test_combinedcontractsdefine.wasm"
+BONDING_CONTRACT = "test_bondingcall.wasm"
+UNBONDING_CONTRACT = "test_unbondingcall.wasm"
+
 
 
 HOST_MOUNT_DIR = f"/tmp/resources_{TAG}"
