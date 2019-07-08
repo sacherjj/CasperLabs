@@ -436,7 +436,7 @@ You can run the code snippet that [generated](VALIDATOR.md#secp256r1) the `NODE_
 ### Configure auto-proposal
 
 It is possible to call the `propose` command to manually trigger block creation but this is best reserved for demonstrational purposes. The recommended way to run a node at the moment is to turn on the simple auto-proposal feature that will try to create a block if a certain number of deploys have accumulated or the oldest has been sitting in the buffer for longer than a threshold:
-* `--casper-auto-propose-enabled true`
+* `--casper-auto-propose-enabled`
 * `--casper-auto-propose-max-interval 5seconds`
 * `--casper-auto-propose-max-count 10`
 
