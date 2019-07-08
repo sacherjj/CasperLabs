@@ -30,8 +30,7 @@ import io.casperlabs.catscontrib.MonadThrowable
       prestate: ByteString,
       blocktime: Long,
       deploys: Seq[Deploy],
-      protocolVersion: ProtocolVersion,
-      ignoreGasCount: Boolean
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(
       prestate: ByteString,
@@ -72,8 +71,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       prestate: ByteString,
       blocktime: Long,
       deploys: Seq[Deploy],
-      protocolVersion: ProtocolVersion,
-      ignoreGasCount: Boolean
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]] =
     for {
       result <- sendMessage(
@@ -99,12 +97,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
             deployResults => {
               val gasSpent =
                 deployResults.foldLeft(0L)((a, d) => a + d.value.executionResult.fold(0L)(_.cost))
-              Metrics[F]
-                .incrementCounter(
-                  "gas_spent",
-                  gasSpent
-                )
-                .whenA(!ignoreGasCount)
+              Metrics[F].incrementCounter("gas_spent", gasSpent)
             }
           )
     } yield result
