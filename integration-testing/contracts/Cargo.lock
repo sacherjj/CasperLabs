@@ -260,10 +260,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-bonding-define"
-version = "0.1.0"
-
-[[package]]
 name = "test-call-hello-name"
 version = "0.1.0"
 dependencies = [
@@ -339,10 +335,6 @@ version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.8.0",
 ]
-
-[[package]]
-name = "test-unbonding-define"
-version = "0.1.0"
 
 [[package]]
 name = "test_combined_contracts_call"

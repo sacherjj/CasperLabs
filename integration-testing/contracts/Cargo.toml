@@ -19,7 +19,5 @@ members = [
     "subcall-revert-test/define",
     "test_args",
     "bonding/call",
-    "bonding/define",
     "unbonding/call",
-    "unbonding/define",
 ]

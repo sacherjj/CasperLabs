@@ -1,7 +1,0 @@
-[package]
-name = "test-unbonding-define"
-version = "0.1.0"
-authors = ["Srinivas Reddy Thatiparthy <srini@casperlabs.io>"]
-edition = "2018"
-
-[dependencies]
