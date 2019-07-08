@@ -755,7 +755,7 @@ object MultiParentCasperImpl {
                          }
         gasSpent = block.getBody.deploys.foldLeft(0L) { case (acc, next) => acc + next.cost }
         _ <- Metrics[F]
-              .incrementCounter("gas_spent_total", gasSpent)(CasperMetricsSource)
+              .incrementCounter("gas_spent", gasSpent)(CasperMetricsSource)
         _ <- Log[F].debug(s"Validating the transactions in $hashPrefix")
         _ <- Validate.transactions[F](
               block,
@@ -939,7 +939,7 @@ object MultiParentCasperImpl {
     case class Context(genesis: Block, lastFinalizedBlockHash: BlockHash)
 
     def establishMetrics[F[_]: Metrics]: F[Unit] =
-      Metrics[F].incrementCounter("gas_spent_total", 0L)(CasperMetricsSource)
+      Metrics[F].incrementCounter("gas_spent", 0L)(CasperMetricsSource)
 
     def create[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Metrics](
         chainId: String
