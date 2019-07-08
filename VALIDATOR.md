@@ -320,7 +320,7 @@ openssl pkey -in ed25519-validator-private.pem -pubout -out ed25519-validator-pu
 Use the public key to create a bonds.txt file which contains a set of initial validators of a network and their initial bonds:
 ```console
 VALIDATOR_ID=$(openssl pkey -outform DER -pubout -in ed25519-validator-private.pem | tail -c +13 | openssl base64)
-echo "$VALIDATOR_ID" " 100" > bonds.txt
+echo "$VALIDATOR_ID 100" > bonds.txt
 ```
 
 Use them as follow:
