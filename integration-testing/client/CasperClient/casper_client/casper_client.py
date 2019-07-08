@@ -60,6 +60,14 @@ class ABI:
 
     @staticmethod
     def args_from_json(s: str) -> bytes:
+        """
+        Convert a string with JSON representation of deploy args to binary (ABI).
+
+        The JSON should be a list of dictionaries {'type': 'value'} that represent type and value of the args,
+        for example:
+
+             [{"u32":1024}, {"account":"00000000000000000000000000000000"}, {"u64":1234567890}]
+        """
         args = json.loads(s)
 
         for arg in args:
@@ -479,7 +487,7 @@ def command_line_tool():
                        [('-n', '--nonce'), dict(required=False, type=int, default=0, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=True, type=str, help='Path to the file with payment code')],
                        [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
-                       [('--args'), dict(required=False, type=str, help='JSON encoded list of ')],
+                       [('--args'), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
                        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
                        [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 
