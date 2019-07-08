@@ -705,8 +705,6 @@ object MultiParentCasperImpl {
   class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Metrics](
       chainId: String
   ) {
-    import MultiParentCasperImpl.StatelessExecutor.metricsSource
-
     implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughApplicativeError[F]
 
     /* Execute the block to get the effects then do some more validation.
@@ -744,20 +742,20 @@ object MultiParentCasperImpl {
         _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
         preStateHash <- ExecEngineUtil.computePrestate[F](merged)
         _            <- Log[F].debug(s"Computing the effects for $hashPrefix")
-        (blockEffects, gasSpent) <- ExecEngineUtil
-                                     .effectsForBlock[F](block, preStateHash)
-                                     .recoverWith {
-                                       case NonFatal(ex) =>
-                                         Log[F].error(
-                                           s"Could not calculate effects for block ${PrettyPrinter
-                                             .buildString(block)}: $ex",
-                                           ex
-                                         ) *>
-                                           FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
-                                     }
-        _ <- Metrics[F].incrementCounter("gas_spent_validate_and_add_block", gasSpent)(
-              StatelessExecutor.metricsSource
-            )
+        blockEffects <- ExecEngineUtil
+                         .effectsForBlock[F](block, preStateHash)
+                         .recoverWith {
+                           case NonFatal(ex) =>
+                             Log[F].error(
+                               s"Could not calculate effects for block ${PrettyPrinter
+                                 .buildString(block)}: $ex",
+                               ex
+                             ) *>
+                               FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
+                         }
+        gasSpent = block.getBody.deploys.foldLeft(0L) { case (acc, next) => acc + next.cost }
+        _ <- Metrics[F]
+              .incrementCounter("gas_spent_total", gasSpent)(CasperMetricsSource)
         _ <- Log[F].debug(s"Validating the transactions in $hashPrefix")
         _ <- Validate.transactions[F](
               block,
@@ -940,11 +938,8 @@ object MultiParentCasperImpl {
   object StatelessExecutor {
     case class Context(genesis: Block, lastFinalizedBlockHash: BlockHash)
 
-    implicit val metricsSource: Metrics.Source =
-      Metrics.Source(CasperMetricsSource, "StatelessExecutor")
-
     def establishMetrics[F[_]: Metrics]: F[Unit] =
-      Metrics[F].incrementCounter("gas_spent_validate_and_add_block", 0L)
+      Metrics[F].incrementCounter("gas_spent_total", 0L)(CasperMetricsSource)
 
     def create[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Metrics](
         chainId: String
