@@ -229,7 +229,8 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
                       }
                       .map(_.flatten.distinct)
 
-      finalizedBlockHashes <- blockHashes.filterA(isGreaterThanFaultToleranceThreshold(dag, _))
+      finalizedBlockHashes <- blockHashes.filterA(isFinalized(dag, _))
+
       _ <- finalizedBlockHashes.traverse { blockHash =>
             removeDeploysInBlock(blockHash) flatMap { removed =>
               Log[F]
@@ -241,6 +242,19 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
             }
           }
     } yield ()
+
+  // CON-86 will implement a 2nd pass that will calculate the threshold for secondary parents;
+  // right now the FinalityDetector only works for main parents. When it's fixed remove this part.
+  private def isFinalized(dag: BlockDagRepresentation[F], blockHash: BlockHash): F[Boolean] =
+    isGreaterThanFaultToleranceThreshold(dag, blockHash).ifM(
+      true.pure[F],
+      dag
+        .children(blockHash)
+        .flatMap {
+          _.toList.flatten
+            .existsM(isFinalized(dag, _))
+        }
+    )
 
   /** Remove deploys from the history which are included in a just finalised block. */
   private def removeDeploysInBlock(blockHash: BlockHash): F[Int] =

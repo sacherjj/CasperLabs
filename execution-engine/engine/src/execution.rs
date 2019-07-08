@@ -689,7 +689,7 @@ where
         self.context.insert_uref(target_purse_id.value());
 
         if self.mint_transfer(mint_contract_key, source, target_purse_id, amount)? {
-            let known_urefs = &[
+            let known_urefs = vec![
                 (
                     String::from(MINT_NAME),
                     self.get_mint_contract_public_uref_key()?,
@@ -700,7 +700,16 @@ where
                 ),
                 (pos_contract_uref.as_string(), pos_contract_key),
                 (mint_contract_uref.as_string(), mint_contract_key),
-            ];
+            ]
+            .into_iter()
+            .map(|(name, key)| {
+                if let Some(uref) = key.as_uref() {
+                    (name, Key::URef(URef::new(uref.addr(), AccessRights::READ)))
+                } else {
+                    (name, key)
+                }
+            })
+            .collect();
             let account = Account::create(target_addr, known_urefs, target_purse_id);
             self.context.write_account(target_key, account)?;
             Ok(TransferResult::TransferredToNewAccount)

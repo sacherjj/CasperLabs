@@ -510,9 +510,12 @@ impl WasmTestBuilder {
             .get_deploy_results()
             .get(0)
             .expect("Unable to get first deploy result");
+        if !deploy_result.has_execution_result() {
+            panic!("Expected ExecutionResult, got {:?} instead", deploy_result);
+        }
         if deploy_result.get_execution_result().has_error() {
             panic!(
-                "Expected error, but instead got a successful response: {:?}",
+                "Expected successful execution result, but instead got: {:?}",
                 exec_response,
             );
         }
