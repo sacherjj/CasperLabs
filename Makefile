@@ -64,6 +64,7 @@ docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-
 docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
 docker-build/key-generator: .make/docker-build/key-generator
 docker-build/explorer: .make/docker-build/explorer
+docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -236,6 +237,11 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	# Compile the faucet contract that grants tokens.
 	cd explorer/contracts && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
+	mkdir -p $(dir $@) && touch $@
+
+.make/docker-build/grpcwebproxy: hack/docker/grpcwebproxy/Dockerfile
+	cd hack/docker && docker-compose build grpcwebproxy
+	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 

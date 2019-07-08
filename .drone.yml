@@ -278,6 +278,22 @@ pipeline:
         - push
         - tag
 
+  docker-explorer-merge:
+    commands:
+      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "make docker-build/explorer"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
+
   package-sbt-artifacts-merge:
     commands:
       - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin node/docker:publishLocal client/docker:publishLocal"
