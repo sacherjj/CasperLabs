@@ -24,5 +24,6 @@ members = [
     "test-contracts/get-caller-subcall",
     "test-contracts/main-purse",
     "test-contracts/blessed-urefs-access-rights",
+    "test-contracts/transfer-purse-to-account",
     "wasm-prep",
 ]
