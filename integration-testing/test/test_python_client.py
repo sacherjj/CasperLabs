@@ -41,7 +41,7 @@ def test_deploy_with_args(one_node_network):
         response, deploy_hash = client.deploy(payment_contract = wasm,
                                               session_contract = wasm,
                                               public_key = signing_public_key_file,
-                                              #private_key = signing_private_key_file,
+                                              private_key = signing_private_key_file,
                                               args = ABI.args([ABI.u32(number)])
                                               )
         logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")

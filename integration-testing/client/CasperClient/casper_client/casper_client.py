@@ -226,10 +226,9 @@ class CasperClient:
         deploy_hash = hash(serialize(header))
         d = consensus.Deploy(deploy_hash = deploy_hash,
                              approvals = [consensus.Approval(approver_public_key = account_public_key,
-                                                             #signature = sign(deploy_hash)
-                                                            )
-                                         ]
-                                         if account_public_key else [],
+                                                             signature = sign(deploy_hash))]
+                                         if account_public_key
+                                         else [],
                              header = header,
                              body = body)
 
