@@ -303,6 +303,8 @@ pub struct WasmTestBuilder {
     bonded_validators: Vec<HashMap<common::value::account::PublicKey, common::value::U512>>,
     /// Cached genesis transforms
     genesis_account: Option<common::value::Account>,
+    /// Genesis transforms
+    genesis_transforms: Option<HashMap<common::key::Key, Transform>>,
     /// Mint contract uref
     mint_contract_uref: Option<common::uref::URef>,
 }
@@ -335,6 +337,7 @@ impl WasmTestBuilder {
             bonded_validators: result.0.bonded_validators,
             genesis_account: result.0.genesis_account,
             mint_contract_uref: result.0.mint_contract_uref,
+            genesis_transforms: result.0.genesis_transforms,
         }
     }
 
@@ -350,6 +353,7 @@ impl WasmTestBuilder {
             bonded_validators: Vec::new(),
             genesis_account: None,
             mint_contract_uref: None,
+            genesis_transforms: None,
         }
     }
 
@@ -403,6 +407,7 @@ impl WasmTestBuilder {
         // This value will change between subsequent contract executions
         self.post_state_hash = Some(genesis_hash);
         self.bonded_validators.push(genesis_validators);
+        self.genesis_transforms = Some(genesis_transforms);
         self
     }
 
@@ -544,6 +549,13 @@ impl WasmTestBuilder {
     pub fn get_mint_contract_uref(&self) -> common::uref::URef {
         self.mint_contract_uref
             .expect("Unable to obtain mint contract uref. Please run genesis first.")
+    }
+
+    pub fn get_genesis_transforms(&self) -> &HashMap<common::key::Key, Transform> {
+        &self
+            .genesis_transforms
+            .as_ref()
+            .expect("should have genesis transforms")
     }
 
     pub fn finish(&self) -> WasmTestResult {
