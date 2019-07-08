@@ -320,7 +320,7 @@ openssl pkey -in ed25519-validator-private.pem -pubout -out ed25519-validator-pu
 Use the public key to create a bonds.txt file which contains a set of initial validators of a network and their initial bonds:
 ```console
 VALIDATOR_ID=$(openssl pkey -outform DER -pubout -in ed25519-validator-private.pem | tail -c +13 | openssl base64)
-echo "$VALIDATOR_ID" " 100" > bonds.txt
+echo "$VALIDATOR_ID 100" > bonds.txt
 ```
 
 Use them as follow:
@@ -436,9 +436,9 @@ You can run the code snippet that [generated](VALIDATOR.md#secp256r1) the `NODE_
 ### Configure auto-proposal
 
 It is possible to call the `propose` command to manually trigger block creation but this is best reserved for demonstrational purposes. The recommended way to run a node at the moment is to turn on the simple auto-proposal feature that will try to create a block if a certain number of deploys have accumulated or the oldest has been sitting in the buffer for longer than a threshold:
-* `--auto-propose-enabled true`
-* `--auto-propose-max-interval 5seconds`
-* `--auto-propose-max-count 10`
+* `--casper-auto-propose-enabled`
+* `--casper-auto-propose-max-interval 5seconds`
+* `--casper-auto-propose-max-count 10`
 
 
 ### Starting the node
