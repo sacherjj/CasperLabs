@@ -70,7 +70,6 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
     val bap = new BlockApproverProtocol(
       validatorId,
-      deployTimestamp,
       bonds,
       Seq.empty,
       BlockApproverProtocol.GenesisConf(
@@ -80,7 +79,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
         genesisAccountPublicKeyPath = None,
         initialTokens = 0L,
         mintCodePath = None,
-        posCodePath = None
+        posCodePath = None,
+        bondsPath = None
       )
     )
     val local: Node = peerNode("src", 40400)

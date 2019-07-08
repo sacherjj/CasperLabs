@@ -1,11 +1,10 @@
 import { observable } from 'mobx';
-import createAuth0Client from '@auth0/auth0-spa-js';
-import Auth0Client from '@auth0/auth0-spa-js/dist/typings/Auth0Client';
+import * as nacl from 'tweetnacl-ts';
+import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
 import FormData from './FormData';
-import * as nacl from 'tweetnacl-ts';
-import { encodeBase64 } from 'tweetnacl-util';
-import { saveAs } from 'file-saver';
+import Auth0Service from '../services/Auth0Service';
+import { encodeBase64 } from '../lib/Conversions';
 
 // https://github.com/auth0/auth0-spa-js/issues/41
 // https://auth0.com/docs/quickstart/spa/vanillajs
@@ -15,8 +14,6 @@ import { saveAs } from 'file-saver';
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
 
-const Auth0ApiUrl = 'https://casperlabs.auth0.com/api/v2/';
-
 export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: UserAccount[] | null = null;
@@ -24,10 +21,17 @@ export class AuthContainer {
   // An account we are creating, while we're configuring it.
   @observable newAccount: NewAccountFormData | null = null;
 
-  private auth0: Auth0Client | null = null;
+  @observable selectedAccount: UserAccount | null = null;
 
-  constructor(private conf: Auth0Config, private errors: ErrorContainer) {
+  constructor(
+    private errors: ErrorContainer,
+    private auth0Service: Auth0Service
+  ) {
     this.init();
+  }
+
+  private getAuth0() {
+    return this.auth0Service.getAuth0();
   }
 
   private async init() {
@@ -45,28 +49,11 @@ export class AuthContainer {
     this.fetchUser();
   }
 
-  private async getAuth0() {
-    if (this.auth0 != null) return this.auth0;
-
-    const auth0 = await createAuth0Client({
-      domain: this.conf.domain,
-      client_id: this.conf.clientId,
-      redirect_uri: window.location.origin,
-      // This is needed so that we can query and update the `user_metadata` from here.
-      audience: Auth0ApiUrl,
-      scope:
-        'read:current_user, create:current_user_metadata, update:current_user_metadata'
-    });
-
-    this.auth0 = auth0;
-    return auth0;
-  }
-
   async login() {
     const auth0 = await this.getAuth0();
     const isAuthenticated = await auth0.isAuthenticated();
     if (!isAuthenticated) {
-      await this.auth0!.loginWithPopup({
+      await auth0.loginWithPopup({
         response_type: 'token id_token'
       } as PopupLoginOptions);
     }
@@ -75,9 +62,10 @@ export class AuthContainer {
 
   async logout() {
     const auth0 = await this.getAuth0();
-    auth0.logout({ returnTo: window.location.origin });
     this.user = null;
     this.accounts = null;
+    sessionStorage.clear();
+    auth0.logout({ returnTo: window.location.origin });
   }
 
   private async fetchUser() {
@@ -89,15 +77,9 @@ export class AuthContainer {
 
   async refreshAccounts() {
     if (this.user != null) {
-      const auth0 = await this.getAuth0();
-      const token = await auth0.getTokenSilently();
-      const response = await fetch(
-        `${Auth0ApiUrl}users/${this.user.sub}?fields=user_metadata`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const meta: UserMetadata = await this.auth0Service.getUserMetadata(
+        this.user.sub
       );
-
-      const fields = await response.json();
-      const meta: UserMetadata = fields.user_metadata || {};
       this.accounts = meta.accounts || [];
     }
   }
@@ -111,10 +93,13 @@ export class AuthContainer {
     let form = this.newAccount!;
     if (form.clean()) {
       // Save the private and public keys to disk.
-      saveToFile(form.privateKey, `${form.name}.private.key`);
-      saveToFile(form.publicKey, `${form.name}.public.key`);
+      saveToFile(form.privateKeyBase64, `${form.name}.private.key`);
+      saveToFile(form.publicKeyBase64, `${form.name}.public.key`);
       // Add the public key to the accounts and save it to Auth0.
-      await this.addAccount({ name: form.name, publicKey: form.publicKey });
+      await this.addAccount({
+        name: form.name,
+        publicKeyBase64: form.publicKeyBase64
+      });
       return true;
     } else {
       return false;
@@ -129,25 +114,18 @@ export class AuthContainer {
   }
 
   private async addAccount(account: UserAccount) {
-    this.accounts = this.accounts!.concat(account);
+    this.accounts!.push(account);
     await this.errors.capture(this.saveAccounts());
   }
 
   private async saveAccounts() {
-    const userMetadata = {
-      user_metadata: { accounts: this.accounts }
-    };
-    const auth0 = await this.getAuth0();
-    const token = await auth0.getTokenSilently();
-    const response = await fetch(`${Auth0ApiUrl}users/${this.user!.sub}`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(userMetadata)
+    await this.auth0Service.updateUserMetadata(this.user!.sub, {
+      accounts: this.accounts || undefined
     });
-    await response.json();
+  }
+
+  selectAccountByName(name: string) {
+    this.selectedAccount = this.accounts!.find(x => x.name === name) || null;
   }
 }
 
@@ -156,18 +134,18 @@ function saveToFile(content: string, filename: string) {
   saveAs(blob, filename);
 }
 
-export class NewAccountFormData extends FormData {
+class NewAccountFormData extends FormData {
   constructor(private accounts: UserAccount[]) {
     super();
     // Generate key pair and assign to public and private keys.
     const keys = nacl.sign_keyPair();
-    this.publicKey = encodeBase64(keys.publicKey);
-    this.privateKey = encodeBase64(keys.secretKey);
+    this.publicKeyBase64 = encodeBase64(keys.publicKey);
+    this.privateKeyBase64 = encodeBase64(keys.secretKey);
   }
 
   @observable name: string = '';
-  @observable publicKey: string = '';
-  @observable privateKey: string = '';
+  @observable publicKeyBase64: string = '';
+  @observable privateKeyBase64: string = '';
 
   protected check() {
     if (this.name === '') return 'Name cannot be empty!';
@@ -175,7 +153,7 @@ export class NewAccountFormData extends FormData {
     if (this.accounts.some(x => x.name === this.name))
       return `An account with name '${this.name}' already exists.`;
 
-    if (this.accounts.some(x => x.publicKey === this.publicKey))
+    if (this.accounts.some(x => x.publicKeyBase64 === this.publicKeyBase64))
       return 'An account with this public key already exists.';
 
     return null;

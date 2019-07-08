@@ -17,6 +17,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -474,8 +475,21 @@ object Validate {
     val bodyHash   = ProtoUtil.protoHash(d.getBody)
     val deployHash = ProtoUtil.protoHash(d.getHeader)
     val ok         = bodyHash == d.getHeader.bodyHash && deployHash == d.deployHash
-    Log[F].warn(s"Invalid deploy hash ${PrettyPrinter.buildString(d.deployHash)}").whenA(!ok) *>
-      ok.pure[F]
+
+    def logDiff = {
+      // Print the full length, maybe the client has configured their hasher to output 64 bytes.
+      def b16(bytes: ByteString) = Base16.encode(bytes.toByteArray)
+      for {
+        _ <- Log[F]
+              .warn(
+                s"Invalid deploy body hash; got ${b16(d.getHeader.bodyHash)}, expected ${b16(bodyHash)}"
+              )
+        _ <- Log[F]
+              .warn(s"Invalid deploy hash; got ${b16(d.deployHash)}, expected ${b16(deployHash)}")
+      } yield ()
+    }
+
+    logDiff.whenA(!ok).as(ok)
   }
 
   def blockHash[F[_]: Monad: RaiseValidationError: Log](
@@ -699,6 +713,11 @@ object Validate {
         false
       }
 
+  // Validates whether received block is valid (according to that nodes logic):
+  // 1) Validates whether pre state hashes match
+  // 2) Runs deploys from the block
+  // 3) Validates whether post state hashes match
+  // 4) Validates whether bonded validators, as at the end of executing the block, match.
   def transactions[F[_]: Monad: Log: BlockStore: ExecutionEngineService: FunctorRaise[
     ?[_],
     InvalidBlock
@@ -711,24 +730,25 @@ object Validate {
     val blockPostState = ProtoUtil.postStateHash(block)
     if (preStateHash == blockPreState) {
       for {
-        possiblePostState <- ExecutionEngineService[F].commit(
-                              preStateHash,
-                              effects
-                            )
+        possibleCommitResult <- ExecutionEngineService[F].commit(
+                                 preStateHash,
+                                 effects
+                               )
         //TODO: distinguish "internal errors" and "user errors"
-        _ <- possiblePostState match {
+        _ <- possibleCommitResult match {
               case Left(ex) =>
                 Log[F].error(
                   s"Could not commit effects of block ${PrettyPrinter.buildString(block)}: $ex",
                   ex
                 ) *>
                   RaiseValidationError[F].raise[Unit](InvalidTransaction)
-              case Right(postStateHash) =>
-                if (postStateHash == blockPostState) {
-                  Applicative[F].unit
-                } else {
-                  RaiseValidationError[F].raise[Unit](InvalidPostStateHash)
-                }
+              case Right(commitResult) =>
+                for {
+                  _ <- RaiseValidationError[F]
+                        .raise[Unit](InvalidPostStateHash)
+                        .whenA(commitResult.postStateHash != blockPostState)
+                  _ <- Validate.bondsCache[F](block, commitResult.bondedValidators)
+                } yield ()
             }
       } yield ()
     } else {

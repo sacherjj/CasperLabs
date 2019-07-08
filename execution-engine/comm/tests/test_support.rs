@@ -9,6 +9,7 @@ extern crate wasm_prep;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use grpc::RequestOptions;
 
@@ -32,6 +33,7 @@ use storage::global_state::in_memory::InMemoryGlobalState;
 //use common::key::Key;
 //use common::value::Value;
 
+pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/debug";
 
@@ -137,20 +139,18 @@ pub fn create_genesis_request(
     (ret, contracts)
 }
 
-pub fn create_exec_request<T: common::bytesrepr::ToBytes>(
+pub fn create_exec_request(
     address: [u8; 32],
     contract_file_name: &str,
     pre_state_hash: &[u8],
+    block_time: u64,
     nonce: u64,
-    arguments: Vec<T>,
+    arguments: impl common::contract_api::argsparser::ArgsParser,
 ) -> ExecRequest {
-    let args: Vec<u8> = arguments
-        .iter()
-        .map(common::bytesrepr::ToBytes::to_bytes)
-        .collect::<Result<Vec<Vec<u8>>, _>>()
+    let args = arguments
+        .parse()
         .and_then(|args_bytes| common::bytesrepr::ToBytes::to_bytes(&args_bytes))
         .expect("should serialize args");
-
     let bytes_to_deploy = read_wasm_file_bytes(contract_file_name);
 
     let mut deploy = Deploy::new();
@@ -170,6 +170,7 @@ pub fn create_exec_request<T: common::bytesrepr::ToBytes>(
     exec_request.set_deploys(deploys);
     exec_request.set_parent_state_hash(pre_state_hash.to_vec());
     exec_request.set_protocol_version(get_protocol_version());
+    exec_request.set_block_time(block_time);
 
     exec_request
 }
@@ -289,8 +290,10 @@ pub fn get_account(
 }
 
 /// Builder for simple WASM test
+#[derive(Clone)]
 pub struct WasmTestBuilder {
-    engine_state: EngineState<InMemoryGlobalState>,
+    /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for EngineState`
+    engine_state: Rc<EngineState<InMemoryGlobalState>>,
     exec_responses: Vec<ExecResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
@@ -298,6 +301,10 @@ pub struct WasmTestBuilder {
     /// i.e. transforms[0] is for first run() call etc.
     transforms: Vec<HashMap<common::key::Key, Transform>>,
     bonded_validators: Vec<HashMap<common::value::account::PublicKey, common::value::U512>>,
+    /// Cached genesis transforms
+    genesis_account: Option<common::value::Account>,
+    /// Mint contract uref
+    mint_contract_uref: Option<common::uref::URef>,
 }
 
 impl Default for WasmTestBuilder {
@@ -306,17 +313,43 @@ impl Default for WasmTestBuilder {
     }
 }
 
+/// A wrapper type to disambiguate builder from an actual result
+pub struct WasmTestResult(WasmTestBuilder);
+
+impl WasmTestResult {
+    /// Access the builder
+    pub fn builder(&self) -> &WasmTestBuilder {
+        &self.0
+    }
+}
+
 impl WasmTestBuilder {
+    /// Carries on attributes from TestResult for further executions
+    pub fn from_result(result: WasmTestResult) -> WasmTestBuilder {
+        WasmTestBuilder {
+            engine_state: result.0.engine_state,
+            exec_responses: Vec::new(),
+            genesis_hash: result.0.genesis_hash,
+            post_state_hash: result.0.post_state_hash,
+            transforms: Vec::new(),
+            bonded_validators: result.0.bonded_validators,
+            genesis_account: result.0.genesis_account,
+            mint_contract_uref: result.0.mint_contract_uref,
+        }
+    }
+
     pub fn new() -> WasmTestBuilder {
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state);
         WasmTestBuilder {
-            engine_state,
+            engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
             transforms: Vec::new(),
             bonded_validators: Vec::new(),
+            genesis_account: None,
+            mint_contract_uref: None,
         }
     }
 
@@ -325,7 +358,7 @@ impl WasmTestBuilder {
         genesis_addr: [u8; 32],
         genesis_validators: HashMap<common::value::account::PublicKey, common::value::U512>,
     ) -> &mut WasmTestBuilder {
-        let (genesis_request, _contracts) =
+        let (genesis_request, contracts) =
             create_genesis_request(genesis_addr, genesis_validators.clone());
 
         let genesis_response = self
@@ -333,6 +366,29 @@ impl WasmTestBuilder {
             .run_genesis(RequestOptions::new(), genesis_request)
             .wait_drop_metadata()
             .unwrap();
+
+        // Cache genesis response transforms for easy access later
+        let genesis_transforms = get_genesis_transforms(&genesis_response);
+
+        let mint_contract_uref = get_mint_contract_uref(&genesis_transforms, &contracts)
+            .expect("Unable to get mint contract uref");
+
+        // Cache mint uref
+        self.mint_contract_uref = Some(mint_contract_uref);
+
+        // Cache the account
+        self.genesis_account = Some(
+            get_account(
+                &genesis_transforms,
+                &common::key::Key::Account(genesis_addr),
+            )
+            .unwrap_or_else(|| {
+                panic!(
+                    "Unable to obtain genesis account from genesis response: {:?}",
+                    genesis_response
+                )
+            }),
+        );
 
         let state_handle = self.engine_state.state();
 
@@ -352,12 +408,13 @@ impl WasmTestBuilder {
 
     /// Runs a contract and after that runs actual WASM contract and expects
     /// transformations to happen at the end of execution.
-    pub fn exec_with_args<T: common::bytesrepr::ToBytes>(
+    pub fn exec_with_args(
         &mut self,
         address: [u8; 32],
         wasm_file: &str,
+        block_time: u64,
         nonce: u64,
-        args: Vec<T>,
+        args: impl common::contract_api::argsparser::ArgsParser,
     ) -> &mut WasmTestBuilder {
         let exec_request = create_exec_request(
             address,
@@ -365,6 +422,7 @@ impl WasmTestBuilder {
             self.post_state_hash
                 .as_ref()
                 .expect("Should have post state hash"),
+            block_time,
             nonce,
             args,
         );
@@ -394,8 +452,14 @@ impl WasmTestBuilder {
         self
     }
 
-    pub fn exec(&mut self, address: [u8; 32], wasm_file: &str, nonce: u64) -> &mut WasmTestBuilder {
-        self.exec_with_args(address, wasm_file, nonce, Vec::<()>::new())
+    pub fn exec(
+        &mut self,
+        address: [u8; 32],
+        wasm_file: &str,
+        block_time: u64,
+        nonce: u64,
+    ) -> &mut WasmTestBuilder {
+        self.exec_with_args(address, wasm_file, block_time, nonce, ())
     }
 
     /// Runs a commit request, expects a successful response, and
@@ -464,5 +528,21 @@ impl WasmTestBuilder {
         &self,
     ) -> Vec<HashMap<common::value::account::PublicKey, common::value::U512>> {
         self.bonded_validators.clone()
+    }
+
+    /// Gets genesis account (if present)
+    pub fn get_genesis_account(&self) -> &common::value::Account {
+        self.genesis_account
+            .as_ref()
+            .expect("Unable to obtain genesis account. Please run genesis first.")
+    }
+
+    pub fn get_mint_contract_uref(&self) -> common::uref::URef {
+        self.mint_contract_uref
+            .expect("Unable to obtain mint contract uref. Please run genesis first.")
+    }
+
+    pub fn finish(&self) -> WasmTestResult {
+        WasmTestResult(self.clone())
     }
 }

@@ -1,12 +1,6 @@
-# CasperLabs User Interface
+# CasperLabs Explorer User Interface
 
-The purpose of the web UI is help users interact with the CasperLabs blockchain:
-* Sign up to participate in devnet
-* Create accounts (public/private key pairs)
-* Ask the faucet for tokens on devnet
-* Explore the block DAG
-
-To build you'll need [npm](https://github.com/nodesource/distributions#installation-instructions).
+To build the client and the server you'll need [npm](https://github.com/nodesource/distributions#installation-instructions).
 
 ```console
 $ npm --version
@@ -31,6 +25,9 @@ You can change the port in the `.env` file or by setting the `PORT` env var.
 
 The page will reload if you make edits.<br>
 You will also see any lint errors in the console.
+
+If we add `"proxy": "http://localhost:8001/"` to `package.json` we get transparent proxying to the server, but it seems to clash with auto-reloading in Firefox; works
+in Chrome.
 
 ### `npm test`
 

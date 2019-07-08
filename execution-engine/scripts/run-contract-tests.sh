@@ -12,6 +12,9 @@ CONTRACTS=(
     "transfer-to-account-02"
     "local-state"
     "known-urefs"
+    "transfer-purse-to-purse"
+    "ee-441-rng-state"
+    "get-blocktime"
     "get-caller"
     "get-caller-subcall"
 )
@@ -26,4 +29,4 @@ for CONTRACT in "${CONTRACTS[@]}"; do
     cargo build -p "${CONTRACT}" --target wasm32-unknown-unknown
 done
 
-cargo test -p casperlabs-engine-grpc-server -- --ignored --nocapture
+cargo test -p casperlabs-engine-grpc-server -- --ignored --nocapture $@

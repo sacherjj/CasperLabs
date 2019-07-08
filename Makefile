@@ -13,7 +13,8 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v target \
 	| grep -v -e ipc.*\.rs)
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
-TS_SRC := $(shell find explorer/ui/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "package.json" \))
+PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
+TS_SRC := $(shell find explorer/ui/src explorer/server/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
@@ -38,6 +39,7 @@ publish: \
 clean: cargo/clean
 	sbt clean
 	cd explorer/ui && rm -rf node_modules build
+	cd explorer/server && rm -rf node_modules dist
 	rm -rf .make
 
 
@@ -179,42 +181,61 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker build -f hack/key-management/Dockerfile -t $(DOCKER_USERNAME)/key-generator:$(DOCKER_LATEST_TAG) hack/key-management
 	mkdir -p $(dir $@) && touch $@
 
+
 # Make an image to host the Casper Explorer UI and the faucet microservice.
 .make/docker-build/explorer: \
 		explorer/Dockerfile \
 		$(TS_SRC) \
-		.make/npm/explorer
+		.make/npm/explorer \
+		.make/explorer/contracts
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
-.make/npm/explorer:
-	if [ -z "${DRONE_BRANCH}" ]; then \
-		$(MAKE) .make/npm-docker/explorer ; \
-	else \
-		$(MAKE) .make/npm-native/explorer ; \
-	fi
-
-.make/npm-native/explorer: $(TS_SRC)
+.make/npm/explorer: $(TS_SRC) .make/protoc/explorer
 	# CI=false so on Drone it won't fail on warnings (currently about href).
-	cd explorer/ui && npm install && CI=false npm run build
+	./hack/build/docker-buildenv.sh "\
+			cd explorer/ui     && npm install && CI=false npm run build && cd - && \
+			cd explorer/server && npm install && npm run clean:dist && npm run build && cd - \
+		"
 	mkdir -p $(dir $@) && touch $@
 
-.make/npm-docker/explorer: $(TS_SRC)
-	$(eval USERID = $(shell id -u))
-	docker pull $(DOCKER_USERNAME)/buildenv:latest
-	docker run --rm --entrypoint sh \
-		-v ${PWD}:/CasperLabs \
-		$(DOCKER_USERNAME)/buildenv:latest \
-		-c "\
-		apt-get install sudo ; \
-		useradd -u $(USERID) -m builder ; \
-		cp -r /root/. /home/builder/ ; \
-		chown -R builder /home/builder ; \
-		sudo -u builder bash -c '\
-			export HOME=/home/builder ; \
-			cd /CasperLabs/explorer/ui ; \
-			npm install && npm run build ; \
-		'"
+# Generate UI client code from Protobuf.
+# Installed via `npm install ts-protoc-gen --no-bin-links --save-dev`
+.make/protoc/explorer: \
+		.make/install/protoc \
+		.make/install/protoc-ts \
+		$(PROTO_SRC)
+	$(eval DIR_IN = ./protobuf)
+	$(eval DIR_OUT = ./explorer/grpc/generated)
+	rm -rf $(DIR_OUT)
+	mkdir -p $(DIR_OUT)
+	# First the pure data packages, so it doesn't create empty _pb_service.d.ts files.
+	protoc \
+	    -I=$(DIR_IN) \
+		--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
+		--js_out=import_style=commonjs,binary:$(DIR_OUT) \
+		--ts_out=service=false:$(DIR_OUT) \
+		$(DIR_IN)/google/protobuf/empty.proto \
+		$(DIR_IN)/io/casperlabs/casper/consensus/consensus.proto \
+		$(DIR_IN)/io/casperlabs/casper/consensus/info.proto \
+		$(DIR_IN)/io/casperlabs/casper/consensus/state.proto
+	# Now the service we'll invoke.
+	protoc \
+	    -I=$(DIR_IN) \
+		--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
+		--js_out=import_style=commonjs,binary:$(DIR_OUT) \
+		--ts_out=service=true:$(DIR_OUT) \
+		$(DIR_IN)/io/casperlabs/node/api/casper.proto
+	# Annotations were only required for the REST gateway. Remove them from Typescript.
+	for f in $(DIR_OUT)/io/casperlabs/node/api/casper_pb* ; do \
+		sed -i '/google_api_annotations_pb/d' $$f ; \
+	done
+	mkdir -p $(dir $@) && touch $@
+
+.make/explorer/contracts: $(RUST_SRC) .make/rustup-update
+	# Compile the faucet contract that grants tokens.
+	cd explorer/contracts && \
+	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@
 
 
@@ -301,13 +322,14 @@ package-blessed-contracts: \
 
 # Package all blessed contracts that we have to make available for download.
 execution-engine/target/blessed-contracts.tar.gz: \
-	.make/blessed-contracts/mint-token
+	.make/blessed-contracts/mint-token \
+	.make/blessed-contracts/pos
 	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))
 	rm -rf $(ARCHIVE) $(ARCHIVE).gz
 	mkdir -p $(dir $@)
 	tar -cvf $(ARCHIVE) -T /dev/null
 	find execution-engine/blessed-contracts -wholename *.wasm | grep -v /release/deps/ | while read file; do \
-		cd $$(dirname $$file); tar -rvf $(ARCHIVE) $$(basename $$file); \
+		cd $$(dirname $$file); tar -rvf $(ARCHIVE) $$(basename $$file); cd -; \
 	done
 	gzip $(ARCHIVE)
 
@@ -322,6 +344,7 @@ execution-engine/target/release/casperlabs-engine-grpc-server: \
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.
+.PHONY: protobuf/google/api
 protobuf/google/api:
 	$(eval DIR = protobuf/google/api)
 	$(eval SRC = https://raw.githubusercontent.com/googleapis/googleapis/master/google/api)
@@ -329,6 +352,15 @@ protobuf/google/api:
 	cd $(DIR) && \
 	curl -s -O $(SRC)/annotations.proto && \
 	curl -s -O $(SRC)/http.proto
+
+.PHONY: protobuf/google
+protobuf/google:
+	$(eval DIR = protobuf/google/protobuf)
+	$(eval SRC = https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf)
+	mkdir -p $(DIR)
+	cd $(DIR) && \
+	curl -s -O $(SRC)/empty.proto && \
+	curl -s -O $(SRC)/descriptor.proto
 
 # Miscellaneous tools to install once.
 
@@ -342,6 +374,14 @@ protobuf/google/api:
 		rm -rf protoc* ; \
 	fi
 	mkdir -p $(dir $@) && touch $@
+
+# Install the protoc plugin to generate TypeScript. Use docker so people don't have to install npm.
+.make/install/protoc-ts: explorer/grpc/package.json
+	./hack/build/docker-buildenv.sh "\
+		cd explorer/grpc && npm install && npm install ts-protoc-gen --no-bin-links --save-dev \
+	"
+	mkdir -p $(dir $@) && touch $@
+
 
 .make/install/cargo-native-packager:
 	@# Installs fail if they already exist.

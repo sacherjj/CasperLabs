@@ -11,7 +11,8 @@ use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::value::Value;
 use shared::transform::Transform;
-use test_support::WasmTestBuilder;
+
+use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 #[allow(dead_code)]
 mod test_support;
@@ -22,15 +23,17 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 #[test]
 fn should_run_local_state_contract() {
     // This test runs a contract that's after every call extends the same key with more data
-    let transforms = WasmTestBuilder::default()
+    let result = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, "local_state.wasm", 1)
+        .exec(GENESIS_ADDR, "local_state.wasm", DEFAULT_BLOCK_TIME, 1)
         .expect_success()
         .commit()
-        .exec(GENESIS_ADDR, "local_state.wasm", 2)
+        .exec(GENESIS_ADDR, "local_state.wasm", DEFAULT_BLOCK_TIME, 2)
         .expect_success()
         .commit()
-        .get_transforms();
+        .finish();
+
+    let transforms = result.builder().get_transforms();
 
     let expected_local_key = Key::local(GENESIS_ADDR, &[66u8; 32].to_bytes().unwrap());
 

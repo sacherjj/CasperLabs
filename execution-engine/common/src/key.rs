@@ -110,6 +110,19 @@ impl Key {
             other => other,
         }
     }
+
+    pub fn as_uref(&self) -> Option<&URef> {
+        match self {
+            Key::URef(uref) => Some(uref),
+            _ => None,
+        }
+    }
+}
+
+impl From<URef> for Key {
+    fn from(uref: URef) -> Key {
+        Key::URef(uref)
+    }
 }
 
 impl ToBytes for Key {

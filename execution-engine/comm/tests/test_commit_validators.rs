@@ -9,7 +9,8 @@ use std::collections::HashMap;
 
 use common::value::account::PublicKey;
 use common::value::U512;
-use test_support::WasmTestBuilder;
+
+use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 #[allow(dead_code)]
 mod test_support;
@@ -28,7 +29,7 @@ fn should_return_bonded_validators() {
 
     let bonded_validators = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators.clone())
-        .exec(GENESIS_ADDR, "local_state.wasm", 1)
+        .exec(GENESIS_ADDR, "local_state.wasm", DEFAULT_BLOCK_TIME, 1)
         .commit()
         .get_bonded_validators();
 

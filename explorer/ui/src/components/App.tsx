@@ -238,7 +238,7 @@ const Content = (props: AppProps) => (
           <PrivateRoute
             path={Pages.Faucet}
             auth={props.auth}
-            render={_ => <Faucet />}
+            render={_ => <Faucet {...props} />}
           />
           <Route path={Pages.Explorer} render={_ => <Explorer />} />
         </Switch>

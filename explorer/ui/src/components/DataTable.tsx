@@ -8,7 +8,7 @@ export interface Props<T> {
   headers: string[];
   rows: T[] | null;
   emptyMessage?: any;
-  renderRow: (x: T) => any;
+  renderRow: (x: T, idx: number) => any;
   renderHeader?: (x: string) => any;
   footerMessage?: any;
 }

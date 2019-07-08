@@ -50,9 +50,9 @@ node-%/metrics:
 
 
 # Start common components.
-up: .make/docker/network
+up: .make/docker/network .casperlabs
 	$(REFRESH_TARGETS)
-	docker-compose -p casperlabs up -d
+	docker-compose -p casperlabs up -d --remove-orphans
 
 # Stop common components.
 down:
@@ -94,10 +94,11 @@ slow:
 .casperlabs:
 	mkdir -p .casperlabs/bootstrap
 	mkdir -p .casperlabs/genesis/system-account
+	mkdir -p .casperlabs/genesis/blessed-contracts
 	mkdir -p .casperlabs/node-0
 	mkdir -p keys/account-0
 
-	@# TODO: When we start publishing blessed-contracts.tar.gz download it make it available.
+	./get-blessed-contracts.sh .casperlabs/genesis/blessed-contracts/blessed-contracts.tar.gz
 
 	../key-management/docker-gen-account-keys.sh .casperlabs/genesis/system-account
 	../key-management/docker-gen-account-keys.sh keys/account-0
