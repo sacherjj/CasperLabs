@@ -17,6 +17,7 @@ CONTRACTS=(
     "get-blocktime"
     "get-caller"
     "get-caller-subcall"
+    "blessed-urefs-access-rights"
 )
 
 source "${HOME}/.cargo/env"
