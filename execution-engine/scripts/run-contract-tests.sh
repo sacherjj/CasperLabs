@@ -18,6 +18,7 @@ CONTRACTS=(
     "get-caller"
     "get-caller-subcall"
     "blessed-urefs-access-rights"
+    "transfer-purse-to-account"
 )
 
 source "${HOME}/.cargo/env"
