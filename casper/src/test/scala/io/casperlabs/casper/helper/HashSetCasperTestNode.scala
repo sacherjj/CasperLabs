@@ -326,8 +326,7 @@ object HashSetCasperTestNode {
           prestate: ByteString,
           blocktime: Long,
           deploys: Seq[Deploy],
-          protocolVersion: ProtocolVersion,
-          ignoreGasCount: Boolean
+          protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =
         //This function returns the same `DeployResult` for all deploys,
         //regardless of their wasm code. It pretends to have run all the deploys,

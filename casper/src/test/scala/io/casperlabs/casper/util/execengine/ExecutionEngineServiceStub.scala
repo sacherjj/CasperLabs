@@ -65,8 +65,7 @@ object ExecutionEngineServiceStub {
         prestate: ByteString,
         blocktime: Long,
         deploys: Seq[Deploy],
-        protocolVersion: ProtocolVersion,
-        ignoreGasCount: Boolean
+        protocolVersion: ProtocolVersion
     ): F[Either[Throwable, Seq[DeployResult]]] =
       execFunc(prestate, blocktime, deploys, protocolVersion)
     override def commit(
