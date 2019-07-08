@@ -229,7 +229,19 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
                       }
                       .map(_.flatten.distinct)
 
-      finalizedBlockHashes <- blockHashes.filterA(isGreaterThanFaultToleranceThreshold(dag, _))
+      finalizedBlockHashes <- blockHashes.filterA { hash =>
+                               isGreaterThanFaultToleranceThreshold(dag, hash).ifM(
+                                 true.pure[F],
+                                 // CON-86 will implement a 2nd pass that will calculate the threshold for secondary parents;
+                                 // right now the FinalityDetector only works for main parents. When it's fixed remove this part.
+                                 dag
+                                   .children(hash)
+                                   .flatMap {
+                                     _.toList.flatten
+                                       .existsM(isGreaterThanFaultToleranceThreshold(dag, _))
+                                   }
+                               )
+                             }
       _ <- finalizedBlockHashes.traverse { blockHash =>
             removeDeploysInBlock(blockHash) flatMap { removed =>
               Log[F]
