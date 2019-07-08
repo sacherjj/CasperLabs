@@ -523,7 +523,8 @@ where
 
             let nonce = deploy.nonce;
             // TODO: is the rounding in this division ok?
-            let gas_limit = (deploy.tokens_transferred_in_payment as u64) / (deploy.gas_price as u64);
+            let gas_limit =
+                (deploy.tokens_transferred_in_payment as u64) / (deploy.gas_price as u64);
             let protocol_version = protocol_version.value;
             engine_state
                 .run_deploy(
