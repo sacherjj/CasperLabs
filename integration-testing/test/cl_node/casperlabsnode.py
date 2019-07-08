@@ -39,7 +39,6 @@ BONDING_CONTRACT = "test_bondingcall.wasm"
 UNBONDING_CONTRACT = "test_unbondingcall.wasm"
 
 
-
 HOST_MOUNT_DIR = f"/tmp/resources_{TAG}"
 HOST_GENESIS_DIR = f"{HOST_MOUNT_DIR}/genesis"
 HOST_BOOTSTRAP_DIR = f"{HOST_MOUNT_DIR}/bootstrap_certificate"

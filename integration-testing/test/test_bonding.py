@@ -19,10 +19,8 @@ def test_bonding(one_node_network):
     wait_for_blocks_propagated(1)
     assert len(network.docker_nodes) == 2, "Total number of nodes should be 2."
     node0, node1 = network.docker_nodes
-    # Send the bonding deployment contract as session and payment
-    # contract parameters.
     block_hash = node1.deploy_and_propose(session_contract=BONDING_CONTRACT, payment_contract=BONDING_CONTRACT)
     assert block_hash is not None
-
-
+    block1 = node1.client.show_block(block_hash)
+    public_key = node1.from_address
 
