@@ -229,7 +229,8 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		$(DIR_IN)/io/casperlabs/node/api/casper.proto
 	# Annotations were only required for the REST gateway. Remove them from Typescript.
 	for f in $(DIR_OUT)/io/casperlabs/node/api/casper_pb* ; do \
-		sed -i '/google_api_annotations_pb/d' $$f ; \
+		sed -n '/google_api_annotations_pb/!p' $$f > $$f.tmp ; \
+		mv $$f.tmp $$f ; \
 	done
 	mkdir -p $(dir $@) && touch $@
 

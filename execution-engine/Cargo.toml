@@ -22,6 +22,7 @@ members = [
     "test-contracts/get-blocktime",
     "test-contracts/get-caller",
     "test-contracts/get-caller-subcall",
+    "test-contracts/main-purse",
     "test-contracts/blessed-urefs-access-rights",
     "wasm-prep",
 ]

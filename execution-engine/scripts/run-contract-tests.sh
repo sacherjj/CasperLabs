@@ -17,6 +17,7 @@ CONTRACTS=(
     "get-blocktime"
     "get-caller"
     "get-caller-subcall"
+    "main-purse"
     "blessed-urefs-access-rights"
 )
 
