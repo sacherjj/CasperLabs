@@ -128,8 +128,13 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
     Validate.preTimestamp[F](block).attempt.flatMap {
       case Right(None) => addBlock(statelessExecutor.validateAndAddBlock)
       case Right(Some(delay)) =>
-        Time[F].sleep(delay) >> addBlock(statelessExecutor.validateAndAddBlock)
-      case _ => addBlock(handleInvalidTimestamp)
+        Time[F].sleep(delay) >> Log[F].info(
+          s"Block ${PrettyPrinter.buildString(block)} is ahead for $delay from now, will retry adding later"
+        ) >> addBlock(statelessExecutor.validateAndAddBlock)
+      case _ =>
+        Log[F].warn(Validate.ignore(block, "block timestamp exceeded threshold")) >> addBlock(
+          handleInvalidTimestamp
+        )
     }
   }
 
