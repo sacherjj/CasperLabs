@@ -10,8 +10,8 @@ import cats.implicits._
 import io.casperlabs.catscontrib.Catscontrib._
 import simulacrum.typeclass
 
+/* FilesAPI typeclass. Use .attempt to handle errors if you care. */
 @typeclass trait FilesAPI[F[_]] {
-
   def readBytes(path: Path): F[Array[Byte]]
 
   def readString(path: Path, charset: Charset = Charset.defaultCharset()): F[String]

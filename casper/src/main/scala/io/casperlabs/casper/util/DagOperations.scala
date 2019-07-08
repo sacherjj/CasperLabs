@@ -1,19 +1,16 @@
 package io.casperlabs.casper.util
 
-import cats.{Eval, Monad}
 import cats.implicits._
+import cats.{Eval, Monad}
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.util.MapHelper.updatedWith
-import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
-import io.casperlabs.catscontrib.{ListContrib, MonadThrowable}
+import io.casperlabs.casper.consensus.Block
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.StreamT
+import simulacrum.typeclass
 
-import scala.annotation.tailrec
 import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
-import simulacrum.typeclass
 
 object DagOperations {
 
@@ -137,7 +134,7 @@ object DagOperations {
       start: IndexedSeq[A],
       parents: A => F[List[A]]
   ): F[Map[A, BitSet]] = {
-    val commonSet = BitSet(0 until start.length: _*)
+    val commonSet = BitSet(start.indices: _*)
 
     def isCommon(set: BitSet): Boolean = set == commonSet
 

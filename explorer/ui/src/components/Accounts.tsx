@@ -2,10 +2,11 @@ import React from 'react';
 import { observer } from 'mobx-react';
 
 import AuthContainer from '../containers/AuthContainer';
-import { RefreshableComponent, Button, ListInline } from './Utils';
+import { RefreshableComponent, Button, IconButton, ListInline } from './Utils';
 import DataTable from './DataTable';
 import Modal from './Modal';
 import { Form, TextField } from './Forms';
+import { base64to16 } from '../lib/Conversions';
 
 interface Props {
   auth: AuthContainer;
@@ -30,22 +31,21 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
             return (
               <tr key={account.name}>
                 <td>{account.name}</td>
-                <td>{account.publicKey}</td>
-                <td>{base64toHex(account.publicKey)}</td>
+                <td>{account.publicKeyBase64}</td>
+                <td>{base64to16(account.publicKeyBase64)}</td>
                 <td className="text-center">
-                  <a
-                    onClick={_ => this.props.auth.deleteAccount(account.name)}
-                    className="icon-button"
-                  >
-                    <i className="fa fa-fw fa-trash-alt" title="Delete" />
-                  </a>
+                  <IconButton
+                    onClick={() => this.props.auth.deleteAccount(account.name)}
+                    title="Delete"
+                    icon="trash-alt"
+                  />
                 </td>
               </tr>
             );
           }}
           footerMessage={
             <span>
-              You can create new account here, which is basically an Ed25519
+              You can create a new account here, which is basically an Ed25519
               public key. Don't worry, the private key will never leave the
               browser, we'll save it straight to disk on your machine.
             </span>
@@ -83,25 +83,25 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
               <TextField
                 id="id-public-key-base64"
                 label="Public Key (Base64)"
-                value={newAccount.publicKey!}
+                value={newAccount.publicKeyBase64!}
                 readonly={true}
               />
               <TextField
                 id="id-public-key-base16"
                 label="Public Key (Base16)"
-                value={base64toHex(newAccount.publicKey!)}
+                value={base64to16(newAccount.publicKeyBase64!)}
                 readonly={true}
               />
               <TextField
                 id="id-private-key-base64"
                 label="Public Key (Base64)"
-                value={newAccount.privateKey!}
+                value={newAccount.privateKeyBase64!}
                 readonly={true}
               />
               <TextField
                 id="id-private-key-base16"
                 label="Public Key (Base16)"
-                value={base64toHex(newAccount.privateKey!)}
+                value={base64to16(newAccount.privateKeyBase64!)}
                 readonly={true}
               />
             </Form>
@@ -110,14 +110,4 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
       </div>
     );
   }
-}
-
-function base64toHex(base64: string): string {
-  const raw = atob(base64);
-  let hex = '';
-  for (let i = 0; i < raw.length; i++) {
-    let _hex = raw.charCodeAt(i).toString(16);
-    hex += _hex.length === 2 ? _hex : '0' + _hex;
-  }
-  return hex.toLowerCase();
 }

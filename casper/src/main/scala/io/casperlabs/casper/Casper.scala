@@ -124,20 +124,24 @@ sealed abstract class MultiParentCasperInstances {
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
-      shardId: String
+      chainId: String
   ): F[MultiParentCasper[F]] =
-    init(genesis, genesisPreState, genesisEffects) >>= {
-      case (blockProcessingLock, casperState) =>
-        implicit val state = casperState
-        MultiParentCasperImpl.create[F](
-          new MultiParentCasperImpl.StatelessExecutor(shardId),
-          MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
-          validatorId,
-          genesis,
-          shardId,
-          blockProcessingLock
-        )
-    }
+    for {
+      (blockProcessingLock, implicit0(casperState: Cell[F, CasperState])) <- init(
+                                                                              genesis,
+                                                                              genesisPreState,
+                                                                              genesisEffects
+                                                                            )
+      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
+      casper <- MultiParentCasperImpl.create[F](
+                 statelessExecutor,
+                 MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
+                 validatorId,
+                 genesis,
+                 chainId,
+                 blockProcessingLock
+               )
+    } yield casper
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
   def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
@@ -145,19 +149,23 @@ sealed abstract class MultiParentCasperInstances {
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
-      shardId: String,
+      chainId: String,
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
-    init(genesis, genesisPreState, genesisEffects) >>= {
-      case (blockProcessingLock, casperState) =>
-        implicit val state = casperState
-        MultiParentCasperImpl.create[F](
-          new MultiParentCasperImpl.StatelessExecutor(shardId),
-          MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
-          validatorId,
-          genesis,
-          shardId,
-          blockProcessingLock
-        )
-    }
+    for {
+      (blockProcessingLock, implicit0(casperState: Cell[F, CasperState])) <- init(
+                                                                              genesis,
+                                                                              genesisPreState,
+                                                                              genesisEffects
+                                                                            )
+      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
+      casper <- MultiParentCasperImpl.create[F](
+                 statelessExecutor,
+                 MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
+                 validatorId,
+                 genesis,
+                 chainId,
+                 blockProcessingLock
+               )
+    } yield casper
 }

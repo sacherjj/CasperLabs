@@ -33,6 +33,7 @@ use storage::global_state::in_memory::InMemoryGlobalState;
 //use common::key::Key;
 //use common::value::Value;
 
+pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/debug";
 
@@ -142,6 +143,7 @@ pub fn create_exec_request(
     address: [u8; 32],
     contract_file_name: &str,
     pre_state_hash: &[u8],
+    block_time: u64,
     nonce: u64,
     arguments: impl common::contract_api::argsparser::ArgsParser,
 ) -> ExecRequest {
@@ -168,6 +170,7 @@ pub fn create_exec_request(
     exec_request.set_deploys(deploys);
     exec_request.set_parent_state_hash(pre_state_hash.to_vec());
     exec_request.set_protocol_version(get_protocol_version());
+    exec_request.set_block_time(block_time);
 
     exec_request
 }
@@ -409,6 +412,7 @@ impl WasmTestBuilder {
         &mut self,
         address: [u8; 32],
         wasm_file: &str,
+        block_time: u64,
         nonce: u64,
         args: impl common::contract_api::argsparser::ArgsParser,
     ) -> &mut WasmTestBuilder {
@@ -418,6 +422,7 @@ impl WasmTestBuilder {
             self.post_state_hash
                 .as_ref()
                 .expect("Should have post state hash"),
+            block_time,
             nonce,
             args,
         );
@@ -447,8 +452,14 @@ impl WasmTestBuilder {
         self
     }
 
-    pub fn exec(&mut self, address: [u8; 32], wasm_file: &str, nonce: u64) -> &mut WasmTestBuilder {
-        self.exec_with_args(address, wasm_file, nonce, ())
+    pub fn exec(
+        &mut self,
+        address: [u8; 32],
+        wasm_file: &str,
+        block_time: u64,
+        nonce: u64,
+    ) -> &mut WasmTestBuilder {
+        self.exec_with_args(address, wasm_file, block_time, nonce, ())
     }
 
     /// Runs a commit request, expects a successful response, and
@@ -499,9 +510,12 @@ impl WasmTestBuilder {
             .get_deploy_results()
             .get(0)
             .expect("Unable to get first deploy result");
+        if !deploy_result.has_execution_result() {
+            panic!("Expected ExecutionResult, got {:?} instead", deploy_result);
+        }
         if deploy_result.get_execution_result().has_error() {
             panic!(
-                "Expected error, but instead got a successful response: {:?}",
+                "Expected successful execution result, but instead got: {:?}",
                 exec_response,
             );
         }

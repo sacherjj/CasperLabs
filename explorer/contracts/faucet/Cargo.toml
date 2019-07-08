@@ -1,11 +1,11 @@
 [package]
-name = "faucet-contract"
+name = "faucet"
 version = "0.1.0"
 authors = ["Mateusz Górski <mateusz@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "faucet_contract"
+name = "faucet"
 crate-type = ["cdylib"]
 
 [features]
@@ -13,4 +13,4 @@ default = []
 std = ["cl_std/std" ]
 
 [dependencies]
-cl_std = { path = "../../execution-engine/common", package = "casperlabs-contract-ffi" }
+cl_std = { path = "../../../execution-engine/common", package = "casperlabs-contract-ffi" }

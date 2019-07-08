@@ -91,10 +91,22 @@ object NodeDiscoveryImpl {
         )(_.cancel.void)
         .void
 
+    def initializeMetrics: Resource[F, Unit] = {
+      val discoverySource = Metrics.Source(CommMetricsSource, "discovery.kademlia")
+      val kademliaSource  = Metrics.Source(CommMetricsSource, "discovery.kademlia.grpc")
+      Resource.liftF(for {
+        _ <- Metrics[F].incrementCounter("handle.ping", 0)(discoverySource)
+        _ <- Metrics[F].incrementCounter("handle.lookup", 0)(discoverySource)
+        _ <- Metrics[F].incrementCounter("ping", 0)(kademliaSource)
+        _ <- Metrics[F].incrementCounter("protocol-lookup-send", 0)(kademliaSource)
+      } yield ())
+    }
+
     for {
       implicit0(kademliaRpcResource: GrpcKademliaService[F]) <- makeKademliaRpc
       implicit0(nodeDiscovery: NodeDiscoveryImpl[F])         <- makeNodeDiscoveryImpl
       _                                                      <- scheduleRecentlyAlivePeersCacheUpdate
+      _                                                      <- initializeMetrics
     } yield nodeDiscovery: NodeDiscovery[F]
   }
 }

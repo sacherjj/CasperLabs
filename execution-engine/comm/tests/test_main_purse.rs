@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use common::key::Key;
 use common::value::Account;
-use test_support::WasmTestBuilder;
+use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 #[allow(unused)]
 mod test_support;
@@ -33,6 +33,7 @@ fn should_run_main_purse_contract_genesis_account() {
         .exec_with_args(
             GENESIS_ADDR,
             "main_purse.wasm",
+            DEFAULT_BLOCK_TIME,
             1,
             genesis_account.purse_id(),
         )
@@ -49,7 +50,13 @@ fn should_run_main_purse_contract_account_1() {
 
     let builder = builder
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec_with_args(GENESIS_ADDR, "transfer_to_account_01.wasm", 1, ())
+        .exec_with_args(
+            GENESIS_ADDR,
+            "transfer_to_account_01.wasm",
+            DEFAULT_BLOCK_TIME,
+            1,
+            ACCOUNT_1_ADDR,
+        )
         .expect_success()
         .commit();
 
@@ -60,7 +67,13 @@ fn should_run_main_purse_contract_account_1() {
     };
 
     builder
-        .exec_with_args(ACCOUNT_1_ADDR, "main_purse.wasm", 1, account_1.purse_id())
+        .exec_with_args(
+            ACCOUNT_1_ADDR,
+            "main_purse.wasm",
+            DEFAULT_BLOCK_TIME,
+            1,
+            account_1.purse_id(),
+        )
         .expect_success()
         .commit();
 }
