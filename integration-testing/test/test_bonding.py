@@ -1,3 +1,4 @@
+import re
 from .cl_node.wait import (
     wait_for_blocks_count_at_least
 )
@@ -22,5 +23,6 @@ def test_bonding(one_node_network):
     block_hash = node1.deploy_and_propose(session_contract=BONDING_CONTRACT, payment_contract=BONDING_CONTRACT)
     assert block_hash is not None
     block1 = node1.client.show_block(block_hash)
-    public_key = node1.from_address
-
+    public_key = node1.from_address()
+    pattern = re.compile(f'bonds\\s*{{\\s*validator_public_key: "{public_key}"\\s*stake: 1\\s*}}', re.MULTILINE)
+    assert re.search(pattern, block1) is not None
