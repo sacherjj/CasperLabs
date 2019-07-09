@@ -46,7 +46,7 @@ pub fn get_protocol_version() -> ProtocolVersion {
 pub fn get_mock_deploy() -> Deploy {
     let mut deploy = Deploy::new();
     deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
-    deploy.set_gas_limit(1000);
+    deploy.set_tokens_transferred_in_payment(1000);
     deploy.set_gas_price(1);
     deploy.set_nonce(1);
     let mut deploy_code = DeployCode::new();
@@ -155,7 +155,7 @@ pub fn create_exec_request(
 
     let mut deploy = Deploy::new();
     deploy.set_address(address.to_vec());
-    deploy.set_gas_limit(1_000_000_000);
+    deploy.set_tokens_transferred_in_payment(1_000_000_000);
     deploy.set_gas_price(1);
     deploy.set_nonce(nonce);
     let mut deploy_code = DeployCode::new();
