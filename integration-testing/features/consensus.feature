@@ -49,19 +49,12 @@ Feature: Consensus
       # Confirm that the contract is not in the global state
       # Check the account balance that funded the deployment and confirm that no funds were deducted for the deployment (it was not finalized)
 
-  # Not Implemented
-  Scenario: Bonding
-     Given: 3 Node Network
-      # TODO: Convert into steps
-      # Create blocks / state on the network (create some deployments & propose blocks from a single validator)
-      # Let the blocks propagate through the network
-      # Spin up a new node
-      # Join the network
-      # Observe the node catch up on state
-      # Send a bonding deployment to one of the other nodes using a client
-      # Observe the block # containing the bonding request
-      # Send a deploy to the newly bonded validator
-      # Propose via the newly bonded validator
-      # Observe the block # proposed
-      # Observe that the block is validated by other nodes.
-      # Observe that the deployed contract is in the state of the other nodes in the network.
+  # Implemented test_bonding.py : test_bonding
+  Scenario: Bonding a validator node to an existing single node network
+    Given: Single  Node Network
+     And: A bonded Validator.
+     When: New node joins.
+     And: Deploys bonding request.
+     And: That bonding request is valid.
+     Then: New node becomes bonded.
+     And: Starting from new block new node can be found in bonded validators set.

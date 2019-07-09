@@ -253,6 +253,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-bonding-call"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
+]
+
+[[package]]
 name = "test-call-hello-name"
 version = "0.1.0"
 dependencies = [
@@ -317,6 +324,13 @@ dependencies = [
 
 [[package]]
 name = "test-subcall-revert-define"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
+]
+
+[[package]]
+name = "test-unbonding-call"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.8.0",

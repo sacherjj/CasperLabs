@@ -15,6 +15,7 @@ from test.cl_node.nonce_registry import NonceRegistry
 
 from docker.errors import ContainerError
 
+
 class DockerClient(CasperLabsClient, LoggingMixin):
 
     def __init__(self, node: 'DockerNode'):
