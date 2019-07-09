@@ -52,7 +52,7 @@ def test_deploy_with_args(one_node_network):
         assert 'Success!' in response.message
         logging.info(f"PROPOSE RESPONSE: {response}")
 
-        block_hash_prefix = response.message.split()[2][:10]
+        block_hash_prefix = response.message.split()[2]
         for deploy in node.d_client.show_deploys(block_hash_prefix):
             assert deploy.is_error is True
             assert deploy.error_message == f'Exit code: {number}'
