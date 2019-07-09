@@ -53,7 +53,11 @@ def test_deploy_with_args(one_node_network):
         logging.info(f"PROPOSE RESPONSE: {response}")
 
         block_hash_prefix = response.message.split()[2][:10]
-        for deploy in node.d_client.show_deploys(block_hash_prefix):
-            assert deploy.is_error is True
-            assert deploy.error_message == f'Exit code: {number}'
+        for deploy_info in client.show_deploys(block_hash_prefix):
+            assert deploy_info.is_error is True
+            assert deploy_info.error_message == f'Exit code: {number}'
+
+            # Test show_deploy
+            d = client.show_deploy(deploy_info.deploy.deploy_hash.hex())
+            assert deploy_info.deploy.deploy_hash == d.deploy.deploy_hash
 

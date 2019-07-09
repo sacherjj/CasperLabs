@@ -27,6 +27,9 @@ from .casper_pb2_grpc import CasperServiceStub
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
 from . import consensus_pb2 as consensus
 
+# ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
+from . import info_pb2 as info
+
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
@@ -162,7 +165,7 @@ class CasperClient:
 
                 return name.endswith('_') and g or f
 
-        self.node = GRPCService(self.port, DeployServiceStub)
+        self.deployService = GRPCService(self.port, DeployServiceStub)
         self.casperService = GRPCService(self.port, CasperServiceStub)
 
     @guarded
@@ -243,17 +246,17 @@ class CasperClient:
         :param depth: lists blocks to the given depth in terms of block height
         :return: generator of blocks
         """
-        yield from self.node.showBlocks_(CasperMessage_pb2.BlocksQuery(depth=depth))
+        yield from self.deployService.showBlocks_(CasperMessage_pb2.BlocksQuery(depth=depth))
 
     @guarded
     def showBlock(self, hash: str):
         """
-        Return object describing a block known by Casper on an existing running node.
+        Returns object describing a block known by Casper on an existing running node.
 
         :param hash:  hash of the block to be retrieved
         :return:      object representing the retrieved block
         """
-        return self.node.showBlock(CasperMessage_pb2.BlockQuery(hash=hash))
+        return self.deployService.showBlock(CasperMessage_pb2.BlockQuery(hash=hash))
 
     @guarded
     def propose(self):
@@ -262,7 +265,7 @@ class CasperClient:
 
         :return:    response object
         """
-        return self.node.createBlock(CasperMessage_pb2.empty__pb2.Empty())
+        return self.deployService.createBlock(CasperMessage_pb2.empty__pb2.Empty())
 
     @guarded
     def visualizeDag(self, depth: int, out: str = None, show_justification_lines: bool = False, stream: str = None):
@@ -280,7 +283,7 @@ class CasperClient:
         :return:                          VisualizeBlocksResponse object
         """
         # TODO: handle stream parameter
-        return self.node.visualizeDag(
+        return self.deployService.visualizeDag(
             CasperMessage_pb2.VisualizeDagQuery(depth=depth, showJustificationLines=show_justification_lines))
 
     @guarded
@@ -321,7 +324,7 @@ class CasperClient:
         :param depth:
         :return:
         """
-        yield from self.node.showMainChain_(CasperMessage_pb2.BlocksQuery(depth=depth))
+        yield from self.deployService.showMainChain_(CasperMessage_pb2.BlocksQuery(depth=depth))
 
     @guarded
     def findBlockWithDeploy(self, user: bytes, timestamp: int):
@@ -339,8 +342,21 @@ class CasperClient:
         :param timestamp:
         :return:
         """
-        return self.node.findBlockWithDeploy(CasperMessage_pb2.FindDeployInBlockQuery(user=user, timestamp=timestamp))
+        return self.deployService.findBlockWithDeploy(CasperMessage_pb2.FindDeployInBlockQuery(user=user, timestamp=timestamp))
 
+
+    def showDeploy(self, deploy_hash: str, full_view=True):
+        return self.casperService.GetDeployInfo(
+                casper.GetDeployInfoRequest(deploy_hash_base16=deploy_hash,
+                                            view=(full_view and info.DeployInfo.View.FULL
+                                                  or info.DeployInfo.View.BASIC)))
+
+    def showDeploys(self, block_hash: str, full_view=True):
+        """ Get the processed deploys within a block."""
+        yield from self.casperService.StreamBlockDeploys_(
+                    casper.StreamBlockDeploysRequest(block_hash_base16=block_hash,
+                                                     view=(full_view and info.DeployInfo.View.FULL
+                                                           or info.DeployInfo.View.BASIC)))
 
 def guarded_command(function):
     """
@@ -446,6 +462,19 @@ def find_block_with_deploy_command(casper_client, args):
     return _show_block(response)
 
 
+@guarded_command
+def show_deploy_command(casper_client, args):
+    response = casper_client.showDeploy(args.hash)
+    print (response)
+    
+
+@guarded_command
+def show_deploys_command(casper_client, args):
+    response = casper_client.showDeploys(args.hash)
+    for deployInfo in response:
+        print (response)
+
+
 def command_line_tool():
     """
     Parse command line and call an appropriate command.
@@ -498,6 +527,11 @@ def command_line_tool():
     parser.addCommand('show-blocks', show_blocks_command, 'View list of blocks in the current Casper view on an existing running node.',
                       [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')]])
 
+    parser.addCommand('show-deploy', show_deploy_command, 'View properties of a deploy known by Casper on an existing running node.',
+                      [[('hash',), dict(type=str, help='Value of the deploy hash, base16 encoded.')]])
+
+    parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
+                      [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
 
     parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
                       [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')],
