@@ -18,8 +18,7 @@ TS_SRC := $(shell find explorer/ui/src explorer/server/src -type f \( -name "*.t
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
-$(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test; else echo DRONE-${DRONE_BUILD_NUMBER}; fi))
-
+$(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test; else echo test-DRONE-${DRONE_BUILD_NUMBER}; fi))
 
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
@@ -128,7 +127,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		integration-testing/Dockerfile
 	$(eval IT_PATH = integration-testing)
 	cp -r protobuf $(IT_PATH)/
-	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_TEST_TAG) $(IT_PATH)/
+	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
 	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@
 
