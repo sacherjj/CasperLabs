@@ -860,7 +860,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
 
       _ <- nodes(1).casperEff
-            .contains(signedBlock4) shouldBeF true // However, in invalidBlockTracker
+            .contains(signedBlock4) shouldBeF false // Since we have enough evidence that it is equivocation, we no longer add it to dag.
 
       _ = nodes(1).logEff.infos.count(_ contains "Added admissible equivocation") should be(1)
       _ = nodes(2).logEff.warns.size should be(0)
@@ -881,10 +881,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
           }(nodes(0).metricEff, nodes(0).logEff)
       _ <- validateBlockStore(nodes(1)) { blockStore =>
             for {
-              _ <- blockStore.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-              result <- blockStore.getBlockMessage(signedBlock4.blockHash) shouldBeF Some(
-                         signedBlock4
-                       )
+              _      <- blockStore.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+              result <- blockStore.getBlockMessage(signedBlock4.blockHash) shouldBeF None
             } yield result
           }(nodes(1).metricEff, nodes(1).logEff)
       result <- validateBlockStore(nodes(2)) { blockStore =>
@@ -939,7 +937,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  it should "prepare to slash a block that includes a invalid block pointer" in effectTest {
+  it should "reject blocks that include a invalid block pointer" in effectTest {
     for {
       nodes           <- networkEff(validatorKeys.take(3), genesis, transforms)
       deploys         <- (1L to 6L).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
@@ -978,9 +976,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).casperEff
             .addBlock(signedInvalidBlock)
 
-      result = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
-      _      <- nodes.map(_.tearDown()).toList.sequence
-    } yield result
+      _ = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+      _ <- nodes(1).casperEff.contains(signedInvalidBlock) shouldBeF false
+      _ <- nodes.map(_.tearDown()).toList.sequence
+    } yield ()
   }
 
   it should "handle a long chain of block requests appropriately" in effectTest {
@@ -1033,6 +1032,50 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
+  it should "create valid block when receives an invalid block" in effectTest {
+    for {
+      nodes <- networkEff(
+                validatorKeys.take(2),
+                genesis,
+                transforms,
+                validateNonces = false
+              )
+      deployData1 <- ProtoUtil.basicDeploy[Effect](1L)
+      createBlock1Result <- nodes(0).casperEff
+                             .deploy(deployData1) *> nodes(0).casperEff.createBlock
+      Created(block1) = createBlock1Result
+      invalidBlock1 = BlockUtil.resignBlock(
+        block1.withHeader(block1.getHeader.withTimestamp(Long.MaxValue)),
+        nodes(0).validatorId.privateKey
+      )
+      _ <- nodes(0).casperEff.addBlock(invalidBlock1)
+      _ = nodes(0).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+      // nodes(0) won't send invalid blocks
+      _ <- nodes(1).receive()
+      _ <- nodes(1).casperEff
+            .contains(invalidBlock1) shouldBeF false
+      // we manually add this invalid block to node1
+      _ <- nodes(1).casperEff.addBlock(invalidBlock1)
+      _ <- nodes(1).casperEff
+            .contains(invalidBlock1) shouldBeF false
+      deployData2 <- ProtoUtil.basicDeploy[Effect](2L)
+      createBlock2Result <- nodes(1).casperEff
+                             .deploy(deployData2) *> nodes(1).casperEff.createBlock
+      Created(block2) = createBlock2Result
+      _               <- nodes(1).casperEff.addBlock(block2)
+      _               <- nodes(0).receive()
+      _               <- nodes.map(_.tearDownNode()).toList.sequence
+      _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
+            validateBlockStore(node) { blockStore =>
+              for {
+                _      <- blockStore.getBlockMessage(invalidBlock1.blockHash) shouldBeF None
+                result <- blockStore.getBlockMessage(block2.blockHash) shouldBeF Some(block2)
+              } yield result
+            }(nodes(0).metricEff, nodes(0).logEff)
+          }
+    } yield ()
+  }
+
   it should "increment last finalized block as appropriate in round robin" in effectTest {
     val stake      = 10L
     val equalBonds = validators.map(_ -> stake).toMap
@@ -1057,78 +1100,86 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                 transformsWithEqualBonds,
                 faultToleranceThreshold = 0f // With equal bonds this should allow the final block to move as expected.
               )
-      deployDatas <- (1L to 8L).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
+      deployDatas <- (1L to 10L).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
 
-      createBlock1Result <- nodes(0).casperEff
-                             .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-      Created(block1) = createBlock1Result
-      _               <- nodes(0).casperEff.addBlock(block1)
-      _               <- nodes(1).receive()
-      _               <- nodes(2).receive()
+      Created(block1) <- nodes(0).casperEff
+                          .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
+      _ <- nodes(0).casperEff.addBlock(block1)
+      _ <- nodes(1).receive()
+      _ <- nodes(2).receive()
 
-      createBlock2Result <- nodes(1).casperEff
-                             .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
-      Created(block2) = createBlock2Result
-      _               <- nodes(1).casperEff.addBlock(block2)
-      _               <- nodes(0).receive()
-      _               <- nodes(2).receive()
+      Created(block2) <- nodes(1).casperEff
+                          .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
+      _ <- nodes(1).casperEff.addBlock(block2)
+      _ <- nodes(0).receive()
+      _ <- nodes(2).receive()
 
-      createBlock3Result <- nodes(2).casperEff
-                             .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
-      Created(block3) = createBlock3Result
-      _               <- nodes(2).casperEff.addBlock(block3)
-      _               <- nodes(0).receive()
-      _               <- nodes(1).receive()
+      Created(block3) <- nodes(2).casperEff
+                          .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
+      _ <- nodes(2).casperEff.addBlock(block3)
+      _ <- nodes(0).receive()
+      _ <- nodes(1).receive()
 
-      createBlock4Result <- nodes(0).casperEff
-                             .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
-      Created(block4) = createBlock4Result
-      _               <- nodes(0).casperEff.addBlock(block4)
-      _               <- nodes(1).receive()
-      _               <- nodes(2).receive()
+      Created(block4) <- nodes(0).casperEff
+                          .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
+      _ <- nodes(0).casperEff.addBlock(block4)
+      _ <- nodes(1).receive()
+      _ <- nodes(2).receive()
 
-      createBlock5Result <- nodes(1).casperEff
-                             .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
-      Created(block5) = createBlock5Result
-      _               <- nodes(1).casperEff.addBlock(block5)
-      _               <- nodes(0).receive()
-      _               <- nodes(2).receive()
+      Created(block5) <- nodes(1).casperEff
+                          .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
+      _ <- nodes(1).casperEff.addBlock(block5)
+      _ <- nodes(0).receive()
+      _ <- nodes(2).receive()
+
+      Created(block6) <- nodes(2).casperEff
+                          .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
+      _ <- nodes(2).casperEff.addBlock(block6)
+      _ <- nodes(0).receive()
+      _ <- nodes(1).receive()
 
       _     <- checkLastFinalizedBlock(nodes(0), block1)
       state <- nodes(0).casperState.read
       _     = state.deployBuffer.size should be(1)
 
-      createBlock6Result <- nodes(2).casperEff
-                             .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
-      Created(block6) = createBlock6Result
-      _               <- nodes(2).casperEff.addBlock(block6)
-      _               <- nodes(0).receive()
-      _               <- nodes(1).receive()
+      Created(block7) <- nodes(0).casperEff
+                          .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
+      _ <- nodes(0).casperEff.addBlock(block7)
+      _ <- nodes(1).receive()
+      _ <- nodes(2).receive()
 
       _     <- checkLastFinalizedBlock(nodes(0), block2)
       state <- nodes(0).casperState.read
-      _     = state.deployBuffer.size should be(1)
+      _     = state.deployBuffer.size should be(2) // deploys contained in block 4 and block 7
 
-      createBlock7Result <- nodes(0).casperEff
-                             .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
-      Created(block7) = createBlock7Result
-      _               <- nodes(0).casperEff.addBlock(block7)
-      _               <- nodes(1).receive()
-      _               <- nodes(2).receive()
+      Created(block8) <- nodes(1).casperEff
+                          .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
+      _ <- nodes(1).casperEff.addBlock(block8)
+      _ <- nodes(0).receive()
+      _ <- nodes(2).receive()
 
       _ <- checkLastFinalizedBlock(nodes(0), block3)
-      _ = state.deployBuffer.size should be(1)
+      _ = state.deployBuffer.size should be(2) // deploys contained in block 4 and block 7
 
-      createBlock8Result <- nodes(1).casperEff
-                             .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
-      Created(block8) = createBlock8Result
-      _               <- nodes(1).casperEff.addBlock(block8)
-      _               <- nodes(0).receive()
-      _               <- nodes(2).receive()
+      Created(block9) <- nodes(2).casperEff
+                          .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
+      _ <- nodes(2).casperEff.addBlock(block9)
+      _ <- nodes(0).receive()
+      _ <- nodes(1).receive()
 
       _     <- checkLastFinalizedBlock(nodes(0), block4)
       state <- nodes(0).casperState.read
-      _     = state.deployBuffer.size should be(1)
+      _     = state.deployBuffer.size should be(1) // deploys contained in block 7
+
+      Created(block10) <- nodes(0).casperEff
+                           .deploy(deployDatas(9)) *> nodes(0).casperEff.createBlock
+      _ <- nodes(0).casperEff.addBlock(block10)
+      _ <- nodes(1).receive()
+      _ <- nodes(2).receive()
+
+      _     <- checkLastFinalizedBlock(nodes(0), block5)
+      state <- nodes(0).casperState.read
+      _     = state.deployBuffer.size should be(2) // deploys contained in block 7 and block 10
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
@@ -1410,7 +1461,8 @@ object HashSetCasperTest {
                   ProofOfStakeParams(minimumBond, maximumBond, validators),
                   wallets,
                   mintCodePath = None,
-                  posCodePath = None
+                  posCodePath = None,
+                  bondsFile = None
                 )
       genenis <- Genesis
                   .withContracts[Task](

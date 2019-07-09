@@ -9,7 +9,7 @@ use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 use crate::value::account::{
-    ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
+    Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
 use crate::value::{Contract, Value, U512};
@@ -205,7 +205,7 @@ pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: U
 }
 
 /// Return the i-th argument passed to the host for the current module
-/// invokation. Note that this is only relevent to contracts stored on-chain
+/// invocation. Note that this is only relevant to contracts stored on-chain
 /// since a contract deployed directly is not invoked with any arguments.
 pub fn get_arg<T: FromBytes>(i: u32) -> T {
     let arg_size = unsafe { ext_ffi::load_arg(i) };
@@ -258,17 +258,12 @@ pub fn remove_uref(name: &str) {
 /// Returns caller of current context.
 /// When in root context (not in the sub call) - returns None.
 /// When in the sub call - returns public key of the account that made the deploy.
-pub fn get_caller() -> Option<PublicKey> {
+pub fn get_caller() -> PublicKey {
     //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
     let dest_ptr = alloc_bytes(36);
-    let result = unsafe { ext_ffi::get_caller(dest_ptr) };
-    if result == 1 {
-        let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
-        let pk = deserialize(&bytes).unwrap();
-        Some(pk)
-    } else {
-        None
-    }
+    unsafe { ext_ffi::get_caller(dest_ptr) };
+    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
+    deserialize(&bytes).unwrap()
 }
 
 pub fn get_blocktime() -> BlockTime {
@@ -281,7 +276,7 @@ pub fn get_blocktime() -> BlockTime {
 }
 
 /// Return `t` to the host, terminating the currently running module.
-/// Note this function is only relevent to contracts stored on chain which
+/// Note this function is only relevant to contracts stored on chain which
 /// return a value to their caller. The return value of a directly deployed
 /// contract is never looked at.
 #[allow(clippy::ptr_arg)]
@@ -390,6 +385,19 @@ pub fn create_purse() -> PurseId {
             panic!("could not create purse_id")
         }
     }
+}
+
+pub fn main_purse() -> PurseId {
+    // TODO: this could be more efficient, bringing the entire account
+    // object across the host/wasm boundary only to use 32 bytes of
+    // its data is pretty bad. A native FFI (as opposed to a library
+    // API) would get around this problem. However, this solution
+    // works for the time being.
+    // https://casperlabs.atlassian.net/browse/EE-439
+    let account_pk = get_caller();
+    let key = Key::Account(account_pk.value());
+    let account: Account = read_untyped(&key).unwrap().try_into().unwrap();
+    account.purse_id()
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

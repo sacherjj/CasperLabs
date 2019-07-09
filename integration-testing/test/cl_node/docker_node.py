@@ -198,6 +198,12 @@ class DockerNode(LoggingDockerBase):
     def from_address(self):
         return base64.b64decode(self.genesis_account_key().public_key + '===').hex()
 
+    def signing_public_key(self):
+        return base64.b64decode(self.genesis_account_key().public_key + '===')
+
+    def signing_private_key(self):
+        return base64.b64decode(self.genesis_account_key().private_key + '===')
+
     @property
     def volumes(self) -> dict:
         if self.config.volumes is not None:
@@ -226,6 +232,8 @@ class DockerNode(LoggingDockerBase):
     def container_command(self):
         bootstrap_flag = '-s' if self.config.is_bootstrap else ''
         options = [f'{opt} {arg}' for opt, arg in self.config.node_command_options(self.container_name).items()]
+        if self.config.is_bootstrap:
+            options.append("--casper-initial-tokens 100")
         return f"run {bootstrap_flag} {' '.join(options)}"
 
     def get_metrics(self) -> Tuple[int, str]:

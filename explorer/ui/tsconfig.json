@@ -29,6 +29,7 @@
     "jsx": "preserve"
   },
   "include": [
-    "src"
+    "src",
+    "../grpc/generated/**/*"
   ]
 }

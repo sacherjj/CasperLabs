@@ -35,8 +35,6 @@ pub struct RuntimeContext<'a, R> {
     // Original account for read only tasks taken before execution
     account: &'a Account,
     args: Vec<Vec<u8>>,
-    // Key of the caller.
-    caller_key: Option<PublicKey>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
@@ -44,7 +42,7 @@ pub struct RuntimeContext<'a, R> {
     gas_limit: u64,
     gas_counter: u64,
     fn_store_id: u32,
-    rng: ChaChaRng,
+    rng: Rc<RefCell<ChaChaRng>>,
     protocol_version: u64,
     correlation_id: CorrelationId,
 }
@@ -60,13 +58,12 @@ where
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
         account: &'a Account,
-        caller_key: Option<PublicKey>,
         base_key: Key,
         blocktime: BlockTime,
         gas_limit: u64,
         gas_counter: u64,
         fn_store_id: u32,
-        rng: ChaChaRng,
+        rng: Rc<RefCell<ChaChaRng>>,
         protocol_version: u64,
         correlation_id: CorrelationId,
     ) -> Self {
@@ -75,7 +72,6 @@ where
             uref_lookup,
             known_urefs,
             args,
-            caller_key,
             account,
             blocktime,
             base_key,
@@ -112,9 +108,9 @@ where
         name: &str,
     ) -> Result<(), Error> {
         contract.get_urefs_lookup_mut().remove(name);
+        // By this point in the code path, there is no further validation needed.
         let validated_uref = Validated::new(contract_key, Validated::valid)?;
-        let validated_value =
-            Validated::new(Value::Contract(contract), |value| self.validate_keys(value))?;
+        let validated_value = Validated::new(Value::Contract(contract), Validated::valid)?;
 
         self.state
             .borrow_mut()
@@ -143,7 +139,26 @@ where
                 Ok(())
             }
             contract_uref @ Key::URef(_) => {
-                let mut contract: Contract = self.read_gs_typed(&contract_uref)?;
+                // We do not need to validate the base key because a contract
+                // is always able to remove keys from its own known_urefs.
+                let contract_key = Validated::new(contract_uref, Validated::valid)?;
+
+                let mut contract: Contract = {
+                    let value: Value = self
+                        .state
+                        .borrow_mut()
+                        .read(self.correlation_id, &contract_key)
+                        .map_err(Into::into)?
+                        .ok_or_else(|| Error::KeyNotFound(contract_uref))?;
+
+                    value.try_into().map_err(|found| {
+                        Error::TypeMismatch(shared::transform::TypeMismatch {
+                            expected: "Contract".to_owned(),
+                            found,
+                        })
+                    })?
+                };
+
                 self.uref_lookup.remove(name);
                 self.remove_uref_from_contract(contract_uref, contract, name)
             }
@@ -160,8 +175,8 @@ where
         }
     }
 
-    pub fn get_caller(&self) -> Option<PublicKey> {
-        self.caller_key
+    pub fn get_caller(&self) -> PublicKey {
+        self.account.pub_key().into()
     }
 
     pub fn get_blocktime(&self) -> BlockTime {
@@ -180,8 +195,8 @@ where
         &self.args
     }
 
-    pub fn rng(&mut self) -> &mut ChaChaRng {
-        &mut self.rng
+    pub fn rng(&self) -> Rc<RefCell<ChaChaRng>> {
+        Rc::clone(&self.rng)
     }
 
     pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
@@ -248,7 +263,7 @@ where
     pub fn new_uref(&mut self, value: Value) -> Result<Key, Error> {
         let uref = {
             let mut addr = [0u8; 32];
-            self.rng.fill_bytes(&mut addr);
+            self.rng.borrow_mut().fill_bytes(&mut addr);
             URef::new(addr, AccessRights::READ_ADD_WRITE)
         };
         let key = Key::URef(uref);
@@ -259,8 +274,16 @@ where
 
     /// Adds `key` to the map of named keys of current context.
     pub fn add_uref(&mut self, name: String, key: Key) -> Result<(), Error> {
-        let base_key = self.base_key();
-        self.add_gs(base_key, Value::NamedKey(name.clone(), key))?;
+        // No need to perform actual validation on the base key because an account or contract (i.e. the
+        // element stored under `base_key`) is allowed to add new named keys to itself.
+        let base_key = Validated::new(self.base_key(), Validated::valid)?;
+
+        let validated_value = Validated::new(Value::NamedKey(name.clone(), key), |v| {
+            self.validate_keys(&v)
+        })?;
+        self.add_gs_validated(base_key, validated_value)?;
+
+        // key was already validated successfully as part of validated_value above
         let validated_key = Validated::new(key, Validated::valid)?;
         self.insert_named_uref(name, validated_key);
         Ok(())
@@ -535,6 +558,14 @@ where
             self.validate_addable(&k).and(self.validate_key(&k))
         })?;
         let validated_value = Validated::new(value, |v| self.validate_keys(&v))?;
+        self.add_gs_validated(validated_key, validated_value)
+    }
+
+    fn add_gs_validated(
+        &mut self,
+        validated_key: Validated<Key>,
+        validated_value: Validated<Value>,
+    ) -> Result<(), Error> {
         match self
             .state
             .borrow_mut()
@@ -755,13 +786,12 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
-            None,
             base_key,
             BlockTime(0),
             0,
             0,
             0,
-            rng,
+            Rc::new(RefCell::new(rng)),
             1,
             CorrelationId::new(),
         )
@@ -1051,13 +1081,12 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
-            None,
             contract_key,
             BlockTime(0),
             0,
             0,
             0,
-            chacha_rng,
+            Rc::new(RefCell::new(chacha_rng)),
             1,
             CorrelationId::new(),
         );
@@ -1104,13 +1133,12 @@ mod tests {
             known_urefs,
             Vec::new(),
             &account,
-            None,
             other_contract_key,
             BlockTime(0),
             0,
             0,
             0,
-            chacha_rng,
+            Rc::new(RefCell::new(chacha_rng)),
             1,
             CorrelationId::new(),
         );

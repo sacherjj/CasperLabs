@@ -9,26 +9,31 @@ extern crate wasm_prep;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::PathBuf;
+use std::rc::Rc;
 
+use grpc::RequestOptions;
+
+use casperlabs_engine_grpc_server::engine_server::ipc;
 use casperlabs_engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, ExecRequest, ExecResponse, GenesisRequest,
     GenesisResponse, TransformEntry,
 };
-use casperlabs_engine_grpc_server::engine_server::mappings::CommitTransforms;
+use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+use casperlabs_engine_grpc_server::engine_server::mappings::{
+    to_domain_validators, CommitTransforms,
+};
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use execution_engine::engine_state::utils::WasmiBytes;
+use execution_engine::engine_state::EngineState;
 use shared::test_utils;
 use shared::transform::Transform;
+use storage::global_state::in_memory::InMemoryGlobalState;
 
-use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 //use common::bytesrepr::ToBytes;
 //use common::key::Key;
 //use common::value::Value;
 
-use execution_engine::engine_state::EngineState;
-use grpc::RequestOptions;
-use storage::global_state::in_memory::InMemoryGlobalState;
-
+pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/debug";
 
@@ -41,7 +46,7 @@ pub fn get_protocol_version() -> ProtocolVersion {
 pub fn get_mock_deploy() -> Deploy {
     let mut deploy = Deploy::new();
     deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
-    deploy.set_gas_limit(1000);
+    deploy.set_tokens_transferred_in_payment(1000);
     deploy.set_gas_price(1);
     deploy.set_nonce(1);
     let mut deploy_code = DeployCode::new();
@@ -71,8 +76,10 @@ pub enum SystemContractType {
     ProofOfStake,
 }
 
+#[allow(clippy::implicit_hasher)]
 pub fn create_genesis_request(
     address: [u8; 32],
+    genesis_validators: HashMap<common::value::account::PublicKey, common::value::U512>,
 ) -> (GenesisRequest, HashMap<SystemContractType, WasmiBytes>) {
     let genesis_account_addr = address.to_vec();
     let mut contracts: HashMap<SystemContractType, WasmiBytes> = HashMap::new();
@@ -105,6 +112,16 @@ pub fn create_genesis_request(
         ret
     };
 
+    let grpc_genesis_validators: Vec<ipc::Bond> = genesis_validators
+        .iter()
+        .map(|(pk, bond)| {
+            let mut grpc_bond = ipc::Bond::new();
+            grpc_bond.set_validator_public_key(pk.value().to_vec());
+            grpc_bond.set_stake((*bond).into());
+            grpc_bond
+        })
+        .collect();
+
     let protocol_version = {
         let mut ret = ProtocolVersion::new();
         ret.set_value(1);
@@ -117,6 +134,7 @@ pub fn create_genesis_request(
     ret.set_mint_code(mint_code);
     ret.set_proof_of_stake_code(proof_of_stake_code);
     ret.set_protocol_version(protocol_version);
+    ret.set_genesis_validators(grpc_genesis_validators.into());
 
     (ret, contracts)
 }
@@ -125,16 +143,24 @@ pub fn create_exec_request(
     address: [u8; 32],
     contract_file_name: &str,
     pre_state_hash: &[u8],
+    block_time: u64,
+    nonce: u64,
+    arguments: impl common::contract_api::argsparser::ArgsParser,
 ) -> ExecRequest {
+    let args = arguments
+        .parse()
+        .and_then(|args_bytes| common::bytesrepr::ToBytes::to_bytes(&args_bytes))
+        .expect("should serialize args");
     let bytes_to_deploy = read_wasm_file_bytes(contract_file_name);
 
     let mut deploy = Deploy::new();
     deploy.set_address(address.to_vec());
-    deploy.set_gas_limit(1_000_000_000);
+    deploy.set_tokens_transferred_in_payment(1_000_000_000);
     deploy.set_gas_price(1);
-    deploy.set_nonce(1);
+    deploy.set_nonce(nonce);
     let mut deploy_code = DeployCode::new();
     deploy_code.set_code(bytes_to_deploy);
+    deploy_code.set_args(args);
     deploy.set_session(deploy_code);
 
     let mut exec_request = ExecRequest::new();
@@ -144,6 +170,7 @@ pub fn create_exec_request(
     exec_request.set_deploys(deploys);
     exec_request.set_parent_state_hash(pre_state_hash.to_vec());
     exec_request.set_protocol_version(get_protocol_version());
+    exec_request.set_block_time(block_time);
 
     exec_request
 }
@@ -263,14 +290,23 @@ pub fn get_account(
 }
 
 /// Builder for simple WASM test
+#[derive(Clone)]
 pub struct WasmTestBuilder {
-    engine_state: EngineState<InMemoryGlobalState>,
+    /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for EngineState`
+    engine_state: Rc<EngineState<InMemoryGlobalState>>,
     exec_responses: Vec<ExecResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
     /// Cached transform maps after subsequent successful runs
     /// i.e. transforms[0] is for first run() call etc.
     transforms: Vec<HashMap<common::key::Key, Transform>>,
+    bonded_validators: Vec<HashMap<common::value::account::PublicKey, common::value::U512>>,
+    /// Cached genesis transforms
+    genesis_account: Option<common::value::Account>,
+    /// Genesis transforms
+    genesis_transforms: Option<HashMap<common::key::Key, Transform>>,
+    /// Mint contract uref
+    mint_contract_uref: Option<common::uref::URef>,
 }
 
 impl Default for WasmTestBuilder {
@@ -279,27 +315,84 @@ impl Default for WasmTestBuilder {
     }
 }
 
+/// A wrapper type to disambiguate builder from an actual result
+pub struct WasmTestResult(WasmTestBuilder);
+
+impl WasmTestResult {
+    /// Access the builder
+    pub fn builder(&self) -> &WasmTestBuilder {
+        &self.0
+    }
+}
+
 impl WasmTestBuilder {
+    /// Carries on attributes from TestResult for further executions
+    pub fn from_result(result: WasmTestResult) -> WasmTestBuilder {
+        WasmTestBuilder {
+            engine_state: result.0.engine_state,
+            exec_responses: Vec::new(),
+            genesis_hash: result.0.genesis_hash,
+            post_state_hash: result.0.post_state_hash,
+            transforms: Vec::new(),
+            bonded_validators: result.0.bonded_validators,
+            genesis_account: result.0.genesis_account,
+            mint_contract_uref: result.0.mint_contract_uref,
+            genesis_transforms: result.0.genesis_transforms,
+        }
+    }
+
     pub fn new() -> WasmTestBuilder {
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
-        let engine_state = EngineState::new(global_state, false);
+        let engine_state = EngineState::new(global_state);
         WasmTestBuilder {
-            engine_state,
+            engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
             transforms: Vec::new(),
+            bonded_validators: Vec::new(),
+            genesis_account: None,
+            mint_contract_uref: None,
+            genesis_transforms: None,
         }
     }
 
-    pub fn run_genesis(&mut self, genesis_addr: [u8; 32]) -> &mut WasmTestBuilder {
-        let (genesis_request, _contracts) = create_genesis_request(genesis_addr);
+    pub fn run_genesis(
+        &mut self,
+        genesis_addr: [u8; 32],
+        genesis_validators: HashMap<common::value::account::PublicKey, common::value::U512>,
+    ) -> &mut WasmTestBuilder {
+        let (genesis_request, contracts) =
+            create_genesis_request(genesis_addr, genesis_validators.clone());
 
         let genesis_response = self
             .engine_state
             .run_genesis(RequestOptions::new(), genesis_request)
             .wait_drop_metadata()
             .unwrap();
+
+        // Cache genesis response transforms for easy access later
+        let genesis_transforms = get_genesis_transforms(&genesis_response);
+
+        let mint_contract_uref = get_mint_contract_uref(&genesis_transforms, &contracts)
+            .expect("Unable to get mint contract uref");
+
+        // Cache mint uref
+        self.mint_contract_uref = Some(mint_contract_uref);
+
+        // Cache the account
+        self.genesis_account = Some(
+            get_account(
+                &genesis_transforms,
+                &common::key::Key::Account(genesis_addr),
+            )
+            .unwrap_or_else(|| {
+                panic!(
+                    "Unable to obtain genesis account from genesis response: {:?}",
+                    genesis_response
+                )
+            }),
+        );
 
         let state_handle = self.engine_state.state();
 
@@ -313,18 +406,30 @@ impl WasmTestBuilder {
         self.genesis_hash = Some(genesis_hash.clone());
         // This value will change between subsequent contract executions
         self.post_state_hash = Some(genesis_hash);
+        self.bonded_validators.push(genesis_validators);
+        self.genesis_transforms = Some(genesis_transforms);
         self
     }
 
     /// Runs a contract and after that runs actual WASM contract and expects
     /// transformations to happen at the end of execution.
-    pub fn exec(&mut self, address: [u8; 32], wasm_file: &str) -> &mut WasmTestBuilder {
+    pub fn exec_with_args(
+        &mut self,
+        address: [u8; 32],
+        wasm_file: &str,
+        block_time: u64,
+        nonce: u64,
+        args: impl common::contract_api::argsparser::ArgsParser,
+    ) -> &mut WasmTestBuilder {
         let exec_request = create_exec_request(
             address,
             &wasm_file,
             self.post_state_hash
                 .as_ref()
                 .expect("Should have post state hash"),
+            block_time,
+            nonce,
+            args,
         );
 
         let exec_response = self
@@ -333,11 +438,12 @@ impl WasmTestBuilder {
             .wait_drop_metadata()
             .expect("should exec");
         self.exec_responses.push(exec_response.clone());
+        assert!(exec_response.has_success());
         // Parse deploy results
         let deploy_result = exec_response
             .get_success()
             .get_deploy_results()
-            .get(0)
+            .get(0) // We only allow for issuing single deploy (one wasm file).
             .expect("Unable to get first deploy result");
         let commit_transforms: CommitTransforms = deploy_result
             .get_execution_result()
@@ -349,6 +455,16 @@ impl WasmTestBuilder {
         // Cache transformations
         self.transforms.push(transforms);
         self
+    }
+
+    pub fn exec(
+        &mut self,
+        address: [u8; 32],
+        wasm_file: &str,
+        block_time: u64,
+        nonce: u64,
+    ) -> &mut WasmTestBuilder {
+        self.exec_with_args(address, wasm_file, block_time, nonce, ())
     }
 
     /// Runs a commit request, expects a successful response, and
@@ -375,7 +491,14 @@ impl WasmTestBuilder {
                 commit_response
             );
         }
-        self.post_state_hash = Some(commit_response.get_success().get_poststate_hash().to_vec());
+        let commit_success = commit_response.get_success();
+        self.post_state_hash = Some(commit_success.get_poststate_hash().to_vec());
+        let bonded_validators = commit_success
+            .get_bonded_validators()
+            .iter()
+            .map(|bond| to_domain_validators(bond).unwrap())
+            .collect();
+        self.bonded_validators.push(bonded_validators);
         self
     }
 
@@ -392,9 +515,13 @@ impl WasmTestBuilder {
             .get_deploy_results()
             .get(0)
             .expect("Unable to get first deploy result");
+        if !deploy_result.has_execution_result() {
+            panic!("Expected ExecutionResult, got {:?} instead", deploy_result);
+        }
+
         if deploy_result.get_execution_result().has_error() {
             panic!(
-                "Expected error, but instead got a successful response: {:?}",
+                "Expected successful execution result, but instead got: {:?}",
                 exec_response,
             );
         }
@@ -404,5 +531,34 @@ impl WasmTestBuilder {
     /// Gets the transform map that's cached between runs
     pub fn get_transforms(&self) -> Vec<HashMap<common::key::Key, Transform>> {
         self.transforms.clone()
+    }
+
+    pub fn get_bonded_validators(
+        &self,
+    ) -> Vec<HashMap<common::value::account::PublicKey, common::value::U512>> {
+        self.bonded_validators.clone()
+    }
+
+    /// Gets genesis account (if present)
+    pub fn get_genesis_account(&self) -> &common::value::Account {
+        self.genesis_account
+            .as_ref()
+            .expect("Unable to obtain genesis account. Please run genesis first.")
+    }
+
+    pub fn get_mint_contract_uref(&self) -> common::uref::URef {
+        self.mint_contract_uref
+            .expect("Unable to obtain mint contract uref. Please run genesis first.")
+    }
+
+    pub fn get_genesis_transforms(&self) -> &HashMap<common::key::Key, Transform> {
+        &self
+            .genesis_transforms
+            .as_ref()
+            .expect("should have genesis transforms")
+    }
+
+    pub fn finish(&self) -> WasmTestResult {
+        WasmTestResult(self.clone())
     }
 }

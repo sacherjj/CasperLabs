@@ -58,7 +58,7 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val logEff: LogStub[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
-  implicit val safetyOracleEff: SafetyOracle[F]
+  implicit val safetyOracleEff: FinalityDetector[F]
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
@@ -277,7 +277,7 @@ object HashSetCasperTestNode {
         MutMap.empty.withDefaultValue(0)
 
       private val zero  = Array.fill(32)(0.toByte)
-      private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
+      private val bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
       private def getExecutionEffect(deploy: Deploy) = {
         // The real execution engine will get the keys from what the code changes, which will include
@@ -358,13 +358,13 @@ object HashSetCasperTestNode {
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, GenesisResult]] =
         commit(emptyStateHash, Seq.empty).map {
-          _.map(GenesisResult(_).withEffect(ExecutionEffect()))
+          _.map(cr => GenesisResult(cr.postStateHash).withEffect(ExecutionEffect()))
         }
 
       override def commit(
           prestate: ByteString,
           effects: Seq[TransformEntry]
-      ): F[Either[Throwable, ByteString]] = {
+      ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = {
         //This function increments the prestate by interpreting as an integer and adding 1.
         //The purpose of this is simply to have the output post-state be different
         //than the input pre-state. `effects` is not used.
@@ -372,7 +372,9 @@ object HashSetCasperTestNode {
         val n      = BigInt(arr)
         val newArr = pad((n + 1).toByteArray, 32)
 
-        ByteString.copyFrom(newArr).asRight[Throwable].pure[F]
+        val pk = ByteString.copyFrom(newArr)
+
+        ExecutionEngineService.CommitResult(pk, bonds).asRight[Throwable].pure[F]
       }
 
       override def query(
@@ -383,14 +385,7 @@ object HashSetCasperTestNode {
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
-      override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-        bonds.pure[F]
-      override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =
-        Defer[F].defer(Applicative[F].unit.map { _ =>
-          bonds = newBonds.map {
-            case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
-          }.toSeq
-        })
+
       override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
         ().asRight[String].pure[F]
     }

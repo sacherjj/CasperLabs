@@ -1,19 +1,15 @@
-extern crate grpc;
-
+extern crate casperlabs_engine_grpc_server;
 extern crate common;
 extern crate execution_engine;
+extern crate grpc;
 extern crate shared;
 extern crate storage;
-
-extern crate casperlabs_engine_grpc_server;
-
-#[allow(unused)]
-mod test_support;
 
 use std::collections::HashMap;
 
 use grpc::RequestOptions;
 
+use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::uref::{AccessRights, URef};
@@ -22,8 +18,10 @@ use common::value::{Value, U512};
 use execution_engine::engine_state::EngineState;
 use shared::transform::Transform;
 use storage::global_state::in_memory::InMemoryGlobalState;
+use test_support::DEFAULT_BLOCK_TIME;
 
-use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+#[allow(unused)]
+mod test_support;
 
 const INITIAL_GENESIS_AMOUNT: u32 = 1_000_000;
 
@@ -37,8 +35,8 @@ const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
 // This value was acquired by observing the output of an execution of "create_purse_01.wasm"
 // made by ACCOUNT_1.
 const EXPECTED_UREF_BYTES: [u8; 32] = [
-    73, 143, 110, 138, 106, 168, 247, 100, 112, 181, 14, 171, 133, 47, 108, 16, 3, 147, 232, 172,
-    251, 67, 247, 26, 160, 197, 79, 100, 233, 232, 174, 118,
+    0xb9, 0x8a, 0x1b, 0xee, 0xd7, 0x95, 0x99, 0x1f, 0x3a, 0x54, 0xdf, 0xb1, 0xad, 0xc8, 0x48, 0x0b,
+    0x16, 0x20, 0x14, 0x25, 0x58, 0xb1, 0x4c, 0x09, 0x16, 0x1f, 0xf1, 0xe7, 0x69, 0xbd, 0x8f, 0xc9,
 ];
 
 struct TestContext {
@@ -89,11 +87,12 @@ fn should_transfer_to_account() {
     let account_key = Key::Account(ACCOUNT_1_ADDR);
 
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state);
 
     // Run genesis
 
-    let (genesis_request, contracts) = test_support::create_genesis_request(GENESIS_ADDR);
+    let (genesis_request, contracts) =
+        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -133,6 +132,9 @@ fn should_transfer_to_account() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
+        1,
+        ACCOUNT_1_ADDR,
     );
 
     let exec_response = engine_state
@@ -183,11 +185,12 @@ fn should_transfer_from_account_to_account() {
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state);
 
     // Run genesis
 
-    let (genesis_request, contracts) = test_support::create_genesis_request(GENESIS_ADDR);
+    let (genesis_request, contracts) =
+        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -216,6 +219,9 @@ fn should_transfer_from_account_to_account() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
+        1,
+        ACCOUNT_1_ADDR,
     );
 
     let exec_1_response = engine_state
@@ -263,6 +269,12 @@ fn should_transfer_from_account_to_account() {
         .wait_drop_metadata()
         .unwrap();
 
+    assert!(
+        commit_response.has_success(),
+        "Commit wasn't successful: {:?}",
+        commit_response
+    );
+
     let commit_hash = commit_response.get_success().get_poststate_hash();
 
     // Exec transfer 2 contract
@@ -271,6 +283,9 @@ fn should_transfer_from_account_to_account() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        DEFAULT_BLOCK_TIME,
+        1,
+        (),
     );
 
     let exec_2_response = engine_state
@@ -319,11 +334,12 @@ fn should_transfer_to_existing_account() {
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state);
 
     // Run genesis
 
-    let (genesis_request, contracts) = test_support::create_genesis_request(GENESIS_ADDR);
+    let (genesis_request, contracts) =
+        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -363,6 +379,9 @@ fn should_transfer_to_existing_account() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
+        1,
+        ACCOUNT_1_ADDR,
     );
 
     let exec_response = engine_state
@@ -410,6 +429,12 @@ fn should_transfer_to_existing_account() {
         .wait_drop_metadata()
         .unwrap();
 
+    assert!(
+        commit_response.has_success(),
+        "Commit wasn't successful: {:?}",
+        commit_response
+    );
+
     let commit_hash = commit_response.get_success().get_poststate_hash();
 
     // Exec transfer contract
@@ -418,6 +443,9 @@ fn should_transfer_to_existing_account() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        DEFAULT_BLOCK_TIME,
+        1,
+        (),
     );
 
     let exec_response = engine_state
@@ -461,11 +489,11 @@ fn should_transfer_to_existing_account() {
 #[test]
 fn should_fail_when_insufficient_funds() {
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, false);
+    let engine_state = EngineState::new(global_state);
 
     // Run genesis
 
-    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR);
+    let (genesis_request, _) = test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -480,6 +508,9 @@ fn should_fail_when_insufficient_funds() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
+        1,
+        ACCOUNT_1_ADDR,
     );
 
     let exec_response = engine_state
@@ -498,6 +529,12 @@ fn should_fail_when_insufficient_funds() {
         .wait_drop_metadata()
         .unwrap();
 
+    assert!(
+        commit_response.has_success(),
+        "Commit wasn't successful: {:?}",
+        commit_response
+    );
+
     let commit_hash = commit_response.get_success().get_poststate_hash();
 
     // Exec transfer contract
@@ -506,6 +543,9 @@ fn should_fail_when_insufficient_funds() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        DEFAULT_BLOCK_TIME,
+        1,
+        (),
     );
 
     let exec_response = engine_state
@@ -532,6 +572,9 @@ fn should_fail_when_insufficient_funds() {
         ACCOUNT_1_ADDR,
         "transfer_to_account_02.wasm",
         commit_hash,
+        DEFAULT_BLOCK_TIME,
+        2,
+        (),
     );
 
     let exec_response = engine_state
@@ -559,11 +602,12 @@ fn should_create_purse() {
     let genesis_account_key = Key::Account(GENESIS_ADDR);
     let account_key = Key::Account(ACCOUNT_1_ADDR);
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, true);
+    let engine_state = EngineState::new(global_state);
 
     // Run genesis & set up an account
 
-    let (genesis_request, contracts) = test_support::create_genesis_request(GENESIS_ADDR);
+    let (genesis_request, contracts) =
+        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -592,6 +636,9 @@ fn should_create_purse() {
         GENESIS_ADDR,
         "transfer_to_account_01.wasm",
         genesis_hash,
+        DEFAULT_BLOCK_TIME,
+        1,
+        ACCOUNT_1_ADDR,
     );
 
     let exec_response = engine_state
@@ -617,12 +664,24 @@ fn should_create_purse() {
         .wait_drop_metadata()
         .unwrap();
 
+    assert!(
+        commit_response.has_success(),
+        "Commit wasn't successful: {:?}",
+        commit_response
+    );
+
     let commit_hash = commit_response.get_success().get_poststate_hash();
 
     // Create purse
 
-    let exec_request =
-        test_support::create_exec_request(ACCOUNT_1_ADDR, "create_purse_01.wasm", commit_hash);
+    let exec_request = test_support::create_exec_request(
+        ACCOUNT_1_ADDR,
+        "create_purse_01.wasm",
+        commit_hash,
+        DEFAULT_BLOCK_TIME,
+        1,
+        (),
+    );
 
     let exec_response = engine_state
         .exec(RequestOptions::new(), exec_request)
@@ -631,14 +690,12 @@ fn should_create_purse() {
 
     let exec_transforms = &test_support::get_exec_transforms(&exec_response)[0];
 
-    let expected_purse_id =
-        PurseId::new(URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE));
-
+    let expected_purse_id = PurseId::new(
+        URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE).remove_access_rights(),
+    );
     test_context.track(&exec_transforms, expected_purse_id);
 
-    let account = test_context
-        .lookup(&exec_transforms, expected_purse_id)
-        .expect("should lookup");
-
-    assert_eq!(account, Transform::Write(Value::UInt512(U512::from(0))));
+    let account = &exec_transforms
+        [&Key::URef(URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE)).normalize()];
+    assert_eq!(account, &Transform::Write(Value::UInt512(U512::from(0))));
 }

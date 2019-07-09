@@ -43,7 +43,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI](
+  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI](
       port: Int,
       conf: Configuration,
       grpcScheduler: Scheduler
@@ -159,7 +159,7 @@ package object gossiping {
     } yield cont
 
   /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
+  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics](
       chainId: String,
       block: Block
   ): F[Unit] =
@@ -172,10 +172,9 @@ package object gossiping {
           for {
             _           <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
             state       <- Cell.mvarCell[F, CasperState](CasperState())
-            executor    = new MultiParentCasperImpl.StatelessExecutor[F](chainId)
+            executor    <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
             dag         <- BlockDagStorage[F].getRepresentation
-            result      <- executor.validateAndAddBlock(None, dag, block)(state)
-            (status, _) = result
+            (status, _) <- executor.validateAndAddBlock(None, dag, block)(state)
           } yield status
 
         case None =>
@@ -327,7 +326,7 @@ package object gossiping {
                         )
     } yield downloadManager
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F]
@@ -369,7 +368,6 @@ package object gossiping {
         for {
           _     <- Log[F].info("Taking bonds from file.")
           bonds <- Genesis.getBonds[F](conf.casper.bondsFile)
-          _     <- ExecutionEngineService[F].setBonds(bonds)
         } yield bonds
       }
 
@@ -378,9 +376,7 @@ package object gossiping {
                                // This is the case of a validator that will pull the genesis from the bootstrap, validate and approve it.
                                // Based on `CasperPacketHandler.of`.
                                for {
-                                 _ <- Log[F].info("Starting in approve genesis mode")
-                                 timestamp <- conf.casper.deployTimestamp
-                                               .fold(Time[F].currentMillis)(_.pure[F])
+                                 _       <- Log[F].info("Starting in approve genesis mode")
                                  wallets <- Genesis.getWallets[F](conf.casper.walletsFile)
                                  bonds   <- readBondsFile
                                  bondsMap = bonds.map {
@@ -395,7 +391,6 @@ package object gossiping {
 
                                    BlockApproverProtocol.validateCandidate[F](
                                      candidate,
-                                     timestamp,
                                      wallets,
                                      bondsMap,
                                      BlockApproverProtocol.GenesisConf.fromCasperConf(conf.casper)
@@ -414,17 +409,8 @@ package object gossiping {
                                  ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
                              } else {
                                // Non-validating nodes. They are okay with everything,
-                               // only checking that the required signatures are present.
-                               // In order to not have to circulate the bonds.txt they set it here.
-                               Log[F].info("Starting in default mode") *> { (genesis: Block) =>
-                                 for {
-                                   _ <- Log[F].info("Taking bonds from the Genesis candidate.")
-                                   bonds = genesis.getHeader.getState.bonds.map { bond =>
-                                     PublicKey(bond.validatorPublicKey.toByteArray) -> bond.stake
-                                   }.toMap
-                                   _ <- ExecutionEngineService[F].setBonds(bonds)
-                                 } yield none[Approval].asRight[Throwable]
-                               }.pure[F]
+                               Log[F].info("Starting in default mode") *>
+                                 ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
                              }
                            }
 
@@ -465,8 +451,6 @@ package object gossiping {
                    for {
                      genesis <- Resource.liftF {
                                  for {
-                                   //TODO: Use bonds
-                                   _       <- readBondsFile
                                    _       <- Log[F].info("Constructing Genesis candidate...")
                                    genesis <- Genesis[F](conf.casper).map(_.getBlockMessage)
                                    // Store it so others can pull it from the bootstrap node.
@@ -596,8 +580,9 @@ package object gossiping {
                         } yield ()
 
                       override def onDownloaded(blockHash: ByteString) =
-                        // Calling `addBlock` during validation has already stored the block.
-                        Log[F].debug(s"Download ready for ${show(blockHash)}")
+                        // Calling `addBlock` during validation has already stored the block,
+                        // so we have nothing more to do here.
+                        ().pure[F]
 
                       override def listTips =
                         for {

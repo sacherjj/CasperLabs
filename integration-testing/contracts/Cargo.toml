@@ -17,4 +17,7 @@ members = [
     "mailing-list/define",
     "subcall-revert-test/call",
     "subcall-revert-test/define",
+    "test_args",
+    "bonding/call",
+    "unbonding/call",
 ]

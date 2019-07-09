@@ -11,9 +11,10 @@ from .cl_node.casperlabs_network import ThreeNodeNetwork, \
     CustomConnectionNetwork
 from .cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from .cl_node.common import random_string
-from .cl_node.wait import wait_for_blocks_count_at_least, \
-    wait_for_peers_count_at_least, \
-    wait_for_peers_count_exactly
+from .cl_node.wait import (wait_for_blocks_count_at_least,
+                           wait_for_block_hash_propagated_to_all_nodes,
+                           wait_for_block_hashes_propagated_to_all_nodes,
+                           wait_for_peers_count_at_least, wait_for_peers_count_exactly)
 
 
 class DeployThread(threading.Thread):
@@ -25,7 +26,7 @@ class DeployThread(threading.Thread):
         threading.Thread.__init__(self)
         self.node = node
         self.batches_of_contracts = batches_of_contracts
-        self.deployed_blocks_hashes = set()
+        self.deployed_block_hashes = set()
         self.max_attempts = max_attempts
         self.retry_seconds = retry_seconds
 
@@ -41,7 +42,7 @@ class DeployThread(threading.Thread):
             propose_output = self.node.client.propose_with_retry(
                 self.max_attempts, self.retry_seconds)
             block_hash = extract_block_hash_from_propose_output(propose_output)
-            self.deployed_blocks_hashes.add(block_hash)
+            self.deployed_block_hashes.add(block_hash)
 
 
 @pytest.fixture()
@@ -65,29 +66,17 @@ def test_block_propagation(nodes,
     Scenario: test_helloworld.wasm deploy and propose by all nodes and stored in all nodes blockstores
     """
 
-    deploy_threads = [
-        DeployThread(node, contract_paths, max_attempts=5, retry_seconds=3) for
-        node in nodes]
+    deploy_threads = [DeployThread(node, contract_paths, max_attempts=5, retry_seconds=3) for node in nodes]
 
     for t in deploy_threads:
         t.start()
 
+    deployed_block_hashes = set()
     for t in deploy_threads:
         t.join()
+        deployed_block_hashes.update(t.deployed_block_hashes)
 
-    for node in nodes:
-        wait_for_blocks_count_at_least(node, expected_number_of_blocks,
-                                       expected_number_of_blocks * 2,
-                                       node.timeout)
-
-    for node in nodes:
-        blocks = parse_show_blocks(
-            node.client.show_blocks(expected_number_of_blocks * 100))
-        # What propose returns is first 10 characters of block hash, so we can compare only first 10 charcters.
-        blocks_hashes = set([b.summary.block_hash[:10] for b in blocks])
-        for t in deploy_threads:
-            assert t.deployed_blocks_hashes.issubset(blocks_hashes), \
-                f"Not all blocks deployed and proposed on {t.node.container_name} were propagated to {node.container_name}"
+    wait_for_block_hashes_propagated_to_all_nodes(nodes, deployed_block_hashes)
 
 
 def deploy_and_propose(node, contract, nonce=None):
@@ -125,10 +114,7 @@ def test_blocks_infect_network(not_all_connected_directly_nodes):
                   not_all_connected_directly_nodes[-1]
 
     block_hash = deploy_and_propose(first, 'test_helloname.wasm')
-    wait_for_blocks_count_at_least(last, 2, 2)
-    blocks = parse_show_blocks(last.client.show_blocks(2))
-    blocks_hashes = set([b.summary.block_hash[:10] for b in blocks])
-    assert block_hash in blocks_hashes
+    wait_for_block_hash_propagated_to_all_nodes([last], block_hash)
 
 
 @pytest.fixture()
@@ -179,11 +165,11 @@ def test_network_partition_and_rejoin(four_nodes_network):
     # so everyone has the genesis plus the 1 block proposed in its partition.
     # Using the same nonce in both partitions because otherwise one of them will
     # sit there unable to propose; should use separate accounts really.
-    deploy_and_propose(partitions[0][0], C[0], nonce=1)
-    deploy_and_propose(partitions[1][0], C[1], nonce=1)
+    block_hashes = (deploy_and_propose(partitions[0][0], C[0], nonce=1),
+                    deploy_and_propose(partitions[1][0], C[1], nonce=1))
 
-    for node in nodes:
-        wait_for_blocks_count_at_least(node, 2, 2, node.timeout * 2)
+    for partition, block_hash in zip(partitions, block_hashes):
+        wait_for_block_hash_propagated_to_all_nodes(partition, block_hash)
 
     logging.info("CONNECT PARTITIONS")
     for connection in connections_between_partitions:
@@ -201,13 +187,8 @@ def test_network_partition_and_rejoin(four_nodes_network):
     # however, nodes in partition[0] will still not see blocks from partition[1]
     # until they also propose a new one on top of the block the created during
     # the network outage.
-    deploy_and_propose(nodes[0], C[2], nonce=2)
+    block_hash = deploy_and_propose(nodes[0], C[2], nonce=2)
 
-    for node in partitions[0]:
-        logging.info(f"CHECK {node} HAS ALL BLOCKS CREATED IN PARTITION 1")
-        wait_for_blocks_count_at_least(node, 3, 3, node.timeout * 2)
-
-    for node in partitions[1]:
-        logging.info(
-            f"CHECK {node} HAS ALL BLOCKS CREATED IN PARTITION 1 and 2")
-        wait_for_blocks_count_at_least(node, 4, 4, node.timeout * 2)
+    for partition, old_hash in zip(partitions, block_hashes):
+        logging.info(f"CHECK {partition} HAS ALL BLOCKS CREATED IN BOTH PARTITIONS")
+        wait_for_block_hashes_propagated_to_all_nodes(partition, [old_hash, block_hash])

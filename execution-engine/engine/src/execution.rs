@@ -40,7 +40,7 @@ use storage::global_state::StateReader;
 use tracking_copy::TrackingCopy;
 use URefAddr;
 
-const MINT_NAME: &str = "mint";
+pub const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
 
 #[derive(Debug)]
@@ -310,20 +310,13 @@ where
         Ok(())
     }
 
-    /// If caller is defined (it's a subcall) then writes caller public key
-    /// to [dest_ptr] in the Wasm memory and returns 1.
-    /// If caller is undefined (we are in  the base context), returns 0.
-    fn get_caller(&mut self, dest_ptr: u32) -> Result<i32, Trap> {
-        let caller = self.context.get_caller();
-        if let Some(key) = caller {
-            let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
-            self.memory
-                .set(dest_ptr, &bytes)
-                .map_err(|e| Error::Interpreter(e).into())
-                .map(|_| 1)
-        } else {
-            Ok(0)
-        }
+    /// Writes caller (deploy) account public key to [dest_ptr] in the Wasm memory.
+    fn get_caller(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        let key = self.context.get_caller();
+        let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
+        self.memory
+            .set(dest_ptr, &bytes)
+            .map_err(|e| Error::Interpreter(e).into())
     }
 
     /// Writes current blocktime to [dest_ptr] in Wasm memory.
@@ -694,7 +687,7 @@ where
         }
 
         if self.mint_transfer(mint_contract_key, source, target_purse_id, amount)? {
-            let known_urefs = &[
+            let known_urefs = vec![
                 (
                     String::from(MINT_NAME),
                     self.get_mint_contract_public_uref_key()?,
@@ -705,7 +698,16 @@ where
                 ),
                 (pos_contract_uref.as_string(), pos_contract_key),
                 (mint_contract_uref.as_string(), mint_contract_key),
-            ];
+            ]
+            .into_iter()
+            .map(|(name, key)| {
+                if let Some(uref) = key.as_uref() {
+                    (name, Key::URef(URef::new(uref.addr(), AccessRights::READ)))
+                } else {
+                    (name, key)
+                }
+            })
+            .collect();
             let account = Account::create(target_addr, known_urefs, target_purse_id);
             self.context.write_account(target_key, account)?;
             Ok(TransferResult::TransferredToNewAccount)
@@ -1012,8 +1014,8 @@ where
             FunctionIndex::GetCallerIndex => {
                 // args(0) = pointer to Wasm memory where to write.
                 let dest_ptr = Args::parse(args)?;
-                self.get_caller(dest_ptr)
-                    .map(|status| Some(RuntimeValue::I32(status)))
+                self.get_caller(dest_ptr)?;
+                Ok(None)
             }
 
             FunctionIndex::GetBlocktimeIndex => {
@@ -1215,7 +1217,6 @@ where
     let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
 
     let known_urefs = extract_access_rights_from_keys(refs.values().cloned().chain(extra_urefs));
-    let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
 
     let mut runtime = Runtime {
         memory,
@@ -1228,13 +1229,12 @@ where
             known_urefs,
             args,
             &current_runtime.context.account(),
-            Some(PublicKey::new(current_runtime.context.account().pub_key())),
             key,
             current_runtime.context.get_blocktime(),
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
-            rng,
+            current_runtime.context.rng(),
             protocol_version,
             current_runtime.context.correlation_id(),
         ),
@@ -1375,7 +1375,6 @@ pub trait Executor<A> {
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
-        nonce_check: bool,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -1395,7 +1394,6 @@ impl Executor<Module> for WasmiExecutor {
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
-        nonce_check: bool,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
@@ -1423,32 +1421,30 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
-        if nonce_check {
-            // Check the difference of a request nonce and account nonce.
-            // Since both nonce and account's nonce are unsigned, so line below performs
-            // a checked subtraction, where underflow (or overflow) would be safe.
-            let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
-            // Difference should always be 1 greater than current nonce for a
-            // given account.
-            if delta != 1 {
-                return ExecutionResult::precondition_failure(
-                    Error::InvalidNonce {
-                        deploy_nonce: nonce,
-                        expected_nonce: account.nonce() + 1,
-                    }
-                    .into(),
-                );
-            }
-
-            // Increment nonce in the account that would be later used through the execution
-            // lifecycle.
-            account.increment_nonce();
-            // Store updated account with new nonce
-            tc.borrow_mut().write(
-                validated_key,
-                Validated::new(account.clone().into(), Validated::valid).unwrap(),
+        // Check the difference of a request nonce and account nonce.
+        // Since both nonce and account's nonce are unsigned, so line below performs
+        // a checked subtraction, where underflow (or overflow) would be safe.
+        let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
+        // Difference should always be 1 greater than current nonce for a
+        // given account.
+        if delta != 1 {
+            return ExecutionResult::precondition_failure(
+                Error::InvalidNonce {
+                    deploy_nonce: nonce,
+                    expected_nonce: account.nonce() + 1,
+                }
+                .into(),
             );
         }
+
+        // Increment nonce in the account that would be later used through the execution
+        // lifecycle.
+        account.increment_nonce();
+        // Store updated account with new nonce
+        tc.borrow_mut().write(
+            validated_key,
+            Validated::new(account.clone().into(), Validated::valid).unwrap(),
+        );
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
@@ -1476,13 +1472,12 @@ impl Executor<Module> for WasmiExecutor {
             known_urefs,
             arguments,
             &account,
-            None,
             acct_key,
             blocktime,
             gas_limit,
             gas_counter,
             fn_store_id,
-            rng,
+            Rc::new(RefCell::new(rng)),
             protocol_version,
             correlation_id,
         );
@@ -1653,7 +1648,6 @@ mod tests {
             1u64,
             CorrelationId::new(),
             tc,
-            true,
         );
 
         match exec_result {

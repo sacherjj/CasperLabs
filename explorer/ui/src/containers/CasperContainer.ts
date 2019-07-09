@@ -1,25 +1,46 @@
-import { observable } from 'mobx';
+import { computed } from 'mobx';
+
+import ErrorContainer from './ErrorContainer';
+import StorageCell from '../lib/StorageCell';
+import FaucetService from '../services/FaucetService';
 
 // CasperContainer talks to the API on behalf of React
 // components and exposes the state in MobX observables.
 export class CasperContainer {
+  _faucetRequests = new StorageCell<FaucetRequest[]>('faucet-requests', []);
 
-  @observable accounts: Account[] | null = null;
+  constructor(
+    private errors: ErrorContainer,
+    private faucetService: FaucetService
+  ) {}
 
-  // We can display the last error when it happens.
-  @observable error: string | null = null;
-
-  private exec<T>(p: Promise<T>, f: (x: T) => void) {
-    p.then(f).catch(err => {
-      this.error = err.message;
-    });
+  async requestTokens(account: UserAccount) {
+    const request = async () => {
+      const deployHash = await this.faucetService.requestTokens(
+        account.publicKeyBase64
+      );
+      this.monitorFaucetRequest(account, deployHash);
+    };
+    this.errors.capture(request());
   }
 
-  refreshAccounts() {
-    // this.exec(this.service.listAccounts(), (xs) => {
-    //   this.accounts = xs;
-    // })
+  @computed get faucetRequests() {
+    return this._faucetRequests.get;
   }
+
+  private monitorFaucetRequest(account: UserAccount, deployHash: DeployHash) {
+    const request = { timestamp: new Date(), account, deployHash };
+    const requests = this._faucetRequests.get.concat(request);
+    this._faucetRequests.set(requests);
+    // TODO: Start polling for the deploy status.
+  }
+}
+
+// Record of a request we submitted.
+export interface FaucetRequest {
+  timestamp: Date;
+  account: UserAccount;
+  deployHash: DeployHash;
 }
 
 export default CasperContainer;
