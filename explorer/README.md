@@ -1,6 +1,6 @@
 # Casper Explorer
 
-The purpose of the explorer is help users interact with the CasperLabs blockchain:
+The purpose of the explorer is help users interact with the blockchain:
 * Sign up to participate in devnet
 * Create accounts (public/private key pairs)
 * Ask the faucet for tokens on devnet

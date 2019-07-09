@@ -19,11 +19,10 @@ const Home = observer((props: Props) => {
           <h1>CasperLabs Explorer</h1>
           <p>
             This is a self serice portal for dApp developers to interact with
-            the CasperLabs blockchain. On devnet you can use this portal to
-            create accounts for yourself, fund them with some free tokens to
-            play with, and explore the block DAG. If you're having an issue then
-            don't hesitate to let us know on{' '}
-            <a href="https://t.me/casperlabss">Telegram</a> or{' '}
+            the blockchain. On devnet you can use this portal to create accounts
+            for yourself, fund them with some free tokens to play with, and
+            explore the block DAG. If you're having an issue then don't hesitate
+            to let us know on <a href="https://t.me/casperlabss">Telegram</a> or{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/issues">Github</a>
           </p>
           <ul className="list-inline" id="go-to-buttons">
