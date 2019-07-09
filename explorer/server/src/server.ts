@@ -30,8 +30,7 @@ const contractKeys =
 // Faucet contract and deploy factory.
 const faucet = new BoundContract(
   new Contract(process.env.FAUCET_CONTRACT_PATH!),
-  contractKeys,
-  process.env.FAUCET_NONCE_PATH!);
+  contractKeys, process.env.FAUCET_NONCE_PATH!);
 
 // gRPC client to the node.
 const deployService = new DeployService(process.env.CASPER_SERVICE_URL!);
@@ -101,11 +100,12 @@ app.post("/api/faucet", checkJwt, (req, res) => {
 
 // Error report in JSON.
 app.use((err: any, req: any, res: any, next: any) => {
+  console.log("ERROR", req.path, err);
   if (err.name === "UnauthorizedError") {
     return res.status(401).send({ msg: "Invalid token" });
   }
   if (req.path === "/api/faucet") {
-    return res.status(500).send({ error: err });
+    return res.status(500).send({ error: err.toString() });
   }
   next(err, req, res);
 });

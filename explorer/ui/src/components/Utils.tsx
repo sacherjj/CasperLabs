@@ -85,15 +85,15 @@ export abstract class RefreshableComponent<P, S> extends React.Component<P, S> {
   }
 }
 
-export const UnderConstruction = (message: string) => {
+export const UnderConstruction = (props: { children: any }) => {
   return (
-    <div className="card shadow">
+    <div className="card shadow mb-3">
       <div className="card-header bg-warning">
         <h4 className="card-title font-weight-bold text-white">
           Under construction
         </h4>
       </div>
-      <div className="card-body">{message}</div>
+      <div className="card-body">{props.children}</div>
     </div>
   );
 };

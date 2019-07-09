@@ -106,16 +106,16 @@ export class AuthContainer {
     }
   }
 
-  async deleteAccount(name: String) {
+  deleteAccount(name: String) {
     if (window.confirm(`Are you sure you want to delete account '${name}'?`)) {
       this.accounts = this.accounts!.filter(x => x.name !== name);
-      await this.errors.capture(this.saveAccounts());
+      this.errors.capture(this.saveAccounts());
     }
   }
 
-  private async addAccount(account: UserAccount) {
+  private addAccount(account: UserAccount) {
     this.accounts!.push(account);
-    await this.errors.capture(this.saveAccounts());
+    this.errors.capture(this.saveAccounts());
   }
 
   private async saveAccounts() {

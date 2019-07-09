@@ -3,7 +3,7 @@ import { observer } from 'mobx-react';
 import { Form, SelectField, TextField } from './Forms';
 import AuthContainer from '../containers/AuthContainer';
 import { CasperContainer, FaucetRequest } from '../containers/CasperContainer';
-import { RefreshableComponent, Button } from './Utils';
+import { RefreshableComponent, Button, UnderConstruction } from './Utils';
 import DataTable from './DataTable';
 import { base64to16, encodeBase16 } from '../lib/Conversions';
 
@@ -93,10 +93,32 @@ class Faucet extends RefreshableComponent<Props, {}> {
       />
     );
 
+    const cliHint = casper.faucetRequests.length > 0 && (
+      <UnderConstruction>
+        <p>
+          Automatic monitoring for status hasn't been implemented yet. You have
+          to do it manually using the{' '}
+          <a
+            href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md#cli-client-tool-1"
+            target="_blank"
+          >
+            casperlabs-client
+          </a>
+          :
+        </p>
+        <pre>
+          {
+            'casperlabs-client --host <node-address> --port 40401 show-deploys <deploy-hash>'
+          }
+        </pre>
+      </UnderConstruction>
+    );
+
     return (
       <div>
         {faucetForm}
         {statusTable}
+        {cliHint}
       </div>
     );
   }
