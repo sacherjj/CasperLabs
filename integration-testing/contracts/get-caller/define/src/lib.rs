@@ -9,12 +9,11 @@ use common::contract_api::{get_caller, store_function, add_uref};
 use common::value::account::PublicKey;
 
 fn test_get_caller() {
-    // Assumes that will be called using account with 
-    // public key == '71ba8d2072964fa42794d2752e1fdaac448a25d8943005b4c7128748d855219b'
+    // Assumes that will be called using test framework genesis account with
+    // public key == 'ae7cd84d61ff556806691be61e6ab217791905677adbbe085b8c540d916e8393'
     // Will fail if we ever change that.
     let caller = get_caller();
-    let expected_caller = PublicKey::new([113, 186, 141, 32, 114, 150, 79, 164, 39, 148, 210, 117, 46, 31, 218, 172, 68, 138, 37, 216, 148, 48, 5, 180, 199, 18, 135, 72, 216, 85, 33, 155]
-);
+    let expected_caller = PublicKey::new([174, 124, 216, 77, 97, 255, 85, 104, 6, 105, 27, 230, 30, 106, 178, 23, 121, 25, 5, 103, 122, 219, 190, 8, 91, 140, 84, 13, 145, 110, 131, 147]);
     assert_eq!(caller, expected_caller);
 }
 

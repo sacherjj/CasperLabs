@@ -29,7 +29,7 @@ class DockerNode(LoggingDockerBase):
     CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
     CL_ACCOUNTS_DIR = f"{CL_NODE_DIRECTORY}/accounts"
     CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
-    CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_GENESIS_DIR}/system-account/account-public.key"
+    CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_ACCOUNTS_DIR}/account-id-genesis"
 
     NUMBER_OF_BONDS = 10
 
@@ -170,7 +170,7 @@ class DockerNode(LoggingDockerBase):
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
         self.create_bonds_file()
 
-    # TODO: I believe this is not used anymore.  We should remove.
+    # TODO: Should be changed to using validator-id from accounts
     def create_bonds_file(self) -> None:
         N = self.NUMBER_OF_BONDS
         path = f'{self.host_genesis_dir}/bonds.txt'
@@ -189,13 +189,15 @@ class DockerNode(LoggingDockerBase):
 
     @property
     def from_address(self) -> str:
-        return GENESIS_ACCOUNT
+        return GENESIS_ACCOUNT.public_key_hex
 
-    def signing_public_key(self):
-        return base64.b64decode(self.genesis_account_key().public_key + '===')
+    @staticmethod
+    def signing_public_key():
+        return base64.b64decode(GENESIS_ACCOUNT.public_key + '===')
 
-    def signing_private_key(self):
-        return base64.b64decode(self.genesis_account_key().private_key + '===')
+    @staticmethod
+    def signing_private_key():
+        return base64.b64decode(GENESIS_ACCOUNT.private_key + '===')
 
     @property
     def volumes(self) -> dict:

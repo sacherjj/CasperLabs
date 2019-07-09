@@ -6,10 +6,9 @@ from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from queue import Empty
 from typing import Any, Dict, Optional, Tuple, Union
-import docker.errors
 from docker import DockerClient
 
-from test.cl_node.casperlabs_accounts import ACCOUNTS
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 from test.cl_node.common import random_string
 from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
 
@@ -102,7 +101,7 @@ class DockerConfig:
         if self.bootstrap_address:
             options['--server-bootstrap'] = self.bootstrap_address
         if self.is_bootstrap:
-            gen_acct_key_file = ACCOUNTS['genesis'].public_key_file
+            gen_acct_key_file = GENESIS_ACCOUNT.public_key_filename
             options['--casper-genesis-account-public-key-path'] = f"/root/.casperlabs/accounts/{gen_acct_key_file}"
             options['--casper-initial-tokens'] = 100000000000
         if self.node_public_key:
@@ -150,6 +149,7 @@ class DockerBase:
 
     @property
     def container_type(self) -> str:
+        # Raising exception rather than abstract method eliminates requiring an __init__ in child classes.
         raise NotImplementedError('No implementation of container_type')
 
     @property
@@ -177,6 +177,7 @@ class DockerBase:
         return self.config.docker_client
 
     def _get_container(self):
+        # Raising exception rather than abstract method eliminates requiring an __init__ in child classes.
         raise NotImplementedError('No implementation of _get_container')
 
     def stop(self):

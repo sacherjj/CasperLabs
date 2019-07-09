@@ -493,6 +493,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "test_args"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
+]
+
+[[package]]
 name = "test_combined_contracts_call"
 version = "0.1.0"
 

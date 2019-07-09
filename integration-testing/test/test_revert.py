@@ -5,6 +5,7 @@ from pyblake2 import blake2b
 from test import contract_hash
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 
+
 @pytest.fixture(scope='module')
 def node(one_node_network_module_scope):
     return one_node_network_module_scope.docker_nodes[0]
@@ -31,7 +32,7 @@ def test_revert_subcall(client, node):
 
     # Help me figure out what subcall-revert-test/call/src/lib.rs should look like
     # TODO: function_counter 0 is a bug, to be fixed in EE.
-    h = contract_hash(GENESIS_ACCOUNT, 0, 0)
+    h = contract_hash(GENESIS_ACCOUNT.public_key_hex, 0, 0)
     logging.info("The expected contract hash is %s (%s)" % (list(h), h.hex()))
 
     block_hash = node.deploy_and_propose(session_contract='test_subcall_revert_call.wasm',
