@@ -108,7 +108,7 @@ class Faucet extends RefreshableComponent<Props, {}> {
         </p>
         <pre>
           {
-            'casperlabs-client --host <node-address> --port 40401 show-deploys <deploy-hash>'
+            'casperlabs-client --host deploy.casperlabs.io --port 40401 show-deploy <deploy-hash>'
           }
         </pre>
       </UnderConstruction>
