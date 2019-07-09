@@ -580,8 +580,9 @@ package object gossiping {
                         } yield ()
 
                       override def onDownloaded(blockHash: ByteString) =
-                        // Calling `addBlock` during validation has already stored the block.
-                        Log[F].debug(s"Download ready for ${show(blockHash)}")
+                        // Calling `addBlock` during validation has already stored the block,
+                        // so we have nothing more to do here.
+                        ().pure[F]
 
                       override def listTips =
                         for {
