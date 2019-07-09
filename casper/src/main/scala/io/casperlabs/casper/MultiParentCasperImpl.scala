@@ -671,7 +671,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
 
     Cell[F, CasperState].modify { s =>
       s.copy(
-        blockBuffer = s.blockBuffer.filterKeys(h => !addedBlockHashes(h)),
+        blockBuffer = s.blockBuffer.filterNot(kv => addedBlockHashes(kv._1)),
         deployBuffer = s.deployBuffer.processed(processedDeployHashes),
         dependencyDag = addedBlocks.foldLeft(s.dependencyDag) {
           case (dag, block) =>
