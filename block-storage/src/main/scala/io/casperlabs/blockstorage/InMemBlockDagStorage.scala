@@ -116,20 +116,20 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
         .toSet
         .diff(block.getHeader.justifications.map(_.validatorPublicKey).toSet)
       validator = block.getHeader.validatorPublicKey
-      newValidatorsWithSender <- if (validator.isEmpty) {
-                                  // Ignore empty sender for special cases such as genesis block
-                                  Log[F].warn(
-                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} validator is empty"
-                                  ) *> newValidators.pure[F]
-                                } else if (validator.size == 32) {
-                                  (newValidators + validator).pure[F]
-                                } else {
-                                  Sync[F].raiseError[Set[ByteString]](
-                                    BlockValidatorIsMalformed(block)
-                                  )
-                                }
+      toUpdateValidators <- if (validator.isEmpty) {
+                             // Ignore empty sender for special cases such as genesis block
+                             Log[F].warn(
+                               s"Block ${Base16.encode(block.blockHash.toByteArray)} validator is empty"
+                             ) *> newValidators.pure[F]
+                           } else if (validator.size == 32) {
+                             List(validator).pure[F]
+                           } else {
+                             Sync[F].raiseError[Set[ByteString]](
+                               BlockValidatorIsMalformed(block)
+                             )
+                           }
       _ <- latestMessagesRef.update { latestMessages =>
-            newValidatorsWithSender.foldLeft(latestMessages) {
+            toUpdateValidators.foldLeft(latestMessages) {
               case (acc, v) => acc.updated(v, block.blockHash)
             }
           }
