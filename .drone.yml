@@ -71,6 +71,8 @@ pipeline:
       - "~/.cargo/bin/cargo build"
       - "~/.cargo/bin/cargo test"
       - "./scripts/run-contract-tests.sh"
+      - "cd ../long-running-tests"
+      - "./build-contracts.sh"
     image: "casperlabs/buildenv:latest"
     when:
       event:
@@ -278,6 +280,38 @@ pipeline:
         - push
         - tag
 
+  docker-explorer-merge:
+    commands:
+      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "make docker-build/explorer"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
+
+  docker-grpcwebproxy-merge:
+    commands:
+      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "make docker-build/grpcwebproxy"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
+
   package-sbt-artifacts-merge:
     commands:
       - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin node/docker:publishLocal client/docker:publishLocal"
@@ -303,6 +337,7 @@ pipeline:
   package-ee:
     commands:
       - "mkdir -p artifacts/${DRONE_BRANCH}"
+      - "make clean"
       - "make cargo-package-all"
       - "cp execution-engine/target/blessed-contracts.tar.gz artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
@@ -366,19 +401,27 @@ pipeline:
       docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:"$REF"
       docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:"$REF"
       docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:"$REF"
+      docker tag casperlabs/explorer:DRONE-${DRONE_BUILD_NUMBER} casperlabs/explorer:"$REF"
+      docker tag casperlabs/grpcwebproxy:DRONE-${DRONE_BUILD_NUMBER} casperlabs/grpcwebproxy:"$REF"
       docker push casperlabs/node:"$REF"
       docker push casperlabs/client:"$REF"
       docker push casperlabs/execution-engine:"$REF"
       docker push casperlabs/key-generator:"$REF"
+      docker push casperlabs/explorer:"$REF"
+      docker push casperlabs/grpcwebproxy:"$REF"
       if [ "${DRONE_BRANCH}" = "master" ]; then
         docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:latest
         docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:latest
         docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:latest
         docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:latest
+        docker tag casperlabs/explorer:DRONE-${DRONE_BUILD_NUMBER} casperlabs/explorer:latest
+        docker tag casperlabs/grpcwebproxy:DRONE-${DRONE_BUILD_NUMBER} casperlabs/grpcwebproxy:latest
         docker push casperlabs/node:latest
         docker push casperlabs/client:latest
         docker push casperlabs/execution-engine:latest
         docker push casperlabs/key-generator:latest
+        docker push casperlabs/explorer:latest
+        docker push casperlabs/grpcwebproxy:latest
       fi
       echo "done"
     image: "casperlabs/buildenv:latest"

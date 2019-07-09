@@ -456,10 +456,9 @@ impl Account {
 
     pub fn create(
         account_addr: [u8; 32],
-        known_urefs: &[(String, Key)],
+        known_urefs: BTreeMap<String, Key>,
         purse_id: PurseId,
     ) -> Self {
-        let known_urefs = known_urefs.iter().cloned().collect();
         let nonce = DEFAULT_NONCE;
         let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();

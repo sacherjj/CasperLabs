@@ -191,6 +191,12 @@ class DockerNode(LoggingDockerBase):
     def from_address(self) -> str:
         return GENESIS_ACCOUNT
 
+    def signing_public_key(self):
+        return base64.b64decode(self.genesis_account_key().public_key + '===')
+
+    def signing_private_key(self):
+        return base64.b64decode(self.genesis_account_key().private_key + '===')
+
     @property
     def volumes(self) -> dict:
         if self.config.volumes is not None:

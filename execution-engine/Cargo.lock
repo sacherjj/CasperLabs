@@ -119,6 +119,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "blessed-urefs-access-rights"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
+]
+
+[[package]]
 name = "byte-tools"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -702,6 +709,13 @@ version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "cfg-if 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "main-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
 ]
 
 [[package]]
@@ -1696,6 +1710,13 @@ dependencies = [
  "tokio-codec 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-reactor 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "transfer-purse-to-account"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.8.0",
 ]
 
 [[package]]

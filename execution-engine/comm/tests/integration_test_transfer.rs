@@ -18,7 +18,6 @@ use common::value::{Value, U512};
 use execution_engine::engine_state::EngineState;
 use shared::transform::Transform;
 use storage::global_state::in_memory::InMemoryGlobalState;
-
 use test_support::DEFAULT_BLOCK_TIME;
 
 #[allow(unused)]
@@ -135,7 +134,7 @@ fn should_transfer_to_account() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (),
+        ACCOUNT_1_ADDR,
     );
 
     let exec_response = engine_state
@@ -222,7 +221,7 @@ fn should_transfer_from_account_to_account() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (),
+        ACCOUNT_1_ADDR,
     );
 
     let exec_1_response = engine_state
@@ -382,7 +381,7 @@ fn should_transfer_to_existing_account() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (),
+        ACCOUNT_1_ADDR,
     );
 
     let exec_response = engine_state
@@ -511,7 +510,7 @@ fn should_fail_when_insufficient_funds() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (),
+        ACCOUNT_1_ADDR,
     );
 
     let exec_response = engine_state
@@ -639,7 +638,7 @@ fn should_create_purse() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (),
+        ACCOUNT_1_ADDR,
     );
 
     let exec_response = engine_state

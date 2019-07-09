@@ -1059,89 +1059,80 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
               )
       deployDatas <- (1L to 10L).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
 
-      createBlock1Result <- nodes(0).casperEff
-                             .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-      Created(block1) = createBlock1Result
-      _               <- nodes(0).casperEff.addBlock(block1)
-      _               <- nodes(1).receive()
-      _               <- nodes(2).receive()
+      Created(block1) <- nodes(0).casperEff
+                          .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
+      _ <- nodes(0).casperEff.addBlock(block1)
+      _ <- nodes(1).receive()
+      _ <- nodes(2).receive()
 
-      createBlock2Result <- nodes(1).casperEff
-                             .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
-      Created(block2) = createBlock2Result
-      _               <- nodes(1).casperEff.addBlock(block2)
-      _               <- nodes(0).receive()
-      _               <- nodes(2).receive()
+      Created(block2) <- nodes(1).casperEff
+                          .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
+      _ <- nodes(1).casperEff.addBlock(block2)
+      _ <- nodes(0).receive()
+      _ <- nodes(2).receive()
 
-      createBlock3Result <- nodes(2).casperEff
-                             .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
-      Created(block3) = createBlock3Result
-      _               <- nodes(2).casperEff.addBlock(block3)
-      _               <- nodes(0).receive()
-      _               <- nodes(1).receive()
+      Created(block3) <- nodes(2).casperEff
+                          .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
+      _ <- nodes(2).casperEff.addBlock(block3)
+      _ <- nodes(0).receive()
+      _ <- nodes(1).receive()
 
-      createBlock4Result <- nodes(0).casperEff
-                             .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
-      Created(block4) = createBlock4Result
-      _               <- nodes(0).casperEff.addBlock(block4)
-      _               <- nodes(1).receive()
-      _               <- nodes(2).receive()
+      Created(block4) <- nodes(0).casperEff
+                          .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
+      _ <- nodes(0).casperEff.addBlock(block4)
+      _ <- nodes(1).receive()
+      _ <- nodes(2).receive()
 
-      createBlock5Result <- nodes(1).casperEff
-                             .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
-      Created(block5) = createBlock5Result
-      _               <- nodes(1).casperEff.addBlock(block5)
-      _               <- nodes(0).receive()
-      _               <- nodes(2).receive()
-      createBlock6Result <- nodes(2).casperEff
-                             .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
-      Created(block6) = createBlock6Result
-      _               <- nodes(2).casperEff.addBlock(block6)
-      _               <- nodes(0).receive()
-      _               <- nodes(1).receive()
+      Created(block5) <- nodes(1).casperEff
+                          .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
+      _ <- nodes(1).casperEff.addBlock(block5)
+      _ <- nodes(0).receive()
+      _ <- nodes(2).receive()
+
+      Created(block6) <- nodes(2).casperEff
+                          .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
+      _ <- nodes(2).casperEff.addBlock(block6)
+      _ <- nodes(0).receive()
+      _ <- nodes(1).receive()
 
       _     <- checkLastFinalizedBlock(nodes(0), block1)
       state <- nodes(0).casperState.read
       _     = state.deployBuffer.size should be(1)
 
-      createBlock7Result <- nodes(0).casperEff
-                             .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
-      Created(block7) = createBlock7Result
-      _               <- nodes(0).casperEff.addBlock(block7)
-      _               <- nodes(1).receive()
-      _               <- nodes(2).receive()
+      Created(block7) <- nodes(0).casperEff
+                          .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
+      _ <- nodes(0).casperEff.addBlock(block7)
+      _ <- nodes(1).receive()
+      _ <- nodes(2).receive()
 
       _     <- checkLastFinalizedBlock(nodes(0), block2)
       state <- nodes(0).casperState.read
       _     = state.deployBuffer.size should be(2) // deploys contained in block 4 and block 7
 
-      createBlock8Result <- nodes(1).casperEff
-                             .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
-      Created(block8) = createBlock8Result
-      _               <- nodes(1).casperEff.addBlock(block8)
-      _               <- nodes(0).receive()
-      _               <- nodes(2).receive()
+      Created(block8) <- nodes(1).casperEff
+                          .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
+      _ <- nodes(1).casperEff.addBlock(block8)
+      _ <- nodes(0).receive()
+      _ <- nodes(2).receive()
 
       _ <- checkLastFinalizedBlock(nodes(0), block3)
       _ = state.deployBuffer.size should be(2) // deploys contained in block 4 and block 7
 
-      createBlock9Result <- nodes(2).casperEff
-                             .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
-      Created(block9) = createBlock9Result
-      _               <- nodes(2).casperEff.addBlock(block9)
-      _               <- nodes(0).receive()
-      _               <- nodes(1).receive()
+      Created(block9) <- nodes(2).casperEff
+                          .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
+      _ <- nodes(2).casperEff.addBlock(block9)
+      _ <- nodes(0).receive()
+      _ <- nodes(1).receive()
 
       _     <- checkLastFinalizedBlock(nodes(0), block4)
       state <- nodes(0).casperState.read
       _     = state.deployBuffer.size should be(1) // deploys contained in block 7
 
-      createBlock10Result <- nodes(0).casperEff
-                              .deploy(deployDatas(9)) *> nodes(0).casperEff.createBlock
-      Created(block10) = createBlock10Result
-      _                <- nodes(0).casperEff.addBlock(block10)
-      _                <- nodes(1).receive()
-      _                <- nodes(2).receive()
+      Created(block10) <- nodes(0).casperEff
+                           .deploy(deployDatas(9)) *> nodes(0).casperEff.createBlock
+      _ <- nodes(0).casperEff.addBlock(block10)
+      _ <- nodes(1).receive()
+      _ <- nodes(2).receive()
 
       _     <- checkLastFinalizedBlock(nodes(0), block5)
       state <- nodes(0).casperState.read

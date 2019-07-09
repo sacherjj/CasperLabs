@@ -173,7 +173,7 @@ object ExecEngineUtil {
     *
     * @param block Block to run.
     * @param prestate prestate hash of the GlobalState on top of which to run deploys.
-    * @return Effects of running deploys from the block.
+    * @return Effects of running deploys from the block
     */
   def effectsForBlock[F[_]: MonadThrowable: BlockStore: ExecutionEngineService](
       block: Block,

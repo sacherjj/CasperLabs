@@ -17,6 +17,9 @@ CONTRACTS=(
     "get-blocktime"
     "get-caller"
     "get-caller-subcall"
+    "main-purse"
+    "blessed-urefs-access-rights"
+    "transfer-purse-to-account"
 )
 
 source "${HOME}/.cargo/env"
