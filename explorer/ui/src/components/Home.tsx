@@ -55,15 +55,15 @@ const Home = observer((props: Props) => {
         <div className="card-body">
           <p>
             To write contracts have a look at the{' '}
-            <a href="https://github.com/CasperLabs/contract-examples">
+            <a href="https://github.com/CasperLabs/contract-examples/tree/master">
               contract
             </a>{' '}
             and the{' '}
-            <a href="https://github.com/CasperLabs/CasperLabs/USAGE.md">
+            <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/USAGE.md">
               usage examples
             </a>
             , the{' '}
-            <a href="https://github.com/CasperLabs/CasperLabs/DEVELOPER.md">
+            <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/DEVELOPER.md">
               developer guide
             </a>{' '}
             and the{' '}
