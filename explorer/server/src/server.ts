@@ -51,8 +51,14 @@ const checkJwt = jwt({
 });
 
 // Serve the static files of the UI
-const staticRoot = process.env.STATIC_ROOT!;
+// Serve the static files of the UI.
+// STATIC_ROOT needs to be an absolute path, otherwise we assume we'll use the `ui` projec's build output.
+const staticRoot = path.isAbsolute(process.env.STATIC_ROOT!)
+  ? process.env.STATIC_ROOT!
+  : path.join(__dirname, process.env.STATIC_ROOT!);
+
 app.use(express.static(staticRoot));
+
 app.get("/", (_, res) => {
   res.sendFile(path.join(staticRoot, "index.html"));
 });
@@ -105,7 +111,7 @@ app.use((err: any, req: any, res: any, next: any) => {
 });
 
 // start the express server
-if (process.env.SERVER_USE_TLS) {
+if (process.env.SERVER_USE_TLS === "true") {
   const cert = process.env.SERVER_TLS_CERT_PATH!;
   const key = process.env.SERVER_TLS_KEY_PATH!;
   https.createServer({
