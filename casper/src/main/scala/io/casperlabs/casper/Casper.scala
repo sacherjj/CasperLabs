@@ -48,23 +48,23 @@ case class DeployBuffer(
   // Removes deploys that were included in a finalized block.
   def remove(deployHashes: Set[DeployHash]) =
     copy(
-      processedDeploys = processedDeploys.filterKeys(h => !deployHashes(h)),
+      processedDeploys = processedDeploys.filterNot(kv => deployHashes(kv._1)),
       // They could be in pendingDeploys too if they were sent to multiple nodes.
-      pendingDeploys = pendingDeploys.filterKeys(h => !deployHashes(h))
+      pendingDeploys = pendingDeploys.filterNot(kv => deployHashes(kv._1))
     )
 
   // Move some deploys from pending to processed.
   def processed(deployHashes: Set[DeployHash]) =
     copy(
-      processedDeploys = processedDeploys ++ pendingDeploys.filterKeys(deployHashes),
-      pendingDeploys = pendingDeploys.filterKeys(h => !deployHashes(h))
+      processedDeploys = processedDeploys ++ pendingDeploys.filter(kv => deployHashes(kv._1)),
+      pendingDeploys = pendingDeploys.filterNot(kv => deployHashes(kv._1))
     )
 
   // Move some deploys back from processed to pending.
   def orphaned(deployHashes: Set[DeployHash]) =
     copy(
-      processedDeploys = processedDeploys.filterKeys(h => !deployHashes(h)),
-      pendingDeploys = pendingDeploys ++ processedDeploys.filterKeys(deployHashes)
+      processedDeploys = processedDeploys.filterNot(kv => deployHashes(kv._1)),
+      pendingDeploys = pendingDeploys ++ processedDeploys.filter(kv => deployHashes(kv._1))
     )
 
   def get(deployHash: DeployHash): Option[Deploy] =
