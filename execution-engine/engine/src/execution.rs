@@ -762,7 +762,7 @@ where
                 self.transfer_to_new_account(source, target, amount)
             }
             Some(Value::Account(account)) => {
-                let target = account.purse_id();
+                let target = account.purse_id_add_only();
                 if source == target {
                     return Ok(TransferResult::TransferredToExistingAccount);
                 }
