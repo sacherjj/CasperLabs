@@ -231,6 +231,8 @@ class DockerNode(LoggingDockerBase):
     def container_command(self):
         bootstrap_flag = '-s' if self.config.is_bootstrap else ''
         options = [f'{opt} {arg}' for opt, arg in self.config.node_command_options(self.container_name).items()]
+        if self.config.is_bootstrap:
+            options.append("--casper-initial-tokens 100")
         return f"run {bootstrap_flag} {' '.join(options)}"
 
     def get_metrics(self) -> Tuple[int, str]:

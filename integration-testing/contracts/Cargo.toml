@@ -21,4 +21,6 @@ members = [
     "transfer-to-account-1/call",
     "transfer-to-account-2/call",
     "test_args",
+    "bonding/call",
+    "unbonding/call",
 ]

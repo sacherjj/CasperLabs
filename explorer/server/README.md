@@ -10,7 +10,7 @@ This is the server side component for the CasperLabs Explorer:
 
 Rebuilds and restarts the server whenever there's a source code change.
 
-### `npm start:both`
+### `npm run start:both`
 
 Runs the server and the UI in development mode. The UI will proxy to the server on its own port, so you can reach API without CORS issues on port 8000, or directly at port 8001. The client can be started in a separate terminal as well.
 
@@ -24,6 +24,10 @@ The `grpc` directory contains auto-generated files, they were addes as follows:
 cd src
 ln -s ../../grpc/generated grpc
 ```
+
+### `npm run test`
+
+Run unit tests, for example to check the contract ABI serialization format.
 
 ## Useful links:
 * https://facebook.github.io/create-react-app/docs/deployment
