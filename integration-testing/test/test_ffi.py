@@ -20,4 +20,3 @@ def test_get_caller(one_node_network, define_contract, call_contract):
     node = one_node_network.docker_nodes[0]
     deploy_and_propose_expect_no_errors(node, define_contract)
     deploy_and_propose_expect_no_errors(node, call_contract)
-

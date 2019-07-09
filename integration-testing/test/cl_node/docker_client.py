@@ -84,7 +84,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
 
     def deploy(self,
                from_address: str = None,
-               gas_limit: int = 100000000,
+               gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: Optional[int] = None,
                session_contract: str = None,
