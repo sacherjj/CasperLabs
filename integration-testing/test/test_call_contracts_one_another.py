@@ -46,6 +46,7 @@ test_parameters = [
     (HELLO_WORLD, 0, "helloworld", lambda r: r.string_value == "Hello, World"),
 ]
 
+
 @pytest.mark.parametrize("contract, function_counter, path, expected", test_parameters)
 def test_call_contracts_one_another(nodes, docker_client, contract, function_counter, path, expected):
     """
@@ -53,13 +54,13 @@ def test_call_contracts_one_another(nodes, docker_client, contract, function_cou
     Scenario: Call contracts deployed on a node from another node.
     """
 
-    from_address = nodes[0].from_address()
+    from_address = nodes[0].from_address
 
     # Help me figure out what hashes to put into the call contracts.
     # combined-contracts/define/src/lib.rs defines them;
     # the order is hello_name_ext, counter_ext, mailing_list_ext
-    #h = contract_hash(from_address, 0, function_counter)
-    #logging.info("The expected contract hash for %s is %s (%s)" % (contract, list(h), h.hex()))
+    # h = contract_hash(from_address, 0, function_counter)
+    # logging.info("The expected contract hash for %s is %s (%s)" % (contract, list(h), h.hex()))
 
     def state(node, path, block_hash):
         return node.d_client.query_state(block_hash=block_hash, key=from_address, key_type="address", path=path)

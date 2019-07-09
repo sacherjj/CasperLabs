@@ -81,7 +81,6 @@ def test_client_parser_show_blocks():
     assert sum(bond.stake for bond in bonds) == 190
 
 
-
 DEPLOY = """
 deploy {
   deploy_hash: "154999dfe710f669c20a9194c417ea8b0fba597871cc81fcd4f38b769be59c69"
@@ -213,6 +212,7 @@ processing_results {
 
 
 """
+
 
 def test_client_parser_deploy():
     r = parse(DEPLOY)

@@ -14,6 +14,7 @@ from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 
 
 class DockerNode(LoggingDockerBase):
@@ -168,18 +169,8 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.host_mount_dir)
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
         self.create_bonds_file()
-        self.create_genesis_account_public_key_file()
 
-    def genesis_account_key(self):
-        # Take one not used by bonds
-        return PREGENERATED_KEYPAIRS[self.NUMBER_OF_BONDS]
-
-    def create_genesis_account_public_key_file(self):
-        path = f'{self.host_genesis_dir}/system-account/account-public.key'
-        os.makedirs(os.path.dirname(path))
-        with open(path, 'w') as f:
-            f.write(f'{self.genesis_account_key().public_key}')
-
+    # TODO: I believe this is not used anymore.  We should remove.
     def create_bonds_file(self) -> None:
         N = self.NUMBER_OF_BONDS
         path = f'{self.host_genesis_dir}/bonds.txt'
@@ -196,8 +187,9 @@ class DockerNode(LoggingDockerBase):
         if os.path.exists(self.deploy_dir):
             shutil.rmtree(self.deploy_dir)
 
-    def from_address(self):
-        return base64.b64decode(self.genesis_account_key().public_key + '===').hex()
+    @property
+    def from_address(self) -> str:
+        return GENESIS_ACCOUNT
 
     @property
     def volumes(self) -> dict:
@@ -244,7 +236,7 @@ class DockerNode(LoggingDockerBase):
 
     def deploy_and_propose(self, **deploy_kwargs) -> str:
         if 'from_address' not in deploy_kwargs:
-            deploy_kwargs['from_address'] = self.from_address()
+            deploy_kwargs['from_address'] = self.from_address
         deploy_output = self.client.deploy(**deploy_kwargs)
         assert 'Success!' in deploy_output
         block_hash_output_string = self.client.propose()

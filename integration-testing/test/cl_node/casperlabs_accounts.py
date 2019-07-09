@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import threading
 from pathlib import Path
 import os
 
@@ -8,18 +7,10 @@ import os
 class Account:
     public_key: str
     public_key_hex: str
-    public_key_ints: list
     public_key_file: str
     private_key_file: str
     transfer_amount: float
     transfer_contract: str
-    _nonce: int = 0
-    _lock = threading.Lock()
-
-    def next_nonce(self):
-        with self._lock:
-            self._nonce += 1
-            return self._nonce
 
     @staticmethod
     def int_key_to_hex(key):
@@ -28,131 +19,90 @@ class Account:
 
 ACCOUNTS = {'genesis': Account(public_key='rnzYTWH/VWgGaRvmHmqyF3kZBWd6274IW4xUDZFug5M=',
                                public_key_hex='ae7cd84d61ff556806691be61e6ab217791905677adbbe085b8c540d916e8393',
-                               public_key_ints=[174, 124, 216, 77, 97, 255, 85, 104, 6, 105, 27, 230, 30, 106, 178, 23,
-                                                121, 25, 5, 103, 122, 219, 190, 8, 91, 140, 84, 13, 145, 110, 131, 147],
                                public_key_file='account-public-genesis.pem',
-                               private_key_file='account-private-genesis.pem', transfer_amount=0,
-                               transfer_contract='test_transfer_to_account_genesis_call.wasm', _nonce=0),
+                               private_key_file='account-private-genesis.pem', transfer_amount=0, transfer_contract=''),
             1: Account(public_key='nTm3+6R9B8Gvb3Ee/mBKESqzceLe77maYT0rPc37pBQ=',
                        public_key_hex='9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414',
-                       public_key_ints=[157, 57, 183, 251, 164, 125, 7, 193, 175, 111, 113, 30, 254, 96, 74, 17, 42,
-                                        179, 113, 226, 222, 239, 185, 154, 97, 61, 43, 61, 205, 251, 164, 20],
                        public_key_file='account-public-1.pem', private_key_file='account-private-1.pem',
-                       transfer_amount=0, transfer_contract='test_transfer_to_account_1_call.wasm', _nonce=0),
+                       transfer_amount=1000000, transfer_contract='test_transfer_to_account_1_call.wasm'),
             2: Account(public_key='TnRuZ872N6B0A51gJH5cJgXZpdeOx6rEaoPM44EGnTU=',
                        public_key_hex='4e746e67cef637a074039d60247e5c2605d9a5d78ec7aac46a83cce381069d35',
-                       public_key_ints=[78, 116, 110, 103, 206, 246, 55, 160, 116, 3, 157, 96, 36, 126, 92, 38, 5, 217,
-                                        165, 215, 142, 199, 170, 196, 106, 131, 204, 227, 129, 6, 157, 53],
                        public_key_file='account-public-2.pem', private_key_file='account-private-2.pem',
-                       transfer_amount=0, transfer_contract='test_transfer_to_account_2_call.wasm', _nonce=0),
+                       transfer_amount=750000, transfer_contract='test_transfer_to_account_2_call.wasm'),
             3: Account(public_key='WPdPKqEZ5dE8abOdA0Mw+tISbEc4mnsVBiGafwuuogk=',
                        public_key_hex='58f74f2aa119e5d13c69b39d034330fad2126c47389a7b1506219a7f0baea209',
-                       public_key_ints=[88, 247, 79, 42, 161, 25, 229, 209, 60, 105, 179, 157, 3, 67, 48, 250, 210, 18,
-                                        108, 71, 56, 154, 123, 21, 6, 33, 154, 127, 11, 174, 162, 9],
                        public_key_file='account-public-3.pem', private_key_file='account-private-3.pem',
-                       transfer_amount=0, transfer_contract='test_transfer_to_account_3_call.wasm', _nonce=0),
+                       transfer_amount=1000000, transfer_contract='test_transfer_to_account_3_call.wasm'),
             4: Account(public_key='HKieoFdYwmHM1rbJHzF+wetS9WTXg0DUvdjx89LUSHY=',
                        public_key_hex='1ca89ea05758c261ccd6b6c91f317ec1eb52f564d78340d4bdd8f1f3d2d44876',
-                       public_key_ints=[28, 168, 158, 160, 87, 88, 194, 97, 204, 214, 182, 201, 31, 49, 126, 193, 235,
-                                        82, 245, 100, 215, 131, 64, 212, 189, 216, 241, 243, 210, 212, 72, 118],
                        public_key_file='account-public-4.pem', private_key_file='account-private-4.pem',
-                       transfer_amount=0, transfer_contract='test_transfer_to_account_4_call.wasm', _nonce=0),
+                       transfer_amount=1000000, transfer_contract='test_transfer_to_account_4_call.wasm'),
             5: Account(public_key='6pb+YTBu7N5X4N9l7PlgNqhRXjNn56rdh7wSHCVi6gk=',
                        public_key_hex='ea96fe61306eecde57e0df65ecf96036a8515e3367e7aadd87bc121c2562ea09',
-                       public_key_ints=[234, 150, 254, 97, 48, 110, 236, 222, 87, 224, 223, 101, 236, 249, 96, 54, 168,
-                                        81, 94, 51, 103, 231, 170, 221, 135, 188, 18, 28, 37, 98, 234, 9],
                        public_key_file='account-public-5.pem', private_key_file='account-private-5.pem',
-                       transfer_amount=0, transfer_contract='test_transfer_to_account_5_call.wasm', _nonce=0),
+                       transfer_amount=1000000, transfer_contract='test_transfer_to_account_5_call.wasm'),
             6: Account(public_key='AW9KTASW7GrDdctN0AI2GrGhHrJmbi/jlA/xHnJGqBg=',
                        public_key_hex='016f4a4c0496ec6ac375cb4dd002361ab1a11eb2666e2fe3940ff11e7246a818',
-                       public_key_ints=[1, 111, 74, 76, 4, 150, 236, 106, 195, 117, 203, 77, 208, 2, 54, 26, 177, 161,
-                                        30, 178, 102, 110, 47, 227, 148, 15, 241, 30, 114, 70, 168, 24],
                        public_key_file='account-public-6.pem', private_key_file='account-private-6.pem',
-                       transfer_amount=0, transfer_contract='test_transfer_to_account_6_call.wasm', _nonce=0),
+                       transfer_amount=1000000, transfer_contract='test_transfer_to_account_6_call.wasm'),
             7: Account(public_key='3sYg/RiD/VzGcNcwdk/vjueR7GkW30zDHjbamiKKIDI=',
                        public_key_hex='dec620fd1883fd5cc670d730764fef8ee791ec6916df4cc31e36da9a228a2032',
-                       public_key_ints=[222, 198, 32, 253, 24, 131, 253, 92, 198, 112, 215, 48, 118, 79, 239, 142, 231,
-                                        145, 236, 105, 22, 223, 76, 195, 30, 54, 218, 154, 34, 138, 32, 50],
                        public_key_file='account-public-7.pem', private_key_file='account-private-7.pem',
-                       transfer_amount=0, transfer_contract='test_transfer_to_account_7_call.wasm', _nonce=0),
+                       transfer_amount=1000000, transfer_contract='test_transfer_to_account_7_call.wasm'),
             8: Account(public_key='/wxF7teEy55PuRSIYlkS/URf/qwLE2XrWgRdyb1aba0=',
                        public_key_hex='ff0c45eed784cb9e4fb91488625912fd445ffeac0b1365eb5a045dc9bd5a6dad',
-                       public_key_ints=[255, 12, 69, 238, 215, 132, 203, 158, 79, 185, 20, 136, 98, 89, 18, 253, 68, 95,
-                                        254, 172, 11, 19, 101, 235, 90, 4, 93, 201, 189, 90, 109, 173],
                        public_key_file='account-public-8.pem', private_key_file='account-private-8.pem',
-                       transfer_amount=0, transfer_contract='test_transfer_to_account_8_call.wasm', _nonce=0),
+                       transfer_amount=1000000, transfer_contract='test_transfer_to_account_8_call.wasm'),
             9: Account(public_key='17bidAlUbKdYBYxPDlvhPvmbYXAZpNBqFPgV/qLm654=',
                        public_key_hex='d7b6e27409546ca758058c4f0e5be13ef99b617019a4d06a14f815fea2e6eb9e',
-                       public_key_ints=[215, 182, 226, 116, 9, 84, 108, 167, 88, 5, 140, 79, 14, 91, 225, 62, 249, 155,
-                                        97, 112, 25, 164, 208, 106, 20, 248, 21, 254, 162, 230, 235, 158],
                        public_key_file='account-public-9.pem', private_key_file='account-private-9.pem',
-                       transfer_amount=0, transfer_contract='test_transfer_to_account_9_call.wasm', _nonce=0),
+                       transfer_amount=1000000, transfer_contract='test_transfer_to_account_9_call.wasm'),
             10: Account(public_key='1dSZlgLdtJAMVAqSVPMptYxiIzyudXlbVN01va8d5IY=',
                         public_key_hex='d5d4999602ddb4900c540a9254f329b58c62233cae75795b54dd35bdaf1de486',
-                        public_key_ints=[213, 212, 153, 150, 2, 221, 180, 144, 12, 84, 10, 146, 84, 243, 41, 181, 140,
-                                         98, 35, 60, 174, 117, 121, 91, 84, 221, 53, 189, 175, 29, 228, 134],
                         public_key_file='account-public-10.pem', private_key_file='account-private-10.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_10_call.wasm', _nonce=0),
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_10_call.wasm'),
             11: Account(public_key='V6pKFWo01y+qNwxiNrJwKP1GwpwwBjNbW/0tXsQQyKs=',
                         public_key_hex='57aa4a156a34d72faa370c6236b27028fd46c29c3006335b5bfd2d5ec410c8ab',
-                        public_key_ints=[87, 170, 74, 21, 106, 52, 215, 47, 170, 55, 12, 98, 54, 178, 112, 40, 253, 70,
-                                         194, 156, 48, 6, 51, 91, 91, 253, 45, 94, 196, 16, 200, 171],
                         public_key_file='account-public-11.pem', private_key_file='account-private-11.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_11_call.wasm', _nonce=0),
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_11_call.wasm'),
             12: Account(public_key='o8LZPrTLf3z9IT13jV40PTwsEBHqOoUeXn8KabATvWA=',
                         public_key_hex='a3c2d93eb4cb7f7cfd213d778d5e343d3c2c1011ea3a851e5e7f0a69b013bd60',
-                        public_key_ints=[163, 194, 217, 62, 180, 203, 127, 124, 253, 33, 61, 119, 141, 94, 52, 61, 60,
-                                         44, 16, 17, 234, 58, 133, 30, 94, 127, 10, 105, 176, 19, 189, 96],
                         public_key_file='account-public-12.pem', private_key_file='account-private-12.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_12_call.wasm', _nonce=0),
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_12_call.wasm'),
             13: Account(public_key='t9eYMD0bd3v6crI7r0ySZThFsNexHNchnILvuxVHq9U=',
                         public_key_hex='b7d798303d1b777bfa72b23baf4c92653845b0d7b11cd7219c82efbb1547abd5',
-                        public_key_ints=[183, 215, 152, 48, 61, 27, 119, 123, 250, 114, 178, 59, 175, 76, 146, 101, 56,
-                                         69, 176, 215, 177, 28, 215, 33, 156, 130, 239, 187, 21, 71, 171, 213],
                         public_key_file='account-public-13.pem', private_key_file='account-private-13.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_13_call.wasm', _nonce=0),
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_13_call.wasm'),
             14: Account(public_key='5uzR1fai4CBkPUT2tYdhMCG+BQlH20uLBPonj8ot4tA=',
                         public_key_hex='e6ecd1d5f6a2e020643d44f6b587613021be050947db4b8b04fa278fca2de2d0',
-                        public_key_ints=[230, 236, 209, 213, 246, 162, 224, 32, 100, 61, 68, 246, 181, 135, 97, 48, 33,
-                                         190, 5, 9, 71, 219, 75, 139, 4, 250, 39, 143, 202, 45, 226, 208],
                         public_key_file='account-public-14.pem', private_key_file='account-private-14.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_14_call.wasm', _nonce=0),
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_14_call.wasm'),
             15: Account(public_key='1JHV8xwVQgWIwSUGALgTjf2i3N+NiYKmiupnksQBlIk=',
                         public_key_hex='d491d5f31c15420588c1250600b8138dfda2dcdf8d8982a68aea6792c4019489',
-                        public_key_ints=[212, 145, 213, 243, 28, 21, 66, 5, 136, 193, 37, 6, 0, 184, 19, 141, 253, 162,
-                                         220, 223, 141, 137, 130, 166, 138, 234, 103, 146, 196, 1, 148, 137],
                         public_key_file='account-public-15.pem', private_key_file='account-private-15.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_15_call.wasm', _nonce=0),
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_15_call.wasm'),
             16: Account(public_key='AjXd1PK+CboSXzcLET6/ZTD3GaJu06PTnWd81j57R4Q=',
                         public_key_hex='0235ddd4f2be09ba125f370b113ebf6530f719a26ed3a3d39d677cd63e7b4784',
-                        public_key_ints=[2, 53, 221, 212, 242, 190, 9, 186, 18, 95, 55, 11, 17, 62, 191, 101, 48, 247,
-                                         25, 162, 110, 211, 163, 211, 157, 103, 124, 214, 62, 123, 71, 132],
                         public_key_file='account-public-16.pem', private_key_file='account-private-16.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_16_call.wasm', _nonce=0),
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_16_call.wasm'),
             17: Account(public_key='JPAmGHF0Kyw1drBLqEosKNmnjzmZJiTPBLx1sHveNQA=',
                         public_key_hex='24f0261871742b2c3576b04ba84a2c28d9a78f39992624cf04bc75b07bde3500',
-                        public_key_ints=[36, 240, 38, 24, 113, 116, 43, 44, 53, 118, 176, 75, 168, 74, 44, 40, 217, 167,
-                                         143, 57, 153, 38, 36, 207, 4, 188, 117, 176, 123, 222, 53, 0],
                         public_key_file='account-public-17.pem', private_key_file='account-private-17.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_17_call.wasm', _nonce=0),
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_17_call.wasm'),
             18: Account(public_key='7HHcA2IOJMZCSQKgdw6no6nCQ01cVcFVVffpvIgzrUo=',
                         public_key_hex='ec71dc03620e24c6424902a0770ea7a3a9c2434d5c55c15555f7e9bc8833ad4a',
-                        public_key_ints=[236, 113, 220, 3, 98, 14, 36, 198, 66, 73, 2, 160, 119, 14, 167, 163, 169, 194,
-                                         67, 77, 92, 85, 193, 85, 85, 247, 233, 188, 136, 51, 173, 74],
                         public_key_file='account-public-18.pem', private_key_file='account-private-18.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_18_call.wasm', _nonce=0),
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_18_call.wasm'),
             19: Account(public_key='37Bzq/uI6PIRruo0WqPC3J5mJkc50jpnStrdVFIeISM=',
                         public_key_hex='dfb073abfb88e8f211aeea345aa3c2dc9e66264739d23a674adadd54521e2123',
-                        public_key_ints=[223, 176, 115, 171, 251, 136, 232, 242, 17, 174, 234, 52, 90, 163, 194, 220,
-                                         158, 102, 38, 71, 57, 210, 58, 103, 74, 218, 221, 84, 82, 30, 33, 35],
                         public_key_file='account-public-19.pem', private_key_file='account-private-19.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_19_call.wasm', _nonce=0),
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_19_call.wasm'),
             20: Account(public_key='0fc7cGfUAPIm7P2hdshKU0wviQJEfRC5kXkg9n3uoB8=',
                         public_key_hex='d1f73b7067d400f226ecfda176c84a534c2f8902447d10b9917920f67deea01f',
-                        public_key_ints=[209, 247, 59, 112, 103, 212, 0, 242, 38, 236, 253, 161, 118, 200, 74, 83, 76,
-                                         47, 137, 2, 68, 125, 16, 185, 145, 121, 32, 246, 125, 238, 160, 31],
                         public_key_file='account-public-20.pem', private_key_file='account-private-20.pem',
-                        transfer_amount=0, transfer_contract='test_transfer_to_account_20_call.wasm', _nonce=0)}
+                        transfer_amount=1000000, transfer_contract='test_transfer_to_account_20_call.wasm')}
+
+GENESIS_ACCOUNT = ACCOUNTS['genesis'].public_key_hex
 
 
 if __name__ == '__main__':
@@ -160,12 +110,14 @@ if __name__ == '__main__':
     # I don't want to dynamically generate it each time, as transfer amounts and others are manual.
     # Might change to generate by key as we need.
 
+    transfer_amount = [0, 1000000, 750000] + ([1000000] * 18)
+
     cur_path = Path(os.path.realpath(__file__)).parent
     while cur_path.name != 'integration-testing':
         cur_path = cur_path.parent
     path = cur_path / 'resources' / 'accounts'
     accounts = {}
-
+    rust_keys = {}
     for acct in ['genesis'] + list(range(1, 21)):
 
         with open(path / f'account-id-{acct}') as f:
@@ -175,14 +127,20 @@ if __name__ == '__main__':
             public_key_hex = f.read().strip()
 
         # Converting hex string to list of ints for Rust contracts address
-        public_key_ints = [int(public_key_hex[i:i+2], 16) for i in range(0, len(public_key_hex), 2)]
-        assert public_key_hex == Account.int_key_to_hex(public_key_ints)
+        if acct != 'genesis':
+            rust_keys[acct] = [int(public_key_hex[i:i+2], 16) for i in range(0, len(public_key_hex), 2)]
 
         accounts[acct] = Account(public_key=public_key,
                                  public_key_hex=public_key_hex,
-                                 public_key_ints=public_key_ints,
                                  public_key_file=f'account-public-{acct}.pem',
                                  private_key_file=f'account-private-{acct}.pem',
-                                 transfer_amount=0,
-                                 transfer_contract=f'test_transfer_to_account_{acct}_call.wasm')
+                                 transfer_amount=0 if acct == 'genesis' else transfer_amount[acct],
+                                 transfer_contract='' if acct == 'genesis' else f'test_transfer_to_account_{acct}_call.wasm')
     print(f'ACCOUNTS = {accounts}')
+    print('')
+
+    print(f'Rust Code for it_common lib.rs:')
+    for key, value in rust_keys.items():
+        print(f'const ACCOUNT_{key}_ADDR: [u8;32] = {value};')
+        print(f'const ACCOUNT_{key}_TRANSFER_AMOUNT: u32 = {transfer_amount[key]};')
+        print('')

@@ -1,8 +1,7 @@
-import logging
 import time
-import os
 from typing import Optional
-from collections import defaultdict
+import docker.errors
+
 
 from test.cl_node import LoggingMixin
 from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
@@ -10,10 +9,7 @@ from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
-import docker.errors
 from test.cl_node.nonce_registry import NonceRegistry
-
-from docker.errors import ContainerError
 
 
 class DockerClient(CasperLabsClient, LoggingMixin):
@@ -99,7 +95,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         assert session_contract is not None
         assert payment_contract is not None
 
-        address = from_address or self.node.from_address()
+        address = from_address or self.node.from_address
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
         payment_contract = payment_contract or session_contract
 

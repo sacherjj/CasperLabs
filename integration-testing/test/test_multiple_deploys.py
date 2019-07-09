@@ -31,11 +31,11 @@ branch out and be only 4 levels deep
 
 class DeployThread(threading.Thread):
     def __init__(self,
-            name: str,
-            node: DockerNode,
-            batches_of_contracts: List[List[str]],
-            max_attempts: int,
-            retry_seconds: int) -> None:
+                 name: str,
+                 node: DockerNode,
+                 batches_of_contracts: List[List[str]],
+                 max_attempts: int,
+                 retry_seconds: int) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
@@ -54,7 +54,6 @@ class DeployThread(threading.Thread):
             self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
 
 
-
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
                         ([['test_helloname.wasm']], [1, 1, 1, 1])
 ])
@@ -71,7 +70,7 @@ def test_multiple_deploys_at_once(three_node_network,
     for node in nodes:
         wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
 
-    deploy_threads = [DeployThread("node" + str(i + 1), node, contract_paths, max_attempts = 5, retry_seconds = 3)
+    deploy_threads = [DeployThread("node" + str(i + 1), node, contract_paths, max_attempts=5, retry_seconds=3)
                       for i, node in enumerate(nodes)]
 
     for t in deploy_threads:

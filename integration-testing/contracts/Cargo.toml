@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "it_common",
     "combined-contracts/call",
     "combined-contracts/define",
     "counter/call",

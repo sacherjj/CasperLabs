@@ -40,7 +40,7 @@ def node(one_node_network_module_scope):
 def test_account_state(node):
 
     def account_state(block_hash):
-        return node.d_client.query_state(block_hash=block_hash, key_type='address', key=node.from_address(), path='')
+        return node.d_client.query_state(block_hash=block_hash, key_type='address', key=node.from_address, path='')
 
     blocks = parse_show_blocks(node.d_client.show_blocks(1000))
     assert len(blocks) == 1  # There should be only one block, the genesis block
@@ -48,7 +48,9 @@ def test_account_state(node):
     response = account_state(blocks[0].summary.block_hash)
     assert response.account.nonce == 0
 
-    block_hash = node.deploy_and_propose(session_contract="test_counterdefine.wasm", payment_contract="test_counterdefine.wasm", nonce=1)
+    block_hash = node.deploy_and_propose(session_contract="test_counterdefine.wasm",
+                                         payment_contract="test_counterdefine.wasm",
+                                         nonce=1)
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error
 
@@ -56,7 +58,9 @@ def test_account_state(node):
     assert response.account.nonce == 1, str(response)
 
     for nonce in range(2, 5):
-        block_hash = node.deploy_and_propose(session_contract="test_countercall.wasm", payment_contract="test_counterdefine.wasm", nonce=nonce)
+        block_hash = node.deploy_and_propose(session_contract="test_countercall.wasm",
+                                             payment_contract="test_counterdefine.wasm",
+                                             nonce=nonce)
         response = account_state(block_hash)
         assert response.account.nonce == nonce
 

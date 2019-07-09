@@ -1,4 +1,3 @@
-import logging
 from test import contract_hash
 
 
@@ -37,6 +36,7 @@ nonce=9 counter=0 hash=[105, 4, 214, 201, 122, 32, 80, 4, 101, 134, 177, 49, 252
 nonce=9 counter=1 hash=[145, 130, 187, 81, 162, 22, 236, 123, 185, 83, 193, 18, 229, 101, 166, 156, 190, 169, 181, 118, 205, 177, 126, 242, 140, 156, 163, 221, 19, 135, 215, 127]
 nonce=9 counter=2 hash=[105, 12, 118, 161, 38, 130, 56, 203, 24, 145, 213, 69, 126, 146, 148, 222, 246, 214, 96, 116, 126, 207, 81, 32, 230, 184, 36, 227, 121, 249, 84, 144]
 """
+
 
 def test_contract_hash():
     # Check that the old hash values can be calculated correctly.
