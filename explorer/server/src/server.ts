@@ -57,7 +57,9 @@ const checkJwt = jwt({
 const staticRoot = path.isAbsolute(process.env.STATIC_ROOT!)
   ? process.env.STATIC_ROOT!
   : path.join(__dirname, process.env.STATIC_ROOT!);
-app.use(express.static(path.join(__dirname, staticRoot)));
+
+app.use(express.static(staticRoot));
+
 app.get("/", (_, res) => {
   res.sendFile(path.join(staticRoot, "index.html"));
 });
