@@ -15,10 +15,13 @@ export class CasperContainer {
   ) {}
 
   async requestTokens(account: UserAccount) {
-    const deployHash = await this.errors.capture(
-      this.faucetService.requestTokens(account.publicKeyBase64)
-    );
-    this.monitorFaucetRequest(account, deployHash);
+    const request = async () => {
+      const deployHash = await this.faucetService.requestTokens(
+        account.publicKeyBase64
+      );
+      this.monitorFaucetRequest(account, deployHash);
+    };
+    this.errors.capture(request());
   }
 
   @computed get faucetRequests() {
