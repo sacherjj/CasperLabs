@@ -8,7 +8,7 @@ use cl_std::contract_api::{get_arg, read_local, revert, transfer_to_account, Tra
 use cl_std::value::account::PublicKey;
 use cl_std::value::U512;
 
-const TRANSFER_AMOUNT: u32 = 1_000_000;
+const TRANSFER_AMOUNT: u32 = 10_000_000;
 
 /// Executes token transfer to supplied public key.
 /// Transfers 100_000 tokens every time.

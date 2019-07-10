@@ -1,0 +1,5 @@
+[package]
+name = "it_common"
+version = "0.1.0"
+authors = ["Joe Sacher <321623+sacherjj@users.noreply.github.com>"]
+edition = "2018"

@@ -172,11 +172,7 @@ class FinalityDetectorTest
       val v3         = generateValidator("Validator 3")
       val validators = List(v0, v1, v2, v3)
 
-      val v0Bond                          = Bond(v0, 1)
-      val v1Bond                          = Bond(v1, 1)
-      val v2Bond                          = Bond(v2, 1)
-      val v3Bond                          = Bond(v3, 1)
-      val bonds                           = List(v0Bond, v1Bond, v2Bond, v3Bond)
+      val bonds                           = validators.map(v => Bond(v, 1))
       implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
 
       /* The DAG looks like
@@ -201,43 +197,43 @@ class FinalityDetectorTest
         b1 <- createBlock[Task](
                Seq(genesis.blockHash),
                v0,
-               Seq(v0Bond),
+               bonds,
                Map(v0 -> genesis.blockHash)
              )
         b2 <- createBlock[Task](
                Seq(genesis.blockHash),
                v3,
-               Seq(v3Bond),
+               bonds,
                Map(v3 -> genesis.blockHash)
              )
         b3 <- createBlock[Task](
                Seq(b1.blockHash),
                v1,
-               Seq(v0Bond, v1Bond),
+               bonds,
                Map(v0 -> b1.blockHash, v1 -> genesis.blockHash)
              )
         b4 <- createBlock[Task](
                Seq(b1.blockHash),
                v0,
-               Seq(v0Bond),
+               bonds,
                Map(v0 -> b1.blockHash)
              )
         b5 <- createBlock[Task](
                Seq(b2.blockHash),
                v3,
-               Seq(v1Bond, v3Bond),
+               bonds,
                Map(v1 -> b3.blockHash, v3 -> b2.blockHash)
              )
         b6 <- createBlock[Task](
                Seq(b4.blockHash),
                v2,
-               Seq(v0Bond, v2Bond, v3Bond),
+               bonds,
                Map(v0 -> b4.blockHash, v2 -> genesis.blockHash, v3 -> b5.blockHash)
              )
         b7 <- createBlock[Task](
                Seq(b6.blockHash),
                v3,
-               Seq(v2Bond, v3Bond),
+               bonds,
                Map(v2 -> b6.blockHash, v3 -> b5.blockHash)
              )
         dag <- blockDagStorage.getRepresentation

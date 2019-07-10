@@ -14,6 +14,7 @@ from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 
 
 class DockerNode(LoggingDockerBase):
@@ -26,8 +27,9 @@ class DockerNode(LoggingDockerBase):
     CL_GENESIS_DIR = f'{CL_NODE_DIRECTORY}/genesis'
     CL_SOCKETS_DIR = f'{CL_NODE_DIRECTORY}/sockets'
     CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
+    CL_ACCOUNTS_DIR = f"{CL_NODE_DIRECTORY}/accounts"
     CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
-    CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_GENESIS_DIR}/system-account/account-public.key"
+    CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_ACCOUNTS_DIR}/account-id-genesis"
 
     NUMBER_OF_BONDS = 10
 
@@ -167,18 +169,8 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.host_mount_dir)
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
         self.create_bonds_file()
-        self.create_genesis_account_public_key_file()
 
-    def genesis_account_key(self):
-        # Take one not used by bonds
-        return PREGENERATED_KEYPAIRS[self.NUMBER_OF_BONDS]
-
-    def create_genesis_account_public_key_file(self):
-        path = f'{self.host_genesis_dir}/system-account/account-public.key'
-        os.makedirs(os.path.dirname(path))
-        with open(path, 'w') as f:
-            f.write(f'{self.genesis_account_key().public_key}')
-
+    # TODO: Should be changed to using validator-id from accounts
     def create_bonds_file(self) -> None:
         N = self.NUMBER_OF_BONDS
         path = f'{self.host_genesis_dir}/bonds.txt'
@@ -195,14 +187,17 @@ class DockerNode(LoggingDockerBase):
         if os.path.exists(self.deploy_dir):
             shutil.rmtree(self.deploy_dir)
 
-    def from_address(self):
-        return base64.b64decode(self.genesis_account_key().public_key + '===').hex()
+    @property
+    def from_address(self) -> str:
+        return GENESIS_ACCOUNT.public_key_hex
 
-    def signing_public_key(self):
-        return base64.b64decode(self.genesis_account_key().public_key + '===')
+    @staticmethod
+    def signing_public_key():
+        return base64.b64decode(GENESIS_ACCOUNT.public_key + '===')
 
-    def signing_private_key(self):
-        return base64.b64decode(self.genesis_account_key().private_key + '===')
+    @staticmethod
+    def signing_private_key():
+        return base64.b64decode(GENESIS_ACCOUNT.private_key + '===')
 
     @property
     def volumes(self) -> dict:
@@ -216,6 +211,10 @@ class DockerNode(LoggingDockerBase):
                 },
                 self.host_bootstrap_dir: {
                     "bind": self.CL_BOOTSTRAP_DIR,
+                    "mode": "rw"
+                },
+                self.host_accounts_dir: {
+                    "bind": self.CL_ACCOUNTS_DIR,
                     "mode": "rw"
                 },
                 self.deploy_dir: {
@@ -232,8 +231,6 @@ class DockerNode(LoggingDockerBase):
     def container_command(self):
         bootstrap_flag = '-s' if self.config.is_bootstrap else ''
         options = [f'{opt} {arg}' for opt, arg in self.config.node_command_options(self.container_name).items()]
-        if self.config.is_bootstrap:
-            options.append("--casper-initial-tokens 100")
         return f"run {bootstrap_flag} {' '.join(options)}"
 
     def get_metrics(self) -> Tuple[int, str]:
@@ -247,7 +244,7 @@ class DockerNode(LoggingDockerBase):
 
     def deploy_and_propose(self, **deploy_kwargs) -> str:
         if 'from_address' not in deploy_kwargs:
-            deploy_kwargs['from_address'] = self.from_address()
+            deploy_kwargs['from_address'] = self.from_address
         deploy_output = self.client.deploy(**deploy_kwargs)
         assert 'Success!' in deploy_output
         block_hash_output_string = self.client.propose()

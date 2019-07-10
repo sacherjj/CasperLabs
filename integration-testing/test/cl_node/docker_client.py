@@ -1,8 +1,7 @@
-import logging
 import time
-import os
 from typing import Optional
-from collections import defaultdict
+import docker.errors
+
 
 from test.cl_node import LoggingMixin
 from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
@@ -10,10 +9,8 @@ from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
-import docker.errors
 from test.cl_node.nonce_registry import NonceRegistry
 
-from docker.errors import ContainerError
 
 
 class DockerClient(CasperLabsClient, LoggingMixin):
@@ -37,14 +34,14 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         command = f'--host {self.node.container_name} {command}'
         self.logger.info(f"COMMAND {command}")
         container = self.docker_client.containers.run(
-            image = f"casperlabs/client:{self.node.docker_tag}",
-            name = f"client-{self.node.config.number}-{random_string(5)}",
-            command = command,
-            network = self.node.network,
-            volumes = volumes,
-            detach = True,
-            stderr = True,
-            stdout = True,
+            image=f"casperlabs/client:{self.node.docker_tag}",
+            name=f"client-{self.node.config.number}-{random_string(5)}",
+            command=command,
+            network=self.node.network,
+            volumes=volumes,
+            detach=True,
+            stderr=True,
+            stdout=True,
         )
         r = container.wait()
         error, status_code = r['Error'], r['StatusCode']
@@ -99,7 +96,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         assert session_contract is not None
         assert payment_contract is not None
 
-        address  = from_address or self.node.from_address()
+        address = from_address or self.node.from_address
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
         payment_contract = payment_contract or session_contract
 
@@ -157,3 +154,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
 
     def show_deploy(self, hash: str):
         return parse(self.invoke_client(f'show-deploy {hash}'))
+
+    def query_purse_balance(self, block_hash: str, purse_id: str) -> Optional[float]:
+        raise NotImplementedError()
+

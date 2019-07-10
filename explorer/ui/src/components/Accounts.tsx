@@ -94,13 +94,13 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
               />
               <TextField
                 id="id-private-key-base64"
-                label="Public Key (Base64)"
+                label="Private Key (Base64)"
                 value={newAccount.privateKeyBase64!}
                 readonly={true}
               />
               <TextField
                 id="id-private-key-base16"
-                label="Public Key (Base16)"
+                label="Private Key (Base16)"
                 value={base64to16(newAccount.privateKeyBase64!)}
                 readonly={true}
               />

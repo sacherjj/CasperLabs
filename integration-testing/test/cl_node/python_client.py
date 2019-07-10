@@ -39,7 +39,7 @@ class PythonClient(CasperLabsClient):
         assert session_contract is not None
         assert payment_contract is not None
 
-        address  = from_address or self.node.from_address()
+        address = from_address or self.node.from_address
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
 
         resources_path = self.node.resources_folder
@@ -69,9 +69,8 @@ class PythonClient(CasperLabsClient):
     def query_state(self, block_hash: str, key: str, path: str, key_type: str):
         return self.client.queryState(block_hash, key, path, key_type)
 
-    def show_block(self, block_hash: str) -> str:
-        # TODO:
-        raise Exception("Not implemented yet")
+    def show_block(self, block_hash: str):
+        return self.client.showBlock(block_hash)
 
     def show_blocks(self, depth: int):
         return self.client.showBlocks(depth)
@@ -79,8 +78,8 @@ class PythonClient(CasperLabsClient):
     def get_blocks_count(self, depth: int) -> int:
         return len(list(self.show_blocks(depth)))
 
-    def show_deploys(self, hash: str):
-        raise Exception("Not implemented yet")
+    def show_deploys(self, block_hash: str):
+        return self.client.showDeploys(block_hash)
 
-    def show_deploy(self, hash: str):
-        raise Exception("Not implemented yet")
+    def show_deploy(self, deploy_hash: str):
+        return self.client.showDeploy(deploy_hash)

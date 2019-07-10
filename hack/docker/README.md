@@ -65,6 +65,9 @@ make node-1/up node-2/up
 
 After connection is complete, all node logs will show `Peers: 2`.
 
+## Cleanup
+To cleanup the network stopping and removing all containers run the command `make clean`.
+
 ## Deploy some WASM code
 
 Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
