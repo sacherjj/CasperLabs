@@ -42,7 +42,6 @@ object Main {
       case Unbond(
           amount,
           from,
-          gasPrice,
           nonce,
           contractCode,
           paymentCode,
@@ -51,7 +50,6 @@ object Main {
           ) =>
         DeployRuntime.unbond(
           amount,
-          gasPrice,
           nonce,
           from,
           contractCode,
@@ -62,7 +60,6 @@ object Main {
       case Bond(
           amount,
           from,
-          gasPrice,
           nonce,
           contractCode,
           paymentCode,
@@ -71,7 +68,6 @@ object Main {
           ) =>
         DeployRuntime.bond(
           amount,
-          gasPrice,
           nonce,
           from,
           contractCode,

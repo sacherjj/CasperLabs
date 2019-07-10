@@ -177,12 +177,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "amount of tokens to unbond"
     )
 
-    val gasPrice = opt[Long](
-      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
-      validate = _ > 0,
-      required = true
-    )
-
     val contractPath =
       opt[File](
         required = true,
@@ -230,12 +224,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       name = "amount",
       validate = _ > 0,
       descr = "amount of tokens to bond",
-      required = true
-    )
-
-    val gasPrice = opt[Long](
-      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
-      validate = _ > 0,
       required = true
     )
 

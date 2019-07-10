@@ -43,7 +43,6 @@ object DeployRuntime {
 
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
-      gasPrice: Long,
       nonce: Long,
       from: Option[String],
       contractCode: File,
@@ -73,14 +72,13 @@ object DeployRuntime {
       paymentCode,
       maybePublicKeyFile,
       maybePrivateKeyFile,
-      gasPrice,
+      10L, // gas price is fixed at the moment for 10:1
       ByteString.copyFrom(amountBytes)
     )
   }
 
   def bond[F[_]: Sync: DeployService](
       amount: Long,
-      gasPrice: Long,
       nonce: Long,
       from: Option[String],
       contractCode: File,
@@ -105,7 +103,7 @@ object DeployRuntime {
       paymentCode,
       maybePublicKeyFile,
       maybePrivateKeyFile,
-      gasPrice,
+      10L, // gas price is fixed at the moment for 10:1
       amountByteString
     )
   }

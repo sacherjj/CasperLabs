@@ -29,7 +29,6 @@ final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
     from: Option[String],
-    gasPrice: Long,
     nonce: Long,
     sessionCode: File,
     paymentCode: File,
@@ -39,7 +38,6 @@ final case class Bond(
 final case class Unbond(
     amount: Option[Long],
     from: Option[String],
-    gasPrice: Long,
     nonce: Long,
     sessionCode: File,
     paymentCode: File,
@@ -100,7 +98,6 @@ object Configuration {
         Unbond(
           options.unbond.amount.toOption,
           options.unbond.from.toOption,
-          options.unbond.gasPrice(),
           options.unbond.nonce(),
           options.unbond.contractPath(),
           options.unbond.payment(),
@@ -111,7 +108,6 @@ object Configuration {
         Bond(
           options.unbond.amount(),
           options.unbond.from.toOption,
-          options.unbond.gasPrice(),
           options.unbond.nonce(),
           options.unbond.contractPath(),
           options.unbond.payment(),
