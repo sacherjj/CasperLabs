@@ -906,11 +906,10 @@ object MultiParentCasperImpl {
               s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
             ) *> dag.pure[F]
 
-        case InvalidUnslashableBlock | InvalidFollows | InvalidBlockNumber | InvalidParents |
-            JustificationRegression | InvalidSequenceNumber | NeglectedInvalidBlock |
-            NeglectedEquivocation | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
-            InvalidChainId | InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash |
-            InvalidPostStateHash =>
+        case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
+            NeglectedInvalidBlock | NeglectedEquivocation | InvalidTransaction | InvalidBondsCache |
+            InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash | InvalidDeployCount |
+            InvalidPreStateHash | InvalidPostStateHash =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
 
         case Processing | Processed =>
@@ -1016,12 +1015,11 @@ object MultiParentCasperImpl {
               // In the future this won't happen because the DownloadManager won't try to add blocks with missing dependencies.
               fetchMissingDependencies(block)
 
-            case IgnorableEquivocation | InvalidUnslashableBlock | InvalidFollows |
-                InvalidBlockNumber | InvalidParents | JustificationRegression |
-                InvalidSequenceNumber | NeglectedInvalidBlock | NeglectedEquivocation |
-                InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId |
-                InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash |
-                Processing | Processed =>
+            case IgnorableEquivocation | InvalidUnslashableBlock | InvalidBlockNumber |
+                InvalidParents | InvalidSequenceNumber | NeglectedInvalidBlock |
+                NeglectedEquivocation | InvalidTransaction | InvalidBondsCache |
+                InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash | InvalidDeployCount |
+                InvalidPreStateHash | InvalidPostStateHash | Processing | Processed =>
               Log[F].debug(
                 s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $status"
               )
@@ -1084,12 +1082,11 @@ object MultiParentCasperImpl {
               "Impossible! The DownloadManager should not tell Casper about blocks with missing dependencies!"
             )
 
-          case IgnorableEquivocation | InvalidUnslashableBlock | InvalidFollows |
-              InvalidBlockNumber | InvalidParents | JustificationRegression |
-              InvalidSequenceNumber | NeglectedInvalidBlock | NeglectedEquivocation |
-              InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId |
-              InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash |
-              Processing | Processed =>
+          case IgnorableEquivocation | InvalidUnslashableBlock | InvalidBlockNumber |
+              InvalidParents | InvalidSequenceNumber | NeglectedInvalidBlock |
+              NeglectedEquivocation | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
+              InvalidChainId | InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash |
+              InvalidPostStateHash | Processing | Processed =>
             ().pure[F]
 
           case UnexpectedBlockException(_) =>
