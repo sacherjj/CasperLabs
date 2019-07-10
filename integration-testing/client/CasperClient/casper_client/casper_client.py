@@ -15,10 +15,9 @@ import json
 from operator import add
 from functools import reduce
 
-
-# ~/CasperLabs/protobuf/io/casperlabs/casper/protocol/CasperMessage.proto
-from . import CasperMessage_pb2
-from .CasperMessage_pb2_grpc import DeployServiceStub
+# ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
+from .control_pb2_grpc import ControlServiceStub
+from . import control_pb2 as control
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
 from . import casper_pb2 as casper
@@ -165,8 +164,8 @@ class CasperClient:
 
                 return name.endswith('_') and g or f
 
-        self.deployService = GRPCService(self.port, DeployServiceStub)
         self.casperService = GRPCService(self.port, CasperServiceStub)
+        self.controlService = GRPCService(self.internal_port, ControlServiceStub)
 
     @guarded
     def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
@@ -239,33 +238,44 @@ class CasperClient:
 
 
     @guarded
-    def showBlocks(self, depth: int = 1):
+    def showBlocks(self, depth: int=1, max_rank=0, full_view=True):
         """
-        Yields list of blocks in the current Casper view on an existing running node.
+        Get slices of the DAG, going backwards, rank by rank.
 
-        :param depth: lists blocks to the given depth in terms of block height
-        :return: generator of blocks
+        :param depth:     How many of the top ranks of the DAG to show.
+        :param max_rank:  Maximum rank to go back from.
+                          0 means go from the current tip of the DAG.
+        :param full_view: Full view if True, otherwise basic.
+        :return:          Generator of block info objects.
         """
-        yield from self.deployService.showBlocks_(CasperMessage_pb2.BlocksQuery(depth=depth))
+        yield from self.casperService.StreamBlockInfos_(
+            casper.StreamBlockInfosRequest(depth=depth,
+                                           max_rank=max_rank,
+                                           view=(full_view and info.BlockInfo.View.FULL
+                                                 or info.BlockInfo.View.BASIC)))
 
     @guarded
-    def showBlock(self, hash: str):
+    def showBlock(self, block_hash_base16: str, full_view=True):
         """
         Returns object describing a block known by Casper on an existing running node.
 
-        :param hash:  hash of the block to be retrieved
-        :return:      object representing the retrieved block
+        :param hash:      hash of the block to be retrieved
+        :param full_view: full view if True, otherwise basic
+        :return:          object representing the retrieved block
         """
-        return self.deployService.showBlock(CasperMessage_pb2.BlockQuery(hash=hash))
+        return self.casperService.GetBlockInfo(
+                casper.GetBlockInfoRequest(block_hash_base16=block_hash_base16,
+                                           view=(full_view and info.BlockInfo.View.FULL
+                                                 or info.BlockInfo.View.BASIC)))
 
     @guarded
     def propose(self):
         """"
-        Force a node to propose a block based on its accumulated deploys.
+        Propose a block using deploys in the pool.
 
-        :return:    response object
+        :return:    response object with block_hash
         """
-        return self.deployService.createBlock(CasperMessage_pb2.empty__pb2.Empty())
+        return self.controlService.Propose(control.ProposeRequest())
 
     @guarded
     def visualizeDag(self, depth: int, out: str = None, show_justification_lines: bool = False, stream: str = None):
@@ -283,8 +293,7 @@ class CasperClient:
         :return:                          VisualizeBlocksResponse object
         """
         # TODO: handle stream parameter
-        return self.deployService.visualizeDag(
-            CasperMessage_pb2.VisualizeDagQuery(depth=depth, showJustificationLines=show_justification_lines))
+        raise Error('Not implemented yet')
 
     @guarded
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
@@ -314,40 +323,10 @@ class CasperClient:
                                                     key_base16 = key,
                                                     path_segments = path_segments(path))))
 
-    @guarded
-    def showMainChain(self, depth: int):
-        """
-        TODO: this is not implemented in the Scala client, need to find out docs.
 
-        rpc showMainChain (BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
-
-        :param depth:
-        :return:
-        """
-        yield from self.deployService.showMainChain_(CasperMessage_pb2.BlocksQuery(depth=depth))
-
-    @guarded
-    def findBlockWithDeploy(self, user: bytes, timestamp: int):
-        """
-        TODO: this is not implemented in the Scala client, need to find out docs.
-
-        rpc findBlockWithDeploy (FindDeployInBlockQuery) returns (BlockQueryResponse) {}
-
-        message FindDeployInBlockQuery {
-            bytes user = 1;
-           int64 timestamp = 2;
-        }
-
-        :param user:
-        :param timestamp:
-        :return:
-        """
-        return self.deployService.findBlockWithDeploy(CasperMessage_pb2.FindDeployInBlockQuery(user=user, timestamp=timestamp))
-
-
-    def showDeploy(self, deploy_hash: str, full_view=True):
+    def showDeploy(self, deploy_hash_base16: str, full_view=True):
         return self.casperService.GetDeployInfo(
-                casper.GetDeployInfoRequest(deploy_hash_base16=deploy_hash,
+                casper.GetDeployInfoRequest(deploy_hash_base16=deploy_hash_base16,
                                             view=(full_view and info.DeployInfo.View.FULL
                                                   or info.DeployInfo.View.BASIC)))
 
@@ -451,18 +430,6 @@ def query_state_command(casper_client, args):
 
 
 @guarded_command
-def show_main_chain_command(casper_client, args):
-    response = casper_client.showMainChain(args.depth)
-    _show_blocks(response)
-
-
-@guarded_command
-def find_block_with_deploy_command(casper_client, args):
-    response = casper_client.findBlockWithDeploy(args.user, args.timestamp)
-    return _show_block(response)
-
-
-@guarded_command
 def show_deploy_command(casper_client, args):
     response = casper_client.showDeploy(args.hash)
     print (response)
@@ -544,13 +511,6 @@ def command_line_tool():
                        [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
                        [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
                        [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address'), help="Type of base key. Must be one of 'hash', 'uref', 'address'")]])
-
-    parser.addCommand('show-main-chain', show_main_chain_command, 'Show main chain',
-                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')]])
-
-    parser.addCommand('find-block-with-deploy', find_block_with_deploy_command, 'Find block with deploy',
-                      [[('-u', '--user'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help="User")],
-                       [('-t', '--timestamp'), dict(required=True, type=int, help="Time in seconds since the epoch as an integer")]])
 
     sys.exit(parser.run())
 
