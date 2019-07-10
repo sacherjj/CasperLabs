@@ -107,7 +107,7 @@ class InternalError(Exception):
     pass
 
 
-def guarded(function):
+def api(function):
     """
     Decorator of API functions that protects user code from
     unknown exceptions raised by gRPC or internal API errors.
@@ -160,14 +160,14 @@ class CasperClient:
 
                 def g(*args):
                     with grpc.insecure_channel(address) as channel:
-                        yield from getattr(self.serviceStub(channel), name[:-1])(*args)
+                        yield from getattr(self.serviceStub(channel), name[:-len('_stream')])(*args)
 
-                return name.endswith('_') and g or f
+                return name.endswith('_stream') and g or f
 
         self.casperService = GRPCService(self.port, CasperServiceStub)
         self.controlService = GRPCService(self.internal_port, ControlServiceStub)
 
-    @guarded
+    @api
     def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
                payment: str = None, session: str = None, nonce: int = 0,
                public_key: str = None, private_key: str = None, args: bytes = None):
@@ -237,7 +237,7 @@ class CasperClient:
         return self.casperService.Deploy(casper.DeployRequest(deploy = d)), deploy_hash
 
 
-    @guarded
+    @api
     def showBlocks(self, depth: int=1, max_rank=0, full_view=True):
         """
         Get slices of the DAG, going backwards, rank by rank.
@@ -248,13 +248,13 @@ class CasperClient:
         :param full_view: Full view if True, otherwise basic.
         :return:          Generator of block info objects.
         """
-        yield from self.casperService.StreamBlockInfos_(
+        yield from self.casperService.StreamBlockInfos_stream(
             casper.StreamBlockInfosRequest(depth=depth,
                                            max_rank=max_rank,
                                            view=(full_view and info.BlockInfo.View.FULL
                                                  or info.BlockInfo.View.BASIC)))
 
-    @guarded
+    @api
     def showBlock(self, block_hash_base16: str, full_view=True):
         """
         Returns object describing a block known by Casper on an existing running node.
@@ -268,7 +268,7 @@ class CasperClient:
                                            view=(full_view and info.BlockInfo.View.FULL
                                                  or info.BlockInfo.View.BASIC)))
 
-    @guarded
+    @api
     def propose(self):
         """"
         Propose a block using deploys in the pool.
@@ -277,7 +277,7 @@ class CasperClient:
         """
         return self.controlService.Propose(control.ProposeRequest())
 
-    @guarded
+    @api
     def visualizeDag(self, depth: int, out: str = None, show_justification_lines: bool = False, stream: str = None):
         """
         Retrieve DAG in DOT format.
@@ -292,10 +292,9 @@ class CasperClient:
                                           valid values are 'single-output', 'multiple-outputs'
         :return:                          VisualizeBlocksResponse object
         """
-        # TODO: handle stream parameter
         raise Error('Not implemented yet')
 
-    @guarded
+    @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
         """
         Query a value in the global state.
@@ -324,16 +323,23 @@ class CasperClient:
                                                     path_segments = path_segments(path))))
 
 
+    @api
     def showDeploy(self, deploy_hash_base16: str, full_view=True):
+        """
+        Retrieve information about a single deploy by hash.
+        """
         return self.casperService.GetDeployInfo(
                 casper.GetDeployInfoRequest(deploy_hash_base16=deploy_hash_base16,
                                             view=(full_view and info.DeployInfo.View.FULL
                                                   or info.DeployInfo.View.BASIC)))
 
-    def showDeploys(self, block_hash: str, full_view=True):
-        """ Get the processed deploys within a block."""
-        yield from self.casperService.StreamBlockDeploys_(
-                    casper.StreamBlockDeploysRequest(block_hash_base16=block_hash,
+    @api
+    def showDeploys(self, block_hash_base16: str, full_view=True):
+        """
+        Get the processed deploys within a block.
+        """
+        yield from self.casperService.StreamBlockDeploys_stream(
+                    casper.StreamBlockDeploysRequest(block_hash_base16=block_hash_base16,
                                                      view=(full_view and info.DeployInfo.View.FULL
                                                            or info.DeployInfo.View.BASIC)))
 
