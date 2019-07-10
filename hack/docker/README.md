@@ -18,7 +18,7 @@ Contract examples exist in another repo.  Clone https://github.com/CasperLabs/co
 
 ## Required: OpenSSL 1.1
 
-`openssl` is used to generate keys and certificates. Please verify that [the latest OpenSSL 1.1 version is installed](https://github.com/openssl/openssl). You can also [follow these steps](https://github.com/CasperLabs/CasperLabs/blob/dev/VALIDATOR.md#setting-up-keys)
+`openssl` is used to generate keys and certificates. Please verify that [the latest OpenSSL 1.1 version is installed](https://github.com/openssl/openssl). You can also [follow these steps](https://github.com/CasperLabs/CasperLabs/blob/dev/docs/KEYS.md)
 
 ## Required: SHA3SUM
 

@@ -70,29 +70,45 @@ read EC key
 Generate keys: Success
 ```
 
-## Generating DApp Developer Keys
+## Generating Account Keys
 
-Currently, the recommended method for generating developer keys is to use the [CasperLabs Explorer](https://explorer.casperlabs.io).
+(for DApp Developers)
 
-These instructions are provided for reference and for advanced use-cases.
+Currently, the recommended method for generating account keys is to use the [CasperLabs Explorer](https://explorer.casperlabs.io).
+
+These instructions are provided for reference and advanced use-cases.
 
 In order to deploy a contract on the network, you will need the following files:
 
-|File                   |Contents                                                                                            |
-|-----------------------|----------------------------------------------------------------------------------------------------|
-|`developer-private.pem`|An `ed25519` private key                                                                            |
-|`developer-public.pem` |The `ed25519` public key paired with `developer-private.pem`                                        |
-|`developer-id`         |The base-64 representation of `developer-public.pem`                                                |
-|`developer-id-hex`     |The base-16 representation of `developer-public.pem`, used when issuing certain commands to the node|
+|File                 |Contents                                                                                          |
+|---------------------|--------------------------------------------------------------------------------------------------|
+|`account-private.pem`|An `ed25519` private key                                                                          |
+|`account-public.pem` |The `ed25519` public key paired with `account-private.pem`                                        |
+|`account-id`         |The base-64 representation of `account-public.pem`                                                |
+|`account-id-hex`     |The base-16 representation of `account-public.pem`, used when issuing certain commands to the node|
 
-### Prerequisites
-* [OpenSSL](https://www.openssl.org): v1.1.1 or higher
+### Using Docker
 
-### Instructions
+#### Prerequisites
+* [Docker](https://docs.docker.com/install/)
+
+#### Instructions
 
 ```
-openssl genpkey -algorithm Ed25519 -out developer-private.pem
-openssl pkey -in developer-private.pem -pubout -out developer-public.pem
-openssl pkey -outform DER -pubout -in developer-private.pem | tail -c +13 | openssl base64 > developer-id
-cat developer-id | openssl base64 -d | hexdump -ve '/1 "%02x" ' | awk '{print $0}' > developer-id-hex
+mkdir account-keys
+./hack/key-management/docker-gen-account-keys.sh account-keys
+```
+
+### Using OpenSSL
+
+#### Prerequisites
+* [OpenSSL](https://www.openssl.org): v1.1.1 or higher
+
+#### Instructions
+
+```
+openssl genpkey -algorithm Ed25519 -out account-private.pem
+openssl pkey -in account-private.pem -pubout -out account-public.pem
+openssl pkey -outform DER -pubout -in account-private.pem | tail -c +13 | openssl base64 > account-id
+cat account-id | openssl base64 -d | hexdump -ve '/1 "%02x" ' | awk '{print $0}' > account-id-hex
 ```
