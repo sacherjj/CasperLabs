@@ -528,6 +528,20 @@ impl WasmTestBuilder {
         self
     }
 
+    pub fn is_error(&self) -> bool {
+        let exec_response = self
+            .exec_responses
+            .last()
+            .expect("Expected to be called after run()")
+            .clone();
+        let deploy_result = exec_response
+            .get_success()
+            .get_deploy_results()
+            .get(0)
+            .expect("Unable to get first deploy result");
+        deploy_result.get_execution_result().has_error()
+    }
+
     /// Gets the transform map that's cached between runs
     pub fn get_transforms(&self) -> Vec<HashMap<common::key::Key, Transform>> {
         self.transforms.clone()
