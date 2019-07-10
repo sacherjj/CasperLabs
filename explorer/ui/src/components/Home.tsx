@@ -18,11 +18,12 @@ const Home = observer((props: Props) => {
         <div>
           <h1>CasperLabs Explorer</h1>
           <p>
-            This is a self serice portal for dApp developers to interact with
+            This is a self service portal for dApp developers to interact with
             the blockchain. On devnet you can use this portal to create accounts
             for yourself, fund them with some free tokens to play with, and
-            explore the block DAG. If you're having an issue then don't hesitate
-            to let us know on <a href="https://t.me/casperlabss">Telegram</a> or{' '}
+            explore the blockchain. If you're having an issue then don't
+            hesitate to let us know on{' '}
+            <a href="https://t.me/casperlabs">Telegram</a> or{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/issues">Github</a>
           </p>
           <ul className="list-inline" id="go-to-buttons">
@@ -55,11 +56,11 @@ const Home = observer((props: Props) => {
           <p>
             To write contracts have a look at the{' '}
             <a href="https://github.com/CasperLabs/contract-examples/tree/master">
-              contract
-            </a>{' '}
-            and the{' '}
+              contract examples
+            </a>
+            , the{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/USAGE.md">
-              usage examples
+              usage document
             </a>
             , the{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/DEVELOPER.md">
@@ -144,7 +145,7 @@ const ExploreCard = (_: {}) => {
   // TODO: Display latest block timestamp.
   return (
     <Card background="success" icon="project-diagram" to={Pages.Explorer}>
-      <CardMessage message="Explore the block DAG" />
+      <CardMessage message="Explore the blockchain" />
     </Card>
   );
 };
