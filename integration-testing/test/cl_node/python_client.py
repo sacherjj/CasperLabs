@@ -39,7 +39,7 @@ class PythonClient(CasperLabsClient):
         assert session_contract is not None
         assert payment_contract is not None
 
-        address  = from_address or self.node.from_address()
+        address = from_address or self.node.from_address
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
 
         resources_path = self.node.resources_folder

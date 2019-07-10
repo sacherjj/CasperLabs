@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "it_common",
     "combined-contracts/call",
     "combined-contracts/define",
     "counter/call",
@@ -17,6 +18,8 @@ members = [
     "mailing-list/define",
     "subcall-revert-test/call",
     "subcall-revert-test/define",
+    "transfer-to-account-1/call",
+    "transfer-to-account-2/call",
     "test_args",
     "bonding/call",
     "unbonding/call",

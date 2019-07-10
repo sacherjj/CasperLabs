@@ -5,6 +5,7 @@ import re
 Parser of the gRPC message dump for human reading as produced by scalapb and printed by the Scala CasperLabs client.
 """
 
+
 class MaybeList(list):
     def __getattr__(self, name):
         if len(self) != 1:
@@ -29,7 +30,7 @@ class PropertyBag:
 
 
 def attribute_name(s, line_number):
-    return (s.endswith(':') and s[:-1] or s, line_number)
+    return s.endswith(':') and s[:-1] or s, line_number
 
 
 def value(s, line_number):
@@ -102,4 +103,3 @@ def parse_show_deploys(s):
 
 def parse_show_block(s):
     return parse(s)
-

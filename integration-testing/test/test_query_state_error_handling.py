@@ -46,7 +46,7 @@ def test_query_state_error(node, client, block_hash, query, expected):
         query['block_hash'] = block_hash
 
     if not 'key' in query:
-        query['key'] = node.from_address()
+        query['key'] = node.from_address
 
     with pytest.raises(NonZeroExitCodeError) as excinfo:
         response = client.query_state(**query)

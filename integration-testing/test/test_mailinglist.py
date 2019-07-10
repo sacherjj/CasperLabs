@@ -12,12 +12,12 @@ def test_mailinglist(one_node_network):
         return block_hash
 
     block_hash = create_block("test_mailinglistdefine.wasm")
-    r = client.query_state(block_hash=block_hash, key=node.from_address(), key_type="address", path="mailing/list")
+    r = client.query_state(block_hash=block_hash, key=node.from_address, key_type="address", path="mailing/list")
 
     block_hash = create_block("test_mailinglistcall.wasm")
-    r = client.query_state(block_hash=block_hash, key=node.from_address(), key_type="address", path="mailing/list")
+    r = client.query_state(block_hash=block_hash, key=node.from_address, key_type="address", path="mailing/list")
     assert r.string_list.values == 'CasperLabs'
 
     block_hash = create_block("test_mailinglistcall.wasm")
-    r = client.query_state(block_hash=block_hash, key=node.from_address(), key_type="address", path="mailing/list")
+    r = client.query_state(block_hash=block_hash, key=node.from_address, key_type="address", path="mailing/list")
     assert r.string_list.values == 'CasperLabs'

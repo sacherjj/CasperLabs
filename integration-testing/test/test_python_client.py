@@ -5,11 +5,12 @@ import logging
 import ed25519
 import json
 
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+
 
 def write_binary(file_name, b):
     with open(file_name, 'wb') as f:
         f.write(b)
-
 
 
 def test_args_parser():
@@ -34,15 +35,17 @@ def test_deploy_with_args(one_node_network):
     signing_private_key_file = 'verifying_key'
 
     write_binary(signing_public_key_file, node.signing_public_key())
-    write_binary(signing_private_key_file, node.signing_private_key())
+    # We do not have raw private keys with .pem certificate files
+    # removing this to not sign deploy at this time.
+    # write_binary(signing_private_key_file, node.signing_private_key())
 
     wasm = "test_args.wasm"
     for number in [12, 256, 1024]:
-        response, deploy_hash = client.deploy(payment_contract = wasm,
-                                              session_contract = wasm,
-                                              public_key = signing_public_key_file,
-                                              private_key = signing_private_key_file,
-                                              args = ABI.args([ABI.u32(number)])
+        response, deploy_hash = client.deploy(payment_contract=wasm,
+                                              session_contract=wasm,
+                                              public_key=signing_public_key_file,
+                                              # private_key=signing_private_key_file,
+                                              args=ABI.args([ABI.u32(number)])
                                               )
         logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
                                 

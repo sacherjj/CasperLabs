@@ -7,7 +7,6 @@ from test.cl_node.errors import NonZeroExitCodeError
 
 CONTRACT_1 = 'old_wasm/helloname_invalid_just_1.wasm'
 CONTRACT_2 = 'old_wasm/helloname_invalid_just_2.wasm'
-PAYMENT_CONTRACT = 'old_wasm/payment.wasm'
 
 
 class TimedThread(Thread):
@@ -63,15 +62,15 @@ def test_neglected_invalid_block(three_node_network):
 
         boot_deploy = DeployTimedTread(bootstrap,
                                        {'session_contract': CONTRACT_1,
-                                        'payment_contract': PAYMENT_CONTRACT},
+                                        'payment_contract': CONTRACT_1},
                                        start_time)
         node1_deploy = DeployTimedTread(node1,
                                         {'session_contract': CONTRACT_2,
-                                         'payment_contract': PAYMENT_CONTRACT},
+                                         'payment_contract': CONTRACT_2},
                                         start_time)
         node2_deploy = DeployTimedTread(node2,
                                         {'session_contract': CONTRACT_2,
-                                         'payment_contract': PAYMENT_CONTRACT},
+                                         'payment_contract': CONTRACT_2},
                                         start_time)
 
         # Simultaneous Deploy
