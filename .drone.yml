@@ -67,7 +67,6 @@ pipeline:
   rust-compile-test-pr:
     commands:
       - "cd execution-engine/"
-      - "~/.cargo/bin/cargo update"
       - "~/.cargo/bin/cargo build"
       - "~/.cargo/bin/cargo test"
       - "./scripts/run-contract-tests.sh"
@@ -128,7 +127,6 @@ pipeline:
   rust-compile-test-bors:
     commands:
       - "cd execution-engine/"
-      - "~/.cargo/bin/cargo update"
       - "~/.cargo/bin/cargo build"
       - "~/.cargo/bin/cargo test"
     image: "casperlabs/buildenv:latest"
@@ -234,7 +232,6 @@ pipeline:
   rust-compile-for-make:
     commands:
       - "cd execution-engine/"
-      - "~/.cargo/bin/cargo update"
       - "~/.cargo/bin/cargo build"
     image: "casperlabs/buildenv:latest"
     when:

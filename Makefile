@@ -261,7 +261,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 .make/cargo-package/%: \
 		$(RUST_SRC) \
 		.make/install/protoc
-	cd $* && cargo update && cargo package
+	cd $* && cargo package
 	mkdir -p $(dir $@) && touch $@
 
 .make/cargo-publish/%: .make/cargo-package/%
@@ -365,7 +365,6 @@ execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
 		.make/install/protoc
 	cd execution-engine/comm && \
-	cargo update && \
 	cargo build --release
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
