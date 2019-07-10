@@ -25,5 +25,7 @@ members = [
     "test-contracts/main-purse",
     "test-contracts/blessed-urefs-access-rights",
     "test-contracts/transfer-purse-to-account",
+    "validator-contracts/bonding",
+    "validator-contracts/unbonding",
     "wasm-prep",
 ]
