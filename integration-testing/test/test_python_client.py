@@ -50,7 +50,7 @@ def test_deploy_with_args(one_node_network):
         logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
                                 
         response = client.propose()
-         # Need to convert to hex string from bytes
+        # Need to convert to hex string from bytes
         block_hash = response.block_hash.hex()
         block_info = client.show_block(block_hash)
 
