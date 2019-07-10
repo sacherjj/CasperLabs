@@ -31,16 +31,14 @@ final case class Bond(
     from: Option[String],
     nonce: Long,
     sessionCode: File,
-    publicKey: Option[File],
-    privateKey: Option[File]
+    privateKey: File
 ) extends Configuration
 final case class Unbond(
     amount: Option[Long],
     from: Option[String],
     nonce: Long,
     sessionCode: File,
-    publicKey: Option[File],
-    privateKey: Option[File]
+    privateKey: File
 ) extends Configuration
 final case class VisualizeDag(
     depth: Int,
@@ -98,8 +96,7 @@ object Configuration {
           options.unbond.from.toOption,
           options.unbond.nonce(),
           options.unbond.contractPath(),
-          options.unbond.publicKey.toOption,
-          options.unbond.privateKey.toOption
+          options.unbond.privateKey()
         )
       case options.bond =>
         Bond(
@@ -107,8 +104,7 @@ object Configuration {
           options.unbond.from.toOption,
           options.unbond.nonce(),
           options.unbond.contractPath(),
-          options.unbond.publicKey.toOption,
-          options.unbond.privateKey.toOption
+          options.unbond.privateKey()
         )
       case options.visualizeBlocks =>
         VisualizeDag(

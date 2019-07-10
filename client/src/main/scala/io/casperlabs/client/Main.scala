@@ -44,32 +44,28 @@ object Main {
           from,
           nonce,
           contractCode,
-          maybePublicKey,
-          maybePrivateKey
+          privateKey
           ) =>
         DeployRuntime.unbond(
           amount,
           nonce,
           from,
           contractCode,
-          maybePublicKey,
-          maybePrivateKey
+          privateKey
         )
       case Bond(
           amount,
           from,
           nonce,
           contractCode,
-          maybePublicKey,
-          maybePrivateKey
+          privateKey
           ) =>
         DeployRuntime.bond(
           amount,
           nonce,
           from,
           contractCode,
-          maybePublicKey,
-          maybePrivateKey
+          privateKey
         )
       case Deploy(
           from,

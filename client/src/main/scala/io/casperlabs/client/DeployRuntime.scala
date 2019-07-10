@@ -46,8 +46,7 @@ object DeployRuntime {
       nonce: Long,
       from: Option[String],
       sessionCode: File,
-      maybePublicKeyFile: Option[File],
-      maybePrivateKeyFile: Option[File]
+      privateKeyFile: File
   ): F[Unit] = {
     val amountBytes = maybeAmount match {
       case Some(amount) => {
@@ -69,8 +68,8 @@ object DeployRuntime {
       nonce,
       sessionCode,
       sessionCode, // currently, sessionCode == paymentCode in order to get some gas limit for the execution
-      maybePublicKeyFile,
-      maybePrivateKeyFile,
+      None,
+      Some(privateKeyFile),
       10L, // gas price is fixed at the moment for 10:1
       ByteString.copyFrom(amountBytes)
     )
@@ -81,8 +80,7 @@ object DeployRuntime {
       nonce: Long,
       from: Option[String],
       sessionCode: File,
-      maybePublicKeyFile: Option[File],
-      maybePrivateKeyFile: Option[File]
+      privateKeyFile: File
   ): F[Unit] = {
     val array: Array[Byte] = java.nio.ByteBuffer
       .allocate(8)
@@ -99,8 +97,8 @@ object DeployRuntime {
       nonce,
       sessionCode,
       sessionCode, // currently, sessionCode == paymentCode in order to get some gas limit for the execution
-      maybePublicKeyFile,
-      maybePrivateKeyFile,
+      None,
+      Some(privateKeyFile),
       10L, // gas price is fixed at the moment for 10:1
       amountByteString
     )

@@ -197,13 +197,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
-    val publicKey =
-      opt[File](
-        required = false,
-        descr = "Path to the file with account public key (Ed25519)",
-        validate = fileCheck
-      )
-
     val privateKey =
       opt[File](
         required = false,
@@ -243,13 +236,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       validate = _ > 0,
       required = true
     )
-
-    val publicKey =
-      opt[File](
-        required = false,
-        descr = "Path to the file with account public key (Ed25519)",
-        validate = fileCheck
-      )
 
     val privateKey =
       opt[File](
