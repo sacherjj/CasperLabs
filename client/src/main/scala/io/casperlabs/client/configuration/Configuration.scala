@@ -95,7 +95,7 @@ object Configuration {
           options.unbond.amount.toOption,
           options.unbond.from.toOption,
           options.unbond.nonce(),
-          options.unbond.contractPath(),
+          options.unbond.session(),
           options.unbond.privateKey()
         )
       case options.bond =>
@@ -103,7 +103,7 @@ object Configuration {
           options.unbond.amount(),
           options.unbond.from.toOption,
           options.unbond.nonce(),
-          options.unbond.contractPath(),
+          options.unbond.session(),
           options.unbond.privateKey()
         )
       case options.visualizeBlocks =>
