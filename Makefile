@@ -18,7 +18,7 @@ TS_SRC := $(shell find explorer/ui/src explorer/server/src -type f \( -name "*.t
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
-$(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test; else echo DRONE-${DRONE_BUILD_NUMBER}; fi))
+$(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test; else echo test-DRONE-${DRONE_BUILD_NUMBER}; fi))
 
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.

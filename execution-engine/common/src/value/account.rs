@@ -1,6 +1,6 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
 use crate::key::{addr_to_hex, Key, UREF_SIZE};
-use crate::uref::{URef, UREF_SIZE_SERIALIZED};
+use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -493,6 +493,13 @@ impl Account {
 
     pub fn purse_id(&self) -> PurseId {
         self.purse_id
+    }
+
+    /// Returns an [`AccessRights::ADD`]-only version of the [`PurseId`].
+    pub fn purse_id_add_only(&self) -> PurseId {
+        let purse_id_uref = self.purse_id.value();
+        let add_only_uref = URef::new(purse_id_uref.addr(), AccessRights::ADD);
+        PurseId::new(add_only_uref)
     }
 
     pub fn associated_keys(&self) -> &AssociatedKeys {
