@@ -3,29 +3,19 @@
 
 The open-source CasperLabs project is building a decentralized, economic, censorship-resistant, public compute infrastructure and blockchain. It will host and execute programs popularly referred to as “smart contracts”. It will be trustworthy, scalable, concurrent, with proof-of-stake consensus and content delivery.
 
-## Download
-Check our public repositories with prebuilt binaries:
+---
 
-  http://repo.casperlabs.io/casperlabs/repo/
+## Docs
 
-  https://dl.bintray.com/casperlabs/debian/
+Please refer to our [Documentation](docs/README.md).
 
-  https://dl.bintray.com/casperlabs/rpm/
+---
 
-## Installing from debian repository
-```
-echo "deb https://dl.bintray.com/casperlabs/debian /" | sudo tee -a /etc/apt/sources.list.d/casperlabs.list
-curl -o casperlabs-public.key.asc https://bintray.com/user/downloadSubjectPublicKey?username=casperlabs
-sudo apt-key add casperlabs-public.key.asc
-sudo apt update
-sudo apt install casperlabs
-```
+## Installation Guide
 
-## Installing from rpm repository
-```
-curl https://bintray.com/casperlabs/rpm/rpm | sudo tee /etc/yum.repos.d/bintray-casperlabs-rpm.repo
-sudo yum install casperlabs
-```
+To install our pre-built binaries, please refer to the [Installation Guide](docs/INSTALL.md)
+
+---
 
 ## Running
 
@@ -98,10 +88,14 @@ Install using `sudo rpm -U client/target/rpm/RPMS/noarch/casperlabs-client-[VERS
 
 After installation run `casperlabs-client -- --help` for printing help message.
 
-## Developer guide
+---
 
-For building of CasperLabs, please refer to the [Developer guide](DEVELOPER.md)
+## Developer Guide
 
-## Validator guide
+For building of CasperLabs, please refer to the [Developer Guide](DEVELOPER.md)
 
-For running a CasperLabs node, please refer to the [Validator guide](VALIDATOR.md)
+---
+
+## Validator Guide
+
+For running a CasperLabs node, please refer to the [Validator Guide](VALIDATOR.md)
