@@ -168,6 +168,116 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showBlocks)
 
+  val unbond = new Subcommand("unbond") {
+    descr("Issues unbonding request")
+
+    val amount = opt[Long](
+      name = "amount",
+      validate = _ > 0,
+      descr = "amount of tokens to unbond"
+    )
+
+    val gasPrice = opt[Long](
+      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val contractPath =
+      opt[File](
+        required = true,
+        descr = "Path to the file with unbonding contract.",
+        validate = fileCheck
+      )
+
+    val payment =
+      opt[File](required = true, descr = "Path to the file with payment code", validate = fileCheck)
+
+    val from = opt[String](
+      descr =
+        "The public key of the account which is the context of this deployment, base16 encoded.",
+      required = false,
+      validate = hexCheck
+    )
+
+    val nonce = opt[Long](
+      descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val publicKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck
+      )
+
+    val privateKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account private key (Ed25519)",
+        validate = fileCheck
+      )
+
+  }
+  addSubcommand(unbond)
+
+  val bond = new Subcommand("bond") {
+    descr("Issues bonding request")
+
+    val amount = opt[Long](
+      name = "amount",
+      validate = _ > 0,
+      descr = "amount of tokens to bond",
+      required = true
+    )
+
+    val gasPrice = opt[Long](
+      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val contractPath =
+      opt[File](
+        required = true,
+        descr = "Path to the file with bonding contract.",
+        validate = fileCheck
+      )
+
+    val payment =
+      opt[File](required = true, descr = "Path to the file with payment code", validate = fileCheck)
+
+    val from = opt[String](
+      descr =
+        "The public key of the account which is the context of this deployment, base16 encoded.",
+      required = false,
+      validate = hexCheck
+    )
+
+    val nonce = opt[Long](
+      descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val publicKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck
+      )
+
+    val privateKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account private key (Ed25519)",
+        validate = fileCheck
+      )
+  }
+  addSubcommand(bond)
+
   val visualizeBlocks = new Subcommand("vdag") {
     descr(
       "DAG in DOT format"

@@ -39,7 +39,46 @@ object Main {
       case ShowDeploy(hash)  => DeployRuntime.showDeploy(hash)
       case ShowDeploys(hash) => DeployRuntime.showDeploys(hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
-
+      case Unbond(
+          amount,
+          from,
+          gasPrice,
+          nonce,
+          contractCode,
+          paymentCode,
+          maybePublicKey,
+          maybePrivateKey
+          ) =>
+        DeployRuntime.unbond(
+          amount,
+          gasPrice,
+          nonce,
+          from,
+          contractCode,
+          paymentCode,
+          maybePublicKey,
+          maybePrivateKey
+        )
+      case Bond(
+          amount,
+          from,
+          gasPrice,
+          nonce,
+          contractCode,
+          paymentCode,
+          maybePublicKey,
+          maybePrivateKey
+          ) =>
+        DeployRuntime.bond(
+          amount,
+          gasPrice,
+          nonce,
+          from,
+          contractCode,
+          paymentCode,
+          maybePublicKey,
+          maybePrivateKey
+        )
       case Deploy(
           from,
           nonce,

@@ -26,6 +26,26 @@ final case class ShowBlock(blockHash: String)   extends Configuration
 final case class ShowDeploys(blockHash: String) extends Configuration
 final case class ShowDeploy(deployHash: String) extends Configuration
 final case class ShowBlocks(depth: Int)         extends Configuration
+final case class Bond(
+    amount: Long,
+    from: Option[String],
+    gasPrice: Long,
+    nonce: Long,
+    sessionCode: File,
+    paymentCode: File,
+    publicKey: Option[File],
+    privateKey: Option[File]
+) extends Configuration
+final case class Unbond(
+    amount: Option[Long],
+    from: Option[String],
+    gasPrice: Long,
+    nonce: Long,
+    sessionCode: File,
+    paymentCode: File,
+    publicKey: Option[File],
+    privateKey: Option[File]
+) extends Configuration
 final case class VisualizeDag(
     depth: Int,
     showJustificationLines: Boolean,
@@ -76,6 +96,28 @@ object Configuration {
         ShowDeploy(options.showDeploy.hash())
       case options.showBlocks =>
         ShowBlocks(options.showBlocks.depth())
+      case options.unbond =>
+        Unbond(
+          options.unbond.amount.toOption,
+          options.unbond.from.toOption,
+          options.unbond.gasPrice(),
+          options.unbond.nonce(),
+          options.unbond.contractPath(),
+          options.unbond.payment(),
+          options.unbond.publicKey.toOption,
+          options.unbond.privateKey.toOption
+        )
+      case options.bond =>
+        Bond(
+          options.unbond.amount(),
+          options.unbond.from.toOption,
+          options.unbond.gasPrice(),
+          options.unbond.nonce(),
+          options.unbond.contractPath(),
+          options.unbond.payment(),
+          options.unbond.publicKey.toOption,
+          options.unbond.privateKey.toOption
+        )
       case options.visualizeBlocks =>
         VisualizeDag(
           options.visualizeBlocks.depth(),

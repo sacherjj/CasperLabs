@@ -1,7 +1,9 @@
 package io.casperlabs.client
 import java.io.File
+import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.util
 
 import cats.effect.{Sync, Timer}
 import cats.implicits._
@@ -38,6 +40,75 @@ object DeployRuntime {
 
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(depth))
+
+  def unbond[F[_]: Sync: DeployService](
+      maybeAmount: Option[Long],
+      gasPrice: Long,
+      nonce: Long,
+      from: Option[String],
+      contractCode: File,
+      paymentCode: File,
+      maybePublicKeyFile: Option[File],
+      maybePrivateKeyFile: Option[File]
+  ): F[Unit] = {
+    val amountBytes = maybeAmount match {
+      case Some(amount) => {
+        val array: Array[Byte] = java.nio.ByteBuffer
+          .allocate(8)
+          .order(ByteOrder.LITTLE_ENDIAN)
+          .putLong(amount)
+          .array()
+
+        Array[Byte](1, 0, 0, 0, 9, 0, 0, 0, 1) ++ array
+      }
+      case None => {
+        Array[Byte](1, 0, 0, 0, 1, 0, 0, 0, 0)
+      }
+    }
+
+    deployFileProgram[F](
+      from,
+      nonce,
+      contractCode,
+      paymentCode,
+      maybePublicKeyFile,
+      maybePrivateKeyFile,
+      gasPrice,
+      ByteString.copyFrom(amountBytes)
+    )
+  }
+
+  def bond[F[_]: Sync: DeployService](
+      amount: Long,
+      gasPrice: Long,
+      nonce: Long,
+      from: Option[String],
+      contractCode: File,
+      paymentCode: File,
+      maybePublicKeyFile: Option[File],
+      maybePrivateKeyFile: Option[File]
+  ): F[Unit] = {
+    val array: Array[Byte] = java.nio.ByteBuffer
+      .allocate(8)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .putLong(amount)
+      .array()
+
+    val amountBytes: Array[Byte] = Array[Byte](1, 0, 0, 0, 8, 0, 0, 0) ++ array
+
+    val amountByteString = ByteString.copyFrom(amountBytes)
+
+    deployFileProgram[F](
+      from,
+      nonce,
+      contractCode,
+      paymentCode,
+      maybePublicKeyFile,
+      maybePrivateKeyFile,
+      gasPrice,
+      amountByteString
+    )
+  }
 
   def queryState[F[_]: Sync: DeployService](
       blockHash: String,
@@ -125,7 +196,8 @@ object DeployRuntime {
       paymentCode: File,
       maybePublicKeyFile: Option[File],
       maybePrivateKeyFile: Option[File],
-      gasPrice: Long
+      gasPrice: Long,
+      sessionArgs: ByteString = ByteString.EMPTY
   ): F[Unit] = {
     def readFile(file: File): F[ByteString] =
       Sync[F].fromTry(
@@ -176,7 +248,7 @@ object DeployRuntime {
         .withBody(
           consensus.Deploy
             .Body()
-            .withSession(consensus.Deploy.Code().withCode(session))
+            .withSession(consensus.Deploy.Code().withCode(session).withArgs(sessionArgs))
             .withPayment(consensus.Deploy.Code().withCode(payment))
         )
         .withHashes
