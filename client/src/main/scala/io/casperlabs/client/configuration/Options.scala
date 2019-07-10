@@ -184,13 +184,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         validate = fileCheck
       )
 
-    val from = opt[String](
-      descr =
-        "The public key of the account which is the context of this deployment, base16 encoded.",
-      required = false,
-      validate = hexCheck
-    )
-
     val nonce = opt[Long](
       descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
       validate = _ > 0,
@@ -223,13 +216,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         descr = "Path to the file with bonding contract.",
         validate = fileCheck
       )
-
-    val from = opt[String](
-      descr =
-        "The public key of the account which is the context of this deployment, base16 encoded.",
-      required = false,
-      validate = hexCheck
-    )
 
     val nonce = opt[Long](
       descr = "This allows you to overwrite your own pending transactions that use the same nonce.",

@@ -41,7 +41,6 @@ object Main {
       case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
       case Unbond(
           amount,
-          from,
           nonce,
           contractCode,
           privateKey
@@ -49,13 +48,11 @@ object Main {
         DeployRuntime.unbond(
           amount,
           nonce,
-          from,
           contractCode,
           privateKey
         )
       case Bond(
           amount,
-          from,
           nonce,
           contractCode,
           privateKey
@@ -63,7 +60,6 @@ object Main {
         DeployRuntime.bond(
           amount,
           nonce,
-          from,
           contractCode,
           privateKey
         )

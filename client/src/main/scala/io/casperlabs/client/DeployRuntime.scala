@@ -44,7 +44,6 @@ object DeployRuntime {
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
       nonce: Long,
-      from: Option[String],
       sessionCode: File,
       privateKeyFile: File
   ): F[Unit] = {
@@ -64,7 +63,7 @@ object DeployRuntime {
     }
 
     deployFileProgram[F](
-      from,
+      None,
       nonce,
       sessionCode,
       sessionCode, // currently, sessionCode == paymentCode in order to get some gas limit for the execution
@@ -78,7 +77,6 @@ object DeployRuntime {
   def bond[F[_]: Sync: DeployService](
       amount: Long,
       nonce: Long,
-      from: Option[String],
       sessionCode: File,
       privateKeyFile: File
   ): F[Unit] = {
@@ -93,7 +91,7 @@ object DeployRuntime {
     val amountByteString = ByteString.copyFrom(amountBytes)
 
     deployFileProgram[F](
-      from,
+      None,
       nonce,
       sessionCode,
       sessionCode, // currently, sessionCode == paymentCode in order to get some gas limit for the execution

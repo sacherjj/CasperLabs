@@ -28,14 +28,12 @@ final case class ShowDeploy(deployHash: String) extends Configuration
 final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
-    from: Option[String],
     nonce: Long,
     sessionCode: File,
     privateKey: File
 ) extends Configuration
 final case class Unbond(
     amount: Option[Long],
-    from: Option[String],
     nonce: Long,
     sessionCode: File,
     privateKey: File
@@ -93,7 +91,6 @@ object Configuration {
       case options.unbond =>
         Unbond(
           options.unbond.amount.toOption,
-          options.unbond.from.toOption,
           options.unbond.nonce(),
           options.unbond.session(),
           options.unbond.privateKey()
@@ -101,7 +98,6 @@ object Configuration {
       case options.bond =>
         Bond(
           options.unbond.amount(),
-          options.unbond.from.toOption,
           options.unbond.nonce(),
           options.unbond.session(),
           options.unbond.privateKey()
