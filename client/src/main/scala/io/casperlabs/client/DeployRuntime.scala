@@ -1,8 +1,7 @@
 package io.casperlabs.client
-import java.io.File
+import java.io._
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
 import java.util
 
 import cats.effect.{Sync, Timer}
@@ -11,16 +10,20 @@ import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import org.apache.commons.io._
 
 import scala.concurrent.duration._
 import scala.language.higherKinds
 import scala.util.Try
 
 object DeployRuntime {
+
+  val BONDING_WASM_FILE   = "bonding.wasm"
+  val UNBONDING_WASM_FILE = "unbonding.wasm"
 
   def propose[F[_]: Sync: DeployService](): F[Unit] =
     gracefulExit(
@@ -44,7 +47,7 @@ object DeployRuntime {
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
       nonce: Long,
-      sessionCode: File,
+      sessionCode: Option[File],
       privateKeyFile: File
   ): F[Unit] = {
     val amountBytes = maybeAmount match {
@@ -58,11 +61,22 @@ object DeployRuntime {
       }
     }
 
+    val inputStream = readFileOrDefault(sessionCode, UNBONDING_WASM_FILE)
+    val ba = {
+      val baos = new ByteArrayOutputStream()
+      IOUtils.copy(inputStream, baos)
+      baos.toByteArray
+    }
+
+    val sessionInputStream = new ByteArrayInputStream(ba)
+    // currently, sessionCode == paymentCode in order to get some gas limit for the execution
+    val paymentInputStream = new ByteArrayInputStream(ba)
+
     deployFileProgram[F](
       None,
       nonce,
-      sessionCode,
-      sessionCode, // currently, sessionCode == paymentCode in order to get some gas limit for the execution
+      sessionInputStream,
+      paymentInputStream,
       None,
       Some(privateKeyFile),
       10L, // gas price is fixed at the moment for 10:1
@@ -73,24 +87,33 @@ object DeployRuntime {
   def bond[F[_]: Sync: DeployService](
       amount: Long,
       nonce: Long,
-      sessionCode: File,
+      sessionCode: Option[File],
       privateKeyFile: File
   ): F[Unit] = {
     val array: Array[Byte] = serializeAmount(amount)
 
     val amountBytes: Array[Byte] = Array[Byte](1, 0, 0, 0, 8, 0, 0, 0) ++ array
 
-    val amountByteString = ByteString.copyFrom(amountBytes)
+    val inputStream = readFileOrDefault(sessionCode, BONDING_WASM_FILE)
+    val ba = {
+      val baos = new ByteArrayOutputStream()
+      IOUtils.copy(inputStream, baos)
+      baos.toByteArray
+    }
+
+    val sessionInputStream = new ByteArrayInputStream(ba)
+    // currently, sessionCode == paymentCode in order to get some gas limit for the execution
+    val paymentInputStream = new ByteArrayInputStream(ba)
 
     deployFileProgram[F](
       None,
       nonce,
-      sessionCode,
-      sessionCode, // currently, sessionCode == paymentCode in order to get some gas limit for the execution
+      sessionInputStream,
+      paymentInputStream,
       None,
       Some(privateKeyFile),
       10L, // gas price is fixed at the moment for 10:1
-      amountByteString
+      ByteString.copyFrom(amountBytes)
     )
   }
 
@@ -176,27 +199,25 @@ object DeployRuntime {
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[String],
       nonce: Long,
-      sessionCode: File,
-      paymentCode: File,
+      sessionCode: InputStream,
+      paymentCode: InputStream,
       maybePublicKeyFile: Option[File],
       maybePrivateKeyFile: Option[File],
       gasPrice: Long,
       sessionArgs: ByteString = ByteString.EMPTY
   ): F[Unit] = {
-    def readFile(file: File): F[ByteString] =
-      Sync[F].fromTry(
-        Try(ByteString.copyFrom(Files.readAllBytes(file.toPath)))
-      )
+    def readBytes(is: InputStream): F[Array[Byte]] =
+      Sync[F].fromTry(Try(IOUtils.toByteArray(is)))
 
     def readFileAsString(file: File): F[String] =
       for {
-        raw <- readFile(file)
-        str = new String(raw.toByteArray, StandardCharsets.UTF_8)
+        raw <- readBytes(new FileInputStream(file))
+        str = new String(raw, StandardCharsets.UTF_8)
       } yield str
 
     val deploy = for {
-      session <- readFile(sessionCode)
-      payment <- readFile(paymentCode)
+      session <- readBytes(sessionCode).map(ByteString.copyFrom(_))
+      payment <- readBytes(paymentCode).map(ByteString.copyFrom(_))
       maybePrivateKey <- {
         maybePrivateKeyFile.fold(none[PrivateKey].pure[F]) { file =>
           readFileAsString(file).map(Ed25519.tryParsePrivateKey)
@@ -272,6 +293,7 @@ object DeployRuntime {
   private def hash[T <: scalapb.GeneratedMessage](data: T): ByteString =
     ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
 
+  // When not provided fallbacks to the contract version packaged with the client.
   private def readFileOrDefault(file: Option[File], defaultName: String): InputStream =
     file
       .map(new FileInputStream(_))

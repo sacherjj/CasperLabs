@@ -1,5 +1,7 @@
 package io.casperlabs.client
 
+import java.io.FileInputStream
+
 import cats.effect.{Sync, Timer}
 import io.casperlabs.client.configuration._
 import io.casperlabs.shared.{Log, UncaughtExceptionHandler}
@@ -75,8 +77,8 @@ object Main {
         DeployRuntime.deployFileProgram(
           from,
           nonce,
-          sessionCode,
-          paymentCode,
+          new FileInputStream(sessionCode),
+          new FileInputStream(paymentCode),
           maybePublicKey,
           maybePrivateKey,
           gasPrice

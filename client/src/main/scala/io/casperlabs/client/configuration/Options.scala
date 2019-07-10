@@ -174,12 +174,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val amount = opt[Long](
       name = "amount",
       validate = _ > 0,
-      descr = "Amount of tokens to unbond. If not provided then a request to unbond with all staked tokens is made."
+      descr =
+        "Amount of tokens to unbond. If not provided then a request to unbond with all staked tokens is made."
     )
 
     val session =
       opt[File](
-        required = true,
         descr = "Path to the file with unbonding contract.",
         validate = fileCheck
       )
@@ -212,7 +212,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val session =
       opt[File](
-        required = true,
         descr = "Path to the file with bonding contract.",
         validate = fileCheck
       )

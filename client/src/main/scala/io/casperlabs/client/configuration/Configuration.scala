@@ -29,13 +29,13 @@ final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
     nonce: Long,
-    sessionCode: File,
+    sessionCode: Option[File],
     privateKey: File
 ) extends Configuration
 final case class Unbond(
     amount: Option[Long],
     nonce: Long,
-    sessionCode: File,
+    sessionCode: Option[File],
     privateKey: File
 ) extends Configuration
 final case class VisualizeDag(
@@ -92,14 +92,14 @@ object Configuration {
         Unbond(
           options.unbond.amount.toOption,
           options.unbond.nonce(),
-          options.unbond.session(),
+          options.unbond.session.toOption,
           options.unbond.privateKey()
         )
       case options.bond =>
         Bond(
           options.unbond.amount(),
           options.unbond.nonce(),
-          options.unbond.session(),
+          options.unbond.session.toOption,
           options.unbond.privateKey()
         )
       case options.visualizeBlocks =>
