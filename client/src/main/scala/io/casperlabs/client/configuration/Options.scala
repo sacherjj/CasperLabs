@@ -192,9 +192,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val privateKey =
       opt[File](
-        required = false,
         descr = "Path to the file with account private key (Ed25519)",
-        validate = fileCheck
+        validate = fileCheck,
+        required = true
       )
 
   }
@@ -225,9 +225,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val privateKey =
       opt[File](
-        required = false,
         descr = "Path to the file with account private key (Ed25519)",
-        validate = fileCheck
+        validate = fileCheck,
+        required = true
       )
   }
   addSubcommand(bond)
