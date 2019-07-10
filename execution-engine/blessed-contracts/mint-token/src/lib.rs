@@ -15,7 +15,6 @@ mod internal_purse_id;
 
 mod mint;
 
-use alloc::collections::BTreeMap;
 use alloc::string::String;
 use core::convert::TryInto;
 
@@ -34,13 +33,9 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     type PurseId = WithdrawId;
     type DepOnlyId = DepositId;
 
-    fn create(&self, balance: U512) -> Self::PurseId {
-        // Gorski writes:
-        //   This creates money out of nowhere. It doesn't decrease Mint's available tokens,
-        //   doesn't check whether it reached the limit, etc. I think that it should be created
-        //   with a 0 value at the start and the code that calls the `Mint::creates method would
-        //   transfer funds in a separate call.
-        let balance_uref: Key = contract_api::new_uref(balance).into();
+    fn create(&self) -> Self::PurseId {
+        let initial_balance = U512::from(0);
+        let balance_uref: Key = contract_api::new_uref(initial_balance).into();
 
         let purse_key: URef = contract_api::new_uref(()).into();
         let purse_id: WithdrawId = WithdrawId::from_uref(purse_key).unwrap();
@@ -71,14 +66,13 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
 }
 
 #[no_mangle]
-pub extern "C" fn mint_ext() {
+pub extern "C" fn call() {
     let mint = CLMint;
     let method_name: String = contract_api::get_arg(0);
 
     match method_name.as_str() {
         "create" => {
-            let amount: U512 = contract_api::get_arg(1);
-            let purse_id = mint.create(amount);
+            let purse_id = mint.create();
             let purse_key = URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
             contract_api::ret(&purse_key, &vec![purse_key])
         }
@@ -116,9 +110,4 @@ pub extern "C" fn mint_ext() {
 
         _ => panic!("Unknown method name!"),
     }
-}
-
-#[no_mangle]
-pub extern "C" fn call() {
-    let _hash = contract_api::store_function("mint_ext", BTreeMap::new());
 }

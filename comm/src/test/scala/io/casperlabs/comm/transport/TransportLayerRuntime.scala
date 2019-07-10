@@ -80,13 +80,12 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] exten
                 else implicitly[Timer[F]].sleep(1.second)
             _ <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
             _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
-          } yield
-            new TwoNodesResult {
-              def localNode: Node        = local
-              def remoteNode: Node       = remote
-              def remoteNodes: Seq[Node] = Seq(remote)
-              def apply(): A             = r
-            }
+          } yield new TwoNodesResult {
+            def localNode: Node        = local
+            def remoteNode: Node       = remote
+            def remoteNodes: Seq[Node] = Seq(remote)
+            def apply(): A             = r
+          }
         }
       )
 
@@ -116,12 +115,11 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] exten
                 )
             r <- execute(localTl, local, remote)
             _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
-          } yield
-            new TwoNodesResult {
-              def localNode: Node  = local
-              def remoteNode: Node = remote
-              def apply(): A       = r
-            }
+          } yield new TwoNodesResult {
+            def localNode: Node  = local
+            def remoteNode: Node = remote
+            def apply(): A       = r
+          }
         }
       )
 
@@ -175,13 +173,12 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] exten
             _ <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
             _ <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
             _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
-          } yield
-            new ThreeNodesResult {
-              def localNode: Node   = local
-              def remoteNode1: Node = remote1
-              def remoteNode2: Node = remote2
-              def apply(): A        = r
-            }
+          } yield new ThreeNodesResult {
+            def localNode: Node   = local
+            def remoteNode1: Node = remote1
+            def remoteNode2: Node = remote2
+            def apply(): A        = r
+          }
         }
       )
 
@@ -252,7 +249,7 @@ final class Dispatcher[F[_]: Monad: Timer, R, S](
 
 object Dispatcher {
   def heartbeatResponseDispatcher[F[_]: Monad: Timer]
-    : Dispatcher[F, Protocol, CommunicationResponse] =
+      : Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
       peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
       ignore = _.message.isDisconnect
@@ -274,7 +271,7 @@ object Dispatcher {
     )
 
   def internalCommunicationErrorDispatcher[F[_]: Monad: Timer]
-    : Dispatcher[F, Protocol, CommunicationResponse] =
+      : Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
       _ => CommunicationResponse.notHandled(InternalCommunicationError("Test")),
       ignore = _.message.isDisconnect

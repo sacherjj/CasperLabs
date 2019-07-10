@@ -4,7 +4,8 @@ import java.io.File
 final case class ConnectOptions(
     host: String,
     portExternal: Int,
-    portInternal: Int
+    portInternal: Int,
+    nodeId: Option[String]
 )
 
 sealed trait Configuration
@@ -15,7 +16,8 @@ final case class Deploy(
     sessionCode: File,
     paymentCode: File,
     publicKey: Option[File],
-    privateKey: Option[File]
+    privateKey: Option[File],
+    gasPrice: Long
 ) extends Configuration
 
 final case object Propose extends Configuration
@@ -47,7 +49,12 @@ final case class Query(
 object Configuration {
   def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
     val options = Options(args)
-    val connect = ConnectOptions(options.host(), options.port(), options.portInternal())
+    val connect = ConnectOptions(
+      options.host(),
+      options.port(),
+      options.portInternal(),
+      options.nodeId.toOption
+    )
     val conf = options.subcommand.map {
       case options.deploy =>
         Deploy(
@@ -56,7 +63,8 @@ object Configuration {
           options.deploy.session(),
           options.deploy.payment(),
           options.deploy.publicKey.toOption,
-          options.deploy.privateKey.toOption
+          options.deploy.privateKey.toOption,
+          options.deploy.gasPrice()
         )
       case options.propose =>
         Propose

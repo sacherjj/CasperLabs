@@ -2,13 +2,14 @@ package io.casperlabs.casper
 
 import cats.Monad
 import cats.effect.Sync
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.IndexedBlockDagStorage
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
-import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
@@ -22,6 +23,7 @@ import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 import scala.util.Random
 
+@silent("deprecated")
 class ManyValidatorsTest
     extends FlatSpec
     with Matchers
@@ -77,15 +79,15 @@ class ManyValidatorsTest
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips.toIndexedSeq
                      )(Sync[Task], blockStore, newIndexedBlockDagStorage)
-      logEff             = new LogStub[Task]
-      casperRef          <- MultiParentCasperRef.of[Task]
-      _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
+      logEff                 = new LogStub[Task]
+      casperRef              <- MultiParentCasperRef.of[Task]
+      _                      <- casperRef.set(casperEffect)
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
       result <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                  MonadThrowable[Task],
                  casperRef,
                  logEff,
-                 cliqueOracleEffect,
+                 finalityDetectorEffect,
                  blockStore
                )
     } yield result

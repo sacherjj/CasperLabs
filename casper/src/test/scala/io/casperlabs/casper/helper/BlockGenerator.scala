@@ -6,14 +6,12 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.DeploysCheckpoint
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
-import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.ipc.ProtocolVersion
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -89,6 +87,7 @@ object BlockGenerator {
       result <- computeDeploysCheckpoint[F](
                  merged,
                  deploys,
+                 b.getHeader.timestamp,
                  ProtocolVersion(1)
                )
     } yield result

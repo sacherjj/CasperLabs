@@ -4,6 +4,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
+import base64
 from typing import List, Tuple, Dict
 
 from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
@@ -13,6 +14,7 @@ from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 
 
 class DockerNode(LoggingDockerBase):
@@ -25,7 +27,11 @@ class DockerNode(LoggingDockerBase):
     CL_GENESIS_DIR = f'{CL_NODE_DIRECTORY}/genesis'
     CL_SOCKETS_DIR = f'{CL_NODE_DIRECTORY}/sockets'
     CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
+    CL_ACCOUNTS_DIR = f"{CL_NODE_DIRECTORY}/accounts"
     CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
+    CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_ACCOUNTS_DIR}/account-id-genesis"
+
+    NUMBER_OF_BONDS = 10
 
     NETWORK_PORT = 40400
     GRPC_EXTERNAL_PORT = 40401
@@ -121,16 +127,11 @@ class DockerNode(LoggingDockerBase):
                 f'{self.GRPC_EXTERNAL_PORT}/tcp': self.grpc_external_docker_port}
 
     def _get_container(self):
-        env = {
-            'RUST_BACKTRACE': 'full',
-            'CL_LOG_LEVEL': 'DEBUG',
-            'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'true',
-            'CL_SERVER_NO_UPNP': 'true'
-        }
+        env = self.config.node_env.copy()
+        env['CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH'] = self.CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
             env['_JAVA_OPTIONS'] = java_options
-
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix='deploy_')
         self.create_resources_dir()
 
@@ -169,12 +170,13 @@ class DockerNode(LoggingDockerBase):
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
         self.create_bonds_file()
 
+    # TODO: Should be changed to using validator-id from accounts
     def create_bonds_file(self) -> None:
-        N = len(PREGENERATED_KEYPAIRS)
+        N = self.NUMBER_OF_BONDS
         path = f'{self.host_genesis_dir}/bonds.txt'
         os.makedirs(os.path.dirname(path))
         with open(path, 'a') as f:
-            for i, pair in enumerate(PREGENERATED_KEYPAIRS):
+            for i, pair in enumerate(PREGENERATED_KEYPAIRS[:N]):
                 bond = N + 2 * i
                 f.write(f'{pair.public_key} {bond}\n')
 
@@ -184,6 +186,18 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.host_mount_dir)
         if os.path.exists(self.deploy_dir):
             shutil.rmtree(self.deploy_dir)
+
+    @property
+    def from_address(self) -> str:
+        return GENESIS_ACCOUNT.public_key_hex
+
+    @staticmethod
+    def signing_public_key():
+        return base64.b64decode(GENESIS_ACCOUNT.public_key + '===')
+
+    @staticmethod
+    def signing_private_key():
+        return base64.b64decode(GENESIS_ACCOUNT.private_key + '===')
 
     @property
     def volumes(self) -> dict:
@@ -197,6 +211,10 @@ class DockerNode(LoggingDockerBase):
                 },
                 self.host_bootstrap_dir: {
                     "bind": self.CL_BOOTSTRAP_DIR,
+                    "mode": "rw"
+                },
+                self.host_accounts_dir: {
+                    "bind": self.CL_ACCOUNTS_DIR,
                     "mode": "rw"
                 },
                 self.deploy_dir: {
@@ -225,9 +243,20 @@ class DockerNode(LoggingDockerBase):
         return output
 
     def deploy_and_propose(self, **deploy_kwargs) -> str:
+        if 'from_address' not in deploy_kwargs:
+            deploy_kwargs['from_address'] = self.from_address
         deploy_output = self.client.deploy(**deploy_kwargs)
         assert 'Success!' in deploy_output
         block_hash_output_string = self.client.propose()
+        block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
+        assert block_hash is not None
+        logging.info(f"The block hash: {block_hash} generated for {self.container.name}")
+        return block_hash
+
+    def deploy_and_propose_with_retry(self, max_attempts: int, retry_seconds: int, **deploy_kwargs) -> str:
+        deploy_output = self.client.deploy(**deploy_kwargs)
+        assert 'Success!' in deploy_output
+        block_hash_output_string = self.client.propose_with_retry(max_attempts, retry_seconds)
         block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
         assert block_hash is not None
         logging.info(f"The block hash: {block_hash} generated for {self.container.name}")

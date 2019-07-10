@@ -1,9 +1,17 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
-use crate::key::{Key, UREF_SIZE};
-use crate::uref::URef;
+use crate::key::{addr_to_hex, Key, UREF_SIZE};
+use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::fmt::{Debug, Display, Formatter};
+use failure::Fail;
+
+const DEFAULT_NONCE: u64 = 0;
+const DEFAULT_CURRENT_BLOCK_TIME: BlockTime = BlockTime(0);
+const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
+
+pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PurseId(URef);
@@ -18,49 +26,113 @@ impl PurseId {
     }
 }
 
+impl ToBytes for PurseId {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        ToBytes::to_bytes(&self.0)
+    }
+}
+
+impl FromBytes for PurseId {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        <URef>::from_bytes(bytes).map(|(uref, rem)| (PurseId::new(uref), rem))
+    }
+}
+
+#[repr(u32)]
 pub enum ActionType {
     /// Required by deploy execution.
-    Deployment,
+    Deployment = 0,
     /// Required when adding/removing associated keys, changing threshold levels.
-    KeyManagement,
-    /// Required when recovering inactive account.
-    InactiveAccountRecovery,
+    KeyManagement = 1,
+}
+
+impl From<u32> for ActionType {
+    fn from(value: u32) -> ActionType {
+        // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
+        // that helps to automatically create `from_u32` and `to_u32`. This approach
+        // gives better control over generated code.
+        match value {
+            d if d == ActionType::Deployment as u32 => ActionType::Deployment,
+            d if d == ActionType::KeyManagement as u32 => ActionType::KeyManagement,
+            _ => unreachable!(),
+        }
+    }
 }
 
 /// Thresholds that has to be met when executing an action of certain type.
-/// Note that `InactiveAccountRecovery` doesn't have a threshold defined here.
-/// It's so that accounts don't change that value as it's system-wide set to 0.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionThresholds {
     deployment: Weight,
     key_management: Weight,
 }
 
-impl ActionThresholds {
-    // NOTE: I chose to not provide one method for setting action thresholds b/c `InactiveAccountRecovery`
-    // threshold is 0. If there was a polymorphic method then trying to set threshold for `InactiveAccountRecovery`
-    // would have to return an error.
+/// Represents an error that occurs during the change of a thresholds on an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in an out
+/// through FFI boundaries as a number.
+///
+/// The explicit numbering of the variants is done on purpose and whenever you plan to add
+/// new variant, you should always extend it, and add a variant that does not exist already.
+/// When adding new variants you should also remember to change
+/// `From<i32> for SetThresholdFailure`.
+///
+/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
+/// reviewed and tested.
+#[repr(i32)]
+#[derive(Debug, Fail, PartialEq, Eq)]
+pub enum SetThresholdFailure {
+    #[fail(display = "New threshold should be lower or equal than deployment threshold")]
+    KeyManagementThresholdError = 1,
+    #[fail(display = "New threshold should be lower or equal than key management threshold")]
+    DeploymentThresholdError = 2,
+    #[fail(display = "Unable to set action threshold due to insufficient permissions")]
+    PermissionDeniedError = 3,
+}
 
+impl From<i32> for SetThresholdFailure {
+    fn from(value: i32) -> SetThresholdFailure {
+        match value {
+            d if d == SetThresholdFailure::KeyManagementThresholdError as i32 => {
+                SetThresholdFailure::KeyManagementThresholdError
+            }
+            d if d == SetThresholdFailure::DeploymentThresholdError as i32 => {
+                SetThresholdFailure::DeploymentThresholdError
+            }
+            d if d == SetThresholdFailure::PermissionDeniedError as i32 => {
+                SetThresholdFailure::PermissionDeniedError
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl ActionThresholds {
     /// Sets new threshold for [ActionType::Deployment].
     /// Should return an error if setting new threshold for `action_type` breaks one of the invariants.
     /// Currently, invariant is that `ActionType::Deployment` threshold shouldn't be higher than any other,
     /// which should be checked both when increasing `Deployment` threshold and decreasing the other.
-    pub fn set_deployment_threshold(&mut self, new_threshold: Weight) -> bool {
+    pub fn set_deployment_threshold(
+        &mut self,
+        new_threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
         if new_threshold > self.key_management {
-            false
+            Err(SetThresholdFailure::DeploymentThresholdError)
         } else {
             self.deployment = new_threshold;
-            true
+            Ok(())
         }
     }
 
     /// Sets new threshold for [ActionType::KeyManagement].
-    pub fn set_key_management_threshold(&mut self, new_threshold: Weight) -> bool {
+    pub fn set_key_management_threshold(
+        &mut self,
+        new_threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
         if self.deployment > new_threshold {
-            false
+            Err(SetThresholdFailure::KeyManagementThresholdError)
         } else {
             self.key_management = new_threshold;
-            true
+            Ok(())
         }
     }
 
@@ -70,6 +142,19 @@ impl ActionThresholds {
 
     pub fn key_management(&self) -> &Weight {
         &self.key_management
+    }
+
+    /// Unified function that takes an action type, and changes appropriate
+    /// threshold defined by the [ActionType] variants.
+    pub fn set_threshold(
+        &mut self,
+        action_type: ActionType,
+        new_threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
+        match action_type {
+            ActionType::Deployment => self.set_deployment_threshold(new_threshold),
+            ActionType::KeyManagement => self.set_key_management_threshold(new_threshold),
+        }
     }
 }
 
@@ -82,7 +167,7 @@ impl Default for ActionThresholds {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub struct BlockTime(pub u64);
 
 /// Holds information about last usage time of specific action.
@@ -157,9 +242,26 @@ impl Weight {
 
 pub const WEIGHT_SIZE: usize = U8_SIZE;
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct PublicKey([u8; KEY_SIZE]);
 
+impl Display for PublicKey {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "PublicKey({})", addr_to_hex(&self.0))
+    }
+}
+
+impl Debug for PublicKey {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+// TODO: This needs to be updated, `PUBLIC_KEY_SIZE` is not 32 bytes as KEY_SIZE * U8_SIZE.
+// I am not changing that as I don't want to deal with ripple effect.
+
+// Public key is encoded as its underlying [u8; 32] array, which in turn
+// is serialized as u8 + [u8; 32], u8 represents the length and then 32 element array.
 pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
 
 impl PublicKey {
@@ -170,6 +272,16 @@ impl PublicKey {
     pub fn value(self) -> [u8; KEY_SIZE] {
         self.0
     }
+
+    pub fn from_slice(slice: &[u8]) -> Option<PublicKey> {
+        if slice.len() != KEY_SIZE {
+            None
+        } else {
+            let mut buff = [0u8; 32];
+            buff.copy_from_slice(slice);
+            Some(PublicKey::new(buff))
+        }
+    }
 }
 
 impl From<[u8; KEY_SIZE]> for PublicKey {
@@ -178,10 +290,90 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+impl ToBytes for PublicKey {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        ToBytes::to_bytes(&self.0)
+    }
+}
+
+impl FromBytes for PublicKey {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (key_bytes, rem): ([u8; KEY_SIZE], &[u8]) = FromBytes::from_bytes(bytes)?;
+        Ok((PublicKey::new(key_bytes), rem))
+    }
+}
+
+/// Represents an error that happens when trying to add a new associated key
+/// on an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in an out
+/// through FFI boundaries as a number.
+///
+/// The explicit numbering of the variants is done on purpose and whenever you plan to add
+/// new variant, you should always extend it, and add a variant that does not exist already.
+/// When adding new variants you should also remember to change
+/// `From<i32> for AddKeyFailure`.
+///
+/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
+/// reviewed and tested.
+#[derive(PartialEq, Eq, Fail, Debug)]
+#[repr(i32)]
 pub enum AddKeyFailure {
-    MaxKeysLimit,
-    DuplicateKey,
+    #[fail(display = "Unable to add new associated key because maximum amount of keys is reached")]
+    MaxKeysLimit = 1,
+    #[fail(display = "Unable to add new associated key because given key already exists")]
+    DuplicateKey = 2,
+    #[fail(display = "Unable to add new associated key due to insufficient permissions")]
+    PermissionDenied = 3,
+}
+
+impl From<i32> for AddKeyFailure {
+    fn from(value: i32) -> AddKeyFailure {
+        // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
+        // that helps to automatically create `from_i32` and `to_i32`. This approach
+        // gives better control over generated code.
+        match value {
+            d if d == AddKeyFailure::MaxKeysLimit as i32 => AddKeyFailure::MaxKeysLimit,
+            d if d == AddKeyFailure::DuplicateKey as i32 => AddKeyFailure::DuplicateKey,
+            d if d == AddKeyFailure::PermissionDenied as i32 => AddKeyFailure::PermissionDenied,
+            _ => unreachable!(),
+        }
+    }
+}
+
+/// Represents an error that happens when trying to remove an associated key
+/// from an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in an out
+/// through FFI boundaries as a number.
+///
+/// The explicit numbering of the variants is done on purpose and whenever you plan to add
+/// new variant, you should always extend it, and add a variant that does not exist already.
+/// When adding new variants you should also remember to change
+/// `From<i32> for RemoveKeyFailure`.
+///
+/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
+/// reviewed and tested.
+#[derive(Fail, Debug, Eq, PartialEq)]
+#[repr(i32)]
+pub enum RemoveKeyFailure {
+    /// Key does not exist in the list of associated keys.
+    #[fail(display = "Unable to remove a key that does not exist")]
+    MissingKey = 1,
+    #[fail(display = "Unable to remove associated key due to insufficient permissions")]
+    PermissionDenied = 2,
+}
+
+impl From<i32> for RemoveKeyFailure {
+    fn from(value: i32) -> RemoveKeyFailure {
+        match value {
+            d if d == RemoveKeyFailure::MissingKey as i32 => RemoveKeyFailure::MissingKey,
+            d if d == RemoveKeyFailure::PermissionDenied as i32 => {
+                RemoveKeyFailure::PermissionDenied
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
@@ -214,8 +406,11 @@ impl AssociatedKeys {
 
     /// Removes key from the associated keys set.
     /// Returns true if value was found in the set prior to the removal, false otherwise.
-    pub fn remove_key(&mut self, key: &PublicKey) -> bool {
-        self.0.remove(key).is_some()
+    pub fn remove_key(&mut self, key: &PublicKey) -> Result<(), RemoveKeyFailure> {
+        self.0
+            .remove(key)
+            .map(|_| ())
+            .ok_or(RemoveKeyFailure::MissingKey)
     }
 
     pub fn get(&self, key: &PublicKey) -> Option<&Weight> {
@@ -259,6 +454,27 @@ impl Account {
         }
     }
 
+    pub fn create(
+        account_addr: [u8; 32],
+        known_urefs: BTreeMap<String, Key>,
+        purse_id: PurseId,
+    ) -> Self {
+        let nonce = DEFAULT_NONCE;
+        let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
+        let action_thresholds: ActionThresholds = Default::default();
+        let account_activity =
+            AccountActivity::new(DEFAULT_CURRENT_BLOCK_TIME, DEFAULT_INACTIVITY_PERIOD_TIME);
+        Account::new(
+            account_addr,
+            nonce,
+            known_urefs,
+            purse_id,
+            associated_keys,
+            action_thresholds,
+            account_activity,
+        )
+    }
+
     pub fn insert_urefs(&mut self, keys: &mut BTreeMap<String, Key>) {
         self.known_urefs.append(keys);
     }
@@ -267,16 +483,23 @@ impl Account {
         &self.known_urefs
     }
 
-    pub fn get_urefs_lookup(self) -> BTreeMap<String, Key> {
-        self.known_urefs
+    pub fn get_urefs_lookup_mut(&mut self) -> &mut BTreeMap<String, Key> {
+        &mut self.known_urefs
     }
 
-    pub fn pub_key(&self) -> &[u8] {
-        &self.public_key
+    pub fn pub_key(&self) -> [u8; 32] {
+        self.public_key
     }
 
     pub fn purse_id(&self) -> PurseId {
         self.purse_id
+    }
+
+    /// Returns an [`AccessRights::ADD`]-only version of the [`PurseId`].
+    pub fn purse_id_add_only(&self) -> PurseId {
+        let purse_id_uref = self.purse_id.value();
+        let add_only_uref = URef::new(purse_id_uref.addr(), AccessRights::ADD);
+        PurseId::new(add_only_uref)
     }
 
     pub fn associated_keys(&self) -> &AssociatedKeys {
@@ -304,6 +527,29 @@ impl Account {
     pub fn increment_nonce(&mut self) {
         self.nonce += 1;
     }
+
+    pub fn add_associated_key(
+        &mut self,
+        public_key: PublicKey,
+        weight: Weight,
+    ) -> Result<(), AddKeyFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.associated_keys.add_key(public_key, weight)
+    }
+
+    pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.associated_keys.remove_key(&public_key)
+    }
+
+    pub fn set_action_threshold(
+        &mut self,
+        action_type: ActionType,
+        weight: Weight,
+    ) -> Result<(), SetThresholdFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.action_thresholds.set_threshold(action_type, weight)
+    }
 }
 
 impl ToBytes for Weight {
@@ -316,19 +562,6 @@ impl FromBytes for Weight {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (byte, rem): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         Ok((Weight::new(byte), rem))
-    }
-}
-
-impl ToBytes for PublicKey {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        ToBytes::to_bytes(&self.0)
-    }
-}
-
-impl FromBytes for PublicKey {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (key_bytes, rem): ([u8; KEY_SIZE], &[u8]) = FromBytes::from_bytes(bytes)?;
-        Ok((PublicKey::new(key_bytes), rem))
     }
 }
 
@@ -352,7 +585,7 @@ impl FromBytes for AssociatedKeys {
     }
 }
 
-const BLOCKTIME_SIZE: usize = U64_SIZE;
+pub const BLOCKTIME_SER_SIZE: usize = U64_SIZE;
 
 impl ToBytes for BlockTime {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
@@ -390,13 +623,21 @@ impl FromBytes for ActionThresholds {
         let (weight_2, rem4): (Weight, &[u8]) = FromBytes::from_bytes(&rem3)?;
         match (id_1, id_2) {
             (DEPLOYMENT_THRESHOLD_ID, KEY_MANAGEMENT_THRESHOLD_ID) => {
-                action_thresholds.set_key_management_threshold(weight_2);
-                action_thresholds.set_deployment_threshold(weight_1);
+                action_thresholds
+                    .set_key_management_threshold(weight_2)
+                    .map_err(Error::custom)?;
+                action_thresholds
+                    .set_deployment_threshold(weight_1)
+                    .map_err(Error::custom)?;
                 Ok((action_thresholds, rem4))
             }
             (KEY_MANAGEMENT_THRESHOLD_ID, DEPLOYMENT_THRESHOLD_ID) => {
-                action_thresholds.set_key_management_threshold(weight_1);
-                action_thresholds.set_deployment_threshold(weight_2);
+                action_thresholds
+                    .set_key_management_threshold(weight_1)
+                    .map_err(Error::custom)?;
+                action_thresholds
+                    .set_deployment_threshold(weight_2)
+                    .map_err(Error::custom)?;
                 Ok((action_thresholds, rem4))
             }
             _ => Err(Error::FormattingError),
@@ -410,7 +651,7 @@ const INACTIVITY_PERIOD_LIMIT_ID: u8 = 2;
 
 impl ToBytes for AccountActivity {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SIZE + U8_SIZE));
+        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SER_SIZE + U8_SIZE));
         result.push(KEY_MANAGEMENT_LAST_USED_ID);
         result.extend(&self.key_management_last_used.to_bytes()?);
         result.push(DEPLOYMENT_LAST_USED_ID);
@@ -449,7 +690,7 @@ impl FromBytes for AccountActivity {
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let action_thresholds_size = 2 * (WEIGHT_SIZE + U8_SIZE);
-        let account_activity_size: usize = 3 * (BLOCKTIME_SIZE + U8_SIZE);
+        let account_activity_size: usize = 3 * (BLOCKTIME_SER_SIZE + U8_SIZE);
         let associated_keys_size =
             self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
         let known_urefs_size = UREF_SIZE * self.known_urefs.len() + U32_SIZE;
@@ -567,7 +808,7 @@ mod tests {
         let pk = PublicKey([0u8; KEY_SIZE]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
-        assert!(keys.remove_key(&pk));
-        assert!(!keys.remove_key(&PublicKey([1u8; KEY_SIZE])));
+        assert!(keys.remove_key(&pk).is_ok());
+        assert!(keys.remove_key(&PublicKey([1u8; KEY_SIZE])).is_err());
     }
 }

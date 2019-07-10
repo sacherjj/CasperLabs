@@ -1,5 +1,0 @@
-pynacl
-cryptography
-eth-hash[pycryptodome]
-oyaml
-docker

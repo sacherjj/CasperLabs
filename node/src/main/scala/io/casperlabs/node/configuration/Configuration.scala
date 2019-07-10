@@ -4,20 +4,19 @@ import java.nio.file.{Path, Paths}
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
 import cats.syntax.either._
-import cats.syntax.option._
 import cats.syntax.validated._
+import com.github.ghik.silencer.silent
 import eu.timepit.refined._
-import eu.timepit.refined.numeric._
 import eu.timepit.refined.api.Refined
-import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
+import eu.timepit.refined.numeric._
+import io.casperlabs.blockstorage.LMDBBlockStore
 import io.casperlabs.casper.CasperConf
-import io.casperlabs.node.configuration.Utils._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.{relativeToDataDir, SubConfig}
+import io.casperlabs.node.configuration.Utils._
 import io.casperlabs.shared.StoreType
-import shapeless.<:!<
-import toml.Toml
+
 import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
 
@@ -27,11 +26,11 @@ import scala.io.Source
   */
 final case class Configuration(
     server: Configuration.Server,
-    grpc: Configuration.GrpcServer,
+    grpc: Configuration.Grpc,
     tls: Tls,
     casper: CasperConf,
     lmdb: LMDBBlockStore.Config,
-    blockstorage: BlockDagFileStorage.Config,
+    blockstorage: Configuration.BlockStorage,
     metrics: Configuration.Kamon,
     influx: Option[Configuration.Influx]
 )
@@ -91,11 +90,16 @@ object Configuration extends ParserImplicits {
       cleanBlockStorage: Boolean
   ) extends SubConfig
 
-  case class GrpcServer(
-      host: String,
+  case class BlockStorage(
+      latestMessagesLogMaxSizeFactor: Int,
+      cacheMaxSizeBytes: Long
+  ) extends SubConfig
+
+  case class Grpc(
       socket: Path,
       portExternal: Int,
-      portInternal: Int
+      portInternal: Int,
+      useTls: Boolean
   ) extends SubConfig
 
   sealed trait Command extends Product with Serializable
@@ -110,22 +114,18 @@ object Configuration extends ParserImplicits {
   ): ValidatedNel[String, (Command, Configuration)] = {
     val res = for {
       // NOTE: Add default values to node/src/test/resources/default-configuration.toml as well as the main one.
-      defaultRaw         <- readFile(Source.fromResource("default-configuration.toml"))
-      defaults           <- parseToml(defaultRaw)
-      options            <- Options.safeCreate(args, defaults)
-      command            <- options.parseCommand
-      defaultDataDir     <- readDefaultDataDir
-      maybeRawConfigFile <- options.readConfigFile
-      maybeConfigFile <- maybeRawConfigFile.fold(none[Map[CamelCase, String]].asRight[String])(
-                          parseToml(_).map(_.some)
-                        )
+      defaultRaw      <- readFile(Source.fromResource("default-configuration.toml"))
+      defaults        = parseToml(defaultRaw)
+      options         <- Options.safeCreate(args, defaults)
+      command         <- options.parseCommand
+      defaultDataDir  <- readDefaultDataDir
+      maybeConfigFile <- options.readConfigFile.map(_.map(parseToml))
       envSnakeCase = envVars.flatMap {
         case (k, v) if k.startsWith("CL_") && isSnakeCase(k) => List(SnakeCase(k) -> v)
         case _                                               => Nil
       }
-    } yield
-      parse(options.fieldByName, envSnakeCase, maybeConfigFile, defaultDataDir, defaults)
-        .map(conf => (command, conf))
+    } yield parse(options.fieldByName, envSnakeCase, maybeConfigFile, defaultDataDir, defaults)
+      .map(conf => (command, conf))
     res.fold(_.invalidNel[(Command, Configuration)], identity)
   }
 
@@ -150,8 +150,9 @@ object Configuration extends ParserImplicits {
     * Otherwise replaces a parent of a field to updated server.dataDir
     */
   private[configuration] def updatePaths(c: Configuration, defaultDataDir: Path): Configuration = {
-    import scala.language.experimental.macros
     import magnolia._
+
+    import scala.language.experimental.macros
 
     val dataDir = c.server.dataDir
 
@@ -159,11 +160,15 @@ object Configuration extends ParserImplicits {
       def update(a: A): A
     }
 
+    @silent("is never used")
     implicit def default[A: NotPath: NotSubConfig]: PathUpdater[A] =
       identity(_)
+
+    @silent("is never used")
     implicit def option[A](implicit U: PathUpdater[A]): PathUpdater[Option[A]] =
       opt => opt.map(U.update)
 
+    @silent("is never used")
     implicit val pathUpdater: PathUpdater[Path] = (path: Path) =>
       Paths.get(replacePrefix(path, defaultDataDir, dataDir))
 
@@ -227,7 +232,7 @@ object Configuration extends ParserImplicits {
   private def readDefaultDataDir: Either[String, Path] =
     for {
       defaultRaw <- readFile(Source.fromResource("default-configuration.toml"))
-      defaults   <- parseToml(defaultRaw)
+      defaults   = parseToml(defaultRaw)
       dataDir <- defaults
                   .get(CamelCase("serverDataDir"))
                   .fold("server default data dir must be defined".asLeft[Path])(
@@ -235,24 +240,30 @@ object Configuration extends ParserImplicits {
                   )
     } yield dataDir
 
-  private[configuration] def parseToml(content: String): Either[String, Map[CamelCase, String]] = {
+  private[configuration] def parseToml(content: String): Map[CamelCase, String] = {
+    val tableRegex = """\[(.+)\]""".r
+    val valueRegex = """([a-z\-]+)\s*=\s*\"?([^\"]*)\"?""".r
 
-    def flatten(t: Map[String, toml.Value]): Map[String, String] =
-      t.toList.flatMap {
-        case (key, toml.Value.Str(value))  => List((key, value))
-        case (key, toml.Value.Bool(value)) => List((key, value.toString))
-        case (key, toml.Value.Real(value)) => List((key, value.toString))
-        case (key, toml.Value.Num(value))  => List((key, value.toString))
-        case (key, toml.Value.Tbl(values)) => flatten(values).map { case (k, v) => s"$key-$k" -> v }
-        case _                             => Nil
-      }.toMap
+    val lines = content
+      .split('\n')
+    val withoutCommentsAndEmptyLines = lines
+      .filterNot(s => s.startsWith("#") || s.trim.isEmpty)
+      .map(_.trim)
 
-    for {
-      tbl          <- Toml.parse(content)
-      dashifiedMap = flatten(tbl.values)
-    } yield
-      dashifiedMap.map {
-        case (k, v) => (dashToCamel(k), v)
+    val dashifiedMap: Map[String, String] = withoutCommentsAndEmptyLines
+      .foldLeft((Map.empty[String, String], Option.empty[String])) {
+        case ((acc, _), tableRegex(table)) =>
+          (acc, Some(table))
+        case ((acc, t @ Some(currentTable)), valueRegex(key, value)) =>
+          (acc + (currentTable + "-" + key -> value), t)
+        case (x, _) => x
       }
+      ._1
+
+    val camelCasedMap: Map[CamelCase, String] = dashifiedMap.map {
+      case (k, v) => (dashToCamel(k), v)
+    }
+
+    camelCasedMap
   }
 }

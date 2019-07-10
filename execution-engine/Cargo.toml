@@ -2,6 +2,7 @@
 
 members = [
     "blessed-contracts/mint-token",
+    "blessed-contracts/pos",
     "blessed-contracts/test-mint-token",
     "comm",
     "common",
@@ -9,5 +10,20 @@ members = [
     "metrics-scraper",
     "shared",
     "storage",
+    "test-contracts/create-purse-01",
+    "test-contracts/ee-401-regression",
+    "test-contracts/ee-401-regression-call",
+    "test-contracts/transfer-to-account-01",
+    "test-contracts/transfer-to-account-02",
+    "test-contracts/local-state",
+    "test-contracts/known-urefs",
+    "test-contracts/transfer-purse-to-purse",
+    "test-contracts/ee-441-rng-state",
+    "test-contracts/get-blocktime",
+    "test-contracts/get-caller",
+    "test-contracts/get-caller-subcall",
+    "test-contracts/main-purse",
+    "test-contracts/blessed-urefs-access-rights",
+    "test-contracts/transfer-purse-to-account",
     "wasm-prep",
 ]

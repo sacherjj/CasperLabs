@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::convert::{TryFrom, TryInto};
+use std::fmt::Display;
 use std::rc::Rc;
 
 use blake2::digest::{Input, VariableOutput};
@@ -10,9 +12,12 @@ use rand_chacha::ChaChaRng;
 use common::bytesrepr::{deserialize, ToBytes};
 use common::key::{Key, LOCAL_SEED_SIZE};
 use common::uref::{AccessRights, URef};
-use common::value::account::Account;
-use common::value::Value;
-use shared::newtypes::{Blake2bHash, CorrelationId, Validated};
+use common::value::account::{
+    Account, ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure,
+    SetThresholdFailure, Weight,
+};
+use common::value::{Contract, Value};
+use shared::newtypes::{CorrelationId, Validated};
 use storage::global_state::StateReader;
 
 use engine_state::execution_effect::ExecutionEffect;
@@ -27,15 +32,17 @@ pub struct RuntimeContext<'a, R> {
     uref_lookup: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
     known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
+    // Original account for read only tasks taken before execution
     account: &'a Account,
     args: Vec<Vec<u8>>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
+    blocktime: BlockTime,
     gas_limit: u64,
     gas_counter: u64,
     fn_store_id: u32,
-    rng: ChaChaRng,
+    rng: Rc<RefCell<ChaChaRng>>,
     protocol_version: u64,
     correlation_id: CorrelationId,
 }
@@ -52,10 +59,11 @@ where
         args: Vec<Vec<u8>>,
         account: &'a Account,
         base_key: Key,
+        blocktime: BlockTime,
         gas_limit: u64,
         gas_counter: u64,
         fn_store_id: u32,
-        rng: ChaChaRng,
+        rng: Rc<RefCell<ChaChaRng>>,
         protocol_version: u64,
         correlation_id: CorrelationId,
     ) -> Self {
@@ -65,6 +73,7 @@ where
             known_urefs,
             args,
             account,
+            blocktime,
             base_key,
             gas_limit,
             gas_counter,
@@ -79,6 +88,10 @@ where
         self.uref_lookup.get(name)
     }
 
+    pub fn list_known_urefs(&self) -> &BTreeMap<String, Key> {
+        &self.uref_lookup
+    }
+
     pub fn fn_store_id(&self) -> u32 {
         self.fn_store_id
     }
@@ -87,20 +100,103 @@ where
         self.uref_lookup.contains_key(name)
     }
 
+    // Helper function to avoid duplication in `remove_uref`.
+    fn remove_uref_from_contract(
+        &mut self,
+        contract_key: Key,
+        mut contract: Contract,
+        name: &str,
+    ) -> Result<(), Error> {
+        contract.get_urefs_lookup_mut().remove(name);
+        // By this point in the code path, there is no further validation needed.
+        let validated_uref = Validated::new(contract_key, Validated::valid)?;
+        let validated_value = Validated::new(Value::Contract(contract), Validated::valid)?;
+
+        self.state
+            .borrow_mut()
+            .write(validated_uref, validated_value);
+
+        Ok(())
+    }
+
+    /// Remove URef from the `known_urefs` map of the current context.
+    /// It removes both from the ephemeral map (RuntimeContext::known_urefs) but also
+    /// persistable map (one that is found in the TrackingCopy/GlobalState).
+    pub fn remove_uref(&mut self, name: &str) -> Result<(), Error> {
+        match self.base_key() {
+            public_key @ Key::Account(_) => {
+                let mut account: Account = self.read_gs_typed(&public_key)?;
+                self.uref_lookup.remove(name);
+                account.get_urefs_lookup_mut().remove(name);
+                let validated_uref = Validated::new(public_key, Validated::valid)?;
+                let validated_value =
+                    Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+
+                self.state
+                    .borrow_mut()
+                    .write(validated_uref, validated_value);
+
+                Ok(())
+            }
+            contract_uref @ Key::URef(_) => {
+                // We do not need to validate the base key because a contract
+                // is always able to remove keys from its own known_urefs.
+                let contract_key = Validated::new(contract_uref, Validated::valid)?;
+
+                let mut contract: Contract = {
+                    let value: Value = self
+                        .state
+                        .borrow_mut()
+                        .read(self.correlation_id, &contract_key)
+                        .map_err(Into::into)?
+                        .ok_or_else(|| Error::KeyNotFound(contract_uref))?;
+
+                    value.try_into().map_err(|found| {
+                        Error::TypeMismatch(shared::transform::TypeMismatch {
+                            expected: "Contract".to_owned(),
+                            found,
+                        })
+                    })?
+                };
+
+                self.uref_lookup.remove(name);
+                self.remove_uref_from_contract(contract_uref, contract, name)
+            }
+            contract_hash @ Key::Hash(_) => {
+                let mut contract: Contract = self.read_gs_typed(&contract_hash)?;
+                self.uref_lookup.remove(name);
+                self.remove_uref_from_contract(contract_hash, contract, name)
+            }
+            contract_local @ Key::Local(_) => {
+                let mut contract: Contract = self.read_gs_typed(&contract_local)?;
+                self.uref_lookup.remove(name);
+                self.remove_uref_from_contract(contract_local, contract, name)
+            }
+        }
+    }
+
+    pub fn get_caller(&self) -> PublicKey {
+        self.account.pub_key().into()
+    }
+
+    pub fn get_blocktime(&self) -> BlockTime {
+        self.blocktime
+    }
+
     pub fn add_urefs(&mut self, urefs_map: HashMap<URefAddr, HashSet<AccessRights>>) {
         self.known_urefs.extend(urefs_map);
     }
 
     pub fn account(&self) -> &'a Account {
-        self.account
+        &self.account
     }
 
     pub fn args(&self) -> &Vec<Vec<u8>> {
         &self.args
     }
 
-    pub fn rng(&mut self) -> &mut ChaChaRng {
-        &mut self.rng
+    pub fn rng(&self) -> Rc<RefCell<ChaChaRng>> {
+        Rc::clone(&self.rng)
     }
 
     pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
@@ -132,7 +228,7 @@ where
             Key::Account(bytes) => bytes,
             Key::Hash(bytes) => bytes,
             Key::URef(uref) => uref.addr(),
-            Key::Local { seed, key_hash } => Blake2bHash::new(&[seed, key_hash].concat()).into(),
+            Key::Local(hash) => hash,
         }
     }
 
@@ -151,7 +247,7 @@ where
     /// then all function addresses generated within one deploy would have been the same.
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
-        pre_hash_bytes.extend_from_slice(self.account().pub_key());
+        pre_hash_bytes.extend_from_slice(&self.account().pub_key());
         pre_hash_bytes.append(&mut self.account().nonce().to_bytes()?);
         pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
 
@@ -167,7 +263,7 @@ where
     pub fn new_uref(&mut self, value: Value) -> Result<Key, Error> {
         let uref = {
             let mut addr = [0u8; 32];
-            self.rng.fill_bytes(&mut addr);
+            self.rng.borrow_mut().fill_bytes(&mut addr);
             URef::new(addr, AccessRights::READ_ADD_WRITE)
         };
         let key = Key::URef(uref);
@@ -178,10 +274,39 @@ where
 
     /// Adds `key` to the map of named keys of current context.
     pub fn add_uref(&mut self, name: String, key: Key) -> Result<(), Error> {
-        let base_key = self.base_key();
-        self.add_gs(base_key, Value::NamedKey(name.clone(), key))?;
+        // No need to perform actual validation on the base key because an account or contract (i.e. the
+        // element stored under `base_key`) is allowed to add new named keys to itself.
+        let base_key = Validated::new(self.base_key(), Validated::valid)?;
+
+        let validated_value = Validated::new(Value::NamedKey(name.clone(), key), |v| {
+            self.validate_keys(&v)
+        })?;
+        self.add_gs_validated(base_key, validated_value)?;
+
+        // key was already validated successfully as part of validated_value above
         let validated_key = Validated::new(key, Validated::valid)?;
         self.insert_named_uref(name, validated_key);
+        Ok(())
+    }
+
+    pub fn read_ls(&mut self, key: &[u8]) -> Result<Option<Value>, Error> {
+        let seed = self.seed();
+        let key = Key::local(seed, key);
+        let validated_key = Validated::new(key, Validated::valid)?;
+        self.state
+            .borrow_mut()
+            .read(self.correlation_id, &validated_key)
+            .map_err(Into::into)
+    }
+
+    pub fn write_ls(&mut self, key_bytes: &[u8], value: Value) -> Result<(), Error> {
+        let seed = self.seed();
+        let key = Key::local(seed, key_bytes);
+        let validated_key = Validated::new(key, Validated::valid)?;
+        let validated_value = Validated::new(value, Validated::valid)?;
+        self.state
+            .borrow_mut()
+            .write(validated_key, validated_value);
         Ok(())
     }
 
@@ -195,6 +320,27 @@ where
             .map_err(Into::into)
     }
 
+    /// This method is a wrapper over `read_gs` in the sense
+    /// that it extracts the type held by a Value stored in the
+    /// global state in a type safe manner.
+    ///
+    /// This is useful if you want to get the exact type
+    /// from global state.
+    pub fn read_gs_typed<T>(&mut self, key: &Key) -> Result<T, Error>
+    where
+        T: TryFrom<Value>,
+        T::Error: Display,
+    {
+        let value = match self.read_gs(&key)? {
+            None => return Err(Error::KeyNotFound(*key)),
+            Some(value) => value,
+        };
+
+        value.try_into().map_err(|s| {
+            Error::FunctionNotFound(format!("Value at {:?} has invalid type: {}", key, s))
+        })
+    }
+
     pub fn write_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
         let validated_key: Validated<Key> = Validated::new(key, |key| {
             self.validate_writeable(&key).and(self.validate_key(&key))
@@ -204,6 +350,32 @@ where
             .borrow_mut()
             .write(validated_key, validated_value);
         Ok(())
+    }
+
+    pub fn read_account(&mut self, key: &Key) -> Result<Option<Value>, Error> {
+        if let Key::Account(_) = key {
+            let validated_key = Validated::new(*key, |key| self.validate_key(&key))?;
+            self.state
+                .borrow_mut()
+                .read(self.correlation_id, &validated_key)
+                .map_err(Into::into)
+        } else {
+            panic!("Do not use this function for reading from non-account keys")
+        }
+    }
+
+    pub fn write_account(&mut self, key: Key, account: Account) -> Result<(), Error> {
+        if let Key::Account(_) = key {
+            let validated_key = Validated::new(key, |key| self.validate_key(&key))?;
+            let validated_value =
+                Validated::new(Value::Account(account), |value| self.validate_keys(&value))?;
+            self.state
+                .borrow_mut()
+                .write(validated_key, validated_value);
+            Ok(())
+        } else {
+            panic!("Do not use this function for writing non-account keys")
+        }
     }
 
     pub fn store_contract(&mut self, contract: Value) -> Result<[u8; 32], Error> {
@@ -248,7 +420,8 @@ where
             | Value::ListInt32(_)
             | Value::String(_)
             | Value::ListString(_)
-            | Value::Unit => Ok(()),
+            | Value::Unit
+            | Value::UInt64(_) => Ok(()),
             Value::NamedKey(_, key) => self.validate_key(&key),
             Value::Key(key) => self.validate_key(&key),
             Value::Account(account) => {
@@ -274,6 +447,23 @@ where
             Key::URef(uref) => uref,
             _ => return Ok(()),
         };
+        self.validate_uref(uref)
+    }
+
+    pub fn validate_uref(&self, uref: &URef) -> Result<(), Error> {
+        if self.account.purse_id().value().addr() == uref.addr() {
+            // If passed uref matches account's purse then we have to also validate their access
+            // rights.
+            if let Some(rights) = self.account.purse_id().value().access_rights() {
+                if let Some(uref_rights) = uref.access_rights() {
+                    // Access rights of the passed uref, and the account's purse_id should match
+                    if rights & uref_rights == uref_rights {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
         if let Some(new_rights) = uref.access_rights() {
             self.known_urefs
                 .get(&uref.addr()) // Check if the `key` is known
@@ -283,7 +473,7 @@ where
                         .any(|right| *right & new_rights == new_rights)
                 }) // are we allowed to use it this way?
                 .map(|_| ()) // at this point we know it's valid to use `key`
-                .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
+                .ok_or_else(|| Error::ForgedReference(*uref)) // otherwise `key` is forged
         } else {
             Ok(())
         }
@@ -292,6 +482,12 @@ where
     pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
         let keys: Vec<Key> = deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_key(k))?;
+        Ok(keys)
+    }
+
+    pub fn deserialize_urefs(&self, bytes: &[u8]) -> Result<Vec<URef>, Error> {
+        let keys: Vec<URef> = deserialize(bytes)?;
+        keys.iter().try_for_each(|k| self.validate_uref(k))?;
         Ok(keys)
     }
 
@@ -331,7 +527,7 @@ where
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
             Key::URef(uref) => uref.is_readable(),
-            Key::Local { seed, .. } => &self.seed() == seed,
+            Key::Local(_) => false,
         }
     }
 
@@ -340,7 +536,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
             Key::URef(uref) => uref.is_addable(),
-            Key::Local { seed, .. } => &self.seed() == seed,
+            Key::Local(_) => false,
         }
     }
 
@@ -349,7 +545,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => false,
             Key::URef(uref) => uref.is_writeable(),
-            Key::Local { seed, .. } => &self.seed() == seed,
+            Key::Local(_) => false,
         }
     }
 
@@ -362,6 +558,14 @@ where
             self.validate_addable(&k).and(self.validate_key(&k))
         })?;
         let validated_value = Validated::new(value, |v| self.validate_keys(&v))?;
+        self.add_gs_validated(validated_key, validated_value)
+    }
+
+    fn add_gs_validated(
+        &mut self,
+        validated_key: Validated<Key>,
+        validated_value: Validated<Value>,
+    ) -> Result<(), Error> {
         match self
             .state
             .borrow_mut()
@@ -372,6 +576,101 @@ where
             Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
             Ok(AddResult::TypeMismatch(type_mismatch)) => Err(Error::TypeMismatch(type_mismatch)),
         }
+    }
+
+    pub fn add_associated_key(
+        &mut self,
+        public_key: PublicKey,
+        weight: Weight,
+    ) -> Result<(), Error> {
+        // Check permission to modify associated keys
+        if self.base_key() != Key::Account(self.account().pub_key()) {
+            // Exit early with error to avoid mutations
+            return Err(AddKeyFailure::PermissionDenied.into());
+        }
+
+        // Converts an account's public key into a URef
+        let key = Key::Account(self.account().pub_key());
+
+        // Take an account out of the global state
+        let mut account: Account = self.read_gs_typed(&key)?;
+
+        // Exit early in case of error without updating global state
+        account
+            .add_associated_key(public_key, weight)
+            .map_err(Error::from)?;
+
+        let validated_uref = Validated::new(key, Validated::valid)?;
+        let validated_value =
+            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+
+        self.state
+            .borrow_mut()
+            .write(validated_uref, validated_value);
+
+        Ok(())
+    }
+
+    pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), Error> {
+        // Check permission to modify associated keys
+        if self.base_key() != Key::Account(self.account().pub_key()) {
+            // Exit early with error to avoid mutations
+            return Err(RemoveKeyFailure::PermissionDenied.into());
+        }
+
+        // Converts an account's public key into a URef
+        let key = Key::Account(self.account().pub_key());
+
+        // Take an account out of the global state
+        let mut account: Account = self.read_gs_typed(&key)?;
+
+        // Exit early in case of error without updating global state
+        account
+            .remove_associated_key(public_key)
+            .map_err(Error::from)?;
+
+        let validated_uref = Validated::new(key, Validated::valid)?;
+        let validated_value =
+            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+
+        self.state
+            .borrow_mut()
+            .write(validated_uref, validated_value);
+
+        Ok(())
+    }
+
+    pub fn set_action_threshold(
+        &mut self,
+        action_type: ActionType,
+        threshold: Weight,
+    ) -> Result<(), Error> {
+        // Check permission to modify associated keys
+        if self.base_key() != Key::Account(self.account().pub_key()) {
+            // Exit early with error to avoid mutations
+            return Err(SetThresholdFailure::PermissionDeniedError.into());
+        }
+
+        // Converts an account's public key into a URef
+        let key = Key::Account(self.account().pub_key());
+
+        // Take an account out of the global state
+        let mut account: Account = self.read_gs_typed(&key)?;
+
+        // Exit early in case of error without updating global state
+        account
+            .set_action_threshold(action_type, threshold)
+            .map_err(Error::from)?;
+
+        let validated_uref = Validated::new(key, Validated::valid)?;
+        let validated_value =
+            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+
+        self.state
+            .borrow_mut()
+            .write(validated_uref, validated_value);
+
+        Ok(())
     }
 }
 
@@ -394,13 +693,14 @@ mod tests {
 
     use super::{Error, RuntimeContext, URefAddr, Validated};
     use common::value::account::{
-        AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+        AccountActivity, ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
+        RemoveKeyFailure, SetThresholdFailure, Weight,
     };
-    use execution::{create_rng, vec_key_rights_to_map};
-    use shared::newtypes::{Blake2bHash, CorrelationId};
+    use execution::{create_rng, extract_access_rights_from_keys};
+    use shared::newtypes::CorrelationId;
     use tracking_copy::TrackingCopy;
 
-    fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {
+    fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemoryGlobalState> {
         let correlation_id = CorrelationId::new();
         let mut hist = InMemoryGlobalState::empty().unwrap();
         let root_hash = hist.root_hash;
@@ -425,13 +725,13 @@ mod tests {
         TrackingCopy::new(reader)
     }
 
-    fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
+    fn mock_account_with_purse_id(addr: [u8; 32], purse_id: [u8; 32]) -> (Key, value::Account) {
         let associated_keys = AssociatedKeys::new(PublicKey::new(addr), Weight::new(1));
         let account = value::account::Account::new(
             addr,
             0,
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            PurseId::new(URef::new(purse_id, AccessRights::READ_ADD_WRITE)),
             associated_keys,
             Default::default(),
             AccountActivity::new(BlockTime(0), BlockTime(100)),
@@ -439,6 +739,10 @@ mod tests {
         let key = Key::Account(addr);
 
         (key, account)
+    }
+
+    fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
+        mock_account_with_purse_id(addr, [0; 32])
     }
 
     // create random account key.
@@ -465,8 +769,7 @@ mod tests {
     fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SIZE]) -> Key {
         let mut key = [0u8; 64];
         entropy_source.fill_bytes(&mut key);
-        let key_hash = Blake2bHash::new(&key).into();
-        Key::Local { seed, key_hash }
+        Key::local(seed, &key)
     }
 
     fn mock_runtime_context<'a>(
@@ -476,7 +779,7 @@ mod tests {
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         rng: ChaChaRng,
     ) -> RuntimeContext<'a, InMemoryGlobalState> {
-        let tc = mock_tc(base_key, &account);
+        let tc = mock_tc(base_key, account.clone());
         RuntimeContext::new(
             Rc::new(RefCell::new(tc)),
             uref_map,
@@ -484,10 +787,11 @@ mod tests {
             Vec::new(),
             &account,
             base_key,
+            BlockTime(0),
             0,
             0,
             0,
-            rng,
+            Rc::new(RefCell::new(rng)),
             1,
             CorrelationId::new(),
         )
@@ -525,7 +829,7 @@ mod tests {
         let base_acc_addr = [0u8; 32];
         let (key, account) = mock_account(base_acc_addr);
         let mut uref_map = BTreeMap::new();
-        let chacha_rng = create_rng(&base_acc_addr, 0, 0);
+        let chacha_rng = create_rng(base_acc_addr, 0);
         let runtime_context =
             mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
         query(runtime_context)
@@ -536,7 +840,7 @@ mod tests {
         // Test fixture
         let mut rng = rand::thread_rng();
         let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref]);
         // Use uref as the key to perform an action on the global state.
         // This should succeed because the uref is valid.
         let query_result = test(known_urefs, |mut rc| rc.write_gs(uref, Value::Int32(43)));
@@ -558,7 +862,7 @@ mod tests {
     fn store_contract_with_uref_valid() {
         let mut rng = rand::thread_rng();
         let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref]);
 
         let contract = Value::Contract(Contract::new(
             Vec::new(),
@@ -601,7 +905,7 @@ mod tests {
         // Test that storing contract under URef that is known and has WRITE access works.
         let mut rng = rand::thread_rng();
         let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![contract_uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
         let contract: Value = Contract::new(
             Vec::new(),
             once(("ValidURef".to_owned(), contract_uref)).collect(),
@@ -641,7 +945,7 @@ mod tests {
         // Test that storing contract under URef that is known but is not writeable fails.
         let mut rng = rand::thread_rng();
         let contract_uref = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![contract_uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
         let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
 
         let query_result = test(known_urefs, |mut rc| {
@@ -666,14 +970,13 @@ mod tests {
         // Account key is readable if it is a "base" key - current context of the execution.
         let query_result = test(HashMap::new(), |mut rc| {
             let base_key = rc.base_key();
-            let base_account = rc.account().clone();
 
             let result = rc
                 .read_gs(&base_key)
                 .expect("Account key is readable.")
                 .expect("Account is found in GS.");
 
-            assert_eq!(result, Value::Account(base_account.clone()));
+            assert_eq!(result, Value::Account(rc.account().clone()));
             Ok(())
         });
 
@@ -696,7 +999,7 @@ mod tests {
         // Account key is addable if it is a "base" key - current context of the execution.
         let mut rng = rand::thread_rng();
         let uref = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![uref]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref]);
         let query_result = test(known_urefs, |mut rc| {
             let base_key = rc.base_key();
             let uref_name = "NewURef".to_owned();
@@ -706,7 +1009,11 @@ mod tests {
 
             let named_key_transform = Transform::AddKeys(once((uref_name.clone(), uref)).collect());
 
-            assert_eq!(*rc.effect().1.get(&base_key).unwrap(), named_key_transform);
+            assert_eq!(
+                *rc.effect().transforms.get(&base_key).unwrap(),
+                named_key_transform
+            );
+
             Ok(())
         });
 
@@ -756,7 +1063,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let contract_key = random_contract_key(&mut rng);
         let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
-        let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
+        let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut().write(
             Validated::new(contract_key, Validated::valid).unwrap(),
@@ -765,8 +1072,9 @@ mod tests {
 
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref]);
-        let chacha_rng = create_rng(&base_acc_addr, 0, 0);
+        let known_urefs = extract_access_rights_from_keys(vec![uref]);
+        let chacha_rng = create_rng(base_acc_addr, 0);
+
         let mut runtime_context = RuntimeContext::new(
             Rc::clone(&tc),
             &mut uref_map,
@@ -774,10 +1082,11 @@ mod tests {
             Vec::new(),
             &account,
             contract_key,
+            BlockTime(0),
             0,
             0,
             0,
-            chacha_rng,
+            Rc::new(RefCell::new(chacha_rng)),
             1,
             CorrelationId::new(),
         );
@@ -793,7 +1102,7 @@ mod tests {
             Contract::new(Vec::new(), once((uref_name, uref)).collect(), 1).into();
 
         assert_eq!(
-            *tc.borrow().effect().1.get(&contract_key).unwrap(),
+            *tc.borrow().effect().transforms.get(&contract_key).unwrap(),
             Transform::Write(updated_contract)
         );
     }
@@ -807,7 +1116,7 @@ mod tests {
         let contract_key = random_contract_key(&mut rng);
         let other_contract_key = random_contract_key(&mut rng);
         let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
-        let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
+        let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut().write(
             Validated::new(contract_key, Validated::valid).unwrap(),
@@ -816,8 +1125,8 @@ mod tests {
 
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref]);
-        let chacha_rng = create_rng(&base_acc_addr, 0, 0);
+        let known_urefs = extract_access_rights_from_keys(vec![uref]);
+        let chacha_rng = create_rng(base_acc_addr, 0);
         let mut runtime_context = RuntimeContext::new(
             Rc::clone(&tc),
             &mut uref_map,
@@ -825,10 +1134,11 @@ mod tests {
             Vec::new(),
             &account,
             other_contract_key,
+            BlockTime(0),
             0,
             0,
             0,
-            chacha_rng,
+            Rc::new(RefCell::new(chacha_rng)),
             1,
             CorrelationId::new(),
         );
@@ -845,7 +1155,7 @@ mod tests {
     fn uref_key_readable_valid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.read_gs(&uref_key));
         assert!(query_result.is_ok());
     }
@@ -854,7 +1164,7 @@ mod tests {
     fn uref_key_readable_invalid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.read_gs(&uref_key));
         assert_invalid_access(query_result, AccessRights::READ);
     }
@@ -863,7 +1173,7 @@ mod tests {
     fn uref_key_writeable_valid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.write_gs(uref_key, Value::Int32(1)));
         assert!(query_result.is_ok());
     }
@@ -872,7 +1182,7 @@ mod tests {
     fn uref_key_writeable_invalid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.write_gs(uref_key, Value::Int32(1)));
         assert_invalid_access(query_result, AccessRights::WRITE);
     }
@@ -881,7 +1191,7 @@ mod tests {
     fn uref_key_addable_valid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::ADD_WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| {
             rc.write_gs(uref_key, Value::Int32(10))
                 .expect("Writing to the GlobalState should work.");
@@ -894,7 +1204,7 @@ mod tests {
     fn uref_key_addable_invalid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
+        let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.add_gs(uref_key, Value::Int32(1)));
         assert_invalid_access(query_result, AccessRights::ADD);
     }
@@ -909,7 +1219,7 @@ mod tests {
             runtime_context.validate_writeable(&key)
         };
         let query_result = test(known_urefs, query);
-        assert!(query_result.is_ok())
+        assert!(query_result.is_err())
     }
 
     #[test]
@@ -935,7 +1245,7 @@ mod tests {
             runtime_context.validate_readable(&key)
         };
         let query_result = test(known_urefs, query);
-        assert!(query_result.is_ok())
+        assert!(query_result.is_err())
     }
 
     #[test]
@@ -961,7 +1271,7 @@ mod tests {
             runtime_context.validate_addable(&key)
         };
         let query_result = test(known_urefs, query);
-        assert!(query_result.is_ok())
+        assert!(query_result.is_err())
     }
 
     #[test]
@@ -975,5 +1285,244 @@ mod tests {
         };
         let query_result = test(known_urefs, query);
         assert!(query_result.is_err())
+    }
+
+    #[test]
+    fn manage_associated_keys() {
+        // Testing a valid case only - successfuly added a key, and successfuly removed,
+        // making sure `account_dirty` mutated
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let public_key = PublicKey::new([42; 32]);
+            let weight = Weight::new(255);
+
+            // Add a key (this doesn't check for all invariants as `add_key`
+            // is already tested in different place)
+            runtime_context
+                .add_associated_key(public_key, weight)
+                .expect("Unable to add key");
+
+            let effect = runtime_context.effect();
+            let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
+            let account = match transform {
+                Transform::Write(Value::Account(account)) => account,
+                _ => panic!("Invalid transform operation found"),
+            };
+            account
+                .associated_keys()
+                .get(&public_key)
+                .expect("Public key wasn't added to associated keys");
+
+            // Remove a key that was already added
+            runtime_context
+                .remove_associated_key(public_key)
+                .expect("Unable to remove key");
+
+            // Verify
+            let effect = runtime_context.effect();
+            let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
+            let account = match transform {
+                Transform::Write(Value::Account(account)) => account,
+                _ => panic!("Invalid transform operation found"),
+            };
+
+            assert!(account.associated_keys().get(&public_key).is_none());
+
+            // Remove a key that was already removed
+            runtime_context
+                .remove_associated_key(public_key)
+                .expect_err("A non existing key was unexpectedly removed again");
+
+            Ok(())
+        };
+        let _ = test(known_urefs, query);
+    }
+
+    #[test]
+    fn action_thresholds_management() {
+        // Testing a valid case only - successfuly added a key, and successfuly removed,
+        // making sure `account_dirty` mutated
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            runtime_context
+                .set_action_threshold(ActionType::KeyManagement, Weight::new(253))
+                .expect("Unable to set action threshold KeyManagement");
+            runtime_context
+                .set_action_threshold(ActionType::Deployment, Weight::new(252))
+                .expect("Unable to set action threshold Deployment");
+
+            let effect = runtime_context.effect();
+            let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
+            let mutated_account = match transform {
+                Transform::Write(Value::Account(account)) => account,
+                _ => panic!("Invalid transform operation found"),
+            };
+
+            assert_eq!(
+                mutated_account.action_thresholds().deployment(),
+                &Weight::new(252)
+            );
+            assert_eq!(
+                mutated_account.action_thresholds().key_management(),
+                &Weight::new(253)
+            );
+
+            runtime_context
+                .set_action_threshold(ActionType::Deployment, Weight::new(255))
+                .expect_err(
+                    "Shouldn't be able to set deployment threshold higher than key management",
+                );
+
+            Ok(())
+        };
+        let _ = test(known_urefs, query);
+    }
+
+    #[test]
+    fn should_verify_ownership_before_adding_key() {
+        // Testing a valid case only - successfuly added a key, and successfuly removed,
+        // making sure `account_dirty` mutated
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+            runtime_context.base_key = Key::Hash([1; 32]);
+
+            let err = runtime_context
+                .add_associated_key(PublicKey::new([84; 32]), Weight::new(123))
+                .expect_err("This operation should return error");
+
+            match err {
+                Error::AddKeyFailure(AddKeyFailure::PermissionDenied) => {}
+                e => panic!("Invalid error variant: {:?}", e),
+            }
+
+            Ok(())
+        };
+        let _ = test(known_urefs, query);
+    }
+
+    #[test]
+    fn should_verify_ownership_before_removing_a_key() {
+        // Testing a valid case only - successfuly added a key, and successfuly removed,
+        // making sure `account_dirty` mutated
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+            runtime_context.base_key = Key::Hash([1; 32]);
+
+            let err = runtime_context
+                .remove_associated_key(PublicKey::new([84; 32]))
+                .expect_err("This operation should return error");
+
+            match err {
+                Error::RemoveKeyFailure(RemoveKeyFailure::PermissionDenied) => {}
+                ref e => panic!("Invalid error variant: {:?}", e),
+            }
+
+            Ok(())
+        };
+        let _ = test(known_urefs, query);
+    }
+
+    #[test]
+    fn should_verify_ownership_before_setting_action_threshold() {
+        // Testing a valid case only - successfuly added a key, and successfuly removed,
+        // making sure `account_dirty` mutated
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+            runtime_context.base_key = Key::Hash([1; 32]);
+
+            let err = runtime_context
+                .set_action_threshold(ActionType::Deployment, Weight::new(123))
+                .expect_err("This operation should return error");
+
+            match err {
+                Error::SetThresholdFailure(SetThresholdFailure::PermissionDeniedError) => {}
+                ref e => panic!("Invalid error variant: {:?}", e),
+            }
+
+            Ok(())
+        };
+        let _ = test(known_urefs, query);
+    }
+
+    #[test]
+    fn can_roundtrip_key_value_pairs_into_local_state() {
+        let known_urefs = HashMap::new();
+        let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let test_key = b"test_key";
+            let test_value = Value::String("test_value".to_string());
+
+            runtime_context
+                .write_ls(test_key, test_value.to_owned())
+                .expect("should write_ls");
+
+            let result = runtime_context.read_ls(test_key).expect("should read_ls");
+
+            Ok(result == Some(test_value))
+        };
+        let query_result = test(known_urefs, query).expect("should be ok");
+        assert!(query_result)
+    }
+
+    #[test]
+    fn remove_uref_works() {
+        // Test that `remove_uref` removes Key from both ephemeral representation
+        // which is one of the current RuntimeContext, and also puts that change
+        // into the `TrackingCopy` so that it's later committed to the GlobalState.
+
+        let known_urefs = HashMap::new();
+        let base_acc_addr = [0u8; 32];
+        let (key, account) = mock_account(base_acc_addr);
+        let mut chacha_rng = create_rng(base_acc_addr, 0);
+        let uref_name = "Foo".to_owned();
+        let uref_key = random_uref_key(&mut chacha_rng, AccessRights::READ);
+        let mut uref_map = std::iter::once((uref_name.clone(), uref_key)).collect();
+        let mut runtime_context =
+            mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
+
+        assert!(runtime_context.contains_uref(&uref_name));
+        assert!(runtime_context.remove_uref(&uref_name).is_ok());
+        assert!(runtime_context.validate_key(&uref_key).is_err());
+        assert!(!runtime_context.contains_uref(&uref_name));
+        let effects = runtime_context.effect();
+        let transform = effects.transforms.get(&key).unwrap();
+        let account = match transform {
+            Transform::Write(Value::Account(account)) => account,
+            _ => panic!("Invalid transform operation found"),
+        };
+        assert!(!account.urefs_lookup().contains_key(&uref_name));
+    }
+
+    #[test]
+    fn validate_valid_purse_id_of_an_account() {
+        // Tests that URef which matches a purse_id of a given context gets validated
+        let mock_purse_id = [42u8; 32];
+        let known_urefs = HashMap::new();
+        let base_acc_addr = [0u8; 32];
+        let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
+        let chacha_rng = create_rng(base_acc_addr, 0);
+        let mut uref_map = BTreeMap::new();
+        let runtime_context =
+            mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
+
+        // URef that has the same id as purse_id of an account gets validated successfully.
+        let purse_id = URef::new(mock_purse_id, AccessRights::READ_ADD_WRITE);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+
+        // URef that has the same id as purse_id of an account gets validated successfully
+        // as the passed purse has only subset of the privileges
+        let purse_id = URef::new(mock_purse_id, AccessRights::READ);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+        let purse_id = URef::new(mock_purse_id, AccessRights::ADD);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+        let purse_id = URef::new(mock_purse_id, AccessRights::WRITE);
+        assert!(runtime_context.validate_uref(&purse_id).is_ok());
+
+        // Purse ID that doesn't match account's purse_id should fail as it's also not in known
+        // urefs.
+        let purse_id = URef::new([53; 32], AccessRights::READ_ADD_WRITE);
+        assert!(runtime_context.validate_uref(&purse_id).is_err());
     }
 }

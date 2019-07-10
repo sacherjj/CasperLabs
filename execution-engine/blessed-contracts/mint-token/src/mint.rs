@@ -17,7 +17,7 @@ where
     type PurseId;
     type DepOnlyId;
 
-    fn create(&self, balance: U512) -> Self::PurseId;
+    fn create(&self) -> Self::PurseId;
     fn lookup(&self, p: Self::PurseId) -> Option<RW>;
     fn dep_lookup(&self, p: Self::DepOnlyId) -> Option<A>;
 
@@ -51,6 +51,9 @@ mod tests {
 
     use capabilities::{Addable, Readable, Writable};
     use mint::{Error, Mint};
+
+    const GENESIS_PURSE_AMOUNT: u32 = 150;
+    const GENESIS_PURSE: FullId = FullId(0);
 
     type Balance = Rc<Cell<U512>>;
 
@@ -106,7 +109,15 @@ mod tests {
 
     impl SimpleMint {
         pub fn new() -> Self {
-            SimpleMint(RefCell::new(BTreeMap::new()), Cell::new(0))
+            let initial = {
+                let mut ret = BTreeMap::new();
+                ret.insert(
+                    GENESIS_PURSE.0,
+                    Rc::new(Cell::new(U512::from(GENESIS_PURSE_AMOUNT))),
+                );
+                ret
+            };
+            SimpleMint(RefCell::new(initial), Cell::new(1))
         }
 
         pub fn balance(&self, id: u32) -> Option<U512> {
@@ -118,10 +129,11 @@ mod tests {
         type PurseId = FullId;
         type DepOnlyId = DepId;
 
-        fn create(&self, balance: U512) -> Self::PurseId {
+        fn create(&self) -> Self::PurseId {
             let id = self.1.get();
             self.1.set(id + 1);
 
+            let balance = U512::from(0);
             let balance = Rc::new(Cell::new(balance));
             self.0.borrow_mut().insert(id, balance);
             FullId(id)
@@ -139,12 +151,12 @@ mod tests {
     #[test]
     fn transfer_success() {
         let mint = SimpleMint::new();
-        let balance1 = U512::from(150);
-        let balance2 = U512::from(30);
+        let balance1 = U512::from(GENESIS_PURSE_AMOUNT);
+        let balance2 = U512::from(0);
         let transfer_amount = U512::from(75);
 
-        let purse1 = mint.create(balance1);
-        let purse2 = mint.create(balance2).to_dep();
+        let purse1 = GENESIS_PURSE;
+        let purse2 = mint.create().to_dep();
 
         mint.transfer(purse1, purse2, transfer_amount)
             .expect("transfer errored when it should not.");
@@ -159,12 +171,12 @@ mod tests {
     #[test]
     fn transfer_overdraft() {
         let mint = SimpleMint::new();
-        let balance1 = U512::from(150);
-        let balance2 = U512::from(30);
+        let balance1 = U512::from(GENESIS_PURSE_AMOUNT);
+        let balance2 = U512::from(0);
         let transfer_amount = U512::from(1000);
 
-        let purse1 = mint.create(balance1);
-        let purse2 = mint.create(balance2).to_dep();
+        let purse1 = GENESIS_PURSE;
+        let purse2 = mint.create().to_dep();
 
         assert_eq!(
             Err(Error::InsufficientFunds),
@@ -182,10 +194,10 @@ mod tests {
     #[test]
     fn transfer_dest_not_exist() {
         let mint = SimpleMint::new();
-        let balance1 = U512::from(150);
+        let balance1 = U512::from(GENESIS_PURSE_AMOUNT);
         let transfer_amount = U512::from(75);
 
-        let purse1 = mint.create(balance1);
+        let purse1 = GENESIS_PURSE;
         let purse2 = DepId(purse1.0 + 1);
 
         assert_eq!(
@@ -201,10 +213,10 @@ mod tests {
     #[test]
     fn transfer_source_not_exist() {
         let mint = SimpleMint::new();
-        let balance1 = U512::from(150);
+        let balance1 = U512::from(GENESIS_PURSE_AMOUNT);
         let transfer_amount = U512::from(75);
 
-        let purse1 = mint.create(balance1);
+        let purse1 = GENESIS_PURSE;
         let purse2 = FullId(purse1.0 + 1);
 
         assert_eq!(

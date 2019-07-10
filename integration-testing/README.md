@@ -2,7 +2,7 @@
 
 ## Step 1. Install Docker
 
-Follow the instructions on [this page](https://docs.docker.com/install/) for platform specific instalation steps
+Follow the instructions on [this page](https://docs.docker.com/install/) for platform specific installation steps
 
 ## Step 2. Python v3.6+
 

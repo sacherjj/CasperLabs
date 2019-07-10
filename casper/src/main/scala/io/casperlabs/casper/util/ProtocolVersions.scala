@@ -2,10 +2,10 @@ package io.casperlabs.casper.util
 
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
-import io.casperlabs.ipc
+import io.casperlabs.casper.consensus.state
 
 class ProtocolVersions private (l: List[BlockThreshold]) {
-  def versionAt(blockHeight: Long): ipc.ProtocolVersion =
+  def versionAt(blockHeight: Long): state.ProtocolVersion =
     l.collectFirst {
       case BlockThreshold(blockHeightMin, protocolVersion) if blockHeightMin <= blockHeight =>
         protocolVersion
@@ -13,13 +13,13 @@ class ProtocolVersions private (l: List[BlockThreshold]) {
 
   def fromBlock(
       b: Block
-  ): ipc.ProtocolVersion =
+  ): state.ProtocolVersion =
     versionAt(b.getHeader.rank)
 }
 
 object ProtocolVersions {
 
-  final case class BlockThreshold(blockHeightMin: Long, version: ipc.ProtocolVersion)
+  final case class BlockThreshold(blockHeightMin: Long, version: state.ProtocolVersion)
 
   private implicit val blockThresholdOrdering: Ordering[BlockThreshold] =
     Ordering.by[BlockThreshold, Long](_.blockHeightMin).reverse
@@ -42,7 +42,7 @@ object ProtocolVersions {
           "Block thresholds' lower boundaries can't repeat."
         )
         assert(
-          currThreshold.version.version == protocolVersionsSeen.last.version - 1,
+          currThreshold.version.value == protocolVersionsSeen.last.value - 1,
           "Protocol versions should increase monotonically by 1."
         )
         (rangeMinAcc + currThreshold.blockHeightMin, protocolVersionsSeen :+ currThreshold.version)
@@ -57,7 +57,7 @@ object CasperLabsProtocolVersions {
 
   // Specifies what protocol version to choose at the `blockThreshold` height.
   val thresholdsVersionMap: ProtocolVersions = ProtocolVersions(
-    List(BlockThreshold(0, ipc.ProtocolVersion(1)))
+    List(BlockThreshold(0, state.ProtocolVersion(1)))
   )
 
 }

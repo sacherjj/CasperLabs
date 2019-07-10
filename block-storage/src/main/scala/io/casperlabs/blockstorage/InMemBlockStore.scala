@@ -33,7 +33,7 @@ class InMemBlockStore[F[_]] private (
   ): F[Unit] =
     refF
       .update(
-        _ + (blockHash -> (blockMsgWithTransform, blockMsgWithTransform.toBlockSummary))
+        _.updated(blockHash, (blockMsgWithTransform, blockMsgWithTransform.toBlockSummary))
       ) *>
       reverseIdxRefF.update { m =>
         blockMsgWithTransform.getBlockMessage.getBody.deploys.foldLeft(m) { (m, d) =>
@@ -86,4 +86,11 @@ object InMemBlockStore {
   ): F[Ref[F, Map[BlockHash, V]]] =
     Ref[F].of(Map.empty[BlockHash, V])
 
+  def empty[F[_]: Sync: Metrics] =
+    for {
+      blockMapRef      <- Ref[F].of(Map.empty[BlockHash, (BlockMsgWithTransform, BlockSummary)])
+      deployMapRef     <- Ref[F].of(Map.empty[DeployHash, Seq[BlockHash]])
+      approvedBlockRef <- Ref.of[F, Option[ApprovedBlock]](None)
+      store            = create[F](Sync[F], blockMapRef, deployMapRef, approvedBlockRef, Metrics[F])
+    } yield store
 }

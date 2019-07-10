@@ -76,6 +76,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "binascii"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "bit-set"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -114,6 +119,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "blessed-urefs-access-rights"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
 name = "byte-tools"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -135,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "casperlabs-contract-ffi"
-version = "0.7.0"
+version = "0.9.0"
 dependencies = [
  "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -149,9 +161,9 @@ dependencies = [
 
 [[package]]
 name = "casperlabs-engine-grpc-server"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
- "casperlabs-contract-ffi 0.7.0",
+ "casperlabs-contract-ffi 0.9.0",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ctrlc 3.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -225,6 +237,13 @@ dependencies = [
 name = "constant_time_eq"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "create-purse-01"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
 
 [[package]]
 name = "crossbeam-deque"
@@ -307,6 +326,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ee-401-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
+name = "ee-401-regression-call"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
+name = "ee-441-rng-state"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
 name = "either"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -315,8 +355,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "execution-engine"
 version = "0.1.0"
 dependencies = [
+ "binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.7.0",
+ "casperlabs-contract-ffi 0.9.0",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -402,6 +443,27 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "typenum 1.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "get-blocktime"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
+name = "get-caller"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
+name = "get-caller-subcall"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
 ]
 
 [[package]]
@@ -576,6 +638,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "known-urefs"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -611,6 +680,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "local-state"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -633,6 +709,13 @@ version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "cfg-if 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "main-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
 ]
 
 [[package]]
@@ -670,7 +753,7 @@ dependencies = [
 name = "mint-token"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.7.0",
+ "casperlabs-contract-ffi 0.9.0",
 ]
 
 [[package]]
@@ -861,6 +944,13 @@ dependencies = [
 name = "pkg-config"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "pos"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
 
 [[package]]
 name = "proc-macro2"
@@ -1216,13 +1306,14 @@ version = "0.2.0"
 dependencies = [
  "base16 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.7.0",
+ "casperlabs-contract-ffi 0.9.0",
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "hostname 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.55 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "proptest 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.91 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1258,7 +1349,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "storage"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.7.0",
+ "casperlabs-contract-ffi 0.9.0",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lmdb 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1342,7 +1433,7 @@ dependencies = [
 name = "test-mint-token"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.7.0",
+ "casperlabs-contract-ffi 0.9.0",
 ]
 
 [[package]]
@@ -1622,6 +1713,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "transfer-purse-to-account"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
+name = "transfer-purse-to-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
+name = "transfer-to-account-01"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
+name = "transfer-to-account-02"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1825,6 +1944,7 @@ dependencies = [
 "checksum backtrace-sys 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)" = "797c830ac25ccc92a7f8a7b9862bde440715531514594a6154e3d4a54dd769b6"
 "checksum base16 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "5d608a38535c371b2a9149159f6dd2259af379f71e50c24d54a842de44bc5b19"
 "checksum base64 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)" = "489d6c0ed21b11d038c31b6ceccca973e65d73ba3bd8ecb9a2babf5546164643"
+"checksum binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "3dc96c09fe0e8441b8e0e8afa1a64f11a1994f3f146008175eccdfe67f7c0330"
 "checksum bit-set 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "e84c238982c4b1e1ee668d136c510c67a13465279c0cb367ea6baf6310620a80"
 "checksum bit-vec 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f59bbe95d4e52a6398ec21238d31577f2b28a9d86807f06ca59d191d8440d0bb"
 "checksum bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "228047a76f468627ca71776ecdebd732a3423081fcf5125585bcd7c49886ce12"

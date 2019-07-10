@@ -1,0 +1,100 @@
+version: "3.5"
+
+networks:
+  casperlabs:
+    external: true
+
+services:
+  # Metrics available at http://localhost:9090
+  prometheus:
+    image: prom/prometheus:v2.7.1
+    container_name: prometheus
+    volumes:
+      - ${PWD}/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      # Mount the file which we'll keep refreshing any time nodes are created or removed.
+      - ${PWD}/monitoring/prometheus/targets.yml:/etc/prometheus/targets.yml
+    ports:
+      - ${CL_PROMETHEUS_PORT}:9090
+    networks:
+      - casperlabs
+
+  # Dashboard available at http://localhost:3000
+  # login credentials are admin/admin
+  grafana:
+    image: grafana/grafana:5.4.3
+    container_name: grafana
+    volumes:
+      # http://docs.grafana.org/v5.0/administration/provisioning/
+      - ${PWD}/monitoring/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ${PWD}/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    ports:
+      - ${CL_GRAFANA_PORT}:3000
+    networks:
+      - casperlabs
+
+  # Expose ports from one of the containers to the host.
+  # https://hub.docker.com/r/marcnuri/port-forward
+  # https://hub.docker.com/r/alpine/socat
+  proxy-node-http:
+    image: alpine/socat
+    container_name: proxy-node-http
+    ports:
+      - ${CL_SERVER_HTTP_PORT}:40403
+    command: "tcp-listen:40403,fork,reuseaddr tcp-connect:node-0:40403"
+    networks:
+      - casperlabs
+
+
+  # According to https://github.com/improbable-eng/grpc-web/issues/199
+  # grpc/grpc-web has a client that works with envoy and
+  # improbably-eng/grpc-web works with with grpcwebproxy
+  # https://github.com/grpc/grpc-web#proxy-interoperability
+  # https://github.com/improbable-eng/grpc-web/tree/master/go/grpcwebproxy
+  grpcwebproxy:
+    build:
+      context: ./
+      dockerfile: ./grpcwebproxy/Dockerfile
+    image: casperlabs/grpcwebproxy
+    container_name: grpcwebproxy
+    ports:
+      - ${CL_EXPLORER_GRPC_PORT}:8080
+    volumes:
+      - ${PWD}/grpcwebproxy/certificate.pem:/etc/tls/certificate.pem
+      - ${PWD}/grpcwebproxy/key.pem:/etc/tls/key.pem
+    command:
+      - /grpcwebproxy
+      - --backend_addr=node-0:40401
+      - --backend_tls=true
+      - --backend_tls_noverify
+      - --backend_max_call_recv_msg_size=16777216
+      - --allow_all_origins
+      - --server_tls_cert_file=/etc/tls/certificate.pem
+      - --server_tls_key_file=/etc/tls/key.pem
+    networks:
+      - casperlabs
+
+  # CasperLabs Explorer available at https://localhost:8443
+  # The URL needs to be enabled in Auth0 for login/logout to work.
+  explorer:
+    image: casperlabs/explorer:latest
+    container_name: explorer
+    networks:
+      - casperlabs
+    ports:
+      - ${CL_EXPLORER_HTTP_PORT}:8443
+    volumes:
+      # NOTE: This is using the system account, so no need for giving funds to the faucet.
+      - ${PWD}/.casperlabs/genesis/system-account/account-public.pem:/app/keys/public.key
+      - ${PWD}/.casperlabs/genesis/system-account/account-private.pem:/app/keys/private.key
+      - ${PWD}/grpcwebproxy/certificate.pem:/app/tls/certificate.pem
+      - ${PWD}/grpcwebproxy/key.pem:/app/tls/key.pem
+      - ${PWD}/.casperlabs/explorer/nonce.txt:/app/nonce.txt
+    environment:
+      FAUCET_ACCOUNT_PUBLIC_KEY_PATH: /app/keys/public.key
+      FAUCET_ACCOUNT_PRIVATE_KEY_PATH: /app/keys/private.key
+      FAUCET_NONCE_PATH: /app/nonce.txt
+      CASPER_SERVICE_URL: http://grpcwebproxy:8080
+      SERVER_USE_TLS: "true"
+      SERVER_PORT: 8443
+      SERVER_TLS_CERT_PATH: /app/tls/certificate.pem
+      SERVER_TLS_KEY_PATH: /app/tls/key.pem

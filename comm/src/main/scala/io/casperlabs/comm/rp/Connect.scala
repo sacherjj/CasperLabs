@@ -79,7 +79,7 @@ object Connect {
     * use the TransportLayer to send Heartbeat messages and get rid of some that aren't
     * responding. Currently 10 connections are pinged in a round. */
   def clearConnections[F[_]: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
-    : F[Int] = {
+      : F[Int] = {
 
     def sendHeartbeat(peer: Node): F[(Node, CommErr[Protocol])] =
       for {
@@ -110,7 +110,7 @@ object Connect {
 
   /** Disconnect from all connections. */
   def resetConnections[F[_]: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
-    : F[Unit] =
+      : F[Unit] =
     ConnectionsCell[F].flatModify { connections =>
       for {
         local  <- RPConfAsk[F].reader(_.local)
@@ -127,7 +127,7 @@ object Connect {
     for {
       connections <- ConnectionsCell[F].read
       tout        <- RPConfAsk[F].reader(_.defaultTimeout)
-      peers <- NodeDiscovery[F].alivePeersAscendingDistance
+      peers <- NodeDiscovery[F].recentlyAlivePeersAscendingDistance
                 .map(p => (p.toSet -- connections).toList)
       connected <- peers.traverseFilter { peer =>
                     ErrorHandler[F].attempt(conn(peer, tout)).flatMap {

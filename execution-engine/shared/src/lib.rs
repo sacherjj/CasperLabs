@@ -9,6 +9,7 @@ extern crate base16;
 extern crate libc;
 extern crate log;
 extern crate num;
+extern crate parity_wasm;
 
 pub mod init;
 #[macro_use]

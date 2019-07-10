@@ -6,7 +6,7 @@ import com.google.protobuf.empty.Empty
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.SafetyOracle
+import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info._
@@ -18,14 +18,13 @@ import io.casperlabs.shared.Log
 import io.casperlabs.comm.ServiceError.InvalidArgument
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.ipc
-import monix.execution.Scheduler
+import io.casperlabs.casper.consensus.state
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 
-object GrpcCasperService extends StateConversions {
+object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: SafetyOracle: BlockStore: ExecutionEngineService](
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStore: ExecutionEngineService](
       ignoreDeploySignature: Boolean
   ): F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
@@ -119,14 +118,14 @@ object GrpcCasperService extends StateConversions {
                       case SmartContractEngineError(msg) =>
                         MonadThrowable[F].raiseError(InvalidArgument(msg))
                     }
-          } yield fromIpc(value)
+          } yield value
       }
     }
 
   def toKey[F[_]: MonadThrowable](
       keyType: StateQuery.KeyVariant,
       keyValue: String
-  ): F[ipc.Key] =
+  ): F[state.Key] =
     Utils.toKey[F](keyType.name, keyValue).handleErrorWith {
       case ex: java.lang.IllegalArgumentException =>
         MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))

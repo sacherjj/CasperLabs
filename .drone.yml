@@ -70,6 +70,9 @@ pipeline:
       - "~/.cargo/bin/cargo update"
       - "~/.cargo/bin/cargo build"
       - "~/.cargo/bin/cargo test"
+      - "./scripts/run-contract-tests.sh"
+      - "cd ../long-running-tests"
+      - "./build-contracts.sh"
     image: "casperlabs/buildenv:latest"
     when:
       event:
@@ -98,12 +101,15 @@ pipeline:
         - pull_request
 
 # This section is for bors' branches only
-  sbt-compile-test-bors:
+  sbt-test-docker-bors:
     commands:
       - "sbt test"
+      - "make docker-build/node docker-build/client"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
     when:
       branch:
         - staging
@@ -175,12 +181,14 @@ pipeline:
         - staging
         - trying
 
-  docker-build-artifacts-bors:
+  docker-build-ee-int-bors:
     commands:
-      - "sbt node/docker:publishLocal client/docker:publishLocal"
       - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "./integration-testing/contracts/build_contracts.sh"
       - "make docker-build/execution-engine"
       - "make docker-build/integration-testing"
+      - "make docker-build/key-generator"
+      - "make docker-build/explorer"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
@@ -191,12 +199,26 @@ pipeline:
         - staging
         - trying
 
+  docker-keys-gen-test-bors:
+    commands:
+      - "mkdir /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+      - "./hack/key-management/docker-gen-keys.sh /tmp/keys-DRONE-${DRONE_BUILD_NUMBER} --test"
+      - "rm -rf /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/tmp:/tmp"
+    when:
+      branch:
+        - staging
+        - trying
+
   run-integration-tests:
     commands:
       - "apt-get update && apt-get -y install gcc"
       - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2"
       - "cd integration-testing"
-      - ./docker_run_tests.sh
+      - "./docker_run_tests.sh"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
@@ -224,9 +246,8 @@ pipeline:
         - push
         - tag
 
-  docker-build-artifacts-merge:
+  docker-build-ee-merge:
     commands:
-      - "sbt node/docker:publishLocal client/docker:publishLocal"
       - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
       - "make docker-build/execution-engine"
     environment:
@@ -243,9 +264,57 @@ pipeline:
         - push
         - tag
 
-  package-sbt-artifacts:
+  docker-key-gen-merge:
     commands:
-      - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
+      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "make docker-build/key-generator"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
+
+  docker-explorer-merge:
+    commands:
+      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "make docker-build/explorer"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
+
+  docker-grpcwebproxy-merge:
+    commands:
+      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "make docker-build/grpcwebproxy"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
+
+  package-sbt-artifacts-merge:
+    commands:
+      - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin node/docker:publishLocal client/docker:publishLocal"
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
       - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
@@ -268,7 +337,9 @@ pipeline:
   package-ee:
     commands:
       - "mkdir -p artifacts/${DRONE_BRANCH}"
+      - "make clean"
       - "make cargo-package-all"
+      - "cp execution-engine/target/blessed-contracts.tar.gz artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm artifacts/${DRONE_BRANCH}"
       - "WORKING_DIR=$(pwd) ; cd execution-engine/target/release/rpmbuild/SOURCES ; OS=$(uname -s | tr '[:upper:]' '[:lower:]') ; ARCH=$(uname -p) ; SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed \"s/.tar.gz//\") ; TARGET=$(ls $SOURCE*.tar.gz | sed \"s/.tar.gz/_\"$OS\"_\"$ARCH\".tar.gz/\") ; tar -xzf $SOURCE.tar.gz ; tar -czf $TARGET -C $SOURCE/usr/bin/ . && cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}"
@@ -329,16 +400,28 @@ pipeline:
       docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:"$REF"
       docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:"$REF"
       docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:"$REF"
+      docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:"$REF"
+      docker tag casperlabs/explorer:DRONE-${DRONE_BUILD_NUMBER} casperlabs/explorer:"$REF"
+      docker tag casperlabs/grpcwebproxy:DRONE-${DRONE_BUILD_NUMBER} casperlabs/grpcwebproxy:"$REF"
       docker push casperlabs/node:"$REF"
       docker push casperlabs/client:"$REF"
       docker push casperlabs/execution-engine:"$REF"
+      docker push casperlabs/key-generator:"$REF"
+      docker push casperlabs/explorer:"$REF"
+      docker push casperlabs/grpcwebproxy:"$REF"
       if [ "${DRONE_BRANCH}" = "master" ]; then
         docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:latest
         docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:latest
         docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:latest
+        docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:latest
+        docker tag casperlabs/explorer:DRONE-${DRONE_BUILD_NUMBER} casperlabs/explorer:latest
+        docker tag casperlabs/grpcwebproxy:DRONE-${DRONE_BUILD_NUMBER} casperlabs/grpcwebproxy:latest
         docker push casperlabs/node:latest
         docker push casperlabs/client:latest
         docker push casperlabs/execution-engine:latest
+        docker push casperlabs/key-generator:latest
+        docker push casperlabs/explorer:latest
+        docker push casperlabs/grpcwebproxy:latest
       fi
       echo "done"
     image: "casperlabs/buildenv:latest"
@@ -408,7 +491,7 @@ pipeline:
       - slack_webhook
     template: |
       *{{ uppercasefirst build.status }}*
-        Author: {{ build.author }} 
+        Author: {{ build.author }}
         Drone Build: <{{ build.link }}|#{{ build.number }}>
         Commit Link: <https://github.com/{{repo.owner}}/{{repo.name}}/commit/{{build.commit}}|{{ truncate build.commit 10 }}>
     when:

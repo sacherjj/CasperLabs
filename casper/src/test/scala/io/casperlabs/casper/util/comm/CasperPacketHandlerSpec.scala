@@ -9,7 +9,6 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage,
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.genesis.contracts.Faucet
 import io.casperlabs.casper.helper.{
   BlockDagStorageTestFixture,
   HashSetCasperTestNode,
@@ -27,6 +26,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   StandaloneCasperHandler
 }
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
+import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.catscontrib.ApplicativeError_
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.comm.discovery.Node
@@ -50,6 +50,7 @@ import monix.execution.Scheduler
 import org.scalatest.{Matchers, WordSpec}
 
 import scala.concurrent.duration._
+import io.casperlabs.shared.FilesAPI
 
 class CasperPacketHandlerSpec extends WordSpec with Matchers {
   private def setup() = new {
@@ -61,7 +62,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     val requiredSigs               = 1
     val deployTimestamp            = 1L
     val BlockMsgWithTransform(Some(genesis), transforms) =
-      buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
+      buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, deployTimestamp)
     val validatorId       = ValidatorIdentity(validatorPk, validatorSk, Ed25519)
     val storageSize: Long = 1024L * 1024
 
@@ -69,13 +70,18 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
     val bap = new BlockApproverProtocol(
       validatorId,
-      deployTimestamp,
       bonds,
       Seq.empty,
-      1L,
-      Long.MaxValue,
-      false,
-      requiredSigs
+      BlockApproverProtocol.GenesisConf(
+        minimumBond = 1L,
+        maximumBond = Long.MaxValue,
+        requiredSigs = requiredSigs,
+        genesisAccountPublicKeyPath = None,
+        initialTokens = 0L,
+        mintCodePath = None,
+        posCodePath = None,
+        bondsPath = None
+      )
     )
     val local: Node = peerNode("src", 40400)
     val chainId     = "test-chainId"
@@ -87,6 +93,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val rpConf         = createRPConfAsk[Task](local)
     implicit val time           = TestTime.instance
     implicit val log            = new LogStub[Task]
+    implicit val filesApi       = FilesAPI.create[Task]
     implicit val errHandler =
       ApplicativeError_.applicativeError(new ApplicativeError[Task, CommError] {
         override def raiseError[A](e: CommError): Task[A] =
@@ -109,7 +116,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
-    implicit val safetyOracle = new SafetyOracle[Task] {
+    implicit val safetyOracle = new FinalityDetector[Task] {
       override def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[Task],
           estimateBlockHash: BlockHash
@@ -149,7 +156,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
             blockApproval.toByteString
           )
           _ = {
-            log.warns shouldBe empty
+            log.warns.size shouldBe 1
+            log.warns.head should include("Unable to construct blessed terms")
             transportLayer.requests should not be empty
             val lastMessage = transportLayer.requests.last
             assert(lastMessage.peer == local && lastMessage.msg == expectedPacket)

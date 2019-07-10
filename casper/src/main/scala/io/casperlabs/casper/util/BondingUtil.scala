@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.{Resource, Sync}
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -16,6 +17,7 @@ object BondingUtil {
   def bondingStatusOut(ethAddress: String): String        = s"${ethAddress}_bondingOut"
   def transferStatusOut(ethAddress: String): String       = s"${ethAddress}_transferOut"
 
+  @silent("is never used")
   def bondingForwarderDeploy(bondKey: String, ethAddress: String): String = """"""
 
   def unlockDeploy[F[_]: Sync](ethAddress: String, pubKey: String, secKey: String)(
@@ -40,6 +42,7 @@ object BondingUtil {
       Base16.decode(secKey)
     )
 
+  @silent("is never used")
   def preWalletUnlockDeploy[F[_]: Sync](
       ethAddress: String,
       pubKey: String,
@@ -47,12 +50,14 @@ object BondingUtil {
       statusOut: String
   )(implicit scheduler: Scheduler): F[String] = ???
 
+  @silent("is never used")
   def walletTransferSigData[F[_]: Sync](
       nonce: Int,
       amount: Long,
       destination: String
   )(implicit scheduler: Scheduler): F[Array[Byte]] = ???
 
+  @silent("is never used")
   def issuanceWalletTransferDeploy[F[_]: Sync](
       nonce: Int,
       amount: Long,
@@ -62,6 +67,7 @@ object BondingUtil {
       secKey: Array[Byte]
   )(implicit scheduler: Scheduler): F[String] = """""".pure[F]
 
+  @silent("is never used")
   def faucetBondDeploy[F[_]: Sync](
       amount: Long,
       sigAlgorithm: String,
@@ -82,10 +88,12 @@ object BondingUtil {
       runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
     )
 
+  @silent("is never used")
   def makeExecutionEngineServiceResource[F[_]: Sync](
       runtimeDirResource: Resource[F, Path]
   ): Resource[F, ExecutionEngineService[Task]] = ???
 
+  @silent("is never used")
   def bondingDeploy[F[_]: Sync](
       bondKey: String,
       ethAddress: String,
@@ -94,6 +102,7 @@ object BondingUtil {
       pubKey: String
   ): F[Unit] = ???
 
+  @silent("is never used")
   def writeFaucetBasedRhoFiles[F[_]: Sync](
       amount: Long,
       sigAlgorithm: String,

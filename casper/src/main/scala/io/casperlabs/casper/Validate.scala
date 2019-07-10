@@ -1,28 +1,29 @@
 package io.casperlabs.casper
 
-import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{Applicative, Functor, Monad}
+import cats.{Applicative, ApplicativeError, Functor, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.protocol.{ApprovedBlock}
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}, Block.Justification
+import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
+import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.util.ProtoUtil.bonds
-import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
-import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import simulacrum.typeclass
 
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
 
 object Validate {
@@ -36,13 +37,14 @@ object Validate {
 
   val DRIFT = 15000 // 15 seconds
 
-  def raiseValidateErrorThroughSync[F[_]: Sync]: FunctorRaise[F, InvalidBlock] =
+  def raiseValidateErrorThroughApplicativeError[F[_]: ApplicativeError[?[_], Throwable]]
+      : FunctorRaise[F, InvalidBlock] =
     new FunctorRaise[F, InvalidBlock] {
       override val functor: Functor[F] =
         Functor[F]
 
       override def raise[A](e: InvalidBlock): F[A] =
-        Sync[F].raiseError(ValidateErrorWrapper(e))
+        ValidateErrorWrapper(e).raiseError[F, A]
     }
 
   final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception(status.toString)
@@ -168,12 +170,12 @@ object Validate {
           )
       _ <- Validate.blockSummary[F](summary, chainId)
       // Checks that need dependencies.
-      _ <- Validate.missingBlocks[F](summary, dag)
-      _ <- Validate.timestamp[F](summary, dag)
+      _ <- Validate.missingBlocks[F](summary)
+      _ <- Validate.timestamp[F](summary)
       _ <- Validate.blockNumber[F](summary, dag)
       _ <- Validate.sequenceNumber[F](summary, dag)
       _ <- maybeGenesis.filterNot(_.blockHash == summary.blockHash).fold(().pure[F]) { genesis =>
-            Validate.justificationFollows[F](summary, genesis, dag) *>
+            Validate.justificationFollows[F](summary) *>
               Validate.justificationRegressions[F](summary, genesis, dag)
           }
       // Checks that need the body.
@@ -202,38 +204,49 @@ object Validate {
       } yield false
     }
 
-  def deploySignature[F[_]: Applicative: Log](d: consensus.Deploy): F[Boolean] =
+  def deploySignature[F[_]: Monad: Log](d: consensus.Deploy): F[Boolean] =
     if (d.approvals.isEmpty) {
       Log[F].warn(
         s"Deploy ${PrettyPrinter.buildString(d.deployHash)} has no signatures."
       ) *> false.pure[F]
     } else {
-      d.approvals.toList.traverse { a =>
-        signatureVerifiers(a.getSignature.sigAlgorithm)
-          .map { verify =>
-            Try {
-              verify(
-                d.deployHash.toByteArray,
-                Signature(a.getSignature.sig.toByteArray),
-                PublicKey(a.approverPublicKey.toByteArray)
-              )
-            } match {
-              case Success(true) =>
-                true.pure[F]
-              case _ =>
-                Log[F].warn(
-                  s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash)} is invalid."
-                ) *> false.pure[F]
-            }
-          } getOrElse {
-          Log[F].warn(
-            s"Signature algorithm ${a.getSignature.sigAlgorithm} of deploy ${PrettyPrinter
-              .buildString(d.deployHash)} is unsupported."
-          ) *> false.pure[F]
+      for {
+        signatoriesVerified <- d.approvals.toList
+                                .traverse { a =>
+                                  signatureVerifiers(a.getSignature.sigAlgorithm)
+                                    .map { verify =>
+                                      Try {
+                                        verify(
+                                          d.deployHash.toByteArray,
+                                          Signature(a.getSignature.sig.toByteArray),
+                                          PublicKey(a.approverPublicKey.toByteArray)
+                                        )
+                                      } match {
+                                        case Success(true) =>
+                                          true.pure[F]
+                                        case _ =>
+                                          Log[F].warn(
+                                            s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash)} is invalid."
+                                          ) *> false.pure[F]
+                                      }
+                                    } getOrElse {
+                                    Log[F].warn(
+                                      s"Signature algorithm ${a.getSignature.sigAlgorithm} of deploy ${PrettyPrinter
+                                        .buildString(d.deployHash)} is unsupported."
+                                    ) *> false.pure[F]
+                                  }
+                                }
+                                .map(_.forall(identity))
+        keysMatched = d.approvals.toList.exists { a =>
+          a.approverPublicKey == d.getHeader.accountPublicKey
         }
-      } map {
-        _.forall(identity)
-      }
+        _ <- Log[F]
+              .warn(
+                s"Signatories of deploy ${PrettyPrinter.buildString(d.deployHash)} don't contain at least one signature with key equal to public key: ${PrettyPrinter
+                  .buildString(d.getHeader.accountPublicKey)}"
+              )
+              .whenA(!keysMatched)
+      } yield signatoriesVerified && keysMatched
     }
 
   def blockSender[F[_]: Monad: Log: BlockStore](
@@ -300,11 +313,11 @@ object Validate {
   // Validates whether block was built using correct protocol version.
   def version[F[_]: Applicative: Log](
       b: BlockSummary,
-      m: BlockHeight => ipc.ProtocolVersion
+      m: BlockHeight => state.ProtocolVersion
   ): F[Boolean] = {
     val blockVersion = b.getHeader.protocolVersion
     val blockHeight  = b.getHeader.rank
-    val version      = m(blockHeight).version
+    val version      = m(blockHeight).value
     if (blockVersion == version) {
       true.pure[F]
     } else {
@@ -321,8 +334,7 @@ object Validate {
     * Works with either efficient justifications or full explicit justifications
     */
   def missingBlocks[F[_]: Monad: Log: BlockStore: RaiseValidationError](
-      block: BlockSummary,
-      dag: BlockDagRepresentation[F]
+      block: BlockSummary
   ): F[Unit] =
     for {
       parentsPresent <- block.getHeader.parentHashes.toList.forallM(p => BlockStore[F].contains(p))
@@ -335,8 +347,7 @@ object Validate {
 
   // This is not a slashable offence
   def timestamp[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
-      b: BlockSummary,
-      dag: BlockDagRepresentation[F]
+      b: BlockSummary
   ): F[Unit] =
     for {
       currentTime  <- Time[F].currentMillis
@@ -368,35 +379,51 @@ object Validate {
           }
     } yield ()
 
-  // Agnostic of non-parent justifications
+  /* If we receive block from future then we may fail to propose new block on top of it because of Validation.timestamp */
+  def preTimestamp[F[_]: MonadThrowable: Log: Time: RaiseValidationError](
+      b: Block
+  ): F[Option[FiniteDuration]] =
+    for {
+      currentMillis <- Time[F].currentMillis
+      delay <- b.getHeader.timestamp - currentMillis match {
+                case n if n <= 0     => none[FiniteDuration].pure[F]
+                case n if n <= DRIFT =>
+                  // Sleep for a little bit more time to ensure we won't propose block on top of block from future
+                  FiniteDuration(n + 500, MILLISECONDS).some.pure[F]
+                case _ =>
+                  RaiseValidationError[F].raise[Option[FiniteDuration]](InvalidUnslashableBlock)
+              }
+    } yield delay
+
+  // Block number is 1 plus the maximum of block number of its justifications.
   def blockNumber[F[_]: MonadThrowable: Log: RaiseValidationError](
       b: BlockSummary,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
-      parents <- b.getHeader.parentHashes.toList.traverse { parentHash =>
-                  dag.lookup(parentHash).flatMap {
-                    MonadThrowable[F].fromOption(
-                      _,
-                      new Exception(
-                        s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
-                      )
-                    )
-                  }
-                }
-      maxBlockNumber = parents.foldLeft(-1L) {
-        case (acc, p) => math.max(acc, p.rank)
+      justificationMsgs <- b.getHeader.justifications.toList.traverse { justification =>
+                            dag.lookup(justification.latestBlockHash).flatMap {
+                              MonadThrowable[F].fromOption(
+                                _,
+                                new Exception(
+                                  s"Block dag store was missing ${PrettyPrinter.buildString(justification.latestBlockHash)}."
+                                )
+                              )
+                            }
+                          }
+      maxRank = justificationMsgs.foldLeft(-1L) {
+        case (acc, blockMetadata) => math.max(acc, blockMetadata.rank)
       }
       number = b.getHeader.rank
-      result = maxBlockNumber + 1 == number
+      result = maxRank + 1 == number
       _ <- if (result) {
             Applicative[F].unit
           } else {
             val logMessage =
-              if (parents.isEmpty)
-                s"block number $number is not zero, but block has no parents."
+              if (justificationMsgs.isEmpty)
+                s"block number $number is not zero, but block has no justifications."
               else
-                s"block number $number is not one more than maximum parent number $maxBlockNumber."
+                s"block number $number is not one more than the maximum justification's number $maxRank."
             for {
               _ <- Log[F].warn(ignore(b, logMessage))
               _ <- RaiseValidationError[F].raise[Unit](InvalidBlockNumber)
@@ -466,8 +493,21 @@ object Validate {
     val bodyHash   = ProtoUtil.protoHash(d.getBody)
     val deployHash = ProtoUtil.protoHash(d.getHeader)
     val ok         = bodyHash == d.getHeader.bodyHash && deployHash == d.deployHash
-    Log[F].warn(s"Invalid deploy hash ${PrettyPrinter.buildString(d.deployHash)}").whenA(!ok) *>
-      ok.pure[F]
+
+    def logDiff = {
+      // Print the full length, maybe the client has configured their hasher to output 64 bytes.
+      def b16(bytes: ByteString) = Base16.encode(bytes.toByteArray)
+      for {
+        _ <- Log[F]
+              .warn(
+                s"Invalid deploy body hash; got ${b16(d.getHeader.bodyHash)}, expected ${b16(bodyHash)}"
+              )
+        _ <- Log[F]
+              .warn(s"Invalid deploy hash; got ${b16(d.deployHash)}, expected ${b16(deployHash)}")
+      } yield ()
+    }
+
+    logDiff.whenA(!ok).as(ok)
   }
 
   def blockHash[F[_]: Monad: RaiseValidationError: Log](
@@ -532,21 +572,14 @@ object Validate {
   def parents[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: Block,
       lastFinalizedBlockHash: BlockHash,
-      genesisBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
-    val maybeParentHashes = ProtoUtil.parentHashes(b)
-    val parentHashes = maybeParentHashes match {
-      case hashes if hashes.isEmpty => Seq(lastFinalizedBlockHash)
-      case hashes                   => hashes
-    }
-
     def printHashes(hashes: Iterable[ByteString]) =
-      hashes.map(PrettyPrinter.buildString(_)).mkString("[", ", ", "]")
+      hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.getHeader.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, genesisBlockHash, latestMessagesHashes)
+      tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
@@ -583,9 +616,7 @@ object Validate {
    * This check must come before Validate.parents
    */
   def justificationFollows[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
-      b: BlockSummary,
-      genesis: Block,
-      dag: BlockDagRepresentation[F]
+      b: BlockSummary
   ): F[Unit] = {
     val raiseNoParent =
       Log[F].warn(ignore(b, s"doesn't have a parent.")) *>
@@ -599,8 +630,8 @@ object Validate {
       status <- if (bondedValidators == justifiedValidators) {
                  Applicative[F].unit
                } else {
-                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString(_))
-                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString(_))
+                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString)
+                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString)
                  for {
                    _ <- Log[F].warn(
                          ignore(
@@ -647,10 +678,7 @@ object Validate {
     } yield result
   }
 
-  private def justificationRegressionsAux[F[_]: MonadThrowable: Log: BlockStore: FunctorRaise[
-    ?[_],
-    InvalidBlock
-  ]](
+  private def justificationRegressionsAux[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockSummary,
       latestMessagesOfBlock: Map[Validator, BlockHash],
       latestMessagesFromSenderView: Map[Validator, BlockHash],
@@ -700,12 +728,13 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Monad: Log: BlockStore: ExecutionEngineService: FunctorRaise[
-    ?[_],
-    InvalidBlock
-  ]](
+  // Validates whether received block is valid (according to that nodes logic):
+  // 1) Validates whether pre state hashes match
+  // 2) Runs deploys from the block
+  // 3) Validates whether post state hashes match
+  // 4) Validates whether bonded validators, as at the end of executing the block, match.
+  def transactions[F[_]: Monad: Log: BlockStore: ExecutionEngineService: RaiseValidationError](
       block: Block,
-      dag: BlockDagRepresentation[F],
       preStateHash: StateHash,
       effects: Seq[ipc.TransformEntry]
   ): F[Unit] = {
@@ -713,24 +742,25 @@ object Validate {
     val blockPostState = ProtoUtil.postStateHash(block)
     if (preStateHash == blockPreState) {
       for {
-        possiblePostState <- ExecutionEngineService[F].commit(
-                              preStateHash,
-                              effects
-                            )
+        possibleCommitResult <- ExecutionEngineService[F].commit(
+                                 preStateHash,
+                                 effects
+                               )
         //TODO: distinguish "internal errors" and "user errors"
-        _ <- possiblePostState match {
+        _ <- possibleCommitResult match {
               case Left(ex) =>
                 Log[F].error(
                   s"Could not commit effects of block ${PrettyPrinter.buildString(block)}: $ex",
                   ex
                 ) *>
                   RaiseValidationError[F].raise[Unit](InvalidTransaction)
-              case Right(postStateHash) =>
-                if (postStateHash == blockPostState) {
-                  Applicative[F].unit
-                } else {
-                  RaiseValidationError[F].raise[Unit](InvalidPostStateHash)
-                }
+              case Right(commitResult) =>
+                for {
+                  _ <- RaiseValidationError[F]
+                        .raise[Unit](InvalidPostStateHash)
+                        .whenA(commitResult.postStateHash != blockPostState)
+                  _ <- Validate.bondsCache[F](block, commitResult.bondedValidators)
+                } yield ()
             }
       } yield ()
     } else {

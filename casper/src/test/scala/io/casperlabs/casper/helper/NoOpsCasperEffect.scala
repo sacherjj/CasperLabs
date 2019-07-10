@@ -38,6 +38,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def lastFinalizedBlock: F[Block]                                    = Block().pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
   def bufferedDeploys: F[DeployBuffer]                                = DeployBuffer.empty.pure[F]
+  def faultToleranceThreshold                                         = 0f
 }
 
 object NoOpsCasperEffect {

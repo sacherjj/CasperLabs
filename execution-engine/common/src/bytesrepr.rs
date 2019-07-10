@@ -1,6 +1,7 @@
 use super::alloc::collections::BTreeMap;
-use super::alloc::string::String;
+use super::alloc::string::{String, ToString};
 use super::alloc::vec::Vec;
+use core::fmt::Display;
 use core::mem::{size_of, MaybeUninit};
 
 use failure::Fail;
@@ -39,6 +40,15 @@ pub enum Error {
 
     #[fail(display = "Serialization error: out of memory")]
     OutOfMemoryError,
+
+    #[fail(display = "Serialization error: {}", _0)]
+    CustomError(String),
+}
+
+impl Error {
+    pub fn custom<T: Display>(msg: T) -> Error {
+        Error::CustomError(msg.to_string())
+    }
 }
 
 pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
@@ -48,6 +58,10 @@ pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
     } else {
         Err(Error::LeftOverBytes)
     }
+}
+
+pub fn serialize(t: impl ToBytes) -> Result<Vec<u8>, Error> {
+    t.to_bytes()
 }
 
 pub fn safe_split_at(bytes: &[u8], n: usize) -> Result<(&[u8], &[u8]), Error> {
@@ -543,6 +557,11 @@ mod proptests {
         #[test]
         fn test_access_rights(access_right in access_rights_arb()) {
             assert!(test_serialization_roundtrip(&access_right))
+        }
+
+        #[test]
+        fn test_public_key(pk in public_key_arb()) {
+            assert!(test_serialization_roundtrip(&pk))
         }
     }
 

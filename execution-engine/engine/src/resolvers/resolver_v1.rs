@@ -45,13 +45,25 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::ReadFuncIndex.into(),
             ),
+            "read_value_local" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                FunctionIndex::ReadLocalFuncIndex.into(),
+            ),
             "serialize_function" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::SerFnFuncIndex.into(),
             ),
+            "serialize_known_urefs" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 0][..], Some(ValueType::I32)),
+                FunctionIndex::SerKnownURefs.into(),
+            ),
             "write" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::WriteFuncIndex.into(),
+            ),
+            "write_local" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 4][..], None),
+                FunctionIndex::WriteLocalFuncIndex.into(),
             ),
             "get_read" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
@@ -90,7 +102,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::GetCallResultFuncIndex.into(),
             ),
             "get_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 3][..], None),
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::GetURefFuncIndex.into(),
             ),
             "has_uref_name" => FuncInstance::alloc_host(
@@ -117,13 +129,53 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::IsValidFnIndex.into(),
             ),
-            "seed" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::SeedFnIndex.into(),
-            ),
             "revert" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::RevertFuncIndex.into(),
+            ),
+            "add_associated_key" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                FunctionIndex::AddAssociatedKeyFuncIndex.into(),
+            ),
+            "remove_associated_key" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
+                FunctionIndex::RemoveAssociatedKeyFuncIndex.into(),
+            ),
+            "set_action_threshold" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                FunctionIndex::SetActionThresholdFuncIndex.into(),
+            ),
+            "list_known_urefs" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::ListKnownURefsIndex.into(),
+            ),
+            "remove_uref" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], None),
+                FunctionIndex::RemoveURef.into(),
+            ),
+            "get_caller" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::GetCallerIndex.into(),
+            ),
+            "get_blocktime" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::GetBlocktimeIndex.into(),
+            ),
+            "create_purse" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                FunctionIndex::CreatePurseIndex.into(),
+            ),
+            "transfer_to_account" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
+                FunctionIndex::TransferToAccountIndex.into(),
+            ),
+            "transfer_from_purse_to_account" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
+                FunctionIndex::TransferFromPurseToAccountIndex.into(),
+            ),
+            "transfer_from_purse_to_purse" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
+                FunctionIndex::TransferFromPurseToPurseIndex.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

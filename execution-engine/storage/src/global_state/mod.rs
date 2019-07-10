@@ -2,6 +2,7 @@ pub mod in_memory;
 pub mod lmdb;
 
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::BuildHasher;
 use std::time::Instant;
 
@@ -32,6 +33,19 @@ pub enum CommitResult {
     TypeMismatch(TypeMismatch),
 }
 
+impl fmt::Display for CommitResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            CommitResult::RootNotFound => write!(f, "Root not found"),
+            CommitResult::Success(hash) => write!(f, "Success: {}", hash),
+            CommitResult::KeyNotFound(key) => write!(f, "Key not found: {}", key),
+            CommitResult::TypeMismatch(type_mismatch) => {
+                write!(f, "Type mismatch: {:?}", type_mismatch)
+            }
+        }
+    }
+}
+
 impl From<transform::Error> for CommitResult {
     fn from(error: transform::Error) -> Self {
         match error {
@@ -57,6 +71,8 @@ pub trait History {
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error>;
+
+    fn current_root(&self) -> Blake2bHash;
 }
 
 const GLOBAL_STATE_COMMIT_READS: &str = "global_state_commit_reads";

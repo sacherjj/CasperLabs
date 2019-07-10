@@ -5,8 +5,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
-import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.util.ProtoUtil
@@ -14,7 +14,15 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtilTest._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.ipc
-import io.casperlabs.ipc._
+import io.casperlabs.casper.consensus.state._
+import io.casperlabs.ipc.{
+  DeployResult,
+  ExecutionEffect,
+  OpEntry,
+  Transform,
+  TransformEntry,
+  TransformIdentity
+}
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -27,7 +35,7 @@ class ExecEngineUtilTest
     with BlockGenerator
     with BlockDagStorageFixture {
 
-  implicit val logEff = new LogStub[Task]()
+  implicit val logEff: LogStub[Task] = new LogStub[Task]()
 
   implicit val executionEngineService: ExecutionEngineService[Task] =
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
@@ -36,23 +44,23 @@ class ExecEngineUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val genesisDeploys = Vector(
         ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
       val genesisDeploysCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
       val b1Deploys = Vector(
         ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
       val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
       val b2Deploys = Vector(
         ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
       val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
       val b3Deploys = Vector(
         ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
       val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
       /*
@@ -95,7 +103,7 @@ class ExecEngineUtilTest
                               genesis,
                               dag4
                             )
-        (postb3StateHash, _) = blockCheckpointB4
+        (_, _) = blockCheckpointB4
 //          b3PostState          = runtimeManager.storageRepr(postb3StateHash).get
 //
 //          _      = b3PostState.contains("@{1}!(1)") should be(true)
@@ -105,53 +113,50 @@ class ExecEngineUtilTest
   }
 
   def computeSingleProcessedDeploy(
-      dag: BlockDagRepresentation[Task],
       deploy: Seq[consensus.Deploy],
-      protocolVersion: ProtocolVersion = ProtocolVersion(1)
+      protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
       implicit blockStore: BlockStore[Task],
       executionEngineService: ExecutionEngineService[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
+      blocktime <- Task.delay(System.currentTimeMillis)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
                           deploy,
+                          blocktime,
                           protocolVersion
                         )
-      DeploysCheckpoint(_, _, result, _, _, _, _) = computeResult
+      DeploysCheckpoint(_, _, _, result, _, _, _) = computeResult
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
     implicit blockStore =>
-      implicit blockDagStorage =>
+      _ =>
         // reference costs
         // deploy each Rholang program separately and record its cost
         val deploy1 = ProtoUtil.sourceDeploy(
           ByteString.copyFromUtf8("@1!(Nil)"),
-          System.currentTimeMillis(),
-          Integer.MAX_VALUE
+          System.currentTimeMillis
         )
         val deploy2 =
           ProtoUtil.sourceDeploy(
             ByteString.copyFromUtf8("@3!([1,2,3,4])"),
-            System.currentTimeMillis(),
-            Integer.MAX_VALUE
+            System.currentTimeMillis
           )
         val deploy3 =
           ProtoUtil.sourceDeploy(
             ByteString.copyFromUtf8("for(@x <- @0) { @4!(x.toByteArray()) }"),
-            System.currentTimeMillis(),
-            Integer.MAX_VALUE
+            System.currentTimeMillis
           )
         for {
-          dag           <- blockDagStorage.getRepresentation
-          proc1         <- computeSingleProcessedDeploy(dag, Seq(deploy1))
-          proc2         <- computeSingleProcessedDeploy(dag, Seq(deploy2))
-          proc3         <- computeSingleProcessedDeploy(dag, Seq(deploy3))
+          proc1         <- computeSingleProcessedDeploy(Seq(deploy1))
+          proc2         <- computeSingleProcessedDeploy(Seq(deploy2))
+          proc3         <- computeSingleProcessedDeploy(Seq(deploy3))
           singleResults = proc1 ++ proc2 ++ proc3
           batchDeploy   = Seq(deploy1, deploy2, deploy3)
-          batchResult   <- computeSingleProcessedDeploy(dag, batchDeploy)
+          batchResult   <- computeSingleProcessedDeploy(batchDeploy)
         } yield batchResult should contain theSameElementsAs singleResults
   }
 
@@ -159,21 +164,21 @@ class ExecEngineUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
-          (_, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
+          (_, _) => new Throwable("failed when run genesis").asLeft.pure[Task],
+          (_, _, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
-          (_, _, _) => new SmartContractEngineError("unimplemented").asLeft.pure[Task],
-          _ => Seq.empty[Bond].pure[Task],
-          _ => Task.unit,
+          (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
           _ => ().asRight[String].pure[Task]
         )
 
       val failedCommitEEService: ExecutionEngineService[Task] =
         mock[Task](
-          (_, deploys, _) =>
+          (_, _) => new Throwable("failed when run genesis").asLeft.pure[Task],
+          (_, _, deploys, _) =>
             Task.now {
               def getExecutionEffect(deploy: ipc.Deploy) = {
                 val key =
-                  Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
+                  Key(Key.Value.Hash(Key.Hash(ByteString.copyFromUtf8(deploy.toProtoString))))
                 val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
                 val op            = ipc.Op(ipc.Op.OpInstance.Noop(io.casperlabs.ipc.NoOp()))
                 val transforEntry = TransformEntry(Some(key), Some(transform))
@@ -192,9 +197,7 @@ class ExecEngineUtilTest
                 .asRight[Throwable]
             },
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
-          (_, _, _) => new SmartContractEngineError("unimplemented").asLeft.pure[Task],
-          _ => Seq.empty[Bond].pure[Task],
-          _ => Task.unit,
+          (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
           _ => ().asRight[String].pure[Task]
         )
 
@@ -225,19 +228,19 @@ class ExecEngineUtilTest
                                            dag
                                          )
           (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-          result <- injectPostStateHash[Task](
-                     index,
-                     b1,
-                     postB1StateHash,
-                     postB1ProcessedDeploys
-                   )
+          _ <- injectPostStateHash[Task](
+                index,
+                b1,
+                postB1StateHash,
+                postB1ProcessedDeploys
+              )
         } yield postB1StateHash
 
       for {
         genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
         b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
         b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-        b3      <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
+        _       <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
         _       <- step(0, genesis)
         _       <- step(1, genesis)
         r1 <- step(2, genesis)(failedExecEEService).onErrorHandleWith { ex =>
@@ -247,12 +250,12 @@ class ExecEngineUtilTest
                }
              }
         _ = r1 should be(ByteString.copyFromUtf8("succeed"))
-        r2 <- step(2, genesis)(failedCommitEEService).onErrorHandleWith { ex =>
-               Task.now {
-                 ex.getMessage should startWith("failed when commit")
-                 ByteString.copyFromUtf8("succeed")
-               }
-             }
+        _ <- step(2, genesis)(failedCommitEEService).onErrorHandleWith { ex =>
+              Task.now {
+                ex.getMessage should startWith("failed when commit")
+                ByteString.copyFromUtf8("succeed")
+              }
+            }
         _ = r1 should be(ByteString.copyFromUtf8("succeed"))
       } yield ()
   }
@@ -261,7 +264,7 @@ class ExecEngineUtilTest
     val genesis = OpDagNode.genesis(Map(1     -> Op.Read))
     val tip     = OpDagNode.withParents(Map(2 -> Op.Write), List(genesis))
 
-    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(tip))
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
     val zeroResult = OpDagNode.merge(
       Vector(genesis)
     )
@@ -269,8 +272,8 @@ class ExecEngineUtilTest
       Vector(tip)
     )
 
-    zeroResult shouldBe (Map.empty, Vector(genesis))
-    oneResult shouldBe (Map.empty, Vector(tip))
+    zeroResult shouldBe ((Map.empty, Vector(genesis)))
+    oneResult shouldBe ((Map.empty, Vector(tip)))
   }
 
   it should "correctly merge in the case of non-conflicting multiple blocks with shared history" in {
@@ -283,10 +286,10 @@ class ExecEngineUtilTest
     val b = OpDagNode.withParents(bOps, List(genesis))
     val c = OpDagNode.withParents(cOps, List(genesis))
 
-    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(a, b, c))
-    val result         = OpDagNode.merge(Vector(a, b, c))
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
+    val result                              = OpDagNode.merge(Vector(a, b, c))
 
-    result shouldBe (bOps + cOps, Vector(a, b, c))
+    result shouldBe ((bOps + cOps, Vector(a, b, c)))
   }
 
   // test case courtesy of @afck: https://github.com/CasperLabs/CasperLabs/pull/385#discussion_r281099630
@@ -305,10 +308,10 @@ class ExecEngineUtilTest
     // b1 and b2 both write to the same key, however since b1 is an ancestor of b2 and no other blocks
     // write to that key, this should not impact the merge
 
-    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(a2, b2, c2))
-    val result         = OpDagNode.merge(Vector(a2, b2, c2))
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
+    val result                              = OpDagNode.merge(Vector(a2, b2, c2))
 
-    result shouldBe (b2Ops + c2Ops, Vector(a2, b2, c2))
+    result shouldBe ((b2Ops + c2Ops, Vector(a2, b2, c2)))
   }
 
   it should "correctly merge in the case of conflicting multiple blocks with shared history" in {
@@ -321,10 +324,10 @@ class ExecEngineUtilTest
     val b = OpDagNode.withParents(bOps, List(genesis))
     val c = OpDagNode.withParents(cOps, List(genesis))
 
-    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(a, b, c))
-    val result         = OpDagNode.merge(Vector(a, b, c))
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
+    val result                              = OpDagNode.merge(Vector(a, b, c))
 
-    result shouldBe (cOps, Vector(a, c))
+    result shouldBe ((cOps, Vector(a, c)))
   }
 
   it should "correctly merge in the case of non-conflicting blocks with a more complex history" in {
@@ -357,15 +360,15 @@ class ExecEngineUtilTest
     val j = OpDagNode.withParents(ops('j'), List(g))
     val k = OpDagNode.withParents(ops('k'), List(h, i))
 
-    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(j, k))
-    val result1        = OpDagNode.merge(Vector(j, k))
-    val result2        = OpDagNode.merge(Vector(k, j))
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
+    val result1                             = OpDagNode.merge(Vector(j, k))
+    val result2                             = OpDagNode.merge(Vector(k, j))
 
     val nonFirstEffect1 = Vector('b', 'd', 'e', 'f', 'h', 'i', 'k').map(ops.apply).reduce(_ + _)
     val nonFirstEffect2 = Vector('c', 'g', 'j').map(ops.apply).reduce(_ + _)
 
-    result1 shouldBe (nonFirstEffect1, Vector(j, k))
-    result2 shouldBe (nonFirstEffect2, Vector(k, j))
+    result1 shouldBe ((nonFirstEffect1, Vector(j, k)))
+    result2 shouldBe ((nonFirstEffect2, Vector(k, j)))
   }
 
   it should "correctly merge in the case of conflicting blocks with a more complex history" in {
@@ -405,20 +408,20 @@ class ExecEngineUtilTest
     val k = OpDagNode.withParents(ops('k'), List(g, h))
     val l = OpDagNode.withParents(ops('l'), List(i))
 
-    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(j, k, l))
-    val result1        = OpDagNode.merge(Vector(j, k, l))
-    val result2        = OpDagNode.merge(Vector(j, l, k))
-    val result3        = OpDagNode.merge(Vector(k, j, l))
-    val result4        = OpDagNode.merge(Vector(k, l, j))
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
+    val result1                             = OpDagNode.merge(Vector(j, k, l))
+    val result2                             = OpDagNode.merge(Vector(j, l, k))
+    val result3                             = OpDagNode.merge(Vector(k, j, l))
+    val result4                             = OpDagNode.merge(Vector(k, l, j))
 
     val nonFirstEffect1 = Vector('b', 'd', 'e', 'h', 'k').map(ops.apply).reduce(_ + _)
     val nonFirstEffect2 = Vector('b', 'f', 'i', 'l').map(ops.apply).reduce(_ + _)
     val nonFirstEffect3 = ops('j')
 
     // cannot pick l and k together since l's history conflicts with k's history
-    result1 shouldBe (nonFirstEffect1, Vector(j, k))
-    result2 shouldBe (nonFirstEffect2, Vector(j, l))
-    result3 shouldBe (nonFirstEffect3, Vector(k, j))
+    result1 shouldBe ((nonFirstEffect1, Vector(j, k)))
+    result2 shouldBe ((nonFirstEffect2, Vector(j, l)))
+    result3 shouldBe ((nonFirstEffect3, Vector(k, j)))
     result4 shouldBe result3
   }
 }
@@ -454,16 +457,16 @@ object ExecEngineUtilTest {
       }
     }
   }
-  def opDagNodeOrder(tips: List[OpDagNode]): Ordering[OpDagNode] =
+  def opDagNodeOrder: Ordering[OpDagNode] =
     Ordering.by[OpDagNode, Int](_.height)
 
-  val registry = """ """.stripMargin
+  val registry: String = """ """.stripMargin
 
-  val other = """ """.stripMargin
+  val other: String = """ """.stripMargin
 
-  def prepareDeploys(v: Vector[ByteString], c: Long) = {
+  def prepareDeploys(v: Vector[ByteString], c: Long): Vector[ProcessedDeploy] = {
     val genesisDeploys =
-      v.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      v.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
     genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
   }
 }

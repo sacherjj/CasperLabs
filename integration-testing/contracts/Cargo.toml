@@ -1,0 +1,26 @@
+[workspace]
+
+members = [
+    "it_common",
+    "combined-contracts/call",
+    "combined-contracts/define",
+    "counter/call",
+    "counter/define",
+    "direct-revert-test/call",
+    "direct-revert-test/define",
+    "get-caller/call",
+    "get-caller/define",
+    "hello-name/call",
+    "hello-name/define",
+    "list-known-urefs/call",
+    "list-known-urefs/define",
+    "mailing-list/call",
+    "mailing-list/define",
+    "subcall-revert-test/call",
+    "subcall-revert-test/define",
+    "transfer-to-account-1/call",
+    "transfer-to-account-2/call",
+    "test_args",
+    "bonding/call",
+    "unbonding/call",
+]

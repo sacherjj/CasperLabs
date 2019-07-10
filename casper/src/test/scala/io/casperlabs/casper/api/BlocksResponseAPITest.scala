@@ -2,6 +2,7 @@ package io.casperlabs.casper.api
 
 import cats.Id
 import cats.effect.Sync
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.BlockHash
@@ -18,6 +19,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.immutable.HashMap
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
+@silent("deprecated")
 class BlocksResponseAPITest
     extends FlatSpec
     with Matchers
@@ -66,33 +68,33 @@ class BlocksResponseAPITest
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
-        b7 <- createBlock[Task](
-               Seq(b5.blockHash),
-               v3,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-             )
-        b8 <- createBlock[Task](
-               Seq(b6.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-             )
+        _ <- createBlock[Task](
+              Seq(b5.blockHash),
+              v3,
+              bonds,
+              HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+            )
+        _ <- createBlock[Task](
+              Seq(b6.blockHash),
+              v2,
+              bonds,
+              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+            )
         dag  <- blockDagStorage.getRepresentation
         tips <- Estimator.tips[Task](dag, genesis.blockHash)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
                        )
-        logEff             = new LogStub[Task]
-        casperRef          <- MultiParentCasperRef.of[Task]
-        _                  <- casperRef.set(casperEffect)
-        cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
+        logEff                 = new LogStub[Task]
+        casperRef              <- MultiParentCasperRef.of[Task]
+        _                      <- casperRef.set(casperEffect)
+        finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
         blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
                            logEff,
-                           cliqueOracleEffect,
+                           finalityDetectorEffect,
                            blockStore
                          )
       } yield blocksResponse.length should be(5)
@@ -132,37 +134,36 @@ class BlocksResponseAPITest
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
-        b7 <- createBlock[Task](
-               Seq(b5.blockHash),
-               v3,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-             )
-        b8 <- createBlock[Task](
-               Seq(b6.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-             )
+        _ <- createBlock[Task](
+              Seq(b5.blockHash),
+              v3,
+              bonds,
+              HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+            )
+        _ <- createBlock[Task](
+              Seq(b6.blockHash),
+              v2,
+              bonds,
+              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+            )
         dag  <- blockDagStorage.getRepresentation
         tips <- Estimator.tips[Task](dag, genesis.blockHash)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
                        )
-        logEff             = new LogStub[Task]
-        casperRef          <- MultiParentCasperRef.of[Task]
-        _                  <- casperRef.set(casperEffect)
-        cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
+        logEff                 = new LogStub[Task]
+        casperRef              <- MultiParentCasperRef.of[Task]
+        _                      <- casperRef.set(casperEffect)
+        finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
         blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
                            logEff,
-                           cliqueOracleEffect,
+                           finalityDetectorEffect,
                            blockStore
                          )
-      } yield
-        blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
+      } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
   it should "return until depth" in withStorage { implicit blockStore => implicit blockDagStorage =>
@@ -198,36 +199,35 @@ class BlocksResponseAPITest
              bonds,
              HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
            )
-      b7 <- createBlock[Task](
-             Seq(b5.blockHash),
-             v3,
-             bonds,
-             HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-           )
-      b8 <- createBlock[Task](
-             Seq(b6.blockHash),
-             v2,
-             bonds,
-             HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-           )
+      _ <- createBlock[Task](
+            Seq(b5.blockHash),
+            v3,
+            bonds,
+            HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+          )
+      _ <- createBlock[Task](
+            Seq(b6.blockHash),
+            v2,
+            bonds,
+            HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+          )
       dag  <- blockDagStorage.getRepresentation
       tips <- Estimator.tips[Task](dag, genesis.blockHash)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips
                      )
-      logEff             = new LogStub[Task]
-      casperRef          <- MultiParentCasperRef.of[Task]
-      _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
+      logEff                 = new LogStub[Task]
+      casperRef              <- MultiParentCasperRef.of[Task]
+      _                      <- casperRef.set(casperEffect)
+      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
       blocksResponse <- BlockAPI.showBlocks[Task](2)(
                          Sync[Task],
                          casperRef,
                          logEff,
-                         cliqueOracleEffect,
+                         finalityDetectorEffect,
                          blockStore
                        )
-    } yield
-      blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
+    } yield blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }
 }

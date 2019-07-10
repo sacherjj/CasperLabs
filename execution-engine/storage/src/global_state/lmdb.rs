@@ -14,7 +14,7 @@ use global_state::{commit, CommitResult, History};
 use trie::operations::create_hashed_empty_trie;
 use trie::Trie;
 use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use trie_store::operations::{read, write, ReadResult, WriteResult};
+use trie_store::operations::{read, ReadResult};
 use trie_store::{Transaction, TransactionSource, TrieStore};
 
 /// Represents a "view" of global state at a particular root hash.
@@ -52,41 +52,6 @@ impl LmdbGlobalState {
             store,
             root_hash,
         }
-    }
-
-    /// Creates a state from an environement, a store, and given set of [`Key`](common::key::key),
-    /// [`Value`](common::value::Value) pairs.
-    pub fn from_pairs(
-        correlation_id: CorrelationId,
-        environment: Arc<LmdbEnvironment>,
-        store: Arc<LmdbTrieStore>,
-        pairs: &[(Key, Value)],
-    ) -> Result<Self, error::Error> {
-        let mut ret = LmdbGlobalState::empty(environment, store)?;
-        {
-            let mut txn = ret.environment.create_read_write_txn()?;
-            let mut current_root = ret.root_hash;
-            for (key, value) in pairs {
-                let key = key.normalize();
-                match write::<_, _, _, LmdbTrieStore, error::Error>(
-                    correlation_id,
-                    &mut txn,
-                    &ret.store,
-                    &current_root,
-                    &key,
-                    value,
-                )? {
-                    WriteResult::Written(root_hash) => {
-                        current_root = root_hash;
-                    }
-                    WriteResult::AlreadyExists => (),
-                    WriteResult::RootNotFound => panic!("LmdbGlobalState has invalid root"),
-                }
-            }
-            ret.root_hash = current_root;
-            txn.commit()?;
-        }
-        Ok(ret)
     }
 }
 
@@ -145,6 +110,10 @@ impl History for LmdbGlobalState {
             self.root_hash = root_hash;
         };
         Ok(commit_result)
+    }
+
+    fn current_root(&self) -> Blake2bHash {
+        self.root_hash
     }
 }
 

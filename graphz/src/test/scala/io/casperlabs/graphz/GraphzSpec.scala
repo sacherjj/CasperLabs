@@ -253,7 +253,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _ <- g.node("1", shape = PlainText)
         _ <- g.node("0", shape = PlainText)
         _ <- g.edge("0" -> "1")
-        _ <- g.edge("1" -> "2")
+        _ <- g.edge("1", "2", style = Some(Bold), constraint = Some(false))
         _ <- g.edge("2" -> "3")
         _ <- g.close
       } yield g
@@ -290,7 +290,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
           |    "1" [shape=plaintext]
           |    "0" [shape=plaintext]
           |    "0" -> "1"
-          |    "1" -> "2"
+          |    "1" -> "2" [constraint=false style=bold]
           |    "2" -> "3"
           |  }
           |}""".stripMargin

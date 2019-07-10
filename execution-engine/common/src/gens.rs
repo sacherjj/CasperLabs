@@ -48,7 +48,7 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
         u8_slice_32().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
         uref_arb().prop_map(Key::URef),
-        (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key_hash)| Key::Local { seed, key_hash })
+        (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key)| Key::local(seed, &key))
     ]
 }
 
@@ -124,6 +124,27 @@ pub fn u512_arb() -> impl Strategy<Value = U512> {
 }
 
 pub fn value_arb() -> impl Strategy<Value = Value> {
+    // If compiler brings you here it most probably means you've added a variant to `Value` enum
+    // but forgot to add generator for it.
+    let stub: Option<Value> = None;
+    if let Some(v) = stub {
+        match v {
+            Value::Int32(_)
+            | Value::UInt64(_)
+            | Value::UInt128(_)
+            | Value::UInt256(_)
+            | Value::UInt512(_)
+            | Value::ByteArray(_)
+            | Value::String(_)
+            | Value::ListString(_)
+            | Value::ListInt32(_)
+            | Value::Account(_)
+            | Value::Contract(_)
+            | Value::Key(_)
+            | Value::NamedKey(_, _)
+            | Value::Unit => (),
+        }
+    };
     prop_oneof![
         (any::<i32>().prop_map(Value::Int32)),
         (vec(any::<u8>(), 1..1000).prop_map(Value::ByteArray)),
@@ -136,6 +157,8 @@ pub fn value_arb() -> impl Strategy<Value = Value> {
         contract_arb().prop_map(Value::Contract),
         u128_arb().prop_map(Value::UInt128),
         u256_arb().prop_map(Value::UInt256),
-        u512_arb().prop_map(Value::UInt512)
+        u512_arb().prop_map(Value::UInt512),
+        Just(Value::Unit),
+        (any::<u64>().prop_map(Value::UInt64)),
     ]
 }

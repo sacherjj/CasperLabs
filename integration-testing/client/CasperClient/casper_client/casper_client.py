@@ -10,13 +10,18 @@ import functools
 import pathlib
 from pyblake2 import blake2b
 import ed25519
+import struct
+import json
+from operator import add
+from functools import reduce
+
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/protocol/CasperMessage.proto
 from . import CasperMessage_pb2
 from .CasperMessage_pb2_grpc import DeployServiceStub
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
-from . import casper_pb2
+from . import casper_pb2 as casper
 from .casper_pb2_grpc import CasperServiceStub
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
@@ -25,6 +30,69 @@ from . import consensus_pb2 as consensus
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
+
+
+class ABI:
+    """ Encode deploy args.
+    """
+
+    @staticmethod
+    def u32(n: int):
+        return struct.pack('<I', n)
+
+    @staticmethod
+    def u64(n: int):
+        return struct.pack('<Q', n)
+        
+    @staticmethod
+    def byte_array(a: bytes):
+        return ABI.u32(len(a)) + a
+
+    @staticmethod
+    def account(a: bytes):
+        if len(a) != 32:
+            raise Error('Account must be 32 bytes long')
+        return ABI.byte_array(a)
+
+    @staticmethod
+    def args(l: list):
+        return ABI.u32(len(l)) + reduce(add, map(ABI.byte_array, l))
+
+    @staticmethod
+    def args_from_json(s: str) -> bytes:
+        """
+        Convert a string with JSON representation of deploy args to binary (ABI).
+
+        The JSON should be a list of dictionaries {'type': 'value'} that represent type and value of the args,
+        for example:
+
+             [{"u32":1024}, {"account":"00000000000000000000000000000000"}, {"u64":1234567890}]
+        """
+        args = json.loads(s)
+
+        for arg in args:
+            if len(arg) != 1:
+                raise Error(f'Wrong encoding of value in {arg}. Only one pair of type and value allowed.')
+
+        def python_value(typ, value: str):
+            if typ in ('u32', 'u64'):
+                return int(value) 
+            return bytearray(value, 'utf-8')
+
+        def encode(typ: str, value: str) -> bytes:
+            try:
+                v = python_value(typ, value)
+                return getattr(ABI, typ)(v)
+            except KeyError:
+                raise Error(f'Unknown type {typ} in {{typ: value}}')
+
+        def only_one(arg):
+            items = list(arg.items())
+            if len(items) != 1:
+                raise Error("Only one pair {'type', 'value'} allowed.")
+            return items[0]
+
+        return ABI.args([encode(*only_one(arg)) for arg in args]) 
 
 
 class InternalError(Exception):
@@ -100,7 +168,7 @@ class CasperClient:
     @guarded
     def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
                payment: str = None, session: str = None, nonce: int = 0,
-               public_key: str = None, private_key: str = None):
+               public_key: str = None, private_key: str = None, args: bytes = None):
         """
         Deploy a smart contract source file to Casper on an existing running node.
         The deploy will be packaged and sent as a block to the network depending
@@ -117,7 +185,8 @@ class CasperClient:
                               transactions that use the same nonce.
         :param public_key:    Path to a file with public key (Ed25519)
         :param private_key:   Path to a file with private key (Ed25519)
-        :return:              deserialized DeployServiceResponse object
+        :param args:          List of ABI encoded arguments
+        :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
         def hash(data: bytes) -> bytes:
@@ -129,8 +198,9 @@ class CasperClient:
             with open(file_name, 'rb') as f:
                 return f.read()
 
-        def read_code(file_name: str):
-            return consensus.Deploy.Code(code = read_binary(file_name))
+        def read_code(file_name: str, abi_encoded_args: bytes = None):
+            return consensus.Deploy.Code(code = read_binary(file_name),
+                                         args = abi_encoded_args)
 
 
         def sign(data: bytes):
@@ -141,8 +211,10 @@ class CasperClient:
         def serialize(o) -> bytes:
             return o.SerializeToString()
 
-        body = consensus.Deploy.Body(session = read_code(session),
-                                     payment = read_code(payment))
+        # args must go to payment as well for now cause otherwise we'll get GASLIMIT error:
+        # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
+        body = consensus.Deploy.Body(session = read_code(session, args),
+                                     payment = read_code(payment, payment == session and args or None))
 
         account_public_key = public_key and read_binary(public_key)
         header = consensus.Deploy.Header(account_public_key = account_public_key, 
@@ -153,12 +225,14 @@ class CasperClient:
 
         deploy_hash = hash(serialize(header))
         d = consensus.Deploy(deploy_hash = deploy_hash,
-                             approvals = [consensus.Approval(approver_public_key = account_public_key, signature = sign(deploy_hash))]
-                                         if account_public_key else [],
+                             approvals = [consensus.Approval(approver_public_key = account_public_key,
+                                                             signature = sign(deploy_hash))]
+                                         if account_public_key
+                                         else [],
                              header = header,
                              body = body)
 
-        return self.casperService.Deploy(casper_pb2.DeployRequest(deploy = d)), deploy_hash
+        return self.casperService.Deploy(casper.DeployRequest(deploy = d)), deploy_hash
 
 
     @guarded
@@ -222,8 +296,20 @@ class CasperClient:
                                   'address'.
         :return:                  QueryStateResponse object
         """
-        return self.node.queryState(
-            CasperMessage_pb2.QueryStateRequest(block_hash=blockHash, key_bytes=key, key_variant=keyType, path=path))
+        def key_variant(keyType):
+            return {'hash': casper.StateQuery.KeyVariant.HASH,
+                    'uref': casper.StateQuery.KeyVariant.UREF,
+                    'address': casper.StateQuery.KeyVariant.ADDRESS}[keyType]
+
+        def path_segments(path):
+            return path.split('/')
+
+        return self.casperService.GetBlockState(
+            casper.GetBlockStateRequest(block_hash_base16 = blockHash,
+                                        query = casper.StateQuery(
+                                                    key_variant = key_variant(keyType),
+                                                    key_base16 = key,
+                                                    path_segments = path_segments(path))))
 
     @guarded
     def showMainChain(self, depth: int):
@@ -302,8 +388,15 @@ def _show_block(response):
 
 @guarded_command
 def deploy_command(casper_client, args):
-    response, deploy_hash = casper_client.deploy(getattr(args,'from'), args.gas_limit, args.gas_price, 
-                                                 args.payment, args.session, args.nonce)
+    response, deploy_hash = casper_client.deploy(getattr(args,'from'),
+                                                 args.gas_limit,
+                                                 args.gas_price, 
+                                                 args.payment,
+                                                 args.session,
+                                                 args.nonce,
+                                                 args.public_key or None,
+                                                 args.private_key or None,
+                                                 args.args and ABI.args_from_json(args.args) or None)
     print (f'{response.message}. Deploy hash: {deploy_hash}')
     if not response.success:
         return 1
@@ -393,6 +486,7 @@ def command_line_tool():
                        [('-n', '--nonce'), dict(required=False, type=int, default=0, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=True, type=str, help='Path to the file with payment code')],
                        [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
+                       [('--args'), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
                        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
                        [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 
