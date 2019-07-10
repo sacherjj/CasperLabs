@@ -1,11 +1,6 @@
 from casper_client import ABI
 
-import pytest
 import logging
-import ed25519
-import json
-
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 
 
 def write_binary(file_name, b):
@@ -32,9 +27,10 @@ def test_deploy_with_args(one_node_network):
     client = node.p_client
 
     signing_public_key_file = 'signing_key'
-    signing_private_key_file = 'verifying_key'
+    # signing_private_key_file = 'verifying_key'
 
     write_binary(signing_public_key_file, node.signing_public_key())
+
     # We do not have raw private keys with .pem certificate files
     # removing this to not sign deploy at this time.
     # write_binary(signing_private_key_file, node.signing_private_key())
@@ -50,13 +46,19 @@ def test_deploy_with_args(one_node_network):
         logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
                                 
         response = client.propose()
-        assert response.success is True
-        # "Success! Block 3c543cb5fa... created and added."
-        assert 'Success!' in response.message
-        logging.info(f"PROPOSE RESPONSE: {response}")
 
-        block_hash_prefix = response.message.split()[2][:10]
-        for deploy in node.d_client.show_deploys(block_hash_prefix):
-            assert deploy.is_error is True
-            assert deploy.error_message == f'Exit code: {number}'
+         # Need to convert to hex string from bytes
+        block_hash = response.block_hash.hex()
+        block_info = client.show_block(block_hash)
+
+        for deploy_info in client.show_deploys(block_hash):
+            assert deploy_info.is_error is True
+            assert deploy_info.error_message == f'Exit code: {number}'
+
+            # Test show_deploy
+            d = client.show_deploy(deploy_info.deploy.deploy_hash.hex())
+            assert deploy_info.deploy.deploy_hash == d.deploy.deploy_hash
+
+    for blockInfo in client.show_blocks(10):
+        assert blockInfo.status.stats.block_size_bytes > 0
 
