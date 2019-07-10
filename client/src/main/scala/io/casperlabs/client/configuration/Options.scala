@@ -184,9 +184,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         validate = fileCheck
       )
 
-    val payment =
-      opt[File](required = true, descr = "Path to the file with payment code", validate = fileCheck)
-
     val from = opt[String](
       descr =
         "The public key of the account which is the context of this deployment, base16 encoded.",
@@ -233,9 +230,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         descr = "Path to the file with bonding contract.",
         validate = fileCheck
       )
-
-    val payment =
-      opt[File](required = true, descr = "Path to the file with payment code", validate = fileCheck)
 
     val from = opt[String](
       descr =

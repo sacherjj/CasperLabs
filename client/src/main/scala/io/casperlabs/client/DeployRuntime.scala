@@ -45,8 +45,7 @@ object DeployRuntime {
       maybeAmount: Option[Long],
       nonce: Long,
       from: Option[String],
-      contractCode: File,
-      paymentCode: File,
+      sessionCode: File,
       maybePublicKeyFile: Option[File],
       maybePrivateKeyFile: Option[File]
   ): F[Unit] = {
@@ -68,8 +67,8 @@ object DeployRuntime {
     deployFileProgram[F](
       from,
       nonce,
-      contractCode,
-      paymentCode,
+      sessionCode,
+      sessionCode, // currently, sessionCode == paymentCode in order to get some gas limit for the execution
       maybePublicKeyFile,
       maybePrivateKeyFile,
       10L, // gas price is fixed at the moment for 10:1
@@ -81,8 +80,7 @@ object DeployRuntime {
       amount: Long,
       nonce: Long,
       from: Option[String],
-      contractCode: File,
-      paymentCode: File,
+      sessionCode: File,
       maybePublicKeyFile: Option[File],
       maybePrivateKeyFile: Option[File]
   ): F[Unit] = {
@@ -99,8 +97,8 @@ object DeployRuntime {
     deployFileProgram[F](
       from,
       nonce,
-      contractCode,
-      paymentCode,
+      sessionCode,
+      sessionCode, // currently, sessionCode == paymentCode in order to get some gas limit for the execution
       maybePublicKeyFile,
       maybePrivateKeyFile,
       10L, // gas price is fixed at the moment for 10:1

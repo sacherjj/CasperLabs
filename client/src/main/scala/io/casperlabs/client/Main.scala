@@ -44,7 +44,6 @@ object Main {
           from,
           nonce,
           contractCode,
-          paymentCode,
           maybePublicKey,
           maybePrivateKey
           ) =>
@@ -53,7 +52,6 @@ object Main {
           nonce,
           from,
           contractCode,
-          paymentCode,
           maybePublicKey,
           maybePrivateKey
         )
@@ -62,7 +60,6 @@ object Main {
           from,
           nonce,
           contractCode,
-          paymentCode,
           maybePublicKey,
           maybePrivateKey
           ) =>
@@ -71,7 +68,6 @@ object Main {
           nonce,
           from,
           contractCode,
-          paymentCode,
           maybePublicKey,
           maybePrivateKey
         )

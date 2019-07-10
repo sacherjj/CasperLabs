@@ -31,7 +31,6 @@ final case class Bond(
     from: Option[String],
     nonce: Long,
     sessionCode: File,
-    paymentCode: File,
     publicKey: Option[File],
     privateKey: Option[File]
 ) extends Configuration
@@ -40,7 +39,6 @@ final case class Unbond(
     from: Option[String],
     nonce: Long,
     sessionCode: File,
-    paymentCode: File,
     publicKey: Option[File],
     privateKey: Option[File]
 ) extends Configuration
@@ -100,7 +98,6 @@ object Configuration {
           options.unbond.from.toOption,
           options.unbond.nonce(),
           options.unbond.contractPath(),
-          options.unbond.payment(),
           options.unbond.publicKey.toOption,
           options.unbond.privateKey.toOption
         )
@@ -110,7 +107,6 @@ object Configuration {
           options.unbond.from.toOption,
           options.unbond.nonce(),
           options.unbond.contractPath(),
-          options.unbond.payment(),
           options.unbond.publicKey.toOption,
           options.unbond.privateKey.toOption
         )
