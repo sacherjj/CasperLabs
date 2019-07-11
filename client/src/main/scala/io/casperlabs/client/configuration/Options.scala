@@ -174,7 +174,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val amount = opt[Long](
       name = "amount",
       validate = _ > 0,
-      descr = "amount of tokens to unbond"
+      descr = "Amount of tokens to unbond. If not provided then a request to unbond with all staked tokens is made."
     )
 
     val session =
