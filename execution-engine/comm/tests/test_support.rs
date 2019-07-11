@@ -467,18 +467,30 @@ impl WasmTestBuilder {
         self.exec_with_args(address, wasm_file, block_time, nonce, ())
     }
 
+    /// Commit effects of previous exec call on the latest post-state hash.
+    pub fn commit(&mut self) -> &mut WasmTestBuilder {
+        let prestate_hash = self
+            .post_state_hash
+            .clone()
+            .expect("Should have genesis hash");
+
+        let effects = self
+            .transforms
+            .last()
+            .cloned()
+            .expect("Should have transforms to commit.");
+
+        self.commit_effects(prestate_hash, effects)
+    }
+
     /// Runs a commit request, expects a successful response, and
     /// overwrites existing cached post state hash with a new one.
-    pub fn commit(&mut self) -> &mut WasmTestBuilder {
-        let commit_request = create_commit_request(
-            self.post_state_hash
-                .as_ref()
-                .expect("Should have genesis hash"),
-            self.transforms
-                .last()
-                .as_ref()
-                .expect("Should have transform effects"),
-        );
+    pub fn commit_effects(
+        &mut self,
+        prestate_hash: Vec<u8>,
+        effects: HashMap<common::key::Key, Transform>,
+    ) -> &mut WasmTestBuilder {
+        let commit_request = create_commit_request(&prestate_hash, &effects);
 
         let commit_response = self
             .engine_state
