@@ -342,7 +342,6 @@ client/src/main/resources/%.wasm: .make/validator-contracts/%
 	$(eval CONTRACT=$*)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
 
-.PHONY: build-validator-contracts
 build-validator-contracts: \
 	client/src/main/resources/bonding.wasm \
 	client/src/main/resources/unbonding.wasm
