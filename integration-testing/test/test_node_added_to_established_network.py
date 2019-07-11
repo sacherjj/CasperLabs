@@ -33,7 +33,7 @@ def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
 
     node0, node1, node2 = network.docker_nodes
     for i, block_hash in enumerate(block_hashes):
-        assert f"Attempting to add Block #{i+1} ({block_hash}...)" in node2.logs()
+        assert f"Attempting to add Block #{i+1} ({block_hash[:10]}...)" in node2.logs()
 
     # Verify that the new node didn't do any gossiping.
     wait_for_gossip_metrics_and_assert_blocks_gossiped(node2, node2.timeout, 0)

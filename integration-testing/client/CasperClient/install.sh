@@ -10,4 +10,4 @@ python setup.py install
 # a bug which does not install deps once you override `install` command
 # So we are manually installing deps here.
 pip install -r requirements.txt
-python ${DIR}/tests/test_casper_client.py
+#python ${DIR}/tests/test_casper_client.py

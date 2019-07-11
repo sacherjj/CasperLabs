@@ -148,8 +148,10 @@ object BlockAPI {
       blockApiLock: Semaphore[F]
   ): F[DeployServiceResponse] =
     propose(blockApiLock) map { blockHash =>
-      val hash = PrettyPrinter.buildString(blockHash)
-      DeployServiceResponse(success = true, s"Success! Block $hash created and added.")
+      DeployServiceResponse(
+        success = true,
+        s"Success! Block ${Base16.encode(blockHash.toByteArray)} created and added."
+      )
     } handleError {
       case InvalidArgument(msg) =>
         DeployServiceResponse(success = false, s"Failure! $msg")

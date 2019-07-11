@@ -67,4 +67,7 @@ execution-engine/gens/*.lock
 execution-engine/blessed-contracts/mint-token/*.lock
 execution-engine/blessed-contracts/pos/*.lock
 
+# wasms
+client/src/main/resources/*.wasm
+
 .make
