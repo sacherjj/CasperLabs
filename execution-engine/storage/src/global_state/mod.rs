@@ -1,6 +1,3 @@
-pub mod in_memory;
-pub mod lmdb;
-
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::BuildHasher;
@@ -8,13 +5,15 @@ use std::time::Instant;
 
 use common::key::Key;
 use common::value::Value;
+use shared::logging::{log_duration, log_metric, GAUGE};
 use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::{self, Transform, TypeMismatch};
-
-use shared::logging::{log_duration, log_metric, GAUGE};
 use trie::Trie;
 use trie_store::operations::{read, write, ReadResult, WriteResult};
 use trie_store::{Transaction, TransactionSource, TrieStore};
+
+pub mod in_memory;
+pub mod lmdb;
 
 /// A reader of state
 pub trait StateReader<K, V> {
@@ -73,6 +72,8 @@ pub trait History {
     ) -> Result<CommitResult, Self::Error>;
 
     fn current_root(&self) -> Blake2bHash;
+
+    fn empty_root(&self) -> Blake2bHash;
 }
 
 const GLOBAL_STATE_COMMIT_READS: &str = "global_state_commit_reads";
