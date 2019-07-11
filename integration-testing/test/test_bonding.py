@@ -1,9 +1,9 @@
-import re
 from .cl_node.wait import (
     wait_for_blocks_count_at_least
 )
 from .cl_node.casperlabsnode import BONDING_CONTRACT, UNBONDING_CONTRACT
 from .cl_node.casperlabs_network import OneNodeNetwork
+from .cl_node.client_parser import parse_show_block
 
 
 def wait_for_blocks_propagated(network: OneNodeNetwork, n: int) -> None:
@@ -24,9 +24,10 @@ def test_bonding(one_node_network):
     block_hash = node1.deploy_and_propose(session_contract=BONDING_CONTRACT, payment_contract=BONDING_CONTRACT)
     assert block_hash is not None
     block1 = node1.client.show_block(block_hash)
+    block_ds = parse_show_block(block1)
     public_key = node1.from_address
-    pattern = re.compile(f'bonds\\s*{{\\s*validator_public_key: "{public_key}"\\s*stake: 1\\s*}}', re.MULTILINE)
-    assert re.search(pattern, block1) is not None
+    item = list(filter(lambda x: x.stake == 1 and x.validator_public_key == public_key, block_ds.summary[0].header[0].state[0].bonds))
+    assert len(item) == 1
 
 
 def test_unbonding(one_node_network):
@@ -43,9 +44,12 @@ def test_unbonding(one_node_network):
     assert block_hash1 is not None
     block1 = node1.client.show_block(block_hash1)
     public_key = node1.from_address
-    pattern = re.compile(f'bonds\\s*{{\\s*validator_public_key: "{public_key}"\\s*stake: 1\\s*}}', re.MULTILINE)
-    assert re.search(pattern, block1) is not None
+    block_ds = parse_show_block(block1)
+    item = list(filter(lambda x: x.stake == 1 and x.validator_public_key == public_key, block_ds.summary[0].header[0].state[0].bonds))
+    assert len(item) == 1
     block_hash2 = node1.deploy_and_propose(session_contract=UNBONDING_CONTRACT, payment_contract=UNBONDING_CONTRACT)
     assert block_hash2 is not None
     block2 = node1.client.show_block(block_hash2)
-    assert re.search(pattern, block2) is None
+    block_ds = parse_show_block(block2)
+    item = list(filter(lambda x: x.stake == 1 and x.validator_public_key == public_key, block_ds.summary[0].header[0].state[0].bonds))
+    assert len(item) == 0
