@@ -29,10 +29,6 @@ use shared::test_utils;
 use shared::transform::Transform;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
-//use common::bytesrepr::ToBytes;
-//use common::key::Key;
-//use common::value::Value;
-
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/debug";
@@ -563,11 +559,25 @@ impl WasmTestBuilder {
             .expect("Unable to obtain mint contract uref. Please run genesis first.")
     }
 
-    pub fn get_genesis_transforms(&self) -> &HashMap<common::key::Key, Transform> {
+    pub fn get_genesis_transforms(
+        &self,
+    ) -> &HashMap<common::key::Key, shared::transform::Transform> {
         &self
             .genesis_transforms
             .as_ref()
             .expect("should have genesis transforms")
+    }
+
+    pub fn get_genesis_hash(&self) -> Vec<u8> {
+        self.genesis_hash
+            .clone()
+            .expect("Genesis hash should be present. Should be called after run_genesis.")
+    }
+
+    pub fn get_poststate_hash(&self) -> Vec<u8> {
+        self.post_state_hash
+            .clone()
+            .expect("Should have post-state hash.")
     }
 
     pub fn finish(&self) -> WasmTestResult {
