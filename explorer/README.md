@@ -23,10 +23,11 @@ Start a local docker network first:
 
 ```sh
 cd ../hack/docker
-export CL_VERSION=test
 make up node-0/up
 cd -
 ```
+
+### Fund the Faucet
 
 The `server` component has a utility program to do the initial token transfer, let's build that first (not necessary if we already built everything with docker):
 
@@ -45,6 +46,16 @@ node ./server/dist/transfer.js \
   --to-public-key-path ./server/test.public.key \
   --amount 500000 \
   --nonce 1
+```
+
+NOTE: If you are connecting to a HTTPS endpoint you have to relax the SSL certificate, which is
+the case in local testing, you have to relax the SSL certificate checks in Node.js like so:
+
+```console
+$ export NODE_TLS_REJECT_UNAUTHORIZED=0
+$ node ./server/dist/transfer.js \
+  --host-url https://localhost:8443 \
+  ...
 ```
 
 If successful, it should print something like this:
@@ -189,3 +200,9 @@ unit {
 Alas, that's not the balance. We'll have to figure out how to get there,
 apparently there's an indirection from the purse to a local address we
 can't easily see.
+
+
+### Create an account
+
+You can access the explorer at https://localhost:8443 to create accounts
+and ask the faucet for tokens.
