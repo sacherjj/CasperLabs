@@ -2,15 +2,15 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use lmdb;
+
 use common::key::Key;
 use common::value::Value;
-use lmdb;
-use shared::newtypes::{Blake2bHash, CorrelationId};
-use shared::transform::Transform;
-
 use error;
 use global_state::StateReader;
 use global_state::{commit, CommitResult, History};
+use shared::newtypes::{Blake2bHash, CorrelationId};
+use shared::transform::Transform;
 use trie::operations::create_hashed_empty_trie;
 use trie::Trie;
 use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
@@ -22,6 +22,7 @@ pub struct LmdbGlobalState {
     pub(super) environment: Arc<LmdbEnvironment>,
     pub(super) store: Arc<LmdbTrieStore>,
     pub(super) root_hash: Blake2bHash,
+    pub(super) empty_root_hash: Blake2bHash,
 }
 
 impl LmdbGlobalState {
@@ -37,7 +38,12 @@ impl LmdbGlobalState {
             txn.commit()?;
             root_hash
         };
-        Ok(LmdbGlobalState::new(environment, store, root_hash))
+        Ok(LmdbGlobalState::new(
+            environment,
+            store,
+            root_hash,
+            root_hash,
+        ))
     }
 
     /// Creates a state from an existing environment, store, and root_hash.
@@ -46,11 +52,13 @@ impl LmdbGlobalState {
         environment: Arc<LmdbEnvironment>,
         store: Arc<LmdbTrieStore>,
         root_hash: Blake2bHash,
+        empty_root_hash: Blake2bHash,
     ) -> Self {
         LmdbGlobalState {
             environment,
             store,
             root_hash,
+            empty_root_hash,
         }
     }
 }
@@ -88,6 +96,7 @@ impl History for LmdbGlobalState {
             environment: Arc::clone(&self.environment),
             store: Arc::clone(&self.store),
             root_hash: prestate_hash,
+            empty_root_hash: self.empty_root_hash,
         });
         txn.commit()?;
         Ok(maybe_state)
@@ -115,6 +124,10 @@ impl History for LmdbGlobalState {
     fn current_root(&self) -> Blake2bHash {
         self.root_hash
     }
+
+    fn empty_root(&self) -> Blake2bHash {
+        self.empty_root_hash
+    }
 }
 
 #[cfg(test)]
@@ -122,9 +135,10 @@ mod tests {
     use lmdb::DatabaseFlags;
     use tempfile::tempdir;
 
-    use super::*;
     use trie_store::operations::{write, WriteResult};
     use TEST_MAP_SIZE;
+
+    use super::*;
 
     #[derive(Debug, Clone)]
     struct TestPair {
