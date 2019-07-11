@@ -49,11 +49,7 @@ object DeployRuntime {
   ): F[Unit] = {
     val amountBytes = maybeAmount match {
       case Some(amount) => {
-        val array: Array[Byte] = java.nio.ByteBuffer
-          .allocate(8)
-          .order(ByteOrder.LITTLE_ENDIAN)
-          .putLong(amount)
-          .array()
+        val array: Array[Byte] = serializeAmount(amount)
 
         Array[Byte](1, 0, 0, 0, 9, 0, 0, 0, 1) ++ array
       }
@@ -80,11 +76,7 @@ object DeployRuntime {
       sessionCode: File,
       privateKeyFile: File
   ): F[Unit] = {
-    val array: Array[Byte] = java.nio.ByteBuffer
-      .allocate(8)
-      .order(ByteOrder.LITTLE_ENDIAN)
-      .putLong(amount)
-      .array()
+    val array: Array[Byte] = serializeAmount(amount)
 
     val amountBytes: Array[Byte] = Array[Byte](1, 0, 0, 0, 8, 0, 0, 0) ++ array
 
@@ -279,6 +271,18 @@ object DeployRuntime {
 
   private def hash[T <: scalapb.GeneratedMessage](data: T): ByteString =
     ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
+
+  private def readFileOrDefault(file: Option[File], defaultName: String): InputStream =
+    file
+      .map(new FileInputStream(_))
+      .getOrElse(getClass.getClassLoader.getResourceAsStream(defaultName))
+
+  private def serializeAmount(amount: Long): Array[Byte] =
+    java.nio.ByteBuffer
+      .allocate(8)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .putLong(amount)
+      .array()
 
   implicit class DeployOps(d: consensus.Deploy) {
     def withHashes = {
