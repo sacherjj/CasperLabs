@@ -59,7 +59,7 @@ class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):
 
 class NewForkChoiceTipBlock(LogsContainMessage):
     def __init__(self, node: 'Node', block: str) -> None:
-        super().__init__(node, f'New fork-choice tip is block {block}....')
+        super().__init__(node, f'New fork-choice tip is block {block[:10]}....')
 
 
 class RegexBlockRequest:

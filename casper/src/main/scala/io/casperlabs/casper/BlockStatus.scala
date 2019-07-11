@@ -36,21 +36,19 @@ final case object IgnorableEquivocation   extends InvalidBlock
 final case object InvalidUnslashableBlock extends InvalidBlock
 final case object MissingBlocks           extends InvalidBlock
 
-final case object InvalidBlockNumber      extends InvalidBlock with Slashable
-final case object InvalidRepeatDeploy     extends InvalidBlock with Slashable
-final case object InvalidParents          extends InvalidBlock with Slashable
-final case object InvalidFollows          extends InvalidBlock with Slashable
-final case object InvalidSequenceNumber   extends InvalidBlock with Slashable
-final case object InvalidChainId          extends InvalidBlock with Slashable
-final case object JustificationRegression extends InvalidBlock with Slashable
-final case object NeglectedInvalidBlock   extends InvalidBlock with Slashable
-final case object NeglectedEquivocation   extends InvalidBlock with Slashable
-final case object InvalidTransaction      extends InvalidBlock with Slashable
-final case object InvalidPreStateHash     extends InvalidBlock with Slashable
-final case object InvalidPostStateHash    extends InvalidBlock with Slashable
-final case object InvalidBondsCache       extends InvalidBlock with Slashable
-final case object InvalidBlockHash        extends InvalidBlock with Slashable
-final case object InvalidDeployCount      extends InvalidBlock with Slashable
+final case object InvalidBlockNumber    extends InvalidBlock with Slashable
+final case object InvalidRepeatDeploy   extends InvalidBlock with Slashable
+final case object InvalidParents        extends InvalidBlock with Slashable
+final case object InvalidSequenceNumber extends InvalidBlock with Slashable
+final case object InvalidChainId        extends InvalidBlock with Slashable
+final case object NeglectedInvalidBlock extends InvalidBlock with Slashable
+final case object NeglectedEquivocation extends InvalidBlock with Slashable
+final case object InvalidTransaction    extends InvalidBlock with Slashable
+final case object InvalidPreStateHash   extends InvalidBlock with Slashable
+final case object InvalidPostStateHash  extends InvalidBlock with Slashable
+final case object InvalidBondsCache     extends InvalidBlock with Slashable
+final case object InvalidBlockHash      extends InvalidBlock with Slashable
+final case object InvalidDeployCount    extends InvalidBlock with Slashable
 
 object BlockStatus {
   val valid: BlockStatus      = Valid

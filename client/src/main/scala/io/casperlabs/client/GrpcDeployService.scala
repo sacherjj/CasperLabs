@@ -88,14 +88,20 @@ class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with C
   private lazy val controlServiceStub = ControlGrpcMonix.stub(internalChannel)
 
   def deploy(d: consensus.Deploy): Task[Either[Throwable, String]] =
-    casperServiceStub.deploy(DeployRequest().withDeploy(d)).map(_ => "Success!").attempt
+    casperServiceStub
+      .deploy(DeployRequest().withDeploy(d))
+      .map { _ =>
+        val hash = Base16.encode(d.deployHash.toByteArray)
+        s"Success! Deploy $hash deployed."
+      }
+      .attempt
 
   def propose(): Task[Either[Throwable, String]] =
     controlServiceStub
       .propose(ProposeRequest())
       .map { response =>
-        val hash = Base16.encode(response.blockHash.toByteArray).take(10)
-        s"Success! Block $hash... created and added."
+        val hash = Base16.encode(response.blockHash.toByteArray)
+        s"Success! Block $hash created and added."
       }
       .attempt
 

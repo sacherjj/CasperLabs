@@ -5,7 +5,8 @@
     core_intrinsics,
     lang_items,
     alloc_error_handler,
-    maybe_uninit
+    maybe_uninit,
+    try_reserve
 )]
 
 #[macro_use]

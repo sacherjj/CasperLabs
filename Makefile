@@ -244,9 +244,14 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
+.make/client/contracts: build-validator-contracts
+	mkdir -p $(dir $@) && touch $@
+
+.make/node/contracts:
+	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
-.make/sbt-stage/%: $(SCALA_SRC)
+.make/sbt-stage/%: $(SCALA_SRC) .make/%/contracts
 	$(eval PROJECT = $*)
 	sbt -mem 5000 $(PROJECT)/universal:stage
 	mkdir -p $(dir $@) && touch $@
@@ -325,6 +330,21 @@ package-blessed-contracts: \
 	cd execution-engine/blessed-contracts/$(CONTRACT) && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown --target-dir target
 	mkdir -p $(dir $@) && touch $@
+
+# Compile a validator contract;
+.make/validator-contracts/%: $(RUST_SRC) .make/rustup-update
+	$(eval CONTRACT=$*)
+	cd execution-engine/validator-contracts/$(CONTRACT) && \
+	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
+	mkdir -p $(dir $@) && touch $@
+
+client/src/main/resources/%.wasm: .make/validator-contracts/%
+	$(eval CONTRACT=$*)
+	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
+
+build-validator-contracts: \
+	client/src/main/resources/bonding.wasm \
+	client/src/main/resources/unbonding.wasm
 
 # Package all blessed contracts that we have to make available for download.
 execution-engine/target/blessed-contracts.tar.gz: \

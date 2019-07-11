@@ -31,5 +31,5 @@ count: 123
 
 
 def test_extract_block_hash_from_propose_output() -> None:
-    response = "Response: Success! Block a91208047c... created and added.\n"
+    response = "Response: Success! Block a91208047c created and added.\n"
     assert extract_block_hash_from_propose_output(response) == "a91208047c"

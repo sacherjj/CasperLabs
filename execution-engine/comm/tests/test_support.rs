@@ -29,10 +29,6 @@ use shared::test_utils;
 use shared::transform::Transform;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
-//use common::bytesrepr::ToBytes;
-//use common::key::Key;
-//use common::value::Value;
-
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/debug";
@@ -467,18 +463,30 @@ impl WasmTestBuilder {
         self.exec_with_args(address, wasm_file, block_time, nonce, ())
     }
 
+    /// Commit effects of previous exec call on the latest post-state hash.
+    pub fn commit(&mut self) -> &mut WasmTestBuilder {
+        let prestate_hash = self
+            .post_state_hash
+            .clone()
+            .expect("Should have genesis hash");
+
+        let effects = self
+            .transforms
+            .last()
+            .cloned()
+            .expect("Should have transforms to commit.");
+
+        self.commit_effects(prestate_hash, effects)
+    }
+
     /// Runs a commit request, expects a successful response, and
     /// overwrites existing cached post state hash with a new one.
-    pub fn commit(&mut self) -> &mut WasmTestBuilder {
-        let commit_request = create_commit_request(
-            self.post_state_hash
-                .as_ref()
-                .expect("Should have genesis hash"),
-            self.transforms
-                .last()
-                .as_ref()
-                .expect("Should have transform effects"),
-        );
+    pub fn commit_effects(
+        &mut self,
+        prestate_hash: Vec<u8>,
+        effects: HashMap<common::key::Key, Transform>,
+    ) -> &mut WasmTestBuilder {
+        let commit_request = create_commit_request(&prestate_hash, &effects);
 
         let commit_response = self
             .engine_state
@@ -528,6 +536,20 @@ impl WasmTestBuilder {
         self
     }
 
+    pub fn is_error(&self) -> bool {
+        let exec_response = self
+            .exec_responses
+            .last()
+            .expect("Expected to be called after run()")
+            .clone();
+        let deploy_result = exec_response
+            .get_success()
+            .get_deploy_results()
+            .get(0)
+            .expect("Unable to get first deploy result");
+        deploy_result.get_execution_result().has_error()
+    }
+
     /// Gets the transform map that's cached between runs
     pub fn get_transforms(&self) -> Vec<HashMap<common::key::Key, Transform>> {
         self.transforms.clone()
@@ -551,11 +573,25 @@ impl WasmTestBuilder {
             .expect("Unable to obtain mint contract uref. Please run genesis first.")
     }
 
-    pub fn get_genesis_transforms(&self) -> &HashMap<common::key::Key, Transform> {
+    pub fn get_genesis_transforms(
+        &self,
+    ) -> &HashMap<common::key::Key, shared::transform::Transform> {
         &self
             .genesis_transforms
             .as_ref()
             .expect("should have genesis transforms")
+    }
+
+    pub fn get_genesis_hash(&self) -> Vec<u8> {
+        self.genesis_hash
+            .clone()
+            .expect("Genesis hash should be present. Should be called after run_genesis.")
+    }
+
+    pub fn get_poststate_hash(&self) -> Vec<u8> {
+        self.post_state_hash
+            .clone()
+            .expect("Should have post-state hash.")
     }
 
     pub fn finish(&self) -> WasmTestResult {
