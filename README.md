@@ -99,3 +99,9 @@ For building of CasperLabs, please refer to the [Developer Guide](DEVELOPER.md)
 ## Validator Guide
 
 For running a CasperLabs node, please refer to the [Validator Guide](VALIDATOR.md)
+
+---
+
+## Querying
+
+For learning how to retrieve information from the CasperLabs platform, please refer to the [Querying guide](/QUERYING.md)
