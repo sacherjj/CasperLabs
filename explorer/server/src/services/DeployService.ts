@@ -9,9 +9,27 @@ import { CasperService } from "../grpc/io/casperlabs/node/api/casper_pb_service"
 // https://www.npmjs.com/package/@improbable-eng/grpc-web-node-http-transport
 
 export default class DeployService {
+  private readonly transport: grpc.TransportFactory;
+
   constructor(
     private nodeUrl: string,
-  ) { }
+  ) {
+    // NOTE: To talk to backends with self-signed certificates we either need to copy the code from
+    // https://github.com/improbable-eng/grpc-web/blob/master/client/grpc-web-node-http-transport/src/index.ts
+    // and add `rejectUnautorized: false` to the HTTP options, or use the `NODE_TLS_REJECT_UNAUTHORIZED` env var.
+    const nodeTransport = NodeHttpTransport();
+    this.transport = (opts) => {
+      const onEnd = opts.onEnd;
+      // We can see more details about the error if we log it here.
+      opts.onEnd = (err) => {
+        if (err !== undefined) {
+          console.log(`error calling CasperService at ${this.nodeUrl}: `, err);
+        }
+        onEnd(err);
+      };
+      return nodeTransport(opts);
+    };
+  }
 
   public deploy(deploy: Deploy) {
     return new Promise<void>((resolve, reject) => {
@@ -21,7 +39,7 @@ export default class DeployService {
       grpc.unary(CasperService.Deploy, {
         host: this.nodeUrl,
         request: deployRequest,
-        transport: NodeHttpTransport(),
+        transport: this.transport,
         onEnd: (res) => {
           if (res.status === grpc.Code.OK) {
             resolve();

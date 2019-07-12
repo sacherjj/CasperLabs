@@ -6,6 +6,9 @@ interface Window {
 
 interface Config {
   auth0: Auth0Config;
+  grpc: {
+    url: string | undefined;
+  };
 }
 
 interface Auth0Config {
