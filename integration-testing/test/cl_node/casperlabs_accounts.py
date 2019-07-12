@@ -7,9 +7,6 @@ import base64
 import os
 
 
-TRANSFER_AMOUNTS = [0, 1000000, 750000] + [1000000] * 18
-
-
 def is_valid_account(account_id: Union[int, str]) -> bool:
     try:
         if account_id == 'genesis':
@@ -61,17 +58,6 @@ class Account:
         return [int(pkh[i:i+2], 16) for i in range(0, len(pkh), 2)]
 
     @property
-    def transfer_amount(self) -> Optional[int]:
-        index = 0 if self.file_id == 'genesis' else self.file_id
-        return TRANSFER_AMOUNTS[index]
-
-    @property
-    def transfer_contract(self) -> Optional[str]:
-        if self.file_id in [1, 2]:
-            return f'test_transfer_to_account_{self.file_id}.wasm'
-        return None
-
-    @property
     def public_key_binary(self) -> bytes:
         return base64.b64decode(self.public_key + '===')
 
@@ -96,6 +82,4 @@ if __name__ == '__main__':
     print(f'Rust Code for it_common lib.rs:')
     for key in ['genesis'] + list(range(1, 21)):
         acct = Account(key)
-        print(f'const ACCOUNT_{key}_ADDR: [u8;32] = {acct.public_key_int_list};')
-        print(f'const ACCOUNT_{key}_TRANSFER_AMOUNT: u32 = {acct.transfer_amount};')
-        print('')
+        print(f'const ACCOUNT_{str(key).upper()}_ADDR: [u8;32] = {acct.public_key_int_list};')
