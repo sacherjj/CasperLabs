@@ -92,5 +92,8 @@ object Main {
 
       case Query(hash, keyType, keyValue, path) =>
         DeployRuntime.queryState(hash, keyType, keyValue, path)
+
+      case Balance(address, blockHash) =>
+        DeployRuntime.balance(address, blockHash)
     }
 }
