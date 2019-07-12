@@ -5,7 +5,7 @@ interact with a CasperLabs node via its gRPC API.
 
 ## Installation
 
-`casperlabs-client` is a Python 3.6 module, it does not support Python 2.7.
+`casperlabs-client` is a Python 3.6+ module, it does not support Python 2.7.
 You can install it with 
 
 ```
@@ -49,15 +49,14 @@ To deploy a smart contract to CasperLabs devnet you have to first:
 1. Create an account using [CasperLabs Explorer](https://explorer.casperlabs.io/#/)
 and transfer (free) tokens to the account from the faucet.
 
-   An account address is a public key looking like
+   An account address is a public key in hex format such as:
    ```
    f2cbd19d054bd2b2c06ea26714275271663a5e4503d5d059de159c3b60d81ab7
    ```
 
 2. Compile a contract to the [WASM](https://webassembly.org) format,
 see CasperLabs [contract examples](https://github.com/CasperLabs/contract-examples)
-to see example contracts 
-and instructions on 
+to see example contracts and instructions on 
 [how to compile](https://github.com/CasperLabs/contract-examples/blob/master/README.md)
 them.
 
