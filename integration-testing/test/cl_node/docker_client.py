@@ -83,6 +83,22 @@ class DockerClient(CasperLabsClient, LoggingMixin):
                     self.logger.debug("Could not propose; no more retries!")
                     raise ex
 
+    def get_balance(self, account_address: str, block_hash: str) -> int:
+        """
+        Returns balance of account according to block given.
+
+        :param account_address: account public key in hex
+        :param block_hash: block_hash in hex
+        :return: balance as int
+        """
+        command = f"balance --address {account_address} --block-hash {block_hash}"
+        r = self.invoke_client(command)
+        try:
+            balance = r.split(' : ')[1]
+            return int(balance)
+        except Exception as e:
+            raise Exception(f'Error parsing: {r}.\n{e}')
+
     def deploy(self,
                from_address: str = None,
                gas_limit: int = 1000000,
