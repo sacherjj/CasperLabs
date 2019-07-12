@@ -3,8 +3,6 @@
 [CasperLabs](https://casperlabs.io/) Python client is a library that can be used to 
 interact with a CasperLabs node via its gRPC API. 
 
-The module also provides a command line interface (CLI).
-
 ## Installation
 
 `casperlabs-client` is a Python 3.6 module, it does not support Python 2.7.
