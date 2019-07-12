@@ -71,11 +71,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
 
     val gasPrice = opt[Long](
-      descr =
-        "The price of gas for this transaction in units dust/gas. Must be positive integer. By default is 1.",
+      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
       validate = _ > 0,
       required = false,
-      default = 1L.some
+      default = 10L.some
     )
 
     val nonce = opt[Long](
