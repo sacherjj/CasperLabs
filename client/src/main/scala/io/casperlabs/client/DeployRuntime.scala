@@ -116,7 +116,11 @@ object DeployRuntime {
       keyValue: String,
       path: String
   ): F[Unit] =
-    gracefulExit(DeployService[F].queryState(blockHash, keyVariant, keyValue, path))
+    gracefulExit(
+      DeployService[F]
+        .queryState(blockHash, keyVariant, keyValue, path)
+        .map(_.map(Printer.printToUnicodeString(_)))
+    )
 
   def visualizeDag[F[_]: Sync: DeployService: Timer](
       depth: Int,
