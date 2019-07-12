@@ -31,31 +31,16 @@ casperlabs-client \
 
 ### Bonding
 
-* [Install the CasperLabs node and client](INSTALL.md)
-* Use the CasperLabs client `bond` sub-command (example below)
-  - `--amount` is the amount of tokens you wish to bond
-  - `--nonce` is preserved for each account; if you deployed code above, continue the sequence where you left off
-  - `--private-key` is the path to the private key file downloaded from [explorer.casperlabs.io](https://explorer.casperlabs.io/) during account creation
-```
-casperlabs-client \
-        --host deploy.casperlabs.io \
-        bond \
-        --amount 1000 \
-        --nonce 2 \
-        --private-key account.private.key
-```
-* [Run your node](NODE.md); include some specific command line flags for devnet:
-  - Use `--bootstrap casperlabs://a605c8ddc4ed3dc9b881bfe006cc8175fb31e125@100.24.117.48?protocol=40400&discovery=40404` to connect to the devnet P2P network
-  - Set `--casper-validator-private-key-path` be the path to the same private key you used for bonding
-  - Use `--server-use-gossiping`
-* Use the CasperLabs client with your node to deploy code and propose blocks on the devnet
+* Follow instructions in [NODE.md](NODE.md) for connecting to the CasperLabs network
+* Once bonded, you can use the CasperLabs client with your local node to deploy code and propose blocks on the devnet
+  - See [CONTRACTS.md](CONTRACTS.md) for details
 ```
 casperlabs-client \
         --host localhost \
         deploy \
-        --nonce 3 \
-        --session my_other_contract.wasm \
-        --private-key account.private.key
+        --nonce <nonce> \
+        --session <path-to-wasm> \
+        --private-key <path-to-account-private-key>
 
 casperlabs-client \
         --host localhost \
@@ -64,20 +49,7 @@ casperlabs-client \
 
 ### Unbonding
 
-* Ensure you have the CasperLabs client installed
-* Use the CasperLabs client `bond` sub-command (example below)
-  - `--amount` is the amount of tokens you wish to unbond; this parameter is optional and if not present then all tokens will be unbonded
-  - `--nonce` is preserved for each account, continue the sequence where you left off from your `bond` or last `deploy`
-  - `--private-key` is the path to the private key file you used to `bond`
-* Do not shutdown your running node until _after_ you have unbonded
-```
-casperlabs-client \
-        --host deploy.casperlabs.io \
-        unbond \
-        --amount 500 \
-        --nonce 4 \
-        --private-key account.private.key
-```
+* Follow instructions in [NODE.md](NODE.md) for stopping a bonded validator
 
 ## Notes
 
