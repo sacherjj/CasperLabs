@@ -61,10 +61,15 @@ and instructions on
 [how to compile](https://github.com/CasperLabs/contract-examples/blob/master/README.md)
 them.
 
-To deploy 
+To deploy a compiled contract from your account address:
 
 ```python
->>> response = client.deploy(from_addr="f2cbd19d054bd2b2c06ea26714275271663a5e4503d5d059de159c3b60d81ab7", gas_limit=1000000, gas_price=1, payment="helloname.wasm", session="helloname.wasm", nonce=1)
+    response = client.deploy(from_addr="f2cbd19d054bd2b2c06ea26714275271663a5e4503d5d059de159c3b60d81ab7",
+                             gas_limit=1000000,
+                             gas_price=1,
+                             payment="helloname.wasm",
+                             session="helloname.wasm",
+                             nonce=1)
 ```
 
 ### Return values
