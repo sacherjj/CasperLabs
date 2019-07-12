@@ -7,7 +7,7 @@ interface Window {
 interface Config {
   auth0: Auth0Config;
   grpc: {
-    url: string;
+    url: string | undefined;
   };
 }
 

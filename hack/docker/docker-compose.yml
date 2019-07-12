@@ -57,7 +57,7 @@ services:
     image: casperlabs/grpcwebproxy
     container_name: grpcwebproxy
     ports:
-      # This is just explosed for debug purposes. Access it through Nginx reverse proxy instead.
+      # This is just exposed for debug purposes. Access it through Nginx reverse proxy instead.
       - ${CL_EXPLORER_GRPC_PORT}:8080
     volumes:
       - ${PWD}/grpcwebproxy/certificate.pem:/etc/tls/certificate.pem

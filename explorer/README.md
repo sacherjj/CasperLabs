@@ -29,6 +29,8 @@ cd -
 
 ### Fund the Faucet
 
+If we are not using the Genesis account (the one with all the initial tokens) as the Faucet account, we have to esablish the latter by transfering some tokens to it that it can later pass on.
+
 The `server` component has a utility program to do the initial token transfer, let's build that first (not necessary if we already built everything with docker):
 
 ```console
@@ -44,7 +46,7 @@ node ./server/dist/transfer.js \
   --from-private-key-path ../hack/docker/.casperlabs/genesis/system-account/account-private.pem \
   --from-public-key-path ../hack/docker/.casperlabs/genesis/system-account/account-public.pem \
   --to-public-key-path ./server/test.public.key \
-  --amount 500000 \
+  --amount 100000000 \
   --nonce 1
 ```
 

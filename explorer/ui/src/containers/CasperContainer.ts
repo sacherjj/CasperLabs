@@ -7,6 +7,7 @@ import CasperService from '../services/CasperService';
 import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import { GrpcError } from '../services/Errors';
 import { grpc } from '@improbable-eng/grpc-web';
+import { encodeBase16 } from '../lib/Conversions';
 
 // CasperContainer talks to the API on behalf of React
 // components and exposes the state in MobX observables.
@@ -15,7 +16,10 @@ export class CasperContainer {
     'faucet-requests',
     []
   );
-  @observable deployInfos = new Map<DeployHash, DeployInfo>();
+
+  // Technical observable because the UI doesn't seem to react to
+  // changes in the fields of the faucet request.
+  @observable lastRefresh: Date | undefined = undefined;
 
   constructor(
     private errors: ErrorContainer,
@@ -47,20 +51,27 @@ export class CasperContainer {
   }
 
   async refreshFaucetRequestStatus() {
-    for (let req of this._faucetRequests.get) {
-      const status = this.deployInfos.get(req.deployHash);
+    const requests = this._faucetRequests.get;
+    let updated = false;
+    for (let req of requests) {
       const needsUpdate =
-        typeof status === 'undefined' ||
-        status!.getProcessingResultsList().findIndex(x => !x.getIsError()) ===
-          -1;
+        typeof req.deployInfo === 'undefined' ||
+        req.deployInfo!.processingResultsList.length === 0;
 
       if (needsUpdate) {
-        const info = await this.tryGetDeployInfo(req.deployHash);
+        const info = await this.errors.withCapture(
+          this.tryGetDeployInfo(req.deployHash)
+        );
         if (info != null) {
-          this.deployInfos.set(req.deployHash, info);
+          req.deployInfo = info.toObject();
+          updated = true;
         }
       }
     }
+    if (updated) {
+      this._faucetRequests.set(requests);
+    }
+    this.lastRefresh = new Date();
   }
 
   private async tryGetDeployInfo(
@@ -84,6 +95,8 @@ export interface FaucetRequest {
   timestamp: Date;
   account: UserAccount;
   deployHash: DeployHash;
+  // Assigned later when the data becomes available.
+  deployInfo?: DeployInfo.AsObject;
 }
 
 export default CasperContainer;

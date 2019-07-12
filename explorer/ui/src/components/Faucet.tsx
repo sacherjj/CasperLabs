@@ -7,6 +7,7 @@ import { RefreshableComponent, Button, CommandLineHint, Icon } from './Utils';
 import DataTable from './DataTable';
 import { base64to16, encodeBase16 } from '../lib/Conversions';
 import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
+import { classExpression } from '@babel/types';
 
 interface Props {
   auth: AuthContainer;
@@ -71,36 +72,38 @@ class Faucet extends RefreshableComponent<Props, {}> {
       </div>
     );
 
-    const deployStatus = (deployHash: DeployHash) => {
-      const info = this.props.casper.deployInfos.get(deployHash);
-      const display: () => [any, string | undefined] = () => {
+    const deployStatus = (request: FaucetRequest) => {
+      const info = request.deployInfo;
+      const iconAndMessage: () => [any, string | undefined] = () => {
         if (info) {
-          const attempts = info.getProcessingResultsList().reverse();
-          const success = attempts.find(x => !x.getIsError());
-          const failure = attempts.find(x => x.getIsError());
-          const blockHash = (result: DeployInfo.ProcessingResult) =>
-            encodeBase16(
-              result
-                .getBlockInfo()!
-                .getSummary()!
-                .getBlockHash_asU8()
-            );
+          console.log('Rendering status', encodeBase16(request.deployHash));
+          const attempts = info.processingResultsList.reverse();
+          const success = attempts.find(x => !x.isError);
+          const failure = attempts.find(x => x.isError);
+          const blockHash = (result: DeployInfo.ProcessingResult.AsObject) =>
+            encodeBase16(result.blockInfo!.summary!.blockHash as ByteArray);
           if (success)
             return [
               <Icon name="check-circle" color="green" />,
               `Successfully included in block ${blockHash(success)}`
             ];
-          if (failure)
+          if (failure) {
+            const errm = failure.errorMessage;
+            const hint =
+              errm === 'Exit code: 1'
+                ? '. It looks like you already funded this account!'
+                : errm === 'Exit code: 2'
+                ? '. It looks like the faucet ran out of funds!'
+                : '';
             return [
               <Icon name="times-circle" color="red" />,
-              `Failed in block ${blockHash(
-                failure
-              )}: ${failure.getErrorMessage()}`
+              `Failed in block ${blockHash(failure)}: ${errm + hint}`
             ];
+          }
         }
         return [<Icon name="clock" />, 'Pending...'];
       };
-      const [icon, message] = display();
+      const [icon, message] = iconAndMessage();
       return (
         <td className="text-center" title={message}>
           {icon}
@@ -112,7 +115,7 @@ class Faucet extends RefreshableComponent<Props, {}> {
       <DataTable
         title="Request Status"
         refresh={() => this.props.casper.refreshFaucetRequestStatus()}
-        rows={casper.faucetRequests}
+        rows={casper.faucetRequests.reverse()}
         headers={['Timestamp', 'Account', 'Deploy Hash', 'Status']}
         renderRow={(request: FaucetRequest, idx: number) => {
           return (
@@ -120,12 +123,16 @@ class Faucet extends RefreshableComponent<Props, {}> {
               <td>{request.timestamp.toLocaleString()}</td>
               <td>{request.account.name}</td>
               <td>{encodeBase16(request.deployHash)}</td>
-              {deployStatus(request.deployHash)}
+              {deployStatus(request)}
             </tr>
           );
         }}
         footerMessage={
-          <span>Wait until the deploy is included in a block.</span>
+          <span>
+            Wait until the deploy is included in a block.{' '}
+            {casper.lastRefresh &&
+              `Last checked at ${casper.lastRefresh.toLocaleTimeString()}`}
+          </span>
         }
       />
     );

@@ -26,7 +26,9 @@ w.$ = w.jQuery = jQuery;
 
 const auth0Service = new Auth0Service(window.config.auth0);
 const faucetService = new FaucetService(auth0Service);
-const casperService = new CasperService(window.config.grpc.url);
+const casperService = new CasperService(
+  window.config.grpc.url || window.origin
+);
 
 const errors = new ErrorContainer();
 const casper = new CasperContainer(errors, faucetService, casperService);
