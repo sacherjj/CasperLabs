@@ -130,22 +130,22 @@ object DeployRuntime {
               .raiseError(new IllegalStateException(s"Expected Account type value under $address."))
               .whenA(!value.value.isAccount)
         account = value.getAccount
-        mint_public <- Sync[F].fromOption(
-                        account.knownUrefs.find(_.name == "mint").flatMap(_.key),
-                        new IllegalStateException(
-                          "Account's known_urefs map did not contain Mint contract address."
+        mintPublic <- Sync[F].fromOption(
+                       account.knownUrefs.find(_.name == "mint").flatMap(_.key),
+                       new IllegalStateException(
+                         "Account's known_urefs map did not contain Mint contract address."
+                       )
+                     )
+        mintPrivate <- DeployService[F]
+                        .queryState(
+                          blockHash,
+                          "uref",
+                          Base16.encode(mintPublic.getUref.uref.toByteArray), // I am assuming that "mint" points to URef type key.
+                          ""
                         )
-                      )
-        mint_private <- DeployService[F]
-                         .queryState(
-                           blockHash,
-                           "uref",
-                           Base16.encode(mint_public.getUref.uref.toByteArray), // I am assuming that "mint" points to URef type key.
-                           ""
-                         )
-                         .rethrow
+                        .rethrow
         localKeyValue = {
-          val mintPrivateHex = Base16.encode(mint_private.getKey.getUref.uref.toByteArray) // Assuming that `mint_private` is of `URef` type.
+          val mintPrivateHex = Base16.encode(mintPrivate.getKey.getUref.uref.toByteArray) // Assuming that `mint_private` is of `URef` type.
           val purseAddrHex = {
             val purseAddr    = account.getPurseId.uref.toByteArray
             val purseAddrSer = serializeArray(purseAddr)
