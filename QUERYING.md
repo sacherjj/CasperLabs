@@ -8,7 +8,7 @@ By default CasperLabs Node provides gRPC API [/protobuf/io/casperlabs/node/api/c
 CasperLabs provides the Scala and Python CLI tools to access the gRPC API. Python CLI tool also can be used as a library and published to the [PyPi.org](https://pypi.org) Python packages repository.
 
 ### Scala
-Checkout our public repository where Scala client is published [http://repo.casperlabs.io/casperlabs/repo/](http://repo.casperlabs.io/casperlabs/repo/) and the Docker image: [https://hub.docker.com/r/casperlabs/client](https://hub.docker.com/r/casperlabs/client).
+The Scala client is published to our [public repository](http://repo.casperlabs.io/casperlabs/repo/) as well as [Docker Hub](https://hub.docker.com/r/casperlabs/client).
 
 Also, it can be built locally, see the [Developer Guide](/DEVELOPER.md#building-nodes-client) for more information.
 
