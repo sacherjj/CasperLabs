@@ -20,7 +20,7 @@ It will show all commands and their options.
 See the doc at [/integration-testing/client/CasperClient/README.md](/integration-testing/client/CasperClient/README.md)
 
 ## GraphQL
-CasperLabs Node provides a GraphQL API served on `/graphql` path and 40403 port by default, , see for `server.http-port` in the [/node/src/main/resources/default-configuration.toml](/node/src/main/resources/default-configuration.toml).
+CasperLabs Node provides a GraphQL API served on `/graphql` path and port 40403, by default (specified by `server.http-port` in the [default-configuration.toml](/node/src/main/resources/default-configuration.toml) config file).
 
 To explore the API, read the docs and signatures, open the GraphQL Playground (https://github.com/prisma/graphql-playground) on `http://<node's IP address or hostname>:40403/graphql` in a web browser.
 
