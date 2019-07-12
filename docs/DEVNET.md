@@ -12,6 +12,20 @@
 * Navigate to [Faucet](https://explorer.casperlabs.io/#/faucet), select your new account, and click [Request Tokens]
 * The request will appear in the "Recent Faucet Requests" table; wait for the green check mark to appear in the "Status" column
 
+#### Checking the balance of an account
+
+* [Install the CasperLabs client](INSTALL.md)
+* Use the `balance` sub-command (see example below)
+  * `--address` is the hex-encoded public key of the account to query
+  * `--block-hash` the hex-encoded hash of the block where the balance should be queried
+```
+casperlabs-client \
+        --host deploy.casperlabs.io \
+        balance \
+        --address b9ae114d6093646ed4be6f7fe1f7e5533a5d52a3351f3f18030ea82b3d915d6b \
+        --block-hash ef6d4c66a29d833de462fbb7fd35227cbc3849b36872940c852727f668d6993f
+```
+
 ### Deploying code
 
 * [Install the CasperLabs client](INSTALL.md)
