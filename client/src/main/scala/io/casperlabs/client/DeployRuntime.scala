@@ -50,16 +50,10 @@ object DeployRuntime {
       sessionCode: Option[File],
       privateKeyFile: File
   ): F[Unit] = {
-    val amountBytes = maybeAmount match {
-      case Some(amount) => {
-        val array: Array[Byte] = serializeAmount(amount)
-
-        Array[Byte](1, 0, 0, 0, 9, 0, 0, 0, 1) ++ array
-      }
-      case None => {
-        Array[Byte](1, 0, 0, 0, 1, 0, 0, 0, 0)
-      }
-    }
+    val args: Array[Array[Byte]] = Array(
+      serializeOption(maybeAmount, serializeLong)
+    )
+    val argsSer = serializeArgs(args)
 
     val inputStream = readFileOrDefault(sessionCode, UNBONDING_WASM_FILE)
     val ba = {
@@ -80,7 +74,7 @@ object DeployRuntime {
       None,
       Some(privateKeyFile),
       10L, // gas price is fixed at the moment for 10:1
-      ByteString.copyFrom(amountBytes)
+      ByteString.copyFrom(argsSer)
     )
   }
 
@@ -90,9 +84,8 @@ object DeployRuntime {
       sessionCode: Option[File],
       privateKeyFile: File
   ): F[Unit] = {
-    val array: Array[Byte] = serializeAmount(amount)
-
-    val amountBytes: Array[Byte] = Array[Byte](1, 0, 0, 0, 8, 0, 0, 0) ++ array
+    val args: Array[Array[Byte]] = Array(serializeLong(amount))
+    val argsSer: Array[Byte]     = serializeArgs(args)
 
     val inputStream = readFileOrDefault(sessionCode, BONDING_WASM_FILE)
     val ba = {
@@ -113,7 +106,7 @@ object DeployRuntime {
       None,
       Some(privateKeyFile),
       10L, // gas price is fixed at the moment for 10:1
-      ByteString.copyFrom(amountBytes)
+      ByteString.copyFrom(argsSer)
     )
   }
 
@@ -299,12 +292,39 @@ object DeployRuntime {
       .map(new FileInputStream(_))
       .getOrElse(getClass.getClassLoader.getResourceAsStream(defaultName))
 
-  private def serializeAmount(amount: Long): Array[Byte] =
+  private def serializeLong(l: Long): Array[Byte] =
     java.nio.ByteBuffer
       .allocate(8)
       .order(ByteOrder.LITTLE_ENDIAN)
-      .putLong(amount)
+      .putLong(l)
       .array()
+
+  private def serializeInt(i: Int): Array[Byte] =
+    java.nio.ByteBuffer
+      .allocate(4)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .putInt(i)
+      .array()
+
+  // Option serializes as follows:
+  // None:        [0]
+  // Some(value): [1] ++ serialized value
+  private def serializeOption[T](in: Option[T], fSer: T => Array[Byte]): Array[Byte] =
+    in.map(value => Array[Byte](1) ++ fSer(value)).getOrElse(Array[Byte](0))
+
+  // This is true for any array but I didn't want to go as far as writing type classes.
+  // Binary format of an array is constructed from:
+  // length (u64/integer in binary) ++ bytes
+  private def serializeArray(ba: Array[Byte]): Array[Byte] = {
+    val serLen = serializeInt(ba.length)
+    serLen ++ ba
+  }
+
+  private def serializeArgs(args: Array[Array[Byte]]): Array[Byte] = {
+    val argsBytes    = args.flatMap(serializeArray)
+    val argsBytesLen = serializeInt(args.length)
+    argsBytesLen ++ argsBytes
+  }
 
   implicit class DeployOps(d: consensus.Deploy) {
     def withHashes = {
@@ -329,5 +349,4 @@ object DeployRuntime {
       )
     }
   }
-
 }
