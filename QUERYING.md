@@ -3,7 +3,7 @@
 CasperLabs Node provides the [gRPC](https://grpc.io) and [GraphQL](https://graphql.org) APIs to retrieve information from the platform.
 
 ## gRPC
-By default CasperLabs Node provides gRPC API [/protobuf/io/casperlabs/casper/protocol/CasperMessage.proto](/protobuf/io/casperlabs/casper/protocol/CasperMessage.proto) on the 40401 port, see for `grpc.port-external` in the [/node/src/main/resources/default-configuration.toml](/node/src/main/resources/default-configuration.toml).
+By default CasperLabs Node provides gRPC API [/protobuf/io/casperlabs/node/api/casper.proto](/protobuf/io/casperlabs/node/api/casper.proto) on the 40401 port, see for `grpc.port-external` in the [/node/src/main/resources/default-configuration.toml](/node/src/main/resources/default-configuration.toml).
 
 CasperLabs provides the Scala and Python CLI tools to access the gRPC API. Python CLI tool also can be used as a library and published to the [PyPi.org](https://pypi.org) Python packages repository.
 
