@@ -3,9 +3,10 @@ import { observer } from 'mobx-react';
 import { Form, SelectField, TextField } from './Forms';
 import AuthContainer from '../containers/AuthContainer';
 import { CasperContainer, FaucetRequest } from '../containers/CasperContainer';
-import { RefreshableComponent, Button, UnderConstruction } from './Utils';
+import { RefreshableComponent, Button, CommandLineHint, Icon } from './Utils';
 import DataTable from './DataTable';
 import { base64to16, encodeBase16 } from '../lib/Conversions';
+import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 
 interface Props {
   auth: AuthContainer;
@@ -16,6 +17,7 @@ interface Props {
 class Faucet extends RefreshableComponent<Props, {}> {
   refresh() {
     this.props.auth.refreshAccounts();
+    this.props.casper.refreshFaucetRequestStatus();
   }
 
   render() {
@@ -69,35 +71,69 @@ class Faucet extends RefreshableComponent<Props, {}> {
       </div>
     );
 
+    const deployStatus = (deployHash: DeployHash) => {
+      const info = this.props.casper.deployInfos.get(deployHash);
+      const display: () => [any, string | undefined] = () => {
+        if (info) {
+          const attempts = info.getProcessingResultsList().reverse();
+          const success = attempts.find(x => !x.getIsError());
+          const failure = attempts.find(x => x.getIsError());
+          const blockHash = (result: DeployInfo.ProcessingResult) =>
+            encodeBase16(
+              result
+                .getBlockInfo()!
+                .getSummary()!
+                .getBlockHash_asU8()
+            );
+          if (success)
+            return [
+              <Icon name="check-circle" color="green" />,
+              `Successfully included in block ${blockHash(success)}`
+            ];
+          if (failure)
+            return [
+              <Icon name="times-circle" color="red" />,
+              `Failed in block ${blockHash(
+                failure
+              )}: ${failure.getErrorMessage()}`
+            ];
+        }
+        return [<Icon name="clock" />, 'Pending...'];
+      };
+      const [icon, message] = display();
+      return (
+        <td className="text-center" title={message}>
+          {icon}
+        </td>
+      );
+    };
+
     const statusTable = casper.faucetRequests.length > 0 && (
       <DataTable
         title="Request Status"
-        refresh={() => this.refresh()}
+        refresh={() => this.props.casper.refreshFaucetRequestStatus()}
         rows={casper.faucetRequests}
-        headers={['Timestamp', 'Account', 'Deploy Hash']}
+        headers={['Timestamp', 'Account', 'Deploy Hash', 'Status']}
         renderRow={(request: FaucetRequest, idx: number) => {
           return (
             <tr key={idx}>
               <td>{request.timestamp.toLocaleString()}</td>
               <td>{request.account.name}</td>
               <td>{encodeBase16(request.deployHash)}</td>
+              {deployStatus(request.deployHash)}
             </tr>
           );
         }}
         footerMessage={
-          <span>
-            Wait until the deploy is included in a block and that block gets
-            finalized.
-          </span>
+          <span>Wait until the deploy is included in a block.</span>
         }
       />
     );
 
     const cliHint = casper.faucetRequests.length > 0 && (
-      <UnderConstruction>
+      <CommandLineHint>
         <p>
-          Automatic monitoring for status hasn't been implemented yet. You have
-          to do it manually using the{' '}
+          You can also monitor the outcome of the deploys using the{' '}
           <a
             href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md#cli-client-tool-1"
             target="_blank"
@@ -111,7 +147,7 @@ class Faucet extends RefreshableComponent<Props, {}> {
             'casperlabs-client --host deploy.casperlabs.io --port 40401 show-deploy <deploy-hash>'
           }
         </pre>
-      </UnderConstruction>
+      </CommandLineHint>
     );
 
     return (
