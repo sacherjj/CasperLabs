@@ -12,90 +12,9 @@ Checkout our public repository where Scala client is published [http://repo.casp
 
 Also, it can be built locally, see [DEVELOPER.md#building-nodes-client](/DEVELOPER.md#building-nodes-client) for more information.
 
-Print the help message (assuming if you decided to built it locally):
-```bash
-$ ./client/target/universal/stage/bin/casperlabs-client --help
-CasperLabs Client 0.5.0
-  -h, --host  <arg>            Hostname or IP of node on which the gRPC service
-                               is running.
-  -n, --node-id  <arg>         Node ID (i.e. the Keccak256 hash of the public
-                               key the node uses for TLS) in case secure
-                               communication is needed.
-  -p, --port  <arg>            Port used for exte
-  rnal gRPC API.
-      --port-internal  <arg>   Port used for internal gRPC API.
-      --help                   Show help message
-  -v, --version                Show version of this program
+Print the help message (assuming if you decided to built it locally): `./client/target/universal/stage/bin/casperlabs-client --help`.
 
-Subcommand: deploy - Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
-  -f, --from  <arg>          The public key of the account which is the context
-                             of this deployment, base16 encoded.
-  -g, --gas-limit  <arg>     [Deprecated] The amount of gas to use for the
-                             transaction (unused gas is refunded). Must be
-                             positive integer.
-      --gas-price  <arg>     The price of gas for this transaction in units
-                             dust/gas. Must be positive integer.
-  -n, --nonce  <arg>         This allows you to overwrite your own pending
-                             transactions that use the same nonce.
-  -p, --payment  <arg>       Path to the file with payment code
-      --private-key  <arg>   Path to the file with account private key (Ed25519)
-      --public-key  <arg>    Path to the file with account public key (Ed25519)
-  -s, --session  <arg>       Path to the file with session code
-  -h, --help                 Show help message
-Subcommand: propose - Force a node to propose a block based on its accumulated deploys.
-  -h, --help   Show help message
-Subcommand: show-block - View properties of a block known by Casper on an existing running node.
-  -h, --help   Show help message
-
- trailing arguments:
-  hash (required)   Value of the block hash, base16 encoded.
-Subcommand: show-deploys - View deploys included in a block.
-  -h, --help   Show help message
-
- trailing arguments:
-  hash (required)   Value of the block hash, base16 encoded.
-Subcommand: show-deploy - View properties of a deploy known by Casper on an existing running node.
-  -h, --help   Show help message
-
- trailing arguments:
-  hash (required)   Value of the deploy hash, base16 encoded.
-Subcommand: show-blocks - View list of blocks in the current Casper view on an existing running node.
-  -d, --depth  <arg>   lists blocks to the given depth in terms of block height
-  -h, --help           Show help message
-Subcommand: vdag - DAG in DOT format
-  -d, --depth  <arg>               depth in terms of block height
-  -o, --out  <arg>                 output image filename, outputs to stdout if
-                                   not specified, must ends with one of the png,
-                                   svg, svg_standalone, xdot, plain, plain_ext,
-                                   ps, ps2, json, json0
-  -s, --show-justification-lines   if justification lines should be shown
-      --stream  <arg>              subscribe to changes, '--out' has to
-                                   specified, valid values are 'single-output',
-                                   'multiple-outputs'
-  -h, --help                       Show help message
-Subcommand: query-state - Query a value in the global state.
-  -b, --block-hash  <arg>   Hash of the block to query the state of
-  -k, --key  <arg>          Base16 encoding of the base key.
-  -p, --path  <arg>         Path to the value to query. Must be of the form
-                            'key1/key2/.../keyn'
-  -t, --type  <arg>         Type of base key. Must be one of 'hash', 'uref',
-                            'address'
-  -h, --help                Show help message
-```
-
-Commands for querying the platform are `show-block`, `show-deploy`, `show-blocks`, `vdag` and `query-state`.
-
-To get help for a certain command invoke it with the `--help` option as follows:
-```bash
-$ ./client/target/universal/stage/bin/casperlabs-client query-state --help
-  -b, --block-hash  <arg>   Hash of the block to query the state of
-  -k, --key  <arg>          Base16 encoding of the base key.
-  -p, --path  <arg>         Path to the value to query. Must be of the form
-                            'key1/key2/.../keyn'
-  -t, --type  <arg>         Type of base key. Must be one of 'hash', 'uref',
-                            'address'
-  -h, --help                Show help message
-```
+It will show all commands and their options.
 
 ### Python
 See the doc at [/integration-testing/client/CasperClient/README.md](/integration-testing/client/CasperClient/README.md)
