@@ -44,16 +44,17 @@ d286526663ca3766c80781543a148c635f2388bfe128981c3e4ac69cea88dc35: 3000000000
 
 ## Deploying smart contracts
 
-To deploy a smart contract to CasperLabs devnet you have to create an account
-using the [CasperLabs Explorer](https://explorer.casperlabs.io/#/)
+To deploy a smart contract to CasperLabs devnet you have to first:
+
+1. Create an account using [CasperLabs Explorer](https://explorer.casperlabs.io/#/)
 and transfer (free) tokens to the account from the faucet.
 
-An account address is just a public key looking like
+An account address is a public key looking like
 ```
 f2cbd19d054bd2b2c06ea26714275271663a5e4503d5d059de159c3b60d81ab7
 ```
 
-You also have to compile a contract to the [WASM](https://webassembly.org) format,
+2. Compile a contract to the [WASM](https://webassembly.org) format,
 see CasperLabs [contract examples](https://github.com/CasperLabs/contract-examples)
 to see example contracts 
 and instructions on 
@@ -68,7 +69,7 @@ To deploy
 
 ### Return values
 
-Return values of the API functions defined in the `CasperClient` are generally deserialized gRPC reponse objects 
+Return values of the API functions defined in the `CasperClient` are generally deserialized gRPC response objects 
 of the corresponding requests defined in the node's gRPC service, see 
 [casper.proto](https://github.com/CasperLabs/CasperLabs/blob/master/protobuf/io/casperlabs/node/api/casper.proto).
 
