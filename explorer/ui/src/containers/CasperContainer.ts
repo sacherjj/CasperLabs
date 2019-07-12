@@ -17,10 +17,6 @@ export class CasperContainer {
     []
   );
 
-  // Technical observable because the UI doesn't seem to react to
-  // changes in the fields of the faucet request.
-  @observable lastRefresh: Date | undefined = undefined;
-
   constructor(
     private errors: ErrorContainer,
     private faucetService: FaucetService,
@@ -71,7 +67,6 @@ export class CasperContainer {
     if (updated) {
       this._faucetRequests.set(requests);
     }
-    this.lastRefresh = new Date();
   }
 
   private async tryGetDeployInfo(
