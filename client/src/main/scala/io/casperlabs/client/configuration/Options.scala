@@ -173,6 +173,71 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showBlocks)
 
+  val unbond = new Subcommand("unbond") {
+    descr("Issues unbonding request")
+
+    val amount = opt[Long](
+      name = "amount",
+      validate = _ > 0,
+      descr =
+        "Amount of tokens to unbond. If not provided then a request to unbond with all staked tokens is made."
+    )
+
+    val session =
+      opt[File](
+        descr = "Path to the file with unbonding contract.",
+        validate = fileCheck
+      )
+
+    val nonce = opt[Long](
+      descr =
+        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val privateKey =
+      opt[File](
+        descr = "Path to the file with account private key (Ed25519)",
+        validate = fileCheck,
+        required = true
+      )
+
+  }
+  addSubcommand(unbond)
+
+  val bond = new Subcommand("bond") {
+    descr("Issues bonding request")
+
+    val amount = opt[Long](
+      name = "amount",
+      validate = _ > 0,
+      descr = "amount of tokens to bond",
+      required = true
+    )
+
+    val session =
+      opt[File](
+        descr = "Path to the file with bonding contract.",
+        validate = fileCheck
+      )
+
+    val nonce = opt[Long](
+      descr =
+        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val privateKey =
+      opt[File](
+        descr = "Path to the file with account private key (Ed25519)",
+        validate = fileCheck,
+        required = true
+      )
+  }
+  addSubcommand(bond)
+
   val visualizeBlocks = new Subcommand("vdag") {
     descr(
       "DAG in DOT format"

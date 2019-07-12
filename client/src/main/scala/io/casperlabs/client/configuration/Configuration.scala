@@ -26,6 +26,18 @@ final case class ShowBlock(blockHash: String)   extends Configuration
 final case class ShowDeploys(blockHash: String) extends Configuration
 final case class ShowDeploy(deployHash: String) extends Configuration
 final case class ShowBlocks(depth: Int)         extends Configuration
+final case class Bond(
+    amount: Long,
+    nonce: Long,
+    sessionCode: Option[File],
+    privateKey: File
+) extends Configuration
+final case class Unbond(
+    amount: Option[Long],
+    nonce: Long,
+    sessionCode: Option[File],
+    privateKey: File
+) extends Configuration
 final case class VisualizeDag(
     depth: Int,
     showJustificationLines: Boolean,
@@ -76,6 +88,20 @@ object Configuration {
         ShowDeploy(options.showDeploy.hash())
       case options.showBlocks =>
         ShowBlocks(options.showBlocks.depth())
+      case options.unbond =>
+        Unbond(
+          options.unbond.amount.toOption,
+          options.unbond.nonce(),
+          options.unbond.session.toOption,
+          options.unbond.privateKey()
+        )
+      case options.bond =>
+        Bond(
+          options.unbond.amount(),
+          options.unbond.nonce(),
+          options.unbond.session.toOption,
+          options.unbond.privateKey()
+        )
       case options.visualizeBlocks =>
         VisualizeDag(
           options.visualizeBlocks.depth(),
