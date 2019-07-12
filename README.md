@@ -7,9 +7,10 @@ The open-source CasperLabs project is building a decentralized, economic, censor
 
 - [Installing the CasperLabs Node](docs/INSTALL.md)
 - [Building the CasperLabs Node](docs/BUILD.md)
-- [Keys](docs/KEYS.md)
+- [Creating Keys](docs/KEYS.md)
 - [Running the CasperLabs Node](docs/NODE.md)
 - [Deploying Contracts](docs/CONTRACTS.md)
+- [Querying](docs/QUERYING.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Getting Help

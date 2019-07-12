@@ -40,10 +40,10 @@ Add coins to this account using the [faucet](https://explorer.casperlabs.io/#/fa
 
 ```
 casperlabs-client \
-    --host deploy.casperlabs.io 
-    bond 
-    --amount <bond-amount>
-    --nonce <nonce>
+    --host deploy.casperlabs.io \
+    bond \
+    --amount <bond-amount> \
+    --nonce <nonce> \
     --private-key <path-to-private-key>
 ```
 
@@ -70,12 +70,14 @@ casperlabs-node run \
 First, you must unbond:
 ```
 casperlabs-client \
-    --host deploy.casperlabs.io 
-    unbond 
-    --amount <unbond-amount>
-    --nonce <nonce>
+    --host deploy.casperlabs.io \
+    unbond \
+    --amount <unbond-amount> \
+    --nonce <nonce> \
     --private-key <path-to-private-key>
 ```
+
+The `--amount` argument here is optional: you can partially unbond by providing an amount that is smaller than your bond amount, or you can omit this argument to unbond your full bond amount.
 
 After that, you can safely stop processes:
 ```
