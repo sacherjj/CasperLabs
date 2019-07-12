@@ -10,7 +10,7 @@ CasperLabs provides the Scala and Python CLI tools to access the gRPC API. Pytho
 ### Scala
 Checkout our public repository where Scala client is published [http://repo.casperlabs.io/casperlabs/repo/](http://repo.casperlabs.io/casperlabs/repo/) and the Docker image: [https://hub.docker.com/r/casperlabs/client](https://hub.docker.com/r/casperlabs/client).
 
-Also, it can be built locally, see [DEVELOPER.md#building-nodes-client](/DEVELOPER.md#building-nodes-client) for more information.
+Also, it can be built locally, see the [Developer Guide](/DEVELOPER.md#building-nodes-client) for more information.
 
 Print the help message (assuming if you decided to built it locally): `./client/target/universal/stage/bin/casperlabs-client --help`.
 
