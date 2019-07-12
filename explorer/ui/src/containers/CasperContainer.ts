@@ -17,6 +17,9 @@ export class CasperContainer {
     []
   );
 
+  // Start polling for status when we add a new faucet request.
+  private faucetStatusTimerId = 0;
+
   constructor(
     private errors: ErrorContainer,
     private faucetService: FaucetService,
@@ -43,18 +46,29 @@ export class CasperContainer {
     const request = { timestamp: new Date(), account, deployHash };
     const requests = this._faucetRequests.get.concat(request);
     this._faucetRequests.set(requests);
-    // TODO: Start polling for the deploy status.
+    this.startPollingFaucetStatus();
+  }
+
+  private startPollingFaucetStatus() {
+    if (this.faucetStatusTimerId === 0) {
+      this.faucetStatusTimerId = window.setInterval(
+        () => this.refreshFaucetRequestStatus(),
+        10 * 1000
+      );
+    }
   }
 
   async refreshFaucetRequestStatus() {
     const requests = this._faucetRequests.get;
     let updated = false;
+    let anyNeededUpdate = false;
     for (let req of requests) {
       const needsUpdate =
         typeof req.deployInfo === 'undefined' ||
         req.deployInfo!.processingResultsList.length === 0;
 
       if (needsUpdate) {
+        anyNeededUpdate = true;
         const info = await this.errors.withCapture(
           this.tryGetDeployInfo(req.deployHash)
         );
@@ -66,6 +80,9 @@ export class CasperContainer {
     }
     if (updated) {
       this._faucetRequests.set(requests);
+    }
+    if (!anyNeededUpdate) {
+      window.clearTimeout(this.faucetStatusTimerId);
     }
   }
 
