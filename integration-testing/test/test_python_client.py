@@ -1,13 +1,9 @@
 import json
 import logging
-import os
+from pytest import fixture
 
 from casper_client import ABI
-
-
-def write_binary(file_name, b):
-    with open(file_name, 'wb') as f:
-        f.write(b)
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 
 
 def test_args_parser():
@@ -25,32 +21,30 @@ def test_args_parser():
                                                      ABI.u64(1234567890)])
 
 
-def test_deploy_with_args(one_node_network):
-    """
-    Deploys a test contract that does:
+@fixture()
+def genesis_public_signing_key():
+    with GENESIS_ACCOUNT.public_key_binary_file() as f:
+        yield f
 
-        revert(get_arg(0));
+
+def test_deploy_with_args(one_node_network, genesis_public_signing_key):
+    """
+    Deploys test contracts that does:
+
+        revert(get_arg(0)); for u32
+
+        revert(sum(address_bytes[u8; 32]) + u32); for multiple argument test.
 
     Tests args get correctly encoded and decoded in the contract.
     """
     node = one_node_network.docker_nodes[0]
     client = node.p_client
 
-    signing_public_key_file = 'signing_key'
-    # signing_private_key_file = 'verifying_key'
-
-    write_binary(signing_public_key_file, node.signing_public_key())
-
-    # We do not have raw private keys with .pem certificate files
-    # removing this to not sign deploy at this time.
-    # write_binary(signing_private_key_file, node.signing_private_key())
-
     wasm = "test_args_u32.wasm"
     for number in [12, 256, 1024]:
         response, deploy_hash = client.deploy(payment_contract=wasm,
                                               session_contract=wasm,
-                                              public_key=signing_public_key_file,
-                                              # private_key=signing_private_key_file,
+                                              public_key=genesis_public_signing_key,
                                               args=ABI.args([ABI.u32(number)])
                                               )
         logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
@@ -77,7 +71,7 @@ def test_deploy_with_args(one_node_network):
 
     response, deploy_hash = client.deploy(payment_contract=wasm,
                                           session_contract=wasm,
-                                          public_key=signing_public_key_file,
+                                          public_key=genesis_public_signing_key,
                                           args=ABI.args_from_json(json_args)
                                           )
     logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
@@ -96,7 +90,3 @@ def test_deploy_with_args(one_node_network):
 
     for blockInfo in client.show_blocks(10):
         assert blockInfo.status.stats.block_size_bytes > 0
-
-    # TODO: Fix so removes on failure too...
-    # Seems to lose directory when I put this out of function.  Not time to fix better now.
-    os.remove(signing_public_key_file)

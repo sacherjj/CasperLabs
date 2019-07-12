@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from tempfile import NamedTemporaryFile
+from contextlib import contextmanager
 from typing import Union, Optional, List
 from pathlib import Path
 import base64
@@ -8,13 +10,18 @@ import os
 TRANSFER_AMOUNTS = [0, 1000000, 750000] + [1000000] * 18
 
 
+def is_valid_account(account_id: Union[int, str]) -> bool:
+    try:
+        if account_id == 'genesis':
+            return True
+        return 1 <= account_id <= 20
+    except TypeError:
+        return False
+
+
 @dataclass
 class Account:
     file_id: Union[int, str]
-
-    @staticmethod
-    def int_key_to_hex(key: List[int]) -> str:
-        return ''.join([f"{int(ch):#04x}"[2:] for ch in key])
 
     @property
     def account_path(self) -> Path:
@@ -61,8 +68,24 @@ class Account:
     @property
     def transfer_contract(self) -> Optional[str]:
         if self.file_id in [1, 2]:
-            return f'test_transfer_to_account_{self.file_id}_call.wasm'
+            return f'test_transfer_to_account_{self.file_id}.wasm'
         return None
+
+    @property
+    def public_key_binary(self) -> bytes:
+        return base64.b64decode(self.public_key + '===')
+
+    @contextmanager
+    def public_key_binary_file(self):
+        """
+        Creates a temp file containing the binary version of public key.
+
+        :return: path to binary file of public key for signing with Python Client
+        """
+        with NamedTemporaryFile('wb') as temp_file:
+            with open(temp_file.name, 'wb') as f:
+                f.write(self.public_key_binary)
+            yield temp_file.name
 
 
 GENESIS_ACCOUNT = Account('genesis')

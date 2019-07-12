@@ -12,11 +12,11 @@ from test.cl_node.client_parser import parse, parse_show_deploys
 from test.cl_node.nonce_registry import NonceRegistry
 
 
-
 class DockerClient(CasperLabsClient, LoggingMixin):
 
     def __init__(self, node: 'DockerNode'):
         self.node = node
+        self.abi = None  # TODO: Translate Client ABI to similar to Python if implemented
         self.docker_client = node.config.docker_client
         super(DockerClient, self).__init__()
 

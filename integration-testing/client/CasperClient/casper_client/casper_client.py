@@ -7,7 +7,6 @@ import time
 import argparse
 import grpc
 import functools
-import pathlib
 from pyblake2 import blake2b
 import ed25519
 import struct

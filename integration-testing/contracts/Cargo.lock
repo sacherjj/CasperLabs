@@ -486,20 +486,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-transfer-to-account-1-call"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.9.0",
-]
-
-[[package]]
-name = "test-transfer-to-account-2-call"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.9.0",
-]
-
-[[package]]
 name = "test-unbonding-call"
 version = "0.1.0"
 dependencies = [
@@ -523,6 +509,13 @@ dependencies = [
 [[package]]
 name = "test_combined_contracts_call"
 version = "0.1.0"
+
+[[package]]
+name = "transfer_to_account"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.9.0",
+]
 
 [[package]]
 name = "typenum"
