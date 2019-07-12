@@ -26,7 +26,7 @@ To explore the API, read the docs and signatures, open the GraphQL Playground (h
 
 Currently, GraphQL allows only read-only queries without mutations.
 
-To explore possible queries start typing `query` or `subscription` to get an auto-completion list.
+To explore possible queries start typing `query` or `subscription` to get an auto-completion list, or click the [DOCS] or [SCHEMA] button on the right hand side of the screen.
 
 Example of possible query:
 ```graphql
