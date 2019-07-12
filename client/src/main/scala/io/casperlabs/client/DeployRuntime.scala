@@ -122,6 +122,49 @@ object DeployRuntime {
         .map(_.map(Printer.printToUnicodeString(_)))
     )
 
+  def balance[F[_]: Sync: DeployService](address: String, blockHash: String): F[Unit] =
+    gracefulExit {
+      (for {
+        value <- DeployService[F].queryState(blockHash, "address", address, "").rethrow
+        _ <- Sync[F]
+              .raiseError(new IllegalStateException(s"Expected Account type value under $address."))
+              .whenA(!value.value.isAccount)
+        account = value.getAccount
+        mint_public <- Sync[F].fromOption(
+                        account.knownUrefs.find(_.name == "mint").flatMap(_.key),
+                        new IllegalStateException(
+                          "Account's known_urefs map did not contain Mint contract address."
+                        )
+                      )
+        mint_private <- DeployService[F]
+                         .queryState(
+                           blockHash,
+                           "uref",
+                           Base16.encode(mint_public.getUref.uref.toByteArray), // I am assuming that "mint" points to URef type key.
+                           ""
+                         )
+                         .rethrow
+        localKeyValue = {
+          val mintPrivateHex = Base16.encode(mint_private.getKey.getUref.uref.toByteArray) // Assuming that `mint_private` is of `URef` type.
+          val purseAddrHex = {
+            val purseAddr    = account.getPurseId.uref.toByteArray
+            val purseAddrSer = serializeArray(purseAddr)
+            Base16.encode(purseAddrSer)
+          }
+          s"$mintPrivateHex:$purseAddrHex"
+        }
+        balanceURef <- DeployService[F].queryState(blockHash, "local", localKeyValue, "").rethrow
+        balance <- DeployService[F]
+                    .queryState(
+                      blockHash,
+                      "uref",
+                      Base16.encode(balanceURef.getKey.getUref.uref.toByteArray),
+                      ""
+                    )
+                    .rethrow
+      } yield s"Balance:\n$address : ${balance.getBigInt.value}").attempt
+    }
+
   def visualizeDag[F[_]: Sync: DeployService: Timer](
       depth: Int,
       showJustificationLines: Boolean,

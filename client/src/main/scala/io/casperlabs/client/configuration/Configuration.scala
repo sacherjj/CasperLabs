@@ -44,6 +44,7 @@ final case class VisualizeDag(
     out: Option[String],
     streaming: Option[Streaming]
 ) extends Configuration
+final case class Balance(address: String, blockhash: String) extends Configuration
 
 sealed trait Streaming extends Product with Serializable
 object Streaming {
@@ -115,6 +116,11 @@ object Configuration {
           options.query.keyType(),
           options.query.key(),
           options.query.path()
+        )
+      case options.balance =>
+        Balance(
+          options.balance.address(),
+          options.balance.blockHash()
         )
     }
     conf map (connect -> _)
