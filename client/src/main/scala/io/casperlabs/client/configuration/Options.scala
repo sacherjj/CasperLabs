@@ -73,7 +73,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val gasPrice = opt[Long](
       descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
       validate = _ > 0,
-      required = true
+      required = false,
+      default = 10L.some
     )
 
     val nonce = opt[Long](
@@ -86,7 +87,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
 
     val payment =
-      opt[File](required = true, descr = "Path to the file with payment code", validate = fileCheck)
+      opt[File](
+        required = false,
+        descr = "Path to the file with payment code, by default fallbacks to the --session code",
+        validate = fileCheck
+      )
 
     val publicKey =
       opt[File](

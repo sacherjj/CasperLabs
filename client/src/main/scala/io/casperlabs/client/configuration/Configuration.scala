@@ -61,7 +61,7 @@ object Configuration {
           options.deploy.from.toOption,
           options.deploy.nonce(),
           options.deploy.session(),
-          options.deploy.payment(),
+          options.deploy.payment.toOption.getOrElse(options.deploy.session()),
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption,
           options.deploy.gasPrice()
