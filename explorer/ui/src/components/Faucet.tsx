@@ -80,11 +80,11 @@ const FaucetForm = observer(
           />
         </div>
         <div className="card-footer small text-muted">
-          Pick one of your accounts that you haven't yet received free tokens
-          for and submit a request. We'll send a deploy to the blockchain that
-          will transfer you some tokens to play with. The UI will poll the
-          status of the deploy until it's included in a block, so you know when
-          you can start using it.
+          Select an account and request tokens for it from the Faucet.
+          Currently, a given account can only request tokens once. It can take
+          some time for your request to be processed; the status of your request
+          will be updated when tokens are available and you can use your
+          account.
         </div>
       </div>
     );

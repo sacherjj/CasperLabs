@@ -29,7 +29,7 @@ cd -
 
 ### Fund the Faucet
 
-If we are not using the Genesis account (the one with all the initial tokens) as the Faucet account, we have to esablish the latter by transfering some tokens to it that it can later pass on.
+If we are not using the Genesis account (the one with all the initial tokens) as the Faucet account, we have to establish the latter by transfering some tokens to it that it can later pass on.
 
 The `server` component has a utility program to do the initial token transfer, let's build that first (not necessary if we already built everything with docker):
 
