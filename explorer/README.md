@@ -50,8 +50,7 @@ node ./server/dist/transfer.js \
   --nonce 1
 ```
 
-NOTE: If you are connecting to a HTTPS endpoint you have to relax the SSL certificate, which is
-the case in local testing, you have to relax the SSL certificate checks in Node.js like so:
+NOTE: If you are connecting to a HTTPS endpoint which uses a self-signed certificate, which is the case in local testing, you have to relax the SSL certificate checks in Node.js like so:
 
 ```console
 $ export NODE_TLS_REJECT_UNAUTHORIZED=0
