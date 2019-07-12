@@ -47,14 +47,15 @@ casperlabs-client \
     --private-key <path-to-private-key>
 ```
 
-##### Step 3: Start the Execution Engine
+##### Step 4: Start the Execution Engine
 
 ```
 casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
 
-##### Step 4: Start the Node
+##### Step 5: Start the Node
 
+In a separate terminal, run:
 ```
 casperlabs-node run \
     --tls-key ./keys/node.key.pem \
@@ -71,8 +72,8 @@ First, you must unbond:
 casperlabs-client \
     --host deploy.casperlabs.io 
     unbond 
-    --amount 1000 
-    --nonce 1 
+    --amount <unbond-amount>
+    --nonce <nonce>
     --private-key <path-to-private-key>
 ```
 
@@ -95,6 +96,7 @@ mkdir -p ~/.casperlabs/genesis
 
 ##### Step 2: Start the Execution Engine
 
+In a separate terminal, run:
 ```
 casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
@@ -120,4 +122,3 @@ See instructions [here](CONTRACTS.md).
 ### Running a Simulated Network
 
 See instructions [here](../hack/docker/README.md).
-
