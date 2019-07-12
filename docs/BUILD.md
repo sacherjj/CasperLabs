@@ -56,10 +56,9 @@ The `casperlabs-engine-grpc-server` executable will be found here:
 cd execution-engine
 cargo build -p pos --release --target wasm32-unknown-unknown
 cargo build -p mint-token --release --target wasm32-unknown-unknown
-find ./target/wasm32-unknown-unknown/release -maxdepth 1 -type f -name \*.wasm
 ```
 
-The compiled contracts will be here:
+The compiled contracts will be found here:
 ```
 ./target/wasm32-unknown-unknown/release/pos.wasm
 ./target/wasm32-unknown-unknown/release/mint_token.wasm

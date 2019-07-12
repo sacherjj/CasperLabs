@@ -42,9 +42,15 @@ Add coins to this account using the [faucet](https://explorer.casperlabs.io/#/fa
 casperlabs-client \
     --host deploy.casperlabs.io 
     bond 
-    --amount 1000 
-    --nonce 1 
+    --amount <bond-amount>
+    --nonce <nonce>
     --private-key <path-to-private-key>
+```
+
+##### Step 3: Start the Execution Engine
+
+```
+casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
 
 ##### Step 4: Start the Node
@@ -70,9 +76,10 @@ casperlabs-client \
     --private-key <path-to-private-key>
 ```
 
-After that, you can safely stop the node:
+After that, you can safely stop processes:
 ```
 pkill casperlabs-node
+pkill casperlabs-engine-grpc-server
 ```
 
 ### Running a single Node
