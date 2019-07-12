@@ -365,7 +365,7 @@ execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
 		.make/install/protoc
 	cd execution-engine/comm && \
-	cargo build --release
+	cargo --locked build --release
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.

@@ -67,8 +67,8 @@ pipeline:
   rust-compile-test-pr:
     commands:
       - "cd execution-engine/"
-      - "~/.cargo/bin/cargo build"
-      - "~/.cargo/bin/cargo test"
+      - "~/.cargo/bin/cargo --locked build"
+      - "~/.cargo/bin/cargo --locked test"
       - "./scripts/run-contract-tests.sh"
       - "cd ../long-running-tests"
       - "./build-contracts.sh"
@@ -127,8 +127,8 @@ pipeline:
   rust-compile-test-bors:
     commands:
       - "cd execution-engine/"
-      - "~/.cargo/bin/cargo build"
-      - "~/.cargo/bin/cargo test"
+      - "~/.cargo/bin/cargo --locked build"
+      - "~/.cargo/bin/cargo --locked test"
     image: "casperlabs/buildenv:latest"
     when:
       branch:
@@ -232,7 +232,7 @@ pipeline:
   rust-compile-for-make:
     commands:
       - "cd execution-engine/"
-      - "~/.cargo/bin/cargo build"
+      - "~/.cargo/bin/cargo --locked build"
     image: "casperlabs/buildenv:latest"
     when:
       branch:
