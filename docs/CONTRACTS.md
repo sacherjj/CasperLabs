@@ -5,12 +5,10 @@
 #### Using binaries (recommended):
 * Install [`rustup`](https://rustup.rs/).
 * Install the [`casperlabs`](INSTALL.md) package, which contains `casperlabs-client`.
-* Create [keys](KEYS.md#generating-account-keys).
 
 #### Building from source:
 * Install [`rustup`](https://rustup.rs/).
 * Build the [`casperlabs-client`](BUILD.md#build-the-client).
-* Create [keys](KEYS.md#generating-account-keys).
 
 If you build from source, you will need to add the build directories to your `PATH`, for example:
 ```
@@ -35,12 +33,20 @@ export COUNTER_DEFINE="$(pwd)/target/wasm32-unknown-unknown/release/counterdefin
 export COUNTER_CALL="$(pwd)/target/wasm32-unknown-unknown/release/countercall.wasm"
 ```
 
-##### Step 3: Deploy `counterdefine.wasm`
+##### Step 3: Create an account at [explorer.casperlabs.io](https://explorer.casperlabs.io)
+
+Create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine where you will deploy contracts.
+
+##### Step 4: Add coins to this account
+
+Add coins to this account using the [faucet](https://explorer.casperlabs.io/#/faucet).
+
+##### Step 5: Deploy `counterdefine.wasm`
 ```
 casperlabs-client \
     --host deploy.casperlabs.io \
     deploy \
-    --from $(cat <path-to-public-key>) \
+    --private-key <path-to-private-key> \
     --session $COUNTER_DEFINE \
     --nonce <nonce>
 ```
@@ -51,17 +57,17 @@ You should see the following output:
 Success!
 ```
 
-##### Step 4: Observe
+##### Step 6: Observe
 
 See the instructions [here](QUERYING.md).
 
 
-##### Step 5: Deploy `countercall.wasm`
+##### Step 7: Deploy `countercall.wasm`
 ```
 casperlabs-client \
     --host deploy.casperlabs.io \
     deploy \
-    --from $(cat <path-to-public-key>) \
+    --private-key <path-to-private-key> \
     --session $COUNTER_CALL \
     --nonce <nonce>
 ```
@@ -72,7 +78,7 @@ You should see the following output:
 Success!
 ```
 
-##### Step 6: Observe
+##### Step 8: Observe
 
 See the instructions [here](QUERYING.md).
 
@@ -82,13 +88,13 @@ For each account you have, you must keep track of the nonces you use and increme
 
 #### Using a local standalone node
 
-If you are testing with a local standalone node, you will need to change the `--host` argument:
+If you are testing with a [local standalone node](NODE.md#running-a-single-node), you will need to change the `--host` argument:
 
 ```
 casperlabs-client \
     --host 127.0.0.1 \
     deploy \
-    --from $(cat <path-to-public-key>) \
+    --private-key <path-to-private-key> \
     --session $COUNTER_DEFINE \
     --nonce <nonce>
 ```
