@@ -321,7 +321,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val address =
       opt[String](
         name = "address",
-        descr = "Account address in hex.",
+        descr = "Account's public key in hex.",
         required = true,
         validate = hexCheck
       )
