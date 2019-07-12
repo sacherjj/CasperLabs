@@ -1,69 +1,66 @@
 # CasperLabs Python Client API library and command line tool
 
-CasperLabs Python client is a library that can be used to issue requests
-to CasperLabs node's gRPC Deploy API. 
+CasperLabs Python client is a library that can be used to 
+interact with a CasperLabs node via its gRPC API. 
 
-It also provides command line interface with syntax compatible with the Scala client.
+The module also provides a command line interface (CLI).
 
 ## Installation
 
-You can install the `casperlabs-client` library with `pip install casperlabs-client` and then
-you can start using it in your programs.
+`casperlabs-client` is a Python 3.6 module, it does not support Python 2.7.
+You can install it with `pip install casperlabs-client`.
 
-## Development
+## Getting started 
 
-All the files matching `*_pb2.py`, `*_pb2_grpc.py` are generated from proto files.Presently, these files are
-not tracked in the repo, so you might not see them.  Please run `python run_codegen.py` see the generated python
-files.  Please do not modify them otherwise your changes will be overwritten and lost.
+After installing `casperlabs-client` you can start interacting with
+[CasperLabs devnet](https://explorer.casperlabs.io).
 
-Rest of the python files can be modified and committed to git repo.
-
-## Typical usage of the API
-
-Instantiate `CasperClient` and issue a requests.
-`CasperClient` constructor accepts hostname or IP of node on which gRPC service is running on 
-and the service's port.
-
-Both parameters of the CasperClient constructor are optional.
-By default the client will communicate with node running on
-localhost and listening on port 40401. 
 
 ```python
-from casper_client import CasperClient
-
-client = CasperClient('node1', 40402)
-
-response = client.deploy(from_=b"00000000000000000000",
-                         gas_limit=100000000,
-                         gas_price=1,
-                         session="session.wasm",
-                         payment="payment.wasm")
-if response.success:
-    print ('Deployed OK!')
-
+import casper_client
+client = casper_client.CasperClient('deploy.casperlabs.io', 40401)
+blockInfo = next(client.showBlocks(1, full_view=False))
+for bond in blockInfo.summary.header.state.bonds:
+    print(f'{bond.validator_public_key.hex()}: {bond.stake}')
 ```
 
-Methods of the `CasperClient` class define the Python API and correspond to requests defined in 
-[CasperMessage.proto](../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto).
+When executed the script should print a list of bonded validators' public keys
+and their stake:
 
+```
+89e744783c2d70902a5f2ef78e82e1f44102b5eb08ca6234241d95e50f615a6b: 5000000000
+1f66ea6321a48a935f66e97d4f7e60ee2d7fc9ccc62dfbe310f33b4839fc62eb: 8000000000
+569b41d574c46390212d698660b5326269ddb0a761d1294258897ac717b4958b: 4000000000
+d286526663ca3766c80781543a148c635f2388bfe128981c3e4ac69cea88dc35: 3000000000
+```
 
-User can instantiate several instances of `CasperClient` and configure them to
-communicate with nodes running on different machines:
+## Deploying smart contracts
+
+To deploy a smart contract to CasperLabs devnet you have to create an account
+using the [CasperLabs Explorer](https://explorer.casperlabs.io/#/)
+and transfer (free) tokens to the account from the faucet.
+
+An account address is just a public key looking like
+```
+89e744783c2d70902a5f2ef78e82e1f44102b5eb08ca6234241d95e50f615a6b
+```
+
+You also have to compile a contract to the [WASM](https://webassembly.org) format,
+see CasperLabs [contract examples](https://github.com/CasperLabs/contract-examples)
+to see example contracts and instructions on how to compile them.
+
+To deploy 
 
 ```python
-from casper_client import CasperClient
-
-client1 = CasperClient('node1host', 40401)
-client2 = CasperClient('node2host', 40401)
 ```
 
 ### Return values
 
 Return values of the API functions defined in the `CasperClient` are generally deserialized gRPC reponse objects 
-of the corresponding requests defined in the node's Deploy service, see 
-[CasperMessage.proto](../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto).
+of the corresponding requests defined in the node's gRPC service, see 
+[casper.proto]().
 
-Response to requests like `showBlocks` or `showMainChain` is a stream of objects (blocks).
+Response to requests like `showBlocks` or `showDeploys` is a stream of objects.
 Corresponding Python API functions return generator objects:
 
 ```python
