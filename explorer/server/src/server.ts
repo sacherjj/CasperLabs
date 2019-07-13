@@ -9,8 +9,8 @@ import { decodeBase64 } from "tweetnacl-util";
 // TODO: Everything in config.json could come from env vars.
 import config from "./config.json";
 import { BoundContract, Contract, Faucet } from "./lib/Contracts";
-import { Ed25519 } from "./lib/Keys";
 import DeployService from "./services/DeployService";
+import { Ed25519 } from "./shared/Keys";
 
 // https://auth0.com/docs/quickstart/spa/vanillajs/02-calling-an-api
 // https://github.com/auth0/express-jwt
