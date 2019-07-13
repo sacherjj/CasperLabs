@@ -18,8 +18,8 @@ import CasperContainer from './containers/CasperContainer';
 import AuthContainer from './containers/AuthContainer';
 import ErrorContainer from './containers/ErrorContainer';
 import FaucetService from './services/FaucetService';
-import Auth0Service from './services/Auth0Service';
 import CasperService from './services/CasperService';
+import { Auth0Service } from './services/AuthService';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;

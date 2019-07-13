@@ -3,14 +3,9 @@ import * as nacl from 'tweetnacl-ts';
 import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
 import FormData from './FormData';
-import Auth0Service from '../services/Auth0Service';
+import AuthService from '../services/AuthService';
 import { encodeBase64 } from '../lib/Conversions';
 
-// https://github.com/auth0/auth0-spa-js/issues/41
-// https://auth0.com/docs/quickstart/spa/vanillajs
-// https://auth0.com/docs/quickstart/spa/react
-// https://auth0.com/docs/api/management/v2/get-access-tokens-for-spas
-// https://auth0.com/docs/api/management/v2#!/Users/patch_users_by_id
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
 
@@ -25,20 +20,14 @@ export class AuthContainer {
 
   constructor(
     private errors: ErrorContainer,
-    private auth0Service: Auth0Service
+    private authService: AuthService
   ) {
     this.init();
   }
 
-  private getAuth0() {
-    return this.auth0Service.getAuth0();
-  }
-
   private async init() {
-    const auth0 = await this.getAuth0();
-
     if (window.location.search.includes('code=')) {
-      const { appState } = await auth0.handleRedirectCallback();
+      const { appState } = await this.authService.handleRedirectCallback();
       const url =
         appState && appState.targetUrl
           ? appState.targetUrl
@@ -50,34 +39,29 @@ export class AuthContainer {
   }
 
   async login() {
-    const auth0 = await this.getAuth0();
-    const isAuthenticated = await auth0.isAuthenticated();
+    const isAuthenticated = await this.authService.isAuthenticated();
     if (!isAuthenticated) {
-      await auth0.loginWithPopup({
-        response_type: 'token id_token'
-      } as PopupLoginOptions);
+      await this.authService.login();
     }
     this.fetchUser();
   }
 
   async logout() {
-    const auth0 = await this.getAuth0();
     this.user = null;
     this.accounts = null;
     sessionStorage.clear();
-    auth0.logout({ returnTo: window.location.origin });
+    this.authService.logout();
   }
 
   private async fetchUser() {
-    const auth0 = await this.getAuth0();
-    const isAuthenticated = await auth0.isAuthenticated();
-    this.user = isAuthenticated ? await auth0.getUser() : null;
+    const isAuthenticated = await this.authService.isAuthenticated();
+    this.user = isAuthenticated ? await this.authService.getUser() : null;
     this.refreshAccounts();
   }
 
   async refreshAccounts() {
     if (this.user != null) {
-      const meta: UserMetadata = await this.auth0Service.getUserMetadata(
+      const meta: UserMetadata = await this.authService.getUserMetadata(
         this.user.sub
       );
       this.accounts = meta.accounts || [];
@@ -119,7 +103,7 @@ export class AuthContainer {
   }
 
   private async saveAccounts() {
-    await this.auth0Service.updateUserMetadata(this.user!.sub, {
+    await this.authService.updateUserMetadata(this.user!.sub, {
       accounts: this.accounts || undefined
     });
   }

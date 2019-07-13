@@ -1,12 +1,12 @@
 import { decodeBase16 } from '../lib/Conversions';
-import Auth0Service from './Auth0Service';
+import AuthService from './AuthService';
 
 /** Call the API on the server backend. */
 export default class FaucetService {
-  constructor(private auth0Service: Auth0Service) {}
+  constructor(private authService: AuthService) {}
 
   async requestTokens(accountPublicKeyBase64: string): Promise<DeployHash> {
-    const token = await this.auth0Service.getToken();
+    const token = await this.authService.getToken();
     const response = await fetch('/api/faucet', {
       method: 'POST',
       headers: {
