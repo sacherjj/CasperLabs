@@ -146,8 +146,8 @@ export class MockAuthService implements AuthService {
 
   private authenticated = false;
 
-  async getToken(): Promise<string> {
-    throw new Error('Not implemented. The backend expects real Auth0 tokens.');
+  async getToken() {
+    return this.user.sub;
   }
 
   async getUserMetadata() {
