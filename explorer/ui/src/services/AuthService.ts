@@ -1,5 +1,6 @@
 import Auth0Client from '@auth0/auth0-spa-js/dist/typings/Auth0Client';
 import createAuth0Client from '@auth0/auth0-spa-js';
+import StorageCell from '../lib/StorageCell';
 
 // https://github.com/auth0/auth0-spa-js/issues/41
 // https://auth0.com/docs/quickstart/spa/vanillajs
@@ -24,6 +25,8 @@ export default interface AuthService {
 
   isAuthenticated(): Promise<Boolean>;
 
+  getUser(): Promise<User>;
+
   /** Show the login window. */
   login(): Promise<void>;
 
@@ -31,8 +34,6 @@ export default interface AuthService {
 
   /** Handle OAuth redirects and return application state. */
   handleRedirectCallback(): Promise<RedirectState>;
-
-  getUser(): Promise<User>;
 }
 
 /** This is our `audience` value when we want to interact with the user managmeent API. */
@@ -124,5 +125,64 @@ export class Auth0Service implements AuthService {
   async getUser() {
     const auth0 = await this.getAuth0();
     return await auth0.getUser();
+  }
+}
+
+/** Mock auth service for working offline. */
+export class MockAuthService implements AuthService {
+  private user: User = {
+    sub: 'mock|0',
+    name: 'Mr Mustermann'
+  };
+
+  private userMetadata = new StorageCell<UserMetadata>('mock-user-metadata', {
+    accounts: [
+      {
+        name: 'mock-account',
+        publicKeyBase64: 'BFSZ1RoBPgbGy7VzSEPPPH8I1mrzEtgSOP/rVCRPGAA='
+      }
+    ]
+  });
+
+  private authenticated = false;
+
+  async getToken(): Promise<string> {
+    throw new Error('Not implemented. The backend expects real Auth0 tokens.');
+  }
+
+  async getUserMetadata() {
+    return this.userMetadata.get;
+  }
+
+  async updateUserMetadata(userId: string, meta: UserMetadata) {
+    if (userId != this.user.sub) {
+      throw new Error('Can only save changes for the mock user.');
+    }
+    this.userMetadata.set(meta);
+  }
+
+  async isAuthenticated() {
+    return this.authenticated;
+  }
+
+  async getUser() {
+    if (!this.isAuthenticated) {
+      throw new Error('Call login first!');
+    }
+    return this.user;
+  }
+
+  async login() {
+    console.log(`Logging in as ${this.user.name}`);
+    this.authenticated = true;
+  }
+
+  async logout() {
+    this.authenticated = false;
+    window.location.assign(window.origin);
+  }
+
+  async handleRedirectCallback() {
+    return {};
   }
 }

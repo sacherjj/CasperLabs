@@ -54,6 +54,11 @@ const checkJwt = jwt({
 app.get("/config.js", (_, res) => {
   const conf = {
     auth0: config.auth0,
+    auth: {
+      mock: {
+        enabled: process.env.AUTH_MOCK_ENABLED === "true" || false
+      }
+    },
     grpc: {
       // In production we can leave this empty and then it should
       // connect to window.origin and be handled by nginx.
