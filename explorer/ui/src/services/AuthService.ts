@@ -155,7 +155,7 @@ export class MockAuthService implements AuthService {
   }
 
   async updateUserMetadata(userId: string, meta: UserMetadata) {
-    if (userId != this.user.sub) {
+    if (userId !== this.user.sub) {
       throw new Error('Can only save changes for the mock user.');
     }
     this.userMetadata.set(meta);

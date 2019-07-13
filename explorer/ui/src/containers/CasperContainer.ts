@@ -43,7 +43,7 @@ export class CasperContainer {
 
   private monitorFaucetRequest(account: UserAccount, deployHash: DeployHash) {
     const request = { timestamp: new Date(), account, deployHash };
-    const requests = this._faucetRequests.get.concat(request);
+    const requests = this._faucetRequests.get.splice(0, 0, request);
     this._faucetRequests.set(requests);
     this.startPollingFaucetStatus();
   }
@@ -86,7 +86,7 @@ export class CasperContainer {
   }
 
   private async tryGetDeployInfo(
-    deployHash: ByteArray
+    deployHash: DeployHash
   ): Promise<DeployInfo | null> {
     try {
       return await this.casperService.getDeployInfo(deployHash);

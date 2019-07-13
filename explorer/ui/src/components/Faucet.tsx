@@ -122,7 +122,7 @@ const StatusTable = observer(
     <DataTable
       title="Recent Faucet Requests"
       refresh={() => props.onRefresh()}
-      rows={props.requests.reverse()}
+      rows={props.requests}
       headers={['Timestamp', 'Account', 'Deploy Hash', 'Status']}
       renderRow={(request: FaucetRequest, idx: number) => {
         return (
@@ -143,7 +143,7 @@ const StatusCell = observer((props: { request: FaucetRequest }) => {
   const info = props.request.deployInfo;
   const iconAndMessage: () => [any, string | undefined] = () => {
     if (info) {
-      const attempts = info.processingResultsList.reverse();
+      const attempts = info.processingResultsList.slice().reverse();
       const success = attempts.find(x => !x.isError);
       const failure = attempts.find(x => x.isError);
       const blockHash = (result: DeployInfo.ProcessingResult.AsObject) =>
