@@ -176,7 +176,8 @@ impl bytesrepr::FromBytes for URef {
 impl bytesrepr::FromBytes for Vec<URef> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (size, mut stream): (u32, &[u8]) = bytesrepr::FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<URef> = Vec::with_capacity(size as usize);
+        let mut result = Vec::new();
+        result.try_reserve_exact(size as usize)?;
         for _ in 0..size {
             let (uref, rem): (URef, &[u8]) = bytesrepr::FromBytes::from_bytes(stream)?;
             result.push(uref);

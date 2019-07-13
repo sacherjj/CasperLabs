@@ -19,15 +19,19 @@ import AuthContainer from './containers/AuthContainer';
 import ErrorContainer from './containers/ErrorContainer';
 import FaucetService from './services/FaucetService';
 import Auth0Service from './services/Auth0Service';
+import CasperService from './services/CasperService';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
 
 const auth0Service = new Auth0Service(window.config.auth0);
 const faucetService = new FaucetService(auth0Service);
+const casperService = new CasperService(
+  window.config.grpc.url || window.origin
+);
 
 const errors = new ErrorContainer();
-const casper = new CasperContainer(errors, faucetService);
+const casper = new CasperContainer(errors, faucetService, casperService);
 const auth = new AuthContainer(errors, auth0Service);
 
 ReactDOM.render(

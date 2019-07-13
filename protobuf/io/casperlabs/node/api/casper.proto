@@ -111,6 +111,7 @@ message StateQuery {
         HASH = 1;
         UREF = 2;
         ADDRESS = 3;
+        LOCAL = 4;
     }
 }
 

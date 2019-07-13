@@ -174,10 +174,6 @@ object Validate {
       _ <- Validate.timestamp[F](summary)
       _ <- Validate.blockNumber[F](summary, dag)
       _ <- Validate.sequenceNumber[F](summary, dag)
-      _ <- maybeGenesis.filterNot(_.blockHash == summary.blockHash).fold(().pure[F]) { genesis =>
-            Validate.justificationFollows[F](summary) *>
-              Validate.justificationRegressions[F](summary, genesis, dag)
-          }
       // Checks that need the body.
       _ <- Validate.blockHash[F](block)
       _ <- Validate.deployCount[F](block)
@@ -611,122 +607,6 @@ object Validate {
           }
     } yield merged
   }
-
-  /*
-   * This check must come before Validate.parents
-   */
-  def justificationFollows[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
-      b: BlockSummary
-  ): F[Unit] = {
-    val raiseNoParent =
-      Log[F].warn(ignore(b, s"doesn't have a parent.")) *>
-        RaiseValidationError[F].raise[Unit](InvalidFollows)
-    for {
-      _                   <- raiseNoParent.whenA(b.getHeader.parentHashes.isEmpty)
-      justifiedValidators = b.getHeader.justifications.map(_.validatorPublicKey).toSet
-      mainParentHash      = b.getHeader.parentHashes.head
-      mainParent          <- ProtoUtil.unsafeGetBlockSummary[F](mainParentHash)
-      bondedValidators    = ProtoUtil.bonds(mainParent).map(_.validatorPublicKey).toSet
-      status <- if (bondedValidators == justifiedValidators) {
-                 Applicative[F].unit
-               } else {
-                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString)
-                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString)
-                 for {
-                   _ <- Log[F].warn(
-                         ignore(
-                           b,
-                           s"the justified validators, ${justifiedValidatorsPP}, do not match the bonded validators, ${bondedValidatorsPP}."
-                         )
-                       )
-                   _ <- RaiseValidationError[F].raise[Unit](InvalidFollows)
-                 } yield ()
-               }
-    } yield status
-  }
-
-  /*
-   * When we switch between equivocation forks for a slashed validator, we will potentially get a
-   * justification regression that is valid. We cannot ignore this as the creator only drops the
-   * justification block created by the equivocator on the following block.
-   * Hence, we ignore justification regressions involving the block's sender and
-   * let checkEquivocations handle it instead.
-   */
-  def justificationRegressions[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
-      b: BlockSummary,
-      genesis: Block,
-      dag: BlockDagRepresentation[F]
-  ): F[Unit] = {
-    val latestMessagesOfBlock = ProtoUtil.toLatestMessageHashes(b.getHeader.justifications)
-    for {
-      maybeLatestMessage <- dag.latestMessage(b.getHeader.validatorPublicKey)
-      maybeLatestMessagesFromSenderView = maybeLatestMessage.map(
-        bm => ProtoUtil.toLatestMessageHashes(bm.justifications)
-      )
-      result <- maybeLatestMessagesFromSenderView match {
-                 case Some(latestMessagesFromSenderView) =>
-                   justificationRegressionsAux[F](
-                     b,
-                     latestMessagesOfBlock,
-                     latestMessagesFromSenderView,
-                     genesis
-                   )
-                 case None =>
-                   // We cannot have a justification regression if we don't have a previous latest message from sender
-                   Applicative[F].unit
-               }
-    } yield result
-  }
-
-  private def justificationRegressionsAux[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
-      b: BlockSummary,
-      latestMessagesOfBlock: Map[Validator, BlockHash],
-      latestMessagesFromSenderView: Map[Validator, BlockHash],
-      genesis: Block
-  ): F[Unit] =
-    for {
-      containsJustificationRegression <- latestMessagesOfBlock.toList.existsM {
-                                          case (validator, currentBlockJustificationHash) =>
-                                            if (validator == b.getHeader.validatorPublicKey) {
-                                              // We let checkEquivocations handle this case
-                                              false.pure[F]
-                                            } else {
-                                              val previousBlockJustificationHash =
-                                                latestMessagesFromSenderView.getOrElse(
-                                                  validator,
-                                                  genesis.blockHash
-                                                )
-                                              isJustificationRegression[F](
-                                                currentBlockJustificationHash,
-                                                previousBlockJustificationHash
-                                              )
-                                            }
-                                        }
-      _ <- if (containsJustificationRegression) {
-            for {
-              _ <- Log[F].warn(ignore(b, "block contains justification regressions."))
-              _ <- RaiseValidationError[F].raise[Unit](JustificationRegression)
-            } yield ()
-          } else {
-            Applicative[F].unit
-          }
-    } yield ()
-
-  private def isJustificationRegression[F[_]: MonadThrowable: Log: BlockStore](
-      currentBlockJustificationHash: BlockHash,
-      previousBlockJustificationHash: BlockHash
-  ): F[Boolean] =
-    for {
-      currentBlockJustification <- ProtoUtil
-                                    .unsafeGetBlockSummary[F](currentBlockJustificationHash)
-      previousBlockJustification <- ProtoUtil
-                                     .unsafeGetBlockSummary[F](previousBlockJustificationHash)
-    } yield
-      if (currentBlockJustification.getHeader.validatorBlockSeqNum < previousBlockJustification.getHeader.validatorBlockSeqNum) {
-        true
-      } else {
-        false
-      }
 
   // Validates whether received block is valid (according to that nodes logic):
   // 1) Validates whether pre state hashes match

@@ -184,7 +184,8 @@ impl FromBytes for Key {
 impl FromBytes for Vec<Key> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (size, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<Key> = Vec::with_capacity((size as usize) * UREF_SIZE);
+        let mut result = Vec::new();
+        result.try_reserve_exact(size as usize)?;
         let mut stream = rest;
         for _ in 0..size {
             let (t, rem): (Key, &[u8]) = FromBytes::from_bytes(stream)?;
@@ -214,9 +215,11 @@ impl ToBytes for Vec<Key> {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
+    use crate::bytesrepr::{Error, FromBytes};
     use crate::key::Key;
     use crate::uref::{AccessRights, URef};
     use alloc::string::String;
+    use alloc::vec::Vec;
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)
@@ -287,5 +290,12 @@ mod tests {
             format!("{}", local_key),
             format!("Key::Local({})", expected_hash)
         );
+    }
+    #[test]
+    fn abuse_vec_key() {
+        // Prefix is 2^32-1 = shouldn't allocate that much
+        let bytes: Vec<u8> = vec![255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let res: Result<(Vec<Key>, &[u8]), _> = FromBytes::from_bytes(&bytes);
+        assert_eq!(res.expect_err("should fail"), Error::OutOfMemoryError);
     }
 }

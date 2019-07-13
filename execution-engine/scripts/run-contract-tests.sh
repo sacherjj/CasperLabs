@@ -20,6 +20,7 @@ CONTRACTS=(
     "main-purse"
     "blessed-urefs-access-rights"
     "transfer-purse-to-account"
+    "deserialize-error"
 )
 
 source "${HOME}/.cargo/env"
