@@ -33,7 +33,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "casperlabs-contract-ffi"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -102,7 +102,7 @@ dependencies = [
 name = "faucet"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.8.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -380,7 +380,7 @@ dependencies = [
 name = "transfer"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.8.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]

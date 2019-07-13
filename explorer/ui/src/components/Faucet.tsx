@@ -7,7 +7,6 @@ import { RefreshableComponent, Button, CommandLineHint, Icon } from './Utils';
 import DataTable from './DataTable';
 import { base64to16, encodeBase16 } from '../lib/Conversions';
 import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
-import { classExpression } from '@babel/types';
 
 interface Props {
   auth: AuthContainer;
@@ -99,6 +98,7 @@ const CliHint = observer((props: { requests: FaucetRequest[] }) =>
         <a
           href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md#cli-client-tool-1"
           target="_blank"
+          rel="noopener noreferrer"
         >
           casperlabs-client
         </a>

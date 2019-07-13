@@ -9,6 +9,7 @@ const Explorer = () => (
       <a
         href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker#visualizing-the-dag"
         target="_blank"
+        rel="noopener noreferrer"
       >
         visualize
       </a>{' '}

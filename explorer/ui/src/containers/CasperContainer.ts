@@ -1,4 +1,4 @@
-import { computed, observable } from 'mobx';
+import { computed } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import StorageCell from '../lib/StorageCell';
@@ -7,7 +7,6 @@ import CasperService from '../services/CasperService';
 import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import { GrpcError } from '../services/Errors';
 import { grpc } from '@improbable-eng/grpc-web';
-import { encodeBase16 } from '../lib/Conversions';
 
 // CasperContainer talks to the API on behalf of React
 // components and exposes the state in MobX observables.
