@@ -60,10 +60,10 @@ const ARG_PAGES_SHORT: &str = "p";
 const ARG_PAGES_VALUE: &str = "NUM";
 const ARG_PAGES_HELP: &str = "Sets the max number of pages to use for lmdb's mmap";
 const GET_PAGES_EXPECT: &str = "Could not parse pages argument";
-// 1 GiB = 1073741824 bytes
+// 750 GiB = 805306368000 bytes
 // page size on x86_64 linux = 4096 bytes
-// 1073741824 / 4096 = 262144
-const DEFAULT_PAGES: usize = 262_144;
+// 805306368000 / 4096 = 196608000
+const DEFAULT_PAGES: usize = 196_608_000;
 
 // socket
 const ARG_SOCKET: &str = "socket";

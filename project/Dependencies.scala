@@ -86,6 +86,7 @@ object Dependencies {
   val secp256k1Java = "com.github.rchain" % "secp256k1-java" % "0.1"
   val tomlScala     = "tech.sparse"       %% "toml-scala"    % "0.1.1"
   val refinement    = "eu.timepit"        %% "refined"       % "0.9.5"
+  val apacheCommons = "commons-io" % "commons-io" % "2.6"
 
   val overrides = Seq(
     catsCore,

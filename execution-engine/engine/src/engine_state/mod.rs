@@ -67,7 +67,7 @@ where
             protocol_version,
         )?;
         let mut state_guard = self.state.lock();
-        let prestate_hash = state_guard.current_root();
+        let prestate_hash = state_guard.empty_root();
         let commit_result = state_guard
             .commit(correlation_id, prestate_hash, effects.transforms.to_owned())
             .map_err(Into::into)?;

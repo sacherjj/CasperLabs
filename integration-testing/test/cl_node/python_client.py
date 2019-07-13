@@ -4,13 +4,14 @@ import logging
 
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.nonce_registry import NonceRegistry
-from casper_client import CasperClient
+from casper_client import CasperClient, ABI
 
 
 class PythonClient(CasperLabsClient):
 
     def __init__(self, node: 'DockerNode'):
         self.node = node
+        self.abi = ABI
         # If $TAG_NAME is set it means we are running in docker, see docker_run_test.sh
         host = os.environ.get('TAG_NAME', None) and self.node.container_name or 'localhost'
 
@@ -69,9 +70,8 @@ class PythonClient(CasperLabsClient):
     def query_state(self, block_hash: str, key: str, path: str, key_type: str):
         return self.client.queryState(block_hash, key, path, key_type)
 
-    def show_block(self, block_hash: str) -> str:
-        # TODO:
-        raise Exception("Not implemented yet")
+    def show_block(self, block_hash: str):
+        return self.client.showBlock(block_hash)
 
     def show_blocks(self, depth: int):
         return self.client.showBlocks(depth)
@@ -79,8 +79,8 @@ class PythonClient(CasperLabsClient):
     def get_blocks_count(self, depth: int) -> int:
         return len(list(self.show_blocks(depth)))
 
-    def show_deploys(self, hash: str):
-        raise Exception("Not implemented yet")
+    def show_deploys(self, block_hash: str):
+        return self.client.showDeploys(block_hash)
 
-    def show_deploy(self, hash: str):
-        raise Exception("Not implemented yet")
+    def show_deploy(self, deploy_hash: str):
+        return self.client.showDeploy(deploy_hash)

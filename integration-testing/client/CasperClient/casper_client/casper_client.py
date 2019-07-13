@@ -7,7 +7,6 @@ import time
 import argparse
 import grpc
 import functools
-import pathlib
 from pyblake2 import blake2b
 import ed25519
 import struct
@@ -15,10 +14,9 @@ import json
 from operator import add
 from functools import reduce
 
-
-# ~/CasperLabs/protobuf/io/casperlabs/casper/protocol/CasperMessage.proto
-from . import CasperMessage_pb2
-from .CasperMessage_pb2_grpc import DeployServiceStub
+# ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
+from .control_pb2_grpc import ControlServiceStub
+from . import control_pb2 as control
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
 from . import casper_pb2 as casper
@@ -26,6 +24,9 @@ from .casper_pb2_grpc import CasperServiceStub
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
 from . import consensus_pb2 as consensus
+
+# ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
+from . import info_pb2 as info
 
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 40401
@@ -51,7 +52,7 @@ class ABI:
     @staticmethod
     def account(a: bytes):
         if len(a) != 32:
-            raise Error('Account must be 32 bytes long')
+            raise Exception('Account must be 32 bytes long')
         return ABI.byte_array(a)
 
     @staticmethod
@@ -72,27 +73,26 @@ class ABI:
 
         for arg in args:
             if len(arg) != 1:
-                raise Error(f'Wrong encoding of value in {arg}. Only one pair of type and value allowed.')
+                raise Exception(f'Wrong encoding of value in {arg}. Only one pair of type and value allowed.')
 
         def python_value(typ, value: str):
             if typ in ('u32', 'u64'):
-                return int(value) 
-            return bytearray(value, 'utf-8')
+                return int(value)
+            elif typ == 'account':
+                return bytearray.fromhex(value)
+            raise ValueError(f"Unknown type {typ}, expected ('u32', 'u64', 'account')")
 
         def encode(typ: str, value: str) -> bytes:
-            try:
-                v = python_value(typ, value)
-                return getattr(ABI, typ)(v)
-            except KeyError:
-                raise Error(f'Unknown type {typ} in {{typ: value}}')
+            v = python_value(typ, value)
+            return getattr(ABI, typ)(v)
 
         def only_one(arg):
             items = list(arg.items())
             if len(items) != 1:
-                raise Error("Only one pair {'type', 'value'} allowed.")
+                raise Exception("Only one pair {'type', 'value'} allowed.")
             return items[0]
 
-        return ABI.args([encode(*only_one(arg)) for arg in args]) 
+        return ABI.args([encode(*only_one(arg)) for arg in args])
 
 
 class InternalError(Exception):
@@ -105,7 +105,7 @@ class InternalError(Exception):
     pass
 
 
-def guarded(function):
+def api(function):
     """
     Decorator of API functions that protects user code from
     unknown exceptions raised by gRPC or internal API errors.
@@ -158,15 +158,15 @@ class CasperClient:
 
                 def g(*args):
                     with grpc.insecure_channel(address) as channel:
-                        yield from getattr(self.serviceStub(channel), name[:-1])(*args)
+                        yield from getattr(self.serviceStub(channel), name[:-len('_stream')])(*args)
 
-                return name.endswith('_') and g or f
+                return name.endswith('_stream') and g or f
 
-        self.node = GRPCService(self.port, DeployServiceStub)
         self.casperService = GRPCService(self.port, CasperServiceStub)
+        self.controlService = GRPCService(self.internal_port, ControlServiceStub)
 
-    @guarded
-    def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
+    @api
+    def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = 10, 
                payment: str = None, session: str = None, nonce: int = 0,
                public_key: str = None, private_key: str = None, args: bytes = None):
         """
@@ -189,6 +189,8 @@ class CasperClient:
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
+        payment = payment or session
+
         def hash(data: bytes) -> bytes:
             h = blake2b(digest_size=32)
             h.update(data)
@@ -201,7 +203,6 @@ class CasperClient:
         def read_code(file_name: str, abi_encoded_args: bytes = None):
             return consensus.Deploy.Code(code = read_binary(file_name),
                                          args = abi_encoded_args)
-
 
         def sign(data: bytes):
             return (private_key
@@ -234,37 +235,47 @@ class CasperClient:
 
         return self.casperService.Deploy(casper.DeployRequest(deploy = d)), deploy_hash
 
-
-    @guarded
-    def showBlocks(self, depth: int = 1):
+    @api
+    def showBlocks(self, depth: int=1, max_rank=0, full_view=True):
         """
-        Yields list of blocks in the current Casper view on an existing running node.
+        Get slices of the DAG, going backwards, rank by rank.
 
-        :param depth: lists blocks to the given depth in terms of block height
-        :return: generator of blocks
+        :param depth:     How many of the top ranks of the DAG to show.
+        :param max_rank:  Maximum rank to go back from.
+                          0 means go from the current tip of the DAG.
+        :param full_view: Full view if True, otherwise basic.
+        :return:          Generator of block info objects.
         """
-        yield from self.node.showBlocks_(CasperMessage_pb2.BlocksQuery(depth=depth))
+        yield from self.casperService.StreamBlockInfos_stream(
+            casper.StreamBlockInfosRequest(depth=depth,
+                                           max_rank=max_rank,
+                                           view=(full_view and info.BlockInfo.View.FULL
+                                                 or info.BlockInfo.View.BASIC)))
 
-    @guarded
-    def showBlock(self, hash: str):
+    @api
+    def showBlock(self, block_hash_base16: str, full_view=True):
         """
-        Return object describing a block known by Casper on an existing running node.
+        Returns object describing a block known by Casper on an existing running node.
 
-        :param hash:  hash of the block to be retrieved
-        :return:      object representing the retrieved block
+        :param hash:      hash of the block to be retrieved
+        :param full_view: full view if True, otherwise basic
+        :return:          object representing the retrieved block
         """
-        return self.node.showBlock(CasperMessage_pb2.BlockQuery(hash=hash))
+        return self.casperService.GetBlockInfo(
+                casper.GetBlockInfoRequest(block_hash_base16=block_hash_base16,
+                                           view=(full_view and info.BlockInfo.View.FULL
+                                                 or info.BlockInfo.View.BASIC)))
 
-    @guarded
+    @api
     def propose(self):
         """"
-        Force a node to propose a block based on its accumulated deploys.
+        Propose a block using deploys in the pool.
 
-        :return:    response object
+        :return:    response object with block_hash
         """
-        return self.node.createBlock(CasperMessage_pb2.empty__pb2.Empty())
+        return self.controlService.Propose(control.ProposeRequest())
 
-    @guarded
+    @api
     def visualizeDag(self, depth: int, out: str = None, show_justification_lines: bool = False, stream: str = None):
         """
         Retrieve DAG in DOT format.
@@ -279,11 +290,9 @@ class CasperClient:
                                           valid values are 'single-output', 'multiple-outputs'
         :return:                          VisualizeBlocksResponse object
         """
-        # TODO: handle stream parameter
-        return self.node.visualizeDag(
-            CasperMessage_pb2.VisualizeDagQuery(depth=depth, showJustificationLines=show_justification_lines))
+        raise Exception('Not implemented yet')
 
-    @guarded
+    @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
         """
         Query a value in the global state.
@@ -311,35 +320,26 @@ class CasperClient:
                                                     key_base16 = key,
                                                     path_segments = path_segments(path))))
 
-    @guarded
-    def showMainChain(self, depth: int):
+
+    @api
+    def showDeploy(self, deploy_hash_base16: str, full_view=True):
         """
-        TODO: this is not implemented in the Scala client, need to find out docs.
-
-        rpc showMainChain (BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
-
-        :param depth:
-        :return:
+        Retrieve information about a single deploy by hash.
         """
-        yield from self.node.showMainChain_(CasperMessage_pb2.BlocksQuery(depth=depth))
+        return self.casperService.GetDeployInfo(
+                casper.GetDeployInfoRequest(deploy_hash_base16=deploy_hash_base16,
+                                            view=(full_view and info.DeployInfo.View.FULL
+                                                  or info.DeployInfo.View.BASIC)))
 
-    @guarded
-    def findBlockWithDeploy(self, user: bytes, timestamp: int):
+    @api
+    def showDeploys(self, block_hash_base16: str, full_view=True):
         """
-        TODO: this is not implemented in the Scala client, need to find out docs.
-
-        rpc findBlockWithDeploy (FindDeployInBlockQuery) returns (BlockQueryResponse) {}
-
-        message FindDeployInBlockQuery {
-            bytes user = 1;
-           int64 timestamp = 2;
-        }
-
-        :param user:
-        :param timestamp:
-        :return:
+        Get the processed deploys within a block.
         """
-        return self.node.findBlockWithDeploy(CasperMessage_pb2.FindDeployInBlockQuery(user=user, timestamp=timestamp))
+        yield from self.casperService.StreamBlockDeploys_stream(
+                    casper.StreamBlockDeploysRequest(block_hash_base16=block_hash_base16,
+                                                     view=(full_view and info.DeployInfo.View.FULL
+                                                           or info.DeployInfo.View.BASIC)))
 
 
 def guarded_command(function):
@@ -391,7 +391,7 @@ def deploy_command(casper_client, args):
     response, deploy_hash = casper_client.deploy(getattr(args,'from'),
                                                  args.gas_limit,
                                                  args.gas_price, 
-                                                 args.payment,
+                                                 args.payment or args.session,
                                                  args.session,
                                                  args.nonce,
                                                  args.public_key or None,
@@ -435,15 +435,16 @@ def query_state_command(casper_client, args):
 
 
 @guarded_command
-def show_main_chain_command(casper_client, args):
-    response = casper_client.showMainChain(args.depth)
-    _show_blocks(response)
-
+def show_deploy_command(casper_client, args):
+    response = casper_client.showDeploy(args.hash)
+    print (response)
+    
 
 @guarded_command
-def find_block_with_deploy_command(casper_client, args):
-    response = casper_client.findBlockWithDeploy(args.user, args.timestamp)
-    return _show_block(response)
+def show_deploys_command(casper_client, args):
+    response = casper_client.showDeploys(args.hash)
+    for deployInfo in response:
+        print(response)
 
 
 def command_line_tool():
@@ -482,11 +483,11 @@ def command_line_tool():
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
                       [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
                        [('-g', '--gas-limit'), dict(required=True, type=int, help='[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')],
-                       [('--gas-price',), dict(required=True, type=int, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
-                       [('-n', '--nonce'), dict(required=False, type=int, default=0, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
-                       [('-p', '--payment'), dict(required=True, type=str, help='Path to the file with payment code')],
+                       [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
+                       [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
+                       [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
                        [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
-                       [('--args'), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
+                       [('--args',), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
                        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
                        [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 
@@ -498,6 +499,11 @@ def command_line_tool():
     parser.addCommand('show-blocks', show_blocks_command, 'View list of blocks in the current Casper view on an existing running node.',
                       [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')]])
 
+    parser.addCommand('show-deploy', show_deploy_command, 'View properties of a deploy known by Casper on an existing running node.',
+                      [[('hash',), dict(type=str, help='Value of the deploy hash, base16 encoded.')]])
+
+    parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
+                      [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
 
     parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
                       [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')],
@@ -510,13 +516,6 @@ def command_line_tool():
                        [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
                        [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
                        [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address'), help="Type of base key. Must be one of 'hash', 'uref', 'address'")]])
-
-    parser.addCommand('show-main-chain', show_main_chain_command, 'Show main chain',
-                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')]])
-
-    parser.addCommand('find-block-with-deploy', find_block_with_deploy_command, 'Find block with deploy',
-                      [[('-u', '--user'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help="User")],
-                       [('-t', '--timestamp'), dict(required=True, type=int, help="Time in seconds since the epoch as an integer")]])
 
     sys.exit(parser.run())
 

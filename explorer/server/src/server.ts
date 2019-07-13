@@ -50,6 +50,20 @@ const checkJwt = jwt({
   }),
 });
 
+// Render the `config.js` file dynamically.
+app.get("/config.js", (_, res) => {
+  const conf = {
+    auth0: config.auth0,
+    grpc: {
+      // In production we can leave this empty and then it should
+      // connect to window.origin and be handled by nginx.
+      url: process.env.UI_GRPC_URL
+    }
+  };
+  res.header("Content-Type", "application/javascript");
+  res.send(`var config = ${JSON.stringify(conf, null, 2)};`);
+});
+
 // Serve the static files of the UI
 // Serve the static files of the UI.
 // STATIC_ROOT needs to be an absolute path, otherwise we assume we'll use the `ui` projec's build output.
@@ -62,8 +76,6 @@ app.use(express.static(staticRoot));
 app.get("/", (_, res) => {
   res.sendFile(path.join(staticRoot, "index.html"));
 });
-
-// TODO: Render the `config.js` file dynamically.
 
 // Parse JSON sent in the body.
 app.use(express.json());

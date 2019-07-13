@@ -1,7 +1,8 @@
 package io.casperlabs.client
-import java.io.File
+import java.io._
+import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.util
 
 import cats.effect.{Sync, Timer}
 import cats.implicits._
@@ -9,16 +10,20 @@ import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import org.apache.commons.io._
 
 import scala.concurrent.duration._
 import scala.language.higherKinds
 import scala.util.Try
 
 object DeployRuntime {
+
+  val BONDING_WASM_FILE   = "bonding.wasm"
+  val UNBONDING_WASM_FILE = "unbonding.wasm"
 
   def propose[F[_]: Sync: DeployService](): F[Unit] =
     gracefulExit(
@@ -39,13 +44,126 @@ object DeployRuntime {
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(depth))
 
+  def unbond[F[_]: Sync: DeployService](
+      maybeAmount: Option[Long],
+      nonce: Long,
+      sessionCode: Option[File],
+      privateKeyFile: File
+  ): F[Unit] = {
+    val args: Array[Array[Byte]] = Array(
+      serializeOption(maybeAmount, serializeLong)
+    )
+    val argsSer = serializeArgs(args)
+
+    val inputStream = readFileOrDefault(sessionCode, UNBONDING_WASM_FILE)
+    val ba = {
+      val baos = new ByteArrayOutputStream()
+      IOUtils.copy(inputStream, baos)
+      baos.toByteArray
+    }
+
+    val sessionInputStream = new ByteArrayInputStream(ba)
+    // currently, sessionCode == paymentCode in order to get some gas limit for the execution
+    val paymentInputStream = new ByteArrayInputStream(ba)
+
+    deployFileProgram[F](
+      None,
+      nonce,
+      sessionInputStream,
+      paymentInputStream,
+      None,
+      Some(privateKeyFile),
+      10L, // gas price is fixed at the moment for 10:1
+      ByteString.copyFrom(argsSer)
+    )
+  }
+
+  def bond[F[_]: Sync: DeployService](
+      amount: Long,
+      nonce: Long,
+      sessionCode: Option[File],
+      privateKeyFile: File
+  ): F[Unit] = {
+    val args: Array[Array[Byte]] = Array(serializeLong(amount))
+    val argsSer: Array[Byte]     = serializeArgs(args)
+
+    val inputStream = readFileOrDefault(sessionCode, BONDING_WASM_FILE)
+    val ba = {
+      val baos = new ByteArrayOutputStream()
+      IOUtils.copy(inputStream, baos)
+      baos.toByteArray
+    }
+
+    val sessionInputStream = new ByteArrayInputStream(ba)
+    // currently, sessionCode == paymentCode in order to get some gas limit for the execution
+    val paymentInputStream = new ByteArrayInputStream(ba)
+
+    deployFileProgram[F](
+      None,
+      nonce,
+      sessionInputStream,
+      paymentInputStream,
+      None,
+      Some(privateKeyFile),
+      10L, // gas price is fixed at the moment for 10:1
+      ByteString.copyFrom(argsSer)
+    )
+  }
+
   def queryState[F[_]: Sync: DeployService](
       blockHash: String,
       keyVariant: String,
       keyValue: String,
       path: String
   ): F[Unit] =
-    gracefulExit(DeployService[F].queryState(blockHash, keyVariant, keyValue, path))
+    gracefulExit(
+      DeployService[F]
+        .queryState(blockHash, keyVariant, keyValue, path)
+        .map(_.map(Printer.printToUnicodeString(_)))
+    )
+
+  def balance[F[_]: Sync: DeployService](address: String, blockHash: String): F[Unit] =
+    gracefulExit {
+      (for {
+        value <- DeployService[F].queryState(blockHash, "address", address, "").rethrow
+        _ <- Sync[F]
+              .raiseError(new IllegalStateException(s"Expected Account type value under $address."))
+              .whenA(!value.value.isAccount)
+        account = value.getAccount
+        mintPublic <- Sync[F].fromOption(
+                       account.knownUrefs.find(_.name == "mint").flatMap(_.key),
+                       new IllegalStateException(
+                         "Account's known_urefs map did not contain Mint contract address."
+                       )
+                     )
+        mintPrivate <- DeployService[F]
+                        .queryState(
+                          blockHash,
+                          "uref",
+                          Base16.encode(mintPublic.getUref.uref.toByteArray), // I am assuming that "mint" points to URef type key.
+                          ""
+                        )
+                        .rethrow
+        localKeyValue = {
+          val mintPrivateHex = Base16.encode(mintPrivate.getKey.getUref.uref.toByteArray) // Assuming that `mint_private` is of `URef` type.
+          val purseAddrHex = {
+            val purseAddr    = account.getPurseId.uref.toByteArray
+            val purseAddrSer = serializeArray(purseAddr)
+            Base16.encode(purseAddrSer)
+          }
+          s"$mintPrivateHex:$purseAddrHex"
+        }
+        balanceURef <- DeployService[F].queryState(blockHash, "local", localKeyValue, "").rethrow
+        balance <- DeployService[F]
+                    .queryState(
+                      blockHash,
+                      "uref",
+                      Base16.encode(balanceURef.getKey.getUref.uref.toByteArray),
+                      ""
+                    )
+                    .rethrow
+      } yield s"Balance:\n$address : ${balance.getBigInt.value}").attempt
+    }
 
   def visualizeDag[F[_]: Sync: DeployService: Timer](
       depth: Int,
@@ -121,26 +239,25 @@ object DeployRuntime {
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[String],
       nonce: Long,
-      sessionCode: File,
-      paymentCode: File,
+      sessionCode: InputStream,
+      paymentCode: InputStream,
       maybePublicKeyFile: Option[File],
       maybePrivateKeyFile: Option[File],
-      gasPrice: Long
+      gasPrice: Long,
+      sessionArgs: ByteString = ByteString.EMPTY
   ): F[Unit] = {
-    def readFile(file: File): F[ByteString] =
-      Sync[F].fromTry(
-        Try(ByteString.copyFrom(Files.readAllBytes(file.toPath)))
-      )
+    def readBytes(is: InputStream): F[Array[Byte]] =
+      Sync[F].fromTry(Try(IOUtils.toByteArray(is)))
 
     def readFileAsString(file: File): F[String] =
       for {
-        raw <- readFile(file)
-        str = new String(raw.toByteArray, StandardCharsets.UTF_8)
+        raw <- readBytes(new FileInputStream(file))
+        str = new String(raw, StandardCharsets.UTF_8)
       } yield str
 
     val deploy = for {
-      session <- readFile(sessionCode)
-      payment <- readFile(paymentCode)
+      session <- readBytes(sessionCode).map(ByteString.copyFrom(_))
+      payment <- readBytes(paymentCode).map(ByteString.copyFrom(_))
       maybePrivateKey <- {
         maybePrivateKeyFile.fold(none[PrivateKey].pure[F]) { file =>
           readFileAsString(file).map(Ed25519.tryParsePrivateKey)
@@ -176,7 +293,7 @@ object DeployRuntime {
         .withBody(
           consensus.Deploy
             .Body()
-            .withSession(consensus.Deploy.Code().withCode(session))
+            .withSession(consensus.Deploy.Code().withCode(session).withArgs(sessionArgs))
             .withPayment(consensus.Deploy.Code().withCode(payment))
         )
         .withHashes
@@ -216,6 +333,46 @@ object DeployRuntime {
   private def hash[T <: scalapb.GeneratedMessage](data: T): ByteString =
     ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
 
+  // When not provided fallbacks to the contract version packaged with the client.
+  private def readFileOrDefault(file: Option[File], defaultName: String): InputStream =
+    file
+      .map(new FileInputStream(_))
+      .getOrElse(getClass.getClassLoader.getResourceAsStream(defaultName))
+
+  private def serializeLong(l: Long): Array[Byte] =
+    java.nio.ByteBuffer
+      .allocate(8)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .putLong(l)
+      .array()
+
+  private def serializeInt(i: Int): Array[Byte] =
+    java.nio.ByteBuffer
+      .allocate(4)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .putInt(i)
+      .array()
+
+  // Option serializes as follows:
+  // None:        [0]
+  // Some(value): [1] ++ serialized value
+  private def serializeOption[T](in: Option[T], fSer: T => Array[Byte]): Array[Byte] =
+    in.map(value => Array[Byte](1) ++ fSer(value)).getOrElse(Array[Byte](0))
+
+  // This is true for any array but I didn't want to go as far as writing type classes.
+  // Binary format of an array is constructed from:
+  // length (u64/integer in binary) ++ bytes
+  private def serializeArray(ba: Array[Byte]): Array[Byte] = {
+    val serLen = serializeInt(ba.length)
+    serLen ++ ba
+  }
+
+  private def serializeArgs(args: Array[Array[Byte]]): Array[Byte] = {
+    val argsBytes    = args.flatMap(serializeArray)
+    val argsBytesLen = serializeInt(args.length)
+    argsBytesLen ++ argsBytes
+  }
+
   implicit class DeployOps(d: consensus.Deploy) {
     def withHashes = {
       val h = d.getHeader.withBodyHash(hash(d.getBody))
@@ -239,5 +396,4 @@ object DeployRuntime {
       )
     }
   }
-
 }
