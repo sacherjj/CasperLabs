@@ -6,6 +6,8 @@ This is the server side component for the CasperLabs Explorer:
 
 ## Available scripts
 
+NOTE: When the server is run in development mode it uses environment variables from `.env` and saves the nonce to `nonce.txt`. Whenever the docker network is torn down and brougth back up, the `nonce.txt` should be manually deleted and the server restarted to bring the faucet back to initial state as well.
+
 ### `npm run dev`
 
 Rebuilds and restarts the server whenever there's a source code change.
