@@ -1,7 +1,7 @@
 import commandLineArgs from "command-line-args";
 import { Contract, Transfer } from "./lib/Contracts";
+import { Ed25519 } from "./lib/Keys";
 import DeployService from "./services/DeployService";
-import { Ed25519 } from "./shared/Keys";
 
 // https://www.npmjs.com/package/command-line-args
 

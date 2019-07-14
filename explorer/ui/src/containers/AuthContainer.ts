@@ -76,7 +76,6 @@ export class AuthContainer {
         this.user.sub
       );
       this.accounts = meta.accounts || [];
-      await this.refreshBalances();
     }
   }
 
