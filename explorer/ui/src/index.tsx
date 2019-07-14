@@ -33,8 +33,10 @@ const casperService = new CasperService(
 );
 
 const errors = new ErrorContainer();
-const casper = new CasperContainer(errors, faucetService, casperService);
 const auth = new AuthContainer(errors, authService, casperService);
+const casper = new CasperContainer(errors, faucetService, casperService, () =>
+  auth.refreshBalances(true)
+);
 
 ReactDOM.render(
   <HashRouter>

@@ -22,7 +22,8 @@ export class CasperContainer {
   constructor(
     private errors: ErrorContainer,
     private faucetService: FaucetService,
-    private casperService: CasperService
+    private casperService: CasperService,
+    private onFaucetStatusChange: () => void
   ) {}
 
   /** Ask the faucet for tokens for a given account. */
@@ -79,6 +80,7 @@ export class CasperContainer {
     }
     if (updated) {
       this._faucetRequests.set(requests);
+      this.onFaucetStatusChange();
     }
     if (!anyNeededUpdate) {
       window.clearTimeout(this.faucetStatusTimerId);
