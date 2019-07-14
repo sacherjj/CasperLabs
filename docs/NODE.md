@@ -61,7 +61,7 @@ casperlabs-node run \
     --tls-key ./keys/node.key.pem \
     --tls-certificate ./keys/node.certificate.pem \
     --casper-validator-private-key-path ./keys/validator-private.pem \
-    --casper-genesis-account-public-key-path ./keys/validator-public.pem \
+    --casper-validator-public-key-path ./keys/validator-public.pem \
     --server-bootstrap "casperlabs://a605c8ddc4ed3dc9b881bfe006cc8175fb31e125@100.24.117.48?protocol=40400&discovery=40404"
 ```
 
@@ -111,7 +111,7 @@ casperlabs-node run \
     --tls-key ./keys/node.key.pem \
     --tls-certificate ./keys/node.certificate.pem \
     --casper-validator-private-key-path ./keys/validator-private.pem \
-    --casper-genesis-account-public-key-path ./keys/validator-public.pem \
+    --casper-validator-public-key-path ./keys/validator-public.pem \
     --casper-initial-tokens 1234567890 \
     --casper-mint-code-path ./mint_token.wasm \
     --casper-pos-code-path ./pos.wasm
