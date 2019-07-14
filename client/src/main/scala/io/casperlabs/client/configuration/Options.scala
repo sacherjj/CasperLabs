@@ -307,5 +307,26 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(query)
 
+  val balance = new Subcommand("balance") {
+    descr("Returns the balance of the account at the specified block.")
+
+    val blockHash =
+      opt[String](
+        name = "block-hash",
+        descr = "Hash of the block to query the state of",
+        required = true,
+        validate = hexCheck
+      )
+
+    val address =
+      opt[String](
+        name = "address",
+        descr = "Account's public key in hex.",
+        required = true,
+        validate = hexCheck
+      )
+  }
+  addSubcommand(balance)
+
   verify()
 }

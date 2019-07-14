@@ -120,14 +120,14 @@ dependencies = [
 name = "blessed-urefs-access-rights"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
 name = "bonding"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "casperlabs-contract-ffi"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -175,9 +175,9 @@ dependencies = [
 
 [[package]]
 name = "casperlabs-engine-grpc-server"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ctrlc 3.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -257,7 +257,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "create-purse-01"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -326,7 +326,7 @@ dependencies = [
 name = "deserialize-error"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -351,21 +351,21 @@ dependencies = [
 name = "ee-401-regression"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
 name = "ee-401-regression-call"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
 name = "ee-441-rng-state"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -379,7 +379,7 @@ version = "0.1.0"
 dependencies = [
  "binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -471,21 +471,21 @@ dependencies = [
 name = "get-blocktime"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
 name = "get-caller"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
 name = "get-caller-subcall"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -672,7 +672,7 @@ dependencies = [
 name = "known-urefs"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -717,7 +717,7 @@ dependencies = [
 name = "local-state"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -749,7 +749,7 @@ dependencies = [
 name = "main-purse"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -787,7 +787,7 @@ dependencies = [
 name = "mint-token"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -982,7 +982,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "pos"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -1374,8 +1374,8 @@ version = "0.2.0"
 dependencies = [
  "base16 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.9.0",
- "chrono 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "casperlabs-contract-ffi 0.10.0",
+ "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "hostname 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.59 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1422,7 +1422,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "storage"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lmdb 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1498,7 +1498,7 @@ dependencies = [
 name = "test-mint-token"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -1772,28 +1772,28 @@ dependencies = [
 name = "transfer-purse-to-account"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
 name = "transfer-purse-to-purse"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
 name = "transfer-to-account-01"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
 name = "transfer-to-account-02"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -1825,7 +1825,7 @@ dependencies = [
 name = "unbonding"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.9.0",
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
