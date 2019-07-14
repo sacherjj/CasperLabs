@@ -43,4 +43,4 @@ Run unit tests, for example to check the contract ABI serialization format.
 ## Sharing code between UI and server
 
 I haven't yet figured out how to share the TypeScript code in a way that plays nicely with `dist` (i.e. doesn't create a subdirectory), and gets packaged into the `build`
-as well, so for now I just used a symlink from the `ui/src/shared` to the `server/src/shared` contents.
+as well. I tried to put everything I wanted to share in `server/src/shared` contents and use a symlink to mirror it in `ui/src/shared`, but the compiler wouldn't have it. I ended up copying just what I needed until I figure out a better way.
