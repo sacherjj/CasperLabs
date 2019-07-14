@@ -117,18 +117,18 @@ export class AuthContainer {
           }
         }
 
-        if (balanceUref) {
-          const latestAccountBalance = await this.casperService.getAccountBalance(
-            latestBlockHash,
-            balanceUref
-          );
+        const latestAccountBalance = balanceUref
+          ? await this.casperService.getAccountBalance(
+              latestBlockHash,
+              balanceUref
+            )
+          : null;
 
-          this.balances.set(account.publicKeyBase64, {
-            checkedAt: now,
-            blockHash: latestBlockHash,
-            balance: latestAccountBalance
-          });
-        }
+        this.balances.set(account.publicKeyBase64, {
+          checkedAt: now,
+          blockHash: latestBlockHash,
+          balance: latestAccountBalance
+        });
       }
     }
   }
