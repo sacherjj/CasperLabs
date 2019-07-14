@@ -44,7 +44,7 @@ export class CasperContainer {
 
   private monitorFaucetRequest(account: UserAccount, deployHash: DeployHash) {
     const request = { timestamp: new Date(), account, deployHash };
-    const requests = this._faucetRequests.get.concat(request);
+    const requests = [request].concat(this._faucetRequests.get);
     this._faucetRequests.set(requests);
     this.startPollingFaucetStatus();
   }

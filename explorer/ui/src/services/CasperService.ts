@@ -91,10 +91,13 @@ export default class CasperService {
     });
   }
 
-  async getAccountBalance(
+  /** Get the reference to the balance so we can cache it.
+   *  Returns `null` if the account doesn't exist yet.
+   */
+  async getAccountBalanceUref(
     blockHash: BlockHash,
     accountPublicKey: ByteArray
-  ): Promise<number | null> {
+  ): Promise<Key.URef | undefined> {
     try {
       const accountQuery = QueryAccount(accountPublicKey);
 
@@ -122,13 +125,7 @@ export default class CasperService {
         localKeyQuery
       ).then(res => res.getKey()!.getUref()!);
 
-      const balanceQuery = QueryUref(balanceUref);
-
-      const balance = await this.getBlockState(blockHash, balanceQuery).then(
-        res => res.getBigInt()!
-      );
-
-      return Number(balance.getValue());
+      return balanceUref;
     } catch (err) {
       if (err instanceof GrpcError) {
         if (
@@ -136,11 +133,22 @@ export default class CasperService {
           err.message.indexOf('Key') > -1
         ) {
           // The account doesn't exist yet.
-          return null;
+          return undefined;
         }
       }
       throw err;
     }
+  }
+
+  async getAccountBalance(
+    blockHash: BlockHash,
+    balanceUref: Key.URef
+  ): Promise<number> {
+    const balanceQuery = QueryUref(balanceUref);
+    const balance = await this.getBlockState(blockHash, balanceQuery).then(
+      res => res.getBigInt()!
+    );
+    return Number(balance.getValue());
   }
 }
 

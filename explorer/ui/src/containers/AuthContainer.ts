@@ -8,9 +8,12 @@ import CasperService from '../services/CasperService';
 import { encodeBase64 } from '../lib/Conversions';
 import { decodeBase64 } from 'tweetnacl-ts';
 import ObservableValueMap from '../lib/ObservableValueMap';
+import { Key } from '../grpc/io/casperlabs/casper/consensus/state_pb';
 
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
+
+type AccountB64 = string;
 
 export class AuthContainer {
   @observable user: User | null = null;
@@ -22,7 +25,10 @@ export class AuthContainer {
   @observable selectedAccount: UserAccount | null = null;
 
   // Balance for each public key.
-  @observable balances = new ObservableValueMap<string, AccountBalance>();
+  @observable balances = new ObservableValueMap<AccountB64, AccountBalance>();
+
+  // We can cache the balance URef so 2nd time the balances only need 1 query, not 4.
+  private balanceUrefs = new Map<AccountB64, Key.URef>();
 
   // How often to query blaances. Lots of state queries to get one.
   balanceTtl = 5 * 60 * 1000;
@@ -82,6 +88,8 @@ export class AuthContainer {
   async refreshBalances(force?: boolean) {
     const now = new Date();
     let latestBlockHash: BlockHash | null = null;
+    const balanceUrefs = this.balanceUrefs;
+
     for (let account of this.accounts || []) {
       const balance = this.balances.get(account.publicKeyBase64);
 
@@ -96,16 +104,31 @@ export class AuthContainer {
           latestBlockHash = latestBlock.getSummary()!.getBlockHash_asU8();
         }
 
-        const latestAccountBalance = await this.casperService.getAccountBalance(
-          latestBlockHash,
-          decodeBase64(account.publicKeyBase64)
-        );
+        let balanceUref = balanceUrefs.get(account.publicKeyBase64);
 
-        this.balances.set(account.publicKeyBase64, {
-          checkedAt: now,
-          blockHash: latestBlockHash,
-          balance: latestAccountBalance
-        });
+        // Find the balance Uref and cache it if we don't have it.
+        if (!balanceUref) {
+          balanceUref = await this.casperService.getAccountBalanceUref(
+            latestBlockHash,
+            decodeBase64(account.publicKeyBase64)
+          );
+          if (balanceUref) {
+            balanceUrefs.set(account.publicKeyBase64, balanceUref);
+          }
+        }
+
+        if (balanceUref) {
+          const latestAccountBalance = await this.casperService.getAccountBalance(
+            latestBlockHash,
+            balanceUref
+          );
+
+          this.balances.set(account.publicKeyBase64, {
+            checkedAt: now,
+            blockHash: latestBlockHash,
+            balance: latestAccountBalance
+          });
+        }
       }
     }
   }

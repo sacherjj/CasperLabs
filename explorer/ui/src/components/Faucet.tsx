@@ -122,7 +122,7 @@ const StatusTable = observer(
     <DataTable
       title="Recent Faucet Requests"
       refresh={() => props.onRefresh()}
-      rows={props.requests.slice().reverse()}
+      rows={props.requests}
       headers={['Timestamp', 'Account', 'Deploy Hash', 'Status']}
       renderRow={(request: FaucetRequest, idx: number) => {
         return (
