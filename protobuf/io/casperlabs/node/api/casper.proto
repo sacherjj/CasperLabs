@@ -78,7 +78,7 @@ message GetBlockInfoRequest {
 }
 
 message StreamBlockInfosRequest {
-	// How many of the top ranks of the DAG to show.
+	// How many of the top ranks of the DAG to show. 0 will not return anything.
 	uint32 depth = 1;
 
 	// Optionally specify the maximum rank to to go back from.

@@ -38,7 +38,7 @@ publish: \
 clean: cargo/clean
 	sbt clean
 	cd explorer/ui && rm -rf node_modules build
-	cd explorer/server && rm -rf node_modules dist
+	cd explorer/server && rm -rf node_modules dist nonce.txt
 	rm -rf .make
 
 

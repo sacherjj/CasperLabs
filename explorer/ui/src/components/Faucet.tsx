@@ -7,7 +7,6 @@ import { RefreshableComponent, Button, CommandLineHint, Icon } from './Utils';
 import DataTable from './DataTable';
 import { base64to16, encodeBase16 } from '../lib/Conversions';
 import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
-import { classExpression } from '@babel/types';
 
 interface Props {
   auth: AuthContainer;
@@ -99,6 +98,7 @@ const CliHint = observer((props: { requests: FaucetRequest[] }) =>
         <a
           href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md#cli-client-tool-1"
           target="_blank"
+          rel="noopener noreferrer"
         >
           casperlabs-client
         </a>
@@ -122,7 +122,7 @@ const StatusTable = observer(
     <DataTable
       title="Recent Faucet Requests"
       refresh={() => props.onRefresh()}
-      rows={props.requests.reverse()}
+      rows={props.requests}
       headers={['Timestamp', 'Account', 'Deploy Hash', 'Status']}
       renderRow={(request: FaucetRequest, idx: number) => {
         return (
@@ -143,7 +143,7 @@ const StatusCell = observer((props: { request: FaucetRequest }) => {
   const info = props.request.deployInfo;
   const iconAndMessage: () => [any, string | undefined] = () => {
     if (info) {
-      const attempts = info.processingResultsList.reverse();
+      const attempts = info.processingResultsList.slice().reverse();
       const success = attempts.find(x => !x.isError);
       const failure = attempts.find(x => x.isError);
       const blockHash = (result: DeployInfo.ProcessingResult.AsObject) =>

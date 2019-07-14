@@ -1,4 +1,4 @@
-import { computed, observable } from 'mobx';
+import { computed } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import StorageCell from '../lib/StorageCell';
@@ -7,7 +7,6 @@ import CasperService from '../services/CasperService';
 import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import { GrpcError } from '../services/Errors';
 import { grpc } from '@improbable-eng/grpc-web';
-import { encodeBase16 } from '../lib/Conversions';
 
 // CasperContainer talks to the API on behalf of React
 // components and exposes the state in MobX observables.
@@ -23,7 +22,8 @@ export class CasperContainer {
   constructor(
     private errors: ErrorContainer,
     private faucetService: FaucetService,
-    private casperService: CasperService
+    private casperService: CasperService,
+    private onFaucetStatusChange: () => void
   ) {}
 
   /** Ask the faucet for tokens for a given account. */
@@ -44,7 +44,7 @@ export class CasperContainer {
 
   private monitorFaucetRequest(account: UserAccount, deployHash: DeployHash) {
     const request = { timestamp: new Date(), account, deployHash };
-    const requests = this._faucetRequests.get.concat(request);
+    const requests = [request].concat(this._faucetRequests.get);
     this._faucetRequests.set(requests);
     this.startPollingFaucetStatus();
   }
@@ -80,6 +80,7 @@ export class CasperContainer {
     }
     if (updated) {
       this._faucetRequests.set(requests);
+      this.onFaucetStatusChange();
     }
     if (!anyNeededUpdate) {
       window.clearTimeout(this.faucetStatusTimerId);
@@ -87,7 +88,7 @@ export class CasperContainer {
   }
 
   private async tryGetDeployInfo(
-    deployHash: ByteArray
+    deployHash: DeployHash
   ): Promise<DeployInfo | null> {
     try {
       return await this.casperService.getDeployInfo(deployHash);
