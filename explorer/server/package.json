@@ -44,6 +44,7 @@
     "express-jwt": "^5.3.1",
     "google-protobuf": "^3.9.0",
     "jwks-rsa": "^1.6.0",
+    "lodash": "^4.17.14",
     "tweetnacl-ts": "^1.0.3",
     "tweetnacl-util": "^0.15.0"
   }
