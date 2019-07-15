@@ -31,22 +31,16 @@ def test_deploy_with_args(one_node_network):
     node = one_node_network.docker_nodes[0]
     client = node.p_client
 
-    signing_public_key_file = 'signing_key'
-    signing_private_key_file = 'verifying_key'
-
-    write_binary(signing_public_key_file, node.signing_public_key())
-    # We do not have raw private keys with .pem certificate files
-    # removing this to not sign deploy at this time.
-    # write_binary(signing_private_key_file, node.signing_private_key())
-
+    nonce = 1
     wasm = "test_args.wasm"
     for number in [12, 256, 1024]:
         response, deploy_hash = client.deploy(payment_contract=wasm,
                                               session_contract=wasm,
-                                              public_key=signing_public_key_file,
-                                              # private_key=signing_private_key_file,
-                                              args=ABI.args([ABI.u32(number)])
-                                              )
+                                              public_key='resources/accounts/account-public-genesis.pem',
+                                              private_key='resources/accounts/account-private-genesis.pem',
+                                              args=ABI.args([ABI.u32(number)]),
+                                              nonce = nonce)
+        nonce += 1
         logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
                                 
         response = client.propose()
