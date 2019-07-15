@@ -7,7 +7,6 @@ import time
 import argparse
 import grpc
 import functools
-import pathlib
 from pyblake2 import blake2b
 import ed25519
 import base64
@@ -54,7 +53,7 @@ class ABI:
     @staticmethod
     def account(a: bytes):
         if len(a) != 32:
-            raise Error('Account must be 32 bytes long')
+            raise Exception('Account must be 32 bytes long')
         return ABI.byte_array(a)
 
     @staticmethod
@@ -75,27 +74,26 @@ class ABI:
 
         for arg in args:
             if len(arg) != 1:
-                raise Error(f'Wrong encoding of value in {arg}. Only one pair of type and value allowed.')
+                raise Exception(f'Wrong encoding of value in {arg}. Only one pair of type and value allowed.')
 
         def python_value(typ, value: str):
             if typ in ('u32', 'u64'):
-                return int(value) 
-            return bytearray(value, 'utf-8')
+                return int(value)
+            elif typ == 'account':
+                return bytearray.fromhex(value)
+            raise ValueError(f"Unknown type {typ}, expected ('u32', 'u64', 'account')")
 
         def encode(typ: str, value: str) -> bytes:
-            try:
-                v = python_value(typ, value)
-                return getattr(ABI, typ)(v)
-            except KeyError:
-                raise Error(f'Unknown type {typ} in {{typ: value}}')
+            v = python_value(typ, value)
+            return getattr(ABI, typ)(v)
 
         def only_one(arg):
             items = list(arg.items())
             if len(items) != 1:
-                raise Error("Only one pair {'type', 'value'} allowed.")
+                raise Exception("Only one pair {'type', 'value'} allowed.")
             return items[0]
 
-        return ABI.args([encode(*only_one(arg)) for arg in args]) 
+        return ABI.args([encode(*only_one(arg)) for arg in args])
 
 
 class InternalError(Exception):
@@ -169,7 +167,7 @@ class CasperClient:
         self.controlService = GRPCService(self.internal_port, ControlServiceStub)
 
     @api
-    def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
+    def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = 10, 
                payment: str = None, session: str = None, nonce: int = 0,
                public_key: str = None, private_key: str = None, args: bytes = None):
         """
@@ -192,6 +190,8 @@ class CasperClient:
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
+        payment = payment or session
+
         def hash(data: bytes) -> bytes:
             h = blake2b(digest_size=32)
             h.update(data)
@@ -211,7 +211,6 @@ class CasperClient:
         def read_code(file_name: str, abi_encoded_args: bytes = None):
             return consensus.Deploy.Code(code = read_binary(file_name),
                                          args = abi_encoded_args)
-
 
         def sign(data: bytes):
             return (private_key
@@ -243,7 +242,6 @@ class CasperClient:
                              body = body)
 
         return self.casperService.Deploy(casper.DeployRequest(deploy = d)), deploy_hash
-
 
     @api
     def showBlocks(self, depth: int=1, max_rank=0, full_view=True):
@@ -300,7 +298,7 @@ class CasperClient:
                                           valid values are 'single-output', 'multiple-outputs'
         :return:                          VisualizeBlocksResponse object
         """
-        raise Error('Not implemented yet')
+        raise Exception('Not implemented yet')
 
     @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
@@ -351,6 +349,7 @@ class CasperClient:
                                                      view=(full_view and info.DeployInfo.View.FULL
                                                            or info.DeployInfo.View.BASIC)))
 
+
 def guarded_command(function):
     """
     Decorator of functions that implement CLI commands.
@@ -400,7 +399,7 @@ def deploy_command(casper_client, args):
     response, deploy_hash = casper_client.deploy(getattr(args,'from'),
                                                  args.gas_limit,
                                                  args.gas_price, 
-                                                 args.payment,
+                                                 args.payment or args.session,
                                                  args.session,
                                                  args.nonce,
                                                  args.public_key or None,
@@ -453,7 +452,7 @@ def show_deploy_command(casper_client, args):
 def show_deploys_command(casper_client, args):
     response = casper_client.showDeploys(args.hash)
     for deployInfo in response:
-        print (response)
+        print(response)
 
 
 def command_line_tool():
@@ -492,11 +491,11 @@ def command_line_tool():
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
                       [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
                        [('-g', '--gas-limit'), dict(required=True, type=int, help='[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')],
-                       [('--gas-price',), dict(required=True, type=int, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
-                       [('-n', '--nonce'), dict(required=False, type=int, default=0, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
-                       [('-p', '--payment'), dict(required=True, type=str, help='Path to the file with payment code')],
+                       [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
+                       [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
+                       [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
                        [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
-                       [('--args'), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
+                       [('--args',), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
                        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
                        [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 

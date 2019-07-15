@@ -1,5 +1,7 @@
 package io.casperlabs.client
 
+import java.io.FileInputStream
+
 import cats.effect.{Sync, Timer}
 import io.casperlabs.client.configuration._
 import io.casperlabs.shared.{Log, UncaughtExceptionHandler}
@@ -39,7 +41,30 @@ object Main {
       case ShowDeploy(hash)  => DeployRuntime.showDeploy(hash)
       case ShowDeploys(hash) => DeployRuntime.showDeploys(hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
-
+      case Unbond(
+          amount,
+          nonce,
+          contractCode,
+          privateKey
+          ) =>
+        DeployRuntime.unbond(
+          amount,
+          nonce,
+          contractCode,
+          privateKey
+        )
+      case Bond(
+          amount,
+          nonce,
+          contractCode,
+          privateKey
+          ) =>
+        DeployRuntime.bond(
+          amount,
+          nonce,
+          contractCode,
+          privateKey
+        )
       case Deploy(
           from,
           nonce,
@@ -52,8 +77,8 @@ object Main {
         DeployRuntime.deployFileProgram(
           from,
           nonce,
-          sessionCode,
-          paymentCode,
+          new FileInputStream(sessionCode),
+          new FileInputStream(paymentCode),
           maybePublicKey,
           maybePrivateKey,
           gasPrice
@@ -67,5 +92,8 @@ object Main {
 
       case Query(hash, keyType, keyValue, path) =>
         DeployRuntime.queryState(hash, keyType, keyValue, path)
+
+      case Balance(address, blockHash) =>
+        DeployRuntime.balance(address, blockHash)
     }
 }

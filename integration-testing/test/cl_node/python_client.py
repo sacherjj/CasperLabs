@@ -4,13 +4,14 @@ import logging
 
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.nonce_registry import NonceRegistry
-from casper_client import CasperClient
+from casper_client import CasperClient, ABI
 
 
 class PythonClient(CasperLabsClient):
 
     def __init__(self, node: 'DockerNode'):
         self.node = node
+        self.abi = ABI
         # If $TAG_NAME is set it means we are running in docker, see docker_run_test.sh
         host = os.environ.get('TAG_NAME', None) and self.node.container_name or 'localhost'
 

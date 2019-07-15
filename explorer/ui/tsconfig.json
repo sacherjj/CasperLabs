@@ -13,7 +13,7 @@
     "strictNullChecks": true,
     "noImplicitReturns": true,
     "noImplicitThis": true,
-    "noUnusedParameters": true,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "allowJs": true,
     "skipLibCheck": true,
@@ -26,10 +26,17 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "preserve"
+    "jsx": "preserve",
+    "typeRoots": [
+      "@types",
+      "./@types",
+      "./node_modules/@types"
+    ]
   },
   "include": [
-    "src",
-    "../grpc/generated/**/*"
+    "./src/**/*"
+  ],
+  "exclude": [
+    "./src/**/*.test.ts"
   ]
 }

@@ -6,7 +6,8 @@ import { RefreshableComponent, Button, IconButton, ListInline } from './Utils';
 import DataTable from './DataTable';
 import Modal from './Modal';
 import { Form, TextField } from './Forms';
-import { base64to16 } from '../lib/Conversions';
+import { base64to16, encodeBase16 } from '../lib/Conversions';
+import { ObservableValue } from '../lib/ObservableValueMap';
 
 interface Props {
   auth: AuthContainer;
@@ -14,8 +15,9 @@ interface Props {
 
 @observer
 export default class Accounts extends RefreshableComponent<Props, {}> {
-  refresh() {
-    this.props.auth.refreshAccounts();
+  async refresh(force?: boolean) {
+    await this.props.auth.refreshAccounts();
+    await this.props.auth.refreshBalances(force);
   }
 
   render() {
@@ -24,15 +26,27 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
       <div>
         <DataTable
           title="Accounts"
-          refresh={() => this.refresh()}
+          refresh={() => this.refresh(true)}
           rows={this.props.auth.accounts}
-          headers={['Name', 'Public Key (Base64)', 'Public Key (Base16)', '']}
+          headers={[
+            'Name',
+            'Public Key (Base64)',
+            'Public Key (Base16)',
+            'Balance',
+            ''
+          ]}
           renderRow={(account: UserAccount) => {
+            const balance = this.props.auth.balances.get(
+              account.publicKeyBase64
+            );
             return (
               <tr key={account.name}>
                 <td>{account.name}</td>
                 <td>{account.publicKeyBase64}</td>
                 <td>{base64to16(account.publicKeyBase64)}</td>
+                <td>
+                  <Balance balance={balance} />
+                </td>
                 <td className="text-center">
                   <IconButton
                     onClick={() => this.props.auth.deleteAccount(account.name)}
@@ -111,3 +125,19 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
     );
   }
 }
+
+const Balance = observer(
+  (props: { balance: ObservableValue<AccountBalance> }) => {
+    const value = props.balance.value;
+    if (value == null) return null;
+
+    const hash = encodeBase16(value.blockHash);
+    const balance =
+      value.balance == null ? 'n/a' : value.balance.toLocaleString();
+    return (
+      <div className="text-right" title={`As of block ${hash}`}>
+        {balance}
+      </div>
+    );
+  }
+);

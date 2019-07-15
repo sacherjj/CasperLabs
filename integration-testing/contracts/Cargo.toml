@@ -18,9 +18,9 @@ members = [
     "mailing-list/define",
     "subcall-revert-test/call",
     "subcall-revert-test/define",
-    "transfer-to-account-1/call",
-    "transfer-to-account-2/call",
-    "test_args",
+    "transfer_to_account",
+    "test_args/u32",
+    "test_args/multi",
     "bonding/call",
     "unbonding/call",
 ]

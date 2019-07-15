@@ -12,13 +12,20 @@ export const Spinner = (msg: String) => (
 
 export const Loading = () => Spinner('Loading');
 
+export const Icon = (props: { name: string; color?: string }) => {
+  const styles = {
+    color: props.color
+  };
+  return <i className={'fa fa-fw fa-' + props.name} style={styles} />;
+};
+
 export const IconButton = (props: {
   onClick: () => void;
   title: string;
   icon: string;
 }) => (
   <a onClick={_ => props.onClick()} title={props.title} className="icon-button">
-    <i className={'fa fa-fw fa-' + props.icon} />
+    <Icon name={props.icon} />
   </a>
 );
 
@@ -92,6 +99,19 @@ export const UnderConstruction = (props: { children: any }) => {
         <h4 className="card-title font-weight-bold text-white">
           Under construction
         </h4>
+      </div>
+      <div className="card-body">{props.children}</div>
+    </div>
+  );
+};
+
+export const CommandLineHint = (props: { children: any }) => {
+  return (
+    <div className="card shadow mb-3">
+      <div className="card-header bg-info">
+        <h5 className="card-title font-weight-bold text-white">
+          <Icon name="terminal" />
+        </h5>
       </div>
       <div className="card-body">{props.children}</div>
     </div>

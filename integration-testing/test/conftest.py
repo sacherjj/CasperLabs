@@ -82,6 +82,7 @@ def engine(one_node_network):
     with one_node_network as network:
         yield network.execution_engines[0]
 
+
 @pytest.fixture()
 def star_network(docker_client_fixture):
     with CustomConnectionNetwork(docker_client_fixture) as ccn:

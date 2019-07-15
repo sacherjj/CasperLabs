@@ -37,17 +37,49 @@ const deployService = new DeployService(process.env.CASPER_SERVICE_URL!);
 
 const app = express();
 
+// Support using the faucet in offline mode with the mock.
+const isMock = process.env.AUTH_MOCK_ENABLED === "true";
+
 // create the JWT middleware
-const checkJwt = jwt({
-  algorithm: ["RS256"],
-  audience: config.auth0.audience,
-  issuer: `https://${config.auth0.domain}/`,
-  secret: jwksRsa.expressJwtSecret({
-    cache: true,
-    jwksRequestsPerMinute: 5,
-    jwksUri: `https://${config.auth0.domain}/.well-known/jwks.json`,
-    rateLimit: true,
-  }),
+const checkJwt: express.RequestHandler = isMock ?
+  (req, res, next) => {
+    const token = req.headers.authorization;
+    if (token && token.startsWith("Bearer mock|")) {
+      (req as any).user = { sub: token.substr(7) };
+    } else if (token) {
+      return res.status(401).send({ msg: "Expected the mock token only." });
+    }
+    return next();
+  }
+  : jwt({
+    algorithm: ["RS256"],
+    audience: config.auth0.audience,
+    issuer: `https://${config.auth0.domain}/`,
+    secret: jwksRsa.expressJwtSecret({
+      cache: true,
+      jwksRequestsPerMinute: 5,
+      jwksUri: `https://${config.auth0.domain}/.well-known/jwks.json`,
+      rateLimit: true,
+    }),
+  });
+
+// Render the `config.js` file dynamically.
+app.get("/config.js", (_, res) => {
+  const conf = {
+    auth0: config.auth0,
+    auth: {
+      mock: {
+        enabled: isMock
+      }
+    },
+    grpc: {
+      // In production we can leave this empty and then it should
+      // connect to window.origin and be handled by nginx.
+      url: process.env.UI_GRPC_URL
+    }
+  };
+  res.header("Content-Type", "application/javascript");
+  res.send(`var config = ${JSON.stringify(conf, null, 2)};`);
 });
 
 // Serve the static files of the UI
@@ -62,8 +94,6 @@ app.use(express.static(staticRoot));
 app.get("/", (_, res) => {
   res.sendFile(path.join(staticRoot, "index.html"));
 });
-
-// TODO: Render the `config.js` file dynamically.
 
 // Parse JSON sent in the body.
 app.use(express.json());

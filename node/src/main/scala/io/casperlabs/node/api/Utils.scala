@@ -1,15 +1,18 @@
 package io.casperlabs.node.api
 
-import cats.ApplicativeError
-import cats.syntax.applicative._
+import cats.implicits._
+import cats.Monad
 import com.google.protobuf.ByteString
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.ipc
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.hash.Blake2b256
+
+import scala.util.Try
 
 object Utils {
-  def toKey[F[_]](keyType: String, keyValue: String)(
-      implicit appErr: ApplicativeError[F, Throwable]
+  def toKey[F[_]: Monad](keyType: String, keyValue: String)(
+      implicit appErr: MonadThrowable[F]
   ): F[state.Key] = {
     val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))
     keyType.toLowerCase match {
@@ -42,6 +45,32 @@ object Utils {
                 s"Key of type address must have exactly 32 bytes, $n =/= 32 provided."
               )
             )
+        }
+      case "local" =>
+        for {
+          (seed, bytes) <- appErr
+                            .fromTry {
+                              Try(keyValue.split(':').map(Base16.decode(_)))
+                                .filter(_.length == 2)
+                                .map(arr => (arr(0), arr(1)))
+                            }
+                            .handleErrorWith(
+                              _ =>
+                                appErr.raiseError(
+                                  new IllegalArgumentException(
+                                    "Expected local key encoded as {seed}:{rest}. Where both seed and rest parts are hex encoded."
+                                  )
+                                )
+                            )
+          _ <- appErr
+                .raiseError(
+                  new IllegalArgumentException("Seed of Local key has to be exactly 32 bytes long.")
+                )
+                .whenA(seed.length != 32)
+        } yield {
+          // This is what EE does when creating local key address.
+          val hash = Blake2b256.hash(seed ++ bytes)
+          state.Key(state.Key.Value.Local(state.Key.Local(ByteString.copyFrom(hash))))
         }
       case _ =>
         appErr.raiseError(

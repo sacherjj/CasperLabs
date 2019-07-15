@@ -3,16 +3,17 @@ import * as nacl from 'tweetnacl-ts';
 import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
 import FormData from './FormData';
-import Auth0Service from '../services/Auth0Service';
+import AuthService from '../services/AuthService';
+import CasperService from '../services/CasperService';
 import { encodeBase64 } from '../lib/Conversions';
+import { decodeBase64 } from 'tweetnacl-ts';
+import ObservableValueMap from '../lib/ObservableValueMap';
+import { Key } from '../grpc/io/casperlabs/casper/consensus/state_pb';
 
-// https://github.com/auth0/auth0-spa-js/issues/41
-// https://auth0.com/docs/quickstart/spa/vanillajs
-// https://auth0.com/docs/quickstart/spa/react
-// https://auth0.com/docs/api/management/v2/get-access-tokens-for-spas
-// https://auth0.com/docs/api/management/v2#!/Users/patch_users_by_id
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
+
+type AccountB64 = string;
 
 export class AuthContainer {
   @observable user: User | null = null;
@@ -23,22 +24,26 @@ export class AuthContainer {
 
   @observable selectedAccount: UserAccount | null = null;
 
+  // Balance for each public key.
+  @observable balances = new ObservableValueMap<AccountB64, AccountBalance>();
+
+  // We can cache the balance URef so 2nd time the balances only need 1 query, not 4.
+  private balanceUrefs = new Map<AccountB64, Key.URef>();
+
+  // How often to query blaances. Lots of state queries to get one.
+  balanceTtl = 5 * 60 * 1000;
+
   constructor(
     private errors: ErrorContainer,
-    private auth0Service: Auth0Service
+    private authService: AuthService,
+    private casperService: CasperService
   ) {
     this.init();
   }
 
-  private getAuth0() {
-    return this.auth0Service.getAuth0();
-  }
-
   private async init() {
-    const auth0 = await this.getAuth0();
-
     if (window.location.search.includes('code=')) {
-      const { appState } = await auth0.handleRedirectCallback();
+      const { appState } = await this.authService.handleRedirectCallback();
       const url =
         appState && appState.targetUrl
           ? appState.targetUrl
@@ -50,37 +55,81 @@ export class AuthContainer {
   }
 
   async login() {
-    const auth0 = await this.getAuth0();
-    const isAuthenticated = await auth0.isAuthenticated();
+    const isAuthenticated = await this.authService.isAuthenticated();
     if (!isAuthenticated) {
-      await auth0.loginWithPopup({
-        response_type: 'token id_token'
-      } as PopupLoginOptions);
+      await this.authService.login();
     }
     this.fetchUser();
   }
 
   async logout() {
-    const auth0 = await this.getAuth0();
     this.user = null;
     this.accounts = null;
+    this.balances.clear();
     sessionStorage.clear();
-    auth0.logout({ returnTo: window.location.origin });
+    this.authService.logout();
   }
 
   private async fetchUser() {
-    const auth0 = await this.getAuth0();
-    const isAuthenticated = await auth0.isAuthenticated();
-    this.user = isAuthenticated ? await auth0.getUser() : null;
+    const isAuthenticated = await this.authService.isAuthenticated();
+    this.user = isAuthenticated ? await this.authService.getUser() : null;
     this.refreshAccounts();
   }
 
   async refreshAccounts() {
     if (this.user != null) {
-      const meta: UserMetadata = await this.auth0Service.getUserMetadata(
+      const meta: UserMetadata = await this.authService.getUserMetadata(
         this.user.sub
       );
       this.accounts = meta.accounts || [];
+    }
+  }
+
+  async refreshBalances(force?: boolean) {
+    const now = new Date();
+    let latestBlockHash: BlockHash | null = null;
+    const balanceUrefs = this.balanceUrefs;
+
+    for (let account of this.accounts || []) {
+      const balance = this.balances.get(account.publicKeyBase64);
+
+      const needsUpdate =
+        force ||
+        balance.value == null ||
+        now.getTime() - balance.value.checkedAt.getTime() > this.balanceTtl;
+
+      if (needsUpdate) {
+        if (latestBlockHash == null) {
+          const latestBlock = await this.casperService.getLatestBlockInfo();
+          latestBlockHash = latestBlock.getSummary()!.getBlockHash_asU8();
+        }
+
+        let balanceUref = balanceUrefs.get(account.publicKeyBase64);
+
+        // Find the balance Uref and cache it if we don't have it.
+        if (!balanceUref) {
+          balanceUref = await this.casperService.getAccountBalanceUref(
+            latestBlockHash,
+            decodeBase64(account.publicKeyBase64)
+          );
+          if (balanceUref) {
+            balanceUrefs.set(account.publicKeyBase64, balanceUref);
+          }
+        }
+
+        const latestAccountBalance = balanceUref
+          ? await this.casperService.getAccountBalance(
+              latestBlockHash,
+              balanceUref
+            )
+          : null;
+
+        this.balances.set(account.publicKeyBase64, {
+          checkedAt: now,
+          blockHash: latestBlockHash,
+          balance: latestAccountBalance
+        });
+      }
     }
   }
 
@@ -119,7 +168,7 @@ export class AuthContainer {
   }
 
   private async saveAccounts() {
-    await this.auth0Service.updateUserMetadata(this.user!.sub, {
+    await this.authService.updateUserMetadata(this.user!.sub, {
       accounts: this.accounts || undefined
     });
   }

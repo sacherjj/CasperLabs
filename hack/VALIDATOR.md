@@ -173,4 +173,4 @@ casperlabs-node \
 
 You can add the `--metrics-prometheus` option in which case the node will collect metrics and make them available at `http://localhost:40403/metrics`. You can override that port with the `--server-http-port` option.
 
-To see how an example of how to configure Prometheus and Grafana you can check out the [docker setup](hack/docker/README.md#monitoring) or the [Prometheus docs](https://prometheus.io/docs/prometheus/latest/getting_started/).
+To see how an example of how to configure Prometheus and Grafana you can check out the [docker setup](docker/README.md#monitoring) or the [Prometheus docs](https://prometheus.io/docs/prometheus/latest/getting_started/).

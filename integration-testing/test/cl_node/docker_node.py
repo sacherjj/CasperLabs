@@ -1,11 +1,11 @@
 import logging
+import json
 import os
 import re
 import shutil
 import tempfile
 from pathlib import Path
-import base64
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Union
 
 from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from test.cl_node.docker_base import LoggingDockerBase
@@ -14,7 +14,7 @@ from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, is_valid_account, Account
 
 
 class DockerNode(LoggingDockerBase):
@@ -189,15 +189,8 @@ class DockerNode(LoggingDockerBase):
 
     @property
     def from_address(self) -> str:
+        """ Genesis Account Address """
         return GENESIS_ACCOUNT.public_key_hex
-
-    @staticmethod
-    def signing_public_key():
-        return base64.b64decode(GENESIS_ACCOUNT.public_key + '===')
-
-    @staticmethod
-    def signing_private_key():
-        return base64.b64decode(GENESIS_ACCOUNT.private_key + '===')
 
     @property
     def volumes(self) -> dict:
@@ -261,6 +254,68 @@ class DockerNode(LoggingDockerBase):
         assert block_hash is not None
         logging.info(f"The block hash: {block_hash} generated for {self.container.name}")
         return block_hash
+
+    def transfer_to_account(self, to_account_id: int, amount: int, from_account_id: Union[str, int] = 'genesis') -> str:
+        """
+        Performs a transfer using the from account if given (or genesis if not)
+
+        :param to_account_id: 1-20 index of test account for transfer into
+        :param amount: amount of tokens to transfer
+        :param from_account_id: default 'genesis' account, but previously funded account_id is also valid.
+        :returns block_hash in hex str
+        """
+        assert is_valid_account(to_account_id) and to_account_id != 'genesis', \
+            "Can transfer only to non-genesis accounts in test framework (1-20)."
+        assert is_valid_account(from_account_id), "Must transfer from a valid account_id: 1-20 or 'genesis'"
+
+        # backup previous client to use python
+        previous_client_type = self._client
+        self.use_python_client()
+
+        from_account = Account(from_account_id)
+        to_account = Account(to_account_id)
+        args_json = json.dumps([{"account": to_account.public_key_hex},
+                                {"u32": amount}])
+        with from_account.public_key_binary_file() as signing_public_key_file:
+            response, deploy_hash_bytes = self.client.deploy(from_address=from_account.public_key_hex,
+                                                             session_contract='transfer_to_account.wasm',
+                                                             payment_contract='transfer_to_account.wasm',
+                                                             public_key=signing_public_key_file,
+                                                             args=self.client.abi.args_from_json(args_json))
+
+        deploy_hash_hex = deploy_hash_bytes.hex()
+        assert len(deploy_hash_hex) == 64
+
+        response = self.client.propose()
+
+        block_hash = response.block_hash.hex()
+        assert len(deploy_hash_hex) == 64
+
+        for deploy_info in self.client.show_deploys(block_hash):
+            assert deploy_info.is_error is False
+
+        # restore to previous client operation
+        self._client = previous_client_type
+
+        return block_hash
+
+    def transfer_to_accounts(self, account_value_list) -> List[str]:
+        """
+        Allows batching calls to self.transfer_to_account to process in order.
+
+        If from is not provided, the genesis account is used.
+
+        :param account_value_list: List of [to_account_id, amount, Optional(from_account_id)]
+        :return: List of block_hashes from transfer blocks.
+        """
+        block_hashes = []
+        for avl in account_value_list:
+            assert 2 <= len(avl) <= 3, \
+                "Expected account_value_list as list of (to_account_id, value, Optional(from_account_id))"
+            to_addr_id, amount = avl[:2]
+            from_addr_id = 'genesis' if len(avl) == 2 else avl[2]
+            block_hashes.append(self.transfer_to_account(to_addr_id, amount, from_addr_id))
+        return block_hashes
 
     def show_blocks(self) -> Tuple[int, str]:
         return self.exec_run(f'{self.CL_NODE_BINARY} show-blocks')

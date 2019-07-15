@@ -59,13 +59,9 @@ const Home = observer((props: Props) => {
               contract examples
             </a>
             , the{' '}
-            <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/USAGE.md">
-              usage document
+            <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md">
+              main docs
             </a>
-            , the{' '}
-            <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/DEVELOPER.md">
-              developer guide
-            </a>{' '}
             and the{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker">
               local docker network setup

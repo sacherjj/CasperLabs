@@ -18,17 +18,25 @@ import CasperContainer from './containers/CasperContainer';
 import AuthContainer from './containers/AuthContainer';
 import ErrorContainer from './containers/ErrorContainer';
 import FaucetService from './services/FaucetService';
-import Auth0Service from './services/Auth0Service';
+import CasperService from './services/CasperService';
+import { Auth0Service, MockAuthService } from './services/AuthService';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
 
-const auth0Service = new Auth0Service(window.config.auth0);
-const faucetService = new FaucetService(auth0Service);
+const authService = window.config.auth.mock.enabled
+  ? new MockAuthService()
+  : new Auth0Service(window.config.auth0);
+const faucetService = new FaucetService(authService);
+const casperService = new CasperService(
+  window.config.grpc.url || window.origin
+);
 
 const errors = new ErrorContainer();
-const casper = new CasperContainer(errors, faucetService);
-const auth = new AuthContainer(errors, auth0Service);
+const auth = new AuthContainer(errors, authService, casperService);
+const casper = new CasperContainer(errors, faucetService, casperService, () =>
+  auth.refreshBalances(true)
+);
 
 ReactDOM.render(
   <HashRouter>

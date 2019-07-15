@@ -52,46 +52,7 @@ post-state is the state of the global state after running the code in
 the block. Blocks are identified by a cryptographic hash of their
 contents (just block hash for short).
 
-## The Deploy API
-
-TODO: complete this section.
-
-## The State Query API
-
-### Purpose
-
-This API is used to query the value under a key in a particular
-version of the global state. For example, this can be used to track an
-important smart contract state variable or account token balance from
-block-to-block.
-
-### API
-
-The `GetBlockState` gRPC method (`query-state` on the CLI client) of the CasperLabs node accepts a message
-with four parameters:
-
-- Block hash
-  - Determines the particular global state to query. The post state of
-    the block with the given hash is used.
-  - The hash is presented as a base-16 encoded string.
-- Key type
-  - Specified the type of key from which to start the query. Allowed
-    values are `ADDRESS`, `HASH` and `UREF`, same as the types of keys
-    described above.
-  - The key type is passed as lowercased string on the CLI.
-- Key bytes
-  - The bytes which are used to identify the particular key. `URef`
-    and `Hash` type keys use 32-byte identifiers, while `Address` uses
-    only 20 bytes (these bytes are commonly known as the account
-    address).
-  - The bytes are presented as a base16-encoded string.
-- Path
-  - The sequence of human-readable names which can be used to reach
-    the desired key to query. This makes use of the human-readable
-    name associations accounts and contracts have for keys.
-  - The path is presented as a '/'-separated string of identifiers on the CLI.
-
-### Example
+## Example
 
 Consider the [counter contract from our contract examples
 repo](https://github.com/CasperLabs/contract-examples/blob/master/counter/define/src/lib.rs).
