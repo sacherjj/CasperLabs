@@ -11,7 +11,7 @@ def is_valid_account(account_id: Union[int, str]) -> bool:
     try:
         if account_id == 'genesis':
             return True
-        return 1 <= account_id <= 20
+        return 1 <= account_id <= 300
     except TypeError:
         return False
 
@@ -61,6 +61,14 @@ class Account:
     def public_key_binary(self) -> bytes:
         return base64.b64decode(self.public_key + '===')
 
+    @property
+    def public_key_binary_filename(self):
+        return f'account-bin-{self.file_id}'
+
+    @property
+    def public_key_binary_path(self):
+        return self.account_path / self.public_key_binary_filename
+
     @contextmanager
     def public_key_binary_file(self):
         """
@@ -68,10 +76,8 @@ class Account:
 
         :return: path to binary file of public key for signing with Python Client
         """
-        with NamedTemporaryFile('wb') as temp_file:
-            with open(temp_file.name, 'wb') as f:
-                f.write(self.public_key_binary)
-            yield temp_file.name
+        # TODO: Refactor code to use public_key_binary_path
+        yield self.public_key_binary_path
 
 
 GENESIS_ACCOUNT = Account('genesis')
@@ -80,6 +86,8 @@ GENESIS_ACCOUNT = Account('genesis')
 if __name__ == '__main__':
 
     print(f'Rust Code for it_common lib.rs:')
-    for key in ['genesis'] + list(range(1, 21)):
+    for key in ['genesis'] + list(range(1, 301)):
         acct = Account(key)
+        with open(acct.public_key_binary_path, 'wb') as f:
+            f.write(acct.public_key_binary)
         print(f'const ACCOUNT_{str(key).upper()}_ADDR: [u8;32] = {acct.public_key_int_list};')
