@@ -9,6 +9,7 @@ import grpc
 import functools
 from pyblake2 import blake2b
 import ed25519
+import base64
 import struct
 import json
 from operator import add
@@ -200,6 +201,13 @@ class CasperClient:
             with open(file_name, 'rb') as f:
                 return f.read()
 
+        def read_pem_key(file_name: str):
+            with open(file_name) as f:
+                s = [l for l in f.readlines() if l and not l.startswith('-----')][0].strip()
+                r = base64.b64decode(s) 
+                return len(r) % 32 == 0 and r[:32] or r[-32:]
+                
+
         def read_code(file_name: str, abi_encoded_args: bytes = None):
             return consensus.Deploy.Code(code = read_binary(file_name),
                                          args = abi_encoded_args)
@@ -207,7 +215,7 @@ class CasperClient:
         def sign(data: bytes):
             return (private_key
                     and consensus.Signature(sig_algorithm = 'ed25519',
-                                            sig = ed25519.SigningKey(read_binary(private_key)).sign(data, encoding='base16')))
+                                            sig = ed25519.SigningKey(read_pem_key(private_key)).sign(data)))
 
         def serialize(o) -> bytes:
             return o.SerializeToString()
@@ -217,7 +225,7 @@ class CasperClient:
         body = consensus.Deploy.Body(session = read_code(session, args),
                                      payment = read_code(payment, payment == session and args or None))
 
-        account_public_key = public_key and read_binary(public_key)
+        account_public_key = public_key and read_pem_key(public_key)
         header = consensus.Deploy.Header(account_public_key = account_public_key, 
                                          nonce = nonce,
                                          timestamp = int(time.time()),
