@@ -38,13 +38,13 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     Tests args get correctly encoded and decoded in the contract.
     """
     node = one_node_network.docker_nodes[0]
-    client = node.p_client
+    client = node.p_client.client
 
     nonce = 1
-    wasm = "test_args.wasm"
+    wasm = "resources/test_args.wasm"
     for number in [12, 256, 1024]:
-        response, deploy_hash = client.deploy(payment_contract=wasm,
-                                              session_contract=wasm,
+        response, deploy_hash = client.deploy(payment=wasm,
+                                              session=wasm,
                                               public_key='resources/accounts/account-public-genesis.pem',
                                               private_key='resources/accounts/account-private-genesis.pem',
                                               args=ABI.args([ABI.u32(number)]),
@@ -56,24 +56,24 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
         # Need to convert to hex string from bytes
         block_hash = response.block_hash.hex()
 
-        for deploy_info in client.show_deploys(block_hash):
+        for deploy_info in client.showDeploys(block_hash):
             assert deploy_info.is_error is True
             assert deploy_info.error_message == f'Exit code: {number}'
 
             # Test show_deploy
-            d = client.show_deploy(deploy_info.deploy.deploy_hash.hex())
+            d = client.showDeploy(deploy_info.deploy.deploy_hash.hex())
             assert deploy_info.deploy.deploy_hash == d.deploy.deploy_hash
 
     # Testing multiple args without rebuilding network.
-    wasm = "test_args_multi.wasm"
+    wasm = "resources/test_args_multi.wasm"
     account_hex = '0101010102020202030303030404040405050505060606060707070708080808'
     number = 1000
     total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
 
     json_args = json.dumps([{'account': account_hex}, {'u32': number}])
 
-    response, deploy_hash = client.deploy(payment_contract=wasm,
-                                          session_contract=wasm,
+    response, deploy_hash = client.deploy(payment=wasm,
+                                          session=wasm,
                                           public_key='resources/accounts/account-public-genesis.pem',
                                           private_key='resources/accounts/account-private-genesis.pem',
                                           args=ABI.args_from_json(json_args),
@@ -85,13 +85,13 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
 
     block_hash = response.block_hash.hex()
 
-    for deploy_info in client.show_deploys(block_hash):
+    for deploy_info in client.showDeploys(block_hash):
         assert deploy_info.is_error is True
         assert deploy_info.error_message == f'Exit code: {total_sum}'
 
         # Test show_deploy
-        d = client.show_deploy(deploy_info.deploy.deploy_hash.hex())
+        d = client.showDeploy(deploy_info.deploy.deploy_hash.hex())
         assert deploy_info.deploy.deploy_hash == d.deploy.deploy_hash
 
-    for blockInfo in client.show_blocks(10):
+    for blockInfo in client.showBlocks(10):
         assert blockInfo.status.stats.block_size_bytes > 0
