@@ -1,9 +1,18 @@
 import json
 import logging
+import os
+from pathlib import Path
 from pytest import fixture
 
 from casper_client import ABI
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+
+
+def resource(fn):
+    cur_path = Path(os.path.realpath(__file__)).parent
+    while cur_path.name != 'integration-testing':
+        cur_path = cur_path.parent
+    return cur_path / 'resources' / fn
 
 
 def test_args_parser():
@@ -41,12 +50,12 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     client = node.p_client.client
 
     nonce = 1
-    wasm = "resources/test_args.wasm"
+    wasm = resource("test_args.wasm")
     for number in [12, 256, 1024]:
         response, deploy_hash = client.deploy(payment=wasm,
                                               session=wasm,
-                                              public_key='resources/accounts/account-public-genesis.pem',
-                                              private_key='resources/accounts/account-private-genesis.pem',
+                                              public_key=resource('accounts/account-public-genesis.pem'),
+                                              private_key=resource('accounts/account-private-genesis.pem'),
                                               args=ABI.args([ABI.u32(number)]),
                                               nonce = nonce)
         nonce += 1
@@ -65,7 +74,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
             assert deploy_info.deploy.deploy_hash == d.deploy.deploy_hash
 
     # Testing multiple args without rebuilding network.
-    wasm = "resources/test_args_multi.wasm"
+    wasm = resource("test_args_multi.wasm")
     account_hex = '0101010102020202030303030404040405050505060606060707070708080808'
     number = 1000
     total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
@@ -74,8 +83,8 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
 
     response, deploy_hash = client.deploy(payment=wasm,
                                           session=wasm,
-                                          public_key='resources/accounts/account-public-genesis.pem',
-                                          private_key='resources/accounts/account-private-genesis.pem',
+                                          public_key=resource('accounts/account-public-genesis.pem'),
+                                          private_key=resource('accounts/account-private-genesis.pem'),
                                           args=ABI.args_from_json(json_args),
                                           nonce = nonce,
                                           )
