@@ -50,7 +50,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     client = node.p_client.client
 
     nonce = 1
-    wasm = resource("test_args.wasm")
+    wasm = resource("test_args_u32.wasm")
     for number in [12, 256, 1024]:
         response, deploy_hash = client.deploy(payment=wasm,
                                               session=wasm,
