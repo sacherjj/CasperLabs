@@ -39,9 +39,7 @@ class DeployThread(threading.Thread):
                     private_key="validator-0-private.pem",
                     public_key="validator-0-public.pem")
 
-            propose_output = self.node.client.propose_with_retry(
-                self.max_attempts, self.retry_seconds)
-            block_hash = extract_block_hash_from_propose_output(propose_output)
+            block_hash = self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
             self.deployed_block_hashes.add(block_hash)
 
 

@@ -1,12 +1,13 @@
 import threading
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
+from test.cl_node.wait import wait_for_block_hashes_propagated_to_all_nodes
 from typing import List
+from functools import reduce
+from operator import add
+
 
 import pytest
-
-from .cl_node.wait import wait_for_blocks_count_at_least
-
 
 # An explanation given by @Akosh about number of expected blocks.
 # This is why the expected blocks are 4.
@@ -42,6 +43,7 @@ class DeployThread(threading.Thread):
         self.batches_of_contracts = batches_of_contracts
         self.max_attempts = max_attempts
         self.retry_seconds = retry_seconds
+        self.block_hashes = []
 
     def run(self) -> None:
         for batch in self.batches_of_contracts:
@@ -51,7 +53,8 @@ class DeployThread(threading.Thread):
                                                             private_key="validator-0-private.pem",
                                                             public_key="validator-0-public.pem")
 
-            self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
+            block_hash = self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
+            self.block_hashes.append(block_hash)
 
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
@@ -67,9 +70,6 @@ def test_multiple_deploys_at_once(three_node_network,
     nodes = three_node_network.docker_nodes
     # Wait for the genesis block reacing each node.
 
-    for node in nodes:
-        wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
-
     deploy_threads = [DeployThread("node" + str(i + 1), node, contract_paths, max_attempts=5, retry_seconds=3)
                       for i, node in enumerate(nodes)]
 
@@ -80,8 +80,8 @@ def test_multiple_deploys_at_once(three_node_network,
         t.join()
 
     # See COMMENT_EXPECTED_BLOCKS
-    for node in nodes:
-        wait_for_blocks_count_at_least(node, len(expected_deploy_counts_in_blocks), len(expected_deploy_counts_in_blocks) * 2, node.timeout)
+    block_hashes = reduce(add, [t.block_hashes for t in deploy_threads])
+    wait_for_block_hashes_propagated_to_all_nodes(nodes, block_hashes)
 
     for node in nodes:
         blocks = parse_show_blocks(node.client.show_blocks(len(expected_deploy_counts_in_blocks) * 100))
