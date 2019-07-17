@@ -2,6 +2,8 @@
 """
 CasperLabs Client API library and command line tool.
 """
+
+# Hack to fix the relative imports problems #
 import sys
 from pathlib import Path
 file = Path(__file__).resolve()
@@ -14,6 +16,7 @@ try:
 except ValueError: # Already removed
     pass
 
+# end of hack #
 
 import time
 import argparse
