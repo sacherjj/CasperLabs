@@ -5,6 +5,7 @@ import docker.errors
 
 from test.cl_node import LoggingMixin
 from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
+from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
@@ -73,7 +74,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         attempt = 0
         while True:
             try:
-                return self.propose()
+                return extract_block_hash_from_propose_output(self.propose())
             except NonZeroExitCodeError as ex:
                 if attempt < max_attempts:
                     self.logger.debug("Could not propose; retrying later.")

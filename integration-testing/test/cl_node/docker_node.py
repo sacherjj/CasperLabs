@@ -240,8 +240,7 @@ class DockerNode(LoggingDockerBase):
             deploy_kwargs['from_address'] = self.from_address
         deploy_output = self.client.deploy(**deploy_kwargs)
         assert 'Success!' in deploy_output
-        block_hash_output_string = self.client.propose()
-        block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
+        block_hash = extract_block_hash_from_propose_output(self.client.propose())
         assert block_hash is not None
         logging.info(f"The block hash: {block_hash} generated for {self.container.name}")
         return block_hash
@@ -249,8 +248,7 @@ class DockerNode(LoggingDockerBase):
     def deploy_and_propose_with_retry(self, max_attempts: int, retry_seconds: int, **deploy_kwargs) -> str:
         deploy_output = self.client.deploy(**deploy_kwargs)
         assert 'Success!' in deploy_output
-        block_hash_output_string = self.client.propose_with_retry(max_attempts, retry_seconds)
-        block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
+        block_hash = self.client.propose_with_retry(max_attempts, retry_seconds)
         assert block_hash is not None
         logging.info(f"The block hash: {block_hash} generated for {self.container.name}")
         return block_hash

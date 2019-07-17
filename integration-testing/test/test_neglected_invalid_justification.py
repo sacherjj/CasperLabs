@@ -2,8 +2,9 @@ import logging
 from threading import Thread
 from time import sleep, time
 
-from test.cl_node.wait import wait_for_blocks_count_at_least
 from test.cl_node.errors import NonZeroExitCodeError
+from test.cl_node.wait import wait_for_block_hashes_propagated_to_all_nodes
+from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
 
 CONTRACT_1 = 'old_wasm/helloname_invalid_just_1.wasm'
 CONTRACT_2 = 'old_wasm/helloname_invalid_just_2.wasm'
@@ -42,8 +43,9 @@ class DeployTimedTread(TimedThread):
 class ProposeTimedThread(TimedThread):
 
     def my_call(self, kwargs):
+        self.block_hash = None
         try:
-            self.node.client.propose()
+            self.block_hash = extract_block_hash_from_propose_output(self.node.client.propose())
         except NonZeroExitCodeError:
             # Ignore error for no new deploys
             pass
@@ -98,7 +100,8 @@ def test_neglected_invalid_block(three_node_network):
         node2_deploy.join()
 
     # Assure deploy and proposes occurred
-    wait_for_blocks_count_at_least(bootstrap, 5, 10)
+    block_hashes = [h for h in [boot_deploy.block_hash, node1_deploy.block_hash, node2_deploy.block_hash] if h]
+    wait_for_block_hashes_propagated_to_all_nodes(three_node_network.docker_nodes, block_hashes)
 
     assert ' for NeglectedInvalidBlock.' not in bootstrap.logs()
     assert ' for NeglectedInvalidBlock.' not in node1.logs()

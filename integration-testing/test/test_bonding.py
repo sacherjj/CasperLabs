@@ -1,19 +1,10 @@
-from .cl_node.wait import (
-    wait_for_blocks_count_at_least
-)
 from .cl_node.casperlabsnode import BONDING_CONTRACT, UNBONDING_CONTRACT
 from .cl_node.casperlabs_network import OneNodeNetwork
 from .cl_node.client_parser import parse_show_block
 
 
-def wait_for_blocks_propagated(network: OneNodeNetwork, n: int) -> None:
-    for node in network.docker_nodes:
-        wait_for_blocks_count_at_least(node, n, n, node.timeout)
-
-
 def assert_bonding_part(network):
     network.add_new_node_to_network()
-    wait_for_blocks_propagated(network, 1)
     assert len(network.docker_nodes) == 2, "Total number of nodes should be 2."
     node0, node1 = network.docker_nodes
     block_hash = node1.deploy_and_propose(session_contract=BONDING_CONTRACT, payment_contract=BONDING_CONTRACT)
