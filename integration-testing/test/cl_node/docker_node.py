@@ -175,7 +175,7 @@ class DockerNode(LoggingDockerBase):
         path = f'{self.host_genesis_dir}/bonds.txt'
         os.makedirs(os.path.dirname(path))
         with open(path, 'a') as f:
-            for i in range(1, network_node_count + 1):
+            for i in range(network_node_count):
                 bond = network_node_count + 2 * i
                 validator = ValidatorKey(i, self.host_bootstrap_dir)
                 f.write(f'{validator.public_key} {bond}\n')
