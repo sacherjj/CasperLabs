@@ -12,6 +12,7 @@ from test.cl_node.docker_base import LoggingDockerBase
 from test.cl_node.docker_client import DockerClient
 from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from test.cl_node.validator_key import ValidatorKey
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, is_valid_account, Account
@@ -130,9 +131,7 @@ class DockerNode(LoggingDockerBase):
         env = self.config.node_env.copy()
         env['CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH'] = self.CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH
         java_options = os.environ.get('_JAVA_OPTIONS')
-        if java_options is not None:
-            env['_JAVA_OPTIONS'] = java_options + ' -Xms200M -Xmx4G -XX:MaxMetaspaceSize=1G'
-            logging.INFO(f'JAVA Options for DockerNode: {env["_JAVA_OPTIONS"]}')
+        env['_JAVA_OPTIONS'] = java_options if java_options is not None else ''
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix='deploy_')
         self.create_resources_dir()
 
@@ -171,15 +170,15 @@ class DockerNode(LoggingDockerBase):
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
         self.create_bonds_file()
 
-    # TODO: Should be changed to using validator-id from accounts
     def create_bonds_file(self) -> None:
-        N = self.NUMBER_OF_BONDS
+        network_node_count = self.config.network_node_count
         path = f'{self.host_genesis_dir}/bonds.txt'
         os.makedirs(os.path.dirname(path))
         with open(path, 'a') as f:
-            for i, pair in enumerate(PREGENERATED_KEYPAIRS[:N]):
-                bond = N + 2 * i
-                f.write(f'{pair.public_key} {bond}\n')
+            for i in range(1, network_node_count + 1):
+                bond = network_node_count + 2 * i
+                validator = ValidatorKey(i, self.host_bootstrap_dir)
+                f.write(f'{validator.public_key} {bond}\n')
 
     def cleanup(self):
         super().cleanup()

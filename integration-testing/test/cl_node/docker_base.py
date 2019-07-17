@@ -11,6 +11,8 @@ from docker import DockerClient
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 from test.cl_node.common import random_string
 from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
+from test.cl_node.node_key import NodeKey
+from test.cl_node.validator_key import ValidatorKey
 
 
 def humanify(line):
@@ -58,8 +60,7 @@ class DockerConfig:
     This holds all information that will be needed for creating both docker containers for a CL_Node
     """
     docker_client: 'DockerClient'
-    node_private_key: str
-    node_public_key: str = None
+    network_node_count: int
     node_env: dict = None
     network: Optional[Any] = None
     number: int = 0
@@ -88,24 +89,22 @@ class DockerConfig:
 
     def node_command_options(self, server_host: str) -> dict:
         bootstrap_path = '/root/.casperlabs/bootstrap'
+        nk = NodeKey(self.number, bootstrap_path)
+        vk = ValidatorKey(self.number, bootstrap_path)
         options = {'--server-default-timeout': "10second",
                    '--server-host': server_host,
-                   '--casper-validator-private-key': self.node_private_key,
+                   '--casper-validator-private-key-path': vk.private_certificate_path,
+                   '--casper-validator-public-key-path': vk.public_certificate_path,
                    '--grpc-socket': '/root/.casperlabs/sockets/.casper-node.sock',
                    '--metrics-prometheus': '',
-                   '--tls-certificate': f'{bootstrap_path}/node-{self.number}.certificate.pem',
-                   '--tls-key': f'{bootstrap_path}/node-{self.number}.key.pem'}
-        # if self.is_validator:
-        #     options['--casper-validator-private-key-path'] = f'{bootstrap_path}/validator-{self.number}-private.pem'
-        #     options['--casper-validator-public-key-path'] = f'{bootstrap_path}/validator-{self.number}-public.pem'
+                   '--tls-certificate': nk.public_certificate_path,
+                   '--tls-key': nk.private_certificate_path}
         if self.bootstrap_address:
             options['--server-bootstrap'] = self.bootstrap_address
         if self.is_bootstrap:
             gen_acct_key_file = GENESIS_ACCOUNT.public_key_filename
             options['--casper-genesis-account-public-key-path'] = f"/root/.casperlabs/accounts/{gen_acct_key_file}"
             options['--casper-initial-tokens'] = 100000000000
-        if self.node_public_key:
-            options['--casper-validator-public-key'] = self.node_public_key
         if self.use_new_gossiping:
             options['--server-use-gossiping'] = ''
         return options

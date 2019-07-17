@@ -4,6 +4,7 @@ import random
 import string
 import tempfile
 import typing
+from pathlib import Path
 
 from docker.client import DockerClient
 
@@ -30,6 +31,13 @@ class TestingContext:
     bootstrap_keypair: KeyPair
     peers_keypairs: typing.List[KeyPair]
     docker: 'DockerClient'
+
+
+def get_root_test_path():
+    cur_path = Path(os.path.realpath(__file__)).parent
+    while cur_path.name != 'integration-testing':
+        cur_path = cur_path.parent
+    return cur_path
 
 
 def random_string(length: int) -> str:

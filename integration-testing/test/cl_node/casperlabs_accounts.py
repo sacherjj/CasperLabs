@@ -16,6 +16,8 @@ def is_valid_account(account_id: Union[int, str]) -> bool:
         return False
 
 
+# TODO Refactor 'genesis' file_id to 0 to be common with other keys 'node_num'
+
 @dataclass
 class Account:
     file_id: Union[int, str]
