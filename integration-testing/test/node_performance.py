@@ -68,8 +68,6 @@ if __name__ == '__main__':
             transfer_args = node.client.abi.args_from_json(transfer_args_json)
 
             file_name = f'run_result_{time.time()}.txt'
-            with open(file_name, 'w+') as f:
-                f.write('Test Results:')
 
             loop_start = time.time()
             for acct in accts[1:]:
