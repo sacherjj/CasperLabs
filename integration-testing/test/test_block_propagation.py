@@ -11,7 +11,7 @@ from .cl_node.casperlabs_network import ThreeNodeNetwork, \
     CustomConnectionNetwork
 from .cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from .cl_node.common import random_string
-from .cl_node.wait import (wait_for_blocks_count_at_least,
+from .cl_node.wait import (wait_for_genesis_block,
                            wait_for_block_hash_propagated_to_all_nodes,
                            wait_for_block_hashes_propagated_to_all_nodes,
                            wait_for_peers_count_at_least, wait_for_peers_count_exactly)
@@ -49,7 +49,7 @@ def nodes(docker_client_fixture):
         network.create_cl_network()
         # Wait for the genesis block reaching each node.
         for node in network.docker_nodes:
-            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
+            wait_for_genesis_block(node)
         yield network.docker_nodes
 
 
@@ -97,7 +97,7 @@ def not_all_connected_directly_nodes(docker_client_fixture):
         network.create_cl_network(3, [(0, 1), (1, 2), (0, 2)])
         # Wait for the genesis block reaching each node.
         for node in network.docker_nodes:
-            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
+            wait_for_genesis_block(node)
         # All nodes have the genesis block now, so we can disconnect one from the bootstrap.
         network.disconnect((0, 2))
         yield network.docker_nodes
@@ -125,7 +125,7 @@ def four_nodes_network(docker_client_fixture):
 
         # Wait till all nodes have the genesis block.
         for node in network.docker_nodes:
-            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
+            wait_for_genesis_block(node)
 
         yield network
 

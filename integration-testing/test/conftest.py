@@ -9,7 +9,7 @@ from .cl_node.casperlabs_network import (
     ThreeNodeNetwork,
     TwoNodeNetwork,
 )
-from .cl_node.wait import wait_for_blocks_count_at_least
+from .cl_node.wait import wait_for_genesis_block
 
 
 if TYPE_CHECKING:
@@ -73,7 +73,7 @@ def node(one_node_network):
     with one_node_network as network:
         # Wait for the genesis block reaching each node.
         for node in network.docker_nodes:
-            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
+            wait_for_genesis_block(node)
         yield network.docker_nodes[0]
 
 
