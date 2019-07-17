@@ -132,6 +132,7 @@ class DockerNode(LoggingDockerBase):
         env['CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH'] = self.CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH
         java_options = os.environ.get('_JAVA_OPTIONS')
         env['_JAVA_OPTIONS'] = java_options if java_options is not None else ''
+        env['_JAVA_OPTIONS'] += ' -Xmx2G '
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix='deploy_')
         self.create_resources_dir()
 
