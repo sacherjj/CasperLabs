@@ -31,6 +31,8 @@ clone:
       git clone -b ${DRONE_TAG:-$DRONE_BRANCH} $DRONE_REMOTE_URL .
       if [ x$DRONE_PULL_REQUEST != x ]; then
           git fetch origin refs/pull/$DRONE_PULL_REQUEST/head
+          git checkout -b $DRONE_SOURCE_BRANCH FETCH_HEAD
+          git checkout $DRONE_BRANCH
           EMAIL=ci git merge --no-edit FETCH_HEAD
       fi
       git rev-parse HEAD
@@ -95,6 +97,15 @@ pipeline:
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
       - "make lint"
+    image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
+  black-and-flake8:
+    commands:
+      - "python3 -m pip install pipenv"
+      - "cd integration-testing"
+      - "./run_flake8_black.sh"
     image: "casperlabs/buildenv:latest"
     when:
       event:
