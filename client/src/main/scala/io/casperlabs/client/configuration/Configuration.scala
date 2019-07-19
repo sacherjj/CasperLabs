@@ -1,5 +1,6 @@
 package io.casperlabs.client.configuration
 import java.io.File
+import java.nio.file.Path
 
 final case class ConnectOptions(
     host: String,
@@ -45,6 +46,11 @@ final case class VisualizeDag(
     streaming: Option[Streaming]
 ) extends Configuration
 final case class Balance(address: String, blockhash: String) extends Configuration
+final case class Benchmark(
+    output: Path,
+    initialFundsPrivateKey: Path,
+    initialFundsPublicKey: Path
+) extends Configuration
 
 sealed trait Streaming extends Product with Serializable
 object Streaming {
@@ -121,6 +127,12 @@ object Configuration {
         Balance(
           options.balance.address(),
           options.balance.blockHash()
+        )
+      case options.benchmark =>
+        Benchmark(
+          options.benchmark.outputStats(),
+          options.benchmark.initialFundsPrivateKey(),
+          options.benchmark.initialFundsPublicKey()
         )
     }
     conf map (connect -> _)

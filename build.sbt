@@ -420,7 +420,12 @@ lazy val client = (project in file("client"))
     javacOptions ++= Seq("-Dnashorn.args=\"--no-deprecation-warning\""),
     packageSummary := "CasperLabs Client",
     packageDescription := "CLI tool for interaction with the CasperLabs Node",
-    libraryDependencies ++= commonDependencies ++ Seq(scallop, grpcNetty, graphvizJava, apacheCommons),
+    libraryDependencies ++= commonDependencies ++ Seq(
+      scallop,
+      grpcNetty,
+      graphvizJava,
+      apacheCommons
+    ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.client",
     /* Dockerization */
