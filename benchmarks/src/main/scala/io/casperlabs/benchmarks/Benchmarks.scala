@@ -29,6 +29,8 @@ object Benchmarks {
       accountsNum: Int = 250,
       roundsNum: Int = 100
   ): F[Unit] = {
+    val transactionsNum = accountsNum * roundsNum
+
     def readPrivateKey =
       FilesAPI[F].readString(initialFundsPrivateKeyFile.toPath, StandardCharsets.UTF_8).map {
         rawKey =>
@@ -89,7 +91,7 @@ object Benchmarks {
                   recipientPublicKeyBase64 = Base64.encode(pk),
                   senderPrivateKey = initialFundsPrivateKey,
                   senderPublicKey = initialFundsPublicKey,
-                  amount = 100000
+                  amount = transactionsNum
                 )
             }
         _ <- propose
