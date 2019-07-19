@@ -105,12 +105,5 @@ object Main {
 
       case Balance(address, blockHash) =>
         DeployRuntime.balance(address, blockHash)
-
-      case Benchmark(output, initialFundsAccountPrivateKey, initialFundsAccountPublicKey) =>
-        Benchmarking.run[F](
-          output,
-          initialFundsAccountPrivateKey,
-          initialFundsAccountPublicKey
-        )
     }
 }

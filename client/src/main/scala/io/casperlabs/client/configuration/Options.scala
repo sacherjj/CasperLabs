@@ -1,7 +1,6 @@
 package io.casperlabs.client.configuration
 
 import java.io.File
-import java.nio.file.{Path, Paths}
 
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
@@ -328,32 +327,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
   }
   addSubcommand(balance)
-
-  val benchmark = new Subcommand("benchmark") {
-    descr(
-      "Runs benchmarking by sending many token transfer deploys from many different account to single recipient"
-    )
-
-    val outputStats = opt[Path](
-      name = "output",
-      short = 'o',
-      descr = "Output for statistics CSV file",
-      default = Paths.get(sys.props("user.dir"), "benchmarking_stats.csv.txt").some
-    )
-
-    val initialFundsPrivateKey = opt[Path](
-      name = "initial-funds-private-key",
-      required = true,
-      descr = "Private key of account to send funds to initialize other accounts"
-    )
-
-    val initialFundsPublicKey = opt[Path](
-      name = "initial-funds-public-key",
-      required = true,
-      descr = "Public key of account to send funds to initialize other accounts"
-    )
-  }
-  addSubcommand(benchmark)
 
   verify()
 }

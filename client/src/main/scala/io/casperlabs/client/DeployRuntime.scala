@@ -4,7 +4,6 @@ import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
-import cats.Functor
 import cats.effect.{Sync, Timer}
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -16,7 +15,7 @@ import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import io.casperlabs.shared.{FilesAPI, Log}
+import io.casperlabs.shared.FilesAPI
 import org.apache.commons.io._
 
 import scala.concurrent.duration._
@@ -28,8 +27,11 @@ object DeployRuntime {
   val UNBONDING_WASM_FILE = "unbonding.wasm"
   val TRANSFER_WASM_FILE  = "transfer_to_account.wasm"
 
-  def propose[F[_]: Sync: DeployService](): F[Unit] =
-    gracefulExit(DeployService[F].propose().map(_.map(r => s"Response: $r")))
+  def propose[F[_]: Sync: DeployService](
+      exit: Boolean = true,
+      ignoreOutput: Boolean = false
+  ): F[Unit] =
+    gracefulExit(DeployService[F].propose().map(_.map(r => s"Response: $r")), exit, ignoreOutput)
 
   def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].showBlock(hash))
