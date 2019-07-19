@@ -28,10 +28,10 @@ object Benchmarks {
       initialFundsPublicKeyFile: File,
       accountsNum: Int = 250,
       roundsNum: Int = 100,
-      approximateTransferCost: Int = 50000
+      approximateTransferCost: Int = 100000
   ): F[Unit] = {
     // TODO: Probably can cause overflow problems, for the time being it can stay as is.
-    val initialFundsPerAccount = accountsNum * roundsNum * approximateTransferCost
+    val initialFundsPerAccount = roundsNum * approximateTransferCost
 
     def readPrivateKey =
       FilesAPI[F].readString(initialFundsPrivateKeyFile.toPath, StandardCharsets.UTF_8).map {
