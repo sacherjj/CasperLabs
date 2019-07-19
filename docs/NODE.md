@@ -93,7 +93,7 @@ You can run a single Node in standalone mode for testing purposes.
 
 ```
 mkdir -p ~/.casperlabs/genesis
-(cat keys/validator-id; echo " 100") >> ~/.casperlabs/genesis/bonds.txt
+(cat keys/validator-id; echo "100") >> ~/.casperlabs/genesis/bonds.txt
 ```
 
 ##### Step 2: Start the Execution Engine
