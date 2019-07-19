@@ -1,5 +1,6 @@
 package io.casperlabs.client.configuration
 import java.io.File
+import java.nio.file.Path
 
 final case class ConnectOptions(
     host: String,

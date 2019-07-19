@@ -1,10 +1,14 @@
 package io.casperlabs.client
 
-import java.io.FileInputStream
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 
 import cats.effect.{Sync, Timer}
+import cats.syntax.either._
+import cats.temp.par._
 import io.casperlabs.client.configuration._
-import io.casperlabs.shared.{Log, UncaughtExceptionHandler}
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -24,16 +28,16 @@ object Main {
         maybeConf <- Task(Configuration.parse(args))
         _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) {
               case (conn, conf) =>
-                val deployService = new GrpcDeployService(conn)
-                program(conf)(Sync[Task], deployService, Timer[Task])
-                  .doOnFinish(_ => Task(deployService.close()))
+                implicit val deployService: GrpcDeployService = new GrpcDeployService(conn)
+                implicit val filesAPI: FilesAPI[Task]         = FilesAPI.create[Task]
+                program[Task](conf).doOnFinish(_ => Task(deployService.close()))
             }
       } yield ()
 
     exec.runSyncUnsafe()
   }
 
-  def program[F[_]: Sync: DeployService: Timer](
+  def program[F[_]: Sync: DeployService: Timer: FilesAPI: Log: Par](
       configuration: Configuration
   ): F[Unit] =
     configuration match {
@@ -77,10 +81,16 @@ object Main {
         DeployRuntime.deployFileProgram(
           from,
           nonce,
-          new FileInputStream(sessionCode),
-          new FileInputStream(paymentCode),
-          maybePublicKey,
-          maybePrivateKey,
+          Files.readAllBytes(sessionCode.toPath),
+          Files.readAllBytes(paymentCode.toPath),
+          maybePublicKey.map(
+            file =>
+              new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PublicKey]
+          ),
+          maybePrivateKey.map(
+            file =>
+              new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
+          ),
           gasPrice
         )
 
