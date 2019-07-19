@@ -33,11 +33,8 @@ class DeployThread(threading.Thread):
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                assert 'Success' in self.node.client.deploy(
-                    session_contract=contract,
-                    payment_contract=contract,
-                    private_key="validator-0-private.pem",
-                    public_key="validator-0-public.pem")
+                assert 'Success' in self.node.client.deploy(session_contract=contract,
+                                                            payment_contract=contract)
 
             block_hash = self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
             self.deployed_block_hashes.add(block_hash)
@@ -80,8 +77,6 @@ def test_block_propagation(nodes,
 def deploy_and_propose(node, contract, nonce=None):
     assert 'Success' in node.client.deploy(session_contract=contract,
                                            payment_contract=contract,
-                                           private_key="validator-0-private.pem",
-                                           public_key="validator-0-public.pem",
                                            nonce=nonce)
     propose_output = node.client.propose()
     return extract_block_hash_from_propose_output(propose_output)

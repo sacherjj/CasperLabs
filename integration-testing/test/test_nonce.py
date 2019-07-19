@@ -9,9 +9,10 @@ import pytest
 Feature file: ~/CasperLabs/integration-testing/features/deploy.feature
 """
 
-
 def deploy_and_propose(node, contract, nonce=None):
-    node.client.deploy(session_contract=contract, payment_contract=contract, nonce=nonce)
+    node.client.deploy(session_contract=contract,
+                       payment_contract=contract,
+                       nonce=nonce)
     return extract_block_hash_from_propose_output(node.client.propose())
 
 
@@ -48,7 +49,9 @@ def test_deploy_with_higher_nonce(node, contracts: List[str]):
     # Deploy successfully with nonce 1 => Nonce is 1 for account.
     deploy_and_propose(node, contracts[0], 1)
 
-    node.client.deploy(session_contract = contracts[2], payment_contract = contracts[2], nonce = 3)
+    node.client.deploy(session_contract = contracts[2],
+                       payment_contract = contracts[2],
+                       nonce = 3)
 
     with pytest.raises(NonZeroExitCodeError):
         node.client.propose()
@@ -76,12 +79,16 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(node, contrac
     # Deploy successfully with nonce 1 => Nonce is 1 for account.
     deploy_and_propose(node, contracts[0], 1)
 
-    node.client.deploy(session_contract=contracts[1], payment_contract=contracts[1], nonce=4)
+    node.client.deploy(session_contract=contracts[1],
+                       payment_contract=contracts[1],
+                       nonce=4)
 
     with pytest.raises(NonZeroExitCodeError):
         node.client.propose()
 
-    node.client.deploy(session_contract=contracts[2], payment_contract=contracts[2], nonce=2)
+    node.client.deploy(session_contract=contracts[2],
+                       payment_contract=contracts[2],
+                       nonce=2)
     # The deploy with nonce 4 cannot be proposed now. It will be in the deploy buffer but does not include
     # in the new block created now.
     node.client.propose()

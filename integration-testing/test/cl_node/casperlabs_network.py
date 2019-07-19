@@ -164,13 +164,12 @@ class CasperLabsNetwork:
 class OneNodeNetwork(CasperLabsNetwork):
     """ A single node network with just a bootstrap """
 
-    def create_cl_network(self, signed_deploy=False):
+    def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(self.docker_client,
                               node_private_key=kp.private_key,
                               node_public_key=kp.public_key,
                               network=self.create_docker_network())
-        config.node_env['CL_CASPER_IGNORE_DEPLOY_SIGNATURE'] = 'false' if signed_deploy else 'true'
         self.add_bootstrap(config)
 
 
