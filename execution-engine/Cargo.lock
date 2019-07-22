@@ -348,6 +348,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ee-221-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
 name = "ee-401-regression"
 version = "0.1.0"
 dependencies = [
