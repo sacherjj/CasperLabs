@@ -16,7 +16,7 @@ use cl_std::value::account::{PublicKey, PurseId};
 use cl_std::value::U512;
 
 fn get_balance(purse_id: PurseId) -> Option<U512> {
-    let mint_public_hash = get_uref("mint");
+    let mint_public_hash = get_uref("mint").expect("should have mint uref");
     let mint_contract_key: Key = read(mint_public_hash.to_u_ptr().unwrap_or_else(|| revert(103)));
 
     let mint_contract_pointer = match mint_contract_key.to_c_ptr() {

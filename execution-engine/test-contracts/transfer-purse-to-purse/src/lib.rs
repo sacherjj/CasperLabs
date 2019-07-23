@@ -16,7 +16,7 @@ use cl_std::value::account::PurseId;
 use cl_std::value::U512;
 
 fn get_balance(purse_id: PurseId) -> Option<U512> {
-    let mint_public_hash = get_uref("mint");
+    let mint_public_hash = get_uref("mint").expect("should have mint uref");
     let mint_contract_key: Key = read(mint_public_hash.to_u_ptr().unwrap_or_else(|| revert(103)));
 
     let mint_contract_pointer = match mint_contract_key.to_c_ptr() {
@@ -40,7 +40,10 @@ pub extern "C" fn call() {
     add_uref("purse:main", &Key::from(main_purse.value()));
 
     let src_purse_name: String = get_arg(0);
-    let src_purse = match get_uref(&src_purse_name).as_uref() {
+    let src_purse = match get_uref(&src_purse_name)
+        .unwrap_or_else(|| panic!("should have uref {}", src_purse_name))
+        .as_uref()
+    {
         Some(uref) => PurseId::new(*uref),
         None => revert(101),
     };
@@ -53,7 +56,8 @@ pub extern "C" fn call() {
         add_uref(&dst_purse_name, &purse.value().into());
         purse
     } else {
-        let uref_key = get_uref(&dst_purse_name);
+        let uref_key = get_uref(&dst_purse_name)
+            .unwrap_or_else(|| panic!("should have uref {}", dst_purse_name));
         match uref_key.as_uref() {
             Some(uref) => PurseId::new(*uref),
             None => revert(102),

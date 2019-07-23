@@ -42,7 +42,12 @@ pub extern "C" fn call() {
     assert_eq!(hello_world, "Hello, world!");
 
     // Read data through dedicated FFI function
-    let hello_world: String = read(get_uref("URef1").to_u_ptr().expect("Unable to get uptr"));
+    let hello_world: String = read(
+        get_uref("URef1")
+            .expect("should have URef1")
+            .to_u_ptr()
+            .expect("Unable to get uptr"),
+    );
     assert_eq!(hello_world, "Hello, world!");
 
     // Remove uref
@@ -53,7 +58,7 @@ pub extern "C" fn call() {
     assert!(has_uref("URef2"));
 
     // Get the big value back
-    let big_value_key = get_uref("URef2");
+    let big_value_key = get_uref("URef2").expect("should have URef2");
     let big_value_uptr = big_value_key
         .to_u_ptr()
         .expect("Unable to get uptr for URef2");

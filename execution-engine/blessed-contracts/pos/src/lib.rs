@@ -123,7 +123,7 @@ pub extern "C" fn call() {
     let method_name: String = contract_api::get_arg(0);
     let timestamp = contract_api::get_blocktime();
     let pos_purse = match contract_api::get_uref(PURSE_KEY) {
-        Key::URef(uref) => PurseId::new(uref),
+        Some(Key::URef(uref)) => PurseId::new(uref),
         _ => panic!("PoS purse ID not found"),
     };
 
