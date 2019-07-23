@@ -13,10 +13,11 @@ from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
 from test.cl_node.nonce_registry import NonceRegistry
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+from pathlib import Path
 
 def resource(file_name):
     RESOURCES_PATH="../../resources/"
-    return os.path.join(os.path.dirname(os.path.realpath(__file__)), RESOURCES_PATH, file_name)
+    return Path(os.path.dirname(os.path.realpath(__file__)), RESOURCES_PATH, file_name)
 
 class DockerClient(CasperLabsClient, LoggingMixin):
 
