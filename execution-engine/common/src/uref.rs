@@ -2,6 +2,7 @@ use bitflags;
 
 use crate::alloc::string::String;
 use crate::alloc::vec::Vec;
+use crate::base16;
 use crate::bytesrepr;
 use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};
 use crate::contract_api::pointers::UPointer;
@@ -150,8 +151,22 @@ impl URef {
         }
     }
 
+    /// Formats address and its access rights in an unique way that could be
+    /// used as a name when storing given uref in a global state.
+    ///
     pub fn as_string(&self) -> String {
-        format!("{:?}", self)
+        // Extract bits as numerical value, with no flags marked as 0.
+        let access_rights_bits = self
+            .access_rights()
+            .map(|value| value.bits())
+            .unwrap_or_default();
+        // Access rights is represented as octal, which means that max value of u8 can be represented
+        // as maximum of 3 octal digits.
+        format!(
+            "uref-{}-{:03o}",
+            base16::encode_lower(&self.addr()),
+            access_rights_bits
+        )
     }
 }
 
@@ -218,7 +233,6 @@ mod tests {
     use crate::gens;
     use crate::test_utils;
     use crate::uref::{AccessRights, URef};
-    use alloc::string::String;
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)
@@ -276,14 +290,22 @@ mod tests {
     fn uref_as_string() {
         // Since we are putting URefs to known_urefs map keyed by the label that `as_string()`
         // returns, any changes to the string representation of that type cannot break the format.
-        let expected_hash = core::iter::repeat("0").take(64).collect::<String>();
         let addr_array = [0u8; 32];
         let uref_a = URef::new(addr_array, AccessRights::READ);
-        assert_eq!(uref_a.as_string(), format!("URef({}, READ)", expected_hash));
+        assert_eq!(
+            uref_a.as_string(),
+            "uref-0000000000000000000000000000000000000000000000000000000000000000-001"
+        );
         let uref_b = URef::new(addr_array, AccessRights::WRITE);
         assert_eq!(
             uref_b.as_string(),
-            format!("URef({}, WRITE)", expected_hash)
+            "uref-0000000000000000000000000000000000000000000000000000000000000000-002"
+        );
+
+        let uref_c = uref_b.remove_access_rights();
+        assert_eq!(
+            uref_c.as_string(),
+            "uref-0000000000000000000000000000000000000000000000000000000000000000-000"
         );
     }
 }

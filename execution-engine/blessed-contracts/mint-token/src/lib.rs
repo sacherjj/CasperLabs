@@ -38,10 +38,12 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
         let balance_uref: Key = contract_api::new_uref(initial_balance).into();
 
         let purse_key: URef = contract_api::new_uref(()).into();
+        let purse_uref_name = purse_key.remove_access_rights().as_string();
+
         let purse_id: WithdrawId = WithdrawId::from_uref(purse_key).unwrap();
 
         // store balance uref so that the runtime knows the mint has full access
-        contract_api::add_uref(&format!("{:?}", purse_id.raw_id()), &balance_uref);
+        contract_api::add_uref(&purse_uref_name, &balance_uref);
 
         // store association between purse id and balance uref
         //
