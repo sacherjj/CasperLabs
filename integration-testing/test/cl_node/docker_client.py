@@ -126,7 +126,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         # for integration testing.
 
         def docker_path(p):
-            return Path('/data', str(p).split('/')[-2:])
+            return Path(*(['/data'] + str(p).split('/')[-2:]))
 
         public_key = public_key or docker_path(GENESIS_ACCOUNT.public_key_path)
         private_key = private_key or docker_path(GENESIS_ACCOUNT.private_key_path)
