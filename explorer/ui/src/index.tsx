@@ -13,6 +13,7 @@ import './styles/custom.scss';
 
 // Make `jQuery` available in the window in case any Javascript we import directly uses it.
 import * as jQuery from 'jquery';
+import * as d3 from 'd3';
 
 import CasperContainer from './containers/CasperContainer';
 import AuthContainer from './containers/AuthContainer';
@@ -23,6 +24,7 @@ import { Auth0Service, MockAuthService } from './services/AuthService';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
+w.d3 = d3;
 
 const authService = window.config.auth.mock.enabled
   ? new MockAuthService()
@@ -34,8 +36,12 @@ const casperService = new CasperService(
 
 const errors = new ErrorContainer();
 const auth = new AuthContainer(errors, authService, casperService);
-const casper = new CasperContainer(errors, faucetService, casperService, () =>
-  auth.refreshBalances(true)
+const casper = new CasperContainer(
+  errors,
+  faucetService,
+  casperService,
+  // Update the balances when a new faucet request went through.
+  () => auth.refreshBalances(true)
 );
 
 ReactDOM.render(

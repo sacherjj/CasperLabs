@@ -1,21 +1,34 @@
 import React from 'react';
-import { UnderConstruction } from './Utils';
+import { observer } from 'mobx-react';
+import CasperContainer from '../containers/CasperContainer';
+import { RefreshableComponent } from './Utils';
+import { BlockDAG } from './BlockDAG';
 
-const Explorer = () => (
-  <UnderConstruction>
-    <p>
-      Interactive blockchain browser with D3. Meanwhile you can use the CLI
-      client to{' '}
-      <a
-        href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker#visualizing-the-dag"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        visualize
-      </a>{' '}
-      the DAG.
-    </p>
-  </UnderConstruction>
-);
+interface Props {
+  casper: CasperContainer;
+}
 
-export default Explorer;
+const DefaultDepth = 10;
+
+/** Show the tips of the DAG. */
+@observer
+export default class Explorer extends RefreshableComponent<Props, {}> {
+  async refresh() {
+    this.props.casper.refreshBlockDag(DefaultDepth);
+  }
+
+  render() {
+    return (
+      <div>
+        <BlockDAG
+          title="Block DAG tips"
+          blocks={this.props.casper.blocks}
+          refresh={() => this.refresh()}
+          footerMessage="Select a block to see its details."
+          width="100%"
+          height="600"
+        />
+      </div>
+    );
+  }
+}
