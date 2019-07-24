@@ -2,7 +2,22 @@
 """
 CasperLabs Client API library and command line tool.
 """
+
+# Hack to fix the relative imports problems #
 import sys
+from pathlib import Path
+file = Path(__file__).resolve()
+parent, root = file.parent, file.parents[1]
+sys.path.append(str(root))
+
+# Additionally remove the current file's directory from sys.path
+try:
+    sys.path.remove(str(parent))
+except ValueError: # Already removed
+    pass
+
+# end of hack #
+
 import time
 import argparse
 import grpc
