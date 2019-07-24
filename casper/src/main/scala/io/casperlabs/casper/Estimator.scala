@@ -105,20 +105,21 @@ object Estimator {
     blockDag.getMainChildren(blockHash).flatMap {
       case None =>
         blockHash.pure[F]
-      case Some(mainChildren) =>
-        for {
-          // make sure they are reachable from latestMessages
-          reachableMainChildren <- mainChildren.filterA(b => scores.contains(b).pure[F])
-          result <- if (reachableMainChildren.isEmpty) {
-                     blockHash.pure[F]
-                   } else {
-                     forkChoiceTip[F](
-                       blockDag,
-                       reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8),
-                       scores
-                     )
-                   }
-        } yield result
+      case Some(mainChildren) => {
+        // make sure they are reachable from latestMessages
+        val reachableMainChildren = mainChildren.filter(scores.contains)
+        if (reachableMainChildren.isEmpty) {
+          blockHash.pure[F]
+        } else {
+          val reachableChildrenSorted =
+            reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8)
+          forkChoiceTip[F](
+            blockDag,
+            reachableChildrenSorted,
+            scores
+          )
+        }
+      }
     }
 
 }
