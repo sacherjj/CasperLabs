@@ -7,7 +7,7 @@ extern crate cl_std;
 use alloc::string::String;
 
 use cl_std::contract_api::{
-    add, add_uref, get_uref, has_uref, list_known_urefs, new_uref, read, remove_uref, write,
+    add, add_uref, get_uref, has_uref, list_known_urefs, new_uref, read, remove_uref, revert, write,
 };
 use cl_std::key::Key;
 use cl_std::value::U512;
@@ -42,12 +42,9 @@ pub extern "C" fn call() {
     assert_eq!(hello_world, "Hello, world!");
 
     // Read data through dedicated FFI function
-    let hello_world: String = read(
-        get_uref("URef1")
-            .expect("should have URef1")
-            .to_u_ptr()
-            .expect("Unable to get uptr"),
-    );
+    let uref1 = get_uref("URef1").unwrap_or_else(|| revert(100));
+    let uref1_ptr = uref1.to_u_ptr().unwrap_or_else(|| revert(101));
+    let hello_world: String = read(uref1_ptr);
     assert_eq!(hello_world, "Hello, world!");
 
     // Remove uref
@@ -58,7 +55,7 @@ pub extern "C" fn call() {
     assert!(has_uref("URef2"));
 
     // Get the big value back
-    let big_value_key = get_uref("URef2").expect("should have URef2");
+    let big_value_key = get_uref("URef2").unwrap_or_else(|| revert(102));
     let big_value_uptr = big_value_key
         .to_u_ptr()
         .expect("Unable to get uptr for URef2");

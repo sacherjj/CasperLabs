@@ -16,12 +16,12 @@ use cl_std::value::account::PurseId;
 use cl_std::value::U512;
 
 fn get_balance(purse_id: PurseId) -> Option<U512> {
-    let mint_public_hash = get_uref("mint").expect("should have mint uref");
-    let mint_contract_key: Key = read(mint_public_hash.to_u_ptr().unwrap_or_else(|| revert(103)));
+    let mint_public_hash = get_uref("mint").unwrap_or_else(|| revert(100));
+    let mint_contract_key: Key = read(mint_public_hash.to_u_ptr().unwrap_or_else(|| revert(101)));
 
     let mint_contract_pointer = match mint_contract_key.to_c_ptr() {
         Some(ptr) => ptr,
-        None => revert(104),
+        None => revert(102),
     };
 
     let main_purse_uref: URef = purse_id.value();
@@ -40,12 +40,12 @@ pub extern "C" fn call() {
     add_uref("purse:main", &Key::from(main_purse.value()));
 
     let src_purse_name: String = get_arg(0);
-    let src_purse = match get_uref(&src_purse_name)
-        .unwrap_or_else(|| panic!("should have uref {}", src_purse_name))
-        .as_uref()
-    {
+
+    let src_purse_key = get_uref(&src_purse_name).unwrap_or_else(|| revert(103));
+
+    let src_purse = match src_purse_key.as_uref() {
         Some(uref) => PurseId::new(*uref),
-        None => revert(101),
+        None => revert(104),
     };
     let dst_purse_name: String = get_arg(1);
 
@@ -56,11 +56,10 @@ pub extern "C" fn call() {
         add_uref(&dst_purse_name, &purse.value().into());
         purse
     } else {
-        let uref_key = get_uref(&dst_purse_name)
-            .unwrap_or_else(|| panic!("should have uref {}", dst_purse_name));
+        let uref_key = get_uref(&dst_purse_name).unwrap_or_else(|| revert(105));
         match uref_key.as_uref() {
             Some(uref) => PurseId::new(*uref),
-            None => revert(102),
+            None => revert(106),
         }
     };
     let amount: U512 = get_arg(2);
@@ -68,7 +67,7 @@ pub extern "C" fn call() {
     let transfer_result = transfer_from_purse_to_purse(src_purse, dst_purse, amount);
 
     // Assert is done here
-    let final_balance = get_balance(main_purse).unwrap_or_else(|| revert(104));
+    let final_balance = get_balance(main_purse).unwrap_or_else(|| revert(107));
 
     let result = format!("{:?}", transfer_result);
     // Add new urefs
