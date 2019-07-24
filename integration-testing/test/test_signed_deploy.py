@@ -1,41 +1,32 @@
-import os
+from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
+from test.cl_node.errors import NonZeroExitCodeError
+import pytest
 
-RESOURCES_PATH="../resources/"
-
-def resource(file_name):
-    return os.path.join(os.path.dirname(os.path.realpath(__file__)), RESOURCES_PATH, file_name)
-
-VALIDATOR_ID_HEX_PATH=resource("validator-id-hex")
-f = open(VALIDATOR_ID_HEX_PATH, "r")
-VALIDATOR_ID_HEX=f.read()
-
-def test_deploy_with_valid_signature(one_node_network_signed):
+def test_deploy_with_valid_signature(one_node_network):
     """
     Feature file: deploy.feature
     Scenario: Deploy with valid signature
     """
-    node0 = one_node_network_signed.docker_nodes[0]
-    node0.client.deploy(from_address=VALIDATOR_ID_HEX,
-                        session_contract='test_helloname.wasm',
-                        payment_contract='test_helloname.wasm',
-                        private_key="validator-0-private.pem",
-                        public_key="validator-0-public.pem")
+    node0 = one_node_network.docker_nodes[0]
+    client = node0.client
+    client.deploy(session_contract='test_helloname.wasm',
+                  payment_contract='test_helloname.wasm')
+
+    block_hash = extract_block_hash_from_propose_output(client.propose())
+    deploys = client.show_deploys(block_hash)
+    assert deploys[0].is_error is False
 
 
-def test_deploy_with_invalid_signature(one_node_network_signed):
+def test_deploy_with_invalid_signature(one_node_network):
     """
     Feature file: deploy.feature
     Scenario: Deploy with invalid signature
     """
 
-    node0 = one_node_network_signed.docker_nodes[0]
+    node0 = one_node_network.docker_nodes[0]
 
-    try:
-        node0.client.deploy(from_address=VALIDATOR_ID_HEX,
-                            session_contract='test_helloname.wasm',
+    with pytest.raises(NonZeroExitCodeError):
+        node0.client.deploy(session_contract='test_helloname.wasm',
                             payment_contract='test_helloname.wasm',
                             private_key="validator-0-private-invalid.pem",
                             public_key="validator-0-public-invalid.pem")
-        assert False, "Deploy signed with invalid signatures has been passed"
-    except Exception as ex:
-        assert "Deploy with INVALID_ARGUMENT: Invalid deploy signature." in node0.logs()

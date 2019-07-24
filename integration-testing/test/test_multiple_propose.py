@@ -13,8 +13,7 @@ def test_multiple_propose(one_node_network, wasm):
     OP-182: First propose should be success, and subsequent propose calls should throw an error/exception.
     """
     node = one_node_network.docker_nodes[0]
-    assert 'Success' in node.client.deploy(session_contract=wasm, payment_contract=wasm,
-                                           private_key="validator-0-private.pem", public_key="validator-0-public.pem")
+    assert 'Success' in node.client.deploy(session_contract=wasm, payment_contract=wasm)
     assert 'Success' in node.client.propose()
     number_of_blocks = node.client.get_blocks_count(100)
 
