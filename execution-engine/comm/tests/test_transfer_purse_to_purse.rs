@@ -84,7 +84,11 @@ fn should_run_purse_to_purse_transfer() {
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent
-    let purse_secondary_lookup_key = format!("{:?}", purse_secondary_key.as_uref().unwrap().addr());
+    let purse_secondary_lookup_key = purse_secondary_key
+        .as_uref()
+        .unwrap()
+        .remove_access_rights()
+        .as_string();
 
     let mint_contract_uref = transfer_result.builder().get_mint_contract_uref();
     // Obtain transforms for a mint account
@@ -200,7 +204,11 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent
-    let purse_secondary_lookup_key = format!("{:?}", purse_secondary_key.as_uref().unwrap().addr());
+    let purse_secondary_lookup_key = purse_secondary_key
+        .as_uref()
+        .unwrap()
+        .remove_access_rights()
+        .as_string();
 
     // Find `purse:secondary` for a balance
     let purse_secondary_uref = &mint_addkeys[&purse_secondary_lookup_key];

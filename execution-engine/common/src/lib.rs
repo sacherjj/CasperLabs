@@ -26,6 +26,7 @@ extern crate proptest;
 #[global_allocator]
 pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+pub mod base16;
 pub mod bytesrepr;
 pub mod contract_api;
 #[cfg(any(test, feature = "gens"))]
