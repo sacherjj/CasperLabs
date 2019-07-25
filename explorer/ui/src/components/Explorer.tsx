@@ -27,7 +27,18 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
           blocks={this.props.casper.blocks}
           refresh={() => this.refresh()}
           footerMessage="Select a block to see its details."
-          onSelected={block => (this.props.casper.selectedBlock = block)}
+          onSelected={block => {
+            let current = this.props.casper.selectedBlock;
+            if (
+              current &&
+              current.getSummary()!.getBlockHash_asB64() ===
+                block.getSummary()!.getBlockHash_asB64()
+            ) {
+              this.props.casper.selectedBlock = undefined;
+            } else {
+              this.props.casper.selectedBlock = block;
+            }
+          }}
           selected={this.props.casper.selectedBlock}
           depth={this.props.casper.dagDepth}
           onDepthChange={d => {
@@ -157,11 +168,13 @@ class BlockDetails extends React.Component<{
   }
 
   componentDidMount() {
+    // Scroll into view so people realize it's there.
     this.scrollToBlockDetails();
   }
 
   componentDidUpdate() {
-    this.scrollToBlockDetails();
+    // It gets annothing when it's already visible and keeps scrolling into view.
+    // this.scrollToBlockDetails();
   }
 
   scrollToBlockDetails() {
