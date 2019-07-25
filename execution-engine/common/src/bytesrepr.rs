@@ -460,6 +460,36 @@ impl ToBytes for &str {
     }
 }
 
+impl<T: ToBytes, E: ToBytes> ToBytes for Result<T, E> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let (mut variant, mut value) = match self {
+            Ok(result) => (1u8.to_bytes()?, result.to_bytes()?),
+            Err(error) => (0u8.to_bytes()?, error.to_bytes()?),
+        };
+        let mut result: Vec<u8> = Vec::with_capacity(U8_SIZE + value.len());
+        result.append(&mut variant);
+        result.append(&mut value);
+        Ok(result)
+    }
+}
+
+impl<T: FromBytes, E: FromBytes> FromBytes for Result<T, E> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (variant, rem): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
+        match variant {
+            0 => {
+                let (value, rem): (E, &[u8]) = FromBytes::from_bytes(rem)?;
+                Ok((Err(value), rem))
+            }
+            1 => {
+                let (value, rem): (T, &[u8]) = FromBytes::from_bytes(rem)?;
+                Ok((Ok(value), rem))
+            }
+            _ => Err(Error::FormattingError),
+        }
+    }
+}
+
 #[cfg(test)]
 mod proptests {
     // Bring the macros and other important things into scope.
@@ -573,6 +603,11 @@ mod proptests {
         #[test]
         fn test_public_key(pk in public_key_arb()) {
             assert!(test_serialization_roundtrip(&pk))
+        }
+
+        #[test]
+        fn test_result(result in result_arb()) {
+            assert!(test_serialization_roundtrip(&result))
         }
     }
 
