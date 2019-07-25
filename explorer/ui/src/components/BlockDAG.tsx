@@ -73,7 +73,6 @@ export class BlockDAG extends React.Component<Props, {}> {
 
     let graph: Graph = toGraph(this.props.blocks);
     graph = calculateCoordinates(graph, width, height);
-    graph = connectLinks(graph);
 
     const zoom: any = d3
       .zoom()
@@ -121,7 +120,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .attr('stroke-width', '1.5px')
       .attr('fill', (d: d3Node) => color(d.validator));
 
-    node
+    const label = node
       .append('text')
       .text((d: d3Node) => d.title)
       .attr('x', 6)
@@ -136,6 +135,28 @@ export class BlockDAG extends React.Component<Props, {}> {
         (d: d3Node) => `Block: ${d.id} @ ${d.rank}\nValidator: ${d.validator}`
       );
 
+    const focus = (d: any) => {
+      let datum = d3.select(d3.event.target).datum() as d3Node;
+      node.style('opacity', x =>
+        graph.areNeighbours(x.id, datum.id) ? 1 : 0.1
+      );
+      label.attr('display', x =>
+        graph.areNeighbours(x.id, datum.id) ? 'block' : 'none'
+      );
+      link.style('opacity', x =>
+        x.source.id === datum.id || x.target.id === datum.id ? 1 : 0.1
+      );
+    };
+
+    function unfocus() {
+      label.attr('display', 'block');
+      node.style('opacity', 1);
+      link.style('opacity', 1);
+    }
+
+    node.on('mouseover', focus).on('mouseout', unfocus);
+
+    // Adjust positions.
     const ticked = () => {
       link
         .attr('x1', (d: any) => d.source.x)
@@ -169,84 +190,104 @@ const shorten = (d: any, by: number) => {
 
 /** Turn blocks into the reduced graph structure. */
 const toGraph = (blocks: BlockInfo[]) => {
-  let graph: Graph = {
-    nodes: blocks.map(block => {
-      let id = blockHash(block);
-      return {
-        id: id,
-        title: id.substr(0, 10) + '...',
-        validator: validatorHash(block),
-        rank: block
-          .getSummary()!
-          .getHeader()!
-          .getRank()
-      };
-    }),
-    links: blocks.flatMap(block => {
-      let child = blockHash(block);
-      let parents = block
+  let nodes: d3Node[] = blocks.map(block => {
+    let id = blockHash(block);
+    return {
+      id: id,
+      title: id.substr(0, 10) + '...',
+      validator: validatorHash(block),
+      rank: block
         .getSummary()!
         .getHeader()!
-        .getParentHashesList_asU8()
-        .map(h => encodeBase16(h));
-      return parents.map(parent => {
-        return {
-          source: child,
-          target: parent,
-          isMainParent: parent === parents[0]
-        };
-      });
-    })
-  };
+        .getRank()
+    };
+  });
 
-  graph = {
-    nodes: [
-      { id: 'genesis', title: 'genesis...', validator: '', rank: 0 },
-      {
-        id: 'abcdefghij1234567890',
-        title: 'abcdefghij...',
-        validator: 'validator-1',
-        rank: 1
-      },
-      {
-        id: 'bcdefghijk1234567890',
-        title: 'bcdefghijk...',
-        validator: 'validator-2',
-        rank: 1
-      },
-      {
-        id: 'cdefghijkl1234567890',
-        title: 'cdefghijkl...',
-        validator: 'validator-1',
-        rank: 2
-      },
-      {
-        id: 'defghijlmn1234567890',
-        title: 'defghijlmn...',
-        validator: 'validator-3',
-        rank: 3
-      }
-    ],
-    links: [
-      { source: 'abcdefghij1234567890', target: 'genesis', isMainParent: true },
-      { source: 'bcdefghijk1234567890', target: 'genesis', isMainParent: true },
-      {
-        source: 'cdefghijkl1234567890',
-        target: 'abcdefghij1234567890',
-        isMainParent: true
-      },
-      {
-        source: 'cdefghijkl1234567890',
-        target: 'bcdefghijk1234567890',
-        isMainParent: false
-      },
-      {
-        source: 'defghijlmn1234567890',
-        target: 'cdefghijkl1234567890',
-        isMainParent: true
-      }
-    ]
-  };
+  let nodeMap = new Map(nodes.map(x => [x.id, x]));
+
+  let links = blocks.flatMap(block => {
+    let child = blockHash(block);
+
+    let parents = block
+      .getSummary()!
+      .getHeader()!
+      .getParentHashesList_asU8()
+      .map(h => encodeBase16(h));
+
+    return parents.filter(nodeMap.has).map(parent => {
+      return {
+        source: nodeMap.get(child)!,
+        target: nodeMap.get(parent)!,
+        isMainParent: parent === parents[0]
+      };
+    });
+  });
+
+  let graph = new Graph(nodes, links);
+
+  // Test data.
+  nodes = [
+    {
+      id: 'genesis',
+      title: 'genesis...',
+      validator: '',
+      rank: 0
+    },
+    {
+      id: 'abcdefghij1234567890',
+      title: 'abcdefghij...',
+      validator: 'validator-1',
+      rank: 1
+    },
+    {
+      id: 'bcdefghijk1234567890',
+      title: 'bcdefghijk...',
+      validator: 'validator-2',
+      rank: 1
+    },
+    {
+      id: 'cdefghijkl1234567890',
+      title: 'cdefghijkl...',
+      validator: 'validator-1',
+      rank: 2
+    },
+    {
+      id: 'defghijlmn1234567890',
+      title: 'defghijlmn...',
+      validator: 'validator-3',
+      rank: 3
+    }
+  ];
+
+  links = [
+    {
+      source: nodes[1],
+      target: nodes[0],
+      isMainParent: true
+    },
+    {
+      source: nodes[2],
+      target: nodes[0],
+      isMainParent: true
+    },
+    {
+      source: nodes[3],
+      target: nodes[2],
+      isMainParent: true
+    },
+    {
+      source: nodes[3],
+      target: nodes[1],
+      isMainParent: false
+    },
+    {
+      source: nodes[4],
+      target: nodes[3],
+      isMainParent: true
+    }
+  ];
+
+  graph = new Graph(nodes, links);
 
   return graph;
 };
@@ -267,16 +308,6 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
   return graph;
 };
 
-/** Replace string `id` in links with nodes. */
-const connectLinks = (graph: Graph) => {
-  const nodes = new Map(graph.nodes.map(x => [x.id, x]));
-  graph.links.forEach(link => {
-    if (typeof link.source === 'string') link.source = nodes.get(link.source)!;
-    if (typeof link.target === 'string') link.target = nodes.get(link.target)!;
-  });
-  return graph;
-};
-
 const blockHash = (block: BlockInfo) =>
   encodeBase16(block.getSummary()!.getBlockHash_asU8());
 
@@ -288,20 +319,35 @@ const validatorHash = (block: BlockInfo) =>
       .getValidatorPublicKey_asU8()
   );
 
-interface d3Node extends d3.SimulationNodeDatum {
+interface d3Node {
   id: string;
   title: string;
   validator: string;
   rank: number;
+  x?: number;
+  y?: number;
 }
 
-interface d3Link extends d3.SimulationLinkDatum<d3Node> {
-  source: string | d3Node;
-  target: string | d3Node;
+interface d3Link {
+  source: d3Node;
+  target: d3Node;
   isMainParent: boolean;
 }
 
-interface Graph {
-  nodes: d3Node[];
-  links: d3Link[];
+class Graph {
+  private targets: Map<String, Set<String>> = new Map();
+
+  constructor(public nodes: d3Node[], public links: d3Link[]) {
+    links.forEach(link => {
+      let targets = this.targets.get(link.source.id) || new Set<String>();
+      targets.add(link.target.id);
+      this.targets.set(link.source.id, targets);
+    });
+  }
+
+  hasTarget = (from: string, to: string) =>
+    this.targets.has(from) && this.targets.get(from)!.has(to);
+
+  areNeighbours = (a: string, b: string) =>
+    a === b || this.hasTarget(a, b) || this.hasTarget(b, a);
 }
