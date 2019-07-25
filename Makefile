@@ -325,20 +325,20 @@ package-system-contracts: \
 	execution-engine/target/system-contracts.tar.gz
 
 # Compile a system contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
-.make/system-contracts/%: $(RUST_SRC) .make/rustup-update
+.make/contracts/system/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$*)
 	cd execution-engine/contracts/system/$(CONTRACT) && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown --target-dir target
 	mkdir -p $(dir $@) && touch $@
 
 # Compile a validator contract;
-.make/validator-contracts/%: $(RUST_SRC) .make/rustup-update
+.make/contracts/validator/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$*)
-	cd execution-engine/validator-contracts/$(CONTRACT) && \
+	cd execution-engine/contracts/validator/$(CONTRACT) && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@
 
-client/src/main/resources/%.wasm: .make/validator-contracts/%
+client/src/main/resources/%.wasm: .make/contracts/validator/%
 	$(eval CONTRACT=$*)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
 
@@ -348,8 +348,8 @@ build-validator-contracts: \
 
 # Package all system contracts that we have to make available for download.
 execution-engine/target/system-contracts.tar.gz: \
-	.make/system-contracts/mint-token \
-	.make/system-contracts/pos
+	.make/contracts/system/mint-token \
+	.make/contracts/system/pos
 	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))
 	rm -rf $(ARCHIVE) $(ARCHIVE).gz
 	mkdir -p $(dir $@)
