@@ -21,6 +21,7 @@ CONTRACTS=(
     "blessed-urefs-access-rights"
     "transfer-purse-to-account"
     "deserialize-error"
+    "ee-221-regression"
 )
 
 source "${HOME}/.cargo/env"
