@@ -265,10 +265,10 @@ where
     /// Load the uref known by the given name into the Wasm memory
     pub fn get_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
-        let uref = self
-            .context
-            .get_uref(&name)
-            .ok_or_else(|| Error::URefNotFound(name))?;
+        // Take an optional uref, and pass its serialized value as is.
+        // This makes it easy to deserialize optional value on the other
+        // side without failing the execution when the value does not exist.
+        let uref = self.context.get_uref(&name).cloned();
         let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
 
         self.host_buf = uref_bytes;

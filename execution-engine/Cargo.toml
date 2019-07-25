@@ -7,6 +7,7 @@ members = [
     "contracts/system/pos",
     "contracts/system/test-mint-token",
     "contracts/test/create-purse-01",
+    "contracts/test/ee-221-regression",
     "contracts/test/ee-401-regression",
     "contracts/test/ee-401-regression-call",
     "contracts/test/transfer-to-account-01",

@@ -29,7 +29,7 @@ pub extern "C" fn hello_name_ext() {
 
 
 fn get_list_key(name: &str) -> UPointer<Vec<String>> {
-    get_uref(name).to_u_ptr().unwrap()
+    get_uref(name).unwrap().to_u_ptr().unwrap()
 }
 
 fn update_list(name: String) {
@@ -88,7 +88,7 @@ fn publish(msg: String) {
 
 #[no_mangle]
 pub extern "C" fn counter_ext() {
-    let i_key: UPointer<i32> = get_uref("count").to_u_ptr().unwrap();
+    let i_key: UPointer<i32> = get_uref("count").unwrap().to_u_ptr().unwrap();
     let method_name: String = get_arg(0);
     match method_name.as_str() {
         "inc" => add(i_key, 1),
