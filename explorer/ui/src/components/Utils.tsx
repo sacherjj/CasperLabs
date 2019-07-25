@@ -24,9 +24,13 @@ export const IconButton = (props: {
   title: string;
   icon: string;
 }) => (
-  <a onClick={_ => props.onClick()} title={props.title} className="icon-button">
+  <button
+    onClick={_ => props.onClick()}
+    title={props.title}
+    className="link icon-button"
+  >
     <Icon name={props.icon} />
-  </a>
+  </button>
 );
 
 export const RefreshButton = (props: { refresh: () => void }) => (

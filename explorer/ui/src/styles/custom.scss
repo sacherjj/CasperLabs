@@ -42,7 +42,8 @@ button.link {
   font: inherit;
   cursor: pointer;
   font-family: arial, sans-serif; /*input has OS specific font-family*/
-  color: #069;
+  //color: #069;
+  color: inherit;
 }
 button.link:hover {
   text-decoration: underline;

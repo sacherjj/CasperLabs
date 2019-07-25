@@ -52,14 +52,11 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
   }
 }
 
-class BlockDetails extends React.Component<
-  {
-    block: BlockInfo;
-    blocks: BlockInfo[];
-    onSelect: (blockHash: string) => void;
-  },
-  {}
-> {
+class BlockDetails extends React.Component<{
+  block: BlockInfo;
+  blocks: BlockInfo[];
+  onSelect: (blockHash: string) => void;
+}> {
   ref: HTMLElement | null = null;
 
   render() {
@@ -68,46 +65,65 @@ class BlockDetails extends React.Component<
     let header = summary.getHeader()!;
     let id = encodeBase16(summary.getBlockHash_asU8());
     let idB64 = summary.getBlockHash_asB64();
-    let attrs: Array<[string, any]> = [
-      ['Block hash', id],
-      ['Timestamp', new Date(header.getTimestamp()).toISOString()],
-      ['Rank', header.getRank()],
-      ['Validator', encodeBase16(header.getValidatorPublicKey_asU8())],
-      ['Validator block number', header.getValidatorBlockSeqNum()],
+    let validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
+    // Display 2 sets of fields next to each other.
+    let attrs: Array<Array<[string, any]>> = [
+      [['Block hash', id], ['Rank', header.getRank()]],
       [
-        'Parents',
-        <ul>
-          {header.getParentHashesList_asU8().map((x, idx) => (
-            <li key={idx}>
-              <BlockLink blockHash={x} onClick={this.props.onSelect} />
-            </li>
-          ))}
-        </ul>
+        ['Timestamp', new Date(header.getTimestamp()).toISOString()],
+        ['Deploy count', header.getDeployCount()]
       ],
       [
-        'Children',
-        <ul>
-          {this.props.blocks
-            .filter(
-              b =>
-                b
-                  .getSummary()!
-                  .getHeader()!
-                  .getParentHashesList_asB64()
-                  .findIndex(p => p === idB64) > -1
-            )
-            .map((b, idx) => (
+        ['Validator', validatorId],
+        ['Validator block number', header.getValidatorBlockSeqNum()]
+      ],
+      [
+        [
+          'Parents',
+          <ul>
+            {header.getParentHashesList_asU8().map((x, idx) => (
               <li key={idx}>
-                <BlockLink
-                  blockHash={b.getSummary()!.getBlockHash_asU8()}
-                  onClick={this.props.onSelect}
-                />
+                <BlockLink blockHash={x} onClick={this.props.onSelect} />
               </li>
             ))}
-        </ul>
+          </ul>
+        ],
+        [
+          'Children',
+          <ul>
+            {this.props.blocks
+              .filter(
+                b =>
+                  b
+                    .getSummary()!
+                    .getHeader()!
+                    .getParentHashesList_asB64()
+                    .findIndex(p => p === idB64) > -1
+              )
+              .map((b, idx) => (
+                <li key={idx}>
+                  <BlockLink
+                    blockHash={b.getSummary()!.getBlockHash_asU8()}
+                    onClick={this.props.onSelect}
+                  />
+                </li>
+              ))}
+          </ul>
+        ]
       ],
-      ['Deploy count', header.getDeployCount()],
-      ['Fault tolerance', block.getStatus()!.getFaultTolerance()]
+      [
+        [
+          'Validator stake',
+          header
+            .getState()!
+            .getBondsList()
+            .find(
+              x => encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
+            )!
+            .getStake()
+        ],
+        ['Fault tolerance', block.getStatus()!.getFaultTolerance()]
+      ]
     ];
     return (
       <div
@@ -119,12 +135,15 @@ class BlockDetails extends React.Component<
           title={`Block ${id}`}
           headers={[]}
           rows={attrs}
-          renderRow={(attr, idx) => (
+          renderRow={(group, idx) => (
             <tr key={idx}>
-              <th>{attr[0]}</th>
-              <td>{attr[1]}</td>
+              {group.flatMap((attr, idx) => [
+                <th key={`h-${idx}`}>{attr[0]}</th>,
+                <td key={`d-${idx}`}>{attr[1]}</td>
+              ])}
             </tr>
           )}
+          footerMessage="Follow the links to see the parents and children."
         />
       </div>
     );
