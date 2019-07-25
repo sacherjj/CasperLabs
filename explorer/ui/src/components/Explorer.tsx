@@ -117,13 +117,17 @@ class BlockDetails extends React.Component<{
       [
         [
           'Validator stake',
-          header
-            .getState()!
-            .getBondsList()
-            .find(
-              x => encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
-            )!
-            .getStake()
+          (() => {
+            let validatorBond = header
+              .getState()!
+              .getBondsList()
+              .find(
+                x =>
+                  encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
+              );
+            // Genesis doesn't have a validator.
+            return (validatorBond && validatorBond.getStake()) || null;
+          })()
         ],
         ['Fault tolerance', block.getStatus()!.getFaultTolerance()]
       ]
