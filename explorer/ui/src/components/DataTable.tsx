@@ -25,7 +25,7 @@ export default class DataTable<T> extends React.Component<Props<T>> {
             </div>
           )}
         </div>
-        <div className="card-body">
+        <div className="card-body" style={{ overflow: 'auto' }}>
           {this.props.rows == null ? (
             <Loading />
           ) : this.props.rows.length === 0 ? (
