@@ -48,7 +48,7 @@ const Home = observer((props: Props) => {
         <ExploreCard />
       </div>
 
-      <div className="card">
+      <div className="card mt-5">
         <div className="card-header bg-danger text-white">
           Looking for help?
         </div>

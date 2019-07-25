@@ -26,6 +26,7 @@ export class CasperContainer {
   // Block DAG
   @observable blocks: BlockInfo[] | null = null;
   @observable selectedBlock: BlockInfo | undefined = undefined;
+  @observable dagDepth = 10;
 
   constructor(
     private errors: ErrorContainer,
@@ -110,9 +111,9 @@ export class CasperContainer {
     }
   }
 
-  async refreshBlockDag(depth: number) {
+  async refreshBlockDag() {
     this.errors.capture(
-      this.casperService.getBlockInfos(depth).then(blocks => {
+      this.casperService.getBlockInfos(this.dagDepth).then(blocks => {
         this.blocks = blocks;
       })
     );

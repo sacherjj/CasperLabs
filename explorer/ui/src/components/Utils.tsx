@@ -55,7 +55,7 @@ export const Button = (props: {
 export const ListInline = (props: { children: any }) => {
   const children = [].concat(props.children);
   return (
-    <ul className="list-inline">
+    <ul className="list-inline mb-0">
       {children.map((child: any, idx: number) => (
         <li key={idx} className="list-inline-item">
           {child}

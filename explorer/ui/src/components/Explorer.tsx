@@ -12,13 +12,11 @@ interface Props {
   casper: CasperContainer;
 }
 
-const DefaultDepth = 10;
-
 /** Show the tips of the DAG. */
 @observer
 export default class Explorer extends RefreshableComponent<Props, {}> {
   async refresh() {
-    this.props.casper.refreshBlockDag(DefaultDepth);
+    this.props.casper.refreshBlockDag();
   }
 
   render() {
@@ -31,6 +29,11 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
           footerMessage="Select a block to see its details."
           onSelected={block => (this.props.casper.selectedBlock = block)}
           selected={this.props.casper.selectedBlock}
+          depth={this.props.casper.dagDepth}
+          onDepthChange={d => {
+            this.props.casper.dagDepth = d;
+            this.refresh();
+          }}
           width="100%"
           height="600"
         />

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
-import { RefreshButton, Loading } from './Utils';
+import { RefreshButton, Loading, ListInline } from './Utils';
 import * as d3 from 'd3';
 import $ from 'jquery';
 import { encodeBase16 } from '../lib/Conversions';
@@ -19,6 +19,8 @@ export interface Props {
   width: string | number;
   height: string | number;
   selected?: BlockInfo;
+  depth: number;
+  onDepthChange: (depth: number) => void;
   onSelected?: (block: BlockInfo) => void;
 }
 
@@ -33,7 +35,22 @@ export class BlockDAG extends React.Component<Props, {}> {
           <span>{this.props.title}</span>
           {this.props.refresh && (
             <div className="float-right">
-              <RefreshButton refresh={() => this.props.refresh!()} />
+              <ListInline>
+                <select
+                  title="Depth"
+                  value={this.props.depth.toString()}
+                  onChange={e =>
+                    this.props.onDepthChange!(Number(e.target.value))
+                  }
+                >
+                  {[10, 20, 50, 100].map(x => (
+                    <option key={x} value={x}>
+                      {x}
+                    </option>
+                  ))}
+                </select>
+                <RefreshButton refresh={() => this.props.refresh!()} />
+              </ListInline>
             </div>
           )}
         </div>
