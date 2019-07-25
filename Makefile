@@ -151,7 +151,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	# Add system contracts so we can use them in integration testing.
 	# For live tests we should mount them from a real source.
 	mkdir -p hack/docker/.genesis/system-contracts
-	tar -xvzf execution-engine/target/blessed-contracts.tar.gz -C hack/docker/.genesis/system-contracts
+	tar -xvzf execution-engine/target/system-contracts.tar.gz -C hack/docker/.genesis/system-contracts
 	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG) hack/docker
 	rm -rf hack/docker/.genesis
 	mkdir -p $(dir $@) && touch $@
@@ -322,7 +322,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 # Compile contracts that need to go into the Genesis block.
 package-system-contracts: \
-	execution-engine/target/blessed-contracts.tar.gz
+	execution-engine/target/system-contracts.tar.gz
 
 # Compile a system contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
 .make/system-contracts/%: $(RUST_SRC) .make/rustup-update
@@ -347,7 +347,7 @@ build-validator-contracts: \
 	client/src/main/resources/unbonding.wasm
 
 # Package all system contracts that we have to make available for download.
-execution-engine/target/blessed-contracts.tar.gz: \
+execution-engine/target/system-contracts.tar.gz: \
 	.make/system-contracts/mint-token \
 	.make/system-contracts/pos
 	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))

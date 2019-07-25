@@ -26,14 +26,14 @@ git_current_branch () {
 
 
 GIT_CURRENT_BRANCH="$(git_current_branch)"
-LINK="http://repo.casperlabs.io/casperlabs/repo/${GIT_CURRENT_BRANCH}/blessed-contracts.tar.gz"
-echo "Trying to download blessed contracts from $LINK using curl..."
+LINK="http://repo.casperlabs.io/casperlabs/repo/${GIT_CURRENT_BRANCH}/system-contracts.tar.gz"
+echo "Trying to download system contracts from $LINK using curl..."
 HTTP_STATUS_CODE="$(curl "$LINK" -o "$OUTPUT" -s -w "%{http_code}")"
 if [[ "$HTTP_STATUS_CODE" != "200" ]]; then
-    echo "Failed to download blessed contracts, building locally..."
-    cd "../.." && make package-blessed-contracts
+    echo "Failed to download system contracts, building locally..."
+    cd "../.." && make package-system-contracts
     cd "$CURRENT_DIR"
-    cp "../../execution-engine/target/blessed-contracts.tar.gz" "$OUTPUT"
+    cp "../../execution-engine/target/system-contracts.tar.gz" "$OUTPUT"
 fi
 
 $(cd "$(dirname "$OUTPUT")" && tar -xzf "$OUTPUT")
