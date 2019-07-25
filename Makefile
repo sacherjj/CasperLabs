@@ -79,7 +79,7 @@ docker-push/%: docker-build/%
 cargo-package-all: \
 	.make/cargo-package/execution-engine/common \
 	cargo-native-packager/execution-engine/comm \
-	package-blessed-contracts
+	package-system-contracts
 
 # Drone is already running commands in the `builderenv`, no need to delegate.
 cargo-native-packager/%:
@@ -147,11 +147,11 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 .make/docker-build/test/node: \
 		.make/docker-build/universal/node \
 		hack/docker/test-node.Dockerfile \
-		package-blessed-contracts
-	# Add blessed contracts so we can use them in integration testing.
+		package-system-contracts
+	# Add system contracts so we can use them in integration testing.
 	# For live tests we should mount them from a real source.
-	mkdir -p hack/docker/.genesis/blessed-contracts
-	tar -xvzf execution-engine/target/blessed-contracts.tar.gz -C hack/docker/.genesis/blessed-contracts
+	mkdir -p hack/docker/.genesis/system-contracts
+	tar -xvzf execution-engine/target/blessed-contracts.tar.gz -C hack/docker/.genesis/system-contracts
 	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG) hack/docker
 	rm -rf hack/docker/.genesis
 	mkdir -p $(dir $@) && touch $@
@@ -321,13 +321,13 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 
 # Compile contracts that need to go into the Genesis block.
-package-blessed-contracts: \
+package-system-contracts: \
 	execution-engine/target/blessed-contracts.tar.gz
 
-# Compile a blessed contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
-.make/blessed-contracts/%: $(RUST_SRC) .make/rustup-update
+# Compile a system contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
+.make/system-contracts/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$*)
-	cd execution-engine/blessed-contracts/$(CONTRACT) && \
+	cd execution-engine/contracts/system/$(CONTRACT) && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown --target-dir target
 	mkdir -p $(dir $@) && touch $@
 
@@ -346,15 +346,15 @@ build-validator-contracts: \
 	client/src/main/resources/bonding.wasm \
 	client/src/main/resources/unbonding.wasm
 
-# Package all blessed contracts that we have to make available for download.
+# Package all system contracts that we have to make available for download.
 execution-engine/target/blessed-contracts.tar.gz: \
-	.make/blessed-contracts/mint-token \
-	.make/blessed-contracts/pos
+	.make/system-contracts/mint-token \
+	.make/system-contracts/pos
 	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))
 	rm -rf $(ARCHIVE) $(ARCHIVE).gz
 	mkdir -p $(dir $@)
 	tar -cvf $(ARCHIVE) -T /dev/null
-	find execution-engine/blessed-contracts -wholename *.wasm | grep -v /release/deps/ | while read file; do \
+	find execution-engine/contracts/system -wholename *.wasm | grep -v /release/deps/ | while read file; do \
 		cd $$(dirname $$file); tar -rvf $(ARCHIVE) $$(basename $$file); cd -; \
 	done
 	gzip $(ARCHIVE)
