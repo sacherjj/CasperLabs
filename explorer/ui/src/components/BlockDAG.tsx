@@ -61,6 +61,9 @@ export class BlockDAG extends React.Component<Props, {}> {
     if (this.props.blocks == null || this.props.blocks.length === 0) return;
 
     const color = d3.scaleOrdinal(d3.schemeCategory10);
+    const circleRadius = 5;
+    const lineColor = '#AAA';
+
     const svg = d3.select(this.ref);
     const container = svg.append('g');
 
@@ -68,8 +71,9 @@ export class BlockDAG extends React.Component<Props, {}> {
     const width = $(this.ref!).width()!;
     const height = $(this.ref!).height()!;
 
-    const circleRadius = 5;
-    const lineColor = '#AAA';
+    let graph: Graph = toGraph(this.props.blocks);
+    graph = calculateCoordinates(graph, width, height);
+    graph = connectLinks(graph);
 
     const zoom: any = d3
       .zoom()
@@ -90,8 +94,6 @@ export class BlockDAG extends React.Component<Props, {}> {
       .append('path')
       .attr('d', 'M 3 4 7 6 3 8')
       .attr('fill', lineColor);
-
-    const graph: Graph = toGraph(this.props.blocks);
 
     const link = container
       .append('g')
@@ -117,18 +119,22 @@ export class BlockDAG extends React.Component<Props, {}> {
       .attr('r', circleRadius)
       .attr('stroke', '#fff')
       .attr('stroke-width', '1.5px')
-      .attr('fill', (d: d3Node) => color(d.group));
+      .attr('fill', (d: d3Node) => color(d.validator));
 
     node
       .append('text')
       .text((d: d3Node) => d.title)
       .attr('x', 6)
-      .attr('y', 3)
+      .attr('y', 12)
       .style('font-family', 'Arial')
       .style('font-size', 12)
       .style('pointer-events', 'none'); // to prevent mouseover/drag capture
 
-    node.append('title').text((d: d3Node) => d.id);
+    node
+      .append('title')
+      .text(
+        (d: d3Node) => `Block: ${d.id} @ ${d.rank}\nValidator: ${d.validator}`
+      );
 
     const ticked = () => {
       link
@@ -149,34 +155,11 @@ export class BlockDAG extends React.Component<Props, {}> {
       node.attr('transform', (d: any) => 'translate(' + d.x + ',' + d.y + ')');
     };
 
-    d3.forceSimulation(graph.nodes)
-      .force('charge', d3.forceManyBody().strength(-3000))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('x', d3.forceX(width / 2).strength(1))
-      .force('y', d3.forceY(height / 2).strength(1))
-      .force(
-        'link',
-        d3
-          .forceLink<d3Node, d3Link>(graph.links)
-          .id(x => x.id)
-          .distance(50)
-          .strength(1)
-      )
-      .on('tick', ticked);
-
-    d3.forceSimulation(graph.nodes)
-      .force('charge', d3.forceManyBody().strength(-50))
-      .force(
-        'link',
-        d3
-          .forceLink(graph.links)
-          .distance(0)
-          .strength(2)
-      );
+    ticked();
   }
 }
 
-// Shorten lines by a fixed amount so that the line doesn't stick out from under the arrows tip.
+/** Shorten lines by a fixed amount so that the line doesn't stick out from under the arrows tip. */
 const shorten = (d: any, by: number) => {
   let length = Math.sqrt(
     Math.pow(d.target.x - d.source.x, 2) + Math.pow(d.target.y - d.source.y, 2)
@@ -184,6 +167,7 @@ const shorten = (d: any, by: number) => {
   return Math.max(0, (length - by) / length);
 };
 
+/** Turn blocks into the reduced graph structure. */
 const toGraph = (blocks: BlockInfo[]) => {
   let graph: Graph = {
     nodes: blocks.map(block => {
@@ -191,7 +175,11 @@ const toGraph = (blocks: BlockInfo[]) => {
       return {
         id: id,
         title: id.substr(0, 10) + '...',
-        group: validatorHash(block)
+        validator: validatorHash(block),
+        rank: block
+          .getSummary()!
+          .getHeader()!
+          .getRank()
       };
     }),
     links: blocks.flatMap(block => {
@@ -213,26 +201,30 @@ const toGraph = (blocks: BlockInfo[]) => {
 
   graph = {
     nodes: [
-      { id: 'genesis', title: 'genesis...', group: '' },
+      { id: 'genesis', title: 'genesis...', validator: '', rank: 0 },
       {
         id: 'abcdefghij1234567890',
         title: 'abcdefghij...',
-        group: 'validator-1'
+        validator: 'validator-1',
+        rank: 1
       },
       {
         id: 'bcdefghijk1234567890',
         title: 'bcdefghijk...',
-        group: 'validator-2'
+        validator: 'validator-2',
+        rank: 1
       },
       {
         id: 'cdefghijkl1234567890',
         title: 'cdefghijkl...',
-        group: 'validator-1'
+        validator: 'validator-1',
+        rank: 2
       },
       {
         id: 'defghijlmn1234567890',
         title: 'defghijlmn...',
-        group: 'validator-3'
+        validator: 'validator-3',
+        rank: 3
       }
     ],
     links: [
@@ -259,6 +251,32 @@ const toGraph = (blocks: BlockInfo[]) => {
   return graph;
 };
 
+/** Calculate coordinates so that valiators are in horizontal swimlanes, time flowing left to right. */
+const calculateCoordinates = (graph: Graph, width: number, height: number) => {
+  const validators = [...new Set(graph.nodes.map(x => x.validator))].sort();
+  const verticalStep = height / (validators.length + 1);
+  const maxRank = Math.max(...graph.nodes.map(x => x.rank));
+  const minRank = Math.min(...graph.nodes.map(x => x.rank));
+  const horizontalStep = width / (maxRank - minRank + 2);
+
+  graph.nodes.forEach(node => {
+    node.y = (validators.indexOf(node.validator) + 1) * verticalStep;
+    node.x = (node.rank - minRank + 1) * horizontalStep;
+  });
+
+  return graph;
+};
+
+/** Replace string `id` in links with nodes. */
+const connectLinks = (graph: Graph) => {
+  const nodes = new Map(graph.nodes.map(x => [x.id, x]));
+  graph.links.forEach(link => {
+    if (typeof link.source === 'string') link.source = nodes.get(link.source)!;
+    if (typeof link.target === 'string') link.target = nodes.get(link.target)!;
+  });
+  return graph;
+};
+
 const blockHash = (block: BlockInfo) =>
   encodeBase16(block.getSummary()!.getBlockHash_asU8());
 
@@ -273,12 +291,13 @@ const validatorHash = (block: BlockInfo) =>
 interface d3Node extends d3.SimulationNodeDatum {
   id: string;
   title: string;
-  group: string;
+  validator: string;
+  rank: number;
 }
 
 interface d3Link extends d3.SimulationLinkDatum<d3Node> {
-  source: string;
-  target: string;
+  source: string | d3Node;
+  target: string | d3Node;
   isMainParent: boolean;
 }
 
