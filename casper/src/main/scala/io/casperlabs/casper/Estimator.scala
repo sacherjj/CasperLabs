@@ -31,22 +31,24 @@ object Estimator {
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
 
-    def replaceBlockHashWithChildren(
+    /** Finds children of the block b that can have been scored by the LMD algorithm.
+      * If no children exist (block B is the tip) return the tip.
+      *
+      * @param b block for which we want to find tips.
+      * @param scores map of the scores from the block hash to a score
+      * @return tips of the DAG.
+      */
+    def getBlockTips(
         b: BlockHash,
         scores: Map[BlockHash, Long]
     ): F[List[BlockHash]] =
-      for {
-        c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
-      } yield if (c.nonEmpty) c.toList else List(b)
-
-    def stillSame(
-        children: List[BlockHash],
-        nextChildren: List[BlockHash]
-    ): Boolean =
-      children.toSet == nextChildren.toSet
+      blockDag
+        .children(b)
+        .map(_.getOrElse(Set.empty).filter(scores.contains))
+        .map(c => if (c.isEmpty) List(b) else c.toList)
 
     /*
-     * it will return latestMessages except those blocks whose descendant
+     * Returns latestMessages except those blocks whose descendant
      * exists in latestMessages.
      */
     def tipsOfLatestMessages(
@@ -54,9 +56,8 @@ object Estimator {
         scores: Map[BlockHash, Long]
     ): F[List[BlockHash]] =
       for {
-        cr       <- blocks.flatTraverse(replaceBlockHashWithChildren(_, scores))
-        children = cr.distinct
-        result <- if (stillSame(blocks, children)) {
+        children <- blocks.flatTraverse(getBlockTips(_, scores)).map(_.distinct)
+        result <- if (blocks.toSet == children.toSet) {
                    children.pure[F]
                  } else {
                    tipsOfLatestMessages(children, scores)
