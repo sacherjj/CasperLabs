@@ -4,6 +4,7 @@ use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::convert::TryFrom;
 use core::fmt::{Debug, Display, Formatter};
 use failure::Fail;
 
@@ -272,21 +273,26 @@ impl PublicKey {
     pub fn value(self) -> [u8; KEY_SIZE] {
         self.0
     }
-
-    pub fn from_slice(slice: &[u8]) -> Option<PublicKey> {
-        if slice.len() != KEY_SIZE {
-            None
-        } else {
-            let mut buff = [0u8; 32];
-            buff.copy_from_slice(slice);
-            Some(PublicKey::new(buff))
-        }
-    }
 }
 
 impl From<[u8; KEY_SIZE]> for PublicKey {
     fn from(key: [u8; KEY_SIZE]) -> Self {
         PublicKey(key)
+    }
+}
+
+#[derive(Debug)]
+pub struct TryPublicKeyFromSliceError;
+
+impl TryFrom<&[u8]> for PublicKey {
+    type Error = TryPublicKeyFromSliceError;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        if bytes.len() != KEY_SIZE {
+            return Err(TryPublicKeyFromSliceError);
+        }
+        let mut public_key = [0u8; 32];
+        public_key.copy_from_slice(bytes);
+        Ok(PublicKey::new(public_key))
     }
 }
 
@@ -750,6 +756,8 @@ mod tests {
         Weight, KEY_SIZE, MAX_KEYS,
     };
     use alloc::collections::btree_map::BTreeMap;
+    use alloc::vec::Vec;
+    use core::convert::TryFrom;
 
     #[test]
     fn incremented_nonce() {
@@ -810,5 +818,23 @@ mod tests {
         let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk).is_ok());
         assert!(keys.remove_key(&PublicKey([1u8; KEY_SIZE])).is_err());
+    }
+
+    #[test]
+    fn public_key_from_slice() {
+        let bytes: Vec<u8> = (0..32).collect();
+        let public_key = PublicKey::try_from(&bytes[..]).expect("should create public key");
+        assert_eq!(&bytes, &public_key.value());
+    }
+    #[test]
+    fn public_key_from_slice_too_small() {
+        let _public_key =
+            PublicKey::try_from(&[0u8; 31][..]).expect_err("should not create public key");
+    }
+
+    #[test]
+    fn public_key_from_slice_too_big() {
+        let _public_key =
+            PublicKey::try_from(&[0u8; 33][..]).expect_err("should not create public key");
     }
 }
