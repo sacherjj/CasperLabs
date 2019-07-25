@@ -282,7 +282,7 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
 }
 
 #[derive(Debug)]
-pub struct TryPublicKeyFromSliceError;
+pub struct TryFromSliceForPublicKeyError;
 
 impl TryFrom<&[u8]> for PublicKey {
     type Error = TryPublicKeyFromSliceError;
