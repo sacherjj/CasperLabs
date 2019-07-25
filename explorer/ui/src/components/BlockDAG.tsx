@@ -18,6 +18,8 @@ export interface Props {
   footerMessage?: any;
   width: string | number;
   height: string | number;
+  selected?: BlockInfo;
+  onSelected?: (block: BlockInfo) => void;
 }
 
 export class BlockDAG extends React.Component<Props, {}> {
@@ -107,6 +109,8 @@ export class BlockDAG extends React.Component<Props, {}> {
     let graph: Graph = toGraph(this.props.blocks);
     graph = calculateCoordinates(graph, width, height);
 
+    const selectedId = this.props.selected && blockHash(this.props.selected);
+
     const link = container
       .append('g')
       .attr('class', 'links')
@@ -129,8 +133,12 @@ export class BlockDAG extends React.Component<Props, {}> {
     node
       .append('circle')
       .attr('r', CircleRadius)
-      .attr('stroke', '#fff')
-      .attr('stroke-width', '1.5px')
+      .attr('stroke', (d: d3Node) =>
+        selectedId && d.id === selectedId ? '#E00' : '#fff'
+      )
+      .attr('stroke-width', (d: d3Node) =>
+        selectedId && d.id === selectedId ? '3px' : '1.5px'
+      )
       .attr('fill', (d: d3Node) => color(d.validator));
 
     const label = node
@@ -161,13 +169,19 @@ export class BlockDAG extends React.Component<Props, {}> {
       );
     };
 
-    function unfocus() {
+    const unfocus = () => {
       label.attr('display', 'block');
       node.style('opacity', 1);
       link.style('opacity', 1);
-    }
+    };
+
+    const select = (d: any) => {
+      let datum = d3.select(d3.event.target).datum() as d3Node;
+      this.props.onSelected && this.props.onSelected(datum.block);
+    };
 
     node.on('mouseover', focus).on('mouseout', unfocus);
+    node.on('click', select);
 
     const updatePositions = () => {
       link
@@ -199,6 +213,7 @@ interface d3Node {
   rank: number;
   x?: number;
   y?: number;
+  block: BlockInfo;
 }
 
 interface d3Link {
@@ -236,7 +251,8 @@ const toGraph = (blocks: BlockInfo[]) => {
       rank: block
         .getSummary()!
         .getHeader()!
-        .getRank()
+        .getRank(),
+      block: block
     };
   });
 

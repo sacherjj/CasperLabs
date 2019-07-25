@@ -34,17 +34,19 @@ export default class DataTable<T> extends React.Component<Props<T>> {
             </div>
           ) : (
             <table className="table table-bordered">
-              <thead>
-                <tr>
-                  {this.props.headers.map(label =>
-                    this.props.renderHeader ? (
-                      this.props.renderHeader(label)
-                    ) : (
-                      <th key={label}>{label}</th>
-                    )
-                  )}
-                </tr>
-              </thead>
+              {this.props.headers.length > 0 && (
+                <thead>
+                  <tr>
+                    {this.props.headers.map(label =>
+                      this.props.renderHeader ? (
+                        this.props.renderHeader(label)
+                      ) : (
+                        <th key={label}>{label}</th>
+                      )
+                    )}
+                  </tr>
+                </thead>
+              )}
               <tbody>{this.props.rows.map(this.props.renderRow)}</tbody>
             </table>
           )}

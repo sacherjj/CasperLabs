@@ -25,6 +25,7 @@ export class CasperContainer {
 
   // Block DAG
   @observable blocks: BlockInfo[] | null = null;
+  @observable selectedBlock: BlockInfo | undefined = undefined;
 
   constructor(
     private errors: ErrorContainer,
