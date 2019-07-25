@@ -20,7 +20,7 @@ export interface Props {
   height: string | number;
   selected?: BlockInfo;
   depth: number;
-  onDepthChange: (depth: number) => void;
+  onDepthChange?: (depth: number) => void;
   onSelected?: (block: BlockInfo) => void;
 }
 
@@ -33,9 +33,9 @@ export class BlockDAG extends React.Component<Props, {}> {
       <div className="card mb-3">
         <div className="card-header">
           <span>{this.props.title}</span>
-          {this.props.refresh && (
-            <div className="float-right">
-              <ListInline>
+          <div className="float-right">
+            <ListInline>
+              {this.props.onDepthChange && (
                 <select
                   title="Depth"
                   value={this.props.depth.toString()}
@@ -49,10 +49,12 @@ export class BlockDAG extends React.Component<Props, {}> {
                     </option>
                   ))}
                 </select>
+              )}
+              {this.props.refresh && (
                 <RefreshButton refresh={() => this.props.refresh!()} />
-              </ListInline>
-            </div>
-          )}
+              )}
+            </ListInline>
+          </div>
         </div>
         <div className="card-body">
           {this.props.blocks == null ? (
@@ -66,9 +68,7 @@ export class BlockDAG extends React.Component<Props, {}> {
               width={this.props.width}
               height={this.props.height}
               ref={(ref: SVGSVGElement) => (this.ref = ref)}
-            >
-              {' '}
-            </svg>
+            ></svg>
           )}
         </div>
         {this.props.footerMessage && (
@@ -80,6 +80,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     );
   }
 
+  /** Called when the data is refreshed, when we get the blocks. */
   componentDidUpdate() {
     if (this.props.blocks == null || this.props.blocks.length === 0) return;
 
@@ -87,6 +88,8 @@ export class BlockDAG extends React.Component<Props, {}> {
     const color = d3.scaleOrdinal(d3.schemeCategory10);
 
     const svg = d3.select(this.ref);
+
+    // Append items that will not change.
     if (!this.initialized) {
       // Add the zoomable container.
       const container = svg.append('g');
