@@ -21,6 +21,12 @@ class NonceRegistry:
             NonceRegistry._registry[address] = nonce + 1
             return nonce
 
+    @staticmethod
+    def revert(address):
+        if NonceRegistry._registry is None:
+            raise Exception("Registry is empty! Did you forget to call `reset()`?")
+        with NonceRegistry._lock:
+            NonceRegistry._registry[address] -= 1
 
 
 

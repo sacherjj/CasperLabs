@@ -146,7 +146,13 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         if deploy_nonce != '':
             command += f" --nonce {deploy_nonce}"
 
-        r = self.invoke_client(command)
+        try:
+            r = self.invoke_client(command)
+            #if nonce is not None: NonceRegistry._registry[address] = nonce
+        except:
+            if nonce is None:
+                NonceRegistry.revert(address)
+            raise
         return r
 
     def show_block(self, block_hash: str) -> str:

@@ -266,35 +266,28 @@ class DockerNode(LoggingDockerBase):
             "Can transfer only to non-genesis accounts in test framework (1-20)."
         assert is_valid_account(from_account_id), "Must transfer from a valid account_id: 1-20 or 'genesis'"
 
-        # backup previous client to use python
-        previous_client_type = self._client
-        self.use_python_client()
-
         from_account = Account(from_account_id)
         to_account = Account(to_account_id)
         args_json = json.dumps([{"account": to_account.public_key_hex},
                                 {"u32": amount}])
         with from_account.public_key_path as public_key_path, from_account.private_key_path as private_key_path:
-            response, deploy_hash_bytes = self.client.deploy(from_address=from_account.public_key_hex,
-                                                             session_contract='transfer_to_account.wasm',
-                                                             payment_contract='transfer_to_account.wasm',
-                                                             public_key=public_key_path,
-                                                             private_key=private_key_path,
-                                                             args=self.client.abi.args_from_json(args_json))
+            response, deploy_hash_bytes = self.p_client.deploy(from_address=from_account.public_key_hex,
+                                                               session_contract='transfer_to_account.wasm',
+                                                               payment_contract='transfer_to_account.wasm',
+                                                               public_key=public_key_path,
+                                                               private_key=private_key_path,
+                                                               args=self.p_client.abi.args_from_json(args_json))
 
         deploy_hash_hex = deploy_hash_bytes.hex()
         assert len(deploy_hash_hex) == 64
 
-        response = self.client.propose()
+        response = self.p_client.propose()
 
         block_hash = response.block_hash.hex()
         assert len(deploy_hash_hex) == 64
 
-        for deploy_info in self.client.show_deploys(block_hash):
+        for deploy_info in self.p_client.show_deploys(block_hash):
             assert deploy_info.is_error is False
-
-        # restore to previous client operation
-        self._client = previous_client_type
 
         return block_hash
 
