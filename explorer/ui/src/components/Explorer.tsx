@@ -21,10 +21,10 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
     return (
       <div>
         <BlockDAG
-          title="Block DAG"
+          title="Recent Block DAG"
           blocks={this.props.casper.blocks}
           refresh={() => this.refresh()}
-          //footerMessage="Select a block to see its details."
+          footerMessage="Select a block to see its details."
           width="100%"
           height="600"
         />

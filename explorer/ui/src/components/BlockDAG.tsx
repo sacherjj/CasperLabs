@@ -7,6 +7,9 @@ import { encodeBase16 } from '../lib/Conversions';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 
+const CircleRadius = 8;
+const LineColor = '#AAA';
+
 export interface Props {
   title: string;
   refresh?: () => void;
@@ -19,6 +22,7 @@ export interface Props {
 
 export class BlockDAG extends React.Component<Props, {}> {
   ref: SVGSVGElement | null = null;
+  initialized = false;
 
   render() {
     return (
@@ -60,12 +64,41 @@ export class BlockDAG extends React.Component<Props, {}> {
   componentDidUpdate() {
     if (this.props.blocks == null || this.props.blocks.length === 0) return;
 
+    // Display each validator with its own color.
     const color = d3.scaleOrdinal(d3.schemeCategory10);
-    const circleRadius = 5;
-    const lineColor = '#AAA';
 
     const svg = d3.select(this.ref);
-    const container = svg.append('g');
+    if (!this.initialized) {
+      // Add the zoomable container.
+      const container = svg.append('g');
+
+      const zoom: any = d3
+        .zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', () => container.attr('transform', d3.event.transform));
+      svg.call(zoom);
+
+      // Draw an arrow at the end of the lines to point at parents.
+      svg
+        .append('svg:defs')
+        .append('svg:marker')
+        .attr('id', 'arrow')
+        .attr('refX', 6)
+        .attr('refY', 6)
+        .attr('markerWidth', 10)
+        .attr('markerHeight', 10)
+        .attr('orient', 'auto')
+        .append('path')
+        .attr('d', 'M 3 4 7 6 3 8')
+        .attr('fill', LineColor);
+
+      this.initialized = true;
+    }
+
+    const container = svg.select('g');
+
+    // Clear previous contents.
+    container.selectAll('g').remove();
 
     // See what the actual width and height is.
     const width = $(this.ref!).width()!;
@@ -74,26 +107,6 @@ export class BlockDAG extends React.Component<Props, {}> {
     let graph: Graph = toGraph(this.props.blocks);
     graph = calculateCoordinates(graph, width, height);
 
-    const zoom: any = d3
-      .zoom()
-      .scaleExtent([0.1, 4])
-      .on('zoom', () => container.attr('transform', d3.event.transform));
-    svg.call(zoom);
-
-    // Draw an arrow at the end of the lines to point at parents.
-    svg
-      .append('svg:defs')
-      .append('svg:marker')
-      .attr('id', 'arrow')
-      .attr('refX', 6)
-      .attr('refY', 6)
-      .attr('markerWidth', 10)
-      .attr('markerHeight', 10)
-      .attr('orient', 'auto')
-      .append('path')
-      .attr('d', 'M 3 4 7 6 3 8')
-      .attr('fill', lineColor);
-
     const link = container
       .append('g')
       .attr('class', 'links')
@@ -101,7 +114,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .data(graph.links)
       .enter()
       .append('line')
-      .attr('stroke', lineColor)
+      .attr('stroke', LineColor)
       .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 2 : 1))
       .attr('marker-end', 'url(#arrow)');
 
@@ -115,7 +128,7 @@ export class BlockDAG extends React.Component<Props, {}> {
 
     node
       .append('circle')
-      .attr('r', circleRadius)
+      .attr('r', CircleRadius)
       .attr('stroke', '#fff')
       .attr('stroke-width', '1.5px')
       .attr('fill', (d: d3Node) => color(d.validator));
@@ -123,7 +136,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     const label = node
       .append('text')
       .text((d: d3Node) => d.title)
-      .attr('x', 6)
+      .attr('x', 9)
       .attr('y', 12)
       .style('font-family', 'Arial')
       .style('font-size', 12)
@@ -156,8 +169,7 @@ export class BlockDAG extends React.Component<Props, {}> {
 
     node.on('mouseover', focus).on('mouseout', unfocus);
 
-    // Adjust positions.
-    const ticked = () => {
+    const updatePositions = () => {
       link
         .attr('x1', (d: any) => d.source.x)
         .attr('y1', (d: any) => d.source.y)
@@ -165,159 +177,20 @@ export class BlockDAG extends React.Component<Props, {}> {
           'x2',
           (d: any) =>
             d.source.x +
-            (d.target.x - d.source.x) * shorten(d, circleRadius + 2)
+            (d.target.x - d.source.x) * shorten(d, CircleRadius + 2)
         )
         .attr(
           'y2',
           (d: any) =>
             d.source.y +
-            (d.target.y - d.source.y) * shorten(d, circleRadius + 2)
+            (d.target.y - d.source.y) * shorten(d, CircleRadius + 2)
         );
       node.attr('transform', (d: any) => 'translate(' + d.x + ',' + d.y + ')');
     };
 
-    ticked();
+    updatePositions();
   }
 }
-
-/** Shorten lines by a fixed amount so that the line doesn't stick out from under the arrows tip. */
-const shorten = (d: any, by: number) => {
-  let length = Math.sqrt(
-    Math.pow(d.target.x - d.source.x, 2) + Math.pow(d.target.y - d.source.y, 2)
-  );
-  return Math.max(0, (length - by) / length);
-};
-
-/** Turn blocks into the reduced graph structure. */
-const toGraph = (blocks: BlockInfo[]) => {
-  let nodes: d3Node[] = blocks.map(block => {
-    let id = blockHash(block);
-    return {
-      id: id,
-      title: id.substr(0, 10) + '...',
-      validator: validatorHash(block),
-      rank: block
-        .getSummary()!
-        .getHeader()!
-        .getRank()
-    };
-  });
-
-  let nodeMap = new Map(nodes.map(x => [x.id, x]));
-
-  let links = blocks.flatMap(block => {
-    let child = blockHash(block);
-
-    let parents = block
-      .getSummary()!
-      .getHeader()!
-      .getParentHashesList_asU8()
-      .map(h => encodeBase16(h));
-
-    return parents.filter(nodeMap.has).map(parent => {
-      return {
-        source: nodeMap.get(child)!,
-        target: nodeMap.get(parent)!,
-        isMainParent: parent === parents[0]
-      };
-    });
-  });
-
-  let graph = new Graph(nodes, links);
-
-  // Test data.
-  nodes = [
-    {
-      id: 'genesis',
-      title: 'genesis...',
-      validator: '',
-      rank: 0
-    },
-    {
-      id: 'abcdefghij1234567890',
-      title: 'abcdefghij...',
-      validator: 'validator-1',
-      rank: 1
-    },
-    {
-      id: 'bcdefghijk1234567890',
-      title: 'bcdefghijk...',
-      validator: 'validator-2',
-      rank: 1
-    },
-    {
-      id: 'cdefghijkl1234567890',
-      title: 'cdefghijkl...',
-      validator: 'validator-1',
-      rank: 2
-    },
-    {
-      id: 'defghijlmn1234567890',
-      title: 'defghijlmn...',
-      validator: 'validator-3',
-      rank: 3
-    }
-  ];
-
-  links = [
-    {
-      source: nodes[1],
-      target: nodes[0],
-      isMainParent: true
-    },
-    {
-      source: nodes[2],
-      target: nodes[0],
-      isMainParent: true
-    },
-    {
-      source: nodes[3],
-      target: nodes[2],
-      isMainParent: true
-    },
-    {
-      source: nodes[3],
-      target: nodes[1],
-      isMainParent: false
-    },
-    {
-      source: nodes[4],
-      target: nodes[3],
-      isMainParent: true
-    }
-  ];
-
-  graph = new Graph(nodes, links);
-
-  return graph;
-};
-
-/** Calculate coordinates so that valiators are in horizontal swimlanes, time flowing left to right. */
-const calculateCoordinates = (graph: Graph, width: number, height: number) => {
-  const validators = [...new Set(graph.nodes.map(x => x.validator))].sort();
-  const verticalStep = height / (validators.length + 1);
-  const maxRank = Math.max(...graph.nodes.map(x => x.rank));
-  const minRank = Math.min(...graph.nodes.map(x => x.rank));
-  const horizontalStep = width / (maxRank - minRank + 2);
-
-  graph.nodes.forEach(node => {
-    node.y = (validators.indexOf(node.validator) + 1) * verticalStep;
-    node.x = (node.rank - minRank + 1) * horizontalStep;
-  });
-
-  return graph;
-};
-
-const blockHash = (block: BlockInfo) =>
-  encodeBase16(block.getSummary()!.getBlockHash_asU8());
-
-const validatorHash = (block: BlockInfo) =>
-  encodeBase16(
-    block
-      .getSummary()!
-      .getHeader()!
-      .getValidatorPublicKey_asU8()
-  );
 
 interface d3Node {
   id: string;
@@ -351,3 +224,78 @@ class Graph {
   areNeighbours = (a: string, b: string) =>
     a === b || this.hasTarget(a, b) || this.hasTarget(b, a);
 }
+
+/** Turn blocks into the reduced graph structure. */
+const toGraph = (blocks: BlockInfo[]) => {
+  let nodes: d3Node[] = blocks.map(block => {
+    let id = blockHash(block);
+    return {
+      id: id,
+      title: id.substr(0, 10) + '...',
+      validator: validatorHash(block),
+      rank: block
+        .getSummary()!
+        .getHeader()!
+        .getRank()
+    };
+  });
+
+  let nodeMap = new Map(nodes.map(x => [x.id, x]));
+
+  let links = blocks.flatMap(block => {
+    let child = blockHash(block);
+
+    let parents = block
+      .getSummary()!
+      .getHeader()!
+      .getParentHashesList_asU8()
+      .map(h => encodeBase16(h));
+
+    return parents
+      .filter(parent => nodeMap.has(parent))
+      .map(parent => {
+        return {
+          source: nodeMap.get(child)!,
+          target: nodeMap.get(parent)!,
+          isMainParent: parent === parents[0]
+        };
+      });
+  });
+
+  return new Graph(nodes, links);
+};
+
+/** Calculate coordinates so that valiators are in horizontal swimlanes, time flowing left to right. */
+const calculateCoordinates = (graph: Graph, width: number, height: number) => {
+  const validators = [...new Set(graph.nodes.map(x => x.validator))].sort();
+  const verticalStep = height / (validators.length + 1);
+  const maxRank = Math.max(...graph.nodes.map(x => x.rank));
+  const minRank = Math.min(...graph.nodes.map(x => x.rank));
+  const horizontalStep = width / (maxRank - minRank + 2);
+
+  graph.nodes.forEach(node => {
+    node.y = (validators.indexOf(node.validator) + 1) * verticalStep;
+    node.x = (node.rank - minRank + 1) * horizontalStep;
+  });
+
+  return graph;
+};
+
+const blockHash = (block: BlockInfo) =>
+  encodeBase16(block.getSummary()!.getBlockHash_asU8());
+
+const validatorHash = (block: BlockInfo) =>
+  encodeBase16(
+    block
+      .getSummary()!
+      .getHeader()!
+      .getValidatorPublicKey_asU8()
+  );
+
+/** Shorten lines by a fixed amount so that the line doesn't stick out from under the arrows tip. */
+const shorten = (d: any, by: number) => {
+  let length = Math.sqrt(
+    Math.pow(d.target.x - d.source.x, 2) + Math.pow(d.target.y - d.source.y, 2)
+  );
+  return Math.max(0, (length - by) / length);
+};

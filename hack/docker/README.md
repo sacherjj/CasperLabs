@@ -110,17 +110,17 @@ To sign deploy you'll need to [generate and ed25519 keypair](/hack/VALIDATOR.md#
 
 ```console
 ACCOUNT_ID="$(cat .casperlabs/genesis/system-account/account-id-hex)"
-mkdir keys
-cp .casperlabs/genesis/system-account/account-private.pem keys
-cp .casperlabs/genesis/system-account/account-public.pem keys
+mkdir keys/system-account
+cp .casperlabs/genesis/system-account/account-private.pem keys/system-account/
+cp .casperlabs/genesis/system-account/account-public.pem keys/system-account/
 ./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --gas-price 1 \
      --from "$ACCOUNT_ID" \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
      --nonce 1 \
-     --public-key /keys/account-0/account-public.pem \
-     --private-key /keys/account-0/account-private.pem
+     --public-key /keys/system-account/account-public.pem \
+     --private-key /keys/system-account/account-private.pem
 ```
 
 As you may notice we make use of the `system-account` for deploys signing. This is temporal until we the add ability to create new custom accounts.

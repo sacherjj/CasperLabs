@@ -13,7 +13,6 @@ import './styles/custom.scss';
 
 // Make `jQuery` available in the window in case any Javascript we import directly uses it.
 import * as jQuery from 'jquery';
-import * as d3 from 'd3';
 
 import CasperContainer from './containers/CasperContainer';
 import AuthContainer from './containers/AuthContainer';
@@ -24,7 +23,6 @@ import { Auth0Service, MockAuthService } from './services/AuthService';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
-w.d3 = d3;
 
 const authService = window.config.auth.mock.enabled
   ? new MockAuthService()
