@@ -31,14 +31,14 @@ object Estimator {
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
 
-    /** Finds children of the block b that can have been scored by the LMD algorithm.
-      * If no children exist (block B is the tip) return the tip.
+    /** Finds children of the block b that have been scored by the LMD algorithm.
+      * If no children exist (block B is the tip) return the block.
       *
       * @param b block for which we want to find tips.
       * @param scores map of the scores from the block hash to a score
-      * @return tips of the DAG.
+      * @return Children of the block.
       */
-    def getBlockTips(
+    def getChildrenOrSelf(
         b: BlockHash,
         scores: Map[BlockHash, Long]
     ): F[List[BlockHash]] =
@@ -56,7 +56,7 @@ object Estimator {
         scores: Map[BlockHash, Long]
     ): F[List[BlockHash]] =
       for {
-        children <- blocks.flatTraverse(getBlockTips(_, scores)).map(_.distinct)
+        children <- blocks.flatTraverse(getChildrenOrSelf(_, scores)).map(_.distinct)
         result <- if (blocks.toSet == children.toSet) {
                    children.pure[F]
                  } else {
