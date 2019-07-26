@@ -1,6 +1,7 @@
 /// Implementation of error codes that are shared between contract
 /// implementation and FFI.
 use alloc::vec::Vec;
+use core::convert::{TryFrom, TryInto};
 
 use crate::bytesrepr::{self, FromBytes, ToBytes};
 use crate::system_contracts::mint::purse_id::PurseIdError;
@@ -13,9 +14,9 @@ pub enum Error {
     InsufficientFunds = 0,
     SourceNotFound = 1,
     DestNotFound = 2,
-    /// See PurseIdError::InvalidURef
+    /// See [`PurseIdError::InvalidURef`]
     InvalidURef = 3,
-    /// See PurseIdError::InvalidAccessRights
+    /// See [`PurseIdError::InvalidAccessRights`]
     InvalidAccessRights = 4,
 }
 
@@ -34,15 +35,20 @@ impl From<PurseIdError> for Error {
     }
 }
 
-impl From<u32> for Error {
-    fn from(value: u32) -> Error {
+/// The error type returned when a construction
+pub struct TryFromDeserializedU32Error(());
+
+impl TryFrom<u32> for Error {
+    type Error = TryFromDeserializedU32Error;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
-            d if d == Error::InsufficientFunds as u32 => Error::InsufficientFunds,
-            d if d == Error::SourceNotFound as u32 => Error::SourceNotFound,
-            d if d == Error::DestNotFound as u32 => Error::DestNotFound,
-            d if d == Error::InvalidURef as u32 => Error::InvalidURef,
-            d if d == Error::InvalidAccessRights as u32 => Error::InvalidAccessRights,
-            _ => unreachable!(),
+            d if d == Error::InsufficientFunds as u32 => Ok(Error::InsufficientFunds),
+            d if d == Error::SourceNotFound as u32 => Ok(Error::SourceNotFound),
+            d if d == Error::DestNotFound as u32 => Ok(Error::DestNotFound),
+            d if d == Error::InvalidURef as u32 => Ok(Error::InvalidURef),
+            d if d == Error::InvalidAccessRights as u32 => Ok(Error::InvalidAccessRights),
+            _ => Err(TryFromDeserializedU32Error(())),
         }
     }
 }
@@ -57,6 +63,12 @@ impl ToBytes for Error {
 impl FromBytes for Error {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (value, rem): (u32, _) = FromBytes::from_bytes(bytes)?;
-        Ok((value.into(), rem))
+        let error: Error = value
+            .try_into()
+            // In case an Error variant is unable to be determined it would
+            // return a FormattingError as if its unable to be correctly
+            // deserialized.
+            .map_err(|_| bytesrepr::Error::FormattingError)?;
+        Ok((error, rem))
     }
 }

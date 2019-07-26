@@ -798,12 +798,12 @@ where
         amount_ptr: u32,
         amount_size: u32,
     ) -> Result<PurseTransferResult, Error> {
-        let source_purse: PurseId = {
+        let source: PurseId = {
             let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
             deserialize(&bytes).map_err(Error::BytesRepr)?
         };
 
-        let target_purse: PurseId = {
+        let target: PurseId = {
             let bytes = self.bytes_from_mem(target_ptr, target_size as usize)?;
             deserialize(&bytes).map_err(Error::BytesRepr)?
         };
@@ -815,7 +815,7 @@ where
 
         let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
 
-        match self.mint_transfer(mint_contract_key, source_purse, target_purse, amount) {
+        match self.mint_transfer(mint_contract_key, source, target, amount) {
             Ok(_) => Ok(PurseTransferResult::TransferSuccessful),
             Err(_) => Ok(PurseTransferResult::TransferError),
         }
