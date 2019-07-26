@@ -146,9 +146,8 @@ impl Stakes {
             return Err(Error::SpreadTooHigh);
         }
         let max_increase = MAX_INCREASE.min(self.sum() * MAX_REL_INCREASE / 1_000_000);
-        let zero = U512::zero();
-        if (stake == zero && amount > min.saturating_add(max_increase))
-            || (stake > zero && amount > max_increase)
+        if (stake.is_zero() && amount > min.saturating_add(max_increase))
+            || (!stake.is_zero() && amount > max_increase)
         {
             return Err(Error::BondTooLarge);
         }
