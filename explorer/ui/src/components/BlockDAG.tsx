@@ -94,10 +94,8 @@ export class BlockDAG extends React.Component<Props, {}> {
       return;
     }
 
-    // Display each validator with its own color.
-    const color = d3.scaleOrdinal(d3.schemeCategory10);
-
     const svg = d3.select(this.ref);
+    const color = consistentColor();
 
     // Append items that will not change.
     if (!this.initialized) {
@@ -344,4 +342,42 @@ const shorten = (d: any, by: number) => {
     Math.pow(d.target.x - d.source.x, 2) + Math.pow(d.target.y - d.source.y, 2)
   );
   return Math.max(0, (length - by) / length);
+};
+
+/** String hash for consistent colors. Same as Java. */
+const hashCode = (s: string) => {
+  let hash = 0;
+  if (s.length === 0) return hash;
+  for (let i = 0; i < s.length; i++) {
+    let chr = s.charCodeAt(i);
+    hash = (hash << 5) - hash + chr;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return hash;
+};
+
+const consistentColor = () => {
+  // Display each validator with its own color.
+  // https://www.d3-graph-gallery.com/graph/custom_color.html
+  // http://bl.ocks.org/curran/3094b37e63b918bab0a06787e161607b
+  // This can be used like `color(x.validator)` but it changes depending on which validators are on the screen.
+  // const color = d3.scaleOrdinal(d3.schemeCategory10);
+  // This can be used with a numeric value:
+  // const hashRange: [number, number] = [-2147483648, 2147483647];
+  const steps = 20;
+  const domain: [number, number] = [0, steps - 1];
+  const colors = [
+    d3.scaleSequential(d3.interpolateSpectral).domain(domain),
+    d3.scaleSequential(d3.interpolateSinebow).domain(domain),
+    d3.scaleSequential(d3.interpolateRainbow).domain(domain),
+    d3.scaleSequential(d3.interpolateGreys).domain(domain)
+  ];
+  const cl = colors.length;
+
+  return (s: string) => {
+    const h = hashCode(s);
+    const c = h < 0 ? (h % steps) + steps : h % steps;
+    const i = h < 0 ? (h % cl) + cl : h % cl;
+    return colors[i](c);
+  };
 };
