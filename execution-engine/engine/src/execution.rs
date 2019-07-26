@@ -21,7 +21,7 @@ use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE}
 use common::contract_api::argsparser::ArgsParser;
 use common::contract_api::{PurseTransferResult, TransferResult};
 use common::key::Key;
-use common::system_contracts::mint;
+use common::system_contracts::{self, mint};
 use common::uref::{AccessRights, URef};
 use common::value::account::{
     ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
@@ -73,7 +73,7 @@ pub enum Error {
     AddKeyFailure(AddKeyFailure),
     RemoveKeyFailure(RemoveKeyFailure),
     SetThresholdFailure(SetThresholdFailure),
-    MintError(mint::error::Error),
+    SystemContractError(system_contracts::error::Error),
 }
 
 impl fmt::Display for Error {
@@ -136,9 +136,9 @@ impl From<SetThresholdFailure> for Error {
     }
 }
 
-impl From<mint::error::Error> for Error {
-    fn from(err: mint::error::Error) -> Error {
-        Error::MintError(err)
+impl From<system_contracts::error::Error> for Error {
+    fn from(error: system_contracts::error::Error) -> Error {
+        Error::SystemContractError(error)
     }
 }
 
@@ -671,8 +671,9 @@ where
         // This will deserialize `host_buf` into the Result type which carries
         // mint contract error.
         let result: Result<(), mint::error::Error> = deserialize(&self.host_buf)?;
-        // Wraps mint error into a more general error type
-        result.map_err(Error::from)
+        // Wraps mint error into a more general error type through an aggregate
+        // system contracts Error.
+        Ok(result.map_err(system_contracts::error::Error::from)?)
     }
 
     /// Creates a new account at a given public key, transferring a given amount of tokens from
