@@ -75,10 +75,13 @@ object Estimator {
     } yield newMainParent +: sortedSecParents
   }
 
-  /*
-   * Compute the scores for LMD GHOST.
-   * @return The scores map
-   */
+  /** Computes scores for LMD GHOST.
+    *
+    * Starts at the latest messages from currently bonded validators
+    * and traverses up to the Genesis, collecting scores per block.
+    *
+    * @return Scores map.
+    */
   def lmdScoring[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash]
@@ -91,10 +94,10 @@ object Estimator {
           )
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
-              for {
-                weight   <- weightFromValidatorByDag(blockDag, blockHash, validator)
-                oldValue = acc2.getOrElse(blockHash, 0L)
-              } yield acc2.updated(blockHash, weight + oldValue)
+              weightFromValidatorByDag(blockDag, blockHash, validator).map(weight => {
+                val oldValue = acc2.getOrElse(blockHash, 0L)
+                acc2.updated(blockHash, weight + oldValue)
+              })
           }
     }
 
@@ -112,11 +115,11 @@ object Estimator {
         if (reachableMainChildren.isEmpty) {
           blockHash.pure[F]
         } else {
-          val reachableChildrenSorted =
-            reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8)
+          val highestScoreChild =
+            reachableMainChildren.maxBy(b => scores(b) -> b.toStringUtf8)
           forkChoiceTip[F](
             blockDag,
-            reachableChildrenSorted,
+            highestScoreChild,
             scores
           )
         }
