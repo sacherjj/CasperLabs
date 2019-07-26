@@ -31,22 +31,24 @@ object Estimator {
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
 
-    def replaceBlockHashWithChildren(
+    /** Finds children of the block b that have been scored by the LMD algorithm.
+      * If no children exist (block B is the tip) return the block.
+      *
+      * @param b block for which we want to find tips.
+      * @param scores map of the scores from the block hash to a score
+      * @return Children of the block.
+      */
+    def getChildrenOrSelf(
         b: BlockHash,
         scores: Map[BlockHash, Long]
     ): F[List[BlockHash]] =
-      for {
-        c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
-      } yield if (c.nonEmpty) c.toList else List(b)
-
-    def stillSame(
-        children: List[BlockHash],
-        nextChildren: List[BlockHash]
-    ): Boolean =
-      children.toSet == nextChildren.toSet
+      blockDag
+        .children(b)
+        .map(_.filter(scores.contains))
+        .map(c => if (c.isEmpty) List(b) else c.toList)
 
     /*
-     * it will return latestMessages except those blocks whose descendant
+     * Returns latestMessages except those blocks whose descendant
      * exists in latestMessages.
      */
     def tipsOfLatestMessages(
@@ -54,9 +56,8 @@ object Estimator {
         scores: Map[BlockHash, Long]
     ): F[List[BlockHash]] =
       for {
-        cr       <- blocks.flatTraverse(replaceBlockHashWithChildren(_, scores))
-        children = cr.distinct
-        result <- if (stillSame(blocks, children)) {
+        children <- blocks.flatTraverse(getChildrenOrSelf(_, scores)).map(_.distinct)
+        result <- if (blocks.toSet == children.toSet) {
                    children.pure[F]
                  } else {
                    tipsOfLatestMessages(children, scores)
@@ -74,10 +75,13 @@ object Estimator {
     } yield newMainParent +: sortedSecParents
   }
 
-  /*
-   * Compute the scores for LMD GHOST.
-   * @return The scores map
-   */
+  /** Computes scores for LMD GHOST.
+    *
+    * Starts at the latest messages from currently bonded validators
+    * and traverses up to the Genesis, collecting scores per block.
+    *
+    * @return Scores map.
+    */
   def lmdScoring[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash]
@@ -90,10 +94,10 @@ object Estimator {
           )
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
-              for {
-                weight   <- weightFromValidatorByDag(blockDag, blockHash, validator)
-                oldValue = acc2.getOrElse(blockHash, 0L)
-              } yield acc2.updated(blockHash, weight + oldValue)
+              weightFromValidatorByDag(blockDag, blockHash, validator).map(weight => {
+                val oldValue = acc2.getOrElse(blockHash, 0L)
+                acc2.updated(blockHash, weight + oldValue)
+              })
           }
     }
 
@@ -102,23 +106,22 @@ object Estimator {
       blockHash: BlockHash,
       scores: Map[BlockHash, Long]
   ): F[BlockHash] =
-    blockDag.getMainChildren(blockHash).flatMap {
-      case None =>
-        blockHash.pure[F]
-      case Some(mainChildren) =>
-        for {
-          // make sure they are reachable from latestMessages
-          reachableMainChildren <- mainChildren.filterA(b => scores.contains(b).pure[F])
-          result <- if (reachableMainChildren.isEmpty) {
-                     blockHash.pure[F]
-                   } else {
-                     forkChoiceTip[F](
-                       blockDag,
-                       reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8),
-                       scores
-                     )
-                   }
-        } yield result
+    blockDag.getMainChildren(blockHash).flatMap { mainChildren =>
+      {
+        // make sure they are reachable from latestMessages
+        val reachableMainChildren = mainChildren.filter(scores.contains)
+        if (reachableMainChildren.isEmpty) {
+          blockHash.pure[F]
+        } else {
+          val highestScoreChild =
+            reachableMainChildren.maxBy(b => scores(b) -> b.toStringUtf8)
+          forkChoiceTip[F](
+            blockDag,
+            highestScoreChild,
+            scores
+          )
+        }
+      }
     }
 
 }

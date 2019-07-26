@@ -261,8 +261,7 @@ object DagOperations {
           commonAncestors: Set[Block]
       ): F[List[Block]] =
         for {
-          childrenHashesOpt      <- dag.children(b.blockHash)
-          childrenHashes         = childrenHashesOpt.getOrElse(Set.empty[BlockHash])
+          childrenHashes         <- dag.children(b.blockHash)
           children               <- childrenHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
           commonAncestorChildren = children.filter(commonAncestors)
         } yield commonAncestorChildren
@@ -274,9 +273,8 @@ object DagOperations {
         gca <- bfTraverseF[F, Block](List(genesis))(commonAncestorChild(_, commonAncestors)).findF(
                 b =>
                   for {
-                    childrenOpt <- dag.children(b.blockHash)
-                    children    = childrenOpt.getOrElse(Set.empty[BlockHash]).toList
-                    result <- children.existsM(
+                    children <- dag.children(b.blockHash)
+                    result <- children.toList.existsM(
                                hash =>
                                  for {
                                    c <- ProtoUtil.unsafeGetBlock[F](hash)

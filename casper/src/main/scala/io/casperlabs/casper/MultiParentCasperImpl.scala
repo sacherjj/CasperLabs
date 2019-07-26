@@ -196,7 +196,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
       for {
         childrenHashes <- dag
                            .children(acc)
-                           .map(_.getOrElse(Set.empty[BlockHash]).toList)
+                           .map(_.toList)
         finalizedChildren <- childrenHashes.filterA(isGreaterThanFaultToleranceThreshold(dag, _))
         newFinalizedBlock <- if (finalizedChildren.isEmpty) {
                               acc.pure[F]
@@ -250,10 +250,10 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
       true.pure[F],
       dag
         .children(blockHash)
-        .flatMap {
-          _.toList.flatten
+        .flatMap(
+          _.toList
             .existsM(isFinalized(dag, _))
-        }
+        )
     )
 
   /** Remove deploys from the history which are included in a just finalised block. */
@@ -499,7 +499,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
                               .traverse { blockHash =>
                                 DagOperations
                                   .bfTraverseF[F, BlockHash](blockHashes)(
-                                    h => dag.children(h).map(_.toList.flatten)
+                                    h => dag.children(h).map(_.toList)
                                   )
                                   .find(parentSet)
                                   .map(blockHash -> _.isEmpty)

@@ -57,10 +57,7 @@ class DagOperationsTest
             b =>
               dag
                 .children(b.blockHash)
-                .flatMap {
-                  case Some(bs) => bs.toList.traverse(l => dag.lookup(l).map(_.get))
-                  case None     => List.empty[BlockMetadata].pure[Task]
-                }
+                .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
           }
           result <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 3, 4, 5, 6, 7))
         } yield result
