@@ -1,12 +1,13 @@
 import React from 'react';
 import { observer } from 'mobx-react';
 import CasperContainer from '../containers/CasperContainer';
-import { RefreshableComponent } from './Utils';
+import { RefreshableComponent, LinkButton } from './Utils';
 import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
 import { encodeBase16 } from '../lib/Conversions';
 import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import $ from 'jquery';
+import { shortHash } from './Blocks';
 
 interface Props {
   casper: CasperContainer;
@@ -82,13 +83,13 @@ class BlockDetails extends React.Component<{
     let validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
     // Display 2 sets of fields next to each other.
     let attrs: Array<Array<[string, any]>> = [
-      [['Block hash', id], ['Rank', header.getRank()]],
+      [['Block hash', shortHash(id)], ['Rank', header.getRank()]],
       [
         ['Timestamp', new Date(header.getTimestamp()).toISOString()],
         ['Deploy count', header.getDeployCount()]
       ],
       [
-        ['Validator', validatorId],
+        ['Validator', shortHash(validatorId)],
         ['Validator block number', header.getValidatorBlockSeqNum()]
       ],
       [
@@ -197,9 +198,5 @@ const BlockLink = (props: {
   onClick: (blockHashBase16: string) => void;
 }) => {
   let id = encodeBase16(props.blockHash);
-  return (
-    <button className="link" onClick={() => props.onClick(id)}>
-      {id}
-    </button>
-  );
+  return <LinkButton title={shortHash(id)} onClick={() => props.onClick(id)} />;
 };

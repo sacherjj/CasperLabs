@@ -15,6 +15,7 @@ import { PrivateRoute } from './Utils';
 import CasperContainer from '../containers/CasperContainer';
 import AuthContainer from '../containers/AuthContainer';
 import ErrorContainer from '../containers/ErrorContainer';
+import Blocks from './Blocks';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -32,7 +33,8 @@ const SideMenuItems: MenuItem[] = [
   new MenuItem(Pages.Home, 'Home', 'home', true),
   new MenuItem(Pages.Accounts, 'Accounts', 'address-book'),
   new MenuItem(Pages.Faucet, 'Faucet', 'coins'),
-  new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram')
+  new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
+  new MenuItem(Pages.Blocks, 'Blocks', 'th-large')
 ];
 
 export interface AppProps {
@@ -241,6 +243,7 @@ const Content = (props: AppProps) => (
             render={_ => <Faucet {...props} />}
           />
           <Route path={Pages.Explorer} render={_ => <Explorer {...props} />} />
+          <Route path={Pages.Blocks} render={_ => <Blocks {...props} />} />
         </Switch>
       </div>
     </div>

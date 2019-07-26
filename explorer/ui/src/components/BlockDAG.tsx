@@ -4,6 +4,7 @@ import { RefreshButton, Loading, ListInline } from './Utils';
 import * as d3 from 'd3';
 import $ from 'jquery';
 import { encodeBase16 } from '../lib/Conversions';
+import { shortHash } from './Blocks';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 
@@ -266,7 +267,7 @@ const toGraph = (blocks: BlockInfo[]) => {
     let id = blockHash(block);
     return {
       id: id,
-      title: id.substr(0, 10) + '...',
+      title: shortHash(id),
       validator: validatorHash(block),
       rank: block
         .getSummary()!

@@ -52,6 +52,12 @@ export const Button = (props: {
   </button>
 );
 
+export const LinkButton = (props: { onClick: () => void; title: string }) => (
+  <button className="link" onClick={() => props.onClick()}>
+    {props.title}
+  </button>
+);
+
 export const ListInline = (props: { children: any }) => {
   const children = [].concat(props.children);
   return (

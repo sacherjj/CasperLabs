@@ -27,11 +27,13 @@ export class CasperContainer {
   @observable blocks: BlockInfo[] | null = null;
   @observable selectedBlock: BlockInfo | undefined = undefined;
   @observable dagDepth = 10;
+  @observable maxRank = 0;
 
   constructor(
     private errors: ErrorContainer,
     private faucetService: FaucetService,
     private casperService: CasperService,
+    // Callback when the faucet status finished so we can update the balances.
     private onFaucetStatusChange: () => void
   ) {}
 
