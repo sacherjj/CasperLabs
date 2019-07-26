@@ -32,25 +32,27 @@ export class DagStep {
     this.container.maxRank = rank;
   }
 
-  get effectiveMaxRank() {
+  private get currentMaxRank() {
     let blockRank =
       this.container.hasBlocks &&
       this.container
         .blocks![0].getSummary()!
         .getHeader()!
         .getRank();
-    return blockRank
-      ? blockRank - (blockRank % this.dagDepth) - 1 + this.dagDepth
-      : this.maxRank;
+    return this.maxRank === 0 && blockRank ? blockRank : this.maxRank;
   }
 
   first = this.step(() => this.dagDepth - 1);
 
   prev = this.step(() =>
-    Math.max(this.dagDepth - 1, this.effectiveMaxRank - this.dagDepth)
+    this.maxRank === 0 && this.currentMaxRank <= this.dagDepth
+      ? 0
+      : this.currentMaxRank > this.dagDepth
+      ? this.currentMaxRank - this.dagDepth
+      : this.currentMaxRank
   );
 
-  next = this.step(() => this.effectiveMaxRank + this.dagDepth);
+  next = this.step(() => this.currentMaxRank + this.dagDepth);
 
   last = this.step(() => 0);
 }
@@ -74,7 +76,7 @@ export class CasperContainer {
   @observable maxRank = 0;
 
   get minRank() {
-    return Math.max(0, this.maxRank - this.dagDepth);
+    return Math.max(0, this.maxRank - this.dagDepth + 1);
   }
 
   get hasBlocks() {
