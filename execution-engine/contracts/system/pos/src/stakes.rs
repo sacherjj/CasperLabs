@@ -146,7 +146,9 @@ impl Stakes {
             return Err(Error::SpreadTooHigh);
         }
         let max_increase = MAX_INCREASE.min(self.sum() * MAX_REL_INCREASE / 1_000_000);
-        if stake > min.saturating_add(max_increase) && amount > max_increase {
+        if (stake.is_zero() && amount > min.saturating_add(max_increase))
+            || (!stake.is_zero() && amount > max_increase)
+        {
             return Err(Error::BondTooLarge);
         }
         Ok(())

@@ -220,6 +220,14 @@ object ProtoUtil {
     }
   }
 
+  /** Computes block's score by the [validator].
+    *
+    * @param dag
+    * @param blockHash Block's hash
+    * @param validator Validator that produced the block
+    * @tparam F
+    * @return Weight `validator` put behind the block
+    */
   def weightFromValidatorByDag[F[_]: Monad](
       dag: BlockDagRepresentation[F],
       blockHash: BlockHash,
@@ -239,7 +247,7 @@ object ProtoUtil {
 
   def weightFromValidator[F[_]: Monad: BlockStore](
       header: Block.Header,
-      validator: ByteString
+      validator: Validator
   ): F[Long] =
     for {
       maybeMainParent <- mainParent[F](header)
