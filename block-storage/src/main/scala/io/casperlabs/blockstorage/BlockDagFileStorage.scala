@@ -73,31 +73,29 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
     def sortEndBlockNumber = sortOffset + topoSortVector.size - 1
 
     def children(blockHash: BlockHash): F[Set[BlockHash]] =
-      for {
-        result <- childMap.get(blockHash) match {
-                   case Some(children) =>
-                     children.pure[F]
-                   case None =>
-                     for {
-                       blockOpt <- BlockStore[F].getBlockMessage(blockHash)
-                       result <- blockOpt match {
-                                  case Some(block) =>
-                                    val number = block.getHeader.rank
-                                    if (number >= sortOffset) {
-                                      Set.empty[BlockHash].pure[F]
-                                    } else {
-                                      lock.withPermit(
-                                        loadCheckpoint(number).map(
-                                          _.flatMap(_.childMap.get(blockHash))
-                                            .getOrElse(Set.empty)
-                                        )
-                                      )
-                                    }
-                                  case None => Set.empty[BlockHash].pure[F]
-                                }
-                     } yield result
-                 }
-      } yield result
+      childMap.get(blockHash) match {
+        case Some(children) =>
+          children.pure[F]
+        case None =>
+          for {
+            blockOpt <- BlockStore[F].getBlockMessage(blockHash)
+            result <- blockOpt match {
+                       case Some(block) =>
+                         val number = block.getHeader.rank
+                         if (number >= sortOffset) {
+                           Set.empty[BlockHash].pure[F]
+                         } else {
+                           lock.withPermit(
+                             loadCheckpoint(number).map(
+                               _.flatMap(_.childMap.get(blockHash))
+                                 .getOrElse(Set.empty)
+                             )
+                           )
+                         }
+                       case None => Set.empty[BlockHash].pure[F]
+                     }
+          } yield result
+      }
 
     def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
       justificationMap.get(blockHash) match {
