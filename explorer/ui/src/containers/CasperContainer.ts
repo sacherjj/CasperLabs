@@ -11,6 +11,51 @@ import {
 import { GrpcError } from '../services/Errors';
 import { grpc } from '@improbable-eng/grpc-web';
 
+export class DagStep {
+  constructor(private container: CasperContainer) {}
+
+  private step = (f: () => number) => () => {
+    this.maxRank = f();
+    this.container.refreshBlockDag();
+    this.container.selectedBlock = undefined;
+  };
+
+  private get maxRank() {
+    return this.container.maxRank;
+  }
+
+  private get dagDepth() {
+    return this.container.dagDepth;
+  }
+
+  private set maxRank(rank: number) {
+    this.container.maxRank = rank;
+  }
+
+  get effectiveMaxRank() {
+    let blockRank =
+      this.container.blocks &&
+      this.container.blocks.length > 0 &&
+      this.container.blocks[0]
+        .getSummary()!
+        .getHeader()!
+        .getRank();
+    return blockRank
+      ? blockRank - (blockRank % this.dagDepth) - 1 + this.dagDepth
+      : this.maxRank;
+  }
+
+  first = this.step(() => this.dagDepth - 1);
+
+  prev = this.step(() =>
+    Math.max(this.dagDepth - 1, this.effectiveMaxRank - this.dagDepth)
+  );
+
+  next = this.step(() => this.effectiveMaxRank + this.dagDepth);
+
+  last = this.step(() => 0);
+}
+
 // CasperContainer talks to the API on behalf of React
 // components and exposes the state in MobX observables.
 export class CasperContainer {
@@ -28,6 +73,12 @@ export class CasperContainer {
   @observable selectedBlock: BlockInfo | undefined = undefined;
   @observable dagDepth = 10;
   @observable maxRank = 0;
+
+  get minRank() {
+    return Math.max(0, this.maxRank - this.dagDepth);
+  }
+
+  dagStep = new DagStep(this);
 
   constructor(
     private errors: ErrorContainer,
@@ -115,9 +166,11 @@ export class CasperContainer {
 
   async refreshBlockDag() {
     this.errors.capture(
-      this.casperService.getBlockInfos(this.dagDepth).then(blocks => {
-        this.blocks = blocks;
-      })
+      this.casperService
+        .getBlockInfos(this.dagDepth, this.maxRank)
+        .then(blocks => {
+          this.blocks = blocks;
+        })
     );
   }
 }

@@ -4,7 +4,8 @@ import { RefreshButton, Loading, ListInline } from './Utils';
 import * as d3 from 'd3';
 import $ from 'jquery';
 import { encodeBase16 } from '../lib/Conversions';
-import { shortHash } from './Blocks';
+import { shortHash, DagStepButtons } from './Blocks';
+import { DagStep } from '../containers/CasperContainer';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 
@@ -23,6 +24,7 @@ export interface Props {
   depth: number;
   onDepthChange?: (depth: number) => void;
   onSelected?: (block: BlockInfo) => void;
+  dagStep?: DagStep;
 }
 
 export class BlockDAG extends React.Component<Props, {}> {
@@ -36,6 +38,9 @@ export class BlockDAG extends React.Component<Props, {}> {
           <span>{this.props.title}</span>
           <div className="float-right">
             <ListInline>
+              {this.props.dagStep && (
+                <DagStepButtons step={this.props.dagStep} />
+              )}
               {this.props.onDepthChange && (
                 <select
                   title="Depth"
@@ -83,7 +88,11 @@ export class BlockDAG extends React.Component<Props, {}> {
 
   /** Called when the data is refreshed, when we get the blocks. */
   componentDidUpdate() {
-    if (this.props.blocks == null || this.props.blocks.length === 0) return;
+    if (this.props.blocks == null || this.props.blocks.length === 0) {
+      // The renderer will have removed the svg.
+      this.initialized = false;
+      return;
+    }
 
     // Display each validator with its own color.
     const color = d3.scaleOrdinal(d3.schemeCategory10);

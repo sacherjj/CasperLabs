@@ -24,7 +24,11 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
     return (
       <div>
         <BlockDAG
-          title="Recent Block DAG"
+          title={
+            this.props.casper.maxRank === 0
+              ? 'Latest Block DAG'
+              : `Block DAG from rank ${this.props.casper.minRank} to ${this.props.casper.maxRank}`
+          }
           blocks={this.props.casper.blocks}
           refresh={() => this.refresh()}
           footerMessage="Select a block to see its details."
@@ -46,6 +50,7 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
             this.props.casper.dagDepth = d;
             this.refresh();
           }}
+          dagStep={this.props.casper.dagStep}
           width="100%"
           height="600"
         />

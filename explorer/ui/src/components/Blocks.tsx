@@ -1,6 +1,6 @@
 import React from 'react';
 import { observer } from 'mobx-react';
-import CasperContainer from '../containers/CasperContainer';
+import CasperContainer, { DagStep } from '../containers/CasperContainer';
 import { RefreshableComponent, ListInline, IconButton } from './Utils';
 import DataTable from './DataTable';
 import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
@@ -21,54 +21,13 @@ export default class Blocks extends RefreshableComponent<Props, {}> {
     this.props.casper.refreshBlockDag();
   }
 
-  private step = (f: () => void) => () => {
-    f();
-    this.refresh();
-    // TODO: Add the `maxRank` parameter to the URL.
-    // Alternatively we could just encode the actions as a Link.
-  };
-
-  private get maxRank() {
-    return this.props.casper.maxRank;
-  }
-
-  private get dagDepth() {
-    return this.props.casper.dagDepth;
-  }
-
-  private set maxRank(rank: number) {
-    this.props.casper.maxRank = rank;
-  }
-
-  private first = this.step(() => (this.maxRank = this.dagDepth));
-
-  private prev = this.step(() => {
-    let blockRank =
-      this.props.casper.blocks &&
-      this.props.casper.blocks[0]
-        .getSummary()!
-        .getHeader()!
-        .getRank();
-    let maxRank =
-      this.maxRank === 0 && blockRank
-        ? blockRank - (blockRank % this.dagDepth) + this.dagDepth
-        : this.maxRank === 0
-        ? this.dagDepth
-        : this.maxRank;
-    this.maxRank = Math.max(this.dagDepth, maxRank - this.dagDepth);
-  });
-
-  private next = this.step(
-    () => (this.maxRank = this.maxRank === 0 ? 0 : this.maxRank + this.dagDepth)
-  );
-
-  private last = this.step(() => (this.maxRank = 0));
-
   render() {
     return (
       <DataTable
         title={
-          this.maxRank ? `Blocks up to rank ${this.maxRank}` : `Latest blocks`
+          this.props.casper.maxRank === 0
+            ? 'Latest Blocks'
+            : `Blocks from rank ${this.props.casper.minRank} to ${this.props.casper.maxRank}`
         }
         refresh={() => this.refresh()}
         headers={['Block hash', 'Rank', 'Timestamp', 'Validator']}
@@ -90,30 +49,7 @@ export default class Blocks extends RefreshableComponent<Props, {}> {
             </tr>
           );
         }}
-        footerMessage={
-          <ListInline>
-            <IconButton
-              title="First"
-              onClick={() => this.first()}
-              icon="fast-backward"
-            />
-            <IconButton
-              title="Previous"
-              onClick={() => this.prev()}
-              icon="step-backward"
-            />
-            <IconButton
-              title="Next"
-              onClick={() => this.next()}
-              icon="step-forward"
-            />
-            <IconButton
-              title="Last"
-              onClick={() => this.last()}
-              icon="fast-forward"
-            />
-          </ListInline>
-        }
+        footerMessage={<DagStepButtons step={this.props.casper.dagStep} />}
       />
     );
   }
@@ -128,6 +64,33 @@ const Timestamp = (props: { timestamp: number }) => {
   return props.timestamp ? (
     <span title={d.toISOString()}>{timeAgo.format(d)}</span>
   ) : null;
+};
+
+export const DagStepButtons = (props: { step: DagStep }) => {
+  return (
+    <ListInline>
+      <IconButton
+        title="First"
+        onClick={() => props.step.first()}
+        icon="fast-backward"
+      />
+      <IconButton
+        title="Previous"
+        onClick={() => props.step.prev()}
+        icon="step-backward"
+      />
+      <IconButton
+        title="Next"
+        onClick={() => props.step.next()}
+        icon="step-forward"
+      />
+      <IconButton
+        title="Last"
+        onClick={() => props.step.last()}
+        icon="fast-forward"
+      />
+    </ListInline>
+  );
 };
 
 export const shortHash = (hash: string) =>
