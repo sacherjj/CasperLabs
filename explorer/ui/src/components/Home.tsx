@@ -61,7 +61,7 @@ const Home = observer((props: Props) => {
             , the{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md">
               main docs
-            </a>
+            </a>{' '}
             and the{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker">
               local docker network setup

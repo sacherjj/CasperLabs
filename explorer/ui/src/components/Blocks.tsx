@@ -39,7 +39,7 @@ export default class Blocks extends RefreshableComponent<Props, {}> {
           return (
             <tr key={id}>
               <td>
-                <Link to={Pages.block(id)}>{shortHash(id)}</Link>
+                <Link to={Pages.block(id)}>{id}</Link>
               </td>
               <td>{header.getRank()}</td>
               <td>

@@ -34,10 +34,9 @@ export class DagStep {
 
   get effectiveMaxRank() {
     let blockRank =
-      this.container.blocks &&
-      this.container.blocks.length > 0 &&
-      this.container.blocks[0]
-        .getSummary()!
+      this.container.hasBlocks &&
+      this.container
+        .blocks![0].getSummary()!
         .getHeader()!
         .getRank();
     return blockRank
@@ -76,6 +75,10 @@ export class CasperContainer {
 
   get minRank() {
     return Math.max(0, this.maxRank - this.dagDepth);
+  }
+
+  get hasBlocks() {
+    return this.blocks ? this.blocks.length > 0 : false;
   }
 
   dagStep = new DagStep(this);

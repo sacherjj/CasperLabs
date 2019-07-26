@@ -4,8 +4,7 @@ import { RefreshButton, Loading, ListInline } from './Utils';
 import * as d3 from 'd3';
 import $ from 'jquery';
 import { encodeBase16 } from '../lib/Conversions';
-import { shortHash, DagStepButtons } from './Blocks';
-import { DagStep } from '../containers/CasperContainer';
+import { shortHash } from './Blocks';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 
@@ -24,7 +23,6 @@ export interface Props {
   depth: number;
   onDepthChange?: (depth: number) => void;
   onSelected?: (block: BlockInfo) => void;
-  dagStep?: DagStep;
 }
 
 export class BlockDAG extends React.Component<Props, {}> {
@@ -38,9 +36,6 @@ export class BlockDAG extends React.Component<Props, {}> {
           <span>{this.props.title}</span>
           <div className="float-right">
             <ListInline>
-              {this.props.dagStep && (
-                <DagStepButtons step={this.props.dagStep} />
-              )}
               {this.props.onDepthChange && (
                 <select
                   title="Depth"
