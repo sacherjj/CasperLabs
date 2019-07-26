@@ -20,6 +20,7 @@ use core::convert::TryInto;
 
 use cl_std::contract_api;
 use cl_std::key::Key;
+use cl_std::system_contracts::mint::error::Error;
 use cl_std::uref::{AccessRights, URef};
 use cl_std::value::U512;
 
@@ -94,20 +95,22 @@ pub extern "C" fn call() {
 
             let source: WithdrawId = match WithdrawId::from_uref(source) {
                 Ok(withdraw_id) => withdraw_id,
-                Err(error) => contract_api::ret(&format!("Error: {}", error), &vec![]),
+                Err(error) => {
+                    let transfer_result: Result<(), Error> = Err(error.into());
+                    contract_api::ret(&transfer_result, &vec![])
+                }
             };
 
             let target: DepositId = match DepositId::from_uref(target) {
                 Ok(deposit_id) => deposit_id,
-                Err(error) => contract_api::ret(&format!("Error: {}", error), &vec![]),
+                Err(error) => {
+                    let transfer_result: Result<(), Error> = Err(error.into());
+                    contract_api::ret(&transfer_result, &vec![])
+                }
             };
 
-            let transfer_message = match mint.transfer(source, target, amount) {
-                Ok(_) => String::from("Successful transfer"),
-                Err(e) => format!("Error: {:?}", e),
-            };
-
-            contract_api::ret(&transfer_message, &vec![]);
+            let transfer_result = mint.transfer(source, target, amount);
+            contract_api::ret(&transfer_result, &vec![]);
         }
 
         _ => panic!("Unknown method name!"),

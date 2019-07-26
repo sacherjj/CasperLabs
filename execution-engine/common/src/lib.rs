@@ -32,6 +32,7 @@ pub mod contract_api;
 #[cfg(any(test, feature = "gens"))]
 pub mod gens;
 pub mod key;
+pub mod system_contracts;
 #[cfg(any(test, feature = "gens"))]
 pub mod test_utils;
 pub mod uref;

@@ -21,6 +21,7 @@ use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE}
 use common::contract_api::argsparser::ArgsParser;
 use common::contract_api::{PurseTransferResult, TransferResult};
 use common::key::Key;
+use common::system_contracts::{self, mint};
 use common::uref::{AccessRights, URef};
 use common::value::account::{
     ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
@@ -72,6 +73,7 @@ pub enum Error {
     AddKeyFailure(AddKeyFailure),
     RemoveKeyFailure(RemoveKeyFailure),
     SetThresholdFailure(SetThresholdFailure),
+    SystemContractError(system_contracts::error::Error),
 }
 
 impl fmt::Display for Error {
@@ -131,6 +133,12 @@ impl From<RemoveKeyFailure> for Error {
 impl From<SetThresholdFailure> for Error {
     fn from(err: SetThresholdFailure) -> Error {
         Error::SetThresholdFailure(err)
+    }
+}
+
+impl From<system_contracts::error::Error> for Error {
+    fn from(error: system_contracts::error::Error) -> Error {
+        Error::SystemContractError(error)
     }
 }
 
@@ -647,7 +655,7 @@ where
         source: PurseId,
         target: PurseId,
         amount: U512,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         let source_value: URef = source.value();
         let target_value: URef = target.value();
 
@@ -660,9 +668,12 @@ where
 
         self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
 
-        let result: String = deserialize(&self.host_buf)?;
-
-        Ok(&result == "Successful transfer")
+        // This will deserialize `host_buf` into the Result type which carries
+        // mint contract error.
+        let result: Result<(), mint::error::Error> = deserialize(&self.host_buf)?;
+        // Wraps mint error into a more general error type through an aggregate
+        // system contracts Error.
+        Ok(result.map_err(system_contracts::error::Error::from)?)
     }
 
     /// Creates a new account at a given public key, transferring a given amount of tokens from
@@ -686,33 +697,34 @@ where
             return Ok(TransferResult::TransferError);
         }
 
-        if self.mint_transfer(mint_contract_key, source, target_purse_id, amount)? {
-            let known_urefs = vec![
-                (
-                    String::from(MINT_NAME),
-                    self.get_mint_contract_public_uref_key()?,
-                ),
-                (
-                    String::from(POS_NAME),
-                    self.get_pos_contract_public_uref_key()?,
-                ),
-                (pos_contract_uref.as_string(), pos_contract_key),
-                (mint_contract_uref.as_string(), mint_contract_key),
-            ]
-            .into_iter()
-            .map(|(name, key)| {
-                if let Some(uref) = key.as_uref() {
-                    (name, Key::URef(URef::new(uref.addr(), AccessRights::READ)))
-                } else {
-                    (name, key)
-                }
-            })
-            .collect();
-            let account = Account::create(target_addr, known_urefs, target_purse_id);
-            self.context.write_account(target_key, account)?;
-            Ok(TransferResult::TransferredToNewAccount)
-        } else {
-            Ok(TransferResult::TransferError)
+        match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
+            Ok(_) => {
+                let known_urefs = vec![
+                    (
+                        String::from(MINT_NAME),
+                        self.get_mint_contract_public_uref_key()?,
+                    ),
+                    (
+                        String::from(POS_NAME),
+                        self.get_pos_contract_public_uref_key()?,
+                    ),
+                    (pos_contract_uref.as_string(), pos_contract_key),
+                    (mint_contract_uref.as_string(), mint_contract_key),
+                ]
+                .into_iter()
+                .map(|(name, key)| {
+                    if let Some(uref) = key.as_uref() {
+                        (name, Key::URef(URef::new(uref.addr(), AccessRights::READ)))
+                    } else {
+                        (name, key)
+                    }
+                })
+                .collect();
+                let account = Account::create(target_addr, known_urefs, target_purse_id);
+                self.context.write_account(target_key, account)?;
+                Ok(TransferResult::TransferredToNewAccount)
+            }
+            Err(_) => Ok(TransferResult::TransferError),
         }
     }
 
@@ -730,10 +742,9 @@ where
         // This appears to be a load-bearing use of `RuntimeContext::insert_uref`.
         self.context.insert_uref(target.value());
 
-        if self.mint_transfer(mint_contract_key, source, target, amount)? {
-            Ok(TransferResult::TransferredToExistingAccount)
-        } else {
-            Ok(TransferResult::TransferError)
+        match self.mint_transfer(mint_contract_key, source, target, amount) {
+            Ok(_) => Ok(TransferResult::TransferredToExistingAccount),
+            Err(_) => Ok(TransferResult::TransferError),
         }
     }
 
@@ -788,12 +799,12 @@ where
         amount_ptr: u32,
         amount_size: u32,
     ) -> Result<PurseTransferResult, Error> {
-        let source_purse: PurseId = {
+        let source: PurseId = {
             let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
             deserialize(&bytes).map_err(Error::BytesRepr)?
         };
 
-        let target_purse: PurseId = {
+        let target: PurseId = {
             let bytes = self.bytes_from_mem(target_ptr, target_size as usize)?;
             deserialize(&bytes).map_err(Error::BytesRepr)?
         };
@@ -805,11 +816,9 @@ where
 
         let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
 
-        if self.mint_transfer(mint_contract_key, source_purse, target_purse, amount)? {
-            Ok(PurseTransferResult::TransferSuccessful)
-        } else {
-            // TODO: Improve returned type (insufficient funds/access rights, non-existent purses)
-            Ok(PurseTransferResult::TransferError)
+        match self.mint_transfer(mint_contract_key, source, target, amount) {
+            Ok(_) => Ok(PurseTransferResult::TransferSuccessful),
+            Err(_) => Ok(PurseTransferResult::TransferError),
         }
     }
 }
