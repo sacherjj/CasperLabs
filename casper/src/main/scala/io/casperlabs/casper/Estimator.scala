@@ -44,7 +44,7 @@ object Estimator {
     ): F[List[BlockHash]] =
       blockDag
         .children(b)
-        .map(_.getOrElse(Set.empty).filter(scores.contains))
+        .map(_.filter(scores.contains))
         .map(c => if (c.isEmpty) List(b) else c.toList)
 
     /*
@@ -106,10 +106,8 @@ object Estimator {
       blockHash: BlockHash,
       scores: Map[BlockHash, Long]
   ): F[BlockHash] =
-    blockDag.getMainChildren(blockHash).flatMap {
-      case None =>
-        blockHash.pure[F]
-      case Some(mainChildren) => {
+    blockDag.getMainChildren(blockHash).flatMap { mainChildren =>
+      {
         // make sure they are reachable from latestMessages
         val reachableMainChildren = mainChildren.filter(scores.contains)
         if (reachableMainChildren.isEmpty) {

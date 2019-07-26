@@ -72,11 +72,11 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
     // Number of the last rank in topoSortVector
     def sortEndBlockNumber = sortOffset + topoSortVector.size - 1
 
-    def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
+    def children(blockHash: BlockHash): F[Set[BlockHash]] =
       for {
         result <- childMap.get(blockHash) match {
                    case Some(children) =>
-                     Option(children).pure[F]
+                     children.pure[F]
                    case None =>
                      for {
                        blockOpt <- BlockStore[F].getBlockMessage(blockHash)
@@ -84,15 +84,16 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
                                   case Some(block) =>
                                     val number = block.getHeader.rank
                                     if (number >= sortOffset) {
-                                      none[Set[BlockHash]].pure[F]
+                                      Set.empty[BlockHash].pure[F]
                                     } else {
                                       lock.withPermit(
-                                        for {
-                                          oldDagInfo <- loadCheckpoint(number)
-                                        } yield oldDagInfo.flatMap(_.childMap.get(blockHash))
+                                        loadCheckpoint(number).map(
+                                          _.flatMap(_.childMap.get(blockHash))
+                                            .getOrElse(Set.empty)
+                                        )
                                       )
                                     }
-                                  case None => none[Set[BlockHash]].pure[F]
+                                  case None => Set.empty[BlockHash].pure[F]
                                 }
                      } yield result
                  }

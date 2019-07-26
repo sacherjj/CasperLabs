@@ -153,7 +153,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
               Option[BlockMetadata],
               Option[BlockHash],
               Option[BlockMetadata],
-              Option[Set[BlockHash]],
+              Set[BlockHash],
               Option[Set[BlockHash]],
               Boolean
           )
