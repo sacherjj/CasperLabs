@@ -65,15 +65,16 @@ object BlockDagRepresentation {
     )(implicit monad: Monad[F]): F[Option[List[BlockHash]]] =
       blockDagRepresentation.children(blockHash).flatMap {
         case Some(children) =>
-          for {
-            mainChildren <- children.toList.filterA { child =>
-                             blockDagRepresentation.lookup(child).map {
-                               // make sure child's main parent's hash equal to `blockHash`
-                               case Some(blockMetadata) => blockMetadata.parents.head == blockHash
-                               case None                => false
-                             }
-                           }
-          } yield Some(mainChildren)
+          children.toList
+            .filterA(
+              child =>
+                blockDagRepresentation.lookup(child).map {
+                  // make sure child's main parent's hash equal to `blockHash`
+                  case Some(blockMetadata) => blockMetadata.parents.head == blockHash
+                  case None                => false
+                }
+            )
+            .map((Some(_)))
         case None => none[List[BlockHash]].pure[F]
       }
   }
