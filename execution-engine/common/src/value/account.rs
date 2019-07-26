@@ -282,13 +282,13 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
 }
 
 #[derive(Debug)]
-pub struct TryFromSliceForPublicKeyError;
+pub struct TryFromSliceForPublicKeyError(());
 
 impl TryFrom<&[u8]> for PublicKey {
-    type Error = TryPublicKeyFromSliceError;
+    type Error = TryFromSliceForPublicKeyError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         if bytes.len() != KEY_SIZE {
-            return Err(TryPublicKeyFromSliceError);
+            return Err(TryFromSliceForPublicKeyError(()));
         }
         let mut public_key = [0u8; 32];
         public_key.copy_from_slice(bytes);
