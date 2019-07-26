@@ -1,13 +1,7 @@
 use cl_std::value::U512;
 
 use capabilities::{Addable, Readable, Writable};
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Error {
-    InsufficientFunds,
-    SourceNotFound,
-    DestNotFound,
-}
+use cl_std::system_contracts::mint::error::Error;
 
 pub trait Mint<A, RW>
 where
