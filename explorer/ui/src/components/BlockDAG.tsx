@@ -171,7 +171,9 @@ export class BlockDAG extends React.Component<Props, {}> {
       .attr('y', 12)
       .style('font-family', 'Arial')
       .style('font-size', 12)
-      .style('pointer-events', 'none'); // to prevent mouseover/drag capture
+      .style('pointer-events', 'none') // to prevent mouseover/drag capture
+      .style('text-anchor', 'start')
+      .attr('transform', 'rotate(15)'); // rotate so a chain doesn't overlap on a small screen.
 
     node
       .append('title')

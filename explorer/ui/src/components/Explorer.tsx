@@ -164,7 +164,10 @@ class BlockDetails extends React.Component<{
                   encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
               );
             // Genesis doesn't have a validator.
-            return (validatorBond && validatorBond.getStake()) || null;
+            return (
+              (validatorBond && validatorBond.getStake().toLocaleString()) ||
+              null
+            );
           })()
         ],
         ['Fault tolerance', block.getStatus()!.getFaultTolerance()]
