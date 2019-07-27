@@ -44,6 +44,31 @@ export default class CasperService {
     });
   }
 
+  getBlockInfos(depth: number, maxRank?: number): Promise<BlockInfo[]> {
+    return new Promise<BlockInfo[]>((resolve, reject) => {
+      const request = new StreamBlockInfosRequest();
+      request.setDepth(depth);
+      request.setMaxRank(maxRank || 0);
+
+      let blocks: BlockInfo[] = [];
+
+      grpc.invoke(GrpcCasperService.StreamBlockInfos, {
+        host: this.url,
+        request: request,
+        onMessage: msg => {
+          blocks.push(msg as BlockInfo);
+        },
+        onEnd: (code, message) => {
+          if (code === grpc.Code.OK) {
+            resolve(blocks);
+          } else {
+            reject(new GrpcError(code, message));
+          }
+        }
+      });
+    });
+  }
+
   /** Get one of the blocks from the last rank. */
   getLatestBlockInfo(): Promise<BlockInfo> {
     return new Promise<BlockInfo>((resolve, reject) => {
@@ -56,10 +81,10 @@ export default class CasperService {
       grpc.invoke(GrpcCasperService.StreamBlockInfos, {
         host: this.url,
         request: request,
-        onMessage: res => {
+        onMessage: msg => {
           if (!resolved) {
             resolved = true;
-            resolve(res as BlockInfo);
+            resolve(msg as BlockInfo);
           }
         },
         onEnd: (code, message) => {

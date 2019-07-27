@@ -1,10 +1,13 @@
-import { computed } from 'mobx';
+import { computed, observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import StorageCell from '../lib/StorageCell';
 import FaucetService from '../services/FaucetService';
 import CasperService from '../services/CasperService';
-import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
+import {
+  DeployInfo,
+  BlockInfo
+} from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import { GrpcError } from '../services/Errors';
 import { grpc } from '@improbable-eng/grpc-web';
 
@@ -18,6 +21,12 @@ export class CasperContainer {
 
   // Start polling for status when we add a new faucet request.
   private faucetStatusTimerId = 0;
+  private faucetStatusInterval = 10 * 1000;
+
+  // Block DAG
+  @observable blocks: BlockInfo[] | null = null;
+  @observable selectedBlock: BlockInfo | undefined = undefined;
+  @observable dagDepth = 10;
 
   constructor(
     private errors: ErrorContainer,
@@ -53,7 +62,7 @@ export class CasperContainer {
     if (this.faucetStatusTimerId === 0) {
       this.faucetStatusTimerId = window.setInterval(
         () => this.refreshFaucetRequestStatus(),
-        10 * 1000
+        this.faucetStatusInterval
       );
     }
   }
@@ -100,6 +109,14 @@ export class CasperContainer {
       }
       throw err;
     }
+  }
+
+  async refreshBlockDag() {
+    this.errors.capture(
+      this.casperService.getBlockInfos(this.dagDepth).then(blocks => {
+        this.blocks = blocks;
+      })
+    );
   }
 }
 
