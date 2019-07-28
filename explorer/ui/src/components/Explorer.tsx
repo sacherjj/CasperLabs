@@ -170,7 +170,13 @@ class BlockDetails extends React.Component<{
             );
           })()
         ],
-        ['Fault tolerance', block.getStatus()!.getFaultTolerance()]
+        [
+          'Fault tolerance',
+          block
+            .getStatus()!
+            .getFaultTolerance()
+            .toFixed(3)
+        ]
       ]
     ];
     return (
