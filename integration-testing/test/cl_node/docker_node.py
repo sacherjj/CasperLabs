@@ -4,6 +4,8 @@ import os
 import re
 import shutil
 import tempfile
+import inspect
+import base64
 from pathlib import Path
 from typing import List, Tuple, Dict, Union
 
@@ -15,6 +17,14 @@ from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, is_valid_account, Account
+
+
+def test_name():
+    for f in inspect.stack():
+        if (f.function not in ('test_name', 'test_account')
+            and ('_test_' in f.function or f.function.startswith('test_'))):
+            # TODO: handle threads, they don't have test_* in their stack
+            return f.function
 
 
 class DockerNode(LoggingDockerBase):
@@ -48,6 +58,8 @@ class DockerNode(LoggingDockerBase):
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
         self.join_client_network()
+        self.test_accounts = {}
+        self.next_key = 1
 
     @property
     def docker_port_offset(self) -> int:
@@ -188,9 +200,28 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.deploy_dir)
 
     @property
-    def from_address(self) -> str:
+    def genesis_account(self):
         """ Genesis Account Address """
-        return GENESIS_ACCOUNT.public_key_hex
+        return GENESIS_ACCOUNT
+
+
+    @property
+    def test_account(self) -> str:
+        name = test_name()
+        if name not in self.test_accounts:
+            self.test_accounts[name] = Account(self.next_key)
+            logging.info(f"=== Creating test account #{self.next_key} {self.test_accounts[name].public_key_hex} for {name} ")
+            block_hash = self.transfer_to_account(self.next_key, 1000000)
+            for deploy in self.client.show_deploys(block_hash):
+                logging.info(f"=== {deploy} ")
+                assert deploy.is_error is False
+            self.next_key += 1
+        return self.test_accounts[name]
+        
+    @property
+    def from_address(self) -> str:
+        return self.test_account.public_key_hex
+
 
     @property
     def volumes(self) -> dict:
@@ -262,6 +293,9 @@ class DockerNode(LoggingDockerBase):
         :param from_account_id: default 'genesis' account, but previously funded account_id is also valid.
         :returns block_hash in hex str
         """
+
+        logging.info(f"=== Transfering {amount} to {to_account_id}")
+
         assert is_valid_account(to_account_id) and to_account_id != 'genesis', \
             "Can transfer only to non-genesis accounts in test framework (1-20)."
         assert is_valid_account(from_account_id), "Must transfer from a valid account_id: 1-20 or 'genesis'"

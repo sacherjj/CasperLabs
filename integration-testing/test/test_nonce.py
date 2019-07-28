@@ -64,9 +64,10 @@ def test_deploy_with_higher_nonce(node, contracts: List[str]):
     blocks = parse_show_blocks(node.client.show_blocks(100))
 
     # Deploy counts of all blocks except the genesis block.
+    # TODO: filter out blocks not created from this test's account
     deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
 
-    assert sum(deploy_counts) == len(contracts)
+    assert sum(deploy_counts) == len(contracts) + 1 # add one for the transfer from genesis (test account creation)
 
 
 @pytest.mark.parametrize("contracts", [['test_helloname.wasm', 'test_helloworld.wasm', 'test_counterdefine.wasm', 'test_countercall.wasm']])
@@ -97,7 +98,7 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(node, contrac
     # Deploy counts of all blocks except the genesis block.
     deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
 
-    assert sum(deploy_counts) == 2
+    assert sum(deploy_counts) == 2 + 1
 
     deploy_and_propose(node, contracts[3], 3)
     node.client.propose()
@@ -106,4 +107,4 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(node, contrac
     # Deploy counts of all blocks except the genesis block.
     deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
 
-    assert sum(deploy_counts) == len(contracts)
+    assert sum(deploy_counts) == len(contracts) + 1  # add one for the transfer from genesis (test account creation) 

@@ -5,6 +5,11 @@ from test.cl_node.wait import wait_for_block_hashes_propagated_to_all_nodes
 from typing import List
 from functools import reduce
 from operator import add
+from pathlib import Path
+
+def docker_path(p):
+    return Path(*(['/data'] + str(p).split('/')[-2:]))
+
 
 
 import pytest
@@ -49,7 +54,10 @@ class DeployThread(threading.Thread):
         for batch in self.batches_of_contracts:
             for contract in batch:
                 assert 'Success' in self.node.client.deploy(session_contract=contract,
-                                                            payment_contract=contract)
+                                                            payment_contract=contract,
+                                                            from_address=self.node.genesis_account.public_key_hex,
+                                                            public_key=docker_path(self.node.genesis_account.public_key_path),
+                                                            private_key=docker_path(self.node.genesis_account.private_key_path))
 
             block_hash = self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
             self.block_hashes.append(block_hash)

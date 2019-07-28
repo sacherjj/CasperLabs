@@ -134,6 +134,11 @@ def test_network_partition_and_rejoin(four_nodes_network):
     Feature file: block_gossiping.feature
     Scenario: Network partition occurs and rejoin occurs
     """
+    nodes = four_nodes_network.docker_nodes
+    n = len(nodes)
+    block_hash = deploy_and_propose(nodes[0], C[0])
+    wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
+
     # Partition the network so node0 connected to node1 and node2 connected to node3 only.
     connections_between_partitions = [(i, j) for i in (0, 1) for j in (2, 3)]
     logging.info("PARTITIONS: {}".format(connections_between_partitions))
@@ -143,8 +148,6 @@ def test_network_partition_and_rejoin(four_nodes_network):
         logging.info("DISCONNECTING PARTITION: {}".format(connection))
         four_nodes_network.disconnect(connection)
 
-    nodes = four_nodes_network.docker_nodes
-    n = len(nodes)
     partitions = nodes[:int(n / 2)], nodes[int(n / 2):]
     logging.info("PARTITIONS: {}".format(partitions))
 
@@ -158,8 +161,8 @@ def test_network_partition_and_rejoin(four_nodes_network):
     # so everyone has the genesis plus the 1 block proposed in its partition.
     # Using the same nonce in both partitions because otherwise one of them will
     # sit there unable to propose; should use separate accounts really.
-    block_hashes = (deploy_and_propose(partitions[0][0], C[0], nonce=1),
-                    deploy_and_propose(partitions[1][0], C[1], nonce=1))
+    block_hashes = (deploy_and_propose(partitions[0][0], C[0], nonce=2),
+                    deploy_and_propose(partitions[1][0], C[1], nonce=2))
 
     for partition, block_hash in zip(partitions, block_hashes):
         wait_for_block_hash_propagated_to_all_nodes(partition, block_hash)
@@ -180,7 +183,7 @@ def test_network_partition_and_rejoin(four_nodes_network):
     # however, nodes in partition[0] will still not see blocks from partition[1]
     # until they also propose a new one on top of the block the created during
     # the network outage.
-    block_hash = deploy_and_propose(nodes[0], C[2], nonce=2)
+    block_hash = deploy_and_propose(nodes[0], C[2], nonce=3)
 
     for partition, old_hash in zip(partitions, block_hashes):
         logging.info(f"CHECK {partition} HAS ALL BLOCKS CREATED IN BOTH PARTITIONS")

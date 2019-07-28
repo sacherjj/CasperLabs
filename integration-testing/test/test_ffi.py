@@ -1,9 +1,13 @@
 import pytest
+from pathlib import Path
 
 ffi_test_contracts = [
     ('getcallerdefine.wasm', 'getcallercall.wasm'),
     ('listknownurefsdefine.wasm', 'listknownurefscall.wasm'),
 ]
+
+def docker_path(p):
+    return Path(*(['/data'] + str(p).split('/')[-2:]))
 
 
 def deploy_and_propose_expect_no_errors(node, contract):
@@ -11,7 +15,9 @@ def deploy_and_propose_expect_no_errors(node, contract):
 
     block_hash = node.deploy_and_propose(session_contract=contract,
                                          payment_contract=contract,
-                                         from_address='ae7cd84d61ff556806691be61e6ab217791905677adbbe085b8c540d916e8393')
+                                         from_address=node.genesis_account.public_key_hex,
+                                         public_key=docker_path(node.genesis_account.public_key_path),
+                                         private_key=docker_path(node.genesis_account.private_key_path)) 
     r = client.show_deploys(block_hash)[0]
     assert r.is_error is False, f'error_message: {r.error_message}'
 

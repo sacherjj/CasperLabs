@@ -51,17 +51,21 @@ class PythonClient(CasperLabsClient):
                      f'payment_contract={payment_contract_path}, session_contract={session_contract_path}, '
                      f'nonce={deploy_nonce})')
 
-        r = self.client.deploy(address.encode('UTF-8'),
-                               gas_limit,
-                               gas_price,
-                               payment_contract_path,
-                               session_contract_path,
-                               deploy_nonce,
-                               public_key,
-                               private_key,
-                               args)
-
-        return r
+        try:
+            r = self.client.deploy(address.encode('UTF-8'),
+                                   gas_limit,
+                                   gas_price,
+                                   payment_contract_path,
+                                   session_contract_path,
+                                   deploy_nonce,
+                                   public_key,
+                                   private_key,
+                                   args)
+            return r
+        except:
+            if nonce is None:
+                NonceRegistry.revert(address)
+            raise
 
     def propose(self) -> str:
         logging.info(f'PY_CLIENT.propose() for {self.client.host}')

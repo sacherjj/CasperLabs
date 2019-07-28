@@ -246,7 +246,7 @@ class DockerBase:
             try:
                 self.container.remove(force=True, v=True)
             except Exception as e:
-                logging.error(f'Error removing container {self.container_name}: {e}')
+                logging.warning(f'Error removing container {self.container_name}: {e}')
 
 
 class LoggingDockerBase(DockerBase):

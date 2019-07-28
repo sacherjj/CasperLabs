@@ -5,6 +5,10 @@ from itertools import count
 from .cl_node.casperlabsnode import ( COMBINED_CONTRACT, COUNTER_CALL, HELLO_WORLD, MAILING_LIST_CALL)
 from .cl_node.wait import wait_for_block_hash_propagated_to_all_nodes
 from test import contract_hash
+from pathlib import Path
+
+def docker_path(p):
+    return Path(*(['/data'] + str(p).split('/')[-2:]))
 
 
 @pytest.fixture(scope='module')
@@ -14,8 +18,13 @@ def three_node_network_with_combined_contract(three_node_network_module_scope):
     use later by tests in this module.
     """
     tnn = three_node_network_module_scope
-    bootstrap, node1, node2 = tnn.docker_nodes
-    block_hash = bootstrap.deploy_and_propose(session_contract = COMBINED_CONTRACT, payment_contract = COMBINED_CONTRACT)
+    bootstrap, node1, node2 = tnn.docker_nodes 
+    node = bootstrap
+    block_hash = bootstrap.deploy_and_propose(session_contract=COMBINED_CONTRACT, 
+                                              payment_contract=COMBINED_CONTRACT,
+                                              from_address=node.genesis_account.public_key_hex,
+                                              public_key=docker_path(node.genesis_account.public_key_path),
+                                              private_key=docker_path(node.genesis_account.private_key_path))
     wait_for_block_hash_propagated_to_all_nodes(tnn.docker_nodes, block_hash)
     return tnn
 
@@ -26,7 +35,11 @@ def nodes(three_node_network_with_combined_contract):
 
 
 def deploy_and_propose(node, contract):
-    block_hash = node.deploy_and_propose(session_contract=contract, payment_contract=contract)
+    block_hash = node.deploy_and_propose(session_contract=contract,
+                                         payment_contract=contract,
+                                         from_address=node.genesis_account.public_key_hex,
+                                         public_key=docker_path(node.genesis_account.public_key_path),
+                                         private_key=docker_path(node.genesis_account.private_key_path))
     deploys = node.client.show_deploys(block_hash)
     for deploy in deploys:
         assert deploy.is_error is False
@@ -54,7 +67,7 @@ def test_call_contracts_one_another(nodes, docker_client, contract, function_cou
     Scenario: Call contracts deployed on a node from another node.
     """
 
-    from_address = nodes[0].from_address
+    from_address = nodes[0].genesis_account.public_key_hex
 
     # Help me figure out what hashes to put into the call contracts.
     # combined-contracts/define/src/lib.rs defines them;
