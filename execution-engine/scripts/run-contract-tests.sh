@@ -3,6 +3,8 @@
 set -o errexit
 
 CONTRACTS=(
+    "add-update-associated-key"
+    "remove-associated-key"
     "create-purse-01"
     "local-state"
     "mint-token"

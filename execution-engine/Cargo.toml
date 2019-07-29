@@ -10,6 +10,8 @@ members = [
     "metrics-scraper",
     "shared",
     "storage",
+    "test-contracts/add-update-associated-key",
+    "test-contracts/remove-associated-key",
     "test-contracts/create-purse-01",
     "test-contracts/ee-401-regression",
     "test-contracts/ee-401-regression-call",
