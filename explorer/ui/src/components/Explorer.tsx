@@ -1,13 +1,18 @@
 import React from 'react';
 import { observer } from 'mobx-react';
 import DagContainer from '../containers/DagContainer';
-import { RefreshableComponent, LinkButton, ListInline } from './Utils';
+import {
+  RefreshableComponent,
+  LinkButton,
+  ListInline,
+  shortHash
+} from './Utils';
 import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
 import { encodeBase16 } from '../lib/Conversions';
 import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import $ from 'jquery';
-import { shortHash, DagStepButtons } from './Blocks';
+import { DagStepButtons } from './BlockList';
 import { Link } from 'react-router-dom';
 import Pages from './Pages';
 
@@ -104,7 +109,7 @@ class BlockDetails extends React.Component<{
     // Grouped attributes so we could display 2 sets of fields next to each other.
     let attrs: Array<Array<[string, any]>> = [
       [
-        ['Block hash', <Link to={Pages.block(id)}>{shortHash(id)}</Link>],
+        ['Block Hash', <Link to={Pages.block(id)}>{shortHash(id)}</Link>],
         ['Rank', header.getRank()]
       ],
       [
@@ -143,15 +148,15 @@ class BlockDetails extends React.Component<{
       ],
       [
         ['Timestamp', new Date(header.getTimestamp()).toISOString()],
-        ['Deploy count', header.getDeployCount()]
+        ['Deploy Count', header.getDeployCount()]
       ],
       [
         ['Validator', shortHash(validatorId)],
-        ['Validator block number', header.getValidatorBlockSeqNum()]
+        ['Validator Block Number', header.getValidatorBlockSeqNum()]
       ],
       [
         [
-          'Validator stake',
+          'Validator Stake',
           (() => {
             let validatorBond = header
               .getState()!
@@ -168,7 +173,7 @@ class BlockDetails extends React.Component<{
           })()
         ],
         [
-          'Fault tolerance',
+          'Fault Tolerance',
           block
             .getStatus()!
             .getFaultTolerance()

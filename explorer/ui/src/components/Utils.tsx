@@ -2,6 +2,7 @@ import React from 'react';
 import { Route, RouteProps } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import AuthContainer from '../containers/AuthContainer';
+import { encodeBase16 } from '../lib/Conversions';
 
 export const Spinner = (msg: String) => (
   <div className="text-center">
@@ -142,3 +143,8 @@ export class PrivateRoute extends React.Component<PrivateRouteProps, {}> {
     return <Route {...this.props} />;
   }
 }
+
+export const shortHash = (hash: string | ByteArray) => {
+  const h = typeof hash === 'string' ? hash : encodeBase16(hash);
+  return h.length > 10 ? h.substr(0, 10) + '...' : h;
+};

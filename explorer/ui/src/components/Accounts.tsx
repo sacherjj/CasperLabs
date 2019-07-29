@@ -126,6 +126,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
   }
 }
 
+// Need an observer component to subscribe just to this account balance.
 const Balance = observer(
   (props: { balance: ObservableValue<AccountBalance> }) => {
     const value = props.balance.value;

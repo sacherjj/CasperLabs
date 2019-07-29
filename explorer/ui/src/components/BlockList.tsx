@@ -1,7 +1,12 @@
 import React from 'react';
 import { observer } from 'mobx-react';
 import DagContainer, { DagStep } from '../containers/DagContainer';
-import { RefreshableComponent, ListInline, IconButton } from './Utils';
+import {
+  RefreshableComponent,
+  ListInline,
+  IconButton,
+  shortHash
+} from './Utils';
 import DataTable from './DataTable';
 import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import { encodeBase16 } from '../lib/Conversions';
@@ -14,9 +19,8 @@ interface Props {
   dag: DagContainer;
 }
 
-/** Show the list of blocks. */
 @observer
-export default class Blocks extends RefreshableComponent<Props, {}> {
+export default class BlockList extends RefreshableComponent<Props, {}> {
   async refresh() {
     this.props.dag.refreshBlockDag();
   }
@@ -36,7 +40,6 @@ export default class Blocks extends RefreshableComponent<Props, {}> {
         renderRow={(block: BlockInfo) => {
           const header = block.getSummary()!.getHeader()!;
           const id = encodeBase16(block.getSummary()!.getBlockHash_asU8());
-          const validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
           return (
             <tr key={id}>
               <td>
@@ -46,7 +49,7 @@ export default class Blocks extends RefreshableComponent<Props, {}> {
               <td>
                 <Timestamp timestamp={header.getTimestamp()} />
               </td>
-              <td>{shortHash(validatorId)}</td>
+              <td>{shortHash(header.getValidatorPublicKey_asU8())}</td>
             </tr>
           );
         }}
@@ -93,6 +96,3 @@ export const DagStepButtons = (props: { step: DagStep }) => {
     </ListInline>
   );
 };
-
-export const shortHash = (hash: string) =>
-  hash.length > 10 ? hash.substr(0, 10) + '...' : hash;

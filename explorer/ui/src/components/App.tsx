@@ -11,14 +11,14 @@ import Home from './Home';
 import Accounts from './Accounts';
 import Faucet from './Faucet';
 import Explorer from './Explorer';
-import Blocks from './Blocks';
+import BlockList from './BlockList';
 import { PrivateRoute } from './Utils';
 import AuthContainer from '../containers/AuthContainer';
 import FaucetContainer from '../containers/FaucetContainer';
 import ErrorContainer from '../containers/ErrorContainer';
 import DagContainer from '../containers/DagContainer';
-import { Block } from './Block';
-import { BlockContainerFactory } from '../containers/BlockContainer';
+import BlockDetails from './BlockDetails';
+import BlockContainer from '../containers/BlockContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -45,7 +45,7 @@ export interface AppProps {
   auth: AuthContainer;
   faucet: FaucetContainer;
   dag: DagContainer;
-  blocks: BlockContainerFactory;
+  block: BlockContainer;
 }
 
 // The entry point for rendering.
@@ -248,8 +248,8 @@ const Content = (props: AppProps) => (
             render={_ => <Faucet {...props} />}
           />
           <Route path={Pages.Explorer} render={_ => <Explorer {...props} />} />
-          <Route path={Pages.Block} render={_ => <Block {...props} />} />
-          <Route path={Pages.Blocks} render={_ => <Blocks {...props} />} />
+          <Route path={Pages.Block} render={_ => <BlockDetails {...props} />} />
+          <Route path={Pages.Blocks} render={_ => <BlockList {...props} />} />
         </Switch>
       </div>
     </div>

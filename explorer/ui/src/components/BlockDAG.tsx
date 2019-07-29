@@ -4,7 +4,7 @@ import { RefreshButton, Loading, ListInline } from './Utils';
 import * as d3 from 'd3';
 import $ from 'jquery';
 import { encodeBase16 } from '../lib/Conversions';
-import { shortHash } from './Blocks';
+import { shortHash } from './Utils';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 

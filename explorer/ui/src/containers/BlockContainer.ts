@@ -4,35 +4,40 @@ import ErrorContainer from './ErrorContainer';
 import CasperService from '../services/CasperService';
 import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import { encodeBase16 } from '../lib/Conversions';
+import { Block } from '../grpc/io/casperlabs/casper/consensus/consensus_pb';
+import { Key } from '../grpc/io/casperlabs/casper/consensus/state_pb';
+import ObservableValueMap from '../lib/ObservableValueMap';
 
-export class BlockContainerFactory {
-  constructor(
-    private errors: ErrorContainer,
-    private casperService: CasperService
-  ) {}
-
-  make() {
-    return new BlockContainer(this.errors, this.casperService);
-  }
-}
+type AccountB16 = string;
 
 export class BlockContainer {
   @observable blockHash: ByteArray | null = null;
   @observable block: BlockInfo | null = null;
   @observable neighborhood: BlockInfo[] | null = null;
+  @observable deploys: Block.ProcessedDeploy[] | null = null;
+  @observable balances: ObservableValueMap<
+    AccountB16,
+    number
+  > = new ObservableValueMap();
   // How much of the DAG to load around the block.
   depth = 10;
+
+  // We can cache the balance URef so 2nd time the balances only need 1 query, not 4.
+  private balanceUrefs = new Map<AccountB16, Key.URef>();
 
   constructor(
     private errors: ErrorContainer,
     private casperService: CasperService
   ) {}
 
+  /** Call whenever the page switches to a new block. */
   @action
   init(blockHash: ByteArray) {
     this.blockHash = blockHash;
     this.block = null;
     this.neighborhood = null;
+    this.deploys = null;
+    this.balances.clear();
   }
 
   @computed get blockHashBase16() {
@@ -64,4 +69,52 @@ export class BlockContainer {
       })
     );
   }
+
+  async loadDeploys() {
+    if (this.blockHash == null) {
+      this.deploys = null;
+      return;
+    }
+    return this.errors.capture(
+      this.casperService.getBlockDeploys(this.blockHash).then(deploys => {
+        this.deploys = deploys;
+      })
+    );
+  }
+
+  /** Load the balances of accounts that executed deploys in this block. */
+  async loadBalances() {
+    if (this.deploys == null || this.blockHash == null) {
+      return;
+    }
+    for (let deploy of this.deploys) {
+      let accountKey = deploy
+        .getDeploy()!
+        .getHeader()!
+        .getAccountPublicKey_asU8();
+      let accountB16 = encodeBase16(accountKey);
+      let balanceUref = this.balanceUrefs.get(accountB16);
+      if (!balanceUref) {
+        balanceUref = await this.casperService.getAccountBalanceUref(
+          this.blockHash,
+          deploy
+            .getDeploy()!
+            .getHeader()!
+            .getAccountPublicKey_asU8()
+        );
+        if (balanceUref) {
+          this.balanceUrefs.set(accountB16, balanceUref);
+        }
+      }
+      if (balanceUref) {
+        let balance = await this.casperService.getAccountBalance(
+          this.blockHash,
+          balanceUref
+        );
+        this.balances.set(accountB16, balance);
+      }
+    }
+  }
 }
+
+export default BlockContainer;
