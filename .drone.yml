@@ -69,6 +69,7 @@ pipeline:
       - "CARGO_FLAGS=--locked"
     commands:
       - "cd execution-engine/"
+      - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
       - "make test test-contracts"
       - "cd ../long-running-tests"
       - "./build-contracts.sh"
