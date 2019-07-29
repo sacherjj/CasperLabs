@@ -81,8 +81,16 @@ export class BlockDAG extends React.Component<Props, {}> {
     );
   }
 
-  /** Called when the data is refreshed, when we get the blocks. */
+  /** Called when the data is refreshed, when we get the blocks if they were null to begin with. */
   componentDidUpdate() {
+    this.renderGraph();
+  }
+
+  componentDidMount() {
+    this.renderGraph();
+  }
+
+  renderGraph() {
     if (this.props.blocks == null || this.props.blocks.length === 0) {
       // The renderer will have removed the svg.
       this.initialized = false;

@@ -71,11 +71,11 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
               <BlockDetails
                 block={dag.selectedBlock}
                 blocks={dag.blocks!}
-                onSelect={blockHash => {
+                onSelect={blockHashBase16 => {
                   dag.selectedBlock = dag.blocks!.find(
                     x =>
                       encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
-                      blockHash
+                      blockHashBase16
                   );
                 }}
               />

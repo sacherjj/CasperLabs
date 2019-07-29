@@ -34,7 +34,7 @@ export class FaucetContainer {
       );
       this.monitorFaucetRequest(account, deployHash);
     };
-    this.errors.capture(request());
+    return this.errors.capture(request());
   }
 
   /** List faucet requests we sent earlier. */
