@@ -34,8 +34,12 @@ const casperService = new CasperService(
 
 const errors = new ErrorContainer();
 const auth = new AuthContainer(errors, authService, casperService);
-const casper = new CasperContainer(errors, faucetService, casperService, () =>
-  auth.refreshBalances(true)
+const casper = new CasperContainer(
+  errors,
+  faucetService,
+  casperService,
+  // Update the balances when a new faucet request went through.
+  () => auth.refreshBalances(true)
 );
 
 ReactDOM.render(

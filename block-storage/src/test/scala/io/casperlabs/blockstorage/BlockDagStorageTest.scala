@@ -153,7 +153,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
               Option[BlockMetadata],
               Option[BlockHash],
               Option[BlockMetadata],
-              Option[Set[BlockHash]],
+              Set[BlockHash],
               Option[Set[BlockHash]],
               Boolean
           )
@@ -229,12 +229,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           .map(_.blockHash)
         latestMessage shouldBe realLatestMessages.get(b.getHeader.validatorPublicKey)
         children shouldBe
-          Some(
-            blockElements
-              .filter(_.getHeader.parentHashes.contains(b.blockHash))
-              .map(_.blockHash)
-              .toSet
-          )
+          blockElements
+            .filter(_.getHeader.parentHashes.contains(b.blockHash))
+            .map(_.blockHash)
+            .toSet
         blocksWithSpecifiedJustification shouldBe
           Some(
             blockElements
@@ -467,7 +465,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           _      <- secondStorage.close()
         } yield result match {
           case (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) => {
-            list.foreach(_ shouldBe ((None, None, None, None, None, false)))
+            list.foreach(_ shouldBe ((None, None, None, Set.empty, None, false)))
             latestMessageHashes shouldBe Map()
             latestMessages shouldBe Map()
             topoSort shouldBe Vector()
