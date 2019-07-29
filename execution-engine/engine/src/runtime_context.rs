@@ -14,7 +14,7 @@ use common::key::{Key, LOCAL_SEED_SIZE};
 use common::uref::{AccessRights, URef};
 use common::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure,
-    SetThresholdFailure, Weight,
+    SetThresholdFailure, UpdateKeyFailure, Weight,
 };
 use common::value::{Contract, Value};
 use shared::newtypes::{CorrelationId, Validated};
@@ -627,6 +627,39 @@ where
         // Exit early in case of error without updating global state
         account
             .remove_associated_key(public_key)
+            .map_err(Error::from)?;
+
+        let validated_uref = Validated::new(key, Validated::valid)?;
+        let validated_value =
+            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+
+        self.state
+            .borrow_mut()
+            .write(validated_uref, validated_value);
+
+        Ok(())
+    }
+
+    pub fn update_associated_key(
+        &mut self,
+        public_key: PublicKey,
+        weight: Weight,
+    ) -> Result<(), Error> {
+        // Check permission to modify associated keys
+        if self.base_key() != Key::Account(self.account().pub_key()) {
+            // Exit early with error to avoid mutations
+            return Err(UpdateKeyFailure::PermissionDenied.into());
+        }
+
+        // Converts an account's public key into a URef
+        let key = Key::Account(self.account().pub_key());
+
+        // Take an account out of the global state
+        let mut account: Account = self.read_gs_typed(&key)?;
+
+        // Exit early in case of error without updating global state
+        account
+            .update_associated_key(public_key, weight)
             .map_err(Error::from)?;
 
         let validated_uref = Validated::new(key, Validated::valid)?;
@@ -1312,6 +1345,24 @@ mod tests {
                 .associated_keys()
                 .get(&public_key)
                 .expect("Public key wasn't added to associated keys");
+
+            let new_weight = Weight::new(100);
+            runtime_context
+                .update_associated_key(public_key, new_weight)
+                .expect("Unable to update key");
+
+            let effect = runtime_context.effect();
+            let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
+            let account = match transform {
+                Transform::Write(Value::Account(account)) => account,
+                _ => panic!("Invalid transform operation found"),
+            };
+            let value = account
+                .associated_keys()
+                .get(&public_key)
+                .expect("Public key wasn't added to associated keys");
+
+            assert_eq!(value, &new_weight, "value was not updated");
 
             // Remove a key that was already added
             runtime_context
