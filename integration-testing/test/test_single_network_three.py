@@ -5,11 +5,7 @@ from itertools import count
 from .cl_node.casperlabsnode import ( COMBINED_CONTRACT, COUNTER_CALL, HELLO_WORLD, MAILING_LIST_CALL)
 from .cl_node.wait import wait_for_block_hash_propagated_to_all_nodes
 from test import contract_hash
-from pathlib import Path
-
-def docker_path(p):
-    return Path(*(['/data'] + str(p).split('/')[-2:]))
-
+from test.cl_node.docker_node import docker_path
 
 @pytest.fixture(scope='module')
 def three_node_network_with_combined_contract(three_node_network):
@@ -199,10 +195,7 @@ from test.cl_node.wait import wait_for_block_hashes_propagated_to_all_nodes
 from typing import List
 from functools import reduce
 from operator import add
-from pathlib import Path
 
-def docker_path(p):
-    return Path(*(['/data'] + str(p).split('/')[-2:]))
 
 
 
