@@ -31,13 +31,8 @@ account {
 """
 
 
-@pytest.fixture(scope='module')
-def node(one_node_network_module_scope):
-    n = one_node_network_module_scope.docker_nodes[0]
-    return n
-
-
-def test_account_state(node):
+def test_account_state(one_node_network):
+    node = one_node_network.docker_nodes[0]
 
     def account_state(block_hash):
         return node.d_client.query_state(block_hash=block_hash, key_type='address', key=node.from_address, path='')

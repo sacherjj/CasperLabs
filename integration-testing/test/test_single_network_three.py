@@ -56,11 +56,13 @@ test_parameters = [
 
 
 @pytest.mark.parametrize("contract, function_counter, path, expected", test_parameters)
-def test_call_contracts_one_another(nodes, docker_client, contract, function_counter, path, expected):
+def test_call_contracts_one_another(three_node_network_with_combined_contract, docker_client, contract, function_counter, path, expected):
     """
     Feature file: consensus.feature
     Scenario: Call contracts deployed on a node from another node.
     """
+
+    nodes = three_node_network_with_combined_contract.docker_nodes
 
     from_address = nodes[0].genesis_account.public_key_hex
 

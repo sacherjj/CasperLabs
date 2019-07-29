@@ -47,7 +47,7 @@ def test_transfer_to_accounts(one_node_network):
     # Perform multiple transfers with end result of Acct1 = 100, Acct2 = 100, Acct3 = 800
     node.transfer_to_accounts([(1, 1000), (2, 900, 1), (3, 800, 2)])
     with raises(Exception):
-        # Acct 1 only has 100, so should fail
-        node.transfer_to_account(to_account_id=4, amount=101, from_account_id=1)
+        # Acct 1 has not enough funds so it should fail
+        node.transfer_to_account(to_account_id=4, amount=100000000000, from_account_id=1)
     node.transfer_to_account(to_account_id=4, amount=100, from_account_id=2)
     # TODO: Improve checks once balance is easy to read.

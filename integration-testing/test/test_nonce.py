@@ -16,6 +16,20 @@ def deploy_and_propose(node, contract, nonce=None):
     return extract_block_hash_from_propose_output(node.client.propose())
 
 
+def deploy(node, contract, nonce):
+    message = node.client.deploy(session_contract=contract, payment_contract=contract, nonce=nonce)
+    assert 'Success!' in message
+    return message.split()[2]
+
+
+def propose(node):
+    return extract_block_hash_from_propose_output(node.client.propose())
+
+
+def deploy_hashes(node, block_hash):
+    return set(d.deploy.deploy_hash for d in node.client.show_deploys(block_hash))
+
+
 @pytest.mark.parametrize("contract", ['test_helloname.wasm',])
 def test_deploy_without_nonce(node, contract: str):
     """
@@ -39,6 +53,7 @@ def test_deploy_with_lower_nonce(node, contracts: List[str]):
         deploy_and_propose(node, contract, 2)
 
 
+
 @pytest.mark.parametrize("contracts", [['test_helloname.wasm', 'test_helloworld.wasm', 'test_counterdefine.wasm']])
 def test_deploy_with_higher_nonce(node, contracts: List[str]):
     """
@@ -49,9 +64,7 @@ def test_deploy_with_higher_nonce(node, contracts: List[str]):
     # Deploy successfully with nonce 1 => Nonce is 1 for account.
     deploy_and_propose(node, contracts[0], 1)
 
-    node.client.deploy(session_contract = contracts[2],
-                       payment_contract = contracts[2],
-                       nonce = 3)
+    deploy_hash = deploy(node, contracts[2], 3)
 
     with pytest.raises(NonZeroExitCodeError):
         node.client.propose()
@@ -59,15 +72,8 @@ def test_deploy_with_higher_nonce(node, contracts: List[str]):
     deploy_and_propose(node, contracts[1], 2)
 
     # The deploy with nonce 3 can be proposed now.
-    node.client.propose()  
-
-    blocks = parse_show_blocks(node.client.show_blocks(100))
-
-    # Deploy counts of all blocks except the genesis block.
-    # TODO: filter out blocks not created from this test's account
-    deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
-
-    assert sum(deploy_counts) == len(contracts) + 1 # add one for the transfer from genesis (test account creation)
+    block_hash = propose(node)  
+    assert deploy_hash in deploy_hashes(node, block_hash)
 
 
 @pytest.mark.parametrize("contracts", [['test_helloname.wasm', 'test_helloworld.wasm', 'test_counterdefine.wasm', 'test_countercall.wasm']])
@@ -78,33 +84,26 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(node, contrac
     Scenario: Deploy with higher nonce and created block does not include previously deployed contract.
     """
     # Deploy successfully with nonce 1 => Nonce is 1 for account.
-    deploy_and_propose(node, contracts[0], 1)
+    deploy_hash = deploy(node, contracts[0], 1)
+    block_hash = propose(node)
+    assert deploy_hash in deploy_hashes(node, block_hash)
 
-    node.client.deploy(session_contract=contracts[1],
-                       payment_contract=contracts[1],
-                       nonce=4)
+    deploy_hash4 = deploy(node, contracts[1], 4)
 
     with pytest.raises(NonZeroExitCodeError):
-        node.client.propose()
+        propose(node)
 
-    node.client.deploy(session_contract=contracts[2],
-                       payment_contract=contracts[2],
-                       nonce=2)
+    deploy_hash2 = deploy(node, contracts[2], 2)
     # The deploy with nonce 4 cannot be proposed now. It will be in the deploy buffer but does not include
     # in the new block created now.
-    node.client.propose()
-    blocks = parse_show_blocks(node.client.show_blocks(100))
+    block_hash = propose(node)
+    deploys = deploy_hashes(node, block_hash)
+    assert deploy_hash4 not in deploys
+    assert deploy_hash2 in deploys
 
-    # Deploy counts of all blocks except the genesis block.
-    deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
+    deploy_hash3 = deploy(node, contracts[3], 3)
+    block_hash = propose(node)
+    assert deploy_hash3 in deploy_hashes(node, block_hash)
 
-    assert sum(deploy_counts) == 2 + 1
-
-    deploy_and_propose(node, contracts[3], 3)
-    node.client.propose()
-    blocks = parse_show_blocks(node.client.show_blocks(100))
-
-    # Deploy counts of all blocks except the genesis block.
-    deploy_counts = [b.summary.header.deploy_count for b in blocks][:-1]
-
-    assert sum(deploy_counts) == len(contracts) + 1  # add one for the transfer from genesis (test account creation) 
+    block_hash = propose(node)
+    assert deploy_hash4 in deploy_hashes(node, block_hash)
