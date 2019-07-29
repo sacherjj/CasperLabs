@@ -21,6 +21,7 @@ import FaucetService from './services/FaucetService';
 import CasperService from './services/CasperService';
 import { Auth0Service, MockAuthService } from './services/AuthService';
 import DagContainer from './containers/DagContainer';
+import { BlockContainerFactory } from './containers/BlockContainer';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
@@ -45,10 +46,17 @@ const faucet = new FaucetContainer(
   () => auth.refreshBalances(true)
 );
 const dag = new DagContainer(errors, casperService);
+const blocks = new BlockContainerFactory(errors, casperService);
 
 ReactDOM.render(
   <HashRouter>
-    <App errors={errors} auth={auth} faucet={faucet} dag={dag} />
+    <App
+      errors={errors}
+      auth={auth}
+      faucet={faucet}
+      dag={dag}
+      blocks={blocks}
+    />
   </HashRouter>,
   document.getElementById('root')
 );

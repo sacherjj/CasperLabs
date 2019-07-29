@@ -18,6 +18,7 @@ import FaucetContainer from '../containers/FaucetContainer';
 import ErrorContainer from '../containers/ErrorContainer';
 import DagContainer from '../containers/DagContainer';
 import { Block } from './Block';
+import { BlockContainerFactory } from '../containers/BlockContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -44,6 +45,7 @@ export interface AppProps {
   auth: AuthContainer;
   faucet: FaucetContainer;
   dag: DagContainer;
+  blocks: BlockContainerFactory;
 }
 
 // The entry point for rendering.

@@ -56,6 +56,11 @@ export class DagContainer {
   @observable depth = 10;
   @observable maxRank = 0;
 
+  constructor(
+    private errors: ErrorContainer,
+    private casperService: CasperService
+  ) {}
+
   get minRank() {
     return Math.max(0, this.maxRank - this.depth + 1);
   }
@@ -65,11 +70,6 @@ export class DagContainer {
   }
 
   step = new DagStep(this);
-
-  constructor(
-    private errors: ErrorContainer,
-    private casperService: CasperService
-  ) {}
 
   async refreshBlockDag() {
     this.errors.capture(

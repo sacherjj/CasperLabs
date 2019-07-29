@@ -8,7 +8,8 @@ import {
   GetDeployInfoRequest,
   StreamBlockInfosRequest,
   StateQuery,
-  GetBlockStateRequest
+  GetBlockStateRequest,
+  GetBlockInfoRequest
 } from '../grpc/io/casperlabs/node/api/casper_pb';
 import { encodeBase16 } from '../lib/Conversions';
 import { GrpcError } from './Errors';
@@ -36,6 +37,27 @@ export default class CasperService {
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
             resolve(res.message as DeployInfo);
+          } else {
+            reject(new GrpcError(res.status, res.statusMessage));
+          }
+        }
+      });
+    });
+  }
+
+  /** Return the block info including statistics. */
+  getBlockInfo(blockHash: ByteArray): Promise<BlockInfo> {
+    return new Promise<BlockInfo>((resolve, reject) => {
+      const request = new GetBlockInfoRequest();
+      request.setBlockHashBase16(encodeBase16(blockHash));
+      request.setView(BlockInfo.View.FULL);
+
+      grpc.unary(GrpcCasperService.GetBlockInfo, {
+        host: this.url,
+        request: request,
+        onEnd: res => {
+          if (res.status === grpc.Code.OK) {
+            resolve(res.message as BlockInfo);
           } else {
             reject(new GrpcError(res.status, res.statusMessage));
           }

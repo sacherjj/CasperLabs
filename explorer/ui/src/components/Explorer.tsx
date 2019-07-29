@@ -187,6 +187,14 @@ class BlockDetails extends React.Component<{
           headers={[]}
           rows={attrs}
           renderRow={(group, i) =>
+            // <tr key={i}>
+            //   {
+            //     group.flatMap((attr, j) => [
+            //       <th key={'${i}/${j}/0'}>{attr[0]}</th>,
+            //       <td key={'${i}/${j}/1'}>{attr[1]}</td>
+            //     ])
+            //   }
+            // </tr>
             group.flatMap((attr, j) => [
               <tr key={`${i}/${j}`}>
                 <th>{attr[0]}</th>
