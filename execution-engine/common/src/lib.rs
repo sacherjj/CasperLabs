@@ -16,6 +16,7 @@ extern crate binascii;
 
 #[macro_use]
 extern crate uint;
+#[macro_use]
 extern crate failure;
 extern crate wee_alloc;
 #[macro_use]
