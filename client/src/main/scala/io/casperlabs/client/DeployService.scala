@@ -1,6 +1,6 @@
 package io.casperlabs.client
 import io.casperlabs.casper.consensus
-import io.casperlabs.casper.consensus.info
+import io.casperlabs.casper.consensus.state.Value
 import simulacrum.typeclass
 
 import scala.util.Either
@@ -18,5 +18,5 @@ import scala.util.Either
       keyVariant: String,
       keyValue: String,
       path: String
-  ): F[Either[Throwable, String]]
+  ): F[Either[Throwable, Value]]
 }

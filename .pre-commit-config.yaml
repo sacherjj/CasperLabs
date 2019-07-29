@@ -1,0 +1,16 @@
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    sha: v1.2.3
+    hooks:
+    -   id: check-merge-conflict
+    -   id: end-of-file-fixer
+    -   id: debug-statements
+    -   id: flake8
+        args:
+        - --ignore=E203, E501, W503
+        - --exclude=(\*_pb2.py|\*_pb2_grpc.py)
+-   repo: https://github.com/ambv/black
+    rev: stable
+    hooks:
+    - id: black
+      language_version: python3
+      args: [--exclude=/(\*_pb2.py|\*_pb2_grpc.py)/]

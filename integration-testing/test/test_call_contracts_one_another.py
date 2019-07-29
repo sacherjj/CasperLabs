@@ -1,77 +1,71 @@
 import time
+import logging
+import pytest
 from itertools import count
-from .cl_node.casperlabsnode import (
-    COMBINED_CONTRACT,
-    COUNTER_CALL,
-    HELLO_WORLD,
-    MAILING_LIST_CALL,
-    get_contract_state,
-)
-from .cl_node.wait import wait_for_blocks_count_at_least
+from .cl_node.casperlabsnode import ( COMBINED_CONTRACT, COUNTER_CALL, HELLO_WORLD, MAILING_LIST_CALL)
+from .cl_node.wait import wait_for_block_hash_propagated_to_all_nodes
+from test import contract_hash
 
 
-def test_call_contracts_one_another(three_node_network):
+@pytest.fixture(scope='module')
+def three_node_network_with_combined_contract(three_node_network_module_scope):
+    """
+    Fixture of a network with deployed combined definitions contract,
+    use later by tests in this module.
+    """
+    tnn = three_node_network_module_scope
+    bootstrap, node1, node2 = tnn.docker_nodes
+    block_hash = bootstrap.deploy_and_propose(session_contract = COMBINED_CONTRACT, payment_contract = COMBINED_CONTRACT)
+    wait_for_block_hash_propagated_to_all_nodes(tnn.docker_nodes, block_hash)
+    return tnn
+
+
+@pytest.fixture(scope='module')
+def nodes(three_node_network_with_combined_contract):
+    return three_node_network_with_combined_contract.docker_nodes
+
+
+def deploy_and_propose(node, contract):
+    block_hash = node.deploy_and_propose(session_contract=contract, payment_contract=contract)
+    deploys = node.client.show_deploys(block_hash)
+    for deploy in deploys:
+        assert deploy.is_error is False
+    return block_hash
+
+
+@pytest.fixture(scope='module')
+def docker_client(three_node_network_with_combined_contract):
+    return three_node_network_with_combined_contract.docker_client
+
+
+expected_counter_result = count(1)
+
+test_parameters = [
+    (MAILING_LIST_CALL, 2, "mailing/list", lambda r: r.string_list.values == "CasperLabs"),
+    (COUNTER_CALL, 1, "counter/count", lambda r: r.int_value == next(expected_counter_result)),
+    (HELLO_WORLD, 0, "helloworld", lambda r: r.string_value == "Hello, World"),
+]
+
+
+@pytest.mark.parametrize("contract, function_counter, path, expected", test_parameters)
+def test_call_contracts_one_another(nodes, docker_client, contract, function_counter, path, expected):
     """
     Feature file: consensus.feature
     Scenario: Call contracts deployed on a node from another node.
     """
-    nonce = count(1)
-    tnn = three_node_network
-    bootstrap, node1, node2 = tnn.docker_nodes
-    bootstrap.deploy_and_propose(session_contract=COMBINED_CONTRACT, payment_contract=COMBINED_CONTRACT, nonce=next(nonce))
 
-    number_of_blocks = 2
-    for n in tnn.docker_nodes:
-        wait_for_blocks_count_at_least(n, number_of_blocks, number_of_blocks, n.timeout)
+    from_address = nodes[0].from_address
 
-    generated_hashes = {}
-    for contract_name in (COUNTER_CALL, MAILING_LIST_CALL, HELLO_WORLD):
-        list_of_hashes = []
-        for node in tnn.docker_nodes:
-            block_hash = node.deploy_and_propose(session_contract=contract_name, payment_contract=contract_name, nonce=next(nonce))
-            list_of_hashes.append(block_hash)
+    # Help me figure out what hashes to put into the call contracts.
+    # combined-contracts/define/src/lib.rs defines them;
+    # the order is hello_name_ext, counter_ext, mailing_list_ext
+    # h = contract_hash(from_address, 0, function_counter)
+    # logging.info("The expected contract hash for %s is %s (%s)" % (contract, list(h), h.hex()))
 
-            number_of_blocks += 1
-            for n in tnn.docker_nodes:
-                wait_for_blocks_count_at_least(n, number_of_blocks, number_of_blocks, n.timeout)
+    def state(node, path, block_hash):
+        return node.d_client.query_state(block_hash=block_hash, key=from_address, key_type="address", path=path)
 
-        generated_hashes[contract_name] = list_of_hashes
-    for index, counter_hash in enumerate(generated_hashes[COUNTER_CALL]):
-        expected_result = index + 1
-        output = get_contract_state(
-            docker_client=three_node_network.docker_client,
-            network_name=tnn.docker_nodes[index].network,
-            target_host_name=tnn.docker_nodes[index].name,
-            port=40401,
-            _type="address",
-            key=3030303030303030303030303030303030303030303030303030303030303030,
-            path="counter/count",
-            block_hash=counter_hash
-        )
-        assert bytes(f'int_value: {expected_result}\n\n', 'utf-8') == output
-
-    for index, mailing_list_hash in enumerate(generated_hashes[MAILING_LIST_CALL]):
-        output = get_contract_state(
-            docker_client=three_node_network.docker_client,
-            network_name=tnn.docker_nodes[index].network,
-            target_host_name=tnn.docker_nodes[index].name,
-            port=40401,
-            _type="address",
-            key=3030303030303030303030303030303030303030303030303030303030303030,
-            path="mailing/list",
-            block_hash=mailing_list_hash
-        )
-        assert bytes('string_list {\n  values: "CasperLabs"\n}\n\n', 'utf-8') == output
-
-    for index, hello_world_hash in enumerate(generated_hashes[HELLO_WORLD]):
-        output = get_contract_state(
-            docker_client=three_node_network.docker_client,
-            network_name=tnn.docker_nodes[index].network,
-            target_host_name=tnn.docker_nodes[index].name,
-            port=40401,
-            _type="address",
-            key=3030303030303030303030303030303030303030303030303030303030303030,
-            path="helloworld",
-            block_hash=hello_world_hash
-        )
-        assert b'string_value: "Hello, World"\n\n' == output
+    for node in nodes:
+        block_hash = deploy_and_propose(node, contract)
+        wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
+        assert expected(state(node, path, block_hash))

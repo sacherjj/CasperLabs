@@ -3,7 +3,7 @@ pub mod contract;
 pub mod uint;
 
 use crate::bytesrepr::{
-    Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U8_SIZE,
+    Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U64_SIZE, U8_SIZE,
 };
 use crate::key::{self, UREF_SIZE};
 use crate::uref::URef;
@@ -20,6 +20,7 @@ pub use self::uint::{U128, U256, U512};
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Value {
     Int32(i32),
+    UInt64(u64),
     UInt128(U128),
     UInt256(U256),
     UInt512(U512),
@@ -47,6 +48,7 @@ const U256_ID: u8 = 9;
 const U512_ID: u8 = 10;
 const KEY_ID: u8 = 11;
 const UNIT_ID: u8 = 12;
+const U64_ID: u8 = 13;
 
 use self::Value::*;
 
@@ -149,6 +151,12 @@ impl ToBytes for Value {
                 Ok(result)
             }
             Unit => Ok(vec![UNIT_ID]),
+            UInt64(num) => {
+                let mut result = Vec::with_capacity(U8_SIZE + U64_SIZE);
+                result.push(U64_ID);
+                result.append(&mut num.to_bytes()?);
+                Ok(result)
+            }
         }
     }
 }
@@ -206,6 +214,10 @@ impl FromBytes for Value {
                 Ok((ListString(arr), rem))
             }
             UNIT_ID => Ok((Unit, rest)),
+            U64_ID => {
+                let (num, rem): (u64, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((UInt64(num), rem))
+            }
             _ => Err(Error::FormattingError),
         }
     }
@@ -227,6 +239,7 @@ impl Value {
             Key(_) => String::from("Key"),
             ListString(_) => String::from("List[String]"),
             Unit => String::from("Unit"),
+            UInt64(_) => String::from("UInt64"),
         }
     }
 }
@@ -254,6 +267,7 @@ macro_rules! from_try_from_impl {
 }
 
 from_try_from_impl!(i32, Int32);
+from_try_from_impl!(u64, UInt64);
 from_try_from_impl!(U128, UInt128);
 from_try_from_impl!(U256, UInt256);
 from_try_from_impl!(U512, UInt512);

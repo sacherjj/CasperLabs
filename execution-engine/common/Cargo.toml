@@ -1,6 +1,6 @@
 [package]
 name = "casperlabs-contract-ffi"
-version = "0.7.0"
+version = "0.10.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 edition = "2018"
 description = "Library for developing CasperLabs smart contracts."

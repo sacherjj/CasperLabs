@@ -13,6 +13,12 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v target \
 	| grep -v -e ipc.*\.rs)
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
+PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
+TS_SRC := $(shell find explorer/ui/src explorer/server/src explorer/grpc/generated -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
+
+RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
+
+$(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test; else echo test-DRONE-${DRONE_BUILD_NUMBER}; fi))
 
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
@@ -31,6 +37,8 @@ publish: \
 
 clean: cargo/clean
 	sbt clean
+	cd explorer/ui && rm -rf node_modules build
+	cd explorer/server && rm -rf node_modules dist nonce.txt
 	rm -rf .make
 
 
@@ -38,17 +46,24 @@ docker-build-all: \
 	docker-build/node \
 	docker-build/client \
 	docker-build/execution-engine \
-	docker-build/integration-testing
+	docker-build/integration-testing \
+	docker-build/key-generator \
+	docker-build/explorer
 
 docker-push-all: \
 	docker-push/node \
 	docker-push/client \
-	docker-push/execution-engine
+	docker-push/execution-engine \
+	docker-push/key-generator \
+	docker-push/explorer
 
 docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
 docker-build/client: .make/docker-build/universal/client .make/docker-build/test/client
 docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
+docker-build/key-generator: .make/docker-build/key-generator
+docker-build/explorer: .make/docker-build/explorer
+docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -63,7 +78,8 @@ docker-push/%: docker-build/%
 
 cargo-package-all: \
 	.make/cargo-package/execution-engine/common \
-	cargo-native-packager/execution-engine/comm
+	cargo-native-packager/execution-engine/comm \
+	package-system-contracts
 
 # Drone is already running commands in the `builderenv`, no need to delegate.
 cargo-native-packager/%:
@@ -80,7 +96,7 @@ cargo-publish-all: \
 cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
 
 %/Cargo.toml/clean:
-	cd $* && cargo clean
+	cd $* && ([ -d target ] && cargo clean --target-dir target || cargo clean)
 
 
 # Build the `latest` docker image for local testing. Works with Scala.
@@ -130,30 +146,115 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Make a node that has some extras installed for testing.
 .make/docker-build/test/node: \
 		.make/docker-build/universal/node \
-		docker/test-node.Dockerfile
-	docker build -f docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test docker
+		hack/docker/test-node.Dockerfile \
+		package-system-contracts
+	# Add system contracts so we can use them in integration testing.
+	# For live tests we should mount them from a real source.
+	mkdir -p hack/docker/.genesis/system-contracts
+	tar -xvzf execution-engine/target/system-contracts.tar.gz -C hack/docker/.genesis/system-contracts
+	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG) hack/docker
+	rm -rf hack/docker/.genesis
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test version for the execution engine as well just so we can swith version easily.
 .make/docker-build/test/execution-engine: \
 		.make/docker-build/execution-engine
-	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:test
+	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test tagged version of client so all tags exist for integration-testing.
 .make/docker-build/test/client: \
 		.make/docker-build/universal/client
-	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:test
+	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make an image to run Python tests under integration-testing.
 .make/docker-build/test/integration-testing: \
 		.make/docker-build/integration-testing
-	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:test
+	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:$(DOCKER_TEST_TAG)
+	mkdir -p $(dir $@) && touch $@
+
+# Make an image for keys generation
+.make/docker-build/key-generator: \
+	hack/key-management/Dockerfile \
+	hack/key-management/gen-keys.sh
+	docker build -f hack/key-management/Dockerfile -t $(DOCKER_USERNAME)/key-generator:$(DOCKER_LATEST_TAG) hack/key-management
+	mkdir -p $(dir $@) && touch $@
+
+
+# Make an image to host the Casper Explorer UI and the faucet microservice.
+.make/docker-build/explorer: \
+		explorer/Dockerfile \
+		.make/npm/explorer \
+		.make/explorer/contracts
+	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
+	mkdir -p $(dir $@) && touch $@
+
+.make/npm/explorer: \
+	$(TS_SRC) \
+	.make/protoc/explorer \
+	explorer/ui/package.json \
+	explorer/server/package.json
+	# CI=false so on Drone it won't fail on warnings (currently about href).
+	./hack/build/docker-buildenv.sh "\
+			cd explorer/ui     && npm install && CI=false npm run build && cd - && \
+			cd explorer/server && npm install && npm run clean:dist && npm run build && cd - \
+		"
+	mkdir -p $(dir $@) && touch $@
+
+# Generate UI client code from Protobuf.
+# Installed via `npm install ts-protoc-gen --no-bin-links --save-dev`
+.make/protoc/explorer: \
+		.make/install/protoc \
+		.make/install/protoc-ts \
+		$(PROTO_SRC)
+	$(eval DIR_IN = ./protobuf)
+	$(eval DIR_OUT = ./explorer/grpc/generated)
+	rm -rf $(DIR_OUT)
+	mkdir -p $(DIR_OUT)
+	# First the pure data packages, so it doesn't create empty _pb_service.d.ts files.
+	protoc \
+	    -I=$(DIR_IN) \
+		--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
+		--js_out=import_style=commonjs,binary:$(DIR_OUT) \
+		--ts_out=service=false:$(DIR_OUT) \
+		$(DIR_IN)/google/protobuf/empty.proto \
+		$(DIR_IN)/io/casperlabs/casper/consensus/consensus.proto \
+		$(DIR_IN)/io/casperlabs/casper/consensus/info.proto \
+		$(DIR_IN)/io/casperlabs/casper/consensus/state.proto
+	# Now the service we'll invoke.
+	protoc \
+	    -I=$(DIR_IN) \
+		--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
+		--js_out=import_style=commonjs,binary:$(DIR_OUT) \
+		--ts_out=service=true:$(DIR_OUT) \
+		$(DIR_IN)/io/casperlabs/node/api/casper.proto
+	# Annotations were only required for the REST gateway. Remove them from Typescript.
+	for f in $(DIR_OUT)/io/casperlabs/node/api/casper_pb* ; do \
+		sed -n '/google_api_annotations_pb/!p' $$f > $$f.tmp ; \
+		mv $$f.tmp $$f ; \
+	done
+	mkdir -p $(dir $@) && touch $@
+
+.make/explorer/contracts: $(RUST_SRC) .make/rustup-update
+	# Compile the faucet contract that grants tokens.
+	cd explorer/contracts && \
+	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
+	mkdir -p $(dir $@) && touch $@
+
+.make/docker-build/grpcwebproxy: hack/docker/grpcwebproxy/Dockerfile
+	cd hack/docker && docker-compose build grpcwebproxy
+	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
+	mkdir -p $(dir $@) && touch $@
+
+.make/client/contracts: build-validator-contracts
+	mkdir -p $(dir $@) && touch $@
+
+.make/node/contracts:
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
-.make/sbt-stage/%: $(SCALA_SRC)
+.make/sbt-stage/%: $(SCALA_SRC) .make/%/contracts
 	$(eval PROJECT = $*)
 	sbt -mem 5000 $(PROJECT)/universal:stage
 	mkdir -p $(dir $@) && touch $@
@@ -163,7 +264,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 .make/cargo-package/%: \
 		$(RUST_SRC) \
 		.make/install/protoc
-	cd $* && cargo update && cargo package
+	cd $* && cargo package
 	mkdir -p $(dir $@) && touch $@
 
 .make/cargo-publish/%: .make/cargo-package/%
@@ -221,16 +322,57 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		'"
 	mkdir -p $(dir $@) && touch $@
 
+
+# Compile contracts that need to go into the Genesis block.
+package-system-contracts: \
+	execution-engine/target/system-contracts.tar.gz
+
+# Compile a system contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
+.make/contracts/system/%: $(RUST_SRC) .make/rustup-update
+	$(eval CONTRACT=$*)
+	cd execution-engine/contracts/system/$(CONTRACT) && \
+	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown --target-dir target
+	mkdir -p $(dir $@) && touch $@
+
+# Compile a validator contract;
+.make/contracts/validator/%: $(RUST_SRC) .make/rustup-update
+	$(eval CONTRACT=$*)
+	cd execution-engine/contracts/validator/$(CONTRACT) && \
+	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
+	mkdir -p $(dir $@) && touch $@
+
+client/src/main/resources/%.wasm: .make/contracts/validator/%
+	$(eval CONTRACT=$*)
+	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
+
+build-validator-contracts: \
+	client/src/main/resources/bonding.wasm \
+	client/src/main/resources/unbonding.wasm
+
+# Package all system contracts that we have to make available for download.
+execution-engine/target/system-contracts.tar.gz: \
+	.make/contracts/system/mint-token \
+	.make/contracts/system/pos
+	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))
+	rm -rf $(ARCHIVE) $(ARCHIVE).gz
+	mkdir -p $(dir $@)
+	tar -cvf $(ARCHIVE) -T /dev/null
+	find execution-engine/contracts/system -wholename *.wasm | grep -v /release/deps/ | while read file; do \
+		cd $$(dirname $$file); tar -rvf $(ARCHIVE) $$(basename $$file); cd -; \
+	done
+	gzip $(ARCHIVE)
+
+
 # Build the execution engine executable. NOTE: This is not portable.
 execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
 		.make/install/protoc
 	cd execution-engine/comm && \
-	cargo update && \
-	cargo build --release
+	cargo --locked build --release
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.
+.PHONY: protobuf/google/api
 protobuf/google/api:
 	$(eval DIR = protobuf/google/api)
 	$(eval SRC = https://raw.githubusercontent.com/googleapis/googleapis/master/google/api)
@@ -238,6 +380,15 @@ protobuf/google/api:
 	cd $(DIR) && \
 	curl -s -O $(SRC)/annotations.proto && \
 	curl -s -O $(SRC)/http.proto
+
+.PHONY: protobuf/google
+protobuf/google:
+	$(eval DIR = protobuf/google/protobuf)
+	$(eval SRC = https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf)
+	mkdir -p $(DIR)
+	cd $(DIR) && \
+	curl -s -O $(SRC)/empty.proto && \
+	curl -s -O $(SRC)/descriptor.proto
 
 # Miscellaneous tools to install once.
 
@@ -252,6 +403,14 @@ protobuf/google/api:
 	fi
 	mkdir -p $(dir $@) && touch $@
 
+# Install the protoc plugin to generate TypeScript. Use docker so people don't have to install npm.
+.make/install/protoc-ts: explorer/grpc/package.json
+	./hack/build/docker-buildenv.sh "\
+		cd explorer/grpc && npm install && npm install ts-protoc-gen --no-bin-links --save-dev \
+	"
+	mkdir -p $(dir $@) && touch $@
+
+
 .make/install/cargo-native-packager:
 	@# Installs fail if they already exist.
 	cargo install cargo-rpm || exit 0
@@ -264,4 +423,11 @@ protobuf/google/api:
 		# You'll need to isntall `rpmbuild` for `cargo rpm` to work. I'm putting this here for reference:
 		sudo apt-get install rpm
 	fi
+	mkdir -p $(dir $@) && touch $@
+
+
+.make/rustup-update: execution-engine/rust-toolchain
+	rustup update $(RUST_TOOLCHAIN)
+	rustup toolchain install $(RUST_TOOLCHAIN)
+	rustup target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@

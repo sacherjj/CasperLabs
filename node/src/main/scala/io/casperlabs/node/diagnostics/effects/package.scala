@@ -242,7 +242,7 @@ package object effects {
         }
 
       def listDiscoveredPeers(request: Empty): Task[Peers] =
-        nodeDiscovery.alivePeersAscendingDistance.map { ps =>
+        nodeDiscovery.recentlyAlivePeersAscendingDistance.map { ps =>
           Peers(
             ps.map(
               p => Peer(p.host, p.protocolPort, p.id)

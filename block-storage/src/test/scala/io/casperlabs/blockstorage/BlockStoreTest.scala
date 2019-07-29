@@ -4,6 +4,7 @@ import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, DeployHash}
 import io.casperlabs.blockstorage.InMemBlockStore.emptyMapRef
@@ -12,6 +13,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.ipc._
+import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.Log
@@ -26,6 +28,7 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 import scala.language.higherKinds
 
+@silent("match may not be exhaustive")
 trait BlockStoreTest
     extends FlatSpecLike
     with Matchers
@@ -49,7 +52,7 @@ trait BlockStoreTest
       store.findBlockHash(_ == h).map(h -> _.isDefined)
     } map { res =>
       Inspectors.forAll(res) {
-        case (hash, isDefined) => isDefined shouldBe true
+        case (_, isDefined) => isDefined shouldBe true
       }
     }
 
@@ -186,6 +189,7 @@ trait BlockStoreTest
   }
 }
 
+@silent("match may not be exhaustive")
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
@@ -193,7 +197,6 @@ class InMemBlockStoreTest extends BlockStoreTest {
       deployHashesRefTask <- emptyMapRef[Task, Seq[BlockHash]]
       approvedBlockRef    <- Ref[Task].of(none[ApprovedBlock])
       metrics             = new MetricsNOP[Task]()
-      lock                <- Semaphore[Task](1)
       store = InMemBlockStore
         .create[Task](Monad[Task], refTask, deployHashesRefTask, approvedBlockRef, metrics)
       _      <- store.findBlockHash(_ => true).map(x => assert(x.isEmpty))
@@ -203,6 +206,7 @@ class InMemBlockStoreTest extends BlockStoreTest {
   }
 }
 
+@silent("match may not be exhaustive")
 class LMDBBlockStoreTest extends BlockStoreTest {
 
   import java.nio.file.{Files, Path}
@@ -214,7 +218,7 @@ class LMDBBlockStoreTest extends BlockStoreTest {
     val dbDir                           = mkTmpDir()
     val env                             = Context.env(dbDir, mapSize)
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
-    val store                           = LMDBBlockStore.create[Task](env, dbDir)
+    val store                           = LMDBBlockStore.create[Task](env)
     val test = for {
       _      <- store.findBlockHash(_ => true).map(x => assert(x.isEmpty))
       result <- f(store)
@@ -228,6 +232,7 @@ class LMDBBlockStoreTest extends BlockStoreTest {
   }
 }
 
+@silent("match may not be exhaustive")
 class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   val scheduler = Scheduler.fixedPool("block-storage-test-scheduler", 4)
 
@@ -306,16 +311,13 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
           Some(ApprovedBlockCandidate(Some(BlockMessage()), 1)),
           List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
         )
-      val key            = Key(Key.KeyInstance.Hash(KeyHash()))
-      val transform      = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
-      val transforEntrys = Seq(TransformEntry(Some(key), Some(transform)))
 
       for {
         firstStore          <- createBlockStore(blockStoreDataDir)
         _                   <- firstStore.putApprovedBlock(approvedBlock)
         _                   <- firstStore.close()
         secondStore         <- createBlockStore(blockStoreDataDir)
-        storedApprovedBlock <- secondStore.getApprovedBlock
+        storedApprovedBlock <- secondStore.getApprovedBlock()
         _ = storedApprovedBlock shouldBe Some(
           approvedBlock
         )

@@ -1,6 +1,7 @@
 package io.casperlabs.node.api.graphql.schema.globalstate
 
 import cats.syntax.option._
+import com.github.ghik.silencer.silent
 import sangria.marshalling.{CoercedScalaResultMarshaller, FromInput, ResultMarshaller}
 import sangria.schema._
 
@@ -36,9 +37,10 @@ package object arguments {
     "Base-16 encoded key"
   )
 
+  @silent("it is not recommended to define classes/objects inside of package objects")
   case class StateQuery(keyType: String, key: String, pathSegments: Seq[String])
 
-  implicit val decoder = new FromInput[StateQuery] {
+  implicit val decoder: FromInput[StateQuery] = new FromInput[StateQuery] {
     override val marshaller: ResultMarshaller = CoercedScalaResultMarshaller.default
 
     override def fromResult(node: marshaller.Node): StateQuery = {

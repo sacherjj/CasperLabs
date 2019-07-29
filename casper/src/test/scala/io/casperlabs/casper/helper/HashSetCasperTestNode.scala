@@ -11,6 +11,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
@@ -21,6 +22,7 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
+import io.casperlabs.casper.consensus.state.{Unit => _, BigInt => _, _}
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
@@ -34,6 +36,7 @@ import monix.execution.Scheduler
 
 import scala.collection.mutable.{Map => MutMap}
 import scala.util.Random
+import io.casperlabs.crypto.Keys
 
 /** Base class for test nodes with fields used by tests exposed as public. */
 abstract class HashSetCasperTestNode[F[_]](
@@ -42,7 +45,8 @@ abstract class HashSetCasperTestNode[F[_]](
     val genesis: Block,
     val blockDagDir: Path,
     val blockStoreDir: Path,
-    val validateNonces: Boolean
+    val validateNonces: Boolean,
+    maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]]
 )(
     implicit
     concurrentF: Concurrent[F],
@@ -54,6 +58,7 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val logEff: LogStub[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
+  implicit val safetyOracleEff: FinalityDetector[F]
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
@@ -61,7 +66,9 @@ abstract class HashSetCasperTestNode[F[_]](
     .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> b.stake)
     .toMap
 
-  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds, validateNonces)
+  implicit val casperSmartContractsApi =
+    maybeMakeEE.map(_(bonds, validateNonces)) getOrElse
+      HashSetCasperTestNode.simpleEEApi[F](bonds, validateNonces)
 
   /** Handle one message. */
   def receive(): F[Unit]
@@ -138,7 +145,8 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true
+      validateNonces: Boolean = true,
+      maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
@@ -152,7 +160,8 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true
+      validateNonces: Boolean = true,
+      maybeMakeEE: Option[MakeExecutionEngineService[Effect]] = None
   ): Effect[IndexedSeq[TestNode[Effect]]] =
     networkF[Effect](
       sks,
@@ -160,7 +169,8 @@ trait HashSetCasperTestNodeFactory {
       transforms,
       storageSize,
       faultToleranceThreshold,
-      validateNonces
+      validateNonces,
+      maybeMakeEE
     )(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
@@ -183,7 +193,9 @@ trait HashSetCasperTestNodeFactory {
 }
 
 object HashSetCasperTestNode {
-  type Effect[A] = EitherT[Task, CommError, A]
+  type Effect[A]                        = EitherT[Task, CommError, A]
+  type Bonds                            = Map[Keys.PublicKey, Long]
+  type MakeExecutionEngineService[F[_]] = (Bonds, Boolean) => ExecutionEngineService[F]
 
   val appErrId = new ApplicativeError[Id, CommError] {
     def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
@@ -253,10 +265,11 @@ object HashSetCasperTestNode {
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Defer: Applicative](
       initialBonds: Map[PublicKey, Long],
-      validateNonces: Boolean = true
+      validateNonces: Boolean = true,
+      generateConflict: Boolean = false
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
-      import ipc._
+      import ipc.{Bond => _, _}
 
       // NOTE: Some tests would benefit from tacking this per pre-state-hash,
       // but when I tried to do that a great many more failed.
@@ -264,15 +277,28 @@ object HashSetCasperTestNode {
         MutMap.empty.withDefaultValue(0)
 
       private val zero  = Array.fill(32)(0.toByte)
-      private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
+      private val bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
       private def getExecutionEffect(deploy: Deploy) = {
         // The real execution engine will get the keys from what the code changes, which will include
         // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
         // here isn't more specific to a deploy then the real thing would be.
-        val key           = Key(Key.KeyInstance.Hash(KeyHash(deploy.session.fold(ByteString.EMPTY)(_.code))))
-        val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
-        val op            = Op(Op.OpInstance.Read(ReadOp()))
+        val key = Key(
+          Key.Value.Hash(Key.Hash(deploy.session.fold(ByteString.EMPTY)(_.code)))
+        )
+        val (op, transform) = if (!generateConflict) {
+          Op(Op.OpInstance.Read(ReadOp())) ->
+            Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+        } else {
+          Op(Op.OpInstance.Write(WriteOp())) ->
+            Transform(
+              Transform.TransformInstance.Write(
+                TransformWrite(
+                  state.Value(state.Value.Value.IntValue(0)).some
+                )
+              )
+            )
+        }
         val transforEntry = TransformEntry(Some(key), Some(transform))
         val opEntry       = OpEntry(Some(key), Some(op))
         ExecutionEffect(Seq(opEntry), Seq(transforEntry))
@@ -280,7 +306,7 @@ object HashSetCasperTestNode {
 
       // Validate that account's nonces increment monotonically by 1.
       // Assumes that any account address already exists in the GlobalState with nonce = 0.
-      private def validateNonce(prestate: ByteString, deploy: Deploy): Int = synchronized {
+      private def validateNonce(deploy: Deploy): Int = synchronized {
         if (!validateNonces) {
           0
         } else {
@@ -298,15 +324,16 @@ object HashSetCasperTestNode {
 
       override def exec(
           prestate: ByteString,
+          blocktime: Long,
           deploys: Seq[Deploy],
-          protocolVersion: ipc.ProtocolVersion
+          protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =
         //This function returns the same `DeployResult` for all deploys,
         //regardless of their wasm code. It pretends to have run all the deploys,
         //but it doesn't really; it just returns the same result no matter what.
         deploys
           .map { d =>
-            validateNonce(prestate, d) match {
+            validateNonce(d) match {
               case 0 =>
                 DeployResult(
                   ExecutionResult(
@@ -326,10 +353,18 @@ object HashSetCasperTestNode {
           .asRight[Throwable]
           .pure[F]
 
+      override def runGenesis(
+          deploys: Seq[Deploy],
+          protocolVersion: ProtocolVersion
+      ): F[Either[Throwable, GenesisResult]] =
+        commit(emptyStateHash, Seq.empty).map {
+          _.map(cr => GenesisResult(cr.postStateHash).withEffect(ExecutionEffect()))
+        }
+
       override def commit(
           prestate: ByteString,
           effects: Seq[TransformEntry]
-      ): F[Either[Throwable, ByteString]] = {
+      ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = {
         //This function increments the prestate by interpreting as an integer and adding 1.
         //The purpose of this is simply to have the output post-state be different
         //than the input pre-state. `effects` is not used.
@@ -337,7 +372,9 @@ object HashSetCasperTestNode {
         val n      = BigInt(arr)
         val newArr = pad((n + 1).toByteArray, 32)
 
-        ByteString.copyFrom(newArr).asRight[Throwable].pure[F]
+        val pk = ByteString.copyFrom(newArr)
+
+        ExecutionEngineService.CommitResult(pk, bonds).asRight[Throwable].pure[F]
       }
 
       override def query(
@@ -348,14 +385,7 @@ object HashSetCasperTestNode {
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
-      override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-        bonds.pure[F]
-      override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =
-        Defer[F].defer(Applicative[F].unit.map { _ =>
-          bonds = newBonds.map {
-            case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
-          }.toSeq
-        })
+
       override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
         ().asRight[String].pure[F]
     }

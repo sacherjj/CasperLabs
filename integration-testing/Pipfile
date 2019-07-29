@@ -17,5 +17,7 @@ ed25519 = "*"
 in-place = "*"
 pyblake2 = "*"
 setuptools = "*"
-
+pre-commit = "*"
+flake8 = "==3.7.7"
+black = "==19.3b0"
 [dev-packages]

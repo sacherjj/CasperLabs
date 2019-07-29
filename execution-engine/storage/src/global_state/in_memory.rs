@@ -4,12 +4,11 @@ use std::sync::Arc;
 
 use common::key::Key;
 use common::value::Value;
-use shared::newtypes::{Blake2bHash, CorrelationId};
-use shared::transform::Transform;
-
 use error;
 use global_state::StateReader;
 use global_state::{commit, CommitResult, History};
+use shared::newtypes::{Blake2bHash, CorrelationId};
+use shared::transform::Transform;
 use trie::operations::create_hashed_empty_trie;
 use trie::Trie;
 use trie_store::in_memory::{
@@ -23,6 +22,7 @@ pub struct InMemoryGlobalState {
     pub environment: Arc<InMemoryEnvironment>,
     pub store: Arc<InMemoryTrieStore>,
     pub root_hash: Blake2bHash,
+    pub empty_root_hash: Blake2bHash,
 }
 
 impl InMemoryGlobalState {
@@ -37,7 +37,12 @@ impl InMemoryGlobalState {
             txn.commit()?;
             root_hash
         };
-        Ok(InMemoryGlobalState::new(environment, store, root_hash))
+        Ok(InMemoryGlobalState::new(
+            environment,
+            store,
+            root_hash,
+            root_hash,
+        ))
     }
 
     /// Creates a state from an existing environment, store, and root_hash.
@@ -46,11 +51,13 @@ impl InMemoryGlobalState {
         environment: Arc<InMemoryEnvironment>,
         store: Arc<InMemoryTrieStore>,
         root_hash: Blake2bHash,
+        empty_root_hash: Blake2bHash,
     ) -> Self {
         InMemoryGlobalState {
             environment,
             store,
             root_hash,
+            empty_root_hash,
         }
     }
 
@@ -120,6 +127,7 @@ impl History for InMemoryGlobalState {
             environment: Arc::clone(&self.environment),
             store: Arc::clone(&self.store),
             root_hash: prestate_hash,
+            empty_root_hash: self.empty_root_hash,
         });
         txn.commit()?;
         Ok(maybe_state)
@@ -142,6 +150,14 @@ impl History for InMemoryGlobalState {
             self.root_hash = root_hash;
         };
         Ok(commit_result)
+    }
+
+    fn current_root(&self) -> Blake2bHash {
+        self.root_hash
+    }
+
+    fn empty_root(&self) -> Blake2bHash {
+        self.empty_root_hash
     }
 }
 

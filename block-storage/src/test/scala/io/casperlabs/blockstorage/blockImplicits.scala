@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.ipc._
+import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.storage.BlockMsgWithTransform
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen.listOfN
@@ -19,7 +20,7 @@ object blockImplicits {
 
   val transform: Gen[TransformEntry] = for {
     bs        <- arbitrary[ByteString]
-    key       = Key(Key.KeyInstance.Hash(KeyHash(bs)))
+    key       = Key(Key.Value.Hash(Key.Hash(bs)))
     transform = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
   } yield TransformEntry(Some(key), Some(transform))
   implicit val arbitraryTransformEntry: Arbitrary[TransformEntry] = Arbitrary(transform)
@@ -50,20 +51,18 @@ object blockImplicits {
       version         <- arbitrary[Long]
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[ByteString]]
-      justifications  <- arbitrary[Seq[Justification]]
       deploys         <- arbitrary[Seq[Block.ProcessedDeploy]]
-    } yield
-      Block()
-        .withBlockHash(hash)
-        .withHeader(
-          Block
-            .Header()
-            .withParentHashes(parentsHashList)
-            .withProtocolVersion(version)
-            .withTimestamp(timestamp)
-            .withValidatorPublicKey(validator)
-        )
-        .withBody(Block.Body().withDeploys(deploys))
+    } yield Block()
+      .withBlockHash(hash)
+      .withHeader(
+        Block
+          .Header()
+          .withParentHashes(parentsHashList)
+          .withProtocolVersion(version)
+          .withTimestamp(timestamp)
+          .withValidatorPublicKey(validator)
+      )
+      .withBody(Block.Body().withDeploys(deploys))
 
   val blockMsgWithTransformGen: Gen[BlockMsgWithTransform] =
     for {

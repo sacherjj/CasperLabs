@@ -4,21 +4,23 @@ extern crate clap;
 extern crate lazy_static;
 
 // internal dependencies
+extern crate binascii;
 extern crate common;
 extern crate execution_engine;
 extern crate shared;
 extern crate storage;
 extern crate wasm_prep;
 
+use clap::{App, Arg, ArgMatches};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter::Iterator;
-
-use clap::{App, Arg, ArgMatches};
+use std::str;
 
 use common::key::Key;
+use common::value::account::BlockTime;
 use execution_engine::engine_state::error::RootNotFound;
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -42,7 +44,6 @@ const SERVER_START_MESSAGE: &str = "starting Execution Engine Standalone";
 const SERVER_STOP_MESSAGE: &str = "stopping Execution Engine Standalone";
 const SERVER_NO_WASM_MESSAGE: &str = "no wasm files to process";
 const SERVER_NO_GAS_LIMIT_MESSAGE: &str = "gas limit is 0";
-const VALIDATE_NONCE: &str = "validate-nonce";
 
 // loglevel
 const ARG_LOG_LEVEL: &str = "loglevel";
@@ -84,7 +85,7 @@ where
     H: History,
     H::Error: Into<execution_engine::execution::Error> + Debug,
 {
-    match engine_state.apply_effect(correlation_id, *pre_state_hash, effects.1) {
+    match engine_state.apply_effect(correlation_id, *pre_state_hash, effects.transforms) {
         Ok(CommitResult::RootNotFound) => {
             let mut properties: BTreeMap<String, String> = BTreeMap::new();
             let error_message = format!("root {:?} not found", pre_state_hash);
@@ -175,13 +176,16 @@ fn main() {
     }
 
     let account_addr = {
-        let mut address = [48u8; 32];
-        matches
-            .value_of("address")
-            .map(str::as_bytes)
-            .map(|bytes| address.copy_from_slice(bytes))
-            .expect("Error when parsing address");
-        Key::Account(address)
+        let address_hex = matches.value_of("address").expect("Unable to get address");
+        if address_hex.len() != 64 {
+            panic!("Provided address should be exactly 64 bytes long");
+        }
+        // Into fixed size array of 32 bytes
+        let mut dest = [0; 32];
+        binascii::hex2bin(address_hex.as_bytes(), &mut dest)
+            .ok()
+            .expect("Unable to parse address");
+        Key::Account(dest)
     };
 
     let gas_limit: u64 = matches
@@ -193,8 +197,6 @@ fn main() {
         logging::log_info(SERVER_NO_GAS_LIMIT_MESSAGE);
     }
 
-    let validate_nonce = matches.is_present(VALIDATE_NONCE);
-
     // TODO: move to arg parser
     let timestamp: u64 = 100_000;
     let protocol_version: u64 = 1;
@@ -203,7 +205,7 @@ fn main() {
     let global_state = InMemoryGlobalState::from_pairs(CorrelationId::new(), &init_state)
         .expect("Could not create global state");
     let mut state_hash: Blake2bHash = global_state.root_hash;
-    let engine_state = EngineState::new(global_state, validate_nonce);
+    let engine_state = EngineState::new(global_state);
 
     let wasmi_executor = WasmiExecutor;
     let wasm_costs = WasmCosts::from_version(protocol_version).unwrap_or_else(|| {
@@ -221,7 +223,7 @@ fn main() {
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
             account_addr,
-            timestamp,
+            BlockTime(timestamp),
             nonce,
             state_hash,
             gas_limit,
@@ -233,10 +235,6 @@ fn main() {
 
         let mut properties = BTreeMap::new();
 
-        properties.insert(
-            String::from("validate-nonce"),
-            format!("{:?}", validate_nonce),
-        );
         properties.insert(String::from("pre-state-hash"), format!("{:?}", state_hash));
         properties.insert(String::from("wasm-path"), wasm_bytes.path.to_owned());
         properties.insert(String::from("nonce"), format!("{}", nonce));
@@ -253,7 +251,10 @@ fn main() {
                 cost,
             }) => {
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
-                properties.insert("effects".to_string(), format!("{:?}", effects.1.clone()));
+                properties.insert(
+                    "effects".to_string(),
+                    format!("{:?}", effects.transforms.clone()),
+                );
                 let (log_level, error_message, mut new_properties, new_state_hash) =
                     apply_effects(correlation_id, &engine_state, &state_hash, effects);
 
@@ -339,7 +340,6 @@ fn get_args() -> ArgMatches<'static> {
                 .value_name(ARG_LOG_LEVEL_VALUE)
                 .help(ARG_LOG_LEVEL_HELP),
         )
-        .arg(Arg::with_name(VALIDATE_NONCE).long(VALIDATE_NONCE))
         .arg(
             Arg::with_name("wasm")
                 .long("wasm")

@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "create-test-node-01",
+    "create-test-node-02",
+    "create-test-node-03",
+    "shared"
+]

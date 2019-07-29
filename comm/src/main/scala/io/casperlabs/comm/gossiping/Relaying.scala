@@ -71,7 +71,7 @@ class RelayingImpl[F[_]: Sync: Par: Log: Metrics: NodeAsk](
     }
 
     for {
-      peers <- nd.alivePeersAscendingDistance
+      peers <- nd.recentlyAlivePeersAscendingDistance
       _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers), 0, 0))
     } yield ()
   }

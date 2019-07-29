@@ -33,7 +33,10 @@ object BlockDagStorage {
 }
 
 trait BlockDagRepresentation[F[_]] {
-  def children(blockHash: BlockHash): F[Option[Set[BlockHash]]]
+  def children(blockHash: BlockHash): F[Set[BlockHash]]
+
+  /** Return blocks that having a specify justification */
+  def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]]
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
 
@@ -59,20 +62,20 @@ object BlockDagRepresentation {
   ) {
     def getMainChildren(
         blockHash: BlockHash
-    )(implicit monad: Monad[F]): F[Option[List[BlockHash]]] =
-      blockDagRepresentation.children(blockHash).flatMap {
-        case Some(children) =>
-          for {
-            mainChildren <- children.toList.filterA { child =>
-                             blockDagRepresentation.lookup(child).map {
-                               // make sure child's main parent's hash equal to `blockHash`
-                               case Some(blockMetadata) => blockMetadata.parents.head == blockHash
-                               case None                => false
-                             }
-                           }
-          } yield Some(mainChildren)
-        case None => none[List[BlockHash]].pure[F]
-      }
+    )(implicit monad: Monad[F]): F[List[BlockHash]] =
+      blockDagRepresentation
+        .children(blockHash)
+        .flatMap(
+          _.toList
+            .filterA(
+              child =>
+                blockDagRepresentation.lookup(child).map {
+                  // make sure child's main parent's hash equal to `blockHash`
+                  case Some(blockMetadata) => blockMetadata.parents.head == blockHash
+                  case None                => false
+                }
+            )
+        )
   }
 
   def apply[F[_]](implicit ev: BlockDagRepresentation[F]): BlockDagRepresentation[F] = ev

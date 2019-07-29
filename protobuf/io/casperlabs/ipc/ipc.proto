@@ -2,33 +2,36 @@ syntax = "proto3";
 
 package io.casperlabs.ipc;
 
+import "io/casperlabs/casper/consensus/state.proto";
+
 message DeployCode {
   bytes code = 1; // wasm byte code
   bytes args = 2; // ABI-encoded arguments
 }
 
+message Bond {
+    bytes validator_public_key = 1;
+    io.casperlabs.casper.consensus.state.BigInt stake = 2;
+}
+
 message Deploy {
     // Public key of the account which is the context of the execution.
     bytes address = 1; // length 32 bytes
-    uint64 timestamp = 2;
     DeployCode session = 3;
     DeployCode payment = 4;
-    uint64 gas_limit = 5;
-    uint64 gas_price = 6;
+    uint64 tokens_transferred_in_payment = 5; // in units of Tokens -- someday this will come from running payment code
+    uint64 gas_price = 6; // in units of Token / Gas
     uint64 nonce = 7;
     // Public keys used to sign this deploy, to be checked against the keys
     // associated with the account.
     repeated bytes authorization_keys = 8;
 }
 
-message ProtocolVersion  {
-    uint64 version = 1;
-}
-
 message ExecRequest {
     bytes parent_state_hash = 1;
-    repeated Deploy deploys = 2;
-    ProtocolVersion protocol_version = 3;
+    uint64 block_time = 2;
+    repeated Deploy deploys = 3;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 4;
 }
 
 message ExecResponse {
@@ -53,13 +56,14 @@ message CommitRequest {
 
 message CommitResult {
   bytes poststate_hash = 1;
+  repeated Bond bonded_validators = 2;
 }
 
 message CommitResponse {
     oneof result {
         CommitResult success = 1;
         RootNotFound missing_prestate = 2;
-        Key key_not_found = 3;
+        io.casperlabs.casper.consensus.state.Key key_not_found = 3;
         TypeMismatch type_mismatch = 4;
         PostEffectsError failed_transform = 5;
     }
@@ -79,118 +83,17 @@ message WriteOp {}
 message AddOp {}
 message NoOp {}
 
-message Key {
-    oneof key_instance {
-        KeyAddress account = 1; // hash of the key of the account, length 20 bytes
-        KeyHash hash = 2; // hash of the key of the contract, length 32 bytes
-        KeyURef uref = 3; // length 32 bytes TODO: more bytes?
-        KeyLocal local = 4;
-    }
-}
-message KeyAddress {
-    bytes account = 1;
-}
-message KeyHash {
-    bytes key = 1;
-}
-message KeyURef {
-    bytes uref = 1;
-    // NOTE: Numeric values correspond to values of the domain
-    // AccessRights struct.
-    enum AccessRights {
-        UNKNOWN        = 0;
-        READ           = 1;
-        WRITE          = 2;
-        ADD            = 4;
-        READ_ADD       = 5;
-        READ_WRITE     = 3;
-        ADD_WRITE      = 6;
-        READ_ADD_WRITE = 7;
-    }
-    AccessRights access_rights = 2;
-}
-message KeyLocal {
-    bytes seed = 1;
-    bytes key_hash = 2;
-}
-
-// oneof cannot contain `repeated` label
-message IntList {
-    repeated int32 list = 1;
-}
-message StringList {
-    repeated string list = 1;
-}
-message NamedKey {
-    string name = 1;
-    Key key = 2;
-}
-
-message RustBigInt {
-    // Represent the number as a string for
-    // easy portability between rust and scala.
-    string value = 1;
-    uint32 bit_width = 2;
-}
-
-message UnitValue {}
-
-// Things to store under the key in the global state.
-message Value {
-    oneof value_instance {
-        int32 integer = 1;
-        bytes byte_arr = 2;
-        IntList int_list = 3;
-        string string_val = 4;
-        Account account = 5;
-        Contract contract = 6;
-        StringList string_list = 7;
-        NamedKey named_key = 8;
-        RustBigInt big_int = 9;
-        Key key = 10;
-        UnitValue unit = 11;
-    }
-}
-
-message Account {
-    message AssociatedKey {
-        bytes pub_key = 1; // Should have 32 elements
-        uint32 weight = 2;
-    }
-    message ActionThresholds {
-        uint32 deployment_threshold = 1;
-        uint32 key_management_threshold = 2;
-    }
-    message AccountActivity {
-        uint64 key_management_last_used = 1;
-        uint64 deployment_last_used = 2;
-        uint64 inactivity_period_limit = 3;
-    }
-    bytes pub_key = 1; // Should have 32 elements
-    uint64 nonce = 2;
-    repeated NamedKey known_urefs = 3;
-    KeyURef purse_id = 4;
-    repeated AssociatedKey associated_keys = 5;
-    ActionThresholds action_threshold = 6;
-    AccountActivity account_activity = 7;
-}
-message Contract {
-    bytes body = 1;
-    repeated NamedKey known_urefs = 2;
-    ProtocolVersion protocol_version = 3;
-}
-
-
 // Final transformation to the value under the key.
 // It's the outcome of applying all `op`s
 message Transform {
     oneof transform_instance {
         TransformIdentity identity = 1;
         TransformAddInt32 add_i32 = 2;
-        TransformWrite write = 3;
-        TransformAddKeys add_keys = 4;
-        TransformFailure failure = 5;
-        TransformAddBigInt add_big_int = 6;
+        TransformAddUInt64 add_u64 = 3;
+        TransformWrite write = 4;
+        TransformAddKeys add_keys = 5;
+        TransformFailure failure = 6;
+        TransformAddBigInt add_big_int = 7;
     }
 }
 
@@ -198,14 +101,17 @@ message TransformIdentity {}
 message TransformAddInt32 {
     int32 value = 1;
 }
+message TransformAddUInt64 {
+    uint64 value = 1;
+}
 message TransformAddBigInt {
-    RustBigInt value = 1;
+    io.casperlabs.casper.consensus.state.BigInt value = 1;
 }
 message TransformAddKeys {
-    repeated NamedKey value = 1;
+    repeated io.casperlabs.casper.consensus.state.NamedKey value = 1;
 }
 message TransformWrite {
-    Value value = 1;
+    io.casperlabs.casper.consensus.state.Value value = 1;
 }
 message TransformFailure {
     oneof failure_instance {
@@ -241,17 +147,17 @@ message RkvError {
 // Models key value pair of (key, op) entry.
 // Required b/c protobuff doesn't support maps natively
 message OpEntry {
-    Key key = 1;
+    io.casperlabs.casper.consensus.state.Key key = 1;
     Op operation = 2;
 }
 
 message TransformEntry {
-    Key key = 1;
+    io.casperlabs.casper.consensus.state.Key key = 1;
     Transform transform = 2;
 }
 
 // Returned by ExecutionEngine to consensus layer.
-// (Map[Key, Op], Map[Key, Transform]) pair, describes how the deploy modifies the global state.
+// (Map[Key, Op], Map[Key, Transform]) pair, describes how the deploy modifies the global io.casperlabs.casper.consensus.state.
 // op_map and transform_map should be of equal lengths
 message ExecutionEffect {
     repeated OpEntry op_map = 1;
@@ -310,13 +216,13 @@ message PostEffectsError {
 
 message QueryRequest {
     bytes state_hash = 1;
-    Key base_key = 2;
+    io.casperlabs.casper.consensus.state.Key base_key = 2;
     repeated string path = 3;
 }
 
 message QueryResponse {
     oneof result {
-        Value success = 1;
+        io.casperlabs.casper.consensus.state.Value success = 1;
         //TODO: ADT for errors
         string failure = 2;
     }
@@ -336,6 +242,34 @@ message ValidateRequest {
     bytes payment_code = 2;
 }
 
+message GenesisRequest {
+    // genesis account public key, length 32 bytes
+    bytes address = 1;
+    io.casperlabs.casper.consensus.state.BigInt initial_tokens = 2;
+    uint64 timestamp = 3;
+    DeployCode mint_code = 4;
+    DeployCode proof_of_stake_code = 5;
+    repeated Bond genesis_validators = 6;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 7;
+}
+
+message GenesisResult {
+    bytes poststate_hash = 1;
+    ExecutionEffect effect = 2;
+}
+
+message GenesisDeployError {
+    string message = 1;
+}
+
+message GenesisResponse {
+    oneof result {
+        GenesisResult success = 1;
+        GenesisDeployError failed_deploy = 2;
+    }
+}
+
+
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
 service ExecutionEngineService {
@@ -343,4 +277,5 @@ service ExecutionEngineService {
     rpc commit (CommitRequest) returns (CommitResponse) {}
     rpc query (QueryRequest) returns (QueryResponse) {}
     rpc validate (ValidateRequest) returns (ValidateResponse) {}
+    rpc run_genesis (GenesisRequest) returns (GenesisResponse) {}
 }

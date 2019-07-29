@@ -9,43 +9,47 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.ipc._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
 import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
-
-import scala.util.Either
+import scala.util.{Either, Try}
+import io.casperlabs.catscontrib.MonadThrowable
 
 @typeclass trait ExecutionEngineService[F[_]] {
-  //TODO: should this be effectful?
   def emptyStateHash: ByteString
+  def runGenesis(
+      deploys: Seq[Deploy],
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, GenesisResult]]
   def exec(
       prestate: ByteString,
+      blocktime: Long,
       deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]]
-  def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
-  def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
-  def setBonds(bonds: Map[PublicKey, Long]): F[Unit]
+  def commit(
+      prestate: ByteString,
+      effects: Seq[TransformEntry]
+  ): F[Either[Throwable, ExecutionEngineService.CommitResult]]
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
 
-class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smartcontracts] (
+class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
     addr: Path,
-    maxMessageSize: Int,
-    initialBonds: Map[Array[Byte], Long],
     stub: Stub
 ) extends ExecutionEngineService[F] {
-
-  private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
+  import GrpcExecutionEngineService.EngineMetricsSource
 
   override def emptyStateHash: ByteString = {
     val arr: Array[Byte] = Array(
-      202, 169, 195, 180, 73, 241, 1, 207, 158, 155, 105, 130, 222, 149, 113, 83, 244, 33, 11, 132,
-      57, 102, 129, 52, 188, 253, 43, 243, 67, 176, 41, 151
+      51, 7, 165, 76, 166, 213, 191, 186, 252, 14, 241, 176, 3, 243, 236, 73, 65, 192, 17, 238, 127,
+      121, 136, 158, 68, 65, 103, 84, 222, 47, 9, 29
     ).map(_.toByte)
     ByteString.copyFrom(arr)
   }
@@ -65,31 +69,82 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
 
   override def exec(
       prestate: ByteString,
+      blocktime: Long,
       deploys: Seq[Deploy],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]] =
-    sendMessage(ExecRequest(prestate, deploys, Some(protocolVersion)), _.exec) {
-      _.result match {
-        case ExecResponse.Result.Success(ExecResult(deployResults)) =>
-          Right(deployResults)
-        //TODO: Capture errors better than just as a string
-        case ExecResponse.Result.Empty =>
-          Left(new SmartContractEngineError("empty response"))
-        case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
-          Left(
-            new SmartContractEngineError(s"Missing states: ${Base16.encode(missing.toByteArray)}")
+    for {
+      result <- sendMessage(
+                 ExecRequest(prestate, blocktime, deploys, Some(protocolVersion)),
+                 _.exec
+               ) {
+                 _.result match {
+                   case ExecResponse.Result.Success(ExecResult(deployResults)) =>
+                     Right(deployResults)
+                   //TODO: Capture errors better than just as a string
+                   case ExecResponse.Result.Empty =>
+                     Left(new SmartContractEngineError("empty response"))
+                   case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
+                     Left(
+                       new SmartContractEngineError(
+                         s"Missing states: ${Base16.encode(missing.toByteArray)}"
+                       )
+                     )
+                 }
+               }
+      _ <- result.fold(
+            _ => ().pure[F],
+            deployResults => {
+              val gasSpent =
+                deployResults.foldLeft(0L)((a, d) => a + d.value.executionResult.fold(0L)(_.cost))
+              Metrics[F].incrementCounter("gas_spent", gasSpent)
+            }
           )
-      }
+    } yield result
+
+  override def runGenesis(
+      deploys: Seq[Deploy],
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, GenesisResult]] =
+    deploys.length match {
+      case 0 =>
+        // NOTE: For now the EE supports the original 303030... default account.
+        GenesisResult()
+          .withPoststateHash(emptyStateHash)
+          .withEffect(ExecutionEffect())
+          .asRight[Throwable]
+          .pure[F]
+      case 1 =>
+        val code = deploys.head.getSession.code
+        for {
+          request <- MonadThrowable[F].fromTry(Try(GenesisRequest.parseFrom(code.toByteArray)))
+          response <- sendMessage(request, _.runGenesis) {
+                       _.result match {
+                         case GenesisResponse.Result.Success(result) =>
+                           Right(result)
+                         case GenesisResponse.Result.FailedDeploy(error) =>
+                           Left(new SmartContractEngineError(error.message))
+                         case GenesisResponse.Result.Empty =>
+                           Left(new SmartContractEngineError("empty response"))
+                       }
+                     }
+        } yield response
+      case _ =>
+        MonadThrowable[F].raiseError(
+          new IllegalArgumentException(
+            "Executing more than one blessed contract is not supported at the moment."
+          )
+        )
     }
 
   override def commit(
       prestate: ByteString,
       effects: Seq[TransformEntry]
-  ): F[Either[Throwable, ByteString]] =
+  ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
     sendMessage(CommitRequest(prestate, effects), _.commit) {
       _.result match {
-        case CommitResponse.Result.Success(CommitResult(poststateHash)) =>
-          Right(poststateHash)
+        case CommitResponse.Result.Success(commitResult) =>
+          Right(ExecutionEngineService.CommitResult(commitResult))
         case CommitResponse.Result.Empty =>
           Left(SmartContractEngineError("empty response"))
         case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
@@ -100,7 +155,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
           Left(SmartContractEngineError(s"Key not found in global state: $value"))
         case CommitResponse.Result.TypeMismatch(err) =>
           Left(SmartContractEngineError(err.toString))
-
       }
     }
 
@@ -116,18 +170,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
         case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
       }
     }
-  // Todo
-  override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-    // FIXME: Implement bonds!
-    bonds.pure[F]
 
-  // Todo Pass in the genesis bonds until we have a solution based on the BlockStore.
-  override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =
-    Defer[F].defer(Applicative[F].pure {
-      bonds = newBonds.map {
-        case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
-      }.toSeq
-    })
   override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
     stub.validate(contracts).to[F] >>= (
       _.result match {
@@ -145,13 +188,36 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
 
 object ExecutionEngineService {
   type Stub = IpcGrpcMonix.ExecutionEngineServiceStub
+
+  class CommitResult private (val postStateHash: ByteString, val bondedValidators: Seq[Bond])
+
+  object CommitResult {
+    def apply(ipcCommitResult: io.casperlabs.ipc.CommitResult): CommitResult = {
+      val validators = ipcCommitResult.bondedValidators.map(
+        b => Bond(b.validatorPublicKey, b.getStake.value.toLong)
+      )
+      new CommitResult(ipcCommitResult.poststateHash, validators)
+    }
+
+    def apply(postStateHash: ByteString, bonds: Seq[Bond]): CommitResult =
+      new CommitResult(postStateHash, bonds)
+  }
+
 }
 
 object GrpcExecutionEngineService {
-  def apply[F[_]: Sync: Log: TaskLift](
+  private implicit val EngineMetricsSource: Metrics.Source =
+    Metrics.Source(Metrics.BaseSource, "engine")
+
+  private def initializeMetrics[F[_]: Metrics] =
+    Metrics[F].incrementCounter("gas_spent", 0)
+
+  def apply[F[_]: Sync: Log: TaskLift: Metrics](
       addr: Path,
-      maxMessageSize: Int,
-      initBonds: Map[Array[Byte], Long]
+      maxMessageSize: Int
   ): Resource[F, GrpcExecutionEngineService[F]] =
-    new ExecutionEngineConf[F](addr, maxMessageSize, initBonds).apply
+    for {
+      service <- new ExecutionEngineConf[F](addr, maxMessageSize).apply
+      _       <- Resource.liftF(initializeMetrics)
+    } yield service
 }

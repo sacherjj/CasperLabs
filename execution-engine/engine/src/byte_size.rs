@@ -52,7 +52,8 @@ impl ByteSize for Value {
                 | Value::UInt128(_)
                 | Value::UInt256(_)
                 | Value::UInt512(_)
-                | Value::Unit => 0,
+                | Value::Unit
+                | Value::UInt64(_) => 0,
                 Value::ByteArray(vec) => std::mem::size_of::<Vec<u8>>() + vec.capacity(),
                 Value::ListInt32(list) => {
                     std::mem::size_of::<Vec<i32>>() + list.capacity() * I32_SIZE

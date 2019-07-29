@@ -1,0 +1,75 @@
+{
+  "name": "ui",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@auth0/auth0-spa-js": "^1.0.2",
+    "@fortawesome/fontawesome-free": "^5.9.0",
+    "@improbable-eng/grpc-web": "^0.9.6",
+    "@types/d3": "^5.7.2",
+    "@types/file-saver": "^2.0.1",
+    "@types/google-protobuf": "^3.7.1",
+    "@types/jest": "24.0.15",
+    "@types/jquery": "^3.3.30",
+    "@types/node": "12.0.10",
+    "@types/react": "16.8.22",
+    "@types/react-dom": "16.8.4",
+    "@types/react-router-dom": "^4.3.4",
+    "bootstrap": "^4.3.1",
+    "bootstrap-components": "^1.1.287",
+    "d3": "^5.9.7",
+    "file-saver": "^2.0.2",
+    "google-protobuf": "^3.9.0",
+    "jquery": "^3.4.1",
+    "lint-staged": "^8.2.1",
+    "lodash": "^4.17.14",
+    "mobx": "^5.11.0",
+    "mobx-react": "^6.1.1",
+    "node-sass": "^4.12.0",
+    "popper.js": "^1.15.0",
+    "prettier": "^1.18.2",
+    "react": "^16.8.6",
+    "react-dom": "^16.8.6",
+    "react-router-dom": "^5.0.1",
+    "react-scripts": "3.0.1",
+    "tweetnacl-ts": "^1.0.3",
+    "tweetnacl-util": "^0.15.0",
+    "typescript": "3.5.2"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": "react-app"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "src/**/*.{js,jsx,ts,tsx,json,css,scss,md}": [
+      "prettier --single-quote --write",
+      "git add"
+    ]
+  },
+  "devDependencies": {
+    "husky": "^2.7.0"
+  },
+  "proxy": "http://localhost:8001/"
+}

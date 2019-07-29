@@ -2,9 +2,12 @@ import logging
 from threading import Thread
 from time import sleep, time
 
+from test.cl_node.errors import NonZeroExitCodeError
+from test.cl_node.wait import wait_for_block_hashes_propagated_to_all_nodes
+from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
 
-CONTRACT_1 = 'helloname_invalid_just_1.wasm'
-CONTRACT_2 = 'helloname_invalid_just_2.wasm'
+CONTRACT_1 = 'old_wasm/helloname_invalid_just_1.wasm'
+CONTRACT_2 = 'old_wasm/helloname_invalid_just_2.wasm'
 
 
 class TimedThread(Thread):
@@ -40,7 +43,12 @@ class DeployTimedTread(TimedThread):
 class ProposeTimedThread(TimedThread):
 
     def my_call(self, kwargs):
-        self.node.client.propose()
+        self.block_hash = None
+        try:
+            self.block_hash = extract_block_hash_from_propose_output(self.node.client.propose())
+        except NonZeroExitCodeError:
+            # Ignore error for no new deploys
+            pass
 
 
 def test_neglected_invalid_block(three_node_network):
@@ -49,24 +57,22 @@ def test_neglected_invalid_block(three_node_network):
     Scenario: 3 Nodes doing simultaneous deploys and proposes do not have neglected invalid blocks
     """
     bootstrap, node1, node2 = three_node_network.docker_nodes
+
     for cycle_count in range(4):
         logging.info(f'DEPLOY_PROPOSE CYCLE COUNT: {cycle_count + 1}')
         start_time = time() + 1
 
         boot_deploy = DeployTimedTread(bootstrap,
                                        {'session_contract': CONTRACT_1,
-                                        'private_key': 'validator-0-private.pem',
-                                        'public_key': 'validator-0-public.pem'},
+                                        'payment_contract': CONTRACT_1},
                                        start_time)
         node1_deploy = DeployTimedTread(node1,
                                         {'session_contract': CONTRACT_2,
-                                         'private_key': 'validator-0-private.pem',
-                                         'public_key': 'validator-0-public.pem'},
+                                         'payment_contract': CONTRACT_2},
                                         start_time)
         node2_deploy = DeployTimedTread(node2,
                                         {'session_contract': CONTRACT_2,
-                                         'private_key': 'validator-0-private.pem',
-                                         'public_key': 'validator-0-public.pem'},
+                                         'payment_contract': CONTRACT_2},
                                         start_time)
 
         # Simultaneous Deploy
@@ -93,7 +99,9 @@ def test_neglected_invalid_block(three_node_network):
         node1_deploy.join()
         node2_deploy.join()
 
-    sleep(5)
+    # Assure deploy and proposes occurred
+    block_hashes = [h for h in [boot_deploy.block_hash, node1_deploy.block_hash, node2_deploy.block_hash] if h]
+    wait_for_block_hashes_propagated_to_all_nodes(three_node_network.docker_nodes, block_hashes)
 
     assert ' for NeglectedInvalidBlock.' not in bootstrap.logs()
     assert ' for NeglectedInvalidBlock.' not in node1.logs()

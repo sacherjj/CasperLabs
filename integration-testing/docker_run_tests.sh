@@ -3,10 +3,12 @@
 set -e
 
 if [[ -n $DRONE_BUILD_NUMBER ]]; then
-    export TAG_NAME=DRONE-${DRONE_BUILD_NUMBER}
+    export TAG_NAME=test-DRONE-${DRONE_BUILD_NUMBER}
 else
     export TAG_NAME="test"
 fi
+
+export TEST_RUN_ARGS=$@
 
 # We need networks for the Python Client to talk directly to the DockerNode.
 # We cannot share a network as we might have DockerNodes partitioned.

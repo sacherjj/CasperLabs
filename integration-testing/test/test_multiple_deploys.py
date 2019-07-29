@@ -1,12 +1,13 @@
 import threading
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
+from test.cl_node.wait import wait_for_block_hashes_propagated_to_all_nodes
 from typing import List
+from functools import reduce
+from operator import add
+
 
 import pytest
-
-from .cl_node.wait import wait_for_blocks_count_at_least
-
 
 # An explanation given by @Akosh about number of expected blocks.
 # This is why the expected blocks are 4.
@@ -31,32 +32,31 @@ branch out and be only 4 levels deep
 
 class DeployThread(threading.Thread):
     def __init__(self,
-            name: str,
-            node: DockerNode,
-            batches_of_contracts: List[List[str]],
-            max_attempts: int,
-            retry_seconds: int) -> None:
+                 name: str,
+                 node: DockerNode,
+                 batches_of_contracts: List[List[str]],
+                 max_attempts: int,
+                 retry_seconds: int) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
         self.batches_of_contracts = batches_of_contracts
         self.max_attempts = max_attempts
         self.retry_seconds = retry_seconds
+        self.block_hashes = []
 
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
                 assert 'Success' in self.node.client.deploy(session_contract=contract,
-                                                            payment_contract=contract,
-                                                            private_key="validator-0-private.pem",
-                                                            public_key="validator-0-public.pem")
+                                                            payment_contract=contract)
 
-            self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
-
+            block_hash = self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
+            self.block_hashes.append(block_hash)
 
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
-                        ([['test_helloname.wasm']], [1, 1, 1, 0])
+                        ([['test_helloname.wasm']], [1, 1, 1, 1])
 ])
 # Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(three_node_network,
@@ -68,10 +68,7 @@ def test_multiple_deploys_at_once(three_node_network,
     nodes = three_node_network.docker_nodes
     # Wait for the genesis block reacing each node.
 
-    for node in nodes:
-        wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
-
-    deploy_threads = [DeployThread("node" + str(i + 1), node, contract_paths, max_attempts = 5, retry_seconds = 3)
+    deploy_threads = [DeployThread("node" + str(i + 1), node, contract_paths, max_attempts=5, retry_seconds=3)
                       for i, node in enumerate(nodes)]
 
     for t in deploy_threads:
@@ -81,10 +78,10 @@ def test_multiple_deploys_at_once(three_node_network,
         t.join()
 
     # See COMMENT_EXPECTED_BLOCKS
-    for node in nodes:
-        wait_for_blocks_count_at_least(node, len(expected_deploy_counts_in_blocks), len(expected_deploy_counts_in_blocks) * 2, node.timeout)
+    block_hashes = reduce(add, [t.block_hashes for t in deploy_threads])
+    wait_for_block_hashes_propagated_to_all_nodes(nodes, block_hashes)
 
     for node in nodes:
         blocks = parse_show_blocks(node.client.show_blocks(len(expected_deploy_counts_in_blocks) * 100))
         n_blocks = len(expected_deploy_counts_in_blocks)
-        assert [b.deploy_count for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, 'Unexpected deploy counts in blocks'
+        assert [b.summary.header.deploy_count for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, 'Unexpected deploy counts in blocks'

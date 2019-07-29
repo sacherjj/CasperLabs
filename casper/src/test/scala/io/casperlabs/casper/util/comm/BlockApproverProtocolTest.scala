@@ -15,6 +15,7 @@ import io.casperlabs.comm.transport
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.shared.{FilesAPI, Log}
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -22,6 +23,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   import BlockApproverProtocolTest._
 
   private implicit val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
+
+  implicit def filesApi(implicit log: Log[Effect]) = FilesAPI.create[Effect]
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
     val n                          = 8
@@ -91,30 +94,32 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
   ): Effect[(BlockApproverProtocol, TransportLayerCasperTestNode[Effect])] = {
 
     val deployTimestamp = 1L
-    val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
 
     val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.buildGenesis(
       wallets,
       bonds,
       1L,
       Long.MaxValue,
-      Faucet.noopFaucet,
       deployTimestamp
     )
     for {
       nodes <- networkEff(Vector(sk), genesis, transforms)
       node  = nodes.head
-    } yield
-      new BlockApproverProtocol(
-        node.validatorId,
-        deployTimestamp,
-        bonds,
-        wallets,
-        1L,
-        Long.MaxValue,
-        false,
-        requiredSigs
-      ) -> node
+    } yield new BlockApproverProtocol(
+      node.validatorId,
+      bonds,
+      wallets,
+      BlockApproverProtocol.GenesisConf(
+        minimumBond = 1L,
+        maximumBond = Long.MaxValue,
+        requiredSigs = requiredSigs,
+        genesisAccountPublicKeyPath = None,
+        initialTokens = 0L,
+        mintCodePath = None,
+        posCodePath = None,
+        bondsPath = None
+      )
+    ) -> node
   }
 
 }

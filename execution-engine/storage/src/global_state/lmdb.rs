@@ -2,19 +2,19 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use lmdb;
+
 use common::key::Key;
 use common::value::Value;
-use lmdb;
-use shared::newtypes::{Blake2bHash, CorrelationId};
-use shared::transform::Transform;
-
 use error;
 use global_state::StateReader;
 use global_state::{commit, CommitResult, History};
+use shared::newtypes::{Blake2bHash, CorrelationId};
+use shared::transform::Transform;
 use trie::operations::create_hashed_empty_trie;
 use trie::Trie;
 use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use trie_store::operations::{read, write, ReadResult, WriteResult};
+use trie_store::operations::{read, ReadResult};
 use trie_store::{Transaction, TransactionSource, TrieStore};
 
 /// Represents a "view" of global state at a particular root hash.
@@ -22,6 +22,7 @@ pub struct LmdbGlobalState {
     pub(super) environment: Arc<LmdbEnvironment>,
     pub(super) store: Arc<LmdbTrieStore>,
     pub(super) root_hash: Blake2bHash,
+    pub(super) empty_root_hash: Blake2bHash,
 }
 
 impl LmdbGlobalState {
@@ -37,7 +38,12 @@ impl LmdbGlobalState {
             txn.commit()?;
             root_hash
         };
-        Ok(LmdbGlobalState::new(environment, store, root_hash))
+        Ok(LmdbGlobalState::new(
+            environment,
+            store,
+            root_hash,
+            root_hash,
+        ))
     }
 
     /// Creates a state from an existing environment, store, and root_hash.
@@ -46,47 +52,14 @@ impl LmdbGlobalState {
         environment: Arc<LmdbEnvironment>,
         store: Arc<LmdbTrieStore>,
         root_hash: Blake2bHash,
+        empty_root_hash: Blake2bHash,
     ) -> Self {
         LmdbGlobalState {
             environment,
             store,
             root_hash,
+            empty_root_hash,
         }
-    }
-
-    /// Creates a state from an environement, a store, and given set of [`Key`](common::key::key),
-    /// [`Value`](common::value::Value) pairs.
-    pub fn from_pairs(
-        correlation_id: CorrelationId,
-        environment: Arc<LmdbEnvironment>,
-        store: Arc<LmdbTrieStore>,
-        pairs: &[(Key, Value)],
-    ) -> Result<Self, error::Error> {
-        let mut ret = LmdbGlobalState::empty(environment, store)?;
-        {
-            let mut txn = ret.environment.create_read_write_txn()?;
-            let mut current_root = ret.root_hash;
-            for (key, value) in pairs {
-                let key = key.normalize();
-                match write::<_, _, _, LmdbTrieStore, error::Error>(
-                    correlation_id,
-                    &mut txn,
-                    &ret.store,
-                    &current_root,
-                    &key,
-                    value,
-                )? {
-                    WriteResult::Written(root_hash) => {
-                        current_root = root_hash;
-                    }
-                    WriteResult::AlreadyExists => (),
-                    WriteResult::RootNotFound => panic!("LmdbGlobalState has invalid root"),
-                }
-            }
-            ret.root_hash = current_root;
-            txn.commit()?;
-        }
-        Ok(ret)
     }
 }
 
@@ -123,6 +96,7 @@ impl History for LmdbGlobalState {
             environment: Arc::clone(&self.environment),
             store: Arc::clone(&self.store),
             root_hash: prestate_hash,
+            empty_root_hash: self.empty_root_hash,
         });
         txn.commit()?;
         Ok(maybe_state)
@@ -146,6 +120,14 @@ impl History for LmdbGlobalState {
         };
         Ok(commit_result)
     }
+
+    fn current_root(&self) -> Blake2bHash {
+        self.root_hash
+    }
+
+    fn empty_root(&self) -> Blake2bHash {
+        self.empty_root_hash
+    }
 }
 
 #[cfg(test)]
@@ -153,9 +135,10 @@ mod tests {
     use lmdb::DatabaseFlags;
     use tempfile::tempdir;
 
-    use super::*;
     use trie_store::operations::{write, WriteResult};
     use TEST_MAP_SIZE;
+
+    use super::*;
 
     #[derive(Debug, Clone)]
     struct TestPair {

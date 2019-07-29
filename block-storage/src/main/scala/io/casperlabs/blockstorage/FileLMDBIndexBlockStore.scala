@@ -4,13 +4,13 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file._
 
-import cats.{Applicative, Monad}
+import cats.{Applicative, Apply, Monad}
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, ExitCase, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
 import io.casperlabs.shared.Resources.withResource
 import io.casperlabs.blockstorage.FileLMDBIndexBlockStore.Checkpoint
 import io.casperlabs.blockstorage.StorageError.StorageErr
@@ -21,7 +21,7 @@ import io.casperlabs.blockstorage.util.fileIO.{IOError, _}
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.catscontrib.MonadStateOps._
-import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metrics, Metrics.Source
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -349,7 +349,7 @@ object FileLMDBIndexBlockStore {
       blockStoreDataDir.resolve("checkpoints")
     )
 
-  def create[F[_]: Monad: Concurrent: Log](
+  def create[F[_]: Monad: Concurrent: Log: Metrics](
       env: Env[ByteBuffer],
       storagePath: Path,
       approvedBlockPath: Path,
@@ -381,24 +381,32 @@ object FileLMDBIndexBlockStore {
                    )
 
                    initialState.useStateByRef[F] { st =>
-                     (new FileLMDBIndexBlockStore[F](
-                       lock,
-                       env,
-                       index,
-                       blockSummaryDB,
-                       deployHashesDB,
-                       storagePath,
-                       approvedBlockPath,
-                       checkpointsDirPath,
-                       st
-                     ): BlockStore[F]).asRight[StorageError]
+                     val metricsF = Metrics[F]
+                     val store: BlockStore[F] =
+                       new FileLMDBIndexBlockStore[F](
+                         lock,
+                         env,
+                         index,
+                         blockSummaryDB,
+                         deployHashesDB,
+                         storagePath,
+                         approvedBlockPath,
+                         checkpointsDirPath,
+                         st
+                       ) with MeteredBlockStore[F] {
+                         override implicit val m: Metrics[F] = metricsF
+                         override implicit val ms: Source =
+                           Metrics.Source(BlockStorageMetricsSource, "file-lmdb")
+                         override implicit val a: Apply[F] = Concurrent[F]
+                       }
+                     store.asRight[StorageError]
                    }
                  case Left(e) => e.asLeft[BlockStore[F]].pure[F]
                }
     } yield result
   }
 
-  def create[F[_]: Monad: Concurrent: Log](config: Config): F[StorageErr[BlockStore[F]]] =
+  def create[F[_]: Monad: Concurrent: Log: Metrics](config: Config): F[StorageErr[BlockStore[F]]] =
     for {
       notExists <- Sync[F].delay(Files.notExists(config.indexPath))
       _         <- Sync[F].delay(Files.createDirectories(config.indexPath)).whenA(notExists)

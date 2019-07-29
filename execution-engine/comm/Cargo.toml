@@ -1,6 +1,6 @@
 [package]
 name = "casperlabs-engine-grpc-server"
-version = "0.4.0"
+version = "0.5.1"
 authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 description = "WASM execution engine for CasperLabs smart contracts"
 license = "Apache-2.0"
@@ -32,6 +32,11 @@ parity-wasm = "0.31"
 [[bin]]
 name = "casperlabs-engine-grpc-server"
 path = "src/main.rs"
+
+[lib]
+name = "casperlabs_engine_grpc_server"
+path = "src/lib.rs"
+
 [package.metadata.rpm.cargo]
 buildflags = ["--release"]
 

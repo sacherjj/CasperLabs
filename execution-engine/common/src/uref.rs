@@ -1,6 +1,8 @@
 use bitflags;
 
+use crate::alloc::string::String;
 use crate::alloc::vec::Vec;
+use crate::base16;
 use crate::bytesrepr;
 use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};
 use crate::contract_api::pointers::UPointer;
@@ -69,8 +71,31 @@ impl bytesrepr::FromBytes for AccessRights {
 }
 
 /// Represents an unforgeable reference
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct URef([u8; UREF_ADDR_SIZE], Option<AccessRights>);
+
+impl core::fmt::Display for URef {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let addr = self.addr();
+        let access_rights_o = self.access_rights();
+        if let Some(access_rights) = access_rights_o {
+            write!(
+                f,
+                "URef({}, {})",
+                super::key::addr_to_hex(&addr),
+                access_rights
+            )
+        } else {
+            write!(f, "URef({}, None)", super::key::addr_to_hex(&addr))
+        }
+    }
+}
+
+impl core::fmt::Debug for URef {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
 
 impl URef {
     /// Creates a [`URef`] from an id and access rights.
@@ -80,6 +105,7 @@ impl URef {
 
     /// Creates a [`URef`] from an id and optional access rights.  [`URef::new`] is the
     /// preferred constructor for most common use-cases.
+    #[cfg(feature = "gens")]
     pub(crate) fn unsafe_new(
         id: [u8; UREF_ADDR_SIZE],
         maybe_access_rights: Option<AccessRights>,
@@ -125,6 +151,24 @@ impl URef {
             false
         }
     }
+
+    /// Formats address and its access rights in an unique way that could be
+    /// used as a name when storing given uref in a global state.
+    ///
+    pub fn as_string(&self) -> String {
+        // Extract bits as numerical value, with no flags marked as 0.
+        let access_rights_bits = self
+            .access_rights()
+            .map(|value| value.bits())
+            .unwrap_or_default();
+        // Access rights is represented as octal, which means that max value of u8 can be represented
+        // as maximum of 3 octal digits.
+        format!(
+            "uref-{}-{:03o}",
+            base16::encode_lower(&self.addr()),
+            access_rights_bits
+        )
+    }
 }
 
 impl bytesrepr::ToBytes for URef {
@@ -148,7 +192,8 @@ impl bytesrepr::FromBytes for URef {
 impl bytesrepr::FromBytes for Vec<URef> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (size, mut stream): (u32, &[u8]) = bytesrepr::FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<URef> = Vec::with_capacity(size as usize);
+        let mut result = Vec::new();
+        result.try_reserve_exact(size as usize)?;
         for _ in 0..size {
             let (uref, rem): (URef, &[u8]) = bytesrepr::FromBytes::from_bytes(stream)?;
             result.push(uref);
@@ -188,7 +233,7 @@ mod tests {
 
     use crate::gens;
     use crate::test_utils;
-    use crate::uref::AccessRights;
+    use crate::uref::{AccessRights, URef};
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)
@@ -240,5 +285,28 @@ mod tests {
         fn test_uref(uref in gens::uref_arb()) {
             assert!(test_utils::test_serialization_roundtrip(&uref));
         }
+    }
+
+    #[test]
+    fn uref_as_string() {
+        // Since we are putting URefs to known_urefs map keyed by the label that `as_string()`
+        // returns, any changes to the string representation of that type cannot break the format.
+        let addr_array = [0u8; 32];
+        let uref_a = URef::new(addr_array, AccessRights::READ);
+        assert_eq!(
+            uref_a.as_string(),
+            "uref-0000000000000000000000000000000000000000000000000000000000000000-001"
+        );
+        let uref_b = URef::new(addr_array, AccessRights::WRITE);
+        assert_eq!(
+            uref_b.as_string(),
+            "uref-0000000000000000000000000000000000000000000000000000000000000000-002"
+        );
+
+        let uref_c = uref_b.remove_access_rights();
+        assert_eq!(
+            uref_c.as_string(),
+            "uref-0000000000000000000000000000000000000000000000000000000000000000-000"
+        );
     }
 }

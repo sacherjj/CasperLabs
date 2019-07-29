@@ -1,9 +1,14 @@
 package io.casperlabs.client
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+
 import cats.effect.{Sync, Timer}
-import io.casperlabs.casper.protocol
+import cats.syntax.either._
+import cats.temp.par._
 import io.casperlabs.client.configuration._
-import io.casperlabs.shared.{Log, UncaughtExceptionLogger}
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -15,7 +20,7 @@ object Main {
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
       "node-runner",
-      reporter = UncaughtExceptionLogger
+      reporter = UncaughtExceptionHandler
     )
 
     val exec =
@@ -23,20 +28,16 @@ object Main {
         maybeConf <- Task(Configuration.parse(args))
         _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) {
               case (conn, conf) =>
-                val deployService = new GrpcDeployService(
-                  conn.host,
-                  conn.portExternal,
-                  conn.portInternal
-                )
-                program(conf)(Sync[Task], deployService, Timer[Task])
-                  .doOnFinish(_ => Task(deployService.close()))
+                implicit val deployService: GrpcDeployService = new GrpcDeployService(conn)
+                implicit val filesAPI: FilesAPI[Task]         = FilesAPI.create[Task]
+                program[Task](conf).doOnFinish(_ => Task(deployService.close()))
             }
       } yield ()
 
     exec.runSyncUnsafe()
   }
 
-  def program[F[_]: Sync: DeployService: Timer](
+  def program[F[_]: Sync: DeployService: Timer: FilesAPI: Log: Par](
       configuration: Configuration
   ): F[Unit] =
     configuration match {
@@ -44,15 +45,53 @@ object Main {
       case ShowDeploy(hash)  => DeployRuntime.showDeploy(hash)
       case ShowDeploys(hash) => DeployRuntime.showDeploys(hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
-
-      case Deploy(from, nonce, sessionCode, paymentCode, maybePublicKey, maybePrivateKey) =>
-        DeployRuntime.deployFileProgram(
+      case Unbond(
+          amount,
+          nonce,
+          contractCode,
+          privateKey
+          ) =>
+        DeployRuntime.unbond(
+          amount,
+          nonce,
+          contractCode,
+          privateKey
+        )
+      case Bond(
+          amount,
+          nonce,
+          contractCode,
+          privateKey
+          ) =>
+        DeployRuntime.bond(
+          amount,
+          nonce,
+          contractCode,
+          privateKey
+        )
+      case Deploy(
           from,
           nonce,
           sessionCode,
           paymentCode,
           maybePublicKey,
-          maybePrivateKey
+          maybePrivateKey,
+          gasPrice
+          ) =>
+        DeployRuntime.deployFileProgram(
+          from,
+          nonce,
+          Files.readAllBytes(sessionCode.toPath),
+          Files.readAllBytes(paymentCode.toPath),
+          maybePublicKey.map(
+            file =>
+              new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PublicKey]
+          ),
+          maybePrivateKey.map(
+            file =>
+              new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
+          ),
+          gasPrice
         )
 
       case Propose =>
@@ -63,5 +102,8 @@ object Main {
 
       case Query(hash, keyType, keyValue, path) =>
         DeployRuntime.queryState(hash, keyType, keyValue, path)
+
+      case Balance(address, blockHash) =>
+        DeployRuntime.balance(address, blockHash)
     }
 }

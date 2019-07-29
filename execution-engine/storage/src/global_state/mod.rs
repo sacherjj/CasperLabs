@@ -1,19 +1,19 @@
-pub mod in_memory;
-pub mod lmdb;
-
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::BuildHasher;
 use std::time::Instant;
 
 use common::key::Key;
 use common::value::Value;
+use shared::logging::{log_duration, log_metric, GAUGE};
 use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::{self, Transform, TypeMismatch};
-
-use shared::logging::{log_duration, log_metric, GAUGE};
 use trie::Trie;
 use trie_store::operations::{read, write, ReadResult, WriteResult};
 use trie_store::{Transaction, TransactionSource, TrieStore};
+
+pub mod in_memory;
+pub mod lmdb;
 
 /// A reader of state
 pub trait StateReader<K, V> {
@@ -30,6 +30,19 @@ pub enum CommitResult {
     Success(Blake2bHash),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
+}
+
+impl fmt::Display for CommitResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            CommitResult::RootNotFound => write!(f, "Root not found"),
+            CommitResult::Success(hash) => write!(f, "Success: {}", hash),
+            CommitResult::KeyNotFound(key) => write!(f, "Key not found: {}", key),
+            CommitResult::TypeMismatch(type_mismatch) => {
+                write!(f, "Type mismatch: {:?}", type_mismatch)
+            }
+        }
+    }
 }
 
 impl From<transform::Error> for CommitResult {
@@ -57,6 +70,10 @@ pub trait History {
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error>;
+
+    fn current_root(&self) -> Blake2bHash;
+
+    fn empty_root(&self) -> Blake2bHash;
 }
 
 const GLOBAL_STATE_COMMIT_READS: &str = "global_state_commit_reads";

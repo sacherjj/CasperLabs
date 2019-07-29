@@ -8,7 +8,7 @@ import fs2.concurrent.Queue
 import fs2.{Pipe, Stream}
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.SafetyOracle
+import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.node.api.graphql.GraphQLQuery._
 import io.casperlabs.node.api.graphql.ProtocolState.Subscriptions
@@ -40,7 +40,7 @@ object GraphQL {
   private implicit val logSource: LogSource = LogSource(getClass)
 
   /* Entry point */
-  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: SafetyOracle: BlockStore: FinalizedBlocksStream: ExecutionEngineService](
+  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: FinalityDetector: BlockStore: FinalizedBlocksStream: ExecutionEngineService](
       executionContext: ExecutionContext
   ): HttpRoutes[F] = {
     import io.casperlabs.node.api.graphql.RunToFuture.fromEffect
@@ -176,13 +176,12 @@ object GraphQL {
                       .toList
                       .void
                       .start
-          } yield
-            (
-              ProtocolState.Active[F](
-                activeSubscriptions.asInstanceOf[Subscriptions[F]] + (id -> fiber)
-              ),
-              ()
-            )
+          } yield (
+            ProtocolState.Active[F](
+              activeSubscriptions.asInstanceOf[Subscriptions[F]] + (id -> fiber)
+            ),
+            ()
+          )
 
         case (ProtocolState.Active(activeSubscriptions), GraphQLWebSocketMessage.Stop(id)) =>
           for {
@@ -190,8 +189,10 @@ object GraphQL {
                   .asInstanceOf[Subscriptions[F]]
                   .get(id)
                   .fold(().pure[F])(_.cancel)
-          } yield
-            (ProtocolState.Active(activeSubscriptions.asInstanceOf[Subscriptions[F]] - id), ())
+          } yield (
+            ProtocolState.Active(activeSubscriptions.asInstanceOf[Subscriptions[F]] - id),
+            ()
+          )
 
         case (
             ProtocolState.Active(activeSubscriptions),

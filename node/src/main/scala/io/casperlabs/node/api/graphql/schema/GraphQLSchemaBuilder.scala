@@ -3,10 +3,10 @@ package io.casperlabs.node.api.graphql.schema
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.SafetyOracle
+import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.ipc
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
@@ -15,7 +15,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import sangria.schema._
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: SafetyOracle: BlockStore: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService] {
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStore: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService] {
 
   val requireFullBlockFields: Set[String] = Set("blockSizeBytes", "deployErrorCount", "deploys")
 
@@ -82,7 +82,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                 maybePostStateHash <- BlockAPI
                                        .getBlockInfoOpt[F](blockHashBase16Prefix)
                                        .map(_.map(_._1.getSummary.getHeader.getState.postStateHash))
-                values <- maybePostStateHash.fold(List.empty[Option[ipc.Value]].pure[F]) {
+                values <- maybePostStateHash.fold(List.empty[Option[state.Value]].pure[F]) {
                            stateHash =>
                              for {
 
@@ -105,7 +105,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                                         .handleError {
                                                           case SmartContractEngineError(message)
                                                               if message contains "Value not found" =>
-                                                            none[ipc.Value]
+                                                            none[state.Value]
                                                         }
                                             } yield value
                                         }
