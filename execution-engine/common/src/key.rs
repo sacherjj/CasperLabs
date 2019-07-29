@@ -152,10 +152,7 @@ impl Key {
         match binascii::hex2bin(parsed_seed, &mut seed_buff)
             .and(binascii::hex2bin(parsed_key, &mut key_buff))
         {
-            Ok(_) => Some(Key::Local {
-                seed: seed_buff,
-                key_hash: key_buff,
-            }),
+            Ok(_) => Some(Key::local(seed_buff, &key_buff)),
             _ => None,
         }
     }
