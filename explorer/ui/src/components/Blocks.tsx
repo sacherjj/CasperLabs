@@ -1,6 +1,6 @@
 import React from 'react';
 import { observer } from 'mobx-react';
-import CasperContainer, { DagStep } from '../containers/CasperContainer';
+import DagContainer, { DagStep } from '../containers/DagContainer';
 import { RefreshableComponent, ListInline, IconButton } from './Utils';
 import DataTable from './DataTable';
 import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
@@ -11,27 +11,28 @@ import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
 
 interface Props {
-  casper: CasperContainer;
+  dag: DagContainer;
 }
 
 /** Show the list of blocks. */
 @observer
 export default class Blocks extends RefreshableComponent<Props, {}> {
   async refresh() {
-    this.props.casper.refreshBlockDag();
+    this.props.dag.refreshBlockDag();
   }
 
   render() {
+    const { dag } = this.props;
     return (
       <DataTable
         title={
-          this.props.casper.maxRank === 0
+          dag.maxRank === 0
             ? 'Latest Blocks'
-            : `Blocks from rank ${this.props.casper.minRank} to ${this.props.casper.maxRank}`
+            : `Blocks from rank ${dag.minRank} to ${dag.maxRank}`
         }
         refresh={() => this.refresh()}
         headers={['Block hash', 'Rank', 'Timestamp', 'Validator']}
-        rows={this.props.casper.blocks}
+        rows={dag.blocks}
         renderRow={(block: BlockInfo) => {
           const header = block.getSummary()!.getHeader()!;
           const id = encodeBase16(block.getSummary()!.getBlockHash_asU8());
@@ -49,7 +50,7 @@ export default class Blocks extends RefreshableComponent<Props, {}> {
             </tr>
           );
         }}
-        footerMessage={<DagStepButtons step={this.props.casper.dagStep} />}
+        footerMessage={<DagStepButtons step={dag.step} />}
       />
     );
   }

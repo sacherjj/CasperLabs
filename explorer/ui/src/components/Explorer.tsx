@@ -1,6 +1,6 @@
 import React from 'react';
 import { observer } from 'mobx-react';
-import CasperContainer from '../containers/CasperContainer';
+import DagContainer from '../containers/DagContainer';
 import { RefreshableComponent, LinkButton, ListInline } from './Utils';
 import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
@@ -12,70 +12,67 @@ import { Link } from 'react-router-dom';
 import Pages from './Pages';
 
 interface Props {
-  casper: CasperContainer;
+  dag: DagContainer;
 }
 
 /** Show the tips of the DAG. */
 @observer
 export default class Explorer extends RefreshableComponent<Props, {}> {
   async refresh() {
-    this.props.casper.refreshBlockDag();
+    this.props.dag.refreshBlockDag();
   }
 
   render() {
+    const { dag } = this.props;
     return (
       <div>
         <div className="row">
-          <div
-            className={`col-sm-12 col-lg-${
-              this.props.casper.selectedBlock ? 8 : 12
-            }`}
-          >
+          <div className={`col-sm-12 col-lg-${dag.selectedBlock ? 8 : 12}`}>
             <BlockDAG
               title={
-                this.props.casper.maxRank === 0
+                dag.maxRank === 0
                   ? 'Latest Block DAG'
-                  : `Block DAG from rank ${this.props.casper.minRank} to ${this.props.casper.maxRank}`
+                  : `Block DAG from rank ${dag.minRank} to ${dag.maxRank}`
               }
-              blocks={this.props.casper.blocks}
+              blocks={dag.blocks}
               refresh={() => this.refresh()}
               footerMessage={
                 <ListInline>
-                  <DagStepButtons step={this.props.casper.dagStep} />
-                  {this.props.casper.hasBlocks && (
+                  <DagStepButtons step={dag.step} />
+                  {dag.hasBlocks && (
                     <span>Select a block to see its details.</span>
                   )}
                 </ListInline>
               }
               onSelected={block => {
-                let current = this.props.casper.selectedBlock;
+                let current = dag.selectedBlock;
                 if (
                   current &&
                   current.getSummary()!.getBlockHash_asB64() ===
                     block.getSummary()!.getBlockHash_asB64()
                 ) {
-                  this.props.casper.selectedBlock = undefined;
+                  dag.selectedBlock = undefined;
                 } else {
-                  this.props.casper.selectedBlock = block;
+                  dag.selectedBlock = block;
                 }
               }}
-              selected={this.props.casper.selectedBlock}
-              depth={this.props.casper.dagDepth}
+              selected={dag.selectedBlock}
+              depth={dag.depth}
               onDepthChange={d => {
-                this.props.casper.dagDepth = d;
+                dag.depth = d;
                 this.refresh();
               }}
               width="100%"
               height="600"
             />
           </div>
-          {this.props.casper.selectedBlock && (
+          {dag.selectedBlock && (
             <div className="col-sm-12 col-lg-4">
               <BlockDetails
-                block={this.props.casper.selectedBlock}
-                blocks={this.props.casper.blocks!}
+                block={dag.selectedBlock}
+                blocks={dag.blocks!}
                 onSelect={blockHash => {
-                  this.props.casper.selectedBlock = this.props.casper.blocks!.find(
+                  dag.selectedBlock = dag.blocks!.find(
                     x =>
                       encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
                       blockHash
@@ -104,7 +101,7 @@ class BlockDetails extends React.Component<{
     let id = encodeBase16(summary.getBlockHash_asU8());
     let idB64 = summary.getBlockHash_asB64();
     let validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
-    // Display 2 sets of fields next to each other.
+    // Grouped attributes so we could display 2 sets of fields next to each other.
     let attrs: Array<Array<[string, any]>> = [
       [
         ['Block hash', <Link to={Pages.block(id)}>{shortHash(id)}</Link>],
@@ -206,11 +203,6 @@ class BlockDetails extends React.Component<{
   componentDidMount() {
     // Scroll into view so people realize it's there.
     this.scrollToBlockDetails();
-  }
-
-  componentDidUpdate() {
-    // It gets annothing when it's already visible and keeps scrolling into view.
-    // this.scrollToBlockDetails();
   }
 
   scrollToBlockDetails() {

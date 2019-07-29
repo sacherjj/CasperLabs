@@ -2,7 +2,7 @@ import React from 'react';
 import { observer } from 'mobx-react';
 import { Form, SelectField, TextField } from './Forms';
 import AuthContainer from '../containers/AuthContainer';
-import { CasperContainer, FaucetRequest } from '../containers/CasperContainer';
+import { FaucetContainer, FaucetRequest } from '../containers/FaucetContainer';
 import { RefreshableComponent, Button, CommandLineHint, Icon } from './Utils';
 import DataTable from './DataTable';
 import { base64to16, encodeBase16 } from '../lib/Conversions';
@@ -10,26 +10,26 @@ import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 
 interface Props {
   auth: AuthContainer;
-  casper: CasperContainer;
+  faucet: FaucetContainer;
 }
 
 @observer
 class Faucet extends RefreshableComponent<Props, {}> {
   refresh() {
     this.props.auth.refreshAccounts();
-    this.props.casper.refreshFaucetRequestStatus();
+    this.props.faucet.refreshFaucetRequestStatus();
   }
 
   render() {
-    const { auth, casper } = this.props;
+    const { auth, faucet } = this.props;
     return (
       <div>
-        <FaucetForm auth={auth} requestTokens={x => casper.requestTokens(x)} />
+        <FaucetForm auth={auth} requestTokens={x => faucet.requestTokens(x)} />
         <StatusTable
-          requests={casper.faucetRequests}
-          onRefresh={() => this.props.casper.refreshFaucetRequestStatus()}
+          requests={faucet.faucetRequests}
+          onRefresh={() => faucet.refreshFaucetRequestStatus()}
         />
-        <CliHint requests={casper.faucetRequests} />
+        <CliHint requests={faucet.faucetRequests} />
       </div>
     );
   }

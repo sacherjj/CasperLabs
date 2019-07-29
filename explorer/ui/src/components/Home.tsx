@@ -3,11 +3,9 @@ import { Link } from 'react-router-dom';
 import { observer } from 'mobx-react';
 
 import Pages from './Pages';
-import CasperContainer from '../containers/CasperContainer';
 import AuthContainer from '../containers/AuthContainer';
 
 interface Props {
-  casper: CasperContainer;
   auth: AuthContainer;
 }
 
