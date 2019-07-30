@@ -44,6 +44,7 @@ const Home = observer((props: Props) => {
           <FaucetCard />
         )}
         <ExploreCard />
+        <GraphQLCard />
       </div>
 
       <div className="card mt-5">
@@ -84,29 +85,38 @@ interface CardProps {
 }
 
 // Card displays coloured summaries for main areas
-const Card = (props: CardProps) => (
-  <div className="col-xl-3 col-sm-6 mb-3">
-    <div className={`card text-white bg-${props.background} o-hidden h-100`}>
-      <div className="card-body">
-        <div className="card-body-icon">
-          <i className={`fa fa-fw fa-${props.icon}`}></i>
+const Card = (props: CardProps) => {
+  const linkClass = 'card-footer text-white clearfix small z-1';
+  const view = [
+    <span className="float-left">View Details</span>,
+    <span className="float-right">
+      ,<i className="fa fa-angle-right"></i>,
+    </span>
+  ];
+  return (
+    <div className="col-xl-3 col-sm-6 mb-3">
+      <div className={`card text-white bg-${props.background} o-hidden h-100`}>
+        <div className="card-body">
+          <div className="card-body-icon">
+            <i className={`fa fa-fw fa-${props.icon}`}></i>
+          </div>
+          {props.children}
         </div>
-        {props.children}
+        {props.to ? (
+          props.to.startsWith('http') ? (
+            <a href={props.to} target="_blank" className={linkClass}>
+              {view}
+            </a>
+          ) : (
+            <Link to={props.to} className={linkClass}>
+              {view}
+            </Link>
+          )
+        ) : null}
       </div>
-      {props.to && (
-        <Link
-          className="card-footer text-white clearfix small z-1"
-          to={props.to}
-        >
-          <span className="float-left">View Details</span>
-          <span className="float-right">
-            <i className="fa fa-angle-right"></i>
-          </span>
-        </Link>
-      )}
     </div>
-  </div>
-);
+  );
+};
 
 const CardMessage = (props: { message: string }) => {
   return <div className="mr-5">{props.message}</div>;
@@ -140,6 +150,18 @@ const ExploreCard = (_: {}) => {
   return (
     <Card background="success" icon="project-diagram" to={Pages.Explorer}>
       <CardMessage message="Explore the blockchain" />
+    </Card>
+  );
+};
+
+const GraphQLCard = (_: {}) => {
+  return (
+    <Card
+      background="success"
+      icon="flask"
+      to="http://devnet-graphql.casperlabs.io:40403/graphql"
+    >
+      <CardMessage message="Try the GraphQL console!" />
     </Card>
   );
 };
