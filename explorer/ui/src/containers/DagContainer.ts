@@ -72,7 +72,7 @@ export class DagContainer {
   step = new DagStep(this);
 
   async refreshBlockDag() {
-    return this.errors.capture(
+    await this.errors.capture(
       this.casperService
         .getBlockInfos(this.depth, this.maxRank)
         .then(blocks => {

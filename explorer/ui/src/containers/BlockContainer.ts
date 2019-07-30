@@ -44,7 +44,7 @@ export class BlockContainer {
 
   async loadBlock() {
     if (this.blockHash == null) return;
-    return this.errors.capture(
+    await this.errors.capture(
       this.casperService.getBlockInfo(this.blockHash).then(block => {
         this.block = block;
       })
@@ -67,7 +67,7 @@ export class BlockContainer {
     // Adjust the depth so it doesn't result in a negative start value.
     let depth = Math.min(maxRank + 1, this.depth);
 
-    return this.errors.capture(
+    await this.errors.capture(
       this.casperService.getBlockInfos(depth, maxRank).then(blocks => {
         this.neighborhood = blocks;
       })
@@ -79,7 +79,7 @@ export class BlockContainer {
       this.deploys = null;
       return;
     }
-    return this.errors.capture(
+    await this.errors.capture(
       this.casperService.getBlockDeploys(this.blockHash).then(deploys => {
         this.deploys = deploys;
       })
