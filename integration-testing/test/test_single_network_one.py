@@ -1,6 +1,18 @@
-
+from typing import List
+import logging
 import pytest
-from .cl_node.client_parser import parse_show_blocks
+from pytest import raises
+from pathlib import Path
+from pyblake2 import blake2b
+from test.cl_node.casperlabs_accounts import Account
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
+from test.cl_node.client_parser import parse_show_blocks
+from test.cl_node.docker_node import DockerNode
+from test.cl_node.errors import NonZeroExitCodeError
+from test.cl_node.wait import wait_for_genesis_block
+from test import contract_hash
+
 
 """
 Test account state retrieval with query-state.
@@ -48,13 +60,6 @@ def test_account_state(one_node_network):
     block_hash = node.deploy_and_propose(session_contract="test_countercall.wasm", payment_contract="test_countercall.wasm")
     response = account_state(block_hash)
     assert response.account.nonce == 2, str(response)
-
-
-
-from pytest import raises
-
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.casperlabs_accounts import Account
 
 
 def test_transfer_with_overdraft(one_node_network):
@@ -105,9 +110,6 @@ def test_transfer_to_accounts(one_node_network):
     node.transfer_to_account(to_account_id=4, amount=100, from_account_id=2)
     # TODO: Improve checks once balance is easy to read.
 
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.casperlabs_accounts import Account
-
 
 def balance(node, account_address, block_hash):
     try:
@@ -131,8 +133,7 @@ def test_scala_client_balance(one_node_network):
     assert node.d_client.get_balance(account_address=accounts[0].public_key_hex, block_hash=hashes[-1]) == initial[0] + 200
     assert node.d_client.get_balance(account_address=accounts[1].public_key_hex, block_hash=hashes[-1]) == initial[1] + 100
     assert node.d_client.get_balance(account_address=accounts[2].public_key_hex, block_hash=hashes[-1]) == initial[2] + 700
-import pytest
-from pathlib import Path
+
 
 ffi_test_contracts = [
     ('getcallerdefine.wasm', 'getcallercall.wasm'),
@@ -160,11 +161,6 @@ def test_get_caller(one_node_network, define_contract, call_contract):
     node = one_node_network.docker_nodes[0]
     deploy_and_propose_expect_no_errors(node, define_contract)
     deploy_and_propose_expect_no_errors(node, call_contract)
-from test.cl_node.errors import NonZeroExitCodeError
-
-import pytest
-
-from .cl_node.wait import wait_for_genesis_block
 
 
 @pytest.mark.parametrize("wasm", ["test_helloname.wasm", "old_wasm/test_helloname.wasm"])
@@ -188,9 +184,7 @@ def test_multiple_propose(one_node_network, wasm):
 
     # Number of blocks after second propose should not change
     assert node.client.get_blocks_count(100) == number_of_blocks
-from .cl_node.errors import NonZeroExitCodeError
 
-import pytest
 
 # Examples of query-state executed with the Scala client that result in errors:
 
@@ -242,13 +236,6 @@ def test_query_state_error(node, client, block_hash, query, expected):
         response = client.query_state(**query)
     assert expected in excinfo.value.output
 
-import pytest
-import logging
-from pyblake2 import blake2b
-
-from test import contract_hash
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
-
 
 @pytest.fixture(scope='module')
 def node(one_node_network):
@@ -294,9 +281,7 @@ def test_revert_direct(client, node):
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
     assert r.error_message == "Exit code: 1"
-from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
-from test.cl_node.errors import NonZeroExitCodeError
-import pytest
+
 
 def test_deploy_with_valid_signature(one_node_network):
     """
@@ -326,11 +311,6 @@ def test_deploy_with_invalid_signature(one_node_network):
                             payment_contract='test_helloname.wasm',
                             private_key="validator-0-private-invalid.pem",
                             public_key="validator-0-public-invalid.pem")
-from test.cl_node.client_parser import parse_show_blocks
-from test.cl_node.errors import NonZeroExitCodeError
-from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
-from typing import List
-import pytest
 
 
 """

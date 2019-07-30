@@ -1,11 +1,23 @@
-import time
 import logging
 import pytest
+import threading
+import time
+from functools import reduce
 from itertools import count
-from .cl_node.casperlabsnode import ( COMBINED_CONTRACT, COUNTER_CALL, HELLO_WORLD, MAILING_LIST_CALL)
-from .cl_node.wait import wait_for_block_hash_propagated_to_all_nodes
-from test import contract_hash
+from operator import add
+
+from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
+from test.cl_node.client_parser import parse_show_blocks
+from test.cl_node.docker_node import DockerNode
 from test.cl_node.docker_node import docker_path
+from test.cl_node.errors import NonZeroExitCodeError
+from test.cl_node.casperlabsnode import ( COMBINED_CONTRACT, COUNTER_CALL, HELLO_WORLD, MAILING_LIST_CALL)
+from test.cl_node.wait import (wait_for_block_hash_propagated_to_all_nodes, wait_for_block_hashes_propagated_to_all_nodes)
+from test import contract_hash
+from threading import Thread
+from time import sleep, time
+from typing import List
+
 
 @pytest.fixture(scope='module')
 def three_node_network_with_combined_contract(three_node_network):
@@ -76,13 +88,6 @@ def test_call_contracts_one_another(three_node_network_with_combined_contract, d
         wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
         assert expected(state(node, path, block_hash))
 
-import logging
-from threading import Thread
-from time import sleep, time
-
-from test.cl_node.errors import NonZeroExitCodeError
-from test.cl_node.wait import wait_for_block_hashes_propagated_to_all_nodes
-from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
 
 CONTRACT_1 = 'old_wasm/helloname_invalid_just_1.wasm'
 CONTRACT_2 = 'old_wasm/helloname_invalid_just_2.wasm'
@@ -188,18 +193,7 @@ def test_neglected_invalid_block(three_node_network):
     assert ' for NeglectedInvalidBlock.' not in bootstrap.logs()
     assert ' for NeglectedInvalidBlock.' not in node1.logs()
     assert ' for NeglectedInvalidBlock.' not in node2.logs()
-import threading
-from test.cl_node.client_parser import parse_show_blocks
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.wait import wait_for_block_hashes_propagated_to_all_nodes
-from typing import List
-from functools import reduce
-from operator import add
 
-
-
-
-import pytest
 
 # An explanation given by @Akosh about number of expected blocks.
 # This is why the expected blocks are 4.
