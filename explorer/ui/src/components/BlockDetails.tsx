@@ -127,7 +127,7 @@ const DeploysTable = observer(
       <DataTable
         title={`Deploys in block ${props.blockHashBase16}`}
         headers={[
-          'Deploy hash',
+          'Deploy Hash',
           'Account',
           'Cost',
           'Remaining Balance',
@@ -145,7 +145,9 @@ const DeploysTable = observer(
           );
           return (
             <tr key={i}>
-              <td>{shortHash(id)}</td>
+              <td>
+                <Link to={Pages.deploy(id)}>{shortHash(id)}</Link>
+              </td>
               <td>{shortHash(accountId)}</td>
               <td className="text-right">
                 {deploy.getCost().toLocaleString()}
@@ -232,16 +234,18 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
   ];
 };
 
-const BlockLink = (props: { blockHash: ByteArray }) => {
+export const BlockLink = (props: { blockHash: ByteArray }) => {
   let id = encodeBase16(props.blockHash);
   return <Link to={Pages.block(id)}>{id}</Link>;
 };
 
 // Need to observe the balance to react to when it's available.
-const Balance = observer((props: { balance: ObservableValue<number> }) => {
-  const value = props.balance.value;
-  if (value == null) return null;
-  return <span>{value.toLocaleString()}</span>;
-});
+export const Balance = observer(
+  (props: { balance: ObservableValue<number> }) => {
+    const value = props.balance.value;
+    if (value == null) return null;
+    return <span>{value.toLocaleString()}</span>;
+  }
+);
 
 export default BlockDetails;

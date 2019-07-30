@@ -19,6 +19,8 @@ import ErrorContainer from '../containers/ErrorContainer';
 import DagContainer from '../containers/DagContainer';
 import BlockDetails from './BlockDetails';
 import BlockContainer from '../containers/BlockContainer';
+import DeployDetails from './DeployDetails';
+import DeployContainer from '../containers/DeployContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -46,6 +48,7 @@ export interface AppProps {
   faucet: FaucetContainer;
   dag: DagContainer;
   block: BlockContainer;
+  deploy: DeployContainer;
 }
 
 // The entry point for rendering.
@@ -250,6 +253,10 @@ const Content = (props: AppProps) => (
           <Route path={Pages.Explorer} render={_ => <Explorer {...props} />} />
           <Route path={Pages.Block} render={_ => <BlockDetails {...props} />} />
           <Route path={Pages.Blocks} render={_ => <BlockList {...props} />} />
+          <Route
+            path={Pages.Deploy}
+            render={_ => <DeployDetails {...props} />}
+          />
         </Switch>
       </div>
     </div>
