@@ -7,10 +7,7 @@ def bond_to_the_network(network, contract, bond_amount, is_deploy_info_err=False
     assert len(network.docker_nodes) == 2, "Total number of nodes should be 2."
     node0, node1 = network.docker_nodes
     block_hash = node1.bond(
-        session_contract=contract,
-        payment_contract=contract,
-        amount=bond_amount,
-        is_deploy_info_err=is_deploy_info_err,
+        session_contract=contract, payment_contract=contract, amount=bond_amount
     )
     return block_hash
 
@@ -20,9 +17,7 @@ def test_bonding(one_node_network):
     Feature file: consensus.feature
     Scenario: Bonding a validator node to an existing network.
     """
-    block_hash = bond_to_the_network(
-        one_node_network, BONDING_CONTRACT, bond_amount=1, is_deploy_info_err=False
-    )
+    block_hash = bond_to_the_network(one_node_network, BONDING_CONTRACT, bond_amount=1)
     assert block_hash is not None
     node1 = one_node_network.docker_nodes[1]
     block1 = node1.client.show_block(block_hash)
@@ -44,10 +39,7 @@ def test_invalid_bonding(one_node_network):
     """
     # 190 is current total staked amount.
     block_hash = bond_to_the_network(
-        one_node_network,
-        BONDING_CONTRACT,
-        bond_amount=191 * 1000,
-        is_deploy_info_err=True,
+        one_node_network, BONDING_CONTRACT, bond_amount=(190 * 1000) + 1
     )
     assert block_hash is not None
     node1 = one_node_network.docker_nodes[1]
@@ -56,7 +48,8 @@ def test_invalid_bonding(one_node_network):
     public_key = node1.from_address
     item = list(
         filter(
-            lambda x: x.stake == 1 and x.validator_public_key == public_key,
+            lambda x: x.stake == ((190 * 1000) + 1)
+            and x.validator_public_key == public_key,
             block_ds.summary[0].header[0].state[0].bonds,
         )
     )
@@ -68,7 +61,7 @@ def test_unbonding(one_node_network):
     Feature file: consensus.feature
     Scenario: unbonding a bonded validator node from an existing network.
     """
-    bond_to_the_network(one_node_network, BONDING_CONTRACT, 1, is_deploy_info_err=False)
+    bond_to_the_network(one_node_network, BONDING_CONTRACT, 1)
     node0, node1 = one_node_network.docker_nodes
     public_key = node1.from_address
     block_hash2 = node1.unbond(
@@ -94,9 +87,8 @@ def test_invalid_unbonding(one_node_network):
     Feature file: consensus.feature
     Scenario: unbonding a bonded validator node from an existing network.
     """
-    bond_to_the_network(one_node_network, BONDING_CONTRACT, 1, is_deploy_info_err=False)
+    bond_to_the_network(one_node_network, BONDING_CONTRACT, bond_amount=3000)
     node0, node1 = one_node_network.docker_nodes
-    public_key = node1.from_address
     block_hash2 = node1.unbond(
         session_contract=UNBONDING_CONTRACT,
         payment_contract=UNBONDING_CONTRACT,
@@ -108,7 +100,7 @@ def test_invalid_unbonding(one_node_network):
     block_ds = parse_show_block(block2)
     item = list(
         filter(
-            lambda x: x.stake == 1 and x.validator_public_key == public_key,
+            lambda x: x.stake == 3000 and x.validator_public_key == node1.from_address,
             block_ds.summary[0].header[0].state[0].bonds,
         )
     )

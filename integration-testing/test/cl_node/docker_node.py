@@ -319,7 +319,6 @@ class DockerNode(LoggingDockerBase):
         payment_contract: str,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
-        is_deploy_info_err: bool = False,
     ) -> str:
         previous_client_type = self._client
         self.use_python_client()
@@ -343,9 +342,6 @@ class DockerNode(LoggingDockerBase):
         block_hash = response.block_hash.hex()
         assert len(deploy_hash_hex) == 64
 
-        for deploy_info in self.client.show_deploys(block_hash):
-            assert deploy_info.is_error is is_deploy_info_err
-
         # restore to previous client operation
         self._client = previous_client_type
 
@@ -357,7 +353,6 @@ class DockerNode(LoggingDockerBase):
         payment_contract: str,
         amount: Optional[int] = None,
         from_account_id: Union[str, int] = "genesis",
-        is_deploy_info_err: bool = False,
     ) -> str:
         previous_client_type = self._client
         self.use_python_client()
@@ -389,9 +384,6 @@ class DockerNode(LoggingDockerBase):
         block_hash = response.block_hash.hex()
         assert len(deploy_hash_hex) == 64
 
-        for deploy_info in self.client.show_deploys(block_hash):
-            # assert deploy_info.is_error is is_deploy_info_err
-            pass
         # restore to previous client operation
         self._client = previous_client_type
 
