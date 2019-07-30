@@ -68,7 +68,7 @@ pipeline:
     environment:
       - "CARGO_FLAGS=--locked"
     commands:
-      - "cd execution-engine/"
+      - "cd execution-engine"
       - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
       - "make test test-contracts"
       - "cd ../long-running-tests"
@@ -129,7 +129,7 @@ pipeline:
     environment:
       - "CARGO_FLAGS=--locked"
     commands:
-      - "cd execution-engine/"
+      - "cd execution-engine"
       - "make test"
     image: "casperlabs/buildenv:latest"
     when:
@@ -163,7 +163,7 @@ pipeline:
 
   try-cargo-publish-bors:
     commands:
-      - "cd execution-engine/common"
+      - "cd execution-engine"
       - "make check-publish"
     image: "casperlabs/buildenv:latest"
     when:
@@ -173,7 +173,7 @@ pipeline:
 
   run-rust-benchmarks-bors:
     commands:
-      - "cd execution-engine/"
+      - "cd execution-engine"
       - "make bench"
     image: "casperlabs/buildenv:latest"
     when:
@@ -235,7 +235,7 @@ pipeline:
     environment:
       - "CARGO_FLAGS=--locked"
     commands:
-      - "cd execution-engine/"
+      - "cd execution-engine"
       - "make build"
     image: "casperlabs/buildenv:latest"
     when:
