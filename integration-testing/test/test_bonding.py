@@ -67,7 +67,7 @@ def test_unbonding(one_node_network):
     block_hash2 = node1.unbond(
         session_contract=UNBONDING_CONTRACT,
         payment_contract=UNBONDING_CONTRACT,
-        amount=0,  # This is a hack to pass no args to EE. Please see contract/unbonding/call/src/lib.rs file.
+        maybe_amount=None,
     )
 
     assert block_hash2 is not None

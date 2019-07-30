@@ -351,30 +351,22 @@ class DockerNode(LoggingDockerBase):
         self,
         session_contract: str,
         payment_contract: str,
-        amount: Optional[int] = None,
+        maybe_amount: Optional[int] = None,
         from_account_id: Union[str, int] = "genesis",
     ) -> str:
         previous_client_type = self._client
         self.use_python_client()
         from_account = Account(from_account_id)
         with from_account.public_key_path as public_key_path, from_account.private_key_path as private_key_path:
-            if amount is None:
-                response, deploy_hash_bytes = self.client.deploy(
-                    from_address=from_account.public_key_hex,
-                    session_contract=session_contract,
-                    payment_contract=payment_contract,
-                    public_key=public_key_path,
-                    private_key=private_key_path,
-                )
-            else:
-                response, deploy_hash_bytes = self.client.deploy(
-                    from_address=from_account.public_key_hex,
-                    session_contract=session_contract,
-                    payment_contract=payment_contract,
-                    public_key=public_key_path,
-                    private_key=private_key_path,
-                    args=self.client.abi.args_from_json(json.dumps([{"u32": amount}])),
-                )
+            amount = 0 if maybe_amount is None else maybe_amount
+            response, deploy_hash_bytes = self.client.deploy(
+                from_address=from_account.public_key_hex,
+                session_contract=session_contract,
+                payment_contract=payment_contract,
+                public_key=public_key_path,
+                private_key=private_key_path,
+                args=self.client.abi.args_from_json(json.dumps([{"u32": amount}])),
+            )
 
         deploy_hash_hex = deploy_hash_bytes.hex()
         assert len(deploy_hash_hex) == 64
