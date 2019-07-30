@@ -230,12 +230,9 @@ object DeployRuntime {
   def transfer[F[_]: Sync: DeployService: FilesAPI](
       nonce: Long,
       sessionCode: Option[File],
-      senderPublicKey: PublicKey,
-      senderPrivateKey: PrivateKey,
+      privateKeyFile: File,
       recipientPublicKeyBase64: String,
-      amount: Int,
-      exit: Boolean = true,
-      ignoreOutput: Boolean = false
+      amount: Long
   ): F[Unit] =
     for {
       account <- MonadThrowable[F].fromOption(
@@ -246,19 +243,18 @@ object DeployRuntime {
                 )
       sessionCode <- readFileOrDefault[F](sessionCode, TRANSFER_WASM_FILE)
       // currently, sessionCode == paymentCode in order to get some gas limit for the execution
-      paymentCode = sessionCode.toList.toArray
-      args        = serializeArgs(Array(serializeArray(account), serializeInt(amount)))
+      paymentCode   = sessionCode.toList.toArray
+      args          = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
+      rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
             sessionCode = sessionCode,
             paymentCode = paymentCode,
-            maybeEitherPublicKey = senderPublicKey.asRight[String].some,
-            maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
+            maybeEitherPublicKey = None,
+            maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L,
-            ByteString.copyFrom(args),
-            exit,
-            ignoreOutput
+            ByteString.copyFrom(args)
           )
     } yield ()
 
