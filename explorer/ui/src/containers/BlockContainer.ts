@@ -14,13 +14,13 @@ export class BlockContainer {
   @observable blockHash: ByteArray | null = null;
   @observable block: BlockInfo | null = null;
   @observable neighborhood: BlockInfo[] | null = null;
+  // How much of the DAG to load around the block.
+  @observable depth = 10;
   @observable deploys: Block.ProcessedDeploy[] | null = null;
   @observable balances: ObservableValueMap<
     AccountB16,
     number
   > = new ObservableValueMap();
-  // How much of the DAG to load around the block.
-  depth = 10;
 
   // We can cache the balance URef so 2nd time the balances only need 1 query, not 4.
   private balanceUrefs = new Map<AccountB16, Key.URef>();
@@ -58,11 +58,14 @@ export class BlockContainer {
       this.neighborhood = null;
       return;
     }
+
     const maxRank =
       this.block
         .getSummary()!
         .getHeader()!
-        .getRank() + 5;
+        .getRank() +
+      this.depth / 2;
+
     return this.errors.capture(
       this.casperService.getBlockInfos(this.depth, maxRank).then(blocks => {
         this.neighborhood = blocks;

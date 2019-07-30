@@ -80,6 +80,10 @@ class _BlockDetails extends RefreshableComponent<Props, {}> {
               this.props.history.push(Pages.block(target));
             }
           }}
+          onDepthChange={depth => {
+            this.container.depth = depth;
+            this.container.loadNeighborhood();
+          }}
         />
       </div>
     );
