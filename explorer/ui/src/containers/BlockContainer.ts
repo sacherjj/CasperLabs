@@ -66,8 +66,11 @@ export class BlockContainer {
         .getRank() +
       this.depth / 2;
 
+    // Adjust the depth so it doesn't result in a negative start value.
+    let depth = Math.min(maxRank + 1, this.depth);
+
     return this.errors.capture(
-      this.casperService.getBlockInfos(this.depth, maxRank).then(blocks => {
+      this.casperService.getBlockInfos(depth, maxRank).then(blocks => {
         this.neighborhood = blocks;
       })
     );
