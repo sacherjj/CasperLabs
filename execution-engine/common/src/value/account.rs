@@ -382,6 +382,40 @@ impl From<i32> for RemoveKeyFailure {
     }
 }
 
+/// Represents an error that happens when trying to update the value under a public key
+/// associated with an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in and out
+/// through FFI boundaries as a number.
+///
+/// For backwards compatibility, the variants are explicitly ordered and will not be reordered;
+/// variants added in future versions will be appended to extend the enum
+/// and in the event that a variant is removed its ordinal will not be reused.
+#[derive(PartialEq, Eq, Fail, Debug)]
+#[repr(i32)]
+pub enum UpdateKeyFailure {
+    /// Key does not exist in the list of associated keys.
+    #[fail(display = "Unable to update the value under an associated key that does not exist")]
+    MissingKey = 1,
+    #[fail(display = "Unable to add new associated key due to insufficient permissions")]
+    PermissionDenied = 2,
+}
+
+impl From<i32> for UpdateKeyFailure {
+    fn from(value: i32) -> UpdateKeyFailure {
+        // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
+        // that helps to automatically create `from_i32` and `to_i32`. This approach
+        // gives better control over generated code.
+        match value {
+            d if d == UpdateKeyFailure::MissingKey as i32 => UpdateKeyFailure::MissingKey,
+            d if d == UpdateKeyFailure::PermissionDenied as i32 => {
+                UpdateKeyFailure::PermissionDenied
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
 pub struct AssociatedKeys(BTreeMap<PublicKey, Weight>);
 
@@ -417,6 +451,18 @@ impl AssociatedKeys {
             .remove(key)
             .map(|_| ())
             .ok_or(RemoveKeyFailure::MissingKey)
+    }
+
+    /// Adds new AssociatedKey to the set.
+    /// Returns true if added successfully, false otherwise.
+    #[allow(clippy::map_entry)]
+    pub fn update_key(&mut self, key: PublicKey, weight: Weight) -> Result<(), UpdateKeyFailure> {
+        if !self.0.contains_key(&key) {
+            return Err(UpdateKeyFailure::MissingKey);
+        }
+
+        self.0.insert(key, weight);
+        Ok(())
     }
 
     pub fn get(&self, key: &PublicKey) -> Option<&Weight> {
@@ -546,6 +592,15 @@ impl Account {
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
         // TODO(mpapierski): Authorized keys check EE-377
         self.associated_keys.remove_key(&public_key)
+    }
+
+    pub fn update_associated_key(
+        &mut self,
+        public_key: PublicKey,
+        weight: Weight,
+    ) -> Result<(), UpdateKeyFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.associated_keys.update_key(public_key, weight)
     }
 
     pub fn set_action_threshold(
