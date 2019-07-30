@@ -20,7 +20,7 @@ use std::iter::Iterator;
 use std::str;
 
 use common::key::Key;
-use common::value::account::BlockTime;
+use common::value::account::{BlockTime, PublicKey};
 use execution_engine::engine_state::error::RootNotFound;
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -175,7 +175,7 @@ fn main() {
         logging::log_info(SERVER_NO_WASM_MESSAGE);
     }
 
-    let account_addr = {
+    let account_addr_bytes = {
         let address_hex = matches.value_of("address").expect("Unable to get address");
         if address_hex.len() != 64 {
             panic!("Provided address should be exactly 64 bytes long");
@@ -185,8 +185,11 @@ fn main() {
         binascii::hex2bin(address_hex.as_bytes(), &mut dest)
             .ok()
             .expect("Unable to parse address");
-        Key::Account(dest)
+        dest
     };
+
+    let account_addr = Key::Account(account_addr_bytes);
+    let public_key = PublicKey::new(account_addr_bytes);
 
     let gas_limit: u64 = matches
         .value_of("gas-limit")
@@ -223,6 +226,7 @@ fn main() {
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
             account_addr,
+            &[public_key],
             BlockTime(timestamp),
             nonce,
             state_hash,
