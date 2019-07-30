@@ -15,7 +15,6 @@ from .cl_node.wait import (wait_for_genesis_block,
                            wait_for_block_hash_propagated_to_all_nodes,
                            wait_for_block_hashes_propagated_to_all_nodes,
                            wait_for_peers_count_at_least, wait_for_peers_count_exactly)
-from test.cl_node.docker_node import docker_path
 
 
 class DeployThread(threading.Thread):
@@ -37,8 +36,8 @@ class DeployThread(threading.Thread):
                 assert 'Success' in self.node.client.deploy(session_contract=contract,
                                                             payment_contract=contract,
                                                             from_address=self.node.genesis_account.public_key_hex,
-                                                            public_key=docker_path(self.node.genesis_account.public_key_path),
-                                                            private_key=docker_path(self.node.genesis_account.private_key_path))
+                                                            public_key=self.node.genesis_account.public_key_path,
+                                                            private_key=self.node.genesis_account.private_key_path)
 
             block_hash = self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
             self.deployed_block_hashes.add(block_hash)

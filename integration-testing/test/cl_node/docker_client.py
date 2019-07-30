@@ -124,8 +124,8 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         def docker_path(p):
             return Path(*(['/data'] + str(p).split('/')[-2:]))
 
-        public_key = public_key or docker_path(self.node.test_account.public_key_path)
-        private_key = private_key or docker_path(self.node.test_account.private_key_path)
+        public_key = docker_path(public_key or self.node.test_account.public_key_path)
+        private_key = docker_path(private_key or self.node.test_account.private_key_path)
 
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
         payment_contract = payment_contract or session_contract

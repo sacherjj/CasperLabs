@@ -5,12 +5,6 @@ from test.cl_node.wait import (
     wait_for_gossip_metrics_and_assert_blocks_gossiped,
 )
 
-# TODO:  move all docker_path to test/__init__.py
-from pathlib import Path
-
-def docker_path(p):
-    return Path(*(['/data'] + str(p).split('/')[-2:]))
-
 
 def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
     """
@@ -23,8 +17,8 @@ def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
         block_hash = node.deploy_and_propose(session_contract=HELLO_NAME,
                                              payment_contract=HELLO_NAME,
                                              from_address=node.genesis_account.public_key_hex,
-                                             public_key=docker_path(node.genesis_account.public_key_path),
-                                             private_key=docker_path(node.genesis_account.private_key_path))
+                                             public_key=node.genesis_account.public_key_path,
+                                             private_key=node.genesis_account.private_key_path)
 
         return block_hash
 

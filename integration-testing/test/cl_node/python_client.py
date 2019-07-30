@@ -5,6 +5,7 @@ import logging
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.nonce_registry import NonceRegistry
 from casper_client import CasperClient, ABI
+from pathlib import Path
 
 
 class PythonClient(CasperLabsClient):
@@ -40,6 +41,9 @@ class PythonClient(CasperLabsClient):
         assert session_contract is not None
         assert payment_contract is not None
 
+        public_key = public_key or self.node.test_account.public_key_path
+        private_key = private_key or self.node.test_account.private_key_path
+
         address = from_address or self.node.from_address
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
 
@@ -49,6 +53,8 @@ class PythonClient(CasperLabsClient):
 
         logging.info(f'PY_CLIENT.deploy(from_address={address}, gas_limit={gas_limit}, gas_price={gas_price}, '
                      f'payment_contract={payment_contract_path}, session_contract={session_contract_path}, '
+                     f'private_key={private_key}, '
+                     f'public_key={public_key}, '
                      f'nonce={deploy_nonce})')
 
         try:

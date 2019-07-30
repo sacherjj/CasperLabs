@@ -9,7 +9,6 @@ from operator import add
 from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
-from test.cl_node.docker_node import docker_path
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.casperlabsnode import ( COMBINED_CONTRACT, COUNTER_CALL, HELLO_WORLD, MAILING_LIST_CALL)
 from test.cl_node.wait import (wait_for_block_hash_propagated_to_all_nodes, wait_for_block_hashes_propagated_to_all_nodes)
@@ -31,8 +30,8 @@ def three_node_network_with_combined_contract(three_node_network):
     block_hash = bootstrap.deploy_and_propose(session_contract=COMBINED_CONTRACT, 
                                               payment_contract=COMBINED_CONTRACT,
                                               from_address=node.genesis_account.public_key_hex,
-                                              public_key=docker_path(node.genesis_account.public_key_path),
-                                              private_key=docker_path(node.genesis_account.private_key_path))
+                                              public_key=node.genesis_account.public_key_path,
+                                              private_key=node.genesis_account.private_key_path)
     wait_for_block_hash_propagated_to_all_nodes(tnn.docker_nodes, block_hash)
     return tnn
 
@@ -41,8 +40,8 @@ def deploy_and_propose(node, contract):
     block_hash = node.deploy_and_propose(session_contract=contract,
                                          payment_contract=contract,
                                          from_address=node.genesis_account.public_key_hex,
-                                         public_key=docker_path(node.genesis_account.public_key_path),
-                                         private_key=docker_path(node.genesis_account.private_key_path))
+                                         public_key=node.genesis_account.public_key_path,
+                                         private_key=node.genesis_account.private_key_path)
     deploys = node.client.show_deploys(block_hash)
     for deploy in deploys:
         assert deploy.is_error is False
@@ -122,8 +121,8 @@ class DeployTimedTread(TimedThread):
 
     def my_call(self, kwargs):
         kwargs['from_address'] = self.node.test_account.public_key_hex
-        kwargs['public_key'] = docker_path(self.node.test_account.public_key_path)
-        kwargs['private_key'] = docker_path(self.node.test_account.private_key_path)
+        kwargs['public_key'] = self.node.test_account.public_key_path
+        kwargs['private_key'] = self.node.test_account.private_key_path
         self.node.client.deploy(**kwargs)
 
 
@@ -237,8 +236,8 @@ class DeployThread(threading.Thread):
                 assert 'Success' in self.node.client.deploy(session_contract=contract,
                                                             payment_contract=contract,
                                                             from_address=self.node.genesis_account.public_key_hex,
-                                                            public_key=docker_path(self.node.genesis_account.public_key_path),
-                                                            private_key=docker_path(self.node.genesis_account.private_key_path))
+                                                            public_key=self.node.genesis_account.public_key_path,
+                                                            private_key=self.node.genesis_account.private_key_path)
 
             block_hash = self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
             self.block_hashes.append(block_hash)
