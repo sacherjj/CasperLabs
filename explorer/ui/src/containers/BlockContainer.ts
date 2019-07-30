@@ -5,8 +5,8 @@ import CasperService from '../services/CasperService';
 import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import { encodeBase16 } from '../lib/Conversions';
 import { Block } from '../grpc/io/casperlabs/casper/consensus/consensus_pb';
-import { Key } from '../grpc/io/casperlabs/casper/consensus/state_pb';
 import ObservableValueMap from '../lib/ObservableValueMap';
+import BalanceService from '../services/BalanceService';
 
 type AccountB16 = string;
 
@@ -22,12 +22,10 @@ export class BlockContainer {
     number
   > = new ObservableValueMap();
 
-  // We can cache the balance URef so 2nd time the balances only need 1 query, not 4.
-  private balanceUrefs = new Map<AccountB16, Key.URef>();
-
   constructor(
     private errors: ErrorContainer,
-    private casperService: CasperService
+    private casperService: CasperService,
+    private balanceService: BalanceService
   ) {}
 
   /** Call whenever the page switches to a new block. */
@@ -94,29 +92,16 @@ export class BlockContainer {
       return;
     }
     for (let deploy of this.deploys) {
-      let accountKey = deploy
+      const accountKey = deploy
         .getDeploy()!
         .getHeader()!
         .getAccountPublicKey_asU8();
-      let accountB16 = encodeBase16(accountKey);
-      let balanceUref = this.balanceUrefs.get(accountB16);
-      if (!balanceUref) {
-        balanceUref = await this.casperService.getAccountBalanceUref(
-          this.blockHash,
-          deploy
-            .getDeploy()!
-            .getHeader()!
-            .getAccountPublicKey_asU8()
-        );
-        if (balanceUref) {
-          this.balanceUrefs.set(accountB16, balanceUref);
-        }
-      }
-      if (balanceUref) {
-        let balance = await this.casperService.getAccountBalance(
-          this.blockHash,
-          balanceUref
-        );
+      const accountB16 = encodeBase16(accountKey);
+      const balance = await this.balanceService.getAccountBalance(
+        this.blockHash,
+        accountKey
+      );
+      if (balance !== undefined) {
         this.balances.set(accountB16, balance);
       }
     }

@@ -165,7 +165,7 @@ export default class CasperService {
   }
 
   /** Get the reference to the balance so we can cache it.
-   *  Returns `null` if the account doesn't exist yet.
+   *  Returns `undefined` if the account doesn't exist yet.
    */
   async getAccountBalanceUref(
     blockHash: BlockHash,

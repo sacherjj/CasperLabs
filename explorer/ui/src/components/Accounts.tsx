@@ -134,7 +134,7 @@ const Balance = observer(
 
     const hash = encodeBase16(value.blockHash);
     const balance =
-      value.balance == null ? 'n/a' : value.balance.toLocaleString();
+      value.balance === undefined ? 'n/a' : value.balance.toLocaleString();
     return (
       <div className="text-right" title={`As of block ${hash}`}>
         {balance}

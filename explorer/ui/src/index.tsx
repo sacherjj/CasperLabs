@@ -22,6 +22,7 @@ import CasperService from './services/CasperService';
 import { Auth0Service, MockAuthService } from './services/AuthService';
 import DagContainer from './containers/DagContainer';
 import BlockContainer from './containers/BlockContainer';
+import BalanceService from './services/BalanceService';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
@@ -34,10 +35,16 @@ const faucetService = new FaucetService(authService);
 const casperService = new CasperService(
   window.config.grpc.url || window.origin
 );
+const balanceService = new BalanceService(casperService);
 
 // State containers.
 const errors = new ErrorContainer();
-const auth = new AuthContainer(errors, authService, casperService);
+const auth = new AuthContainer(
+  errors,
+  authService,
+  casperService,
+  balanceService
+);
 const faucet = new FaucetContainer(
   errors,
   faucetService,
@@ -46,7 +53,7 @@ const faucet = new FaucetContainer(
   () => auth.refreshBalances(true)
 );
 const dag = new DagContainer(errors, casperService);
-const block = new BlockContainer(errors, casperService);
+const block = new BlockContainer(errors, casperService, balanceService);
 
 ReactDOM.render(
   <HashRouter>

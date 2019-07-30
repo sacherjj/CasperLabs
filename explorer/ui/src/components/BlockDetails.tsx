@@ -90,6 +90,7 @@ class _BlockDetails extends RefreshableComponent<Props, {}> {
   }
 }
 
+// Inject the router parameters so we can extract the ID from the URL.
 export const BlockDetails = withRouter(_BlockDetails);
 
 const BlockTable = observer(

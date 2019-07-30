@@ -104,7 +104,7 @@ const Card = (props: CardProps) => {
         </div>
         {props.to ? (
           props.to.startsWith('http') ? (
-            <a href={props.to} target="_blank" className={linkClass}>
+            <a href={props.to} className={linkClass}>
               {view}
             </a>
           ) : (
