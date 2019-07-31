@@ -320,31 +320,10 @@ class DockerNode(LoggingDockerBase):
         amount: int,
         from_account_id: Union[str, int] = "genesis",
     ) -> str:
-        previous_client_type = self._client
-        self.use_python_client()
-        from_account = Account(from_account_id)
-        args_json = json.dumps([{"u32": amount}])
-        response, deploy_hash_bytes = self.client.deploy(
-            from_address=from_account.public_key_hex,
-            session_contract=session_contract,
-            payment_contract=payment_contract,
-            public_key=from_account.public_key_path,
-            private_key=from_account.private_key_path,
-            args=self.client.abi.args_from_json(args_json),
+        json_args = json.dumps([{"u32": amount}])
+        return self._deploy_and_propose_with_abi_args(
+            session_contract, payment_contract, Account(from_account_id), json_args
         )
-
-        deploy_hash_hex = deploy_hash_bytes.hex()
-        assert len(deploy_hash_hex) == 64
-
-        response = self.client.propose()
-
-        block_hash = response.block_hash.hex()
-        assert len(deploy_hash_hex) == 64
-
-        # restore to previous client operation
-        self._client = previous_client_type
-
-        return block_hash
 
     def unbond(
         self,
@@ -353,17 +332,29 @@ class DockerNode(LoggingDockerBase):
         maybe_amount: Optional[int] = None,
         from_account_id: Union[str, int] = "genesis",
     ) -> str:
+        amount = 0 if maybe_amount is None else maybe_amount
+        json_args = json.dumps([{"u32": amount}])
+        return self._deploy_and_propose_with_abi_args(
+            session_contract, payment_contract, Account(from_account_id), json_args
+        )
+
+    def _deploy_and_propose_with_abi_args(
+        self,
+        session_contract: str,
+        payment_contract: str,
+        from_account: Account,
+        json_args: str,
+    ) -> str:
         previous_client_type = self._client
         self.use_python_client()
-        from_account = Account(from_account_id)
-        amount = 0 if maybe_amount is None else maybe_amount
+
         response, deploy_hash_bytes = self.client.deploy(
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
             payment_contract=payment_contract,
             public_key=from_account.public_key_path,
             private_key=from_account.private_key_path,
-            args=self.client.abi.args_from_json(json.dumps([{"u32": amount}])),
+            args=self.client.abi.args_from_json(json_args),
         )
 
         deploy_hash_hex = deploy_hash_bytes.hex()
