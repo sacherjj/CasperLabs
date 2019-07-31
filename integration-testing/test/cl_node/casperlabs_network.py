@@ -8,8 +8,10 @@ from test.cl_node.docker_execution_engine import DockerExecutionEngine
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
 from test.cl_node.nonce_registry import NonceRegistry
-from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS  # TODO: remove
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, is_valid_account, Account
 from test.cl_node.wait import (
+    wait_for_block_hash_propagated_to_all_nodes,
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
     wait_for_peers_count_at_least,
@@ -18,6 +20,14 @@ from typing import Callable, Dict, List
 
 import docker
 import docker.errors
+import inspect
+
+
+def test_name():
+    for f in inspect.stack():
+        if (f.function not in ('test_name', 'test_account')
+            and ('_test_' in f.function or f.function.startswith('test_'))):
+            return f.function
 
 
 class CasperLabsNetwork:
@@ -37,6 +47,9 @@ class CasperLabsNetwork:
         self._created_networks: List[str] = []
         NonceRegistry.reset()
         self._lock = threading.RLock()  # protect self.cl_nodes and self._created_networks
+        self._accounts_lock = threading.Lock()
+        self.test_accounts = {}
+        self.next_key = 1
 
     @property
     def node_count(self) -> int:
@@ -51,6 +64,37 @@ class CasperLabsNetwork:
     def execution_engines(self) -> List[DockerExecutionEngine]:
         with self._lock:
             return [cl_node.execution_engine for cl_node in self.cl_nodes]
+
+    @property
+    def genesis_account(self):
+        """ Genesis Account Address """
+        return GENESIS_ACCOUNT
+
+
+    def test_account(self, node) -> str:
+        name = test_name()
+        if not name:
+            # This happens when a thread tries to deploy.
+            # Name of the test that spawned the thread does not appear on the inspect.stack.
+            # Threads that don't want to use genesis account
+            # should pass from_address, public_key and private_key to deploy explicitly.
+            return self.genesis_account
+        elif name not in self.test_accounts:
+            with self._accounts_lock:
+                self.test_accounts[name] = Account(self.next_key)
+                logging.info(f"=== Creating test account #{self.next_key} {self.test_accounts[name].public_key_hex} for {name} ")
+                block_hash = node.transfer_to_account(self.next_key, 1000000)
+                # Waiting for the block with transaction that created new account to propagate to all nodes.
+                # Expensive, but some tests may rely on it.
+                wait_for_block_hash_propagated_to_all_nodes(node.cl_network.docker_nodes, block_hash)
+                for deploy in node.client.show_deploys(block_hash):
+                    assert deploy.is_error is False, f"Account creation failed: {deploy}"
+                self.next_key += 1
+        return self.test_accounts[name]
+        
+    def from_address(self, node) -> str:
+        return self.test_account(node).public_key_hex
+
 
     def get_key(self):
         key_pair = PREGENERATED_KEYPAIRS[self._next_key_number]
@@ -75,7 +119,7 @@ class CasperLabsNetwork:
     def _add_cl_node(self, config: DockerConfig) -> None:
         with self._lock:
             config.number = self.node_count
-            cl_node = CasperLabsNode(config)
+            cl_node = CasperLabsNode(self, config)
             self.cl_nodes.append(cl_node)
 
     def add_new_node_to_network(self) -> None:
