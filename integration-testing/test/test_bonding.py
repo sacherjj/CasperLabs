@@ -155,8 +155,7 @@ def test_unbonding_without_bonding(one_node_network):
     block_ds = parse_show_block(block2)
     item = list(
         filter(
-            lambda x: x.stake == bonding_amount
-            and x.validator_public_key == public_key,
+            lambda x: x.validator_public_key == public_key,
             block_ds.summary[0].header[0].state[0].bonds,
         )
     )
