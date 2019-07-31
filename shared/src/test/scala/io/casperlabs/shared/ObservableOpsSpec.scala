@@ -36,10 +36,10 @@ class ObservableOpsSpec extends WordSpec with Matchers {
       "not cancel the stream" in {
         val list = Observable
           .range(0, 100, 1)
-          .withConsumerTimeout(100.millis)
+          .withConsumerTimeout(1.second)
           .toListL
 
-        val res = list.runSyncUnsafe(2.seconds)
+        val res = list.runSyncUnsafe(5.seconds)
         res should have size 100
       }
     }

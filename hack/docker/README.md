@@ -10,7 +10,7 @@ Run `make docker-build-all` in the main project directory to prepare the images.
 
 ## Build contract-examples
 
-Contract examples exist in another repo.  Clone https://github.com/CasperLabs/contract-examples and follow the root [README.md](https://github.com/CasperLabs/contract-examples/blob/master/README.md) for build instructions.  You will need to have performed the Rust developer environment setup section in [DEVELOPER.md](https://github.com/CasperLabs/CasperLabs/blob/dev/DEVELOPER.md) in the root of this repo.
+See instructions [here](https://github.com/CasperLabs/contract-examples/blob/master/README.md).
 
 ## Required: docker-compose
 
@@ -18,7 +18,7 @@ Contract examples exist in another repo.  Clone https://github.com/CasperLabs/co
 
 ## Required: OpenSSL 1.1
 
-`openssl` is used to generate keys and certificates. Please verify that [the latest OpenSSL 1.1 version is installed](https://github.com/openssl/openssl). You can also [follow these steps](https://github.com/CasperLabs/CasperLabs/blob/dev/VALIDATOR.md#setting-up-keys)
+`openssl` is used to generate keys and certificates. Please verify that [the latest OpenSSL 1.1 version is installed](https://github.com/openssl/openssl). You can also [follow these steps](https://github.com/CasperLabs/CasperLabs/blob/dev/docs/KEYS.md)
 
 ## Required: SHA3SUM
 
@@ -29,7 +29,7 @@ Contract examples exist in another repo.  Clone https://github.com/CasperLabs/co
 
 We will create multiple nodes in docker with names such as `node-0`, `node-1` etc. Each will have a corresponding container running the Execution Engine.
 
-The setup process will establish validator keys in `.casperlabs/node-*` and bonds in `.casperlabs/genesis` by executing [docker-gen-keys.sh](/hack/key-management/docker-gen-keys.sh). By default 10 nodes' keys are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
+The setup process will establish validator keys in `.casperlabs/node-*` and bonds in `.casperlabs/genesis` by executing [docker-gen-keys.sh](/hack/key-management/docker-gen-keys.sh). By default 3 nodes' keys are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
 
 `node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first.
 
@@ -65,18 +65,24 @@ make node-1/up node-2/up
 
 After connection is complete, all node logs will show `Peers: 2`.
 
+## Cleanup
+To cleanup the network stopping and removing all containers run the command `make clean`.
+
 ## Deploy some WASM code
 
 Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
 
 ```console
+ACCOUNT_ID="$(cat .casperlabs/genesis/system-account/account-id-hex)"
 ./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
-     --from 3030303030303030303030303030303030303030303030303030303030303030 \
+     --from "$ACCOUNT_ID" \
      --gas-price 1 \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
      --nonce 1
 ```
+
+As you may notice we make use of the `system-account` for deploys signing. This is temporal until we the add ability to create new custom accounts.
 
 After a successful deploy, you should see the following response:
 
@@ -100,18 +106,24 @@ If you check the log output, each node should get the block and provide some fee
 
 ### Signing Deploys
 
-To sign deploy you'll need to [generate and ed25519 keypair](/VALIDATOR.md#setting-up-keys) and save them into `docker/keys`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments, for example:
+To sign deploy you'll need to [generate and ed25519 keypair](/hack/VALIDATOR.md#setting-up-keys) and save them into `docker/keys`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments, for example:
 
 ```console
+ACCOUNT_ID="$(cat .casperlabs/genesis/system-account/account-id-hex)"
+mkdir keys/system-account
+cp .casperlabs/genesis/system-account/account-private.pem keys/system-account/
+cp .casperlabs/genesis/system-account/account-public.pem keys/system-account/
 ./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --gas-price 1 \
-     --from 3030303030303030303030303030303030303030303030303030303030303030 \
+     --from "$ACCOUNT_ID" \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
      --nonce 1 \
-     --public-key /keys/account-0/account-public.pem \
-     --private-key /keys/account-0/account-private.pem
+     --public-key /keys/system-account/account-public.pem \
+     --private-key /keys/system-account/account-private.pem
 ```
+
+As you may notice we make use of the `system-account` for deploys signing. This is temporal until we the add ability to create new custom accounts.
 
 ## Monitoring
 

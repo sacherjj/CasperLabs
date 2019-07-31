@@ -1,10 +1,18 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
-use crate::key::{Key, UREF_SIZE};
-use crate::uref::URef;
+use crate::key::{addr_to_hex, Key, UREF_SIZE};
+use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::convert::TryFrom;
+use core::fmt::{Debug, Display, Formatter};
 use failure::Fail;
+
+const DEFAULT_NONCE: u64 = 0;
+const DEFAULT_CURRENT_BLOCK_TIME: BlockTime = BlockTime(0);
+const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
+
+pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PurseId(URef);
@@ -16,6 +24,18 @@ impl PurseId {
 
     pub fn value(&self) -> URef {
         self.0
+    }
+}
+
+impl ToBytes for PurseId {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        ToBytes::to_bytes(&self.0)
+    }
+}
+
+impl FromBytes for PurseId {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        <URef>::from_bytes(bytes).map(|(uref, rem)| (PurseId::new(uref), rem))
     }
 }
 
@@ -148,7 +168,7 @@ impl Default for ActionThresholds {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub struct BlockTime(pub u64);
 
 /// Holds information about last usage time of specific action.
@@ -223,9 +243,26 @@ impl Weight {
 
 pub const WEIGHT_SIZE: usize = U8_SIZE;
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct PublicKey([u8; KEY_SIZE]);
 
+impl Display for PublicKey {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "PublicKey({})", addr_to_hex(&self.0))
+    }
+}
+
+impl Debug for PublicKey {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+// TODO: This needs to be updated, `PUBLIC_KEY_SIZE` is not 32 bytes as KEY_SIZE * U8_SIZE.
+// I am not changing that as I don't want to deal with ripple effect.
+
+// Public key is encoded as its underlying [u8; 32] array, which in turn
+// is serialized as u8 + [u8; 32], u8 represents the length and then 32 element array.
 pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
 
 impl PublicKey {
@@ -241,6 +278,34 @@ impl PublicKey {
 impl From<[u8; KEY_SIZE]> for PublicKey {
     fn from(key: [u8; KEY_SIZE]) -> Self {
         PublicKey(key)
+    }
+}
+
+#[derive(Debug)]
+pub struct TryFromSliceForPublicKeyError(());
+
+impl TryFrom<&[u8]> for PublicKey {
+    type Error = TryFromSliceForPublicKeyError;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        if bytes.len() != KEY_SIZE {
+            return Err(TryFromSliceForPublicKeyError(()));
+        }
+        let mut public_key = [0u8; 32];
+        public_key.copy_from_slice(bytes);
+        Ok(PublicKey::new(public_key))
+    }
+}
+
+impl ToBytes for PublicKey {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        ToBytes::to_bytes(&self.0)
+    }
+}
+
+impl FromBytes for PublicKey {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (key_bytes, rem): ([u8; KEY_SIZE], &[u8]) = FromBytes::from_bytes(bytes)?;
+        Ok((PublicKey::new(key_bytes), rem))
     }
 }
 
@@ -395,6 +460,27 @@ impl Account {
         }
     }
 
+    pub fn create(
+        account_addr: [u8; 32],
+        known_urefs: BTreeMap<String, Key>,
+        purse_id: PurseId,
+    ) -> Self {
+        let nonce = DEFAULT_NONCE;
+        let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
+        let action_thresholds: ActionThresholds = Default::default();
+        let account_activity =
+            AccountActivity::new(DEFAULT_CURRENT_BLOCK_TIME, DEFAULT_INACTIVITY_PERIOD_TIME);
+        Account::new(
+            account_addr,
+            nonce,
+            known_urefs,
+            purse_id,
+            associated_keys,
+            action_thresholds,
+            account_activity,
+        )
+    }
+
     pub fn insert_urefs(&mut self, keys: &mut BTreeMap<String, Key>) {
         self.known_urefs.append(keys);
     }
@@ -407,12 +493,19 @@ impl Account {
         &mut self.known_urefs
     }
 
-    pub fn pub_key(&self) -> &[u8; 32] {
-        &self.public_key
+    pub fn pub_key(&self) -> [u8; 32] {
+        self.public_key
     }
 
     pub fn purse_id(&self) -> PurseId {
         self.purse_id
+    }
+
+    /// Returns an [`AccessRights::ADD`]-only version of the [`PurseId`].
+    pub fn purse_id_add_only(&self) -> PurseId {
+        let purse_id_uref = self.purse_id.value();
+        let add_only_uref = URef::new(purse_id_uref.addr(), AccessRights::ADD);
+        PurseId::new(add_only_uref)
     }
 
     pub fn associated_keys(&self) -> &AssociatedKeys {
@@ -478,19 +571,6 @@ impl FromBytes for Weight {
     }
 }
 
-impl ToBytes for PublicKey {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        ToBytes::to_bytes(&self.0)
-    }
-}
-
-impl FromBytes for PublicKey {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (key_bytes, rem): ([u8; KEY_SIZE], &[u8]) = FromBytes::from_bytes(bytes)?;
-        Ok((PublicKey::new(key_bytes), rem))
-    }
-}
-
 impl ToBytes for AssociatedKeys {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         ToBytes::to_bytes(&self.0)
@@ -511,7 +591,7 @@ impl FromBytes for AssociatedKeys {
     }
 }
 
-const BLOCKTIME_SIZE: usize = U64_SIZE;
+pub const BLOCKTIME_SER_SIZE: usize = U64_SIZE;
 
 impl ToBytes for BlockTime {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
@@ -577,7 +657,7 @@ const INACTIVITY_PERIOD_LIMIT_ID: u8 = 2;
 
 impl ToBytes for AccountActivity {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SIZE + U8_SIZE));
+        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SER_SIZE + U8_SIZE));
         result.push(KEY_MANAGEMENT_LAST_USED_ID);
         result.extend(&self.key_management_last_used.to_bytes()?);
         result.push(DEPLOYMENT_LAST_USED_ID);
@@ -616,7 +696,7 @@ impl FromBytes for AccountActivity {
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let action_thresholds_size = 2 * (WEIGHT_SIZE + U8_SIZE);
-        let account_activity_size: usize = 3 * (BLOCKTIME_SIZE + U8_SIZE);
+        let account_activity_size: usize = 3 * (BLOCKTIME_SER_SIZE + U8_SIZE);
         let associated_keys_size =
             self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
         let known_urefs_size = UREF_SIZE * self.known_urefs.len() + U32_SIZE;
@@ -676,6 +756,8 @@ mod tests {
         Weight, KEY_SIZE, MAX_KEYS,
     };
     use alloc::collections::btree_map::BTreeMap;
+    use alloc::vec::Vec;
+    use core::convert::TryFrom;
 
     #[test]
     fn incremented_nonce() {
@@ -736,5 +818,23 @@ mod tests {
         let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk).is_ok());
         assert!(keys.remove_key(&PublicKey([1u8; KEY_SIZE])).is_err());
+    }
+
+    #[test]
+    fn public_key_from_slice() {
+        let bytes: Vec<u8> = (0..32).collect();
+        let public_key = PublicKey::try_from(&bytes[..]).expect("should create public key");
+        assert_eq!(&bytes, &public_key.value());
+    }
+    #[test]
+    fn public_key_from_slice_too_small() {
+        let _public_key =
+            PublicKey::try_from(&[0u8; 31][..]).expect_err("should not create public key");
+    }
+
+    #[test]
+    fn public_key_from_slice_too_big() {
+        let _public_key =
+            PublicKey::try_from(&[0u8; 33][..]).expect_err("should not create public key");
     }
 }

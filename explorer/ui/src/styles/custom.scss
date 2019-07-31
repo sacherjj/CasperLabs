@@ -1,0 +1,50 @@
+@import 'sb-admin/variables.scss';
+
+#mainNav.navbar-dark {
+  .username {
+    padding: 0.5rem 1rem;
+    color: fade-out($white, 0.5);
+  }
+}
+
+.navbar-brand img {
+  height: 36px;
+}
+
+#alert-message {
+  position: fixed;
+  right: 0;
+  width: calc(100% - #{$sidenav-base-width});
+  z-index: 1030;
+  padding-right: 30px;
+  padding-left: 30px;
+  padding-top: 15px;
+}
+
+body.sidenav-toggled {
+  #alert-message {
+    width: calc(100% - #{$sidenav-collapsed-width});
+  }
+}
+
+.form-group .numeric input {
+  text-align: right;
+}
+
+.icon-button {
+  cursor: pointer;
+}
+
+button.link {
+  background: none;
+  border: none;
+  padding: 0 !important;
+  font: inherit;
+  cursor: pointer;
+  font-family: arial, sans-serif; /*input has OS specific font-family*/
+  //color: #069;
+  color: inherit;
+}
+button.link:hover {
+  text-decoration: underline;
+}

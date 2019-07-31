@@ -5,7 +5,8 @@
     core_intrinsics,
     lang_items,
     alloc_error_handler,
-    maybe_uninit
+    maybe_uninit,
+    try_reserve
 )]
 
 #[macro_use]
@@ -25,11 +26,13 @@ extern crate proptest;
 #[global_allocator]
 pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+pub mod base16;
 pub mod bytesrepr;
 pub mod contract_api;
 #[cfg(any(test, feature = "gens"))]
 pub mod gens;
 pub mod key;
+pub mod system_contracts;
 #[cfg(any(test, feature = "gens"))]
 pub mod test_utils;
 pub mod uref;
@@ -80,7 +83,7 @@ mod ext_ffi {
             extra_urefs_size: usize,
         ) -> usize;
         pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
-        pub fn get_uref(name_ptr: *const u8, name_size: usize, dest: *mut u8);
+        pub fn get_uref(name_ptr: *const u8, name_size: usize) -> usize;
         pub fn has_uref_name(name_ptr: *const u8, name_size: usize) -> i32;
         pub fn add_uref(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);
         pub fn protocol_version() -> u64;
@@ -90,6 +93,31 @@ mod ext_ffi {
         pub fn remove_associated_key(public_key_ptr: *const u8) -> i32;
         pub fn set_action_threshold(permission_level: u32, threshold: i32) -> i32;
         pub fn remove_uref(name_ptr: *const u8, name_size: usize);
+        pub fn get_caller(dest_ptr: *const u8);
+        pub fn create_purse(purse_id_ptr: *const u8, purse_id_size: usize) -> i32;
+        pub fn transfer_to_account(
+            target_ptr: *const u8,
+            target_size: usize,
+            amount_ptr: *const u8,
+            amount_size: usize,
+        ) -> i32;
+        pub fn get_blocktime(dest_ptr: *const u8);
+        pub fn transfer_from_purse_to_account(
+            source_ptr: *const u8,
+            source_size: usize,
+            target_ptr: *const u8,
+            target_size: usize,
+            amount_ptr: *const u8,
+            amount_size: usize,
+        ) -> i32;
+        pub fn transfer_from_purse_to_purse(
+            source_ptr: *const u8,
+            source_size: usize,
+            target_ptr: *const u8,
+            target_size: usize,
+            amount_ptr: *const u8,
+            amount_size: usize,
+        ) -> i32;
     }
 }
 

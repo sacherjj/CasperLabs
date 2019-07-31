@@ -4,6 +4,7 @@ import cats.Monad
 import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
@@ -25,6 +26,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 
+@silent("deprecated")
 class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCasperTestNodeFactory {
   import HashSetCasperTest._
   import HashSetCasperTestNode.Effect
@@ -116,7 +118,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
         implicit casperRef: MultiParentCasperRef[Effect]
     ): Effect[Unit] =
       for {
-        d <- ProtoUtil.basicDeploy[Effect](1)
+        d <- ProtoUtil.basicDeploy[Effect](1L)
         _ <- BlockAPI.deploy[Effect](d, ignoreDeploySignature = true)
         _ <- BlockAPI.createBlock[Effect](blockApiLock)
         _ <- BlockAPI.deploy[Effect](d, ignoreDeploySignature = true)

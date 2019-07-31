@@ -1,8 +1,8 @@
-from test.cl_node.client_parser import parse
+from test.cl_node.client_parser import parse, parse_show_blocks
 
 
 
-SUMMARY = """
+SHOW_BLOCKS = """
 ------------- block @ 0 ---------------
 summary {
   block_hash: "295868cb6edc0636760a855341e66473708127194d0588c7654569d41818be13"
@@ -74,12 +74,11 @@ count: 3
 """
 
 
-def test_client_parser():
-    r = parse(SUMMARY)
+def test_client_parser_show_blocks():
+    r = parse_show_blocks(SHOW_BLOCKS)[0]
     bonds = r.summary.header.state.bonds
     assert len(bonds) == 10
     assert sum(bond.stake for bond in bonds) == 190
-
 
 
 DEPLOY = """
@@ -214,6 +213,16 @@ processing_results {
 
 """
 
-def test_client_parser():
+
+def test_client_parser_deploy():
     r = parse(DEPLOY)
     assert len (r.processing_results.block_info.summary.header.justifications) == 10
+
+
+def test_client_parser_list_of_values_of_primitive_types():
+    r = parse("""
+    values: 0
+    values: 1
+    """)
+
+    assert r.values == [0, 1]

@@ -3,6 +3,7 @@ package io.casperlabs.casper
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
+import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
@@ -47,23 +48,23 @@ case class DeployBuffer(
   // Removes deploys that were included in a finalized block.
   def remove(deployHashes: Set[DeployHash]) =
     copy(
-      processedDeploys = processedDeploys.filterKeys(h => !deployHashes(h)),
+      processedDeploys = processedDeploys.filterNot(kv => deployHashes(kv._1)),
       // They could be in pendingDeploys too if they were sent to multiple nodes.
-      pendingDeploys = pendingDeploys.filterKeys(h => !deployHashes(h))
+      pendingDeploys = pendingDeploys.filterNot(kv => deployHashes(kv._1))
     )
 
   // Move some deploys from pending to processed.
   def processed(deployHashes: Set[DeployHash]) =
     copy(
-      processedDeploys = processedDeploys ++ pendingDeploys.filterKeys(deployHashes),
-      pendingDeploys = pendingDeploys.filterKeys(h => !deployHashes(h))
+      processedDeploys = processedDeploys ++ pendingDeploys.filter(kv => deployHashes(kv._1)),
+      pendingDeploys = pendingDeploys.filterNot(kv => deployHashes(kv._1))
     )
 
   // Move some deploys back from processed to pending.
   def orphaned(deployHashes: Set[DeployHash]) =
     copy(
-      processedDeploys = processedDeploys.filterKeys(h => !deployHashes(h)),
-      pendingDeploys = pendingDeploys ++ processedDeploys.filterKeys(deployHashes)
+      processedDeploys = processedDeploys.filterNot(kv => deployHashes(kv._1)),
+      pendingDeploys = pendingDeploys ++ processedDeploys.filter(kv => deployHashes(kv._1))
     )
 
   def get(deployHash: DeployHash): Option[Deploy] =
@@ -107,53 +108,64 @@ sealed abstract class MultiParentCasperInstances {
       genesisEffects: ExecEngineUtil.TransformMap
   ) =
     for {
-      dag                 <- BlockDagStorage[F].getRepresentation
-      _                   <- Validation[F].transactions(genesis, dag, genesisPreState, genesisEffects)
+      _ <- {
+        implicit val functorRaiseInvalidBlock: FunctorRaise[F, InvalidBlock] =
+          Validate[F].raiseValidateErrorThroughApplicativeError
+        Validate[F].transactions(genesis, genesisPreState, genesisEffects)
+      }
       blockProcessingLock <- Semaphore[F](1)
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()
                     )
     } yield (blockProcessingLock, casperState)
 
-  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: Metrics: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Validation](
+  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: Metrics: ErrorHandler: FinalityDetector: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Validation](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
-      shardId: String
+      chainId: String
   ): F[MultiParentCasper[F]] =
-    init(genesis, genesisPreState, genesisEffects) >>= {
-      case (blockProcessingLock, casperState) =>
-        implicit val state = casperState
-        MultiParentCasperImpl.create[F](
-          new MultiParentCasperImpl.StatelessExecutor(shardId),
-          MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
-          validatorId,
-          genesis,
-          shardId,
-          blockProcessingLock
-        )
-    }
+    for {
+      (blockProcessingLock, implicit0(casperState: Cell[F, CasperState])) <- init(
+                                                                              genesis,
+                                                                              genesisPreState,
+                                                                              genesisEffects
+                                                                            )
+      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
+      casper <- MultiParentCasperImpl.create[F](
+                 statelessExecutor,
+                 MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
+                 validatorId,
+                 genesis,
+                 chainId,
+                 blockProcessingLock
+               )
+    } yield casper
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Validation](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Validation](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
-      shardId: String,
+      chainId: String,
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
-    init(genesis, genesisPreState, genesisEffects) >>= {
-      case (blockProcessingLock, casperState) =>
-        implicit val state = casperState
-        MultiParentCasperImpl.create[F](
-          new MultiParentCasperImpl.StatelessExecutor(shardId),
-          MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
-          validatorId,
-          genesis,
-          shardId,
-          blockProcessingLock
-        )
-    }
+    for {
+      (blockProcessingLock, implicit0(casperState: Cell[F, CasperState])) <- init(
+                                                                              genesis,
+                                                                              genesisPreState,
+                                                                              genesisEffects
+                                                                            )
+      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
+      casper <- MultiParentCasperImpl.create[F](
+                 statelessExecutor,
+                 MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
+                 validatorId,
+                 genesis,
+                 chainId,
+                 blockProcessingLock
+               )
+    } yield casper
 }

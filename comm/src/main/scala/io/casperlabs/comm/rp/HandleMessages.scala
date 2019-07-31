@@ -4,6 +4,7 @@ import scala.concurrent.duration._
 import cats._
 import cats.effect.Sync
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import io.casperlabs.comm._
 import io.casperlabs.comm.CommError._
 import io.casperlabs.comm.discovery.Node
@@ -17,6 +18,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.effects._
 import io.casperlabs.shared._
 
+@silent()
 object HandleMessages {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)

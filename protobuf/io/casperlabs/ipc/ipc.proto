@@ -9,14 +9,18 @@ message DeployCode {
   bytes args = 2; // ABI-encoded arguments
 }
 
+message Bond {
+    bytes validator_public_key = 1;
+    io.casperlabs.casper.consensus.state.BigInt stake = 2;
+}
+
 message Deploy {
     // Public key of the account which is the context of the execution.
     bytes address = 1; // length 32 bytes
-    uint64 timestamp = 2;
     DeployCode session = 3;
     DeployCode payment = 4;
-    uint64 gas_limit = 5;
-    uint64 gas_price = 6;
+    uint64 tokens_transferred_in_payment = 5; // in units of Tokens -- someday this will come from running payment code
+    uint64 gas_price = 6; // in units of Token / Gas
     uint64 nonce = 7;
     // Public keys used to sign this deploy, to be checked against the keys
     // associated with the account.
@@ -25,8 +29,9 @@ message Deploy {
 
 message ExecRequest {
     bytes parent_state_hash = 1;
-    repeated Deploy deploys = 2;
-    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
+    uint64 block_time = 2;
+    repeated Deploy deploys = 3;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 4;
 }
 
 message ExecResponse {
@@ -51,6 +56,7 @@ message CommitRequest {
 
 message CommitResult {
   bytes poststate_hash = 1;
+  repeated Bond bonded_validators = 2;
 }
 
 message CommitResponse {
@@ -243,7 +249,8 @@ message GenesisRequest {
     uint64 timestamp = 3;
     DeployCode mint_code = 4;
     DeployCode proof_of_stake_code = 5;
-    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 6;
+    repeated Bond genesis_validators = 6;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 7;
 }
 
 message GenesisResult {

@@ -1,8 +1,5 @@
-pub mod ipc;
-pub mod ipc_grpc;
-pub mod mappings;
-pub mod state;
-
+use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::ErrorKind;
@@ -10,21 +7,31 @@ use std::marker::{Send, Sync};
 use std::time::Instant;
 
 use common::key::Key;
+use common::value::account::{BlockTime, PublicKey};
 use common::value::U512;
+use engine_server::ipc::CommitResponse;
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::execution_result::ExecutionResult;
-use execution_engine::engine_state::{EngineState, GenesisResult};
+use execution_engine::engine_state::genesis::GenesisURefsSource;
+use execution_engine::engine_state::{
+    genesis::GenesisResult, get_bonded_validators, EngineState, GetBondedValidatorsError,
+};
 use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
 use shared::logging;
 use shared::logging::{log_duration, log_info};
 use shared::newtypes::{Blake2bHash, CorrelationId};
-use storage::global_state::History;
+use storage::global_state::{CommitResult, History};
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 use self::ipc_grpc::ExecutionEngineService;
 use self::mappings::*;
+
+pub mod ipc;
+pub mod ipc_grpc;
+pub mod mappings;
+pub mod state;
 
 const EXPECTED_PUBLIC_KEY_LENGTH: usize = 32;
 
@@ -152,6 +159,9 @@ where
 
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
+
+        let blocktime = BlockTime(exec_request.get_block_time());
+
         // TODO: don't unwrap
         let wasm_costs = WasmCosts::from_version(protocol_version.value).unwrap();
 
@@ -166,6 +176,7 @@ where
             &executor,
             &preprocessor,
             prestate_hash,
+            blocktime,
             deploys,
             protocol_version,
             correlation_id,
@@ -220,10 +231,31 @@ where
                 commit_response.set_failed_transform(err);
                 commit_response
             }
-            Ok(effects) => grpc_response_from_commit_result::<H>(
-                prestate_hash,
-                self.apply_effect(correlation_id, prestate_hash, effects.value()),
-            ),
+
+            Ok(effects) => {
+                let commit_result =
+                    self.apply_effect(correlation_id, prestate_hash, effects.value());
+                if let Ok(storage::global_state::CommitResult::Success(poststate_hash)) =
+                    commit_result
+                {
+                    let pos_key = Key::URef(GenesisURefsSource::default().get_pos_address());
+                    let bonded_validators_res = get_bonded_validators(
+                        self.state(),
+                        poststate_hash,
+                        &pos_key,
+                        correlation_id,
+                    );
+                    bonded_validators_and_commit_result(
+                        prestate_hash,
+                        poststate_hash,
+                        commit_result,
+                        bonded_validators_res,
+                    )
+                } else {
+                    // Commit unsuccessful.
+                    grpc_response_from_commit_result::<H>(prestate_hash, commit_result)
+                }
+            }
         };
 
         log_duration(
@@ -358,6 +390,36 @@ where
 
         let proof_of_stake_code_bytes = genesis_request.get_proof_of_stake_code().get_code();
 
+        let genesis_validators_result = genesis_request
+            .get_genesis_validators()
+            .iter()
+            .map(|bond| {
+                to_domain_validators(bond).map_err(|err_msg| {
+                    logging::log_error(&err_msg);
+                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                    genesis_deploy_error.set_message(err_msg);
+                    genesis_deploy_error
+                })
+            })
+            .collect();
+
+        let genesis_validators = match genesis_validators_result {
+            Ok(validators) => validators,
+            Err(genesis_error) => {
+                let mut genesis_response = ipc::GenesisResponse::new();
+                genesis_response.set_failed_deploy(genesis_error);
+
+                log_duration(
+                    correlation_id,
+                    METRIC_DURATION_GENESIS,
+                    TAG_RESPONSE_GENESIS,
+                    start.elapsed(),
+                );
+
+                return grpc::SingleResponse::completed(genesis_response);
+            }
+        };
+
         let protocol_version = genesis_request.get_protocol_version().value;
 
         let genesis_response = match self.commit_genesis(
@@ -366,6 +428,7 @@ where
             initial_tokens,
             mint_code_bytes,
             proof_of_stake_code_bytes,
+            genesis_validators,
             protocol_version,
         ) {
             Ok(GenesisResult::Success {
@@ -415,11 +478,13 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_deploys<A, H, E, P>(
     engine_state: &EngineState<H>,
     executor: &E,
     preprocessor: &P,
     prestate_hash: Blake2bHash,
+    blocktime: BlockTime,
     deploys: &[ipc::Deploy],
     protocol_version: &state::ProtocolVersion,
     correlation_id: CorrelationId,
@@ -457,16 +522,41 @@ where
                 Key::Account(dest)
             };
 
-            let timestamp = deploy.timestamp;
+            // Parse all authorization keys from IPC into a vector
+            let authorized_keys: Vec<PublicKey> = {
+                let maybe_keys: Result<Vec<_>, EngineError> = deploy
+                    .authorization_keys
+                    .iter()
+                    .map(|key_bytes| {
+                        // Try to convert an element of bytes into a possibly
+                        // valid PublicKey with error handling
+                        PublicKey::try_from(key_bytes.as_slice()).map_err(|_| {
+                            EngineError::InvalidPublicKeyLength {
+                                expected: EXPECTED_PUBLIC_KEY_LENGTH,
+                                actual: key_bytes.len(),
+                            }
+                        })
+                    })
+                    .collect();
+
+                match maybe_keys {
+                    Ok(keys) => keys,
+                    Err(error) => return Ok(ExecutionResult::precondition_failure(error).into()),
+                }
+            };
+
             let nonce = deploy.nonce;
-            let gas_limit = deploy.gas_limit as u64;
+            // TODO: is the rounding in this division ok?
+            let gas_limit =
+                (deploy.tokens_transferred_in_payment as u64) / (deploy.gas_price as u64);
             let protocol_version = protocol_version.value;
             engine_state
                 .run_deploy(
                     module_bytes,
                     args,
                     address,
-                    timestamp,
+                    &authorized_keys,
+                    blocktime,
                     nonce,
                     prestate_hash,
                     gas_limit,
@@ -479,6 +569,63 @@ where
                 .map_err(Into::into)
         })
         .collect()
+}
+
+// TODO: Refactor.
+#[allow(clippy::implicit_hasher)]
+pub fn bonded_validators_and_commit_result<H>(
+    prestate_hash: Blake2bHash,
+    poststate_hash: Blake2bHash,
+    commit_result: Result<CommitResult, H::Error>,
+    bonded_validators: Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<H>>,
+) -> CommitResponse
+where
+    H: History,
+    H::Error: Into<EngineError> + std::fmt::Debug,
+{
+    match bonded_validators {
+        Ok(bonded_validators) => {
+            let mut grpc_response =
+                grpc_response_from_commit_result::<H>(prestate_hash, commit_result);
+            let grpc_bonded_validators = bonded_validators
+                .iter()
+                .map(|(pk, bond)| {
+                    let mut ipc_bond = ipc::Bond::new();
+                    ipc_bond.set_stake((*bond).into());
+                    ipc_bond.set_validator_public_key(pk.value().to_vec());
+                    ipc_bond
+                })
+                .collect::<Vec<ipc::Bond>>()
+                .into();
+            grpc_response
+                .mut_success() // We know it's a success because of the check few lines earlier.
+                .set_bonded_validators(grpc_bonded_validators);
+            grpc_response
+        }
+        Err(GetBondedValidatorsError::StorageErrors(error)) => {
+            grpc_response_from_commit_result::<H>(poststate_hash, Err(error))
+        }
+        Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)) => {
+            // I am not sure how to parse this error. It would mean that most probably
+            // we have screwed up something in the trie store because `root_hash` was
+            // calculated by us just a moment ago. It [root_hash] is a `poststate_hash` we return to the node.
+            // There is no proper error variant in the `storage::error::Error` for it though.
+            let error_message = format!(
+                "Post state hash not found {} when calculating bonded validators set.",
+                root_hash
+            );
+            logging::log_error(&error_message);
+            let mut commit_response = ipc::CommitResponse::new();
+            let mut err = ipc::PostEffectsError::new();
+            err.set_message(error_message);
+            commit_response.set_failed_transform(err);
+            commit_response
+        }
+        Err(GetBondedValidatorsError::PoSNotFound(key)) => grpc_response_from_commit_result::<H>(
+            poststate_hash,
+            Ok(CommitResult::KeyNotFound(key)),
+        ),
+    }
 }
 
 // Helper method which returns single DeployResult that is set to be a WasmError.

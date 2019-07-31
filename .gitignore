@@ -64,6 +64,10 @@ execution-engine/engine/*.lock
 execution-engine/wasm-prep/*.lock
 execution-engine/tests/*.lock
 execution-engine/gens/*.lock
-execution-engine/blessed-contracts/mint-token/*.lock
+execution-engine/system-contracts/mint-token/*.lock
+execution-engine/system-contracts/pos/*.lock
+
+# wasms
+client/src/main/resources/*.wasm
 
 .make

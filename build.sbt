@@ -44,7 +44,9 @@ lazy val projectSettings = Seq(
   Test / testForkedParallel := false,
   IntegrationTest / fork := true,
   IntegrationTest / parallelExecution := false,
-  IntegrationTest / testForkedParallel := false
+  IntegrationTest / testForkedParallel := false,
+  Compile / doc / sources := Seq.empty,
+  Compile / packageDoc / publishArtifact := false
 )
 
 lazy val coverageSettings = Seq(
@@ -215,7 +217,7 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto, shared % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.4.0"
+val nodeAndClientVersion = "0.5.1"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -361,6 +363,8 @@ lazy val blockStorage = (project in file("block-storage"))
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       lmdbjava,
+      sqlLite,
+      flyway,
       catsCore,
       catsEffect,
       catsMtl
@@ -418,7 +422,12 @@ lazy val client = (project in file("client"))
     javacOptions ++= Seq("-Dnashorn.args=\"--no-deprecation-warning\""),
     packageSummary := "CasperLabs Client",
     packageDescription := "CLI tool for interaction with the CasperLabs Node",
-    libraryDependencies ++= commonDependencies ++ Seq(scallop, grpcNetty, graphvizJava),
+    libraryDependencies ++= commonDependencies ++ Seq(
+      scallop,
+      grpcNetty,
+      graphvizJava,
+      apacheCommons
+    ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.client",
     /* Dockerization */
@@ -509,6 +518,45 @@ lazy val client = (project in file("client"))
     )
   )
   .dependsOn(crypto, shared, models, graphz)
+
+lazy val benchmarks = (project in file("benchmarks"))
+  .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
+  .settings(commonSettings: _*)
+  .settings(
+    name := "benchmarks",
+    version := nodeAndClientVersion,
+    maintainer := "CasperLabs, LLC. <info@casperlabs.io>",
+    packageName := "casperlabs-benchmarks",
+    packageName in Docker := "benchmarks",
+    executableScriptName := "casperlabs-benchmarks",
+    packageSummary := "CasperLabs Benchmarking CLI Client",
+    packageDescription := "CLI tool for running benchmarks against the CasperLabs Node",
+    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
+    buildInfoPackage := "io.casperlabs.benchmarks",
+    /* Dockerization */
+    dockerUsername := Some("casperlabs"),
+    version in Docker := version.value +
+      git.gitHeadCommit.value.fold("")("-git" + _.take(8)),
+    dockerAliases ++=
+      sys.env
+        .get("DRONE_BUILD_NUMBER")
+        .toSeq
+        .map(num => dockerAlias.value.withTag(Some(s"DRONE-$num"))),
+    dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
+    dockerBaseImage := "openjdk:11-jre-slim",
+    dockerCommands := {
+      Seq(
+        Cmd("FROM", dockerBaseImage.value),
+        Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
+        Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
+        Cmd("ADD", "opt /opt"),
+        Cmd("USER", "root"),
+        ExecCmd("ENTRYPOINT", "bin/casperlabs-benchmarks"),
+        ExecCmd("CMD", "run")
+      )
+    }
+  )
+  .dependsOn(client)
 
 /**
   * This project contains Gatling test suits which perform load testing.

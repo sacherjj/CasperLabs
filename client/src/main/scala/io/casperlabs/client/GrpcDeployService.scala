@@ -7,6 +7,7 @@ import cats.mtl.implicits._
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
 import java.security.KeyStore
+
 import javax.net.ssl._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
@@ -14,6 +15,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.HostnameTrustManager
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
+import io.casperlabs.casper.consensus.state.Value
 import io.casperlabs.graphz
 import io.casperlabs.node.api.casper.{
   CasperGrpcMonix,
@@ -32,6 +34,7 @@ import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.grpc.netty.{GrpcSslContexts, NegotiationType}
 import io.netty.handler.ssl.util.SimpleTrustManagerFactory
 import monix.eval.Task
+
 import scala.util.Either
 
 class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with Closeable {
@@ -88,14 +91,20 @@ class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with C
   private lazy val controlServiceStub = ControlGrpcMonix.stub(internalChannel)
 
   def deploy(d: consensus.Deploy): Task[Either[Throwable, String]] =
-    casperServiceStub.deploy(DeployRequest().withDeploy(d)).map(_ => "Success!").attempt
+    casperServiceStub
+      .deploy(DeployRequest().withDeploy(d))
+      .map { _ =>
+        val hash = Base16.encode(d.deployHash.toByteArray)
+        s"Success! Deploy $hash deployed."
+      }
+      .attempt
 
   def propose(): Task[Either[Throwable, String]] =
     controlServiceStub
       .propose(ProposeRequest())
       .map { response =>
-        val hash = Base16.encode(response.blockHash.toByteArray).take(10)
-        s"Success! Block $hash... created and added."
+        val hash = Base16.encode(response.blockHash.toByteArray)
+        s"Success! Block $hash created and added."
       }
       .attempt
 
@@ -139,11 +148,11 @@ class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with C
       keyVariant: String,
       keyValue: String,
       path: String
-  ): Task[Either[Throwable, String]] =
+  ): Task[Either[Throwable, Value]] =
     StateQuery.KeyVariant.values
       .find(_.name == keyVariant.toUpperCase)
       .fold(
-        Task.raiseError[String](
+        Task.raiseError[Value](
           new java.lang.IllegalArgumentException(s"Unknown key variant: $keyVariant")
         )
       ) { kv =>
@@ -156,9 +165,7 @@ class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with C
             )
           )
 
-        casperServiceStub
-          .getBlockState(req)
-          .map(Printer.printToUnicodeString(_))
+        casperServiceStub.getBlockState(req)
       }
       .attempt
 

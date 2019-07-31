@@ -49,6 +49,8 @@ object ProcessedDeployResult {
             ExecutionError(deploy, error, ipc.ExecutionEffect.defaultInstance, cost)
           case ipc.DeployResult.ExecutionResult(Some(effects), None, cost) =>
             ExecutionSuccessful(deploy, effects, cost)
+          case ipc.DeployResult.ExecutionResult(None, None, _) => ???
         }
+      case ipc.DeployResult(ipc.DeployResult.Value.Empty) => ???
     }
 }

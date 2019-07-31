@@ -37,8 +37,7 @@ class GossipServiceCasperTestNode[F[_]](
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainId: String = "casperlabs",
     relaying: Relaying[F],
-    gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F],
-    validatorToNode: Map[ByteString, Node]
+    gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F]
 )(
     implicit
     concurrentF: Concurrent[F],
@@ -58,7 +57,7 @@ class GossipServiceCasperTestNode[F[_]](
       maybeMakeEE
     )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
-  implicit val safetyOracleEff: SafetyOracle[F] = SafetyOracle.cliqueOracle[F]
+  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
 
   //val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 
@@ -148,8 +147,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             blockProcessingLock,
             faultToleranceThreshold,
             relaying = relaying,
-            gossipService = new TestGossipService[F](name),
-            validatorToNode = Map.empty // Shouldn't need it.
+            gossipService = new TestGossipService[F]()
           )(
             concurrentF,
             blockStore,
@@ -184,14 +182,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
     var gossipServices = Map.empty[Node, TestGossipService[F]]
 
-    val validatorToNode = peers
-      .zip(sks)
-      .map {
-        case (node, sk) =>
-          ByteString.copyFrom(Ed25519.tryToPublic(sk).get) -> node
-      }
-      .toMap
-
     val nodesF = peers
       .zip(sks)
       .toList
@@ -203,7 +193,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           implicit val nodeAsk                  = makeNodeAsk(peer)(concurrentF)
           implicit val functorRaiseInvalidBlock = ValidationImpl.raiseValidateErrorThroughSync
 
-          val gossipService = new TestGossipService[F](peer.host)
+          val gossipService = new TestGossipService[F]()
           gossipServices += peer -> gossipService
 
           // Simulate the broadcast semantics.
@@ -236,7 +226,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
-                  validatorToNode = validatorToNode,
                   validateNonces = validateNonces,
                   maybeMakeEE = maybeMakeEE
                 )(
@@ -267,9 +256,9 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
 object GossipServiceCasperTestNodeFactory {
   class TestNodeDiscovery[F[_]: Applicative](peers: List[Node]) extends NodeDiscovery[F] {
-    def discover: F[Unit]                           = ???
-    def lookup(id: NodeIdentifier): F[Option[Node]] = ???
-    def alivePeersAscendingDistance: F[List[Node]]  = peers.pure[F]
+    def discover: F[Unit]                                  = ???
+    def lookup(id: NodeIdentifier): F[Option[Node]]        = ???
+    def recentlyAlivePeersAscendingDistance: F[List[Node]] = peers.pure[F]
   }
 
   def makeNodeAsk[F[_]](node: Node)(implicit ev: Applicative[F]) =
@@ -279,8 +268,7 @@ object GossipServiceCasperTestNodeFactory {
     }
 
   /** Accumulate messages until receive is called by the test. */
-  class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log: Validation](host: String)
-      extends GossipService[F] {
+  class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log: Validation]() extends GossipService[F] {
 
     implicit val metrics = new Metrics.MetricsNOP[F]
 
@@ -369,7 +357,6 @@ object GossipServiceCasperTestNodeFactory {
 
             override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
               for {
-                dag <- casper.blockDag
                 _ <- Log[F].debug(
                       s"Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
                     )

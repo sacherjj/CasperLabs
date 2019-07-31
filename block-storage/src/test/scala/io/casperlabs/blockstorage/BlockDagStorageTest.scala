@@ -4,6 +4,7 @@ import java.nio.file.StandardOpenOption
 
 import cats.effect.Sync
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
@@ -23,6 +24,7 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 import scala.util.Random
 
+@silent("match may not be exhaustive")
 trait BlockDagStorageTest
     extends FlatSpecLike
     with Matchers
@@ -73,6 +75,7 @@ trait BlockDagStorageTest
   }
 }
 
+@silent("match may not be exhaustive")
 class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   import java.nio.file.{Files, Path}
@@ -150,6 +153,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
               Option[BlockMetadata],
               Option[BlockHash],
               Option[BlockMetadata],
+              Set[BlockHash],
               Option[Set[BlockHash]],
               Boolean
           )
@@ -171,12 +175,20 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       list <- blockElements.traverse {
                case BlockMsgWithTransform(Some(b), _) =>
                  for {
-                   blockMetadata     <- dag.lookup(b.blockHash)
-                   latestMessageHash <- dag.latestMessageHash(b.getHeader.validatorPublicKey)
-                   latestMessage     <- dag.latestMessage(b.getHeader.validatorPublicKey)
-                   children          <- dag.children(b.blockHash)
-                   contains          <- dag.contains(b.blockHash)
-                 } yield (blockMetadata, latestMessageHash, latestMessage, children, contains)
+                   blockMetadata                    <- dag.lookup(b.blockHash)
+                   latestMessageHash                <- dag.latestMessageHash(b.getHeader.validatorPublicKey)
+                   latestMessage                    <- dag.latestMessage(b.getHeader.validatorPublicKey)
+                   children                         <- dag.children(b.blockHash)
+                   blocksWithSpecifiedJustification <- dag.justificationToBlocks(b.blockHash)
+                   contains                         <- dag.contains(b.blockHash)
+                 } yield (
+                   blockMetadata,
+                   latestMessageHash,
+                   latestMessage,
+                   children,
+                   blocksWithSpecifiedJustification,
+                   contains
+                 )
              }
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
@@ -200,16 +212,31 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           lm
     }
     list.zip(blockElements).foreach {
-      case ((blockMetadata, latestMessageHash, latestMessage, children, contains), b) =>
+      case (
+          (
+            blockMetadata,
+            latestMessageHash,
+            latestMessage,
+            children,
+            blocksWithSpecifiedJustification,
+            contains
+          ),
+          b
+          ) =>
         blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
         latestMessageHash shouldBe realLatestMessages
           .get(b.getHeader.validatorPublicKey)
           .map(_.blockHash)
         latestMessage shouldBe realLatestMessages.get(b.getHeader.validatorPublicKey)
         children shouldBe
+          blockElements
+            .filter(_.getHeader.parentHashes.contains(b.blockHash))
+            .map(_.blockHash)
+            .toSet
+        blocksWithSpecifiedJustification shouldBe
           Some(
             blockElements
-              .filter(_.getHeader.parentHashes.contains(b.blockHash))
+              .filter(_.getHeader.justifications.map(_.latestBlockHash).contains(b.blockHash))
               .map(_.blockHash)
               .toSet
           )
@@ -438,7 +465,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           _      <- secondStorage.close()
         } yield result match {
           case (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) => {
-            list.foreach(_ shouldBe ((None, None, None, None, false)))
+            list.foreach(_ shouldBe ((None, None, None, Set.empty, None, false)))
             latestMessageHashes shouldBe Map()
             latestMessages shouldBe Map()
             topoSort shouldBe Vector()

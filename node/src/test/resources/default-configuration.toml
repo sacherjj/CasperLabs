@@ -1,3 +1,7 @@
+# Do not support:
+#   * Nested tables
+#   * Arrays
+
 [server]
 host = "test"
 port = 1
@@ -66,8 +70,11 @@ num-validators = 1
 wallets-file = "/tmp/test"
 minimum-bond = 1
 maximum-bond = 1
-has-faucet = false
 required-sigs = 1
+genesis-account-public-key-path = "/tmp/test"
+initial-tokens = 1
+mint-code-path = "/tmp/test"
+pos-code-path = "/tmp/test"
 shard-id = "test"
 standalone = false
 approve-genesis = false

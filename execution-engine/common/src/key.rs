@@ -51,7 +51,8 @@ impl Key {
 
 // There is no impl LowerHex for neither [u8; 32] nor &[u8] in std.
 // I can't impl them b/c they're not living in current crate.
-fn addr_to_hex(addr: &[u8; 32]) -> String {
+/// Creates a hex string from [u8; 32] table.
+pub fn addr_to_hex(addr: &[u8; 32]) -> String {
     let mut str = String::with_capacity(64);
     for b in addr {
         write!(&mut str, "{:02x}", b).unwrap();
@@ -62,18 +63,10 @@ fn addr_to_hex(addr: &[u8; 32]) -> String {
 impl core::fmt::Display for Key {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Key::Account(addr) => write!(f, "Account({})", addr_to_hex(addr)),
-            Key::Hash(addr) => write!(f, "Hash({})", addr_to_hex(addr)),
-            Key::URef(uref) => {
-                let addr = uref.addr();
-                let access_rights_o = uref.access_rights();
-                if let Some(access_rights) = access_rights_o {
-                    write!(f, "URef({}, {})", addr_to_hex(&addr), access_rights)
-                } else {
-                    write!(f, "URef({}, None)", addr_to_hex(&addr))
-                }
-            }
-            Key::Local(hash) => write!(f, "Local({})", addr_to_hex(hash)),
+            Key::Account(addr) => write!(f, "Key::Account({})", addr_to_hex(addr)),
+            Key::Hash(addr) => write!(f, "Key::Hash({})", addr_to_hex(addr)),
+            Key::URef(uref) => write!(f, "Key::{}", uref), // Display impl for URef will append URef(…).
+            Key::Local(hash) => write!(f, "Key::Local({})", addr_to_hex(hash)),
         }
     }
 }
@@ -116,6 +109,19 @@ impl Key {
             Key::URef(uref) => Key::URef(uref.remove_access_rights()),
             other => other,
         }
+    }
+
+    pub fn as_uref(&self) -> Option<&URef> {
+        match self {
+            Key::URef(uref) => Some(uref),
+            _ => None,
+        }
+    }
+}
+
+impl From<URef> for Key {
+    fn from(uref: URef) -> Key {
+        Key::URef(uref)
     }
 }
 
@@ -178,7 +184,8 @@ impl FromBytes for Key {
 impl FromBytes for Vec<Key> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (size, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<Key> = Vec::with_capacity((size as usize) * UREF_SIZE);
+        let mut result = Vec::new();
+        result.try_reserve_exact(size as usize)?;
         let mut stream = rest;
         for _ in 0..size {
             let (t, rem): (Key, &[u8]) = FromBytes::from_bytes(stream)?;
@@ -208,9 +215,11 @@ impl ToBytes for Vec<Key> {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
+    use crate::bytesrepr::{Error, FromBytes};
     use crate::key::Key;
     use crate::uref::{AccessRights, URef};
     use alloc::string::String;
+    use alloc::vec::Vec;
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)
@@ -264,19 +273,29 @@ mod tests {
         let account_key = Key::Account(addr_array);
         assert_eq!(
             format!("{}", account_key),
-            format!("Account({})", expected_hash)
+            format!("Key::Account({})", expected_hash)
         );
         let uref_key = Key::URef(URef::new(addr_array, AccessRights::READ));
         assert_eq!(
             format!("{}", uref_key),
-            format!("URef({}, READ)", expected_hash)
+            format!("Key::URef({}, READ)", expected_hash)
         );
         let hash_key = Key::Hash(addr_array);
-        assert_eq!(format!("{}", hash_key), format!("Hash({})", expected_hash));
+        assert_eq!(
+            format!("{}", hash_key),
+            format!("Key::Hash({})", expected_hash)
+        );
         let local_key = Key::Local(addr_array);
         assert_eq!(
             format!("{}", local_key),
-            format!("Local({})", expected_hash)
+            format!("Key::Local({})", expected_hash)
         );
+    }
+    #[test]
+    fn abuse_vec_key() {
+        // Prefix is 2^32-1 = shouldn't allocate that much
+        let bytes: Vec<u8> = vec![255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let res: Result<(Vec<Key>, &[u8]), _> = FromBytes::from_bytes(&bytes);
+        assert_eq!(res.expect_err("should fail"), Error::OutOfMemoryError);
     }
 }

@@ -1,10 +1,11 @@
 import logging
+import json
 import os
 import re
 import shutil
 import tempfile
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Union
 
 from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from test.cl_node.docker_base import LoggingDockerBase
@@ -13,6 +14,7 @@ from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, is_valid_account, Account
 
 
 class DockerNode(LoggingDockerBase):
@@ -25,7 +27,11 @@ class DockerNode(LoggingDockerBase):
     CL_GENESIS_DIR = f'{CL_NODE_DIRECTORY}/genesis'
     CL_SOCKETS_DIR = f'{CL_NODE_DIRECTORY}/sockets'
     CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
+    CL_ACCOUNTS_DIR = f"{CL_NODE_DIRECTORY}/accounts"
     CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
+    CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_ACCOUNTS_DIR}/account-id-genesis"
+
+    NUMBER_OF_BONDS = 10
 
     NETWORK_PORT = 40400
     GRPC_EXTERNAL_PORT = 40401
@@ -121,18 +127,11 @@ class DockerNode(LoggingDockerBase):
                 f'{self.GRPC_EXTERNAL_PORT}/tcp': self.grpc_external_docker_port}
 
     def _get_container(self):
-        env = {
-            'RUST_BACKTRACE': 'full',
-            'CL_LOG_LEVEL': 'DEBUG',
-            'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'true',
-            'CL_SERVER_NO_UPNP': 'true'
-        }
+        env = self.config.node_env.copy()
+        env['CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH'] = self.CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
             env['_JAVA_OPTIONS'] = java_options
-        # Eliminate UPnP for docker, to not have delay
-        if self.is_in_docker:
-            env['CL_SERVER_NO_UPNP'] = 'true'
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix='deploy_')
         self.create_resources_dir()
 
@@ -171,12 +170,13 @@ class DockerNode(LoggingDockerBase):
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
         self.create_bonds_file()
 
+    # TODO: Should be changed to using validator-id from accounts
     def create_bonds_file(self) -> None:
-        N = len(PREGENERATED_KEYPAIRS)
+        N = self.NUMBER_OF_BONDS
         path = f'{self.host_genesis_dir}/bonds.txt'
         os.makedirs(os.path.dirname(path))
         with open(path, 'a') as f:
-            for i, pair in enumerate(PREGENERATED_KEYPAIRS):
+            for i, pair in enumerate(PREGENERATED_KEYPAIRS[:N]):
                 bond = N + 2 * i
                 f.write(f'{pair.public_key} {bond}\n')
 
@@ -186,6 +186,11 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.host_mount_dir)
         if os.path.exists(self.deploy_dir):
             shutil.rmtree(self.deploy_dir)
+
+    @property
+    def from_address(self) -> str:
+        """ Genesis Account Address """
+        return GENESIS_ACCOUNT.public_key_hex
 
     @property
     def volumes(self) -> dict:
@@ -199,6 +204,10 @@ class DockerNode(LoggingDockerBase):
                 },
                 self.host_bootstrap_dir: {
                     "bind": self.CL_BOOTSTRAP_DIR,
+                    "mode": "rw"
+                },
+                self.host_accounts_dir: {
+                    "bind": self.CL_ACCOUNTS_DIR,
                     "mode": "rw"
                 },
                 self.deploy_dir: {
@@ -227,13 +236,85 @@ class DockerNode(LoggingDockerBase):
         return output
 
     def deploy_and_propose(self, **deploy_kwargs) -> str:
+        if 'from_address' not in deploy_kwargs:
+            deploy_kwargs['from_address'] = self.from_address
         deploy_output = self.client.deploy(**deploy_kwargs)
         assert 'Success!' in deploy_output
-        block_hash_output_string = self.client.propose()
-        block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
+        block_hash = extract_block_hash_from_propose_output(self.client.propose())
         assert block_hash is not None
         logging.info(f"The block hash: {block_hash} generated for {self.container.name}")
         return block_hash
+
+    def deploy_and_propose_with_retry(self, max_attempts: int, retry_seconds: int, **deploy_kwargs) -> str:
+        deploy_output = self.client.deploy(**deploy_kwargs)
+        assert 'Success!' in deploy_output
+        block_hash = self.client.propose_with_retry(max_attempts, retry_seconds)
+        assert block_hash is not None
+        logging.info(f"The block hash: {block_hash} generated for {self.container.name}")
+        return block_hash
+
+    def transfer_to_account(self, to_account_id: int, amount: int, from_account_id: Union[str, int] = 'genesis') -> str:
+        """
+        Performs a transfer using the from account if given (or genesis if not)
+
+        :param to_account_id: 1-20 index of test account for transfer into
+        :param amount: amount of tokens to transfer
+        :param from_account_id: default 'genesis' account, but previously funded account_id is also valid.
+        :returns block_hash in hex str
+        """
+        assert is_valid_account(to_account_id) and to_account_id != 'genesis', \
+            "Can transfer only to non-genesis accounts in test framework (1-20)."
+        assert is_valid_account(from_account_id), "Must transfer from a valid account_id: 1-20 or 'genesis'"
+
+        # backup previous client to use python
+        previous_client_type = self._client
+        self.use_python_client()
+
+        from_account = Account(from_account_id)
+        to_account = Account(to_account_id)
+        args_json = json.dumps([{"account": to_account.public_key_hex},
+                                {"u32": amount}])
+        with from_account.public_key_path as public_key_path, from_account.private_key_path as private_key_path:
+            response, deploy_hash_bytes = self.client.deploy(from_address=from_account.public_key_hex,
+                                                             session_contract='transfer_to_account.wasm',
+                                                             payment_contract='transfer_to_account.wasm',
+                                                             public_key=public_key_path,
+                                                             private_key=private_key_path,
+                                                             args=self.client.abi.args_from_json(args_json))
+
+        deploy_hash_hex = deploy_hash_bytes.hex()
+        assert len(deploy_hash_hex) == 64
+
+        response = self.client.propose()
+
+        block_hash = response.block_hash.hex()
+        assert len(deploy_hash_hex) == 64
+
+        for deploy_info in self.client.show_deploys(block_hash):
+            assert deploy_info.is_error is False
+
+        # restore to previous client operation
+        self._client = previous_client_type
+
+        return block_hash
+
+    def transfer_to_accounts(self, account_value_list) -> List[str]:
+        """
+        Allows batching calls to self.transfer_to_account to process in order.
+
+        If from is not provided, the genesis account is used.
+
+        :param account_value_list: List of [to_account_id, amount, Optional(from_account_id)]
+        :return: List of block_hashes from transfer blocks.
+        """
+        block_hashes = []
+        for avl in account_value_list:
+            assert 2 <= len(avl) <= 3, \
+                "Expected account_value_list as list of (to_account_id, value, Optional(from_account_id))"
+            to_addr_id, amount = avl[:2]
+            from_addr_id = 'genesis' if len(avl) == 2 else avl[2]
+            block_hashes.append(self.transfer_to_account(to_addr_id, amount, from_addr_id))
+        return block_hashes
 
     def show_blocks(self) -> Tuple[int, str]:
         return self.exec_run(f'{self.CL_NODE_BINARY} show-blocks')

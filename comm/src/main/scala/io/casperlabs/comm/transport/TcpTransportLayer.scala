@@ -274,7 +274,7 @@ class TcpTransportLayer(
     cell.modify { s =>
       val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
       val queueScheduler =
-        Scheduler.fixedPool("tl-dispatcher", parallelism, reporter = UncaughtExceptionLogger)
+        Scheduler.fixedPool("tl-dispatcher", parallelism, reporter = UncaughtExceptionHandler)
       for {
         server <- initQueue(s.server) {
                    Task.delay {

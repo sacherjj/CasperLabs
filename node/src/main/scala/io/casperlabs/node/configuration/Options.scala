@@ -5,6 +5,7 @@ import java.nio.file.Path
 import cats.Show
 import cats.syntax.either._
 import cats.syntax.option._
+import com.github.ghik.silencer.silent
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.configuration.cli.scallop
 import io.casperlabs.node.BuildInfo
@@ -90,9 +91,12 @@ private[configuration] final case class Options private (
   import io.casperlabs.comm.discovery.NodeUtils
   import Options.Flag
 
+  //Used in @scallop macro
+  @silent("is never used")
   private implicit def show[T: NotNode]: Show[T] = Show.show(_.toString)
 
   //Needed only for eliminating red code from IntelliJ IDEA, see @scallop definition
+  @silent("is never used")
   private def gen[A](descr: String, short: Char = '\u0000'): ScallopOption[A] =
     sys.error("Add @scallop macro annotation")
 
@@ -282,8 +286,20 @@ private[configuration] final case class Options private (
       gen[Long]("Maximum bond accepted by the PoS contract in the genesis block.")
 
     @scallop
-    val casperHasFaucet =
-      gen[Flag]("True if there should be a public access CSPR faucet in the genesis block.")
+    val casperGenesisAccountPublicKeyPath =
+      gen[Path]("Path to the PEM encoded public key to use for the system account.")
+
+    @scallop
+    val casperInitialTokens =
+      gen[BigInt]("Initial amount of tokens to pass to the Mint contract.")
+
+    @scallop
+    val casperMintCodePath =
+      gen[Path]("Path to the Wasm file which contains the Mint contract.")
+
+    @scallop
+    val casperPosCodePath =
+      gen[Path]("Path to the Wasm file which contains the Proof-of-Stake contract")
 
     @scallop
     val casperIgnoreDeploySignature =

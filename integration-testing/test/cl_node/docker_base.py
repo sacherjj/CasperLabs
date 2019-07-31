@@ -5,12 +5,12 @@ import threading
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from queue import Empty
+from typing import Any, Dict, Optional, Tuple, Union
+from docker import DockerClient
+
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 from test.cl_node.common import random_string
 from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
-from typing import Any, Dict, Optional, Tuple, Union
-
-import docker.errors
-from docker import DockerClient
 
 
 def humanify(line):
@@ -21,7 +21,7 @@ def humanify(line):
 
         {'timestamp': '2019-06-08T17:51:35.308Z', 'process_id': 1, 'process_name': 'casperlabs-engine-grpc-server', 'host_name': 'execution-engine-0-mlgtn', 'log_level': 'Info', 'priority': 5, 'message_type': 'ee-structured', 'message_type_version': '1.0.0', 'message_id': '14039567985248808663', 'description': 'starting Execution Engine Server', 'properties': {'message': 'starting Execution Engine Server', 'message_template': '{message}'}}
     """
-    if not 'execution-engine-' in line:
+    if 'execution-engine-' not in line:
         return line
     try:
         _, payload = line.split('payload=')
@@ -29,7 +29,7 @@ def humanify(line):
         return line
 
     d = json.loads(payload)
-    return ' '.join(str(d[k]) for k in ('log_level', 'description',))
+    return ' '.join(str(d[k]) for k in ('log_level', 'description'))
 
 
 class LoggingThread(threading.Thread):
@@ -60,6 +60,7 @@ class DockerConfig:
     docker_client: 'DockerClient'
     node_private_key: str
     node_public_key: str = None
+    node_env: dict = None
     network: Optional[Any] = None
     number: int = 0
     rand_str: Optional[str] = None
@@ -71,10 +72,19 @@ class DockerConfig:
     is_signed_deploy: bool = True
     bootstrap_address: Optional[str] = None
     use_new_gossiping: bool = True
+    genesis_public_key_path: str = None
 
     def __post_init__(self):
         if self.rand_str is None:
             self.rand_str = random_string(5)
+        if self.node_env is None:
+            self.node_env = {
+                'RUST_BACKTRACE': 'full',
+                'CL_LOG_LEVEL': os.environ.get("CL_LOG_LEVEL", "INFO"),
+                'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'false',
+                'CL_SERVER_NO_UPNP': 'true',
+                'CL_VERSION': 'test'
+            }
 
     def node_command_options(self, server_host: str) -> dict:
         bootstrap_path = '/root/.casperlabs/bootstrap'
@@ -90,6 +100,10 @@ class DockerConfig:
         #     options['--casper-validator-public-key-path'] = f'{bootstrap_path}/validator-{self.number}-public.pem'
         if self.bootstrap_address:
             options['--server-bootstrap'] = self.bootstrap_address
+        if self.is_bootstrap:
+            gen_acct_key_file = GENESIS_ACCOUNT.public_key_filename
+            options['--casper-genesis-account-public-key-path'] = f"/root/.casperlabs/accounts/{gen_acct_key_file}"
+            options['--casper-initial-tokens'] = 100000000000
         if self.node_public_key:
             options['--casper-validator-public-key'] = self.node_public_key
         if self.use_new_gossiping:
@@ -135,6 +149,7 @@ class DockerBase:
 
     @property
     def container_type(self) -> str:
+        # Raising exception rather than abstract method eliminates requiring an __init__ in child classes.
         raise NotImplementedError('No implementation of container_type')
 
     @property
@@ -154,10 +169,15 @@ class DockerBase:
         return f'{self.host_mount_dir}/bootstrap_certificate'
 
     @property
+    def host_accounts_dir(self) -> str:
+        return f'{self.host_mount_dir}/accounts'
+
+    @property
     def docker_client(self) -> DockerClient:
         return self.config.docker_client
 
     def _get_container(self):
+        # Raising exception rather than abstract method eliminates requiring an __init__ in child classes.
         raise NotImplementedError('No implementation of _get_container')
 
     def stop(self):
@@ -225,8 +245,8 @@ class DockerBase:
                 self.disconnect_from_network(network_name)
             try:
                 self.container.remove(force=True, v=True)
-            except docker.errors.NotFound:
-                pass
+            except Exception as e:
+                logging.error(f'Error removing container {self.container_name}: {e}')
 
 
 class LoggingDockerBase(DockerBase):

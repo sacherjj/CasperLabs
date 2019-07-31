@@ -1,18 +1,16 @@
 package io.casperlabs.casper.util
 
-import cats.{Eval, Monad}
 import cats.implicits._
+import cats.{Eval, Monad}
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.util.MapHelper.updatedWith
-import io.casperlabs.catscontrib.{ListContrib, MonadThrowable}
+import io.casperlabs.casper.consensus.Block
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.StreamT
+import simulacrum.typeclass
 
-import scala.annotation.tailrec
 import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
-import simulacrum.typeclass
 
 object DagOperations {
 
@@ -29,9 +27,10 @@ object DagOperations {
       type K = B
       def key(a: A) = k(a)
     }
-    def identity[A]           = instance[A, A](a => a)
-    implicit val blockKey     = instance[Block, BlockHash](_.blockHash)
-    implicit val blockHashKey = identity[BlockHash]
+    def identity[A]               = instance[A, A](a => a)
+    implicit val blockKey         = instance[Block, BlockHash](_.blockHash)
+    implicit val blockMetadataKey = instance[BlockMetadata, BlockHash](_.blockHash)
+    implicit val blockHashKey     = identity[BlockHash]
   }
 
   def bfTraverseF[F[_]: Monad, A](
@@ -53,6 +52,33 @@ object DagOperations {
       }
 
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[k.K])))
+  }
+
+  def bfToposortTraverseF[F[_]: Monad](
+      start: List[BlockMetadata]
+  )(neighbours: BlockMetadata => F[List[BlockMetadata]]): StreamT[F, BlockMetadata] = {
+    def build(
+        q: mutable.PriorityQueue[BlockMetadata],
+        prevVisited: HashSet[BlockHash]
+    ): F[StreamT[F, BlockMetadata]] =
+      if (q.isEmpty) StreamT.empty[F, BlockMetadata].pure[F]
+      else {
+        val curr = q.dequeue
+        if (prevVisited(curr.blockHash)) build(q, prevVisited)
+        else
+          for {
+            ns      <- neighbours(curr)
+            visited = prevVisited + curr.blockHash
+            newQ    = q ++ ns.filterNot(b => visited(b.blockHash))
+          } yield StreamT.cons(curr, Eval.always(build(newQ, visited)))
+      }
+
+    implicit val blockTopoOrdering: Ordering[BlockMetadata] =
+      Ordering.by[BlockMetadata, Long](_.rank).reverse
+
+    StreamT.delay(
+      Eval.now(build(mutable.PriorityQueue.empty[BlockMetadata] ++ start, HashSet.empty[BlockHash]))
+    )
   }
 
   /**
@@ -108,7 +134,7 @@ object DagOperations {
       start: IndexedSeq[A],
       parents: A => F[List[A]]
   ): F[Map[A, BitSet]] = {
-    val commonSet = BitSet(0 until start.length: _*)
+    val commonSet = BitSet(start.indices: _*)
 
     def isCommon(set: BitSet): Boolean = set == commonSet
 
@@ -235,8 +261,7 @@ object DagOperations {
           commonAncestors: Set[Block]
       ): F[List[Block]] =
         for {
-          childrenHashesOpt      <- dag.children(b.blockHash)
-          childrenHashes         = childrenHashesOpt.getOrElse(Set.empty[BlockHash])
+          childrenHashes         <- dag.children(b.blockHash)
           children               <- childrenHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
           commonAncestorChildren = children.filter(commonAncestors)
         } yield commonAncestorChildren
@@ -248,9 +273,8 @@ object DagOperations {
         gca <- bfTraverseF[F, Block](List(genesis))(commonAncestorChild(_, commonAncestors)).findF(
                 b =>
                   for {
-                    childrenOpt <- dag.children(b.blockHash)
-                    children    = childrenOpt.getOrElse(Set.empty[BlockHash]).toList
-                    result <- children.existsM(
+                    children <- dag.children(b.blockHash)
+                    result <- children.toList.existsM(
                                hash =>
                                  for {
                                    c <- ProtoUtil.unsafeGetBlock[F](hash)

@@ -9,7 +9,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use proptest::collection::{btree_map, vec};
 use proptest::prelude::*;
-use proptest::{array, bits, option};
+use proptest::{array, bits, option, result};
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
     vec(any::<u8>(), 32).prop_map(|b| {
@@ -161,4 +161,8 @@ pub fn value_arb() -> impl Strategy<Value = Value> {
         Just(Value::Unit),
         (any::<u64>().prop_map(Value::UInt64)),
     ]
+}
+
+pub fn result_arb() -> impl Strategy<Value = Result<u32, u32>> {
+    result::maybe_ok(any::<u32>(), any::<u32>())
 }

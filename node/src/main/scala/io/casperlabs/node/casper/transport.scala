@@ -32,7 +32,6 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
-
 import scala.concurrent.duration._
 
 /** Create the Casper stack using the TransportLayer and CasperPacketHandler. */
@@ -50,7 +49,7 @@ package object transport {
       logEff: Log[Effect],
       metrics: Metrics[Task],
       metricsEff: Metrics[Effect],
-      safetyOracle: SafetyOracle[Effect],
+      safetyOracle: FinalityDetector[Effect],
       blockStore: BlockStore[Effect],
       blockDagStorage: BlockDagStorage[Effect],
       connectionsCell: ConnectionsCell[Task],
@@ -59,6 +58,7 @@ package object transport {
       multiParentCasperRef: MultiParentCasperRef[Effect],
       executionEngineService: ExecutionEngineService[Effect],
       finalizationHandler: LastFinalizedBlockHashContainer[Effect],
+      filesApiEff: FilesAPI[Effect],
       validation: Validation[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {
@@ -106,8 +106,27 @@ package object transport {
                               .of[Effect](
                                 conf.casper,
                                 defaultTimeout,
-                                executionEngineService,
                                 _.value
+                              )(
+                                labEff,
+                                metricsEff,
+                                blockStore,
+                                connectionsCellEff,
+                                nodeDiscoveryEff,
+                                transportEff,
+                                ErrorHandler[Effect],
+                                rpConfAskEff,
+                                safetyOracle,
+                                Sync[Effect],
+                                Concurrent[Effect],
+                                timeEff,
+                                logEff,
+                                multiParentCasperRef,
+                                blockDagStorage,
+                                executionEngineService,
+                                finalizationHandler,
+                                filesApiEff,
+                                scheduler
                               )
 
       implicit0(packetHandler: PacketHandler[Effect]) = PacketHandler

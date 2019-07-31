@@ -1,5 +1,7 @@
 package io.casperlabs.node
 
+import java.nio.file.Path
+
 import cats._
 import cats.data._
 import cats.effect._
@@ -26,10 +28,10 @@ import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.{syncId, taskLiftEitherT}
 import io.casperlabs.comm._
-import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.discovery.NodeDiscovery._
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.rp.Connect.RPConfState
 import io.casperlabs.comm.rp._
 import io.casperlabs.metrics.Metrics
@@ -40,6 +42,9 @@ import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngine
 import io.netty.handler.ssl.ClientAuth
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
+import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.Location
+
 import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
@@ -48,9 +53,9 @@ class NodeRuntime private[node] (
 )(implicit log: Log[Task], scheduler: Scheduler) {
 
   private[this] val loopScheduler =
-    Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
+    Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionHandler)
   private[this] val blockingScheduler =
-    Scheduler.cached("blocking-io", 4, 64, reporter = UncaughtExceptionLogger)
+    Scheduler.cached("blocking-io", 4, 64, reporter = UncaughtExceptionHandler)
   private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
     catsConcurrentEffectForEffect(
       scheduler
@@ -84,6 +89,8 @@ class NodeRuntime private[node] (
     implicit val logId: Log[Id]         = Log.logId
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
 
+    val filesApiEff = FilesAPI.create[Effect](Sync[Effect], logEff)
+
     // SSL context to use for the public facing API.
     val maybeApiSslContext = Option(conf.tls.readCertAndKey).filter(_ => conf.grpc.useTls).map {
       case (cert, key) =>
@@ -99,8 +106,7 @@ class NodeRuntime private[node] (
                                                                               Effect
                                                                             ](
                                                                               conf.grpc.socket,
-                                                                              conf.server.maxMessageSize,
-                                                                              initBonds = Map.empty
+                                                                              conf.server.maxMessageSize
                                                                             )
 
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
@@ -113,16 +119,19 @@ class NodeRuntime private[node] (
         implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                           id,
                                                           kademliaPort,
-                                                          conf.server.defaultTimeout
+                                                          conf.server.defaultTimeout,
+                                                          conf.server.useGossiping,
+                                                          conf.server.relayFactor,
+                                                          conf.server.relaySaturation
                                                         )(
                                                           maybeBootstrap
                                                         )(
                                                           blockingScheduler,
                                                           effects.peerNodeAsk,
                                                           log,
-                                                          effects.time,
                                                           metrics
                                                         )
+        _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
         implicit0(blockStore: BlockStore[Effect]) <- FileLMDBIndexBlockStore[Effect](
                                                       conf.server.dataDir,
@@ -184,8 +193,12 @@ class NodeRuntime private[node] (
                                                                             .of[Effect]
                                                                         )
 
-        implicit0(safetyOracle: SafetyOracle[Effect]) = SafetyOracle
-          .cliqueOracle[Effect](Monad[Effect], logEff)
+        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorInstancesImpl[
+          Effect
+        ]()(
+          Monad[Effect],
+          logEff
+        )
 
         blockApiLock <- Resource.liftF(Semaphore[Effect](1))
 
@@ -260,6 +273,7 @@ class NodeRuntime private[node] (
                 multiParentCasperRef,
                 executionEngineService,
                 finalizedBlocksStream,
+                filesApiEff,
                 validationEff,
                 scheduler,
                 logId,
@@ -284,6 +298,7 @@ class NodeRuntime private[node] (
                 multiParentCasperRef,
                 executionEngineService,
                 finalizedBlocksStream,
+                filesApiEff,
                 validationEff,
                 scheduler
               )
@@ -299,6 +314,19 @@ class NodeRuntime private[node] (
       }
     })
   }
+
+  private def runRdmbsMigrations(serverDataDir: Path): Effect[Unit] =
+    Task.delay {
+      val db = serverDataDir.resolve("sqlite.db").toString
+      val conf =
+        Flyway
+          .configure()
+          .dataSource(s"jdbc:sqlite:$db", "", "")
+          .locations(new Location("classpath:db/migration"))
+      val flyway = conf.load()
+      flyway.migrate()
+      ()
+    }.toEffect
 
   /** Start periodic tasks as fibers. They'll automatically stop during shutdown. */
   private def nodeProgram(

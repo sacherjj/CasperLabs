@@ -3,6 +3,7 @@ package io.casperlabs.comm.rp
 import cats.Id
 import cats.data._
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
@@ -18,6 +19,7 @@ import org.scalatest._
 
 import scala.concurrent.duration._
 
+@silent()
 class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
   import ScalaTestCats._

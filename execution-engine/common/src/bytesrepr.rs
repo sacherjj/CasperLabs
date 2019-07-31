@@ -1,9 +1,10 @@
 use super::alloc::collections::BTreeMap;
+use super::alloc::collections::CollectionAllocErr;
 use super::alloc::string::{String, ToString};
 use super::alloc::vec::Vec;
+
 use core::fmt::Display;
 use core::mem::{size_of, MaybeUninit};
-
 use failure::Fail;
 
 pub const I32_SIZE: usize = size_of::<i32>();
@@ -45,6 +46,12 @@ pub enum Error {
     CustomError(String),
 }
 
+impl From<CollectionAllocErr> for Error {
+    fn from(_: CollectionAllocErr) -> Error {
+        Error::OutOfMemoryError
+    }
+}
+
 impl Error {
     pub fn custom<T: Display>(msg: T) -> Error {
         Error::CustomError(msg.to_string())
@@ -58,6 +65,10 @@ pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
     } else {
         Err(Error::LeftOverBytes)
     }
+}
+
+pub fn serialize(t: impl ToBytes) -> Result<Vec<u8>, Error> {
+    t.to_bytes()
 }
 
 pub fn safe_split_at(bytes: &[u8], n: usize) -> Result<(&[u8], &[u8]), Error> {
@@ -133,7 +144,8 @@ impl FromBytes for u64 {
 impl FromBytes for Vec<u8> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (size, mut stream): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<u8> = Vec::with_capacity(size as usize);
+        let mut result: Vec<u8> = Vec::new();
+        result.try_reserve_exact(size as usize)?;
         for _ in 0..size {
             let (t, rem): (u8, &[u8]) = FromBytes::from_bytes(stream)?;
             result.push(t);
@@ -161,7 +173,8 @@ impl ToBytes for Vec<u8> {
 impl FromBytes for Vec<i32> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (size, mut stream): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<i32> = Vec::with_capacity(I32_SIZE * size as usize);
+        let mut result: Vec<i32> = Vec::new();
+        result.try_reserve_exact(size as usize)?;
         for _ in 0..size {
             let (t, rem): (i32, &[u8]) = FromBytes::from_bytes(stream)?;
             result.push(t);
@@ -228,7 +241,8 @@ impl ToBytes for Vec<i32> {
 impl FromBytes for Vec<Vec<u8>> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (size, mut stream): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<Vec<u8>> = Vec::with_capacity(size as usize);
+        let mut result = Vec::new();
+        result.try_reserve_exact(size as usize)?;
         for _ in 0..size {
             let (v, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(stream)?;
             result.push(v);
@@ -266,7 +280,8 @@ impl ToBytes for Vec<Vec<u8>> {
 impl FromBytes for Vec<String> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (size, mut stream): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<String> = Vec::with_capacity(size as usize);
+        let mut result = Vec::new();
+        result.try_reserve_exact(size as usize)?;
         for _ in 0..size {
             let (s, rem): (String, &[u8]) = FromBytes::from_bytes(stream)?;
             result.push(s);
@@ -386,8 +401,8 @@ where
         let bytes = self
             .iter()
             .map(move |(k, v)| {
-                let k_bytes = k.to_bytes().map_err(Into::into);
-                let v_bytes = v.to_bytes().map_err(Into::into);
+                let k_bytes = k.to_bytes().map_err(Error::from);
+                let v_bytes = v.to_bytes().map_err(Error::from);
                 // For each key and value pair create a vector of
                 // serialization results
                 let mut vs = Vec::with_capacity(2);
@@ -442,6 +457,36 @@ impl ToBytes for &str {
         result.extend((size as u32).to_bytes()?);
         result.extend(bytes);
         Ok(result)
+    }
+}
+
+impl<T: ToBytes, E: ToBytes> ToBytes for Result<T, E> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let (mut variant, mut value) = match self {
+            Ok(result) => (1u8.to_bytes()?, result.to_bytes()?),
+            Err(error) => (0u8.to_bytes()?, error.to_bytes()?),
+        };
+        let mut result: Vec<u8> = Vec::with_capacity(U8_SIZE + value.len());
+        result.append(&mut variant);
+        result.append(&mut value);
+        Ok(result)
+    }
+}
+
+impl<T: FromBytes, E: FromBytes> FromBytes for Result<T, E> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (variant, rem): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
+        match variant {
+            0 => {
+                let (value, rem): (E, &[u8]) = FromBytes::from_bytes(rem)?;
+                Ok((Err(value), rem))
+            }
+            1 => {
+                let (value, rem): (T, &[u8]) = FromBytes::from_bytes(rem)?;
+                Ok((Ok(value), rem))
+            }
+            _ => Err(Error::FormattingError),
+        }
     }
 }
 
@@ -553,6 +598,16 @@ mod proptests {
         #[test]
         fn test_access_rights(access_right in access_rights_arb()) {
             assert!(test_serialization_roundtrip(&access_right))
+        }
+
+        #[test]
+        fn test_public_key(pk in public_key_arb()) {
+            assert!(test_serialization_roundtrip(&pk))
+        }
+
+        #[test]
+        fn test_result(result in result_arb()) {
+            assert!(test_serialization_roundtrip(&result))
         }
     }
 

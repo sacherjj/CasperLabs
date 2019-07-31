@@ -86,6 +86,9 @@ object Dependencies {
   val secp256k1Java = "com.github.rchain" % "secp256k1-java" % "0.1"
   val tomlScala     = "tech.sparse"       %% "toml-scala"    % "0.1.1"
   val refinement    = "eu.timepit"        %% "refined"       % "0.9.5"
+  val apacheCommons = "commons-io"        % "commons-io"     % "2.6"
+  val sqlLite       = "org.xerial"        % "sqlite-jdbc"    % "3.28.0"
+  val flyway        = "org.flywaydb"      % "flyway-core"    % "5.2.4"
 
   val overrides = Seq(
     catsCore,
@@ -133,7 +136,10 @@ object Dependencies {
     http4sDependencies ++ circeDependencies
 
   val commonDependencies: Seq[ModuleID] =
-    logging ++ testing :+ kindProjector :+ macroParadise :+ betterMonadicFor
+    Seq(
+      compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.1"),
+      "com.github.ghik" %% "silencer-lib" % "1.4.1" % Provided
+    ) ++ logging ++ testing :+ kindProjector :+ macroParadise :+ betterMonadicFor
 
   val gatlingDependencies: Seq[ModuleID] = Seq(
     gatlingFramework,

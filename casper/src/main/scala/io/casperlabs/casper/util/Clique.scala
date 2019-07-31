@@ -30,10 +30,10 @@ object Clique {
           .tail
 
         runTimeParameter.toStream.flatMap {
-          case (s, Some(elem)) => {
+          case (s, Some(elem)) =>
             val adjQ = adj.getOrElse(elem, Set())
             expand(ans :+ elem, (P &~ s) & adjQ, (P ++ s) & adjQ)
-          }
+          case _ => ???
         }
       }
 

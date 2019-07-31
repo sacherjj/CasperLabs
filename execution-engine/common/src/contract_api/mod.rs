@@ -9,9 +9,10 @@ use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 use crate::value::account::{
-    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+    Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
+    SetThresholdFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
-use crate::value::{Contract, Value};
+use crate::value::{Contract, Value, U512};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -204,7 +205,7 @@ pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: U
 }
 
 /// Return the i-th argument passed to the host for the current module
-/// invokation. Note that this is only relevent to contracts stored on-chain
+/// invocation. Note that this is only relevant to contracts stored on-chain
 /// since a contract deployed directly is not invoked with any arguments.
 pub fn get_arg<T: FromBytes>(i: u32) -> T {
     let arg_size = unsafe { ext_ffi::load_arg(i) };
@@ -220,15 +221,18 @@ pub fn get_arg<T: FromBytes>(i: u32) -> T {
 /// Return the unforgable reference known by the current module under the given name.
 /// This either comes from the known_urefs of the account or contract,
 /// depending on whether the current module is a sub-call or not.
-pub fn get_uref(name: &str) -> Key {
+pub fn get_uref(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let dest_ptr = alloc_bytes(UREF_SIZE);
-    let uref_bytes = unsafe {
-        ext_ffi::get_uref(name_ptr, name_size, dest_ptr);
-        Vec::from_raw_parts(dest_ptr, UREF_SIZE, UREF_SIZE)
+    let key_size = unsafe { ext_ffi::get_uref(name_ptr, name_size) };
+    let dest_ptr = alloc_bytes(key_size);
+    let key_bytes = unsafe {
+        // TODO: unify FFIs that just copy from the host buffer
+        // https://casperlabs.atlassian.net/browse/EE-426
+        ext_ffi::get_arg(dest_ptr);
+        Vec::from_raw_parts(dest_ptr, key_size, key_size)
     };
     // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&uref_bytes).unwrap()
+    deserialize(&key_bytes).unwrap()
 }
 
 /// Check if the given name corresponds to a known unforgable reference
@@ -251,8 +255,28 @@ pub fn remove_uref(name: &str) {
     unsafe { ext_ffi::remove_uref(name_ptr, name_size) }
 }
 
+/// Returns caller of current context.
+/// When in root context (not in the sub call) - returns None.
+/// When in the sub call - returns public key of the account that made the deploy.
+pub fn get_caller() -> PublicKey {
+    //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
+    let dest_ptr = alloc_bytes(36);
+    unsafe { ext_ffi::get_caller(dest_ptr) };
+    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
+    deserialize(&bytes).unwrap()
+}
+
+pub fn get_blocktime() -> BlockTime {
+    let dest_ptr = alloc_bytes(BLOCKTIME_SER_SIZE);
+    let bytes = unsafe {
+        ext_ffi::get_blocktime(dest_ptr);
+        Vec::from_raw_parts(dest_ptr, BLOCKTIME_SER_SIZE, BLOCKTIME_SER_SIZE)
+    };
+    deserialize(&bytes).unwrap()
+}
+
 /// Return `t` to the host, terminating the currently running module.
-/// Note this function is only relevent to contracts stored on chain which
+/// Note this function is only relevant to contracts stored on chain which
 /// return a value to their caller. The return value of a directly deployed
 /// contract is never looked at.
 #[allow(clippy::ptr_arg)]
@@ -344,4 +368,149 @@ pub fn set_action_threshold(
         d if d == 0 => Ok(()),
         d => Err(SetThresholdFailure::from(d)),
     }
+}
+
+pub fn create_purse() -> PurseId {
+    let purse_id_ptr = alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
+    unsafe {
+        let ret = ext_ffi::create_purse(purse_id_ptr, PURSE_ID_SIZE_SERIALIZED);
+        if ret == 0 {
+            let bytes = Vec::from_raw_parts(
+                purse_id_ptr,
+                PURSE_ID_SIZE_SERIALIZED,
+                PURSE_ID_SIZE_SERIALIZED,
+            );
+            deserialize(&bytes).unwrap()
+        } else {
+            panic!("could not create purse_id")
+        }
+    }
+}
+
+pub fn main_purse() -> PurseId {
+    // TODO: this could be more efficient, bringing the entire account
+    // object across the host/wasm boundary only to use 32 bytes of
+    // its data is pretty bad. A native FFI (as opposed to a library
+    // API) would get around this problem. However, this solution
+    // works for the time being.
+    // https://casperlabs.atlassian.net/browse/EE-439
+    let account_pk = get_caller();
+    let key = Key::Account(account_pk.value());
+    let account: Account = read_untyped(&key).unwrap().try_into().unwrap();
+    account.purse_id()
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TransferResult {
+    TransferredToExistingAccount,
+    TransferredToNewAccount,
+    TransferError,
+}
+
+impl TryFrom<i32> for TransferResult {
+    type Error = ();
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(TransferResult::TransferredToExistingAccount),
+            1 => Ok(TransferResult::TransferredToNewAccount),
+            2 => Ok(TransferResult::TransferError),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<TransferResult> for i32 {
+    fn from(result: TransferResult) -> Self {
+        match result {
+            TransferResult::TransferredToExistingAccount => 0,
+            TransferResult::TransferredToNewAccount => 1,
+            TransferResult::TransferError => 2,
+        }
+    }
+}
+
+/// Transfers `amount` of tokens from default purse of the account to `target` account.
+/// If `target` does not exist it will create it.
+pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
+    let (target_ptr, target_size, _bytes) = to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) }
+        .try_into()
+        .expect("should parse result")
+}
+
+/// Transfers `amount` of tokens from `source` purse to `target` account.
+/// If `target` does not exist it will create it.
+pub fn transfer_from_purse_to_account(
+    source: PurseId,
+    target: PublicKey,
+    amount: U512,
+) -> TransferResult {
+    let (source_ptr, source_size, _bytes) = to_ptr(&source);
+    let (target_ptr, target_size, _bytes) = to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    unsafe {
+        ext_ffi::transfer_from_purse_to_account(
+            source_ptr,
+            source_size,
+            target_ptr,
+            target_size,
+            amount_ptr,
+            amount_size,
+        )
+    }
+    .try_into()
+    .expect("should parse result")
+}
+
+// TODO: Improve returned result type.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum PurseTransferResult {
+    TransferSuccessful,
+    TransferError,
+}
+
+impl TryFrom<i32> for PurseTransferResult {
+    type Error = ();
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(PurseTransferResult::TransferSuccessful),
+            1 => Ok(PurseTransferResult::TransferError),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<PurseTransferResult> for i32 {
+    fn from(result: PurseTransferResult) -> Self {
+        match result {
+            PurseTransferResult::TransferSuccessful => 0,
+            PurseTransferResult::TransferError => 1,
+        }
+    }
+}
+
+/// Transfers `amount` of tokens from `source` purse to `target` purse.
+pub fn transfer_from_purse_to_purse(
+    source: PurseId,
+    target: PurseId,
+    amount: U512,
+) -> PurseTransferResult {
+    let (source_ptr, source_size, _bytes) = to_ptr(&source);
+    let (target_ptr, target_size, _bytes) = to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    unsafe {
+        ext_ffi::transfer_from_purse_to_purse(
+            source_ptr,
+            source_size,
+            target_ptr,
+            target_size,
+            amount_ptr,
+            amount_size,
+        )
+    }
+    .try_into()
+    .expect("Should parse result")
 }

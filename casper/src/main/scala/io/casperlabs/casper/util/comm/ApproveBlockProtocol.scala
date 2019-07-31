@@ -115,8 +115,9 @@ object ApproveBlockProtocol {
 
     def addApproval(a: BlockApproval): F[Unit] = {
       val validSig = for {
-        c   <- a.candidate if c == this.candidate
-        sig <- a.sig if Validation[F].signature(sigData, sig)
+        _   <- a.candidate.filter(_ == this.candidate)
+        sig <- a.sig
+        if Validate[F].signature(sigData, sig)
       } yield sig
 
       val trustedValidator =

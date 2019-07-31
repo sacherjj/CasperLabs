@@ -459,7 +459,7 @@ class DownloadManagerSpec
           }
         }
 
-      def withRechunking(f: Iterant[Task, Chunk] => Iterant[Task, Chunk]) = { (node: Node) =>
+      def withRechunking(f: Iterant[Task, Chunk] => Iterant[Task, Chunk]) = { _: Node =>
         MockGossipService(Seq(block), rechunker = f)
       }
 
@@ -565,7 +565,7 @@ object DownloadManagerSpec {
       )
 
       val runTest = managerR.use { manager =>
-        test(manager, backend)
+        test((manager, backend))
       }
 
       runTest.runSyncUnsafe(timeout)

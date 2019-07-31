@@ -20,6 +20,7 @@ use std::iter::Iterator;
 use std::str;
 
 use common::key::Key;
+use common::value::account::{BlockTime, PublicKey};
 use execution_engine::engine_state::error::RootNotFound;
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -43,7 +44,6 @@ const SERVER_START_MESSAGE: &str = "starting Execution Engine Standalone";
 const SERVER_STOP_MESSAGE: &str = "stopping Execution Engine Standalone";
 const SERVER_NO_WASM_MESSAGE: &str = "no wasm files to process";
 const SERVER_NO_GAS_LIMIT_MESSAGE: &str = "gas limit is 0";
-const VALIDATE_NONCE: &str = "validate-nonce";
 
 // loglevel
 const ARG_LOG_LEVEL: &str = "loglevel";
@@ -175,7 +175,7 @@ fn main() {
         logging::log_info(SERVER_NO_WASM_MESSAGE);
     }
 
-    let account_addr = {
+    let account_addr_bytes = {
         let address_hex = matches.value_of("address").expect("Unable to get address");
         if address_hex.len() != 64 {
             panic!("Provided address should be exactly 64 bytes long");
@@ -185,8 +185,11 @@ fn main() {
         binascii::hex2bin(address_hex.as_bytes(), &mut dest)
             .ok()
             .expect("Unable to parse address");
-        Key::Account(dest)
+        dest
     };
+
+    let account_addr = Key::Account(account_addr_bytes);
+    let public_key = PublicKey::new(account_addr_bytes);
 
     let gas_limit: u64 = matches
         .value_of("gas-limit")
@@ -197,8 +200,6 @@ fn main() {
         logging::log_info(SERVER_NO_GAS_LIMIT_MESSAGE);
     }
 
-    let validate_nonce = matches.is_present(VALIDATE_NONCE);
-
     // TODO: move to arg parser
     let timestamp: u64 = 100_000;
     let protocol_version: u64 = 1;
@@ -207,7 +208,7 @@ fn main() {
     let global_state = InMemoryGlobalState::from_pairs(CorrelationId::new(), &init_state)
         .expect("Could not create global state");
     let mut state_hash: Blake2bHash = global_state.root_hash;
-    let engine_state = EngineState::new(global_state, validate_nonce);
+    let engine_state = EngineState::new(global_state);
 
     let wasmi_executor = WasmiExecutor;
     let wasm_costs = WasmCosts::from_version(protocol_version).unwrap_or_else(|| {
@@ -225,7 +226,8 @@ fn main() {
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
             account_addr,
-            timestamp,
+            &[public_key],
+            BlockTime(timestamp),
             nonce,
             state_hash,
             gas_limit,
@@ -237,10 +239,6 @@ fn main() {
 
         let mut properties = BTreeMap::new();
 
-        properties.insert(
-            String::from("validate-nonce"),
-            format!("{:?}", validate_nonce),
-        );
         properties.insert(String::from("pre-state-hash"), format!("{:?}", state_hash));
         properties.insert(String::from("wasm-path"), wasm_bytes.path.to_owned());
         properties.insert(String::from("nonce"), format!("{}", nonce));
@@ -346,7 +344,6 @@ fn get_args() -> ArgMatches<'static> {
                 .value_name(ARG_LOG_LEVEL_VALUE)
                 .help(ARG_LOG_LEVEL_HELP),
         )
-        .arg(Arg::with_name(VALIDATE_NONCE).long(VALIDATE_NONCE))
         .arg(
             Arg::with_name("wasm")
                 .long("wasm")

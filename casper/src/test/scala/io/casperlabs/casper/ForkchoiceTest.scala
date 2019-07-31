@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Bond
@@ -11,6 +12,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 
+@silent("is never used")
 class ForkchoiceTest
     extends FlatSpec
     with Matchers
@@ -239,7 +241,7 @@ class ForkchoiceTest
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           a       <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
           b       <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          _       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
           d       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
           e       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
           f       <- createBlock[Task](Seq(b.blockHash), v2, bonds)
