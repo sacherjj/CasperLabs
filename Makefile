@@ -247,7 +247,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
-.make/client/contracts: build-validator-contracts
+.make/client/contracts: build-client-contracts
 	mkdir -p $(dir $@) && touch $@
 
 .make/node/contracts:
@@ -335,19 +335,20 @@ package-system-contracts: \
 	mkdir -p $(dir $@) && touch $@
 
 # Compile a validator contract;
-.make/contracts/validator/%: $(RUST_SRC) .make/rustup-update
+.make/contracts/client/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$*)
-	cd execution-engine/contracts/validator/$(CONTRACT) && \
+	cd execution-engine/contracts/client/$(CONTRACT) && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@
 
-client/src/main/resources/%.wasm: .make/contracts/validator/%
+client/src/main/resources/%.wasm: .make/contracts/client/%
 	$(eval CONTRACT=$*)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
 
-build-validator-contracts: \
+build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
-	client/src/main/resources/unbonding.wasm
+	client/src/main/resources/unbonding.wasm \
+	client/src/main/resources/transfer_to_account.wasm
 
 # Package all system contracts that we have to make available for download.
 execution-engine/target/system-contracts.tar.gz: \

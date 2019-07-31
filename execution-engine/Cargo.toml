@@ -3,6 +3,9 @@
 members = [
     "comm",
     "common",
+    "contracts/client/bonding",
+    "contracts/client/transfer_to_account",
+    "contracts/client/unbonding",
     "contracts/system/mint-token",
     "contracts/system/pos",
     "contracts/system/test-mint-token",
@@ -25,8 +28,6 @@ members = [
     "contracts/test/blessed-urefs-access-rights",
     "contracts/test/transfer-purse-to-account",
     "contracts/test/deserialize-error",
-    "contracts/validator/bonding",
-    "contracts/validator/unbonding",
     "engine",
     "metrics-scraper",
     "shared",
