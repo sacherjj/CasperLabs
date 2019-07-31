@@ -95,3 +95,13 @@ Feature: Consensus
      And: Deploys unbonding request with amount greater than 90% of the total current staked amount.
      Then: Node still is bonded in network.
      And: Starting from new block new node can be found in bonded validators set.
+
+
+  # Implemented test_bonding.py : test_unbonding_without_bonding
+  Scenario: unbonding a validator node which was not bonded to an existing network.
+    Given: Single  Node Network
+     And: A bonded Validator.
+     When: New node joins the network.
+     And: Deploys unbonding request.
+     Then: Node still is not unbonded since it didn't bond to network.
+     And: Starting from new block new node cannot be found in bonded validators set.
