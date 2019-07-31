@@ -1342,8 +1342,7 @@ mod tests {
                 _ => panic!("Invalid transform operation found"),
             };
             account
-                .associated_keys()
-                .get(&public_key)
+                .get_associated_key_weight(public_key)
                 .expect("Public key wasn't added to associated keys");
 
             let new_weight = Weight::new(100);
@@ -1358,8 +1357,7 @@ mod tests {
                 _ => panic!("Invalid transform operation found"),
             };
             let value = account
-                .associated_keys()
-                .get(&public_key)
+                .get_associated_key_weight(public_key)
                 .expect("Public key wasn't added to associated keys");
 
             assert_eq!(value, &new_weight, "value was not updated");
@@ -1377,7 +1375,7 @@ mod tests {
                 _ => panic!("Invalid transform operation found"),
             };
 
-            assert!(account.associated_keys().get(&public_key).is_none());
+            assert!(account.get_associated_key_weight(public_key).is_none());
 
             // Remove a key that was already removed
             runtime_context

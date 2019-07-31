@@ -262,8 +262,6 @@ impl From<common::value::account::Account> for super::state::Account {
         ipc_account.set_purse_id(account.purse_id().value().into());
         let associated_keys: Vec<super::state::Account_AssociatedKey> = account
             .get_associated_keys()
-            .get_all()
-            .iter()
             .map(|(key, weight)| {
                 let mut ipc_associated_key = super::state::Account_AssociatedKey::new();
                 ipc_associated_key.set_public_key(key.value().to_vec());
