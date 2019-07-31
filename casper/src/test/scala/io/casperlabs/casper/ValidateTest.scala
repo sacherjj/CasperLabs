@@ -679,26 +679,25 @@ class ValidateTest
       } yield result
   }
 
-  "Block version validation" should "work" in withStorage {
-    implicit bs => implicit blockDagStorage =>
-      val (sk, pk)                              = Ed25519.newKeyPair
-      val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
-      // Genesis' block version is 1.  `missingProtocolVersionForBlock` will fail ProtocolVersion lookup
-      // while `protocolVersionForGenesisBlock` returns proper one (version=1)
-      val missingProtocolVersionForBlock: Long => ProtocolVersion = _ => ProtocolVersion(-1)
-      val protocolVersionForGenesisBlock: Long => ProtocolVersion = _ => ProtocolVersion(1)
-      for {
-        dag     <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock(block, dag, pk, sk, Ed25519)
-        _ <- Validation[Task].version(
-              genesis,
-              missingProtocolVersionForBlock
-            ) shouldBeF false
-        result <- Validation[Task].version(
-                   genesis,
-                   protocolVersionForGenesisBlock
-                 ) shouldBeF true
-      } yield result
+  "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
+    val (sk, pk)                              = Ed25519.newKeyPair
+    val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    // Genesis' block version is 1.  `missingProtocolVersionForBlock` will fail ProtocolVersion lookup
+    // while `protocolVersionForGenesisBlock` returns proper one (version=1)
+    val missingProtocolVersionForBlock: Long => ProtocolVersion = _ => ProtocolVersion(-1)
+    val protocolVersionForGenesisBlock: Long => ProtocolVersion = _ => ProtocolVersion(1)
+    for {
+      dag     <- blockDagStorage.getRepresentation
+      genesis <- ProtoUtil.signBlock(block, dag, pk, sk, Ed25519)
+      _ <- Validation[Task].version(
+            genesis,
+            missingProtocolVersionForBlock
+          ) shouldBeF false
+      result <- Validation[Task].version(
+                 genesis,
+                 protocolVersionForGenesisBlock
+               ) shouldBeF true
+    } yield result
   }
 
   "validateTransactions" should "return InvalidPreStateHash when preStateHash of block is not correct" in withStorage {

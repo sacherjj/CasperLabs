@@ -36,7 +36,7 @@ object ValidationImpl {
   def apply[F[_]](implicit ev: ValidationImpl[F]) = ev
 }
 
-class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: ExecutionEngineService: Time]
+class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
     extends Validation[F] {
   import ValidationImpl.DRIFT
 
@@ -136,7 +136,7 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
       dag: BlockDagRepresentation[F],
       chainId: String,
       maybeGenesis: Option[Block]
-  ): F[Unit] = {
+  )(implicit bs: BlockStore[F]): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
     for {
       _ <- checkDroppable(
@@ -225,7 +225,7 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
       } yield signatoriesVerified && keysMatched
     }
 
-  def blockSender(block: BlockSummary): F[Boolean] =
+  def blockSender(block: BlockSummary)(implicit bs: BlockStore[F]): F[Boolean] =
     for {
       weight <- ProtoUtil.weightFromSender[F](block.getHeader)
       result <- if (weight > 0) true.pure[F]
@@ -309,7 +309,7 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
     */
   def missingBlocks(
       block: BlockSummary
-  ): F[Unit] =
+  )(implicit bs: BlockStore[F]): F[Unit] =
     for {
       parentsPresent <- block.getHeader.parentHashes.toList.forallM(p => BlockStore[F].contains(p))
       justificationsPresent <- block.getHeader.justifications.toList
@@ -322,7 +322,7 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
   // This is not a slashable offence
   def timestamp(
       b: BlockSummary
-  ): F[Unit] =
+  )(implicit bs: BlockStore[F]): F[Unit] =
     for {
       currentTime  <- Time[F].currentMillis
       timestamp    = b.getHeader.timestamp
@@ -547,6 +547,8 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
       b: Block,
       lastFinalizedBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
+  )(
+      implicit bs: BlockStore[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
     def printHashes(hashes: Iterable[ByteString]) =
       hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
@@ -595,7 +597,7 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
       block: Block,
       preStateHash: StateHash,
       effects: Seq[ipc.TransformEntry]
-  ): F[Unit] = {
+  )(implicit ee: ExecutionEngineService[F]): F[Unit] = {
     val blockPreState  = ProtoUtil.preStateHash(block)
     val blockPostState = ProtoUtil.postStateHash(block)
     if (preStateHash == blockPreState) {
