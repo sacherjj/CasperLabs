@@ -21,7 +21,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
   }
 
   render() {
-    const newAccount = this.props.auth.newAccount;
+    const newAccount = this.props.auth.newAccountForm;
     return (
       <div>
         <DataTable
@@ -80,7 +80,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
             submitLabel="Save"
             onSubmit={() => this.props.auth.createAccount()}
             onClose={() => {
-              this.props.auth.newAccount = null;
+              this.props.auth.newAccountForm = null;
             }}
             error={newAccount.error}
           >

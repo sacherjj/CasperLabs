@@ -2,7 +2,7 @@ import { observable } from 'mobx';
 import * as nacl from 'tweetnacl-ts';
 import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
-import FormData from './FormData';
+import { CleanableFormData } from './FormData';
 import AuthService from '../services/AuthService';
 import CasperService from '../services/CasperService';
 import { encodeBase64, decodeBase16 } from '../lib/Conversions';
@@ -19,7 +19,7 @@ export class AuthContainer {
   @observable accounts: UserAccount[] | null = null;
 
   // An account we are creating, while we're configuring it.
-  @observable newAccount: NewAccountFormData | null = null;
+  @observable newAccountForm: NewAccountFormData | null = null;
 
   @observable selectedAccount: UserAccount | null = null;
 
@@ -116,11 +116,11 @@ export class AuthContainer {
 
   // Open a new account creation form.
   configureNewAccount() {
-    this.newAccount = new NewAccountFormData(this.accounts!);
+    this.newAccountForm = new NewAccountFormData(this.accounts!);
   }
 
   async createAccount(): Promise<boolean> {
-    let form = this.newAccount!;
+    let form = this.newAccountForm!;
     if (form.clean()) {
       // Save the private and public keys to disk.
       saveToFile(form.privateKeyBase64, `${form.name}.private.key`);
@@ -164,7 +164,7 @@ function saveToFile(content: string, filename: string) {
   saveAs(blob, filename);
 }
 
-class NewAccountFormData extends FormData {
+class NewAccountFormData extends CleanableFormData {
   constructor(private accounts: UserAccount[]) {
     super();
     // Generate key pair and assign to public and private keys.
