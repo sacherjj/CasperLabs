@@ -13,7 +13,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use wasmi::{
     Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
-    ModuleRef, RuntimeArgs, RuntimeValue, Trap,
+    ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind,
 };
 
 use args::Args;
@@ -617,12 +617,16 @@ where
         action_type_value: u32,
         threshold_value: u8,
     ) -> Result<i32, Trap> {
-        let action_type = ActionType::from(action_type_value);
-        let threshold = Weight::new(threshold_value);
-        match self.context.set_action_threshold(action_type, threshold) {
-            Ok(_) => Ok(0),
-            Err(Error::SetThresholdFailure(e)) => Ok(e as i32),
-            Err(e) => Err(e.into()),
+        match ActionType::try_from(action_type_value) {
+            Ok(action_type) => {
+                let threshold = Weight::new(threshold_value);
+                match self.context.set_action_threshold(action_type, threshold) {
+                    Ok(_) => Ok(0),
+                    Err(Error::SetThresholdFailure(e)) => Ok(e as i32),
+                    Err(e) => Err(e.into()),
+                }
+            }
+            Err(_) => Err(Trap::new(TrapKind::Unreachable)),
         }
     }
 
