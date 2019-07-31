@@ -1,19 +1,14 @@
-import { computed, observable } from 'mobx';
+import { computed } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import StorageCell from '../lib/StorageCell';
 import FaucetService from '../services/FaucetService';
 import CasperService from '../services/CasperService';
-import {
-  DeployInfo,
-  BlockInfo
-} from '../grpc/io/casperlabs/casper/consensus/info_pb';
+import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import { GrpcError } from '../services/Errors';
 import { grpc } from '@improbable-eng/grpc-web';
 
-// CasperContainer talks to the API on behalf of React
-// components and exposes the state in MobX observables.
-export class CasperContainer {
+export class FaucetContainer {
   private _faucetRequests = new StorageCell<FaucetRequest[]>(
     'faucet-requests',
     []
@@ -23,15 +18,11 @@ export class CasperContainer {
   private faucetStatusTimerId = 0;
   private faucetStatusInterval = 10 * 1000;
 
-  // Block DAG
-  @observable blocks: BlockInfo[] | null = null;
-  @observable selectedBlock: BlockInfo | undefined = undefined;
-  @observable dagDepth = 10;
-
   constructor(
     private errors: ErrorContainer,
     private faucetService: FaucetService,
     private casperService: CasperService,
+    // Callback when the faucet status finished so we can update the balances.
     private onFaucetStatusChange: () => void
   ) {}
 
@@ -43,7 +34,7 @@ export class CasperContainer {
       );
       this.monitorFaucetRequest(account, deployHash);
     };
-    this.errors.capture(request());
+    await this.errors.capture(request());
   }
 
   /** List faucet requests we sent earlier. */
@@ -110,14 +101,6 @@ export class CasperContainer {
       throw err;
     }
   }
-
-  async refreshBlockDag() {
-    this.errors.capture(
-      this.casperService.getBlockInfos(this.dagDepth).then(blocks => {
-        this.blocks = blocks;
-      })
-    );
-  }
 }
 
 // Record of a request we submitted.
@@ -129,4 +112,4 @@ export interface FaucetRequest {
   deployInfo?: DeployInfo.AsObject;
 }
 
-export default CasperContainer;
+export default FaucetContainer;

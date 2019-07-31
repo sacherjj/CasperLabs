@@ -13,7 +13,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use wasmi::{
     Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
-    ModuleRef, RuntimeArgs, RuntimeValue, Trap,
+    ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind,
 };
 
 use args::Args;
@@ -25,7 +25,7 @@ use common::system_contracts::{self, mint};
 use common::uref::{AccessRights, URef};
 use common::value::account::{
     ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
-    SetThresholdFailure, Weight, PUBLIC_KEY_SIZE,
+    SetThresholdFailure, UpdateKeyFailure, Weight, PUBLIC_KEY_SIZE,
 };
 use common::value::{Account, Value, U512};
 use engine_state::execution_result::ExecutionResult;
@@ -72,6 +72,7 @@ pub enum Error {
     Revert(u32),
     AddKeyFailure(AddKeyFailure),
     RemoveKeyFailure(RemoveKeyFailure),
+    UpdateKeyFailure(UpdateKeyFailure),
     SetThresholdFailure(SetThresholdFailure),
     SystemContractError(system_contracts::error::Error),
 }
@@ -127,6 +128,12 @@ impl From<AddKeyFailure> for Error {
 impl From<RemoveKeyFailure> for Error {
     fn from(err: RemoveKeyFailure) -> Error {
         Error::RemoveKeyFailure(err)
+    }
+}
+
+impl From<UpdateKeyFailure> for Error {
+    fn from(err: UpdateKeyFailure) -> Error {
+        Error::UpdateKeyFailure(err)
     }
 }
 
@@ -578,17 +585,48 @@ where
         }
     }
 
+    fn update_associated_key(
+        &mut self,
+        public_key_ptr: u32,
+        weight_value: u8,
+    ) -> Result<i32, Trap> {
+        let public_key = {
+            // Public key as serialized bytes
+            let source_serialized =
+                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            // Public key deserialized
+            let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+            source
+        };
+        let weight = Weight::new(weight_value);
+
+        match self.context.update_associated_key(public_key, weight) {
+            Ok(_) => Ok(0),
+            // This relies on the fact that `UpdateKeyFailure` is represented as
+            // i32 and first variant start with number `1`, so all other variants
+            // are greater than the first one, so it's safe to assume `0` is success,
+            // and any error is greater than 0.
+            Err(Error::UpdateKeyFailure(e)) => Ok(e as i32),
+            // Any other variant just pass as `Trap`
+            Err(e) => Err(e.into()),
+        }
+    }
+
     fn set_action_threshold(
         &mut self,
         action_type_value: u32,
         threshold_value: u8,
     ) -> Result<i32, Trap> {
-        let action_type = ActionType::from(action_type_value);
-        let threshold = Weight::new(threshold_value);
-        match self.context.set_action_threshold(action_type, threshold) {
-            Ok(_) => Ok(0),
-            Err(Error::SetThresholdFailure(e)) => Ok(e as i32),
-            Err(e) => Err(e.into()),
+        match ActionType::try_from(action_type_value) {
+            Ok(action_type) => {
+                let threshold = Weight::new(threshold_value);
+                match self.context.set_action_threshold(action_type, threshold) {
+                    Ok(_) => Ok(0),
+                    Err(Error::SetThresholdFailure(e)) => Ok(e as i32),
+                    Err(e) => Err(e.into()),
+                }
+            }
+            Err(_) => Err(Trap::new(TrapKind::Unreachable)),
         }
     }
 
@@ -1100,6 +1138,14 @@ where
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
+            FunctionIndex::UpdateAssociatedKeyFuncIndex => {
+                // args(0) = pointer to array of bytes of a public key
+                // args(1) = weight of the key
+                let (public_key_ptr, weight_value): (u32, u8) = Args::parse(args)?;
+                let value = self.update_associated_key(public_key_ptr, weight_value)?;
+                Ok(Some(RuntimeValue::I32(value)))
+            }
+
             FunctionIndex::SetActionThresholdFuncIndex => {
                 // args(0) = action type
                 // args(1) = new threshold
@@ -1557,6 +1603,7 @@ mod tests {
             cost: success_cost,
         }
     }
+
     #[test]
     fn on_fail_charge_ok_test() {
         match on_fail_charge_test_helper(|| Ok(()), 123, 456) {

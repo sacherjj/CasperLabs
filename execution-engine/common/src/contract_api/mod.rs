@@ -10,7 +10,7 @@ use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
-    SetThresholdFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
+    SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
 use crate::value::{Contract, Value, U512};
 use alloc::collections::BTreeMap;
@@ -343,7 +343,7 @@ pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), A
     // Translates FFI
     match result {
         d if d == 0 => Ok(()),
-        d => Err(AddKeyFailure::from(d)),
+        d => Err(AddKeyFailure::try_from(d).expect("invalid result")),
     }
 }
 
@@ -353,7 +353,22 @@ pub fn remove_associated_key(public_key: PublicKey) -> Result<(), RemoveKeyFailu
     let result = unsafe { ext_ffi::remove_associated_key(public_key_ptr) };
     match result {
         d if d == 0 => Ok(()),
-        d => Err(RemoveKeyFailure::from(d)),
+        d => Err(RemoveKeyFailure::try_from(d).expect("invalid result")),
+    }
+}
+
+/// Updates the value stored under a public key associated with an account
+pub fn update_associated_key(
+    public_key: PublicKey,
+    weight: Weight,
+) -> Result<(), UpdateKeyFailure> {
+    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
+    // Cast of u8 (weight) into i32 is assumed to be always safe
+    let result = unsafe { ext_ffi::update_associated_key(public_key_ptr, weight.value().into()) };
+    // Translates FFI
+    match result {
+        d if d == 0 => Ok(()),
+        d => Err(UpdateKeyFailure::try_from(d).expect("invalid result")),
     }
 }
 
@@ -366,7 +381,7 @@ pub fn set_action_threshold(
     let result = unsafe { ext_ffi::set_action_threshold(permission_level, threshold) };
     match result {
         d if d == 0 => Ok(()),
-        d => Err(SetThresholdFailure::from(d)),
+        d => Err(SetThresholdFailure::try_from(d).expect("invalid result")),
     }
 }
 
