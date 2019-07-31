@@ -903,8 +903,8 @@ fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::Depl
 }
 
 pub fn to_domain_validators(bond: &ipc::Bond) -> Result<(PublicKey, U512), String> {
-    let pk = PublicKey::from_slice(bond.get_validator_public_key())
-        .ok_or("Public key has to be exactly 32 bytes long.")?;
+    let pk = PublicKey::try_from(bond.get_validator_public_key())
+        .map_err(|_| "Public key has to be exactly 32 bytes long.")?;
     match bond.get_stake().try_into() {
         Ok(bond) => Ok((pk, bond)),
         Err(err) => {

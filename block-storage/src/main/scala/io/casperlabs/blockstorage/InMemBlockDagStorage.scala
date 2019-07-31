@@ -34,8 +34,8 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
       dataLookup: Map[BlockHash, BlockMetadata],
       topoSortVector: Vector[Vector[BlockHash]]
   ) extends BlockDagRepresentation[F] {
-    def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
-      childMap.get(blockHash).pure[F]
+    def children(blockHash: BlockHash): F[Set[BlockHash]] =
+      childMap.getOrElse(blockHash, Set.empty).pure[F]
     def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
       justificationMap.get(blockHash).pure[F]
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =

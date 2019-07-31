@@ -21,10 +21,11 @@ use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes, U32_SIZE}
 use common::contract_api::argsparser::ArgsParser;
 use common::contract_api::{PurseTransferResult, TransferResult};
 use common::key::Key;
+use common::system_contracts::{self, mint};
 use common::uref::{AccessRights, URef};
 use common::value::account::{
     ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
-    SetThresholdFailure, Weight, PUBLIC_KEY_SIZE,
+    SetThresholdFailure, UpdateKeyFailure, Weight, PUBLIC_KEY_SIZE,
 };
 use common::value::{Account, Value, U512};
 use engine_state::execution_result::ExecutionResult;
@@ -71,7 +72,9 @@ pub enum Error {
     Revert(u32),
     AddKeyFailure(AddKeyFailure),
     RemoveKeyFailure(RemoveKeyFailure),
+    UpdateKeyFailure(UpdateKeyFailure),
     SetThresholdFailure(SetThresholdFailure),
+    SystemContractError(system_contracts::error::Error),
 }
 
 impl fmt::Display for Error {
@@ -128,9 +131,21 @@ impl From<RemoveKeyFailure> for Error {
     }
 }
 
+impl From<UpdateKeyFailure> for Error {
+    fn from(err: UpdateKeyFailure) -> Error {
+        Error::UpdateKeyFailure(err)
+    }
+}
+
 impl From<SetThresholdFailure> for Error {
     fn from(err: SetThresholdFailure) -> Error {
         Error::SetThresholdFailure(err)
+    }
+}
+
+impl From<system_contracts::error::Error> for Error {
+    fn from(error: system_contracts::error::Error) -> Error {
+        Error::SystemContractError(error)
     }
 }
 
@@ -265,10 +280,10 @@ where
     /// Load the uref known by the given name into the Wasm memory
     pub fn get_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
-        let uref = self
-            .context
-            .get_uref(&name)
-            .ok_or_else(|| Error::URefNotFound(name))?;
+        // Take an optional uref, and pass its serialized value as is.
+        // This makes it easy to deserialize optional value on the other
+        // side without failing the execution when the value does not exist.
+        let uref = self.context.get_uref(&name).cloned();
         let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
 
         self.host_buf = uref_bytes;
@@ -570,6 +585,33 @@ where
         }
     }
 
+    fn update_associated_key(
+        &mut self,
+        public_key_ptr: u32,
+        weight_value: u8,
+    ) -> Result<i32, Trap> {
+        let public_key = {
+            // Public key as serialized bytes
+            let source_serialized =
+                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            // Public key deserialized
+            let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+            source
+        };
+        let weight = Weight::new(weight_value);
+
+        match self.context.update_associated_key(public_key, weight) {
+            Ok(_) => Ok(0),
+            // This relies on the fact that `UpdateKeyFailure` is represented as
+            // i32 and first variant start with number `1`, so all other variants
+            // are greater than the first one, so it's safe to assume `0` is success,
+            // and any error is greater than 0.
+            Err(Error::UpdateKeyFailure(e)) => Ok(e as i32),
+            // Any other variant just pass as `Trap`
+            Err(e) => Err(e.into()),
+        }
+    }
+
     fn set_action_threshold(
         &mut self,
         action_type_value: u32,
@@ -647,7 +689,7 @@ where
         source: PurseId,
         target: PurseId,
         amount: U512,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         let source_value: URef = source.value();
         let target_value: URef = target.value();
 
@@ -660,9 +702,12 @@ where
 
         self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
 
-        let result: String = deserialize(&self.host_buf)?;
-
-        Ok(&result == "Successful transfer")
+        // This will deserialize `host_buf` into the Result type which carries
+        // mint contract error.
+        let result: Result<(), mint::error::Error> = deserialize(&self.host_buf)?;
+        // Wraps mint error into a more general error type through an aggregate
+        // system contracts Error.
+        Ok(result.map_err(system_contracts::error::Error::from)?)
     }
 
     /// Creates a new account at a given public key, transferring a given amount of tokens from
@@ -686,33 +731,34 @@ where
             return Ok(TransferResult::TransferError);
         }
 
-        if self.mint_transfer(mint_contract_key, source, target_purse_id, amount)? {
-            let known_urefs = vec![
-                (
-                    String::from(MINT_NAME),
-                    self.get_mint_contract_public_uref_key()?,
-                ),
-                (
-                    String::from(POS_NAME),
-                    self.get_pos_contract_public_uref_key()?,
-                ),
-                (pos_contract_uref.as_string(), pos_contract_key),
-                (mint_contract_uref.as_string(), mint_contract_key),
-            ]
-            .into_iter()
-            .map(|(name, key)| {
-                if let Some(uref) = key.as_uref() {
-                    (name, Key::URef(URef::new(uref.addr(), AccessRights::READ)))
-                } else {
-                    (name, key)
-                }
-            })
-            .collect();
-            let account = Account::create(target_addr, known_urefs, target_purse_id);
-            self.context.write_account(target_key, account)?;
-            Ok(TransferResult::TransferredToNewAccount)
-        } else {
-            Ok(TransferResult::TransferError)
+        match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
+            Ok(_) => {
+                let known_urefs = vec![
+                    (
+                        String::from(MINT_NAME),
+                        self.get_mint_contract_public_uref_key()?,
+                    ),
+                    (
+                        String::from(POS_NAME),
+                        self.get_pos_contract_public_uref_key()?,
+                    ),
+                    (pos_contract_uref.as_string(), pos_contract_key),
+                    (mint_contract_uref.as_string(), mint_contract_key),
+                ]
+                .into_iter()
+                .map(|(name, key)| {
+                    if let Some(uref) = key.as_uref() {
+                        (name, Key::URef(URef::new(uref.addr(), AccessRights::READ)))
+                    } else {
+                        (name, key)
+                    }
+                })
+                .collect();
+                let account = Account::create(target_addr, known_urefs, target_purse_id);
+                self.context.write_account(target_key, account)?;
+                Ok(TransferResult::TransferredToNewAccount)
+            }
+            Err(_) => Ok(TransferResult::TransferError),
         }
     }
 
@@ -730,10 +776,9 @@ where
         // This appears to be a load-bearing use of `RuntimeContext::insert_uref`.
         self.context.insert_uref(target.value());
 
-        if self.mint_transfer(mint_contract_key, source, target, amount)? {
-            Ok(TransferResult::TransferredToExistingAccount)
-        } else {
-            Ok(TransferResult::TransferError)
+        match self.mint_transfer(mint_contract_key, source, target, amount) {
+            Ok(_) => Ok(TransferResult::TransferredToExistingAccount),
+            Err(_) => Ok(TransferResult::TransferError),
         }
     }
 
@@ -788,12 +833,12 @@ where
         amount_ptr: u32,
         amount_size: u32,
     ) -> Result<PurseTransferResult, Error> {
-        let source_purse: PurseId = {
+        let source: PurseId = {
             let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
             deserialize(&bytes).map_err(Error::BytesRepr)?
         };
 
-        let target_purse: PurseId = {
+        let target: PurseId = {
             let bytes = self.bytes_from_mem(target_ptr, target_size as usize)?;
             deserialize(&bytes).map_err(Error::BytesRepr)?
         };
@@ -805,11 +850,9 @@ where
 
         let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
 
-        if self.mint_transfer(mint_contract_key, source_purse, target_purse, amount)? {
-            Ok(PurseTransferResult::TransferSuccessful)
-        } else {
-            // TODO: Improve returned type (insufficient funds/access rights, non-existent purses)
-            Ok(PurseTransferResult::TransferError)
+        match self.mint_transfer(mint_contract_key, source, target, amount) {
+            Ok(_) => Ok(PurseTransferResult::TransferSuccessful),
+            Err(_) => Ok(PurseTransferResult::TransferError),
         }
     }
 }
@@ -1091,6 +1134,14 @@ where
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
+            FunctionIndex::UpdateAssociatedKeyFuncIndex => {
+                // args(0) = pointer to array of bytes of a public key
+                // args(1) = weight of the key
+                let (public_key_ptr, weight_value): (u32, u8) = Args::parse(args)?;
+                let value = self.update_associated_key(public_key_ptr, weight_value)?;
+                Ok(Some(RuntimeValue::I32(value)))
+            }
+
             FunctionIndex::SetActionThresholdFuncIndex => {
                 // args(0) = action type
                 // args(1) = new threshold
@@ -1369,6 +1420,7 @@ pub trait Executor<A> {
         parity_module: A,
         args: &[u8],
         account: Key,
+        _authorized_keys: &[PublicKey],
         blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
@@ -1388,6 +1440,7 @@ impl Executor<Module> for WasmiExecutor {
         parity_module: Module,
         args: &[u8],
         acct_key: Key,
+        _authorized_keys: &[PublicKey],
         blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
@@ -1546,6 +1599,7 @@ mod tests {
             cost: success_cost,
         }
     }
+
     #[test]
     fn on_fail_charge_ok_test() {
         match on_fail_charge_test_helper(|| Ok(()), 123, 456) {
@@ -1642,6 +1696,7 @@ mod tests {
             parity_module,
             &[],
             account_key,
+            &[PublicKey::new(account_address)],
             BlockTime(0),
             invalid_nonce,
             100u64,

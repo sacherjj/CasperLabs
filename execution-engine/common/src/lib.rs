@@ -32,6 +32,7 @@ pub mod contract_api;
 #[cfg(any(test, feature = "gens"))]
 pub mod gens;
 pub mod key;
+pub mod system_contracts;
 #[cfg(any(test, feature = "gens"))]
 pub mod test_utils;
 pub mod uref;
@@ -90,6 +91,7 @@ mod ext_ffi {
         pub fn is_valid(value_ptr: *const u8, value_size: usize) -> i32;
         pub fn add_associated_key(public_key_ptr: *const u8, weight: i32) -> i32;
         pub fn remove_associated_key(public_key_ptr: *const u8) -> i32;
+        pub fn update_associated_key(public_key_ptr: *const u8, weight: i32) -> i32;
         pub fn set_action_threshold(permission_level: u32, threshold: i32) -> i32;
         pub fn remove_uref(name_ptr: *const u8, name_size: usize);
         pub fn get_caller(dest_ptr: *const u8);

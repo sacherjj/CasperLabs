@@ -240,7 +240,7 @@ const Content = (props: AppProps) => (
             auth={props.auth}
             render={_ => <Faucet {...props} />}
           />
-          <Route path={Pages.Explorer} render={_ => <Explorer />} />
+          <Route path={Pages.Explorer} render={_ => <Explorer {...props} />} />
         </Switch>
       </div>
     </div>

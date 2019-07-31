@@ -8,7 +8,7 @@ The CasperLabs node consists of two components:
 
 #### Using binaries (recommended):
 * [Install](INSTALL.md) the `casperlabs` package, which contains `casperlabs-node` and `casperlabs-engine-grpc-server`.
-* Download and unzip the [Mint and Proof-of-Stake Contracts](http://repo.casperlabs.io/casperlabs/repo/dev/blessed-contracts.tar.gz).
+* Download and unzip the [Mint and Proof-of-Stake Contracts](http://repo.casperlabs.io/casperlabs/repo/dev/system-contracts.tar.gz).
 * Create [keys](KEYS.md#generating-node-keys-and-validator-keys).
 
 #### Building from source:

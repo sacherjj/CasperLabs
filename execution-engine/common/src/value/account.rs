@@ -4,6 +4,7 @@ use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::convert::TryFrom;
 use core::fmt::{Debug, Display, Formatter};
 use failure::Fail;
 
@@ -272,21 +273,26 @@ impl PublicKey {
     pub fn value(self) -> [u8; KEY_SIZE] {
         self.0
     }
-
-    pub fn from_slice(slice: &[u8]) -> Option<PublicKey> {
-        if slice.len() != KEY_SIZE {
-            None
-        } else {
-            let mut buff = [0u8; 32];
-            buff.copy_from_slice(slice);
-            Some(PublicKey::new(buff))
-        }
-    }
 }
 
 impl From<[u8; KEY_SIZE]> for PublicKey {
     fn from(key: [u8; KEY_SIZE]) -> Self {
         PublicKey(key)
+    }
+}
+
+#[derive(Debug)]
+pub struct TryFromSliceForPublicKeyError(());
+
+impl TryFrom<&[u8]> for PublicKey {
+    type Error = TryFromSliceForPublicKeyError;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        if bytes.len() != KEY_SIZE {
+            return Err(TryFromSliceForPublicKeyError(()));
+        }
+        let mut public_key = [0u8; 32];
+        public_key.copy_from_slice(bytes);
+        Ok(PublicKey::new(public_key))
     }
 }
 
@@ -376,6 +382,40 @@ impl From<i32> for RemoveKeyFailure {
     }
 }
 
+/// Represents an error that happens when trying to update the value under a public key
+/// associated with an account.
+///
+/// It is represented by `i32` to be easily able to transform this value in and out
+/// through FFI boundaries as a number.
+///
+/// For backwards compatibility, the variants are explicitly ordered and will not be reordered;
+/// variants added in future versions will be appended to extend the enum
+/// and in the event that a variant is removed its ordinal will not be reused.
+#[derive(PartialEq, Eq, Fail, Debug)]
+#[repr(i32)]
+pub enum UpdateKeyFailure {
+    /// Key does not exist in the list of associated keys.
+    #[fail(display = "Unable to update the value under an associated key that does not exist")]
+    MissingKey = 1,
+    #[fail(display = "Unable to add new associated key due to insufficient permissions")]
+    PermissionDenied = 2,
+}
+
+impl From<i32> for UpdateKeyFailure {
+    fn from(value: i32) -> UpdateKeyFailure {
+        // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
+        // that helps to automatically create `from_i32` and `to_i32`. This approach
+        // gives better control over generated code.
+        match value {
+            d if d == UpdateKeyFailure::MissingKey as i32 => UpdateKeyFailure::MissingKey,
+            d if d == UpdateKeyFailure::PermissionDenied as i32 => {
+                UpdateKeyFailure::PermissionDenied
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
 pub struct AssociatedKeys(BTreeMap<PublicKey, Weight>);
 
@@ -411,6 +451,18 @@ impl AssociatedKeys {
             .remove(key)
             .map(|_| ())
             .ok_or(RemoveKeyFailure::MissingKey)
+    }
+
+    /// Adds new AssociatedKey to the set.
+    /// Returns true if added successfully, false otherwise.
+    #[allow(clippy::map_entry)]
+    pub fn update_key(&mut self, key: PublicKey, weight: Weight) -> Result<(), UpdateKeyFailure> {
+        if !self.0.contains_key(&key) {
+            return Err(UpdateKeyFailure::MissingKey);
+        }
+
+        self.0.insert(key, weight);
+        Ok(())
     }
 
     pub fn get(&self, key: &PublicKey) -> Option<&Weight> {
@@ -540,6 +592,15 @@ impl Account {
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
         // TODO(mpapierski): Authorized keys check EE-377
         self.associated_keys.remove_key(&public_key)
+    }
+
+    pub fn update_associated_key(
+        &mut self,
+        public_key: PublicKey,
+        weight: Weight,
+    ) -> Result<(), UpdateKeyFailure> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.associated_keys.update_key(public_key, weight)
     }
 
     pub fn set_action_threshold(
@@ -750,6 +811,8 @@ mod tests {
         Weight, KEY_SIZE, MAX_KEYS,
     };
     use alloc::collections::btree_map::BTreeMap;
+    use alloc::vec::Vec;
+    use core::convert::TryFrom;
 
     #[test]
     fn incremented_nonce() {
@@ -810,5 +873,23 @@ mod tests {
         let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk).is_ok());
         assert!(keys.remove_key(&PublicKey([1u8; KEY_SIZE])).is_err());
+    }
+
+    #[test]
+    fn public_key_from_slice() {
+        let bytes: Vec<u8> = (0..32).collect();
+        let public_key = PublicKey::try_from(&bytes[..]).expect("should create public key");
+        assert_eq!(&bytes, &public_key.value());
+    }
+    #[test]
+    fn public_key_from_slice_too_small() {
+        let _public_key =
+            PublicKey::try_from(&[0u8; 31][..]).expect_err("should not create public key");
+    }
+
+    #[test]
+    fn public_key_from_slice_too_big() {
+        let _public_key =
+            PublicKey::try_from(&[0u8; 33][..]).expect_err("should not create public key");
     }
 }
