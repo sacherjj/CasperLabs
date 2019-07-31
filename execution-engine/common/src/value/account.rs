@@ -500,6 +500,22 @@ impl AssociatedKeys {
     pub fn iter(&self) -> impl Iterator<Item = (&PublicKey, &Weight)> {
         self.0.iter()
     }
+
+    /// Checks whether all authorization keys are associated with this account
+    pub fn has_associated_keys(&self, authorization_keys: &[PublicKey]) -> bool {
+        authorization_keys.iter().all(|e| self.0.contains_key(e))
+    }
+
+    /// Calculates total weight of authorization keys provided by an argument
+    pub fn calculate_keys_weight(&self, authorization_keys: &[PublicKey]) -> Weight {
+        let total = authorization_keys
+            .iter()
+            .filter_map(|key| self.0.get(key))
+            .map(|w| w.value())
+            .sum();
+
+        Weight::new(total)
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -639,6 +655,21 @@ impl Account {
     ) -> Result<(), SetThresholdFailure> {
         // TODO(mpapierski): Authorized keys check EE-377
         self.action_thresholds.set_threshold(action_type, weight)
+    }
+
+    /// Checks whether all authorization keys are associated with this account
+    pub fn has_associated_keys(&self, authorization_keys: &[PublicKey]) -> bool {
+        self.associated_keys.has_associated_keys(authorization_keys)
+    }
+
+    /// Checks whether the sum of the weights of all authorization keys is greater
+    /// or equal to deploy threshold.
+    pub fn can_deploy_with(&self, authorization_keys: &[PublicKey]) -> bool {
+        let total_weight = self
+            .associated_keys
+            .calculate_keys_weight(authorization_keys);
+
+        total_weight >= *self.action_thresholds().deployment()
     }
 }
 
@@ -902,6 +933,69 @@ mod tests {
         let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk).is_ok());
         assert!(keys.remove_key(&PublicKey([1u8; KEY_SIZE])).is_err());
+    }
+
+    #[test]
+    fn associated_keys_has_all_authorized() {
+        let key_1 = PublicKey::new([0; 32]);
+        let key_2 = PublicKey::new([1; 32]);
+        let key_3 = PublicKey::new([2; 32]);
+        let mut keys = AssociatedKeys::empty();
+        keys.add_key(key_2, Weight::new(2))
+            .expect("should add key_1");
+        keys.add_key(key_1, Weight::new(1))
+            .expect("should add key_1");
+        keys.add_key(key_3, Weight::new(3))
+            .expect("should add key_1");
+
+        assert!(keys.has_associated_keys(&[key_3, key_2, key_1]));
+        assert!(keys.has_associated_keys(&[key_1, key_3, key_2]));
+
+        assert!(keys.has_associated_keys(&[key_1, key_2]));
+        assert!(keys.has_associated_keys(&[key_1]));
+    }
+
+    #[test]
+    fn account_can_deploy_with() {
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
+            res.add_key(PublicKey::new([2u8; 32]), Weight::new(11))
+                .expect("should add key 1");
+            res.add_key(PublicKey::new([3u8; 32]), Weight::new(11))
+                .expect("should add key 2");
+            res.add_key(PublicKey::new([4u8; 32]), Weight::new(11))
+                .expect("should add key 3");
+            res
+        };
+        let account = Account::new(
+            [0u8; 32],
+            0,
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            associated_keys,
+            // deploy: 33 (3*11)
+            ActionThresholds::new(Weight::new(33), Weight::new(48))
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        // sum: 22, required 33 - can't deploy
+        assert!(!account.can_deploy_with(&[PublicKey::new([3u8; 32]), PublicKey::new([2u8; 32]),]));
+
+        // sum: 33, required 33 - can deploy
+        assert!(account.can_deploy_with(&[
+            PublicKey::new([4u8; 32]),
+            PublicKey::new([3u8; 32]),
+            PublicKey::new([2u8; 32]),
+        ]));
+
+        // sum: 34, required 33 - can deploy
+        assert!(account.can_deploy_with(&[
+            PublicKey::new([2u8; 32]),
+            PublicKey::new([1u8; 32]),
+            PublicKey::new([4u8; 32]),
+            PublicKey::new([3u8; 32]),
+        ]));
     }
 
     #[test]

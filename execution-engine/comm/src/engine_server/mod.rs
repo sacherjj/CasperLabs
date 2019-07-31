@@ -555,7 +555,7 @@ where
                     module_bytes,
                     args,
                     address,
-                    &authorized_keys,
+                    authorized_keys,
                     blocktime,
                     nonce,
                     prestate_hash,

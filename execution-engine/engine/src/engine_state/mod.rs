@@ -97,7 +97,7 @@ where
         module_bytes: &[u8],
         args: &[u8],
         address: Key,
-        authorized_keys: &[PublicKey],
+        authorized_keys: Vec<PublicKey>,
         blocktime: BlockTime,
         nonce: u64,
         prestate_hash: Blake2bHash,

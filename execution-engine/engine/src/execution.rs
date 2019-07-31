@@ -75,6 +75,7 @@ pub enum Error {
     UpdateKeyFailure(UpdateKeyFailure),
     SetThresholdFailure(SetThresholdFailure),
     SystemContractError(system_contracts::error::Error),
+    DeploymentAuthorizationFailure,
 }
 
 impl fmt::Display for Error {
@@ -1283,6 +1284,7 @@ where
             refs,
             known_urefs,
             args,
+            current_runtime.context.authorization_keys().clone(),
             &current_runtime.context.account(),
             key,
             current_runtime.context.get_blocktime(),
@@ -1424,7 +1426,7 @@ pub trait Executor<A> {
         parity_module: A,
         args: &[u8],
         account: Key,
-        _authorized_keys: &[PublicKey],
+        _authorized_keys: Vec<PublicKey>,
         blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
@@ -1444,7 +1446,7 @@ impl Executor<Module> for WasmiExecutor {
         parity_module: Module,
         args: &[u8],
         acct_key: Key,
-        _authorized_keys: &[PublicKey],
+        authorized_keys: Vec<PublicKey>,
         blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
@@ -1477,6 +1479,12 @@ impl Executor<Module> for WasmiExecutor {
                 )
             }
         };
+
+        if authorized_keys.is_empty() || !account.has_associated_keys(&authorized_keys) {
+            return ExecutionResult::precondition_failure(
+                ::engine_state::error::Error::AuthorizationFailure,
+            );
+        }
 
         // Check the difference of a request nonce and account nonce.
         // Since both nonce and account's nonce are unsigned, so line below performs
@@ -1515,6 +1523,14 @@ impl Executor<Module> for WasmiExecutor {
         // only nonce update can be returned.
         let effects_snapshot = tc.borrow().effect();
 
+        // Check if authorized keys can deploy by comparing sum of their weights
+        // with a deploy threshold.
+        if !account.can_deploy_with(&authorized_keys) {
+            return ExecutionResult::precondition_failure(
+                Error::DeploymentAuthorizationFailure.into(),
+            );
+        }
+
         let arguments: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
         } else {
@@ -1528,6 +1544,7 @@ impl Executor<Module> for WasmiExecutor {
             &mut uref_lookup_local,
             known_urefs,
             arguments,
+            authorized_keys,
             &account,
             acct_key,
             blocktime,
@@ -1700,7 +1717,7 @@ mod tests {
             parity_module,
             &[],
             account_key,
-            &[PublicKey::new(account_address)],
+            vec![PublicKey::new(account_address)],
             BlockTime(0),
             invalid_nonce,
             100u64,

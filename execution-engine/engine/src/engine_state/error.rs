@@ -16,6 +16,8 @@ pub enum Error {
     ExecError(::execution::Error),
     #[fail(display = "Storage error: {}", _0)]
     StorageError(storage::error::Error),
+    #[fail(display = "Authorization failure: Keys do not belong to an account.")]
+    AuthorizationFailure,
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {

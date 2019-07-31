@@ -226,7 +226,7 @@ fn main() {
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
             account_addr,
-            &[public_key],
+            vec![public_key],
             BlockTime(timestamp),
             nonce,
             state_hash,

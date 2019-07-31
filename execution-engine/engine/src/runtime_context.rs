@@ -35,6 +35,7 @@ pub struct RuntimeContext<'a, R> {
     // Original account for read only tasks taken before execution
     account: &'a Account,
     args: Vec<Vec<u8>>,
+    authorization_keys: Vec<PublicKey>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
@@ -57,6 +58,7 @@ where
         uref_lookup: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
+        authorization_keys: Vec<PublicKey>,
         account: &'a Account,
         base_key: Key,
         blocktime: BlockTime,
@@ -73,6 +75,7 @@ where
             known_urefs,
             args,
             account,
+            authorization_keys,
             blocktime,
             base_key,
             gas_limit,
@@ -82,6 +85,10 @@ where
             protocol_version,
             correlation_id,
         }
+    }
+
+    pub fn authorization_keys(&self) -> &Vec<PublicKey> {
+        &self.authorization_keys
     }
 
     pub fn get_uref(&self, name: &str) -> Option<&Key> {
@@ -818,6 +825,7 @@ mod tests {
             uref_map,
             known_urefs,
             Vec::new(),
+            vec![PublicKey::new([0; 32])],
             &account,
             base_key,
             BlockTime(0),
@@ -1113,6 +1121,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
+            vec![PublicKey::new(base_acc_addr)],
             &account,
             contract_key,
             BlockTime(0),
@@ -1165,6 +1174,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
+            vec![PublicKey::new(base_acc_addr)],
             &account,
             other_contract_key,
             BlockTime(0),

@@ -142,6 +142,7 @@ pub fn create_exec_request(
     block_time: u64,
     nonce: u64,
     arguments: impl common::contract_api::argsparser::ArgsParser,
+    authorized_keys: Vec<common::value::account::PublicKey>,
 ) -> ExecRequest {
     let args = arguments
         .parse()
@@ -154,6 +155,13 @@ pub fn create_exec_request(
     deploy.set_tokens_transferred_in_payment(1_000_000_000);
     deploy.set_gas_price(1);
     deploy.set_nonce(nonce);
+    deploy.set_authorization_keys(
+        authorized_keys
+            .into_iter()
+            .map(|public_key| public_key.value().to_vec())
+            .collect(),
+    );
+
     let mut deploy_code = DeployCode::new();
     deploy_code.set_code(bytes_to_deploy);
     deploy_code.set_args(args);
@@ -409,13 +417,14 @@ impl WasmTestBuilder {
 
     /// Runs a contract and after that runs actual WASM contract and expects
     /// transformations to happen at the end of execution.
-    pub fn exec_with_args(
+    pub fn exec_with_args_and_keys(
         &mut self,
         address: [u8; 32],
         wasm_file: &str,
         block_time: u64,
         nonce: u64,
         args: impl common::contract_api::argsparser::ArgsParser,
+        authorized_keys: Vec<common::value::account::PublicKey>,
     ) -> &mut WasmTestBuilder {
         let exec_request = create_exec_request(
             address,
@@ -426,6 +435,7 @@ impl WasmTestBuilder {
             block_time,
             nonce,
             args,
+            authorized_keys,
         );
 
         let exec_response = self
@@ -451,6 +461,26 @@ impl WasmTestBuilder {
         // Cache transformations
         self.transforms.push(transforms);
         self
+    }
+
+    pub fn exec_with_args(
+        &mut self,
+        address: [u8; 32],
+        wasm_file: &str,
+        block_time: u64,
+        nonce: u64,
+        args: impl common::contract_api::argsparser::ArgsParser,
+    ) -> &mut WasmTestBuilder {
+        self.exec_with_args_and_keys(
+            address,
+            wasm_file,
+            block_time,
+            nonce,
+            args,
+            // Exec with different account also implies the authorized keys should default to
+            // the calling account.
+            vec![common::value::account::PublicKey::new(address)],
+        )
     }
 
     pub fn exec(
@@ -592,6 +622,10 @@ impl WasmTestBuilder {
         self.post_state_hash
             .clone()
             .expect("Should have post-state hash.")
+    }
+
+    pub fn get_exec_response(&self, index: usize) -> Option<&ExecResponse> {
+        self.exec_responses.get(index)
     }
 
     pub fn finish(&self) -> WasmTestResult {
