@@ -34,10 +34,10 @@ class Search extends React.Component<Props, {}> {
 
 const SearchForm = observer((props: { container: SearchContainer }) => {
   const form = props.container.searchForm;
-
+  const submit = () => props.container.search();
   return (
     <Card title="Search">
-      <Form>
+      <Form onSubmit={submit}>
         <RadioField
           id="id-search-target"
           label="Target"
@@ -55,7 +55,7 @@ const SearchForm = observer((props: { container: SearchContainer }) => {
         />
         <ErrorMessage error={form.error} />
       </Form>
-      <Button title="Submit" onClick={() => props.container.search()} />
+      <Button title="Submit" onClick={submit} />
     </Card>
   );
 });

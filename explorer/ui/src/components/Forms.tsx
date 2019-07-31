@@ -32,6 +32,7 @@ interface FormProps {
   // Expecting to see `<Field />` nested
   // or `<dif class="form-row"><Field /><Field/>`
   children?: any;
+  onSubmit?: () => void;
 }
 
 function controlClass(props: FieldProps) {
@@ -127,7 +128,13 @@ export const RadioField = observer((props: RadioProps) => (
 ));
 
 export const Form = (props: FormProps) => (
-  <form>
+  <form
+    onSubmit={e => {
+      e.preventDefault();
+      props.onSubmit && props.onSubmit();
+      return false;
+    }}
+  >
     {props.children.map((group: any, idx: number) => (
       <div className="form-group" key={idx}>
         {group}
