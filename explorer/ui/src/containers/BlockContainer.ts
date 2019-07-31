@@ -57,6 +57,8 @@ export class BlockContainer {
       return;
     }
 
+    // Try to retrieve equal amounts of ranks of the DAG
+    // before and after the selected block.
     const maxRank =
       this.block
         .getSummary()!
