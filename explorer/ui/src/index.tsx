@@ -24,6 +24,7 @@ import DagContainer from './containers/DagContainer';
 import BlockContainer from './containers/BlockContainer';
 import BalanceService from './services/BalanceService';
 import DeployContainer from './containers/DeployContainer';
+import SearchContainer from './containers/SearchContainer';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
@@ -56,6 +57,7 @@ const faucet = new FaucetContainer(
 const dag = new DagContainer(errors, casperService);
 const block = new BlockContainer(errors, casperService, balanceService);
 const deploy = new DeployContainer(errors, casperService, balanceService);
+const search = new SearchContainer(errors, casperService);
 
 ReactDOM.render(
   <HashRouter>
@@ -66,6 +68,7 @@ ReactDOM.render(
       dag={dag}
       block={block}
       deploy={deploy}
+      search={search}
     />
   </HashRouter>,
   document.getElementById('root')

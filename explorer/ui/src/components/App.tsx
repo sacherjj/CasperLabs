@@ -21,6 +21,8 @@ import BlockDetails from './BlockDetails';
 import BlockContainer from '../containers/BlockContainer';
 import DeployDetails from './DeployDetails';
 import DeployContainer from '../containers/DeployContainer';
+import Search from './Search';
+import SearchContainer from '../containers/SearchContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -39,7 +41,8 @@ const SideMenuItems: MenuItem[] = [
   new MenuItem(Pages.Accounts, 'Accounts', 'address-book'),
   new MenuItem(Pages.Faucet, 'Faucet', 'coins'),
   new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
-  new MenuItem(Pages.Blocks, 'Blocks', 'th-large')
+  new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),
+  new MenuItem(Pages.Search, 'Search', 'search')
 ];
 
 export interface AppProps {
@@ -49,6 +52,7 @@ export interface AppProps {
   dag: DagContainer;
   block: BlockContainer;
   deploy: DeployContainer;
+  search: SearchContainer;
 }
 
 // The entry point for rendering.
@@ -257,6 +261,7 @@ const Content = (props: AppProps) => (
             path={Pages.Deploy}
             render={_ => <DeployDetails {...props} />}
           />
+          <Route path={Pages.Search} render={_ => <Search {...props} />} />
         </Switch>
       </div>
     </div>

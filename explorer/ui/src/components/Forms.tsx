@@ -1,5 +1,6 @@
 import React from 'react';
 import { observer } from 'mobx-react';
+import { ListInline } from './Utils';
 
 interface FieldProps {
   id: string;
@@ -24,6 +25,8 @@ interface TextProps extends FieldProps {
 interface SelectProps extends FieldProps {
   options: Option[];
 }
+
+interface RadioProps extends SelectProps {}
 
 interface FormProps {
   // Expecting to see `<Field />` nested
@@ -92,6 +95,37 @@ export const SelectField = observer((props: SelectProps) => (
   </div>
 ));
 
+export const RadioField = observer((props: RadioProps) => (
+  <div>
+    {
+      <div>
+        <label>{props.label}</label>
+
+        <ListInline>
+          {props.options.map((opt, i) => {
+            const id = `${props.id}/${i}`;
+            return (
+              <div key={i} className="ml-2">
+                <input
+                  className="mr-1"
+                  id={id}
+                  name={props.id}
+                  type="radio"
+                  value={opt.value}
+                  readOnly={props.readonly || false}
+                  onChange={e => props.onChange!(e.target.value)}
+                  checked={opt.value === props.value}
+                />
+                <label htmlFor={id}>{opt.label}</label>
+              </div>
+            );
+          })}
+        </ListInline>
+      </div>
+    }
+  </div>
+));
+
 export const Form = (props: FormProps) => (
   <form>
     {props.children.map((group: any, idx: number) => (
@@ -101,3 +135,10 @@ export const Form = (props: FormProps) => (
     ))}
   </form>
 );
+
+export const ErrorMessage = (props: { error: string | null }) =>
+  props.error ? (
+    <div className="alert alert-danger" role="alert">
+      {props.error}
+    </div>
+  ) : null;
