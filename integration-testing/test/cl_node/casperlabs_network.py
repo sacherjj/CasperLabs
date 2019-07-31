@@ -11,6 +11,7 @@ from test.cl_node.nonce_registry import NonceRegistry
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS  # TODO: remove
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, is_valid_account, Account
 from test.cl_node.wait import (
+    wait_for_block_hash_propagated_to_all_nodes,
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
     wait_for_peers_count_at_least,
@@ -83,6 +84,9 @@ class CasperLabsNetwork:
                 self.test_accounts[name] = Account(self.next_key)
                 logging.info(f"=== Creating test account #{self.next_key} {self.test_accounts[name].public_key_hex} for {name} ")
                 block_hash = node.transfer_to_account(self.next_key, 1000000)
+                # Waiting for the block with transaction that created new account to propagate to all nodes.
+                # Expensive, but some tests may rely on it.
+                wait_for_block_hash_propagated_to_all_nodes(node.cl_network.docker_nodes, block_hash)
                 for deploy in node.client.show_deploys(block_hash):
                     assert deploy.is_error is False, f"Account creation failed: {deploy}"
                 self.next_key += 1

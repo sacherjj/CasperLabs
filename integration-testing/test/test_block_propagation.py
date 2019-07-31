@@ -72,8 +72,8 @@ def test_block_propagation(nodes,
     Scenario: test_helloworld.wasm deploy and propose by all nodes and stored in all nodes blockstores
     """
 
-    test_account = nodes[0].test_account # We may need to wait for the block with transfer to propagate?
-    deploy_threads = [DeployThread(node, contract_paths, test_account, max_attempts=5, retry_seconds=3)
+    account = nodes[0].genesis_account
+    deploy_threads = [DeployThread(node, contract_paths, account, max_attempts=5, retry_seconds=3)
                       for node in nodes]
 
     for t in deploy_threads:
