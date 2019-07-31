@@ -175,14 +175,14 @@ class FinalityDetectorTest
       val bonds                           = validators.map(v => Bond(v, 1))
       implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
 
-      /* The DAG looks like
+      /* The DAG looks like (|| means main parent)
        *
        *        v0  v1    v2  v3
        *
-       *                      b7
-       *                    // |
-       *                  b6   |
-       *                //   \ |
+       *                  b7
+       *                  ||
+       *                  b6
+       *                //   \
        *             //       b5
        *          //   /----/ ||
        *        b4  b3        ||
@@ -218,6 +218,7 @@ class FinalityDetectorTest
                bonds,
                Map(v0 -> b1.blockHash)
              )
+        // b5 vote for b2 instead of b1
         b5 <- createBlock[Task](
                Seq(b2.blockHash),
                v3,
@@ -232,34 +233,35 @@ class FinalityDetectorTest
              )
         b7 <- createBlock[Task](
                Seq(b6.blockHash),
-               v3,
+               v2,
                bonds,
-               Map(v2 -> b6.blockHash, v3 -> b5.blockHash)
+               Map(v2 -> b6.blockHash)
              )
-        dag <- blockDagStorage.getRepresentation
+        dag                    <- blockDagStorage.getRepresentation
+        committeeApproximation = List(v0, v1, v2)
         levelZeroMsgs <- finalityDetectorEffect.levelZeroMsgs(
                           dag,
                           b1.blockHash,
-                          validators
+                          committeeApproximation
                         )
-        lowestLevelZeroMsgs = validators
+        lowestLevelZeroMsgs = committeeApproximation
           .flatMap(v => levelZeroMsgs(v).lastOption)
         _ = lowestLevelZeroMsgs.map(_.blockHash) shouldBe Seq(
           b1.blockHash,
           b3.blockHash,
-          b6.blockHash,
-          b7.blockHash
+          b6.blockHash
         )
         sweepResult <- finalityDetectorEffect.sweep(
                         dag,
-                        validators.toSet,
+                        committeeApproximation.toSet,
                         levelZeroMsgs,
                         3,
                         3,
                         bonds.map(bond => (bond.validatorPublicKey, bond.stake)).toMap
                       )
-        (blockLevelTags, _) = sweepResult
-        b7LevelTags         = blockLevelTags(b7.blockHash)
+        (blockLevelTags, validatorLevel) = sweepResult
+        _                                = validatorLevel.contains(v3) shouldBe false
+        b7LevelTags                      = blockLevelTags(b7.blockHash)
         // b7 doesn't have direct zero-level justification b3, but its non-level-zero justification b5 has seen it
         _ = b7LevelTags.blockLevel shouldBe 1
         _ = b7LevelTags.highestLevelBySeenBlocks(v1) shouldBe 0
