@@ -18,9 +18,6 @@ from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, is_valid_account, Account
 
 
-def docker_path(p):
-    return Path(*(['/data'] + str(p).split('/')[-2:]))
-
 class DockerNode(LoggingDockerBase):
     """
     A CasperLabs Docker Node object
