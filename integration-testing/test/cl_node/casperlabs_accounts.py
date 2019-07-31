@@ -11,7 +11,7 @@ def is_valid_account(account_id: Union[int, str]) -> bool:
     try:
         if account_id == 'genesis':
             return True
-        return 1 <= account_id <= 2000
+        return 1 <= account_id <= 300
     except TypeError:
         return False
 
