@@ -15,7 +15,7 @@ const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
 pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
 
 #[derive(Debug)]
-pub struct TryFromIntError;
+pub struct TryFromIntError(());
 
 #[derive(Debug)]
 pub struct TryFromSliceForPublicKeyError(());
@@ -64,7 +64,7 @@ impl TryFrom<u32> for ActionType {
         match value {
             d if d == ActionType::Deployment as u32 => Ok(ActionType::Deployment),
             d if d == ActionType::KeyManagement as u32 => Ok(ActionType::KeyManagement),
-            _ => Err(TryFromIntError),
+            _ => Err(TryFromIntError(())),
         }
     }
 }
@@ -114,7 +114,7 @@ impl TryFrom<i32> for SetThresholdFailure {
             d if d == SetThresholdFailure::PermissionDeniedError as i32 => {
                 Ok(SetThresholdFailure::PermissionDeniedError)
             }
-            _ => Err(TryFromIntError),
+            _ => Err(TryFromIntError(())),
         }
     }
 }
@@ -351,7 +351,7 @@ impl TryFrom<i32> for AddKeyFailure {
             d if d == AddKeyFailure::MaxKeysLimit as i32 => Ok(AddKeyFailure::MaxKeysLimit),
             d if d == AddKeyFailure::DuplicateKey as i32 => Ok(AddKeyFailure::DuplicateKey),
             d if d == AddKeyFailure::PermissionDenied as i32 => Ok(AddKeyFailure::PermissionDenied),
-            _ => Err(TryFromIntError),
+            _ => Err(TryFromIntError(())),
         }
     }
 }
@@ -389,7 +389,7 @@ impl TryFrom<i32> for RemoveKeyFailure {
             d if d == RemoveKeyFailure::PermissionDenied as i32 => {
                 Ok(RemoveKeyFailure::PermissionDenied)
             }
-            _ => Err(TryFromIntError),
+            _ => Err(TryFromIntError(())),
         }
     }
 }
@@ -423,7 +423,7 @@ impl TryFrom<i32> for UpdateKeyFailure {
             d if d == UpdateKeyFailure::PermissionDenied as i32 => {
                 Ok(UpdateKeyFailure::PermissionDenied)
             }
-            _ => Err(TryFromIntError),
+            _ => Err(TryFromIntError(())),
         }
     }
 }
