@@ -78,8 +78,6 @@ fn should_manage_associated_key() {
         test_support::get_account(&transforms[2], &account_key).expect("should get account")
     };
 
-    //let keys = account_1.get_associated_keys();
-
     assert_eq!(
         account_1.get_associated_key_weight(genesis_key),
         None,
