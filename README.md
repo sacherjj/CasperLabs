@@ -1,4 +1,5 @@
-# CasperLabs
+[![LOGO](CASPERLABS_HORIZONTAL.png)](https://casperlabs.io/)
+
 [![Build Status](https://drone-auto.casperlabs.io/api/badges/CasperLabs/CasperLabs/status.svg?branch=dev)](http://drone-auto.casperlabs.io/CasperLabs/CasperLabs)
 [![Current Release](https://img.shields.io/github/release-pre/CasperLabs/CasperLabs.svg?color=red)](https://github.com/CasperLabs/CasperLabs/releases)
 [![Crates.io](https://img.shields.io/crates/v/casperlabs-contract-ffi)](https://crates.io/crates/casperlabs-contract-ffi)
