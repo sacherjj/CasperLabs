@@ -262,7 +262,7 @@ class FinalityDetectorTest
         (blockLevelTags, validatorLevel) = sweepResult
         _                                = validatorLevel.contains(v3) shouldBe false
         b7LevelTags                      = blockLevelTags(b7.blockHash)
-        // b7 doesn't have direct zero-level justification b3, but its non-level-zero justification b5 has seen it
+        // b7 doesn't have direct zero-level justification b3, but its non-level-zero indirect justification b5 has seen it
         _ = b7LevelTags.blockLevel shouldBe 1
         _ = b7LevelTags.highestLevelBySeenBlocks(v1) shouldBe 0
       } yield ()
