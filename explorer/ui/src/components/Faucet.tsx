@@ -3,7 +3,13 @@ import { observer } from 'mobx-react';
 import { Form, SelectField, TextField } from './Forms';
 import AuthContainer from '../containers/AuthContainer';
 import { FaucetContainer, FaucetRequest } from '../containers/FaucetContainer';
-import { RefreshableComponent, Button, CommandLineHint, Icon } from './Utils';
+import {
+  RefreshableComponent,
+  Button,
+  CommandLineHint,
+  Icon,
+  Card
+} from './Utils';
 import DataTable from './DataTable';
 import { base64to16, encodeBase16 } from '../lib/Conversions';
 import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
@@ -40,52 +46,45 @@ const FaucetForm = observer(
     auth: AuthContainer;
     requestTokens: (account: UserAccount) => void;
   }) => {
-    const auth = props.auth;
+    const { auth, requestTokens } = props;
 
     return (
-      <div className="card mb-3">
-        <div className="card-header">
-          <span>Faucet</span>
-        </div>
-        <div className="card-body">
-          <Form>
-            <SelectField
-              id="id-account-name"
-              label="Account"
-              placeholder="Select account"
-              value={
-                (auth.selectedAccount && auth.selectedAccount.name) || null
-              }
-              options={(auth.accounts || []).map(x => ({
-                label: x.name,
-                value: x.name
-              }))}
-              onChange={x => auth.selectAccountByName(x)}
-            />
-            <TextField
-              id="id-public-key-base16"
-              label="Public Key (Base16)"
-              value={
-                auth.selectedAccount &&
-                base64to16(auth.selectedAccount.publicKeyBase64)
-              }
-              readonly={true}
-            />
-          </Form>
-          <Button
-            title="Request tokens"
-            disabled={auth.selectedAccount == null}
-            onClick={() => props.requestTokens(auth.selectedAccount!)}
+      <Card
+        title="Faucet"
+        footerMessage="Select an account and request tokens for it from the Faucet.
+        Currently, a given account can only request tokens once. It can take
+        some time for your request to be processed; the status of your request
+        will be updated when tokens are available and you can use your
+        account."
+      >
+        <Form>
+          <SelectField
+            id="id-account-name"
+            label="Account"
+            placeholder="Select account"
+            value={(auth.selectedAccount && auth.selectedAccount.name) || null}
+            options={(auth.accounts || []).map(x => ({
+              label: x.name,
+              value: x.name
+            }))}
+            onChange={x => auth.selectAccountByName(x)}
           />
-        </div>
-        <div className="card-footer small text-muted">
-          Select an account and request tokens for it from the Faucet.
-          Currently, a given account can only request tokens once. It can take
-          some time for your request to be processed; the status of your request
-          will be updated when tokens are available and you can use your
-          account.
-        </div>
-      </div>
+          <TextField
+            id="id-public-key-base16"
+            label="Public Key (Base16)"
+            value={
+              auth.selectedAccount &&
+              base64to16(auth.selectedAccount.publicKeyBase64)
+            }
+            readonly={true}
+          />
+        </Form>
+        <Button
+          title="Request tokens"
+          disabled={auth.selectedAccount == null}
+          onClick={() => requestTokens(auth.selectedAccount!)}
+        />
+      </Card>
     );
   }
 );
