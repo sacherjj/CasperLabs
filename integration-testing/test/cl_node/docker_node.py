@@ -90,7 +90,7 @@ class DockerNode(LoggingDockerBase):
         return "node"
 
     @property
-    def client(self) -> "CasperLabsClient":
+    def client(self) -> Union[DockerClient, PythonClient]:
         return {self.DOCKER_CLIENT: self.d_client, self.PYTHON_CLIENT: self.p_client}[
             self._client
         ]
