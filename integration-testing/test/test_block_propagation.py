@@ -156,6 +156,10 @@ def test_network_partition_and_rejoin(four_nodes_network):
     """
     nodes = four_nodes_network.docker_nodes
     n = len(nodes)
+    # Create a block in order to have test account created before partitioning,
+    # because account creation involves creating a block with a transfer
+    # from genesis account and waiting for the block to propagate
+    # to all nodes in the whole network, it would fail with nodes disconnected.
     block_hash = deploy_and_propose(nodes[0], C[0])
     wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
@@ -178,7 +182,8 @@ def test_network_partition_and_rejoin(four_nodes_network):
             wait_for_peers_count_exactly(node, len(partition) - 1, 60)
 
     # Propose separately in each partition. They should not see each others' blocks,
-    # so everyone has the genesis plus the 1 block proposed in its partition.
+    # so everyone has the genesis block, extra block created above,
+    # and the 1 block proposed in its partition.
     # Using the same nonce in both partitions because otherwise one of them will
     # sit there unable to propose; should use separate accounts really.
     block_hashes = (deploy_and_propose(partitions[0][0], C[0], nonce=2),
