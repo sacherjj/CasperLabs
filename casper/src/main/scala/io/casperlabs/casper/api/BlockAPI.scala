@@ -509,7 +509,8 @@ object BlockAPI {
         casper.blockDag flatMap { dag =>
           maxRank match {
             case 0 => dag.topoSortTail(depth)
-            case r => dag.topoSort(endBlockNumber = r, startBlockNumber = math.max(r - depth + 1, 0))
+            case r =>
+              dag.topoSort(endBlockNumber = r, startBlockNumber = math.max(r - depth + 1, 0))
           }
         } handleErrorWith {
           case ex: StorageError =>
