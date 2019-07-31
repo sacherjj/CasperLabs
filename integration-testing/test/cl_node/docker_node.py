@@ -49,7 +49,7 @@ class DockerNode(LoggingDockerBase):
     def __init__(self, cl_network, config: DockerConfig, socket_volume: str):
         super().__init__(config, socket_volume)
         self.cl_network = cl_network
-        self._client = self.PYTHON_CLIENT
+        self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
         self.join_client_network()
