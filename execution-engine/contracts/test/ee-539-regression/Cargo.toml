@@ -1,0 +1,16 @@
+[package]
+name = "ee-539-regression"
+version = "0.1.0"
+authors = ["Michał Papierski <michal@papierski.net>"]
+edition = "2018"
+
+[lib]
+name = "ee_539_regression"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["cl_std/std"]
+
+[dependencies]
+cl_std = { path = "../../../common", package = "casperlabs-contract-ffi" }
