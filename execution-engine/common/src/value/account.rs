@@ -108,6 +108,22 @@ impl From<i32> for SetThresholdFailure {
 }
 
 impl ActionThresholds {
+    /// Creates new ActionThresholds object with provided weights
+    ///
+    /// Requires deployment threshold to be lower than or equal to
+    /// key management threshold.
+    pub fn new(
+        deployment: Weight,
+        key_management: Weight,
+    ) -> Result<ActionThresholds, SetThresholdFailure> {
+        if deployment > key_management {
+            return Err(SetThresholdFailure::DeploymentThresholdError);
+        }
+        Ok(ActionThresholds {
+            deployment,
+            key_management,
+        })
+    }
     /// Sets new threshold for [ActionType::Deployment].
     /// Should return an error if setting new threshold for `action_type` breaks one of the invariants.
     /// Currently, invariant is that `ActionType::Deployment` threshold shouldn't be higher than any other,
@@ -807,8 +823,8 @@ impl FromBytes for Account {
 mod tests {
     use crate::uref::{AccessRights, URef};
     use crate::value::account::{
-        Account, AccountActivity, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
-        Weight, KEY_SIZE, MAX_KEYS,
+        Account, AccountActivity, ActionThresholds, AddKeyFailure, AssociatedKeys, BlockTime,
+        PublicKey, PurseId, Weight, KEY_SIZE, MAX_KEYS,
     };
     use alloc::collections::btree_map::BTreeMap;
     use alloc::vec::Vec;
@@ -891,5 +907,20 @@ mod tests {
     fn public_key_from_slice_too_big() {
         let _public_key =
             PublicKey::try_from(&[0u8; 33][..]).expect_err("should not create public key");
+    }
+
+    #[test]
+
+    fn should_create_new_action_thresholds() {
+        let action_thresholds = ActionThresholds::new(Weight::new(1), Weight::new(42)).unwrap();
+        assert_eq!(*action_thresholds.deployment(), Weight::new(1));
+        assert_eq!(*action_thresholds.key_management(), Weight::new(42));
+    }
+
+    #[test]
+    #[should_panic]
+    fn should_not_create_action_thresholds_with_invalid_deployment_threshold() {
+        // deployment cant be greater than key management
+        ActionThresholds::new(Weight::new(5), Weight::new(1)).unwrap();
     }
 }
