@@ -12,17 +12,20 @@ import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
+import cats.temp.par.Par
 import com.olegpy.meow.effects._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.{
   BlockDagFileStorage,
+  BlockDagStorage,
   BlockStore,
   CachingBlockStore,
   FileLMDBIndexBlockStore
 }
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
+import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
@@ -88,8 +91,8 @@ class NodeRuntime private[node] (
 
     implicit val logId: Log[Id]         = Log.logId
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
-
-    val filesApiEff = FilesAPI.create[Effect](Sync[Effect], logEff)
+    implicit val parForEff: Par[Effect] = catsParForEffect
+    implicit val filesApiEff            = FilesAPI.create[Effect](Sync[Effect], logEff)
 
     // SSL context to use for the public facing API.
     val maybeApiSslContext = Option(conf.tls.readCertAndKey).filter(_ => conf.grpc.useTls).map {
@@ -98,7 +101,11 @@ class NodeRuntime private[node] (
     }
 
     rpConfState >>= (_.runState { implicit state =>
-      val metrics = diagnostics.effects.metrics[Task]
+      implicit val metrics     = diagnostics.effects.metrics[Task]
+      implicit val nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
+      implicit val jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
+      implicit val nodeAsk     = eitherTApplicativeAsk(effects.peerNodeAsk(state))
+
       implicit val metricsEff: Metrics[Effect] =
         Metrics.eitherT[CommError, Task](Monad[Task], metrics)
       val resources = for {
@@ -153,16 +160,16 @@ class NodeRuntime private[node] (
                                                       )
                                                     }
 
-        blockDagStorage <- BlockDagFileStorage[Effect](
-                            dagStoragePath,
-                            conf.blockstorage.latestMessagesLogMaxSizeFactor,
-                            blockStore
-                          )(
-                            Concurrent[Effect],
-                            logEff,
-                            raiseIOError,
-                            metricsEff
-                          )
+        implicit0(blockDagStorage: BlockDagStorage[Effect]) <- BlockDagFileStorage[Effect](
+                                                                dagStoragePath,
+                                                                conf.blockstorage.latestMessagesLogMaxSizeFactor,
+                                                                blockStore
+                                                              )(
+                                                                Concurrent[Effect],
+                                                                logEff,
+                                                                raiseIOError,
+                                                                metricsEff
+                                                              )
 
         _ <- Resource.liftF {
               Task
@@ -174,11 +181,8 @@ class NodeRuntime private[node] (
                 .toEffect
             }
 
-        nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
-        jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
-
-        implicit0(raise: FunctorRaise[Effect, InvalidBlock]) = ValidationImpl
-          .raiseValidateErrorThroughSync[Effect]
+        implicit0(raise: FunctorRaise[Effect, InvalidBlock]) = validation
+          .raiseValidateErrorThroughApplicativeError[Effect]
         implicit0(validationEff: Validation[Effect]) = new ValidationImpl[Effect]
 
         // TODO: Only a loop started with the TransportLayer keeps filling this up,
@@ -225,17 +229,6 @@ class NodeRuntime private[node] (
                 blockingScheduler,
                 blockApiLock,
                 maybeApiSslContext
-              )(
-                logEff,
-                logId,
-                metricsEff,
-                metricsId,
-                nodeDiscovery,
-                jvmMetrics,
-                nodeMetrics,
-                connectionsCell,
-                multiParentCasperRef,
-                scheduler
               )
 
         _ <- api.Servers.externalServersR[Effect](
@@ -259,48 +252,12 @@ class NodeRuntime private[node] (
                 port,
                 conf,
                 blockingScheduler
-              )(
-                catsParForEffect,
-                catsConcurrentEffectForEffect(scheduler),
-                logEff,
-                metricsEff,
-                Timer[Effect],
-                safetyOracle,
-                blockStore,
-                blockDagStorage,
-                NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
-                eitherTApplicativeAsk(effects.peerNodeAsk(state)),
-                multiParentCasperRef,
-                executionEngineService,
-                finalizedBlocksStream,
-                filesApiEff,
-                validationEff,
-                scheduler,
-                logId,
-                metricsId
               )
             } else {
               casper.transport.apply(
                 port,
                 conf,
                 blockingScheduler
-              )(
-                log,
-                logEff,
-                metrics,
-                metricsEff,
-                safetyOracle,
-                blockStore,
-                blockDagStorage,
-                connectionsCell,
-                nodeDiscovery,
-                state,
-                multiParentCasperRef,
-                executionEngineService,
-                finalizedBlocksStream,
-                filesApiEff,
-                validationEff,
-                scheduler
               )
             }
 

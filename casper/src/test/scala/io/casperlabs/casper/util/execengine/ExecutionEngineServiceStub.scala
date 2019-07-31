@@ -3,16 +3,16 @@ package io.casperlabs.casper.util.execengine
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
-import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper.{Validation, ValidationImpl, InvalidBlock}
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper
+import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
-import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -24,7 +24,7 @@ object ExecutionEngineServiceStub {
   type Bonds = Map[PublicKey, Long]
 
   implicit def functorRaiseInvalidBlock[F[_]: Sync] =
-    ValidationImpl.raiseValidateErrorThroughSync[F]
+    casper.validation.raiseValidateErrorThroughApplicativeError[F]
 
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
       b: Block,

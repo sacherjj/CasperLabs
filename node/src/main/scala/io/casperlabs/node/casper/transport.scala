@@ -9,11 +9,13 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.foldable._
 import cats.syntax.functor._
+import com.github.ghik.silencer.silent
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.util.comm.CasperPacketHandler
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
@@ -32,6 +34,7 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
+
 import scala.concurrent.duration._
 
 /** Create the Casper stack using the TransportLayer and CasperPacketHandler. */
@@ -39,6 +42,7 @@ package object transport {
   def eitherTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
 
+  //@silent("is never used")
   def apply(
       port: Int,
       conf: Configuration,
@@ -62,6 +66,8 @@ package object transport {
       validation: Validation[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {
+    implicit val rpConfAsk = effects.rpConfAsk(rpConfState)
+    implicit val timeEff   = Time[Effect]
     for {
       tcpConnections <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
 
@@ -88,17 +94,7 @@ package object transport {
       implicit0(labEff: LastApprovedBlock[Effect]) = LastApprovedBlock
         .eitherTLastApprovedBlock[CommError, Task]
 
-      implicit0(rpConfAsk: RPConfAsk[Task]) = effects.rpConfAsk(rpConfState)
-
       peerNodeAsk = effects.peerNodeAsk(rpConfState)
-
-      implicit0(connectionsCellEff: ConnectionsCell[Effect]) = Cell
-        .eitherTCell[CommError, Task, Connections]
-
-      implicit0(nodeDiscoveryEff: NodeDiscovery[Effect]) = NodeDiscovery
-        .eitherTNodeDiscovery[CommError, Task]
-
-      implicit0(timeEff: Time[Effect]) = Time[Effect]
 
       defaultTimeout = conf.server.defaultTimeout
 
@@ -107,26 +103,6 @@ package object transport {
                                 conf.casper,
                                 defaultTimeout,
                                 _.value
-                              )(
-                                labEff,
-                                metricsEff,
-                                blockStore,
-                                connectionsCellEff,
-                                nodeDiscoveryEff,
-                                transportEff,
-                                ErrorHandler[Effect],
-                                rpConfAskEff,
-                                safetyOracle,
-                                Sync[Effect],
-                                Concurrent[Effect],
-                                timeEff,
-                                logEff,
-                                multiParentCasperRef,
-                                blockDagStorage,
-                                executionEngineService,
-                                finalizationHandler,
-                                filesApiEff,
-                                scheduler
                               )
 
       implicit0(packetHandler: PacketHandler[Effect]) = PacketHandler

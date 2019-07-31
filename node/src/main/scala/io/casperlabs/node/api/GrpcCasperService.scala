@@ -5,7 +5,6 @@ import cats.implicits._
 import com.google.protobuf.empty.Empty
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
-import io.casperlabs.casper.{SafetyOracle, Validation}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.api.BlockAPI
@@ -20,6 +19,7 @@ import io.casperlabs.comm.ServiceError.InvalidArgument
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.casper.validation.Validation
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 

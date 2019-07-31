@@ -16,6 +16,7 @@ import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.{MonadThrowable, MonadTrans}
 import io.casperlabs.comm.CommError.ErrorHandler
@@ -54,7 +55,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       _ <- Metrics[F].incrementCounter("blocks-received-again", 0)
     } yield ()
 
-  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: Validation](
+  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: Validation](
       conf: CasperConf,
       delay: FiniteDuration,
       toTask: F[_] => Task[_]

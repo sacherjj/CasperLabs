@@ -11,7 +11,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, Bloc
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
 import Block.Justification
-import io.casperlabs.casper.ValidationImpl.{DropErrorWrapper, ValidateErrorWrapper}
+import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
@@ -19,13 +19,14 @@ import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.gossiping
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.ipc
+import io.casperlabs.{casper, ipc}
 import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.SmartContractEngineError
@@ -69,7 +70,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   //TODO pull out
-  implicit val functorRaiseInvalidBlock = ValidationImpl.raiseValidateErrorThroughSync[F]
+  implicit val functorRaiseInvalidBlock = validation.raiseValidateErrorThroughApplicativeError[F]
 
   type Validator = ByteString
 
@@ -128,14 +129,14 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
           .addEffects(InvalidUnslashableBlock, block, Seq.empty, dag)
           .tupleLeft(InvalidUnslashableBlock: BlockStatus)
 
-    Validate.preTimestamp[F](block).attempt.flatMap {
+    Validation[F].preTimestamp(block).attempt.flatMap {
       case Right(None) => addBlock(statelessExecutor.validateAndAddBlock)
       case Right(Some(delay)) =>
         Time[F].sleep(delay) >> Log[F].info(
           s"Block ${PrettyPrinter.buildString(block)} is ahead for $delay from now, will retry adding later"
         ) >> addBlock(statelessExecutor.validateAndAddBlock)
       case _ =>
-        Log[F].warn(Validate.ignore(block, "block timestamp exceeded threshold")) >> addBlock(
+        Log[F].warn(validation.ignore(block, "block timestamp exceeded threshold")) >> addBlock(
           handleInvalidTimestamp
         )
     }
@@ -164,7 +165,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
       furtherAttempts <- status match {
                           case MissingBlocks | IgnorableEquivocation | InvalidUnslashableBlock =>
                             List.empty[(Block, BlockStatus)].pure[F]
-                          case _                       =>
+                          case _ =>
                             // re-attempt for any status that resulted in the adding of the block into the view
                             reAttemptBuffer(updatedDag, lastFinalizedBlockHash)
                         }
@@ -742,11 +743,11 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Metrics](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Metrics: Validation](
       chainId: String
   ) {
     //TODO pull out
-    implicit val functorRaiseInvalidBlock = ValidationImpl.raiseValidateErrorThroughSync[F]
+    implicit val functorRaiseInvalidBlock = validation.raiseValidateErrorThroughApplicativeError[F]
 
     /* Execute the block to get the effects then do some more validation.
      * Save the block if everything checks out.
@@ -777,7 +778,7 @@ object MultiParentCasperImpl {
                      .empty[ExecEngineUtil.TransformMap, Block]
                      .pure[F]
                  ) { ctx =>
-                   Validate[F]
+                   Validation[F]
                      .parents(block, ctx.lastFinalizedBlockHash, dag)
                  }
         _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
@@ -980,7 +981,7 @@ object MultiParentCasperImpl {
     def establishMetrics[F[_]: Metrics]: F[Unit] =
       Metrics[F].incrementCounter("gas_spent", 0L)(CasperMetricsSource)
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Metrics](
+    def create[F[_]: MonadThrowable: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Metrics: Validation](
         chainId: String
     ): F[StatelessExecutor[F]] =
       for {

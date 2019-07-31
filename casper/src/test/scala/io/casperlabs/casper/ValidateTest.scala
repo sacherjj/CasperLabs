@@ -1,7 +1,5 @@
 package io.casperlabs.casper
 
-import java.nio.file.Files
-
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -9,13 +7,10 @@ import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
-import io.casperlabs.casper.consensus._
-import Block.Justification
-import io.casperlabs.casper.ValidationImpl.DropErrorWrapper
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
@@ -24,14 +19,14 @@ import io.casperlabs.casper.util.execengine.{
   ExecEngineUtil,
   ExecutionEngineServiceStub
 }
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.casper.validation.Errors.{DropErrorWrapper, ValidateErrorWrapper}
+import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
+import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.ipc.{DeployResult, TransformEntry, ValidateRequest}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
-import io.casperlabs.shared.{Log, Time}
+import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
@@ -50,11 +45,11 @@ class ValidateTest
     with BlockDagStorageFixture
     with ArbitraryConsensus {
   implicit val log              = new LogStub[Task]
-  implicit val raiseValidateErr = Validate.raiseValidateErrorThroughApplicativeError[Task]
+  implicit val raiseValidateErr = validation.raiseValidateErrorThroughApplicativeError[Task]
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.
   implicit def wrapWithThrowable[A <: InvalidBlock](err: A): Throwable =
-    ValidationImpl.ValidateErrorWrapper(err)
+    ValidateErrorWrapper(err)
 
   implicit val consensusConfig = ConsensusConfig()
 
@@ -735,7 +730,7 @@ class ValidateTest
                       b3,
                       dag
                     )
-      } yield postState shouldBe Left(ValidationImpl.ValidateErrorWrapper(InvalidPreStateHash))
+      } yield postState shouldBe Left(ValidateErrorWrapper(InvalidPreStateHash))
   }
 
   it should "return InvalidPostStateHash when postStateHash of block is not correct" in withStorage {
@@ -760,8 +755,8 @@ class ValidateTest
                          )
       } yield {
         validateResult match {
-          case Left(ValidationImpl.ValidateErrorWrapper(InvalidPostStateHash)) =>
-          case Left(ValidationImpl.ValidateErrorWrapper(other)) =>
+          case Left(ValidateErrorWrapper(InvalidPostStateHash)) =>
+          case Left(ValidateErrorWrapper(other)) =>
             fail(s"Expected InvalidPostStateHash, got $other")
           case other => fail(s"Unexpected result: $other")
         }

@@ -29,6 +29,8 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import java.util.concurrent.{TimeUnit, TimeoutException}
+
+import io.casperlabs.casper.validation.Validation
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import monix.eval.TaskLike
 import monix.execution.Scheduler
@@ -292,7 +294,7 @@ package object gossiping {
       validatorId: Option[ValidatorIdentity]
   ): Resource[F, DownloadManager[F]] =
     for {
-      _           <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
+      _ <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
       maybeValidatorPublicKey = validatorId
         .map(x => ByteString.copyFrom(x.publicKey))
         .filterNot(_.isEmpty)

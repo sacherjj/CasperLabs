@@ -19,6 +19,7 @@ import io.casperlabs.casper.protocol.{
   BlockInfo => BlockInfoWithTuplespace
 }
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{protocol, BlockStatus => _, _}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError
@@ -87,7 +88,7 @@ object BlockAPI {
       )
   }
 
-  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStore: SafetyOracle: Validation: FinalityDetector: Log: Metrics](
+  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStore: Validation: FinalityDetector: Log: Metrics](
       d: Deploy,
       ignoreDeploySignature: Boolean
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
@@ -119,7 +120,7 @@ object BlockAPI {
   }
 
   /** Check that we don't have this deploy already in the finalized part of the DAG. */
-  private def ensureNotInDag[F[_]: MonadThrowable: MultiParentCasperRef: BlockStore: SafetyOracle: FinalityDetector: Log](
+  private def ensureNotInDag[F[_]: MonadThrowable: MultiParentCasperRef: BlockStore: FinalityDetector: Log](
       d: Deploy,
       faultToleranceThreshold: Float
   ): F[Unit] =

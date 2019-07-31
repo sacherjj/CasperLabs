@@ -9,6 +9,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper._
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.MonadTrans
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -117,7 +118,7 @@ object ApproveBlockProtocol {
       val validSig = for {
         _   <- a.candidate.filter(_ == this.candidate)
         sig <- a.sig
-        if Validate[F].signature(sigData, sig)
+        if Validation[F].signature(sigData, sig)
       } yield sig
 
       val trustedValidator =

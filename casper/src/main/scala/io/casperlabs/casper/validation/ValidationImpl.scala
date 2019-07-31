@@ -1,30 +1,28 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.validation
 
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{Applicative, ApplicativeError, Functor, Monad}
+import cats.{Applicative, ApplicativeError, Functor}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
-import Block.Justification
+import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper._
+import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
-import io.casperlabs.casper.consensus.state
-import io.casperlabs.blockstorage.BlockMetadata
-import io.casperlabs.casper.ValidationImpl.DropErrorWrapper
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import simulacrum.typeclass
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
@@ -33,27 +31,7 @@ object ValidationImpl {
   type Data        = Array[Byte]
   type BlockHeight = Long
 
-  type RaiseValidationError[F[_]] = FunctorRaise[F, InvalidBlock]
-  object RaiseValidationError {
-    def apply[F[_]](implicit ev: RaiseValidationError[F]): RaiseValidationError[F] = ev
-  }
-
-  def raiseValidateErrorThroughApplicativeError[F[_]: ApplicativeError[?[_], Throwable]]
-      : FunctorRaise[F, InvalidBlock] =
-    new FunctorRaise[F, InvalidBlock] {
-      override val functor: Functor[F] =
-        Functor[F]
-
-      override def raise[A](e: InvalidBlock): F[A] =
-        ValidateErrorWrapper(e).raiseError[F, A]
-    }
-
   val DRIFT = 15000 // 15 seconds
-
-  // Wrapper for the tests that were originally outside the `attemptAdd` method
-  // and meant the block was not getting saved.
-  final case class DropErrorWrapper(status: InvalidBlock)     extends Exception
-  final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception(status.toString)
 
   def apply[F[_]](implicit ev: ValidationImpl[F]) = ev
 }
@@ -74,9 +52,8 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  private def checkDroppable[F[_]: MonadThrowable](checks: F[Boolean]*): F[Unit] =
-    checks.toList
-      .traverse(identity)
+  private def checkDroppable(checks: F[Boolean]*): F[Unit] =
+    checks.toList.sequence
       .map(_.forall(identity))
       .ifM(
         ().pure[F],
@@ -94,15 +71,6 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
     signatureVerifiers(sig.algorithm).fold(false) { verify =>
       verify(d, Signature(sig.sig.toByteArray), PublicKey(sig.publicKey.toByteArray))
     }
-
-  def ignore(block: Block, reason: String): String =
-    ignore(block.blockHash, reason)
-
-  def ignore(block: BlockSummary, reason: String): String =
-    ignore(block.blockHash, reason)
-
-  def ignore(blockHash: ByteString, reason: String): String =
-    s"Ignoring block ${PrettyPrinter.buildString(blockHash)} because $reason"
 
   def approvedBlock(
       a: ApprovedBlock,
@@ -182,10 +150,10 @@ class ValidationImpl[F[_]: BlockStore: MonadThrowable: FunctorRaise[?[_], Invali
           )
       _ <- blockSummary(summary, chainId)
       // Checks that need dependencies.
-      _ <- Validation[F].missingBlocks(summary)
-      _ <- Validation[F].timestamp(summary)
-      _ <- Validation[F].blockNumber(summary, dag)
-      _ <- Validation[F].sequenceNumber(summary, dag)
+      _ <- missingBlocks(summary)
+      _ <- timestamp(summary)
+      _ <- blockNumber(summary, dag)
+      _ <- sequenceNumber(summary, dag)
       // Checks that need the body.
       _ <- blockHash(block)
       _ <- deployCount(block)

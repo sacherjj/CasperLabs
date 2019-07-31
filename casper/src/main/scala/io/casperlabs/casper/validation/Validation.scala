@@ -1,4 +1,4 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.validation
 
 import io.casperlabs.blockstorage.BlockDagRepresentation
 import io.casperlabs.casper.Estimator.BlockHash
@@ -6,8 +6,11 @@ import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.{consensus, protocol}
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.ipc
+
+import scala.concurrent.duration.FiniteDuration
 
 trait Validation[F[_]] {
 
@@ -22,7 +25,6 @@ trait Validation[F[_]] {
   def parents(
       b: Block,
       lastFinalizedBlockHash: BlockHash,
-      genesisBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]]
 
@@ -42,7 +44,6 @@ trait Validation[F[_]] {
 
   def transactions(
       block: Block,
-      dag: BlockDagRepresentation[F],
       preStateHash: StateHash,
       effects: Seq[ipc.TransformEntry]
   ): F[Unit]
@@ -53,6 +54,8 @@ trait Validation[F[_]] {
       chainId: String,
       maybeGenesis: Option[Block]
   ): F[Unit]
+
+  def preTimestamp(b: Block): F[Option[FiniteDuration]]
 }
 
 object Validation {

@@ -11,6 +11,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.gossiping
@@ -108,11 +109,7 @@ sealed abstract class MultiParentCasperInstances {
       genesisEffects: ExecEngineUtil.TransformMap
   ) =
     for {
-      _ <- {
-        implicit val functorRaiseInvalidBlock: FunctorRaise[F, InvalidBlock] =
-          Validate[F].raiseValidateErrorThroughApplicativeError
-        Validate[F].transactions(genesis, genesisPreState, genesisEffects)
-      }
+      _                   <- Validation[F].transactions(genesis, genesisPreState, genesisEffects)
       blockProcessingLock <- Semaphore[F](1)
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()

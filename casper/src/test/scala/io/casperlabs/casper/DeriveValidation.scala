@@ -8,8 +8,9 @@ import io.casperlabs.casper.consensus.state.Value
 import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion}
 import io.casperlabs.casper.consensus.{state, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.crypto.Keys.PublicKey
-import io.casperlabs.ipc.{Deploy, DeployResult, TransformEntry, ValidateRequest}
+import io.casperlabs.ipc.{Deploy, DeployResult, GenesisResult, TransformEntry, ValidateRequest}
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -19,17 +20,20 @@ trait DeriveValidationLowPriority2 {
   //Should not reach these implementations
   def emptyEE[F[_]] = new ExecutionEngineService[F] {
     override def emptyStateHash: DeployHash = ???
+    override def runGenesis(
+        deploys: Seq[Deploy],
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, GenesisResult]] = ???
     override def exec(
         prestate: DeployHash,
+        blocktime: Long,
         deploys: Seq[Deploy],
         protocolVersion: ProtocolVersion
     ): F[Either[Throwable, Seq[DeployResult]]] = ???
     override def commit(
         prestate: DeployHash,
         effects: Seq[TransformEntry]
-    ): F[Either[Throwable, DeployHash]]                                             = ???
-    override def computeBonds(hash: DeployHash)(implicit log: Log[F]): F[Seq[Bond]] = ???
-    override def setBonds(bonds: Map[PublicKey, Long]): F[Unit]                     = ???
+    ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = ???
     override def query(
         state: DeployHash,
         baseKey: Key,
