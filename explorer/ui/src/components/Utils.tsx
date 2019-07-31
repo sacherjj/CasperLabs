@@ -13,6 +13,7 @@ export const Spinner = (msg: String) => (
 
 export const Loading = () => Spinner('Loading');
 
+// https://fontawesome.com/icons?d=gallery&q=ground&m=free
 export const Icon = (props: { name: string; color?: string }) => {
   const styles = {
     color: props.color
@@ -148,3 +149,19 @@ export const shortHash = (hash: string | ByteArray) => {
   const h = typeof hash === 'string' ? hash : encodeBase16(hash);
   return h.length > 10 ? h.substr(0, 10) + '...' : h;
 };
+
+export const Card = (props: {
+  title: string;
+  children: any;
+  footerMessage?: any;
+}) => (
+  <div className="card mb-3">
+    <div className="card-header">
+      <span>{props.title}</span>
+    </div>
+    <div className="card-body">{props.children}</div>
+    {props.footerMessage && (
+      <div className="card-footer small text-muted">{props.footerMessage}</div>
+    )}
+  </div>
+);

@@ -48,11 +48,17 @@ export default class CasperService {
   }
 
   /** Return the block info including statistics. */
-  getBlockInfo(blockHash: ByteArray): Promise<BlockInfo> {
+  getBlockInfo(
+    blockHash: ByteArray | string,
+    view?: 0 | 1
+  ): Promise<BlockInfo> {
     return new Promise<BlockInfo>((resolve, reject) => {
+      // The API supports prefixes, which may not have even number of characters.
+      const hashBase16 =
+        typeof blockHash === 'string' ? blockHash : encodeBase16(blockHash);
       const request = new GetBlockInfoRequest();
-      request.setBlockHashBase16(encodeBase16(blockHash));
-      request.setView(BlockInfo.View.FULL);
+      request.setBlockHashBase16(hashBase16);
+      request.setView(view === undefined ? BlockInfo.View.FULL : view);
 
       grpc.unary(GrpcCasperService.GetBlockInfo, {
         host: this.url,
