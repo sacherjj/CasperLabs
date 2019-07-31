@@ -1,16 +1,19 @@
 from typing import Optional
 import os
 import logging
+import time
 
+from test.cl_node import LoggingMixin
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.nonce_registry import NonceRegistry
-from casper_client import CasperClient, ABI
+from casper_client import CasperClient, ABI, InternalError
 from pathlib import Path
 
 
-class PythonClient(CasperLabsClient):
+class PythonClient(CasperLabsClient, LoggingMixin):
 
     def __init__(self, node: 'DockerNode'):
+        super(PythonClient, self).__init__()
         self.node = node
         self.abi = ABI
         # If $TAG_NAME is set it means we are running in docker, see docker_run_test.sh
@@ -94,3 +97,17 @@ class PythonClient(CasperLabsClient):
 
     def show_deploy(self, deploy_hash: str):
         return self.client.showDeploy(deploy_hash)
+
+    def propose_with_retry(self, max_attempts: int, retry_seconds: int) -> str:
+        attempt = 0
+        while True:
+            try:
+                return self.propose()
+            except InternalError as ex:
+                if attempt < max_attempts:
+                    self.logger.debug("Could not propose; retrying later.")
+                    attempt += 1
+                    time.sleep(retry_seconds)
+                else:
+                    self.logger.debug("Could not propose; no more retries!")
+                    raise ex
