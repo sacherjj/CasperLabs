@@ -54,8 +54,9 @@ fn should_manage_associated_key() {
         test_support::get_account(&transforms[1], &account_key).expect("should get account")
     };
 
-    let keys = account_1.get_associated_keys();
-    let gen_weight = keys.get(&genesis_key).expect("weight");
+    let gen_weight = account_1
+        .get_associated_key_weight(genesis_key)
+        .expect("weight");
 
     let expected_weight = Weight::new(2);
     assert_eq!(*gen_weight, expected_weight, "unexpected weight");
@@ -77,9 +78,13 @@ fn should_manage_associated_key() {
         test_support::get_account(&transforms[2], &account_key).expect("should get account")
     };
 
-    let keys = account_1.get_associated_keys();
+    //let keys = account_1.get_associated_keys();
 
-    assert_eq!(keys.get(&genesis_key), None, "key should be removed");
+    assert_eq!(
+        account_1.get_associated_key_weight(genesis_key),
+        None,
+        "key should be removed"
+    );
 
     let is_error = builder.is_error();
     assert!(!is_error);

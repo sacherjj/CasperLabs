@@ -481,8 +481,8 @@ impl AssociatedKeys {
         self.0.get(key)
     }
 
-    pub fn get_all(&self) -> &BTreeMap<PublicKey, Weight> {
-        &self.0
+    pub fn iter(&self) -> impl Iterator<Item = (&PublicKey, &Weight)> {
+        self.0.iter()
     }
 }
 
@@ -566,12 +566,8 @@ impl Account {
         PurseId::new(add_only_uref)
     }
 
-    pub fn associated_keys(&self) -> &AssociatedKeys {
-        &self.associated_keys
-    }
-
-    pub fn get_associated_keys(&self) -> &AssociatedKeys {
-        &self.associated_keys
+    pub fn get_associated_keys(&self) -> impl Iterator<Item = (&PublicKey, &Weight)> {
+        self.associated_keys.iter()
     }
 
     pub fn action_thresholds(&self) -> &ActionThresholds {
@@ -613,6 +609,11 @@ impl Account {
     ) -> Result<(), UpdateKeyFailure> {
         // TODO(mpapierski): Authorized keys check EE-377
         self.associated_keys.update_key(public_key, weight)
+    }
+
+    pub fn get_associated_key_weight(&self, public_key: PublicKey) -> Option<&Weight> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.associated_keys.get(&public_key)
     }
 
     pub fn set_action_threshold(
