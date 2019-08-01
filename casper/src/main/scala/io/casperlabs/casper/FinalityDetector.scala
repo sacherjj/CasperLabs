@@ -293,11 +293,14 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                                           } yield acc.updated(child, updatedChildBlockStore)
                                       }
             vid = b.validatorPublicKey
-            maxLevel = math.max(
-              validatorLevel.getOrElse(vid, 0),
-              updatedBlockScore.blockLevel
-            )
-            updatedValidatorLevel = validatorLevel.updated(vid, maxLevel)
+            updatedValidatorLevel = if (committeeApproximation.contains(vid)) {
+              val maxLevel = math.max(
+                validatorLevel.getOrElse(vid, 0),
+                updatedBlockScore.blockLevel
+              )
+              validatorLevel.updated(vid, maxLevel)
+            } else
+              validatorLevel
           } yield (updatedBlockLevelTags, updatedValidatorLevel)
       }
   }

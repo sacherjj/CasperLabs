@@ -31,7 +31,7 @@ use storage::global_state::in_memory::InMemoryGlobalState;
 
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
-pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/debug";
+pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
 
 pub fn get_protocol_version() -> ProtocolVersion {
     let mut protocol_version: ProtocolVersion = ProtocolVersion::new();

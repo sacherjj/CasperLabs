@@ -262,8 +262,6 @@ impl From<common::value::account::Account> for super::state::Account {
         ipc_account.set_purse_id(account.purse_id().value().into());
         let associated_keys: Vec<super::state::Account_AssociatedKey> = account
             .get_associated_keys()
-            .get_all()
-            .iter()
             .map(|(key, weight)| {
                 let mut ipc_associated_key = super::state::Account_AssociatedKey::new();
                 ipc_associated_key.set_public_key(key.value().to_vec());
@@ -335,17 +333,13 @@ impl TryFrom<&super::state::Account> for common::value::account::Account {
                     "Missing ActionThresholds object of the Account IPC message.".to_string(),
                 );
             };
-            let mut tmp: ActionThresholds = Default::default();
             let action_thresholds_ipc = value.get_action_thresholds();
-            tmp.set_deployment_threshold(Weight::new(
-                action_thresholds_ipc.get_deployment_threshold() as u8,
-            ))
-            .map_err(ParsingError::custom)?;
-            tmp.set_key_management_threshold(Weight::new(
-                action_thresholds_ipc.get_key_management_threshold() as u8,
-            ))
-            .map_err(ParsingError::custom)?;
-            tmp
+
+            ActionThresholds::new(
+                Weight::new(action_thresholds_ipc.get_deployment_threshold() as u8),
+                Weight::new(action_thresholds_ipc.get_key_management_threshold() as u8),
+            )
+            .map_err(ParsingError::custom)?
         };
         let account_activity: AccountActivity = {
             if !value.has_account_activity() {

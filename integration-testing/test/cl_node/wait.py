@@ -261,10 +261,12 @@ class AllNodesHaveBlockHashes:
         :param nodes:          Nodes that you want the blocks to propagate to.
         :param block_hashes:   Block hashes or prefixes of block hashes. All prefixes must have the same length.
         """
-        self.nodes = nodes
+        assert len(set(len(h) for h in list(block_hashes))) == 1, \
+            f'All block hash prefixes must have the same length: {block_hashes}'
+
+        self.prefix_length = len(list(block_hashes)[0])
         self.block_hashes = set(block_hashes)
-        assert len(set(len(h) for h in list(self.block_hashes))) == 1, 'All block hash prefixes must have the same length'
-        self.prefix_length = len(list(self.block_hashes)[0])
+        self.nodes = nodes
 
     def __str__(self) -> str:
         return f'<{self.__class__.__name__}({self.block_hashes})>'

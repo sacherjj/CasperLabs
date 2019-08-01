@@ -21,7 +21,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
   }
 
   render() {
-    const newAccount = this.props.auth.newAccount;
+    const newAccount = this.props.auth.newAccountForm;
     return (
       <div>
         <DataTable
@@ -80,7 +80,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
             submitLabel="Save"
             onSubmit={() => this.props.auth.createAccount()}
             onClose={() => {
-              this.props.auth.newAccount = null;
+              this.props.auth.newAccountForm = null;
             }}
             error={newAccount.error}
           >
@@ -126,6 +126,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
   }
 }
 
+// Need an observer component to subscribe just to this account balance.
 const Balance = observer(
   (props: { balance: ObservableValue<AccountBalance> }) => {
     const value = props.balance.value;
@@ -133,7 +134,7 @@ const Balance = observer(
 
     const hash = encodeBase16(value.blockHash);
     const balance =
-      value.balance == null ? 'n/a' : value.balance.toLocaleString();
+      value.balance === undefined ? 'n/a' : value.balance.toLocaleString();
     return (
       <div className="text-right" title={`As of block ${hash}`}>
         {balance}

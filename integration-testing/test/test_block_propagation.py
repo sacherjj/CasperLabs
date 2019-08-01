@@ -15,29 +15,40 @@ from .cl_node.wait import (wait_for_genesis_block,
                            wait_for_block_hash_propagated_to_all_nodes,
                            wait_for_block_hashes_propagated_to_all_nodes,
                            wait_for_peers_count_at_least, wait_for_peers_count_exactly)
+from test.cl_node.casperlabs_accounts import Account
 
 
 class DeployThread(threading.Thread):
     def __init__(self,
                  node: DockerNode,
                  batches_of_contracts: List[List[str]],
+                 account: Account,
                  max_attempts: int,
                  retry_seconds: int) -> None:
         threading.Thread.__init__(self)
         self.node = node
         self.batches_of_contracts = batches_of_contracts
-        self.deployed_block_hashes = set()
+        self.account = account
         self.max_attempts = max_attempts
         self.retry_seconds = retry_seconds
+        self.deployed_block_hashes = set()
 
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                assert 'Success' in self.node.client.deploy(session_contract=contract,
-                                                            payment_contract=contract)
+                deploy_response = self.node.client.deploy(session_contract=contract,
+                                                          payment_contract=contract,
+                                                          from_address=self.account.public_key_hex,
+                                                          public_key=self.account.public_key_path,
+                                                          private_key=self.account.private_key_path)
+                logging.info(f"")
+                assert 'Success' in deploy_response or True  # TODO: check return values of Python client...
 
-            block_hash = self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
-            self.deployed_block_hashes.add(block_hash)
+            propose_response = self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
+            if type(propose_response) == str:
+                self.deployed_block_hashes.add(propose_response)
+            else:
+                self.deployed_block_hashes.add(propose_response.block_hash.hex())
 
 
 @pytest.fixture()
@@ -61,7 +72,9 @@ def test_block_propagation(nodes,
     Scenario: test_helloworld.wasm deploy and propose by all nodes and stored in all nodes blockstores
     """
 
-    deploy_threads = [DeployThread(node, contract_paths, max_attempts=5, retry_seconds=3) for node in nodes]
+    account = nodes[0].genesis_account
+    deploy_threads = [DeployThread(node, contract_paths, account, max_attempts=5, retry_seconds=3)
+                      for node in nodes]
 
     for t in deploy_threads:
         t.start()
@@ -75,11 +88,18 @@ def test_block_propagation(nodes,
 
 
 def deploy_and_propose(node, contract, nonce=None):
-    assert 'Success' in node.client.deploy(session_contract=contract,
-                                           payment_contract=contract,
-                                           nonce=nonce)
+    deploy_output = node.client.deploy(session_contract=contract, payment_contract=contract, nonce=nonce)
+    if type(deploy_output) == str:
+        assert 'Success' in deploy_output
+    else:
+        logging.info(f"deploy_output: {deploy_output}")
+        pass  # TODO: assert output of Python client
+
     propose_output = node.client.propose()
-    return extract_block_hash_from_propose_output(propose_output)
+    if type(propose_output) == str:
+        return extract_block_hash_from_propose_output(propose_output)
+    else:
+        return propose_output.block_hash.hex()
 
 
 @pytest.fixture()
@@ -134,6 +154,15 @@ def test_network_partition_and_rejoin(four_nodes_network):
     Feature file: block_gossiping.feature
     Scenario: Network partition occurs and rejoin occurs
     """
+    nodes = four_nodes_network.docker_nodes
+    n = len(nodes)
+    # Create a block in order to have test account created before partitioning,
+    # because account creation involves creating a block with a transfer
+    # from genesis account and waiting for the block to propagate
+    # to all nodes in the whole network, it would fail with nodes disconnected.
+    block_hash = deploy_and_propose(nodes[0], C[0])
+    wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
+
     # Partition the network so node0 connected to node1 and node2 connected to node3 only.
     connections_between_partitions = [(i, j) for i in (0, 1) for j in (2, 3)]
     logging.info("PARTITIONS: {}".format(connections_between_partitions))
@@ -143,8 +172,6 @@ def test_network_partition_and_rejoin(four_nodes_network):
         logging.info("DISCONNECTING PARTITION: {}".format(connection))
         four_nodes_network.disconnect(connection)
 
-    nodes = four_nodes_network.docker_nodes
-    n = len(nodes)
     partitions = nodes[:int(n / 2)], nodes[int(n / 2):]
     logging.info("PARTITIONS: {}".format(partitions))
 
@@ -155,11 +182,12 @@ def test_network_partition_and_rejoin(four_nodes_network):
             wait_for_peers_count_exactly(node, len(partition) - 1, 60)
 
     # Propose separately in each partition. They should not see each others' blocks,
-    # so everyone has the genesis plus the 1 block proposed in its partition.
+    # so everyone has the genesis block, extra block created above,
+    # and the 1 block proposed in its partition.
     # Using the same nonce in both partitions because otherwise one of them will
     # sit there unable to propose; should use separate accounts really.
-    block_hashes = (deploy_and_propose(partitions[0][0], C[0], nonce=1),
-                    deploy_and_propose(partitions[1][0], C[1], nonce=1))
+    block_hashes = (deploy_and_propose(partitions[0][0], C[0], nonce=2),
+                    deploy_and_propose(partitions[1][0], C[1], nonce=2))
 
     for partition, block_hash in zip(partitions, block_hashes):
         wait_for_block_hash_propagated_to_all_nodes(partition, block_hash)
@@ -180,7 +208,7 @@ def test_network_partition_and_rejoin(four_nodes_network):
     # however, nodes in partition[0] will still not see blocks from partition[1]
     # until they also propose a new one on top of the block the created during
     # the network outage.
-    block_hash = deploy_and_propose(nodes[0], C[2], nonce=2)
+    block_hash = deploy_and_propose(nodes[0], C[2], nonce=3)
 
     for partition, old_hash in zip(partitions, block_hashes):
         logging.info(f"CHECK {partition} HAS ALL BLOCKS CREATED IN BOTH PARTITIONS")

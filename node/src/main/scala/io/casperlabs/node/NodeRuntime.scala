@@ -1,5 +1,7 @@
 package io.casperlabs.node
 
+import java.nio.file.Path
+
 import cats._
 import cats.data._
 import cats.effect._
@@ -25,10 +27,10 @@ import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.{syncId, taskLiftEitherT}
 import io.casperlabs.comm._
-import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.discovery.NodeDiscovery._
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.rp.Connect.RPConfState
 import io.casperlabs.comm.rp._
 import io.casperlabs.metrics.Metrics
@@ -39,6 +41,9 @@ import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngine
 import io.netty.handler.ssl.ClientAuth
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
+import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.Location
+
 import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
@@ -126,6 +131,7 @@ class NodeRuntime private[node] (
                                                           log,
                                                           metrics
                                                         )
+        _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
         implicit0(blockStore: BlockStore[Effect]) <- FileLMDBIndexBlockStore[Effect](
                                                       conf.server.dataDir,
@@ -315,6 +321,19 @@ class NodeRuntime private[node] (
       }
     })
   }
+
+  private def runRdmbsMigrations(serverDataDir: Path): Effect[Unit] =
+    Task.delay {
+      val db = serverDataDir.resolve("sqlite.db").toString
+      val conf =
+        Flyway
+          .configure()
+          .dataSource(s"jdbc:sqlite:$db", "", "")
+          .locations(new Location("classpath:db/migration"))
+      val flyway = conf.load()
+      flyway.migrate()
+      ()
+    }.toEffect
 
   /** Start periodic tasks as fibers. They'll automatically stop during shutdown. */
   private def nodeProgram(

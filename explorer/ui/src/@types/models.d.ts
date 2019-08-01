@@ -23,6 +23,6 @@ type BlockHash = ByteArray;
 interface AccountBalance {
   checkedAt: Date;
   blockHash: BlockHash;
-  // null means the account didn't exist.
-  balance: number | null;
+  // undefine means the account didn't exist.
+  balance: number | undefined;
 }

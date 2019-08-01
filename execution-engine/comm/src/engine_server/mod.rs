@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::ErrorKind;
@@ -521,6 +522,29 @@ where
                 Key::Account(dest)
             };
 
+            // Parse all authorization keys from IPC into a vector
+            let authorized_keys: Vec<PublicKey> = {
+                let maybe_keys: Result<Vec<_>, EngineError> = deploy
+                    .authorization_keys
+                    .iter()
+                    .map(|key_bytes| {
+                        // Try to convert an element of bytes into a possibly
+                        // valid PublicKey with error handling
+                        PublicKey::try_from(key_bytes.as_slice()).map_err(|_| {
+                            EngineError::InvalidPublicKeyLength {
+                                expected: EXPECTED_PUBLIC_KEY_LENGTH,
+                                actual: key_bytes.len(),
+                            }
+                        })
+                    })
+                    .collect();
+
+                match maybe_keys {
+                    Ok(keys) => keys,
+                    Err(error) => return Ok(ExecutionResult::precondition_failure(error).into()),
+                }
+            };
+
             let nonce = deploy.nonce;
             // TODO: is the rounding in this division ok?
             let gas_limit =
@@ -531,6 +555,7 @@ where
                     module_bytes,
                     args,
                     address,
+                    &authorized_keys,
                     blocktime,
                     nonce,
                     prestate_hash,

@@ -5,8 +5,8 @@ from .cl_node.client_parser import parse_show_block
 
 def assert_bonding_part(network):
     network.add_new_node_to_network()
-    assert len(network.docker_nodes) == 2, "Total number of nodes should be 2."
-    node0, node1 = network.docker_nodes
+    #assert len(network.docker_nodes) == 2, "Total number of nodes should be 2."
+    node0, node1 = network.docker_nodes[:2]
     block_hash = node1.deploy_and_propose(session_contract=BONDING_CONTRACT, payment_contract=BONDING_CONTRACT)
     assert block_hash is not None
     block1 = node1.client.show_block(block_hash)
@@ -31,7 +31,7 @@ def test_unbonding(one_node_network):
     Scenario: unbonding a bonded validator node from an existing network.
     """
     assert_bonding_part(one_node_network)
-    node0, node1 = one_node_network.docker_nodes
+    node0, node1 = one_node_network.docker_nodes[:2]
     public_key = node1.from_address
     block_hash2 = node1.deploy_and_propose(session_contract=UNBONDING_CONTRACT, payment_contract=UNBONDING_CONTRACT)
     assert block_hash2 is not None

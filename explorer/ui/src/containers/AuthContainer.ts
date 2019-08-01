@@ -2,13 +2,12 @@ import { observable } from 'mobx';
 import * as nacl from 'tweetnacl-ts';
 import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
-import FormData from './FormData';
+import { CleanableFormData } from './FormData';
 import AuthService from '../services/AuthService';
 import CasperService from '../services/CasperService';
-import { encodeBase64 } from '../lib/Conversions';
-import { decodeBase64 } from 'tweetnacl-ts';
+import { encodeBase64, decodeBase16 } from '../lib/Conversions';
 import ObservableValueMap from '../lib/ObservableValueMap';
-import { Key } from '../grpc/io/casperlabs/casper/consensus/state_pb';
+import BalanceService from '../services/BalanceService';
 
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
@@ -20,23 +19,21 @@ export class AuthContainer {
   @observable accounts: UserAccount[] | null = null;
 
   // An account we are creating, while we're configuring it.
-  @observable newAccount: NewAccountFormData | null = null;
+  @observable newAccountForm: NewAccountFormData | null = null;
 
   @observable selectedAccount: UserAccount | null = null;
 
   // Balance for each public key.
   @observable balances = new ObservableValueMap<AccountB64, AccountBalance>();
 
-  // We can cache the balance URef so 2nd time the balances only need 1 query, not 4.
-  private balanceUrefs = new Map<AccountB64, Key.URef>();
-
-  // How often to query blaances. Lots of state queries to get one.
+  // How often to query balances. Lots of state queries to get one.
   balanceTtl = 5 * 60 * 1000;
 
   constructor(
     private errors: ErrorContainer,
     private authService: AuthService,
-    private casperService: CasperService
+    private casperService: CasperService,
+    private balanceService: BalanceService
   ) {
     this.init();
   }
@@ -88,7 +85,6 @@ export class AuthContainer {
   async refreshBalances(force?: boolean) {
     const now = new Date();
     let latestBlockHash: BlockHash | null = null;
-    const balanceUrefs = this.balanceUrefs;
 
     for (let account of this.accounts || []) {
       const balance = this.balances.get(account.publicKeyBase64);
@@ -104,25 +100,10 @@ export class AuthContainer {
           latestBlockHash = latestBlock.getSummary()!.getBlockHash_asU8();
         }
 
-        let balanceUref = balanceUrefs.get(account.publicKeyBase64);
-
-        // Find the balance Uref and cache it if we don't have it.
-        if (!balanceUref) {
-          balanceUref = await this.casperService.getAccountBalanceUref(
-            latestBlockHash,
-            decodeBase64(account.publicKeyBase64)
-          );
-          if (balanceUref) {
-            balanceUrefs.set(account.publicKeyBase64, balanceUref);
-          }
-        }
-
-        const latestAccountBalance = balanceUref
-          ? await this.casperService.getAccountBalance(
-              latestBlockHash,
-              balanceUref
-            )
-          : null;
+        const latestAccountBalance = await this.balanceService.getAccountBalance(
+          latestBlockHash,
+          decodeBase16(account.publicKeyBase64)
+        );
 
         this.balances.set(account.publicKeyBase64, {
           checkedAt: now,
@@ -135,11 +116,11 @@ export class AuthContainer {
 
   // Open a new account creation form.
   configureNewAccount() {
-    this.newAccount = new NewAccountFormData(this.accounts!);
+    this.newAccountForm = new NewAccountFormData(this.accounts!);
   }
 
   async createAccount(): Promise<boolean> {
-    let form = this.newAccount!;
+    let form = this.newAccountForm!;
     if (form.clean()) {
       // Save the private and public keys to disk.
       saveToFile(form.privateKeyBase64, `${form.name}.private.key`);
@@ -183,7 +164,7 @@ function saveToFile(content: string, filename: string) {
   saveAs(blob, filename);
 }
 
-class NewAccountFormData extends FormData {
+class NewAccountFormData extends CleanableFormData {
   constructor(private accounts: UserAccount[]) {
     super();
     // Generate key pair and assign to public and private keys.
