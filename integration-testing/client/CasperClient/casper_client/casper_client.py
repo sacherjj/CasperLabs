@@ -10,12 +10,6 @@ file = Path(__file__).resolve()
 parent, root = file.parent, file.parents[1]
 sys.path.append(str(root))
 
-# Additionally remove the current file's directory from sys.path
-try:
-    sys.path.remove(str(parent))
-except ValueError: # Already removed
-    pass
-
 # end of hack #
 
 import time
@@ -470,7 +464,7 @@ def show_deploys_command(casper_client, args):
         print(response)
 
 
-def command_line_tool():
+def main():
     """
     Parse command line and call an appropriate command.
     """
@@ -544,4 +538,4 @@ def command_line_tool():
 
 
 if __name__ == '__main__':
-    command_line_tool()
+    main()

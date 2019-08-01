@@ -182,4 +182,7 @@ setup(
         'Source': 'https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperClient',
         'Readme': 'https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperClient/README.md',
     },
+    entry_points = {
+        "console_scripts": ['casper_client = casper_client.casper_client:main']
+    },
 )
