@@ -24,7 +24,7 @@ def assert_pre_state_of_network(network: OneNodeNetwork, stakes: List[int]):
         filter(
             lambda x: x.stake in stakes
             and x.validator_public_key == node0.from_address,
-            genesis_block.summary[0].header[0].state[0].bonds,
+            genesis_block.summary.header.state.bonds,
         )
     )
     assert len(item) == 0
@@ -53,7 +53,7 @@ def test_bonding(one_node_network_fn):
         filter(
             lambda x: x.stake == bonding_amount
             and x.validator_public_key == public_key,
-            block_ds.summary[0].header[0].state[0].bonds,
+            block_ds.summary.header.state.bonds,
         )
     )
     assert len(item) == 1
@@ -90,7 +90,7 @@ def test_double_bonding(one_node_network_fn):
         filter(
             lambda x: x.stake == bonding_amount + bonding_amount
             and x.validator_public_key == public_key,
-            block_ds.summary[0].header[0].state[0].bonds,
+            block_ds.summary.header.state.bonds,
         )
     )
     assert len(item) == 1
@@ -120,7 +120,7 @@ def test_invalid_bonding(one_node_network_fn):
         filter(
             lambda x: x.stake == bonding_amount
             and x.validator_public_key == public_key,
-            block_ds.summary[0].header[0].state[0].bonds,
+            block_ds.summary.header.state.bonds,
         )
     )
     assert len(item) == 0
@@ -156,7 +156,7 @@ def test_unbonding(one_node_network_fn):
         filter(
             lambda x: x.stake == bonding_amount
             and x.validator_public_key == public_key,
-            block_ds.summary[0].header[0].state[0].bonds,
+            block_ds.summary.header.state.bonds,
         )
     )
     assert len(item) == 0
@@ -196,7 +196,7 @@ def test_partial_amount_unbonding(one_node_network_fn):
         filter(
             lambda x: x.stake == bonding_amount - unbond_amount
             and x.validator_public_key == public_key,
-            block_ds.summary[0].header[0].state[0].bonds,
+            block_ds.summary.header.state.bonds,
         )
     )
     assert len(item) == 1
@@ -231,7 +231,7 @@ def test_invalid_unbonding(one_node_network_fn):
         filter(
             lambda x: x.stake == bonding_amount
             and x.validator_public_key == node1.genesis_account.public_key_hex,
-            block_ds.summary[0].header[0].state[0].bonds,
+            block_ds.summary.header.state.bonds,
         )
     )
     assert len(item) == 1
@@ -266,7 +266,7 @@ def test_unbonding_without_bonding(one_node_network_fn):
     item = list(
         filter(
             lambda x: x.validator_public_key == public_key,
-            block_ds.summary[0].header[0].state[0].bonds,
+            block_ds.summary.header.state.bonds,
         )
     )
     assert len(item) == 0
