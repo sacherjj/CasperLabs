@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Generator
+from typing import Generator
 
 import docker as docker_py
 import pytest
@@ -9,9 +9,7 @@ from .cl_node.casperlabs_network import (
     ThreeNodeNetwork,
     TwoNodeNetwork,
 )
-
-if TYPE_CHECKING:
-    from docker.client import DockerClient
+from docker.client import DockerClient
 
 
 @pytest.fixture(scope="session")

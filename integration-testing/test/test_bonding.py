@@ -42,6 +42,10 @@ def test_bonding(one_node_network_fn):
     )
     node0, node1 = one_node_network_fn.docker_nodes
     assert block_hash is not None
+    r = node1.client.show_deploys(block_hash)[0]
+    assert r.is_error is False
+    assert r.error_message == ""
+
     block1 = node1.client.show_block(block_hash)
     block_ds = parse_show_block(block1)
     public_key = node1.genesis_account.public_key_hex
@@ -74,6 +78,10 @@ def test_double_bonding(one_node_network_fn):
         amount=bonding_amount,
     )
     assert block_hash is not None
+    r = node1.client.show_deploys(block_hash)[0]
+    assert r.is_error is False
+    assert r.error_message == ""
+
     node1 = one_node_network_fn.docker_nodes[1]
     block1 = node1.client.show_block(block_hash)
     block_ds = parse_show_block(block1)
@@ -101,6 +109,11 @@ def test_invalid_bonding(one_node_network_fn):
     assert block_hash is not None
     node1 = one_node_network_fn.docker_nodes[1]
     block1 = node1.client.show_block(block_hash)
+
+    r = node1.client.show_deploys(block_hash)[0]
+    assert r.is_error is True
+    assert r.error_message == "Exit code: 5"
+
     block_ds = parse_show_block(block1)
     public_key = node1.genesis_account.public_key_hex
     item = list(
@@ -133,6 +146,10 @@ def test_unbonding(one_node_network_fn):
     )
 
     assert block_hash2 is not None
+    r = node1.client.show_deploys(block_hash2)[0]
+    assert r.is_error is False
+    assert r.error_message == ""
+
     block2 = node1.client.show_block(block_hash2)
     block_ds = parse_show_block(block2)
     item = list(
@@ -163,6 +180,10 @@ def test_partial_amount_unbonding(one_node_network_fn):
         payment_contract=UNBONDING_CONTRACT,
         maybe_amount=4,
     )
+
+    r = node1.client.show_deploys(block_hash2)[0]
+    assert r.is_error is False
+    assert r.error_message == ""
 
     assert block_hash2 is not None
     block2 = node1.client.show_block(block_hash2)
@@ -195,6 +216,10 @@ def test_invalid_unbonding(one_node_network_fn):
     )
 
     assert block_hash2 is not None
+    r = node1.client.show_deploys(block_hash2)[0]
+    assert r.is_error is True
+    assert r.error_message == "Exit code: 6"
+
     block2 = node1.client.show_block(block_hash2)
     block_ds = parse_show_block(block2)
     item = list(
@@ -220,14 +245,18 @@ def test_unbonding_without_bonding(one_node_network_fn):
     ), "Total number of nodes should be 2."
     node0, node1 = one_node_network_fn.docker_nodes[:2]
     public_key = node1.genesis_account.public_key_hex
-    block_hash2 = node1.unbond(
+    block_hash = node1.unbond(
         session_contract=UNBONDING_CONTRACT,
         payment_contract=UNBONDING_CONTRACT,
         maybe_amount=None,
     )
 
-    assert block_hash2 is not None
-    block2 = node1.client.show_block(block_hash2)
+    assert block_hash is not None
+    r = node1.client.show_deploys(block_hash)[0]
+    assert r.is_error is True
+    assert r.error_message == "Exit code: 0"
+
+    block2 = node1.client.show_block(block_hash)
     block_ds = parse_show_block(block2)
     item = list(
         filter(
