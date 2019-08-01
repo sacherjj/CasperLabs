@@ -339,7 +339,7 @@ impl WasmTestBuilder {
 
     pub fn new() -> WasmTestBuilder {
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
-        let engine_state = EngineState::new(global_state);
+        let engine_state = EngineState::new(global_state, Default::default());
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
