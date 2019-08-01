@@ -168,7 +168,11 @@ def test_partial_amount_unbonding(one_node_network_fn):
     Scenario: unbonding a bonded validator node with partial bonding amount from an existing network.
     """
     bonding_amount = 11
-    assert_pre_state_of_network(one_node_network_fn, [bonding_amount, 7, 4])
+    unbond_amount = 4
+    assert_pre_state_of_network(
+        one_node_network_fn,
+        [bonding_amount, unbond_amount, bonding_amount - unbond_amount],
+    )
     block_hash = bond_to_the_network(
         one_node_network_fn, BONDING_CONTRACT, bonding_amount
     )
@@ -178,7 +182,7 @@ def test_partial_amount_unbonding(one_node_network_fn):
     block_hash2 = node1.unbond(
         session_contract=UNBONDING_CONTRACT,
         payment_contract=UNBONDING_CONTRACT,
-        maybe_amount=4,
+        maybe_amount=unbond_amount,
     )
 
     r = node1.client.show_deploys(block_hash2)[0]
@@ -190,7 +194,8 @@ def test_partial_amount_unbonding(one_node_network_fn):
     block_ds = parse_show_block(block2)
     item = list(
         filter(
-            lambda x: x.stake == 7 and x.validator_public_key == public_key,
+            lambda x: x.stake == bonding_amount - unbond_amount
+            and x.validator_public_key == public_key,
             block_ds.summary[0].header[0].state[0].bonds,
         )
     )

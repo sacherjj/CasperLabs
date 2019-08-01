@@ -20,13 +20,13 @@ pub extern "C" fn call() {
 
     let source_purse = contract_api::main_purse();
     let bonding_purse = contract_api::create_purse();
-    let bond_amount = contract_api::get_arg::<u32>(0);
+    let bond_amount:U512 = U512::from(contract_api::get_arg::<u32>(0));
 
-    match transfer_from_purse_to_purse(source_purse, bonding_purse, U512::from(bond_amount)) {
+    match transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount) {
         PurseTransferResult::TransferSuccessful => {
             let _result: () = call_contract(
                 pos_pointer,
-                &("bond", U512::from(bond_amount), bonding_purse),
+                &("bond", bond_amount, bonding_purse),
                 &vec![Key::URef(bonding_purse.value())],
             );
         }
