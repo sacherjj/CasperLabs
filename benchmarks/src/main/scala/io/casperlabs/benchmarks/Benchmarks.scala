@@ -28,7 +28,7 @@ object Benchmarks {
       initialFundsPublicKeyFile: File,
       accountsNum: Int = 250,
       roundsNum: Int = 100,
-      approximateTransferCost: Int = 100000
+      approximateTransferCost: Long = 100000
   ): F[Unit] = {
     // TODO: Probably can cause overflow problems, for the time being it can stay as is.
     val initialFundsPerAccount = roundsNum * approximateTransferCost
@@ -59,7 +59,7 @@ object Benchmarks {
         recipientPublicKeyBase64: String,
         senderPrivateKey: PrivateKey,
         senderPublicKey: PublicKey,
-        amount: Int
+        amount: Long
     ): F[Unit] = DeployRuntime.transfer[F](
       nonce = nonce,
       sessionCode = None,

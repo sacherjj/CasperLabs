@@ -2,13 +2,13 @@
 CARGO = $(or $(shell which cargo), $(HOME)/.cargo/bin/cargo)
 
 # Directory names should match crate names
-SYSTEM_CONTRACTS    = $(shell find ./contracts/system    -mindepth 1 -maxdepth 1 -exec basename {} \;)
-TEST_CONTRACTS      = $(shell find ./contracts/test      -mindepth 1 -maxdepth 1 -exec basename {} \;)
-VALIDATOR_CONTRACTS = $(shell find ./contracts/validator -mindepth 1 -maxdepth 1 -exec basename {} \;)
+SYSTEM_CONTRACTS = $(shell find ./contracts/system -mindepth 1 -maxdepth 1 -exec basename {} \;)
+TEST_CONTRACTS   = $(shell find ./contracts/test   -mindepth 1 -maxdepth 1 -exec basename {} \;)
+CLIENT_CONTRACTS = $(shell find ./contracts/client -mindepth 1 -maxdepth 1 -exec basename {} \;)
 
-SYSTEM_CONTRACTS    := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
-TEST_CONTRACTS      := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
-VALIDATOR_CONTRACTS := $(patsubst %, build-contract/%, $(VALIDATOR_CONTRACTS))
+SYSTEM_CONTRACTS := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
+TEST_CONTRACTS   := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
+CLIENT_CONTRACTS := $(patsubst %, build-contract/%, $(CLIENT_CONTRACTS))
 
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
 PACKAGED_SYSTEM_CONTRACTS = mint_token.wasm pos.wasm
@@ -27,7 +27,7 @@ build-contract/%:
 build-contracts: \
 	$(SYSTEM_CONTRACTS) \
 	$(TEST_CONTRACTS) \
-	$(VALIDATOR_CONTRACTS)
+	$(CLIENT_CONTRACTS)
 
 .PHONY: test
 test:
