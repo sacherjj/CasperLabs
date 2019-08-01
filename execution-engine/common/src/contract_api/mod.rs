@@ -343,7 +343,7 @@ pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), A
     // Translates FFI
     match result {
         d if d == 0 => Ok(()),
-        d => Err(AddKeyFailure::from(d)),
+        d => Err(AddKeyFailure::try_from(d).expect("invalid result")),
     }
 }
 
@@ -353,7 +353,7 @@ pub fn remove_associated_key(public_key: PublicKey) -> Result<(), RemoveKeyFailu
     let result = unsafe { ext_ffi::remove_associated_key(public_key_ptr) };
     match result {
         d if d == 0 => Ok(()),
-        d => Err(RemoveKeyFailure::from(d)),
+        d => Err(RemoveKeyFailure::try_from(d).expect("invalid result")),
     }
 }
 
@@ -368,7 +368,7 @@ pub fn update_associated_key(
     // Translates FFI
     match result {
         d if d == 0 => Ok(()),
-        d => Err(UpdateKeyFailure::from(d)),
+        d => Err(UpdateKeyFailure::try_from(d).expect("invalid result")),
     }
 }
 
@@ -381,7 +381,7 @@ pub fn set_action_threshold(
     let result = unsafe { ext_ffi::set_action_threshold(permission_level, threshold) };
     match result {
         d if d == 0 => Ok(()),
-        d => Err(SetThresholdFailure::from(d)),
+        d => Err(SetThresholdFailure::try_from(d).expect("invalid result")),
     }
 }
 

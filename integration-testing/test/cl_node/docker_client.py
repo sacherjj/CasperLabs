@@ -12,7 +12,7 @@ from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
 from test.cl_node.nonce_registry import NonceRegistry
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
 from pathlib import Path
 
 def resource(file_name):
@@ -119,17 +119,15 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         assert session_contract is not None
         assert payment_contract is not None
 
-        address = from_address or GENESIS_ACCOUNT.public_key_hex
+        address = from_address or self.node.test_account.public_key_hex
 
-        # For now by default public_key and private_key will be keys of the genesis account.
-        # This will probably change in the future, we may use accounts created specifically
-        # for integration testing.
-
-        def docker_path(p):
+        def docker_account_path(p):
+            """Convert path of account key file to docker client's path in /data"""
+            
             return Path(*(['/data'] + str(p).split('/')[-2:]))
 
-        public_key = public_key or docker_path(GENESIS_ACCOUNT.public_key_path)
-        private_key = private_key or docker_path(GENESIS_ACCOUNT.private_key_path)
+        public_key = docker_account_path(public_key or self.node.test_account.public_key_path)
+        private_key = docker_account_path(private_key or self.node.test_account.private_key_path)
 
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
         payment_contract = payment_contract or session_contract
@@ -146,8 +144,13 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         if deploy_nonce != '':
             command += f" --nonce {deploy_nonce}"
 
-        r = self.invoke_client(command)
-        return r
+        try:
+            r = self.invoke_client(command)
+            return r
+        except:
+            if nonce is None:
+                NonceRegistry.revert(address)
+            raise
 
     def show_block(self, block_hash: str) -> str:
         return self.invoke_client(f'show-block {block_hash}')

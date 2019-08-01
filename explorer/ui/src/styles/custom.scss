@@ -41,10 +41,12 @@ button.link {
   padding: 0 !important;
   font: inherit;
   cursor: pointer;
-  font-family: arial, sans-serif; /*input has OS specific font-family*/
-  //color: #069;
-  color: inherit;
+  font-family: arial, sans-serif;
+  color: #007bff;
 }
 button.link:hover {
   text-decoration: underline;
+}
+button.icon-button {
+  color: inherit;
 }

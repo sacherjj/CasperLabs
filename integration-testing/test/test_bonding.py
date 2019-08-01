@@ -8,7 +8,7 @@ from typing import List
 def bond_to_the_network(network: OneNodeNetwork, contract: str, bond_amount: int):
     network.add_new_node_to_network()
     assert len(network.docker_nodes) == 2, "Total number of nodes should be 2."
-    node0, node1 = network.docker_nodes
+    node0, node1 = network.docker_nodes[:2]
     block_hash = node1.bond(
         session_contract=contract, payment_contract=contract, amount=bond_amount
     )
@@ -38,8 +38,8 @@ def test_bonding(one_node_network):
     bonding_amount = 1
     assert_pre_state_of_network(one_node_network, [bonding_amount])
     block_hash = bond_to_the_network(one_node_network, BONDING_CONTRACT, bonding_amount)
+    node0, node1 = one_node_network.docker_nodes[:2]
     assert block_hash is not None
-    node1 = one_node_network.docker_nodes[1]
     block1 = node1.client.show_block(block_hash)
     block_ds = parse_show_block(block1)
     public_key = node1.from_address
@@ -204,7 +204,7 @@ def test_unbonding_without_bonding(one_node_network):
     assert_pre_state_of_network(one_node_network, [bonding_amount])
     one_node_network.add_new_node_to_network()
     assert len(one_node_network.docker_nodes) == 2, "Total number of nodes should be 2."
-    node1 = one_node_network.docker_nodes[1]
+    node0, node1 = one_node_network.docker_nodes[:2]
     public_key = node1.from_address
     block_hash2 = node1.unbond(
         session_contract=UNBONDING_CONTRACT,

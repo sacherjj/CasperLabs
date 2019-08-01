@@ -14,6 +14,12 @@ const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
 
 pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
 
+#[derive(Debug)]
+pub struct TryFromIntError(());
+
+#[derive(Debug)]
+pub struct TryFromSliceForPublicKeyError(());
+
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PurseId(URef);
 
@@ -47,15 +53,18 @@ pub enum ActionType {
     KeyManagement = 1,
 }
 
-impl From<u32> for ActionType {
-    fn from(value: u32) -> ActionType {
+/// convert from u32 representation of `[ActionType]`
+impl TryFrom<u32> for ActionType {
+    type Error = TryFromIntError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
         // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
         // that helps to automatically create `from_u32` and `to_u32`. This approach
         // gives better control over generated code.
         match value {
-            d if d == ActionType::Deployment as u32 => ActionType::Deployment,
-            d if d == ActionType::KeyManagement as u32 => ActionType::KeyManagement,
-            _ => unreachable!(),
+            d if d == ActionType::Deployment as u32 => Ok(ActionType::Deployment),
+            d if d == ActionType::KeyManagement as u32 => Ok(ActionType::KeyManagement),
+            _ => Err(TryFromIntError(())),
         }
     }
 }
@@ -90,24 +99,43 @@ pub enum SetThresholdFailure {
     PermissionDeniedError = 3,
 }
 
-impl From<i32> for SetThresholdFailure {
-    fn from(value: i32) -> SetThresholdFailure {
+/// convert from i32 representation of `[SetThresholdFailure]`
+impl TryFrom<i32> for SetThresholdFailure {
+    type Error = TryFromIntError;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
             d if d == SetThresholdFailure::KeyManagementThresholdError as i32 => {
-                SetThresholdFailure::KeyManagementThresholdError
+                Ok(SetThresholdFailure::KeyManagementThresholdError)
             }
             d if d == SetThresholdFailure::DeploymentThresholdError as i32 => {
-                SetThresholdFailure::DeploymentThresholdError
+                Ok(SetThresholdFailure::DeploymentThresholdError)
             }
             d if d == SetThresholdFailure::PermissionDeniedError as i32 => {
-                SetThresholdFailure::PermissionDeniedError
+                Ok(SetThresholdFailure::PermissionDeniedError)
             }
-            _ => unreachable!(),
+            _ => Err(TryFromIntError(())),
         }
     }
 }
 
 impl ActionThresholds {
+    /// Creates new ActionThresholds object with provided weights
+    ///
+    /// Requires deployment threshold to be lower than or equal to
+    /// key management threshold.
+    pub fn new(
+        deployment: Weight,
+        key_management: Weight,
+    ) -> Result<ActionThresholds, SetThresholdFailure> {
+        if deployment > key_management {
+            return Err(SetThresholdFailure::DeploymentThresholdError);
+        }
+        Ok(ActionThresholds {
+            deployment,
+            key_management,
+        })
+    }
     /// Sets new threshold for [ActionType::Deployment].
     /// Should return an error if setting new threshold for `action_type` breaks one of the invariants.
     /// Currently, invariant is that `ActionType::Deployment` threshold shouldn't be higher than any other,
@@ -281,9 +309,6 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
     }
 }
 
-#[derive(Debug)]
-pub struct TryFromSliceForPublicKeyError(());
-
 impl TryFrom<&[u8]> for PublicKey {
     type Error = TryFromSliceForPublicKeyError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
@@ -333,16 +358,16 @@ pub enum AddKeyFailure {
     PermissionDenied = 3,
 }
 
-impl From<i32> for AddKeyFailure {
-    fn from(value: i32) -> AddKeyFailure {
-        // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
-        // that helps to automatically create `from_i32` and `to_i32`. This approach
-        // gives better control over generated code.
+/// convert from i32 representation of `[AddKeyFailure]`
+impl TryFrom<i32> for AddKeyFailure {
+    type Error = TryFromIntError;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            d if d == AddKeyFailure::MaxKeysLimit as i32 => AddKeyFailure::MaxKeysLimit,
-            d if d == AddKeyFailure::DuplicateKey as i32 => AddKeyFailure::DuplicateKey,
-            d if d == AddKeyFailure::PermissionDenied as i32 => AddKeyFailure::PermissionDenied,
-            _ => unreachable!(),
+            d if d == AddKeyFailure::MaxKeysLimit as i32 => Ok(AddKeyFailure::MaxKeysLimit),
+            d if d == AddKeyFailure::DuplicateKey as i32 => Ok(AddKeyFailure::DuplicateKey),
+            d if d == AddKeyFailure::PermissionDenied as i32 => Ok(AddKeyFailure::PermissionDenied),
+            _ => Err(TryFromIntError(())),
         }
     }
 }
@@ -370,14 +395,17 @@ pub enum RemoveKeyFailure {
     PermissionDenied = 2,
 }
 
-impl From<i32> for RemoveKeyFailure {
-    fn from(value: i32) -> RemoveKeyFailure {
+/// convert from i32 representation of `[RemoveKeyFailure]`
+impl TryFrom<i32> for RemoveKeyFailure {
+    type Error = TryFromIntError;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            d if d == RemoveKeyFailure::MissingKey as i32 => RemoveKeyFailure::MissingKey,
+            d if d == RemoveKeyFailure::MissingKey as i32 => Ok(RemoveKeyFailure::MissingKey),
             d if d == RemoveKeyFailure::PermissionDenied as i32 => {
-                RemoveKeyFailure::PermissionDenied
+                Ok(RemoveKeyFailure::PermissionDenied)
             }
-            _ => unreachable!(),
+            _ => Err(TryFromIntError(())),
         }
     }
 }
@@ -401,17 +429,17 @@ pub enum UpdateKeyFailure {
     PermissionDenied = 2,
 }
 
-impl From<i32> for UpdateKeyFailure {
-    fn from(value: i32) -> UpdateKeyFailure {
-        // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
-        // that helps to automatically create `from_i32` and `to_i32`. This approach
-        // gives better control over generated code.
+/// convert from i32 representation of `[UpdateKeyFailure]`
+impl TryFrom<i32> for UpdateKeyFailure {
+    type Error = TryFromIntError;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            d if d == UpdateKeyFailure::MissingKey as i32 => UpdateKeyFailure::MissingKey,
+            d if d == UpdateKeyFailure::MissingKey as i32 => Ok(UpdateKeyFailure::MissingKey),
             d if d == UpdateKeyFailure::PermissionDenied as i32 => {
-                UpdateKeyFailure::PermissionDenied
+                Ok(UpdateKeyFailure::PermissionDenied)
             }
-            _ => unreachable!(),
+            _ => Err(TryFromIntError(())),
         }
     }
 }
@@ -469,8 +497,8 @@ impl AssociatedKeys {
         self.0.get(key)
     }
 
-    pub fn get_all(&self) -> &BTreeMap<PublicKey, Weight> {
-        &self.0
+    pub fn iter(&self) -> impl Iterator<Item = (&PublicKey, &Weight)> {
+        self.0.iter()
     }
 }
 
@@ -554,12 +582,8 @@ impl Account {
         PurseId::new(add_only_uref)
     }
 
-    pub fn associated_keys(&self) -> &AssociatedKeys {
-        &self.associated_keys
-    }
-
-    pub fn get_associated_keys(&self) -> &AssociatedKeys {
-        &self.associated_keys
+    pub fn get_associated_keys(&self) -> impl Iterator<Item = (&PublicKey, &Weight)> {
+        self.associated_keys.iter()
     }
 
     pub fn action_thresholds(&self) -> &ActionThresholds {
@@ -601,6 +625,11 @@ impl Account {
     ) -> Result<(), UpdateKeyFailure> {
         // TODO(mpapierski): Authorized keys check EE-377
         self.associated_keys.update_key(public_key, weight)
+    }
+
+    pub fn get_associated_key_weight(&self, public_key: PublicKey) -> Option<&Weight> {
+        // TODO(mpapierski): Authorized keys check EE-377
+        self.associated_keys.get(&public_key)
     }
 
     pub fn set_action_threshold(
@@ -807,8 +836,8 @@ impl FromBytes for Account {
 mod tests {
     use crate::uref::{AccessRights, URef};
     use crate::value::account::{
-        Account, AccountActivity, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
-        Weight, KEY_SIZE, MAX_KEYS,
+        Account, AccountActivity, ActionThresholds, AddKeyFailure, AssociatedKeys, BlockTime,
+        PublicKey, PurseId, Weight, KEY_SIZE, MAX_KEYS,
     };
     use alloc::collections::btree_map::BTreeMap;
     use alloc::vec::Vec;
@@ -891,5 +920,20 @@ mod tests {
     fn public_key_from_slice_too_big() {
         let _public_key =
             PublicKey::try_from(&[0u8; 33][..]).expect_err("should not create public key");
+    }
+
+    #[test]
+
+    fn should_create_new_action_thresholds() {
+        let action_thresholds = ActionThresholds::new(Weight::new(1), Weight::new(42)).unwrap();
+        assert_eq!(*action_thresholds.deployment(), Weight::new(1));
+        assert_eq!(*action_thresholds.key_management(), Weight::new(42));
+    }
+
+    #[test]
+    #[should_panic]
+    fn should_not_create_action_thresholds_with_invalid_deployment_threshold() {
+        // deployment cant be greater than key management
+        ActionThresholds::new(Weight::new(5), Weight::new(1)).unwrap();
     }
 }

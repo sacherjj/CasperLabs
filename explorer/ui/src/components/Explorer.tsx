@@ -1,66 +1,92 @@
 import React from 'react';
 import { observer } from 'mobx-react';
-import CasperContainer from '../containers/CasperContainer';
-import { RefreshableComponent } from './Utils';
+import DagContainer from '../containers/DagContainer';
+import {
+  RefreshableComponent,
+  LinkButton,
+  ListInline,
+  shortHash
+} from './Utils';
 import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
 import { encodeBase16 } from '../lib/Conversions';
 import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 import $ from 'jquery';
+import { DagStepButtons } from './BlockList';
+import { Link } from 'react-router-dom';
+import Pages from './Pages';
 
 interface Props {
-  casper: CasperContainer;
+  dag: DagContainer;
 }
 
 /** Show the tips of the DAG. */
 @observer
 export default class Explorer extends RefreshableComponent<Props, {}> {
   async refresh() {
-    this.props.casper.refreshBlockDag();
+    this.props.dag.refreshBlockDag();
   }
 
   render() {
+    const { dag } = this.props;
     return (
       <div>
-        <BlockDAG
-          title="Recent Block DAG"
-          blocks={this.props.casper.blocks}
-          refresh={() => this.refresh()}
-          footerMessage="Select a block to see its details."
-          onSelected={block => {
-            let current = this.props.casper.selectedBlock;
-            if (
-              current &&
-              current.getSummary()!.getBlockHash_asB64() ===
-                block.getSummary()!.getBlockHash_asB64()
-            ) {
-              this.props.casper.selectedBlock = undefined;
-            } else {
-              this.props.casper.selectedBlock = block;
-            }
-          }}
-          selected={this.props.casper.selectedBlock}
-          depth={this.props.casper.dagDepth}
-          onDepthChange={d => {
-            this.props.casper.dagDepth = d;
-            this.refresh();
-          }}
-          width="100%"
-          height="600"
-        />
-        {this.props.casper.selectedBlock && (
-          <BlockDetails
-            block={this.props.casper.selectedBlock}
-            blocks={this.props.casper.blocks!}
-            onSelect={blockHash => {
-              this.props.casper.selectedBlock = this.props.casper.blocks!.find(
-                x =>
-                  encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
-                  blockHash
-              );
-            }}
-          />
-        )}
+        <div className="row">
+          <div className={`col-sm-12 col-lg-${dag.selectedBlock ? 8 : 12}`}>
+            <BlockDAG
+              title={
+                dag.maxRank === 0
+                  ? 'Latest Block DAG'
+                  : `Block DAG from rank ${dag.minRank} to ${dag.maxRank}`
+              }
+              blocks={dag.blocks}
+              refresh={() => this.refresh()}
+              footerMessage={
+                <ListInline>
+                  <DagStepButtons step={dag.step} />
+                  {dag.hasBlocks && (
+                    <span>Select a block to see its details.</span>
+                  )}
+                </ListInline>
+              }
+              onSelected={block => {
+                let current = dag.selectedBlock;
+                if (
+                  current &&
+                  current.getSummary()!.getBlockHash_asB64() ===
+                    block.getSummary()!.getBlockHash_asB64()
+                ) {
+                  dag.selectedBlock = undefined;
+                } else {
+                  dag.selectedBlock = block;
+                }
+              }}
+              selected={dag.selectedBlock}
+              depth={dag.depth}
+              onDepthChange={d => {
+                dag.depth = d;
+                this.refresh();
+              }}
+              width="100%"
+              height="600"
+            />
+          </div>
+          {dag.selectedBlock && (
+            <div className="col-sm-12 col-lg-4">
+              <BlockDetails
+                block={dag.selectedBlock}
+                blocks={dag.blocks!}
+                onSelect={blockHashBase16 => {
+                  dag.selectedBlock = dag.blocks!.find(
+                    x =>
+                      encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
+                      blockHashBase16
+                  );
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -80,16 +106,11 @@ class BlockDetails extends React.Component<{
     let id = encodeBase16(summary.getBlockHash_asU8());
     let idB64 = summary.getBlockHash_asB64();
     let validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
-    // Display 2 sets of fields next to each other.
+    // Grouped attributes so we could display 2 sets of fields next to each other.
     let attrs: Array<Array<[string, any]>> = [
-      [['Block hash', id], ['Rank', header.getRank()]],
       [
-        ['Timestamp', new Date(header.getTimestamp()).toISOString()],
-        ['Deploy count', header.getDeployCount()]
-      ],
-      [
-        ['Validator', validatorId],
-        ['Validator block number', header.getValidatorBlockSeqNum()]
+        ['Block Hash', <Link to={Pages.block(id)}>{shortHash(id)}</Link>],
+        ['Rank', header.getRank()]
       ],
       [
         [
@@ -126,8 +147,16 @@ class BlockDetails extends React.Component<{
         ]
       ],
       [
+        ['Timestamp', new Date(header.getTimestamp()).toISOString()],
+        ['Deploy Count', header.getDeployCount()]
+      ],
+      [
+        ['Validator', shortHash(validatorId)],
+        ['Validator Block Number', header.getValidatorBlockSeqNum()]
+      ],
+      [
         [
-          'Validator stake',
+          'Validator Stake',
           (() => {
             let validatorBond = header
               .getState()!
@@ -137,10 +166,19 @@ class BlockDetails extends React.Component<{
                   encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
               );
             // Genesis doesn't have a validator.
-            return (validatorBond && validatorBond.getStake()) || null;
+            return (
+              (validatorBond && validatorBond.getStake().toLocaleString()) ||
+              null
+            );
           })()
         ],
-        ['Fault tolerance', block.getStatus()!.getFaultTolerance()]
+        [
+          'Fault Tolerance',
+          block
+            .getStatus()!
+            .getFaultTolerance()
+            .toFixed(3)
+        ]
       ]
     ];
     return (
@@ -150,18 +188,26 @@ class BlockDetails extends React.Component<{
         }}
       >
         <DataTable
-          title={`Block ${id}`}
+          title={`Block ${shortHash(id)}`}
           headers={[]}
           rows={attrs}
-          renderRow={(group, idx) => (
-            <tr key={idx}>
-              {group.flatMap((attr, idx) => [
-                <th key={`h-${idx}`}>{attr[0]}</th>,
-                <td key={`d-${idx}`}>{attr[1]}</td>
-              ])}
-            </tr>
-          )}
-          footerMessage="Follow the links to see the parents and children."
+          renderRow={(group, i) =>
+            // <tr key={i}>
+            //   {
+            //     group.flatMap((attr, j) => [
+            //       <th key={'${i}/${j}/0'}>{attr[0]}</th>,
+            //       <td key={'${i}/${j}/1'}>{attr[1]}</td>
+            //     ])
+            //   }
+            // </tr>
+            group.flatMap((attr, j) => [
+              <tr key={`${i}/${j}`}>
+                <th>{attr[0]}</th>
+                <td>{attr[1]}</td>
+              </tr>
+            ])
+          }
+          footerMessage="Click the links to select the parents and children."
         />
       </div>
     );
@@ -170,11 +216,6 @@ class BlockDetails extends React.Component<{
   componentDidMount() {
     // Scroll into view so people realize it's there.
     this.scrollToBlockDetails();
-  }
-
-  componentDidUpdate() {
-    // It gets annothing when it's already visible and keeps scrolling into view.
-    // this.scrollToBlockDetails();
   }
 
   scrollToBlockDetails() {
@@ -197,9 +238,5 @@ const BlockLink = (props: {
   onClick: (blockHashBase16: string) => void;
 }) => {
   let id = encodeBase16(props.blockHash);
-  return (
-    <button className="link" onClick={() => props.onClick(id)}>
-      {id}
-    </button>
-  );
+  return <LinkButton title={shortHash(id)} onClick={() => props.onClick(id)} />;
 };
