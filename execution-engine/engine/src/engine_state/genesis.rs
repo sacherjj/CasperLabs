@@ -20,6 +20,8 @@ use shared::transform::{Transform, TypeMismatch};
 use storage::global_state::CommitResult;
 
 pub const POS_BONDING_PURSE: &str = "pos_bonding_purse";
+pub const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
+pub const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 pub const POS_PUBLIC_ADDRESS: &str = "pos_public_address";
 pub const POS_PRIVATE_ADDRESS: &str = "pos_private_address";
 pub const MINT_PUBLIC_ADDRESS: &str = "mint_public_address";
@@ -27,6 +29,8 @@ pub const MINT_PRIVATE_ADDRESS: &str = "mint_private_address";
 pub const GENESIS_ACCOUNT_PURSE: &str = "genesis_account_purse";
 pub const MINT_GENESIS_ACCOUNT_BALANCE_UREF: &str = "mint_genesis_account_balance_uref";
 pub const MINT_POS_BONDING_BALANCE_UREF: &str = "mint_pos_bonding_balance_uref";
+pub const MINT_POS_PAYMENT_BALANCE_UREF: &str = "mint_pos_payment_balance_uref";
+pub const MINT_POS_REWARDS_BALANCE_UREF: &str = "mint_pos_rewards_balance_uref";
 
 /// Structure for tracking URefs generated in the genesis process.
 pub struct GenesisURefsSource(BTreeMap<&'static str, URef>);
@@ -59,6 +63,8 @@ impl Default for GenesisURefsSource {
         let mut chacha_rng = GenesisURefsSource::create_genesis_rng();
         let mut urefs_map = BTreeMap::new();
         urefs_map.insert(POS_BONDING_PURSE, create_uref(&mut chacha_rng));
+        urefs_map.insert(POS_PAYMENT_PURSE, create_uref(&mut chacha_rng));
+        urefs_map.insert(POS_REWARDS_PURSE, create_uref(&mut chacha_rng));
         urefs_map.insert(POS_PUBLIC_ADDRESS, create_uref(&mut chacha_rng));
         urefs_map.insert(POS_PRIVATE_ADDRESS, create_uref(&mut chacha_rng));
         urefs_map.insert(MINT_PUBLIC_ADDRESS, create_uref(&mut chacha_rng));
@@ -69,6 +75,8 @@ impl Default for GenesisURefsSource {
             create_uref(&mut chacha_rng),
         );
         urefs_map.insert(MINT_POS_BONDING_BALANCE_UREF, create_uref(&mut chacha_rng));
+        urefs_map.insert(MINT_POS_PAYMENT_BALANCE_UREF, create_uref(&mut chacha_rng));
+        urefs_map.insert(MINT_POS_REWARDS_BALANCE_UREF, create_uref(&mut chacha_rng));
 
         GenesisURefsSource(urefs_map)
     }
@@ -95,11 +103,13 @@ fn create_mint_effects(
 ) -> Result<HashMap<Key, Value>, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
 
-    // Create (public_uref, mint_contract_uref)
+    // Create pos purses
     let pos_bonding_purse = rng.get_uref(POS_BONDING_PURSE);
+    let pos_payment_purse = rng.get_uref(POS_PAYMENT_PURSE);
+    let pos_rewards_purse = rng.get_uref(POS_REWARDS_PURSE);
 
+    // Create (public_uref, mint_contract_uref)
     let public_uref = rng.get_uref(MINT_PUBLIC_ADDRESS);
-
     let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
     // Store (public_uref, mint_contract_uref) in global state
@@ -153,19 +163,37 @@ fn create_mint_effects(
 
     // Store (pos_bonding_purse_local_key, pos_balance_uref_key) in local state.
     let pos_bonding_balance_key: Key = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF).into();
+    let pos_payment_balance_key: Key = rng.get_uref(MINT_POS_PAYMENT_BALANCE_UREF).into();
+    let pos_rewards_balance_key: Key = rng.get_uref(MINT_POS_REWARDS_BALANCE_UREF).into();
 
     let pos_bonding_purse_local_key =
         create_local_key(mint_contract_uref.addr(), pos_bonding_purse.addr())?;
+    let pos_payment_purse_local_key =
+        create_local_key(mint_contract_uref.addr(), pos_payment_purse.addr())?;
+    let pos_rewards_purse_local_key =
+        create_local_key(mint_contract_uref.addr(), pos_rewards_purse.addr())?;
 
     tmp.insert(
         pos_bonding_purse_local_key,
         Value::Key(pos_bonding_balance_key),
     );
+    tmp.insert(
+        pos_payment_purse_local_key,
+        Value::Key(pos_payment_balance_key),
+    );
+    tmp.insert(
+        pos_rewards_purse_local_key,
+        Value::Key(pos_rewards_balance_key),
+    );
 
     let pos_bonding_balance: Value = Value::UInt512(pos_bonded_balance);
+    let pos_payment_balance: Value = Value::UInt512(U512::zero());
+    let pos_rewards_balance: Value = Value::UInt512(U512::zero());
 
     // Store (pos_balance_uref_key, pos_balance) in GlobalState
     tmp.insert(pos_bonding_balance_key, pos_bonding_balance);
+    tmp.insert(pos_payment_balance_key, pos_payment_balance);
+    tmp.insert(pos_rewards_balance_key, pos_rewards_balance);
 
     // Create balance
 
@@ -183,6 +211,14 @@ fn create_mint_effects(
         ret.insert(
             pos_bonding_balance_key.hex_string(),
             pos_bonding_balance_key,
+        );
+        ret.insert(
+            pos_payment_balance_key.hex_string(),
+            pos_payment_balance_key,
+        );
+        ret.insert(
+            pos_rewards_balance_key.hex_string(),
+            pos_rewards_balance_key,
         );
         ret
     };
@@ -244,9 +280,13 @@ fn create_pos_effects(
     known_urefs.insert(String::from(execution::MINT_NAME), Key::URef(mint_public));
     known_urefs.insert(mint_private.as_string(), Key::URef(mint_private));
 
-    // Include PoS purse in its known_urefs
+    // Include PoS purses in its known_urefs
     let pos_bonding_purse = rng.get_uref(POS_BONDING_PURSE);
+    let pos_payment_purse = rng.get_uref(POS_PAYMENT_PURSE);
+    let pos_rewards_purse = rng.get_uref(POS_REWARDS_PURSE);
     known_urefs.insert(POS_BONDING_PURSE.to_string(), Key::URef(pos_bonding_purse));
+    known_urefs.insert(POS_PAYMENT_PURSE.to_string(), Key::URef(pos_payment_purse));
+    known_urefs.insert(POS_REWARDS_PURSE.to_string(), Key::URef(pos_rewards_purse));
 
     // Create PoS Contract object.
     let contract = Contract::new(pos_code.into(), known_urefs, protocol_version);
@@ -351,7 +391,8 @@ mod tests {
     use engine_state::create_genesis_effects;
     use engine_state::genesis::{
         GenesisURefsSource, GENESIS_ACCOUNT_PURSE, MINT_GENESIS_ACCOUNT_BALANCE_UREF,
-        MINT_POS_BONDING_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS,
+        MINT_POS_BONDING_BALANCE_UREF, MINT_POS_PAYMENT_BALANCE_UREF,
+        MINT_POS_REWARDS_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS,
         POS_PRIVATE_ADDRESS, POS_PUBLIC_ADDRESS,
     };
     use engine_state::utils::{pos_validator_key, WasmiBytes};
@@ -363,7 +404,7 @@ mod tests {
 
     const GENESIS_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
     const PROTOCOL_VERSION: u64 = 1;
-    const EXPECTED_GENESIS_TRANSFORM_COUNT: usize = 9; // 7 writes for Mint and 2 for PoS.
+    const EXPECTED_GENESIS_TRANSFORM_COUNT: usize = 13; // 11 writes for Mint and 2 for PoS.
     const INITIAL_GENESIS_ACCOUNT_BALANCE: &str = "1000";
     const INITIAL_POS_VALIDATORS_BALANCE: &str = "15000";
 
@@ -515,12 +556,22 @@ mod tests {
         let balance_uref_key: Key = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF).into();
 
         let pos_bonding_balance_uref_key: Key = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF).into();
+        let pos_payment_balance_uref_key: Key = rng.get_uref(MINT_POS_PAYMENT_BALANCE_UREF).into();
+        let pos_rewards_balance_uref_key: Key = rng.get_uref(MINT_POS_REWARDS_BALANCE_UREF).into();
 
         let mint_known_urefs = {
             let mut ret: BTreeMap<String, Key> = BTreeMap::new();
             ret.insert(
                 pos_bonding_balance_uref_key.hex_string(),
                 pos_bonding_balance_uref_key,
+            );
+            ret.insert(
+                pos_payment_balance_uref_key.hex_string(),
+                pos_payment_balance_uref_key,
+            );
+            ret.insert(
+                pos_rewards_balance_uref_key.hex_string(),
+                pos_rewards_balance_uref_key,
             );
             ret.insert(balance_uref_key.hex_string(), balance_uref_key);
             ret
@@ -740,8 +791,8 @@ mod tests {
         // rustc isn't smart enough to figure that out
         let pos_contract_raw: Vec<u8> = pos_contract_bytes.into();
         assert_eq!(pos_contract.bytes().to_vec(), pos_contract_raw);
-        // 2 for bonded validators, 1 for PoS purse, 2 for mint
-        let expected_num_known_urefs = 5;
+        // 2 for bonded validators, 3 for PoS purses, 2 for mint
+        let expected_num_known_urefs = 7;
         assert_eq!(pos_contract.urefs_lookup().len(), expected_num_known_urefs);
 
         let validator_a_name: String =
