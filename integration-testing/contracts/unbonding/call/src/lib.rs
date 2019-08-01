@@ -17,13 +17,9 @@ pub extern "C" fn call() {
     let pos_pointer = pos_contract.to_c_ptr().unwrap();
     // I dont have any safe method to check for the existence of the args.
     // I am utilizing 0(invalid) amount to indicate no args to EE.
-    match contract_api::get_arg(0){
-        0  => {
-            let unbonded_amount: Option<U512> = None;
-            let _result: () = contract_api::call_contract(pos_pointer, &("unbond",unbonded_amount), &vec![]);
-        },
-        amount => {
-            let _result: () = contract_api::call_contract(pos_pointer, &("unbond", U512::from(amount)), &vec![]);
-        }
+    let unbond_amount: Option<U512> = match contract_api::get_arg::<u32>(0) {
+        0 => None,
+        amount => Some(amount.into()),
     };
+    let _result: () = contract_api::call_contract(pos_pointer, &("unbond", unbond_amount), &vec![]);
 }
