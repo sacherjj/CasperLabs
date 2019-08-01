@@ -69,7 +69,7 @@ Feature: Consensus
      Then: New node becomes bonded.
      And: Deploys bonding request again with same stake.
      And: That bonding request is valid.
-     Then: Nodes bonded stake amount becomes twice.
+     Then: Bonded stake of Node becomes twice.
      And: Starting from new block new node can be found in bonded validators set.
 
   # Implemented test_bonding.py : test_invalid_bonding
@@ -77,7 +77,7 @@ Feature: Consensus
     Given: Single  Node Network
      And: A bonded Validator.
      When: New node joins.
-     And: Deploys bonding request with bonding amount 1000 times of the total of the current staked amount .
+     And: Deploys bonding request with bonding amount greater than 1000 times of the total of the current staked amount .
      And: That bonding request is invalid.
      Then: New node is not bonded.
      And: Starting from new block new node cannot be found in bonded validators set.
@@ -95,8 +95,8 @@ Feature: Consensus
      Then: Node becomes unbonded from network.
      And: Starting from new block new node cannot be found in bonded validators set.
 
-# Implemented test_bonding.py : test_partial_unbonding
-  Scenario:  Unbonding a bonded validator node with partial bonding amount from an existing network.
+  # Implemented test_bonding.py : test_partial_unbonding
+  Scenario: Unbonding a bonded validator node with partial bonding amount from an existing network.
     Given: Single  Node Network
      And: A bonded Validator.
      When: New node joins.
@@ -121,9 +121,8 @@ Feature: Consensus
      Then: Node still is bonded in network.
      And: Starting from new block new node can be found in bonded validators set.
 
-
   # Implemented test_bonding.py : test_unbonding_without_bonding
-  Scenario: unbonding a validator node which was not bonded to an existing network.
+  Scenario: Unbonding a validator node which was not bonded to an existing network.
     Given: Single  Node Network
      And: A bonded Validator.
      When: New node joins the network.
