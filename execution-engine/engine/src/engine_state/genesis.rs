@@ -157,9 +157,13 @@ fn create_mint_effects(
     let pos_balance_uref = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF);
     let pos_balance_uref_key = Key::URef(pos_balance_uref);
 
-    let pos_bonding_purse_local_key = create_local_key(mint_contract_uref.addr(), pos_bonding_purse.addr())?;
+    let pos_bonding_purse_local_key =
+        create_local_key(mint_contract_uref.addr(), pos_bonding_purse.addr())?;
 
-    tmp.insert(pos_bonding_purse_local_key, Value::Key(pos_balance_uref_key));
+    tmp.insert(
+        pos_bonding_purse_local_key,
+        Value::Key(pos_balance_uref_key),
+    );
 
     let pos_balance: Value = Value::UInt512(pos_bonded_balance);
 
@@ -347,8 +351,8 @@ mod tests {
     use engine_state::create_genesis_effects;
     use engine_state::genesis::{
         GenesisURefsSource, GENESIS_ACCOUNT_PURSE, MINT_GENESIS_ACCOUNT_BALANCE_UREF,
-        MINT_POS_BONDING_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS, POS_PRIVATE_ADDRESS,
-        POS_PUBLIC_ADDRESS,
+        MINT_POS_BONDING_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS,
+        POS_PRIVATE_ADDRESS, POS_PUBLIC_ADDRESS,
     };
     use engine_state::utils::{pos_validator_key, WasmiBytes};
     use shared::test_utils;
@@ -543,8 +547,9 @@ mod tests {
         let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())
             .expect("Should create local key.");
 
-        let pos_bonding_purse_local_key = create_local_key(mint_contract_uref.addr(), pos_bonding_purse.addr())
-            .expect("Should create local key.");
+        let pos_bonding_purse_local_key =
+            create_local_key(mint_contract_uref.addr(), pos_bonding_purse.addr())
+                .expect("Should create local key.");
 
         let balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
 
@@ -570,8 +575,9 @@ mod tests {
             "invalid balance indirection"
         );
 
-        let mint_pos_balance_uref = extract_transform_key(&transforms, &pos_bonding_purse_local_key)
-            .expect("Transform was not a write of a key.");
+        let mint_pos_balance_uref =
+            extract_transform_key(&transforms, &pos_bonding_purse_local_key)
+                .expect("Transform was not a write of a key.");
 
         assert_eq!(
             mint_pos_balance_uref,
