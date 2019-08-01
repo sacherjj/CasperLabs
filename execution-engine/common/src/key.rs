@@ -154,6 +154,15 @@ impl Key {
         Some(Key::local(seed_buff, &key_buff))
     }
 
+    pub fn hex_string(&self) -> String {
+        match self {
+            Key::Account(addr) => addr_to_hex(addr),
+            Key::Hash(addr) => addr_to_hex(addr),
+            Key::URef(uref) => addr_to_hex(&uref.addr()),
+            Key::Local(hash) => addr_to_hex(hash),
+        }
+    }
+
     pub fn as_uref(&self) -> Option<&URef> {
         match self {
             Key::URef(uref) => Some(uref),

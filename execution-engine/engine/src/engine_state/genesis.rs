@@ -145,30 +145,27 @@ fn create_mint_effects(
 
     let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())?;
 
-    let balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
-
-    let balance_uref_key = Key::URef(balance_uref);
+    let balance_uref_key: Key = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF).into();
 
     // Store (purse_id_local_key, balance_uref_key) in local state
 
     tmp.insert(purse_id_local_key, Value::Key(balance_uref_key));
 
     // Store (pos_bonding_purse_local_key, pos_balance_uref_key) in local state.
-    let pos_balance_uref = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF);
-    let pos_balance_uref_key = Key::URef(pos_balance_uref);
+    let pos_bonding_balance_key: Key = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF).into();
 
     let pos_bonding_purse_local_key =
         create_local_key(mint_contract_uref.addr(), pos_bonding_purse.addr())?;
 
     tmp.insert(
         pos_bonding_purse_local_key,
-        Value::Key(pos_balance_uref_key),
+        Value::Key(pos_bonding_balance_key),
     );
 
-    let pos_balance: Value = Value::UInt512(pos_bonded_balance);
+    let pos_bonding_balance: Value = Value::UInt512(pos_bonded_balance);
 
     // Store (pos_balance_uref_key, pos_balance) in GlobalState
-    tmp.insert(pos_balance_uref_key, pos_balance);
+    tmp.insert(pos_bonding_balance_key, pos_bonding_balance);
 
     // Create balance
 
@@ -181,9 +178,12 @@ fn create_mint_effects(
     // Create mint_contract
     let mint_known_urefs = {
         let mut ret: BTreeMap<String, Key> = BTreeMap::new();
-        ret.insert(balance_uref.as_string(), balance_uref_key);
+        ret.insert(balance_uref_key.hex_string(), balance_uref_key);
         // Insert PoS balance URef and its initial stakes so that PoS.
-        ret.insert(pos_balance_uref.as_string(), pos_balance_uref_key);
+        ret.insert(
+            pos_bonding_balance_key.hex_string(),
+            pos_bonding_balance_key,
+        );
         ret
     };
 
@@ -512,18 +512,17 @@ mod tests {
 
         let mint_code_bytes = get_mint_code_bytes();
 
-        // this is passing as currently designed, but see bug: EE-380
-        let balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
+        let balance_uref_key: Key = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF).into();
 
-        let balance_uref_key = Key::URef(balance_uref);
-
-        let pos_balance_uref = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF);
-        let pos_balance_uref_key = Key::URef(pos_balance_uref);
+        let pos_bonding_balance_uref_key: Key = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF).into();
 
         let mint_known_urefs = {
             let mut ret: BTreeMap<String, Key> = BTreeMap::new();
-            ret.insert(pos_balance_uref.as_string(), pos_balance_uref_key);
-            ret.insert(balance_uref.as_string(), balance_uref_key);
+            ret.insert(
+                pos_bonding_balance_uref_key.hex_string(),
+                pos_bonding_balance_uref_key,
+            );
+            ret.insert(balance_uref_key.hex_string(), balance_uref_key);
             ret
         };
 
