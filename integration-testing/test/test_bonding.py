@@ -2,6 +2,7 @@ from test.cl_node.casperlabsnode import BONDING_CONTRACT, UNBONDING_CONTRACT
 from test.cl_node.client_parser import parse_show_block
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.casperlabs_network import OneNodeNetwork
+from typing import List
 
 
 def bond_to_the_network(network: OneNodeNetwork, contract: str, bond_amount: int):
@@ -14,14 +15,15 @@ def bond_to_the_network(network: OneNodeNetwork, contract: str, bond_amount: int
     return block_hash
 
 
-def assert_pre_state_of_network(network: OneNodeNetwork, stake: int):
+def assert_pre_state_of_network(network: OneNodeNetwork, stakes: List[int]):
     node0 = network.docker_nodes[0]
     blocks = parse_show_blocks(node0.client.show_blocks(1000))
     assert len(blocks) == 1
     genesis_block = blocks[0]
     item = list(
         filter(
-            lambda x: x.stake == stake and x.validator_public_key == node0.from_address,
+            lambda x: x.stake in stakes
+            and x.validator_public_key == node0.from_address,
             genesis_block.summary[0].header[0].state[0].bonds,
         )
     )
@@ -34,7 +36,7 @@ def test_bonding(one_node_network):
     Scenario: Bonding a validator node to an existing network.
     """
     bonding_amount = 1
-    assert_pre_state_of_network(one_node_network, bonding_amount)
+    assert_pre_state_of_network(one_node_network, [bonding_amount])
     block_hash = bond_to_the_network(one_node_network, BONDING_CONTRACT, bonding_amount)
     assert block_hash is not None
     node1 = one_node_network.docker_nodes[1]
@@ -44,6 +46,37 @@ def test_bonding(one_node_network):
     item = list(
         filter(
             lambda x: x.stake == bonding_amount
+            and x.validator_public_key == public_key,
+            block_ds.summary[0].header[0].state[0].bonds,
+        )
+    )
+    assert len(item) == 1
+
+
+def test_double_bonding(one_node_network):
+    """
+    Feature file: consensus.feature
+    Scenario: Bonding a validator node twice to an existing network.
+    """
+    bonding_amount = 1
+    stakes = [1, 2]
+    assert_pre_state_of_network(one_node_network, stakes)
+    block_hash = bond_to_the_network(one_node_network, BONDING_CONTRACT, bonding_amount)
+    assert block_hash is not None
+    node1 = one_node_network.docker_nodes[1]
+    block_hash = node1.bond(
+        session_contract=BONDING_CONTRACT,
+        payment_contract=BONDING_CONTRACT,
+        amount=bonding_amount,
+    )
+    assert block_hash is not None
+    node1 = one_node_network.docker_nodes[1]
+    block1 = node1.client.show_block(block_hash)
+    block_ds = parse_show_block(block1)
+    public_key = node1.from_address
+    item = list(
+        filter(
+            lambda x: x.stake == bonding_amount + bonding_amount
             and x.validator_public_key == public_key,
             block_ds.summary[0].header[0].state[0].bonds,
         )
@@ -80,7 +113,7 @@ def test_unbonding(one_node_network):
     Scenario: unbonding a bonded validator node from an existing network.
     """
     bonding_amount = 1
-    assert_pre_state_of_network(one_node_network, bonding_amount)
+    assert_pre_state_of_network(one_node_network, [bonding_amount])
     block_hash = bond_to_the_network(one_node_network, BONDING_CONTRACT, bonding_amount)
     assert block_hash is not None
     node1 = one_node_network.docker_nodes[1]
@@ -104,13 +137,42 @@ def test_unbonding(one_node_network):
     assert len(item) == 0
 
 
+def test_partial_amount_unbonding(one_node_network):
+    """
+    Feature file: consensus.feature
+    Scenario: unbonding a bonded validator node with partial bonding amount from an existing network.
+    """
+    bonding_amount = 11
+    assert_pre_state_of_network(one_node_network, [bonding_amount, 7, 4])
+    block_hash = bond_to_the_network(one_node_network, BONDING_CONTRACT, bonding_amount)
+    assert block_hash is not None
+    node1 = one_node_network.docker_nodes[1]
+    public_key = node1.from_address
+    block_hash2 = node1.unbond(
+        session_contract=UNBONDING_CONTRACT,
+        payment_contract=UNBONDING_CONTRACT,
+        maybe_amount=4,
+    )
+
+    assert block_hash2 is not None
+    block2 = node1.client.show_block(block_hash2)
+    block_ds = parse_show_block(block2)
+    item = list(
+        filter(
+            lambda x: x.stake == 7 and x.validator_public_key == public_key,
+            block_ds.summary[0].header[0].state[0].bonds,
+        )
+    )
+    assert len(item) == 1
+
+
 def test_invalid_unbonding(one_node_network):
     """
     Feature file: consensus.feature
     Scenario: unbonding a bonded validator node from an existing network.
     """
     bonding_amount = 2000
-    assert_pre_state_of_network(one_node_network, bonding_amount)
+    assert_pre_state_of_network(one_node_network, [bonding_amount])
     block_hash = bond_to_the_network(one_node_network, BONDING_CONTRACT, bonding_amount)
     assert block_hash is not None
     node1 = one_node_network.docker_nodes[1]
@@ -139,7 +201,7 @@ def test_unbonding_without_bonding(one_node_network):
     Scenario: unbonding a validator node which was not bonded to an existing network.
     """
     bonding_amount = 1
-    assert_pre_state_of_network(one_node_network, bonding_amount)
+    assert_pre_state_of_network(one_node_network, [bonding_amount])
     one_node_network.add_new_node_to_network()
     assert len(one_node_network.docker_nodes) == 2, "Total number of nodes should be 2."
     node1 = one_node_network.docker_nodes[1]
