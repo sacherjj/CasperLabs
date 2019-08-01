@@ -20,10 +20,10 @@ pub enum Error {
 
 /// Decodes a slice of bytes in base16 form
 pub fn decode_lower(input: &str) -> Result<Vec<u8>, Error> {
-    if input.len() == 0 {
+    if input.is_empty() {
         Ok(Vec::new())
     } else if input.len() % 2 != 0 {
-        return Err(Error::InvalidLengthError);
+        Err(Error::InvalidLengthError)
     } else {
         input
             .as_bytes()
