@@ -40,7 +40,10 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
     newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying = false).start)
 
   /* Same as 'newBlocks' but with synchronous semantics, needed for bootstrapping and some tests. */
-  def newBlocksSynchronous(request: NewBlocksRequest, skipRelaying: Boolean): F[NewBlocksResponse] =
+  def newBlocksSynchronous(
+      request: NewBlocksRequest,
+      skipRelaying: Boolean
+  ): F[NewBlocksResponse] =
     newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying))
 
   private def newBlocks(
@@ -67,36 +70,9 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
   ): F[Unit] = {
     //TODO: Define handling strategies
     def handleSyncError(syncError: SyncError): F[Unit] = {
-      val prefix = s"Failed to sync DAG, source: ${source.show}."
-      syncError match {
-        case SyncError.TooMany(summary, limit) =>
-          Log[F].warn(
-            s"$prefix Returned DAG is too big, limit: $limit, exceeded hash: ${hex(summary)}"
-          )
-        case SyncError.TooDeep(summaries, limit) =>
-          Log[F].warn(
-            s"$prefix Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries
-              .map(hex)}"
-          )
-        case SyncError.TooWide(maxBranchingFactor, maxTotal, total) =>
-          Log[F].warn(
-            s"$prefix Returned dag seems to be exponentially wide, max branching factor: $maxBranchingFactor, max total summaries: $maxTotal, total returned: $total"
-          )
-        case SyncError.Unreachable(summary, requestedDepth) =>
-          Log[F].warn(
-            s"$prefix During streaming source returned unreachable block summary: ${hex(summary)}, requested depth: $requestedDepth"
-          )
-        case SyncError.ValidationError(summary, e) =>
-          Log[F].warn(
-            s"$prefix Failed to validated the block summary: ${hex(summary)}, reason: $e"
-          )
-        case SyncError.MissingDependencies(hashes) =>
-          Log[F].warn(
-            s"$prefix Missing dependencies: ${hashes.map(hex)}"
-          )
-        case SyncError.Cycle(summary) =>
-          Log[F].warn(s"$prefix Detected cycle: ${hex(summary)}")
-      }
+      val prefix  = s"Failed to sync DAG, source: ${source.show}."
+      val message = syncError.getMessage
+      Log[F].warn(s"$prefix $message")
     }
 
     val trySync = for {
