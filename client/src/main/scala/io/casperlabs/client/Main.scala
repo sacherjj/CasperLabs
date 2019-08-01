@@ -76,7 +76,7 @@ object Main {
           contractCode,
           privateKey
           ) =>
-        DeployRuntime.transfer(
+        DeployRuntime.transferCLI(
           nonce,
           contractCode,
           privateKey,
