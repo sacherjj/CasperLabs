@@ -23,7 +23,7 @@ use crate::stakes::{ContractStakes, StakesProvider};
 
 /// The uref name where the PoS purse is stored. It contains all staked tokens, and all unbonded
 /// tokens that are yet to be paid out.
-const PURSE_KEY: &str = "pos_purse";
+const BONDING_PURSE_KEY: &str = "pos_bonding_purse";
 
 /// The time from a bonding request until the bond becomes effective and part of the stake.
 const BOND_DELAY: u64 = 0;
@@ -122,7 +122,7 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec
 pub extern "C" fn call() {
     let method_name: String = contract_api::get_arg(0);
     let timestamp = contract_api::get_blocktime();
-    let pos_purse = match contract_api::get_uref(PURSE_KEY) {
+    let pos_purse = match contract_api::get_uref(BONDING_PURSE_KEY) {
         Some(Key::URef(uref)) => PurseId::new(uref),
         _ => panic!("PoS purse ID not found"),
     };

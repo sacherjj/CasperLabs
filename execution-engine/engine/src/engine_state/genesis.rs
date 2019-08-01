@@ -19,14 +19,14 @@ use shared::newtypes::Blake2bHash;
 use shared::transform::{Transform, TypeMismatch};
 use storage::global_state::CommitResult;
 
-pub const POS_PURSE: &str = "pos_purse";
+pub const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 pub const POS_PUBLIC_ADDRESS: &str = "pos_public_address";
 pub const POS_PRIVATE_ADDRESS: &str = "pos_private_address";
 pub const MINT_PUBLIC_ADDRESS: &str = "mint_public_address";
 pub const MINT_PRIVATE_ADDRESS: &str = "mint_private_address";
 pub const GENESIS_ACCOUNT_PURSE: &str = "genesis_account_purse";
 pub const MINT_GENESIS_ACCOUNT_BALANCE_UREF: &str = "mint_genesis_account_balance_uref";
-pub const MINT_POS_BALANCE_UREF: &str = "mint_pos_balance_uref";
+pub const MINT_POS_BONDING_BALANCE_UREF: &str = "mint_pos_bonding_balance_uref";
 
 /// Structure for tracking URefs generated in the genesis process.
 pub struct GenesisURefsSource(BTreeMap<&'static str, URef>);
@@ -58,7 +58,7 @@ impl Default for GenesisURefsSource {
         // Pregenerates all URefs so that they are statically known.
         let mut chacha_rng = GenesisURefsSource::create_genesis_rng();
         let mut urefs_map = BTreeMap::new();
-        urefs_map.insert(POS_PURSE, create_uref(&mut chacha_rng));
+        urefs_map.insert(POS_BONDING_PURSE, create_uref(&mut chacha_rng));
         urefs_map.insert(POS_PUBLIC_ADDRESS, create_uref(&mut chacha_rng));
         urefs_map.insert(POS_PRIVATE_ADDRESS, create_uref(&mut chacha_rng));
         urefs_map.insert(MINT_PUBLIC_ADDRESS, create_uref(&mut chacha_rng));
@@ -68,7 +68,7 @@ impl Default for GenesisURefsSource {
             MINT_GENESIS_ACCOUNT_BALANCE_UREF,
             create_uref(&mut chacha_rng),
         );
-        urefs_map.insert(MINT_POS_BALANCE_UREF, create_uref(&mut chacha_rng));
+        urefs_map.insert(MINT_POS_BONDING_BALANCE_UREF, create_uref(&mut chacha_rng));
 
         GenesisURefsSource(urefs_map)
     }
@@ -96,7 +96,7 @@ fn create_mint_effects(
     let mut tmp: HashMap<Key, Value> = HashMap::new();
 
     // Create (public_uref, mint_contract_uref)
-    let pos_purse = rng.get_uref(POS_PURSE);
+    let pos_bonding_purse = rng.get_uref(POS_BONDING_PURSE);
 
     let public_uref = rng.get_uref(MINT_PUBLIC_ADDRESS);
 
@@ -153,13 +153,13 @@ fn create_mint_effects(
 
     tmp.insert(purse_id_local_key, Value::Key(balance_uref_key));
 
-    // Store (pos_purse_local_key, pos_balance_uref_key) in local state.
-    let pos_balance_uref = rng.get_uref(MINT_POS_BALANCE_UREF);
+    // Store (pos_bonding_purse_local_key, pos_balance_uref_key) in local state.
+    let pos_balance_uref = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF);
     let pos_balance_uref_key = Key::URef(pos_balance_uref);
 
-    let pos_purse_local_key = create_local_key(mint_contract_uref.addr(), pos_purse.addr())?;
+    let pos_bonding_purse_local_key = create_local_key(mint_contract_uref.addr(), pos_bonding_purse.addr())?;
 
-    tmp.insert(pos_purse_local_key, Value::Key(pos_balance_uref_key));
+    tmp.insert(pos_bonding_purse_local_key, Value::Key(pos_balance_uref_key));
 
     let pos_balance: Value = Value::UInt512(pos_bonded_balance);
 
@@ -241,8 +241,8 @@ fn create_pos_effects(
     known_urefs.insert(mint_private.as_string(), Key::URef(mint_private));
 
     // Include PoS purse in its known_urefs
-    let pos_purse = rng.get_uref(POS_PURSE);
-    known_urefs.insert(POS_PURSE.to_string(), Key::URef(pos_purse));
+    let pos_bonding_purse = rng.get_uref(POS_BONDING_PURSE);
+    known_urefs.insert(POS_BONDING_PURSE.to_string(), Key::URef(pos_bonding_purse));
 
     // Create PoS Contract object.
     let contract = Contract::new(pos_code.into(), known_urefs, protocol_version);
@@ -347,7 +347,7 @@ mod tests {
     use engine_state::create_genesis_effects;
     use engine_state::genesis::{
         GenesisURefsSource, GENESIS_ACCOUNT_PURSE, MINT_GENESIS_ACCOUNT_BALANCE_UREF,
-        MINT_POS_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS, POS_PRIVATE_ADDRESS,
+        MINT_POS_BONDING_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS, POS_PRIVATE_ADDRESS,
         POS_PUBLIC_ADDRESS,
     };
     use engine_state::utils::{pos_validator_key, WasmiBytes};
@@ -355,7 +355,7 @@ mod tests {
     use shared::transform::Transform;
     use wasm_prep::wasm_costs::WasmCosts;
 
-    use super::{create_local_key, POS_PURSE};
+    use super::{create_local_key, POS_BONDING_PURSE};
 
     const GENESIS_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
     const PROTOCOL_VERSION: u64 = 1;
@@ -513,7 +513,7 @@ mod tests {
 
         let balance_uref_key = Key::URef(balance_uref);
 
-        let pos_balance_uref = rng.get_uref(MINT_POS_BALANCE_UREF);
+        let pos_balance_uref = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF);
         let pos_balance_uref_key = Key::URef(pos_balance_uref);
 
         let mint_known_urefs = {
@@ -533,8 +533,8 @@ mod tests {
     fn create_genesis_effects_stores_local_keys_balance_urefs_associations() {
         let rng = GenesisURefsSource::default();
 
-        let pos_purse = rng.get_uref(POS_PURSE);
-        let expected_mint_pos_balance_uref = rng.get_uref(MINT_POS_BALANCE_UREF);
+        let pos_bonding_purse = rng.get_uref(POS_BONDING_PURSE);
+        let expected_mint_pos_balance_uref = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF);
 
         let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
@@ -543,7 +543,7 @@ mod tests {
         let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())
             .expect("Should create local key.");
 
-        let pos_purse_local_key = create_local_key(mint_contract_uref.addr(), pos_purse.addr())
+        let pos_bonding_purse_local_key = create_local_key(mint_contract_uref.addr(), pos_bonding_purse.addr())
             .expect("Should create local key.");
 
         let balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
@@ -556,8 +556,8 @@ mod tests {
         );
 
         assert!(
-            transforms.contains_key(&pos_purse_local_key),
-            "transforms should contain pos_purse_local_key"
+            transforms.contains_key(&pos_bonding_purse_local_key),
+            "transforms should contain pos_bonding_purse_local_key"
         );
 
         let mint_genesis_account_balance_uref =
@@ -570,7 +570,7 @@ mod tests {
             "invalid balance indirection"
         );
 
-        let mint_pos_balance_uref = extract_transform_key(&transforms, &pos_purse_local_key)
+        let mint_pos_balance_uref = extract_transform_key(&transforms, &pos_bonding_purse_local_key)
             .expect("Transform was not a write of a key.");
 
         assert_eq!(
@@ -587,18 +587,18 @@ mod tests {
         let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
 
         let genesis_account_purse = rng.get_uref(GENESIS_ACCOUNT_PURSE);
-        let pos_purse = rng.get_uref(POS_PURSE);
+        let pos_bonding_purse = rng.get_uref(POS_BONDING_PURSE);
 
         let genesis_account_purse_id_local_key =
             create_local_key(mint_contract_uref.addr(), genesis_account_purse.addr())
                 .expect("Mint should create local key for genesis account purse.");
 
         let pos_validators_balance_local_key =
-            create_local_key(mint_contract_uref.addr(), pos_purse.addr())
+            create_local_key(mint_contract_uref.addr(), pos_bonding_purse.addr())
                 .expect("Mint should create local key for PoS purse.");
 
         let genesis_account_balance_uref = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF);
-        let pos_balance_uref = rng.get_uref(MINT_POS_BALANCE_UREF);
+        let pos_balance_uref = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF);
 
         let transforms = get_genesis_transforms();
 
@@ -705,7 +705,7 @@ mod tests {
             (genesis_validator_b_public_key, genesis_validator_b_stake),
         ];
 
-        let pos_purse = rng.get_uref(POS_PURSE);
+        let pos_bonding_purse = rng.get_uref(POS_BONDING_PURSE);
 
         let public_pos_address = rng.get_uref(POS_PUBLIC_ADDRESS);
 
@@ -754,9 +754,9 @@ mod tests {
         );
 
         assert_eq!(
-            pos_contract.urefs_lookup().get(POS_PURSE),
-            Some(&Key::URef(pos_purse)),
-            "create_pos_effects should store POS_PURSE in PoS contract's known urefs map."
+            pos_contract.urefs_lookup().get(POS_BONDING_PURSE),
+            Some(&Key::URef(pos_bonding_purse)),
+            "create_pos_effects should store POS_BONDING_PURSE in PoS contract's known urefs map."
         );
     }
 
