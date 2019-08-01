@@ -15,11 +15,12 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Log
+import io.casperlabs.catscontrib.MonadThrowable
 
 import scala.collection.immutable.HashSet
 
 @silent("The outer reference in this type test cannot be checked at run time.")
-class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
+class InMemBlockDagStorage[F[_]: MonadThrowable: Log: BlockStore](
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
@@ -124,7 +125,7 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
                            } else if (validator.size == 32) {
                              List(validator).pure[F]
                            } else {
-                             Sync[F].raiseError[Set[ByteString]](
+                             MonadThrowable[F].raiseError[Set[ByteString]](
                                BlockValidatorIsMalformed(block)
                              )
                            }

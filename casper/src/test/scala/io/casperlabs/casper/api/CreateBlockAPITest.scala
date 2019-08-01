@@ -7,6 +7,7 @@ import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation
+import io.casperlabs.casper
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
@@ -30,9 +31,13 @@ import scala.concurrent.duration._
 class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCasperTestNodeFactory {
   import HashSetCasperTest._
   import HashSetCasperTestNode.Effect
+  import DeriveValidation._
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
   implicit val metrics              = new Metrics.MetricsNOP[Task]
+  implicit val raiseValidateErr =
+    casper.validation.raiseValidateErrorThroughApplicativeError[Effect]
+  implicit val logEff = new LogStub[Effect]
 
   private val (validatorKeys, validators)                      = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                            = createBonds(validators)
@@ -96,13 +101,6 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
   }
 
   "deploy" should "reject replayed deploys" in {
-    implicit val time = new Time[Task] {
-      private val timer                               = Task.timer
-      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
-      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
-      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
-    }
-
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
