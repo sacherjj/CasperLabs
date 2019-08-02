@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt;
 use std::iter::IntoIterator;
@@ -1426,7 +1426,7 @@ pub trait Executor<A> {
         parity_module: A,
         args: &[u8],
         account: Key,
-        authorized_keys: HashSet<PublicKey>,
+        authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
@@ -1446,7 +1446,7 @@ impl Executor<Module> for WasmiExecutor {
         parity_module: Module,
         args: &[u8],
         acct_key: Key,
-        authorized_keys: HashSet<PublicKey>,
+        authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
@@ -1480,7 +1480,7 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
-        if authorized_keys.is_empty() || !account.can_authorize(authorized_keys.iter()) {
+        if authorized_keys.is_empty() || !account.can_authorize(&authorized_keys) {
             return ExecutionResult::precondition_failure(
                 ::engine_state::error::Error::AuthorizationError,
             );
@@ -1525,7 +1525,7 @@ impl Executor<Module> for WasmiExecutor {
 
         // Check if authorized keys can deploy by comparing sum of their weights
         // with a deploy threshold.
-        if !account.can_deploy_with(authorized_keys.iter()) {
+        if !account.can_deploy_with(&authorized_keys) {
             return ExecutionResult::precondition_failure(
                 Error::DeploymentAuthorizationFailure.into(),
             );
@@ -1585,7 +1585,7 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::collections::{BTreeMap, HashMap, HashSet};
+    use std::collections::{BTreeMap, BTreeSet, HashMap};
     use std::iter::{self, FromIterator};
     use std::rc::Rc;
 
@@ -1717,7 +1717,7 @@ mod tests {
             parity_module,
             &[],
             account_key,
-            HashSet::from_iter(iter::once(PublicKey::new(account_address))),
+            BTreeSet::from_iter(iter::once(PublicKey::new(account_address))),
             BlockTime(0),
             invalid_nonce,
             100u64,

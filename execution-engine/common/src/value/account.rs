@@ -506,12 +506,8 @@ impl AssociatedKeys {
     }
 
     /// Calculates total weight of authorization keys provided by an argument
-    pub fn calculate_keys_weight<'a>(
-        &self,
-        authorization_keys: impl Iterator<Item = &'a PublicKey>,
-    ) -> Weight {
-        let unique_keys: BTreeSet<&'a PublicKey> = authorization_keys.collect();
-        let total = unique_keys
+    pub fn calculate_keys_weight(&self, authorization_keys: &BTreeSet<PublicKey>) -> Weight {
+        let total = authorization_keys
             .iter()
             .filter_map(|key| self.0.get(key))
             .map(|w| w.value())
@@ -661,19 +657,15 @@ impl Account {
     }
 
     /// Checks whether all authorization keys are associated with this account
-    pub fn can_authorize<'a>(
-        &self,
-        mut authorization_keys: impl Iterator<Item = &'a PublicKey>,
-    ) -> bool {
-        authorization_keys.all(|e| self.associated_keys.contains_key(e))
+    pub fn can_authorize(&self, authorization_keys: &BTreeSet<PublicKey>) -> bool {
+        authorization_keys
+            .iter()
+            .all(|e| self.associated_keys.contains_key(e))
     }
 
     /// Checks whether the sum of the weights of all authorization keys is greater
     /// or equal to deploy threshold.
-    pub fn can_deploy_with<'a>(
-        &self,
-        authorization_keys: impl Iterator<Item = &'a PublicKey>,
-    ) -> bool {
+    pub fn can_deploy_with(&self, authorization_keys: &BTreeSet<PublicKey>) -> bool {
         let total_weight = self
             .associated_keys
             .calculate_keys_weight(authorization_keys);
@@ -879,9 +871,10 @@ mod tests {
         Account, AccountActivity, ActionThresholds, AddKeyFailure, AssociatedKeys, BlockTime,
         PublicKey, PurseId, Weight, KEY_SIZE, MAX_KEYS,
     };
-    use alloc::collections::btree_map::BTreeMap;
+    use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
     use alloc::vec::Vec;
     use core::convert::TryFrom;
+    use core::iter::FromIterator;
 
     #[test]
     fn incremented_nonce() {
@@ -970,22 +963,27 @@ mod tests {
             AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
-        assert!(account.can_authorize([key_3, key_2, key_1].iter()));
-        assert!(account.can_authorize([key_1, key_3, key_2].iter()));
+        assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_3, key_2, key_1])));
+        assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_1, key_3, key_2])));
 
-        assert!(account.can_authorize([key_1, key_2].iter()));
-        assert!(account.can_authorize([key_1].iter()));
+        assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_1, key_2])));
+        assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_1])));
 
-        assert!(!account.can_authorize([key_1, key_2, PublicKey::new([42; 32])].iter()));
-        assert!(!account.can_authorize([PublicKey::new([42; 32]), key_1, key_2].iter()));
-        assert!(!account.can_authorize(
-            [
-                PublicKey::new([43; 32]),
-                PublicKey::new([44; 32]),
-                PublicKey::new([42; 32])
-            ]
-            .iter()
-        ));
+        assert!(!account.can_authorize(&BTreeSet::from_iter(vec![
+            key_1,
+            key_2,
+            PublicKey::new([42; 32])
+        ])));
+        assert!(!account.can_authorize(&BTreeSet::from_iter(vec![
+            PublicKey::new([42; 32]),
+            key_1,
+            key_2
+        ])));
+        assert!(!account.can_authorize(&BTreeSet::from_iter(vec![
+            PublicKey::new([43; 32]),
+            PublicKey::new([44; 32]),
+            PublicKey::new([42; 32])
+        ])));
     }
 
     #[test]
@@ -1003,7 +1001,9 @@ mod tests {
             .expect("should add key_1");
 
         assert_eq!(
-            keys.calculate_keys_weight([key_1, key_2, key_3, key_1, key_2, key_3,].iter()),
+            keys.calculate_keys_weight(&BTreeSet::from_iter(vec![
+                key_1, key_2, key_3, key_1, key_2, key_3,
+            ])),
             Weight::new(1 + 2 + 3)
         );
     }
@@ -1033,29 +1033,25 @@ mod tests {
         );
 
         // sum: 22, required 33 - can't deploy
-        assert!(!account
-            .can_deploy_with([PublicKey::new([3u8; 32]), PublicKey::new([2u8; 32]),].iter()));
+        assert!(!account.can_deploy_with(&BTreeSet::from_iter(vec![
+            PublicKey::new([3u8; 32]),
+            PublicKey::new([2u8; 32]),
+        ])));
 
         // sum: 33, required 33 - can deploy
-        assert!(account.can_deploy_with(
-            [
-                PublicKey::new([4u8; 32]),
-                PublicKey::new([3u8; 32]),
-                PublicKey::new([2u8; 32]),
-            ]
-            .iter()
-        ));
+        assert!(account.can_deploy_with(&BTreeSet::from_iter(vec![
+            PublicKey::new([4u8; 32]),
+            PublicKey::new([3u8; 32]),
+            PublicKey::new([2u8; 32]),
+        ])));
 
         // sum: 34, required 33 - can deploy
-        assert!(account.can_deploy_with(
-            [
-                PublicKey::new([2u8; 32]),
-                PublicKey::new([1u8; 32]),
-                PublicKey::new([4u8; 32]),
-                PublicKey::new([3u8; 32]),
-            ]
-            .iter()
-        ));
+        assert!(account.can_deploy_with(&BTreeSet::from_iter(vec![
+            PublicKey::new([2u8; 32]),
+            PublicKey::new([1u8; 32]),
+            PublicKey::new([4u8; 32]),
+            PublicKey::new([3u8; 32]),
+        ])));
     }
 
     #[test]

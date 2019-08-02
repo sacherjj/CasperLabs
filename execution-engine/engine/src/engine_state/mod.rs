@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -97,7 +97,7 @@ where
         module_bytes: &[u8],
         args: &[u8],
         address: Key,
-        authorized_keys: HashSet<PublicKey>,
+        authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
         nonce: u64,
         prestate_hash: Blake2bHash,

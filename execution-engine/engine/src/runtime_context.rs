@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Display;
 use std::rc::Rc;
@@ -35,7 +35,7 @@ pub struct RuntimeContext<'a, R> {
     // Original account for read only tasks taken before execution
     account: &'a Account,
     args: Vec<Vec<u8>>,
-    authorization_keys: HashSet<PublicKey>,
+    authorization_keys: BTreeSet<PublicKey>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
@@ -58,7 +58,7 @@ where
         uref_lookup: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
-        authorization_keys: HashSet<PublicKey>,
+        authorization_keys: BTreeSet<PublicKey>,
         account: &'a Account,
         base_key: Key,
         blocktime: BlockTime,
@@ -87,7 +87,7 @@ where
         }
     }
 
-    pub fn authorization_keys(&self) -> &HashSet<PublicKey> {
+    pub fn authorization_keys(&self) -> &BTreeSet<PublicKey> {
         &self.authorization_keys
     }
 
@@ -717,7 +717,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::collections::{BTreeMap, HashMap, HashSet};
+    use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
     use std::iter::{once, FromIterator};
     use std::rc::Rc;
 
@@ -825,7 +825,7 @@ mod tests {
             uref_map,
             known_urefs,
             Vec::new(),
-            HashSet::from_iter(once(PublicKey::new([0; 32]))),
+            BTreeSet::from_iter(once(PublicKey::new([0; 32]))),
             &account,
             base_key,
             BlockTime(0),
@@ -1121,7 +1121,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            HashSet::from_iter(once(PublicKey::new(base_acc_addr))),
+            BTreeSet::from_iter(once(PublicKey::new(base_acc_addr))),
             &account,
             contract_key,
             BlockTime(0),
@@ -1174,7 +1174,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            HashSet::from_iter(once(PublicKey::new(base_acc_addr))),
+            BTreeSet::from_iter(once(PublicKey::new(base_acc_addr))),
             &account,
             other_contract_key,
             BlockTime(0),
