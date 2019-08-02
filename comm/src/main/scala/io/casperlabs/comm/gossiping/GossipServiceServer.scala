@@ -37,39 +37,56 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
     // reply about those that we are going to download and relay them,
     // then asynchronously sync the DAG, schedule the downloads,
     // and finally notify the consensus engine.
-    newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying = false).start)
+    newBlocks(
+      request,
+      skipRelaying = false,
+      (syncOpt, response) => syncOpt.fold(().pure[F])(_.start.void).as(response)
+    )
 
-  /* Same as 'newBlocks' but with synchronous semantics, needed for bootstrapping and some tests. */
+  /* Same as 'newBlocks' but with synchronous semantics, needed for bootstrapping and some tests.
+   * Return any error we encountered during the sync explicitly to make sure the caller handles it. */
   def newBlocksSynchronous(
       request: NewBlocksRequest,
       skipRelaying: Boolean
-  ): F[NewBlocksResponse] =
-    newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying))
+  ): F[Either[SyncError, NewBlocksResponse]] =
+    newBlocks(
+      request,
+      skipRelaying,
+      (syncOpt, response) =>
+        syncOpt.fold(response.asRight[SyncError].pure[F])(_.map(_.as(response)))
+    )
 
-  private def newBlocks(
+  /** Creates the syncing procedure if there are blocks missing,
+    * then passes the sync to the caller so it can decide whether
+    * it wants to run it in the background or foreground. */
+  private def newBlocks[T](
       request: NewBlocksRequest,
-      sync: (Node, Set[ByteString]) => F[_]
-  ): F[NewBlocksResponse] =
+      skipRelaying: Boolean,
+      start: (Option[F[Either[SyncError, Unit]]], NewBlocksResponse) => F[T]
+  ): F[T] =
     request.blockHashes.distinct.toList
       .filterA { blockHash =>
         backend.hasBlock(blockHash).map(!_)
       }
       .flatMap { newBlockHashes =>
         if (newBlockHashes.isEmpty) {
-          Applicative[F].pure(NewBlocksResponse(isNew = false))
+          start(none, NewBlocksResponse(isNew = false))
         } else {
-          sync(request.getSender, newBlockHashes.toSet).as(NewBlocksResponse(isNew = true))
+          start(
+            sync(request.getSender, newBlockHashes.toSet, skipRelaying).some,
+            NewBlocksResponse(isNew = true)
+          )
         }
       }
 
-  /** Synchronize and download any missing blocks to get to the new ones. */
+  /** Synchronize and download any missing blocks to get to the new ones.
+    * This method will complete when all the downloads are ready. */
   private def sync(
       source: Node,
       newBlockHashes: Set[ByteString],
       skipRelaying: Boolean
-  ): F[Unit] = {
-    //TODO: Define handling strategies
-    def handleSyncError(syncError: SyncError): F[Unit] = {
+  ): F[Either[SyncError, Unit]] = {
+    def logSyncError(syncError: SyncError): F[Unit] = {
       val prefix  = s"Failed to sync DAG, source: ${source.show}."
       val message = syncError.getMessage
       Log[F].warn(s"$prefix $message")
@@ -84,7 +101,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
                      targetBlockHashes = newBlockHashes
                    )
       _ <- dagOrError.fold(
-            syncError => handleSyncError(syncError), { dag =>
+            syncError => logSyncError(syncError), { dag =>
               for {
                 _ <- Log[F].info(s"Syncing ${dag.size} blocks with ${source.show}...")
                 _ <- consensus.onPending(dag)
@@ -107,7 +124,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
               } yield ()
             }
           )
-    } yield ()
+    } yield dagOrError.map(_ => ())
 
     trySync.onError {
       case NonFatal(ex) =>
