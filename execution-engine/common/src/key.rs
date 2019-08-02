@@ -154,12 +154,12 @@ impl Key {
         Some(Key::local(seed_buff, &key_buff))
     }
 
-    pub fn hex_string(&self) -> String {
+    pub fn as_string(&self) -> String {
         match self {
-            Key::Account(addr) => addr_to_hex(addr),
-            Key::Hash(addr) => addr_to_hex(addr),
-            Key::URef(uref) => addr_to_hex(&uref.addr()),
-            Key::Local(hash) => addr_to_hex(hash),
+            Key::Account(addr) => format!("account-{}", base16::encode_lower(addr)),
+            Key::Hash(addr) => format!("hash-{}", base16::encode_lower(addr)),
+            Key::URef(uref) => uref.as_string(),
+            Key::Local(hash) => format!("local-{}", base16::encode_lower(hash)),
         }
     }
 

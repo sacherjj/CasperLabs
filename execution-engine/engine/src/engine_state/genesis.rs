@@ -206,20 +206,11 @@ fn create_mint_effects(
     // Create mint_contract
     let mint_known_urefs = {
         let mut ret: BTreeMap<String, Key> = BTreeMap::new();
-        ret.insert(balance_uref_key.hex_string(), balance_uref_key);
+        ret.insert(balance_uref_key.as_string(), balance_uref_key);
         // Insert PoS balance URef and its initial stakes so that PoS.
-        ret.insert(
-            pos_bonding_balance_key.hex_string(),
-            pos_bonding_balance_key,
-        );
-        ret.insert(
-            pos_payment_balance_key.hex_string(),
-            pos_payment_balance_key,
-        );
-        ret.insert(
-            pos_rewards_balance_key.hex_string(),
-            pos_rewards_balance_key,
-        );
+        ret.insert(pos_bonding_balance_key.as_string(), pos_bonding_balance_key);
+        ret.insert(pos_payment_balance_key.as_string(), pos_payment_balance_key);
+        ret.insert(pos_rewards_balance_key.as_string(), pos_rewards_balance_key);
         ret
     };
 
@@ -562,18 +553,18 @@ mod tests {
         let mint_known_urefs = {
             let mut ret: BTreeMap<String, Key> = BTreeMap::new();
             ret.insert(
-                pos_bonding_balance_uref_key.hex_string(),
+                pos_bonding_balance_uref_key.as_string(),
                 pos_bonding_balance_uref_key,
             );
             ret.insert(
-                pos_payment_balance_uref_key.hex_string(),
+                pos_payment_balance_uref_key.as_string(),
                 pos_payment_balance_uref_key,
             );
             ret.insert(
-                pos_rewards_balance_uref_key.hex_string(),
+                pos_rewards_balance_uref_key.as_string(),
                 pos_rewards_balance_uref_key,
             );
-            ret.insert(balance_uref_key.hex_string(), balance_uref_key);
+            ret.insert(balance_uref_key.as_string(), balance_uref_key);
             ret
         };
 
