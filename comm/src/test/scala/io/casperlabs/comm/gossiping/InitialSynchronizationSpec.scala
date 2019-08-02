@@ -218,6 +218,7 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
 
   object MockSynchronizer extends Synchronizer[Task] {
     def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
+    def downloaded(blockHash: ByteString): Task[Unit]             = ???
   }
 
   object MockDownloadManager extends DownloadManager[Task] {

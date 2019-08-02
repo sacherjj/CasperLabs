@@ -198,6 +198,7 @@ class SynchronizerSpec
         }
       }
     }
+
     "started multiple sync with the same node" should {
       "only run one sync at a time" in forAll(
         genPartialDagFromTips
@@ -218,6 +219,40 @@ class SynchronizerSpec
         }
       }
     }
+
+    "syncs repeatedy" when {
+      "using the same source" should {
+        "not traverse the DAG twice" in forAll(
+          genPartialDagFromTips
+        ) { dag =>
+          // This was copied from the iterative test.
+          log.reset()
+          val ancestorsDepthRequest: Int Refined Positive = 2
+          val grouped = {
+            val headGroup   = Vector(Vector(dag.head))
+            val generations = dag.tail.grouped(consensusConfig.dagWidth).toVector
+            val groups      = headGroup ++ generations
+            groups.grouped(ancestorsDepthRequest).toVector.map(_.flatten)
+          }
+          val finalParents = dag.takeRight(consensusConfig.dagWidth).map(_.blockHash).toSet
+          TestFixture((grouped ++ grouped): _*)(
+            maxDepthAncestorsRequest = ancestorsDepthRequest,
+            notInDag = bs => Task.now(!finalParents(bs))
+          ) { (synchronizer, variables) =>
+            for {
+              r1 <- synchronizer.syncDag(Node(), Set(dag.head.blockHash))
+              r2 <- synchronizer.syncDag(Node(), Set(dag.head.blockHash))
+              d1 = r1.fold(throw _, identity)
+              d2 = r2.fold(throw _, identity)
+            } yield {
+              d2.length should be < d1.length
+              variables.requestsCounter.get should be < ((grouped.size.toDouble / ancestorsDepthRequest).ceil.toInt + 1) * 2
+            }
+          }
+        }
+      }
+    }
+
     "asked to sync DAG" should {
       "ignore branching factor checks until specified count-threshold is reached" in forAll(
         genPartialDagFromTips(
@@ -342,6 +377,7 @@ object SynchronizerSpec {
         requestsGauge: AtomicInt,
         error: Option[RuntimeException],
         knownHashes: ListBuffer[ByteString],
+        // Each request will return the next DAG.
         dags: Vector[BlockSummary]*
     ): Task[GossipService[Task]] =
       Task.now {
@@ -359,9 +395,9 @@ object SynchronizerSpec {
               }
               .flatMap { _ =>
                 error.fold(
-                  Iterant.fromSeq[Task, BlockSummary](
+                  Iterant.fromSeq[Task, BlockSummary] {
                     dags.lift(requestsCounter.getAndIncrement()).getOrElse(Vector.empty)
-                  )
+                  }
                 ) { e =>
                   Iterant.raiseError(e)
                 }

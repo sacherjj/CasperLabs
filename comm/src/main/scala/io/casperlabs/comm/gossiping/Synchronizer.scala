@@ -19,6 +19,12 @@ trait Synchronizer[F[_]] {
       source: Node,
       targetBlockHashes: Set[ByteString]
   ): F[Either[SyncError, Vector[BlockSummary]]]
+
+  /** Called when the block is finally downloaded to release any caches
+    * the synchronizer keeps around. */
+  def downloaded(
+      blockHash: ByteString
+  ): F[Unit]
 }
 
 object Synchronizer {
