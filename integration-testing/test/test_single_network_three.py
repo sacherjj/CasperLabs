@@ -20,7 +20,6 @@ from test.cl_node.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
     wait_for_block_hashes_propagated_to_all_nodes,
 )
-from test import contract_hash
 from threading import Thread
 from time import sleep, time
 from typing import List

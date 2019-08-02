@@ -1,12 +1,7 @@
-from typing import TYPE_CHECKING
-
 import pytest
 
 from . import conftest
-
-if TYPE_CHECKING:
-    from .cl_node.casperlabsnode import KeyPair
-    from docker.client import DockerClient
+from docker.client import DockerClient
 
 
 CEREMONY_MASTER_NODE_KEYS = conftest.KeyPair(
@@ -24,5 +19,5 @@ VALIDATOR_B_KEYS = conftest.KeyPair(
 
 
 @pytest.mark.xfail
-def test_successful_genesis_ceremony(docker_client_session: "DockerClient") -> None:
+def test_successful_genesis_ceremony(docker_client_session: DockerClient) -> None:
     assert False

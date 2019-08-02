@@ -12,7 +12,6 @@ from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
 from test.cl_node.nonce_registry import NonceRegistry
-from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
 from pathlib import Path
 
 

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
-from typing import Union, Optional, List
+from typing import Union, List
 from pathlib import Path
 import base64
 import os
