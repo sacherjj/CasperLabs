@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::prelude::*;
-use std::iter::{once, FromIterator, Iterator};
+use std::iter::{self, FromIterator, Iterator};
 use std::str;
 
 use common::key::Key;
@@ -227,7 +227,7 @@ fn main() {
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
             account_addr,
-            BTreeSet::from_iter(once(public_key)),
+            BTreeSet::from_iter(iter::once(public_key)),
             BlockTime(timestamp),
             nonce,
             state_hash,

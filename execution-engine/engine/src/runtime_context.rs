@@ -718,7 +718,7 @@ where
 mod tests {
     use std::cell::RefCell;
     use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-    use std::iter::{once, FromIterator};
+    use std::iter::{self, FromIterator};
     use std::rc::Rc;
 
     use rand::RngCore;
@@ -825,7 +825,7 @@ mod tests {
             uref_map,
             known_urefs,
             Vec::new(),
-            BTreeSet::from_iter(once(PublicKey::new([0; 32]))),
+            BTreeSet::from_iter(vec![PublicKey::new([0; 32])]),
             &account,
             base_key,
             BlockTime(0),
@@ -907,7 +907,7 @@ mod tests {
 
         let contract = Value::Contract(Contract::new(
             Vec::new(),
-            once(("ValidURef".to_owned(), uref)).collect(),
+            iter::once(("ValidURef".to_owned(), uref)).collect(),
             1,
         ));
 
@@ -932,7 +932,7 @@ mod tests {
         let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
         let contract = Value::Contract(Contract::new(
             Vec::new(),
-            once(("ForgedURef".to_owned(), uref)).collect(),
+            iter::once(("ForgedURef".to_owned(), uref)).collect(),
             1,
         ));
 
@@ -949,7 +949,7 @@ mod tests {
         let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
         let contract: Value = Contract::new(
             Vec::new(),
-            once(("ValidURef".to_owned(), contract_uref)).collect(),
+            iter::once(("ValidURef".to_owned(), contract_uref)).collect(),
             1,
         )
         .into();
@@ -1048,7 +1048,8 @@ mod tests {
 
             rc.add_gs(base_key, named_key).expect("Adding should work.");
 
-            let named_key_transform = Transform::AddKeys(once((uref_name.clone(), uref)).collect());
+            let named_key_transform =
+                Transform::AddKeys(iter::once((uref_name.clone(), uref)).collect());
 
             assert_eq!(
                 *rc.effect().transforms.get(&base_key).unwrap(),
@@ -1121,7 +1122,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            BTreeSet::from_iter(once(PublicKey::new(base_acc_addr))),
+            BTreeSet::from_iter(vec![PublicKey::new(base_acc_addr)]),
             &account,
             contract_key,
             BlockTime(0),
@@ -1141,7 +1142,7 @@ mod tests {
             .expect("Adding should work.");
 
         let updated_contract: Value =
-            Contract::new(Vec::new(), once((uref_name, uref)).collect(), 1).into();
+            Contract::new(Vec::new(), iter::once((uref_name, uref)).collect(), 1).into();
 
         assert_eq!(
             *tc.borrow().effect().transforms.get(&contract_key).unwrap(),
@@ -1174,7 +1175,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            BTreeSet::from_iter(once(PublicKey::new(base_acc_addr))),
+            BTreeSet::from_iter(vec![PublicKey::new(base_acc_addr)]),
             &account,
             other_contract_key,
             BlockTime(0),
@@ -1537,7 +1538,7 @@ mod tests {
         let mut chacha_rng = create_rng(base_acc_addr, 0);
         let uref_name = "Foo".to_owned();
         let uref_key = random_uref_key(&mut chacha_rng, AccessRights::READ);
-        let mut uref_map = once((uref_name.clone(), uref_key)).collect();
+        let mut uref_map = iter::once((uref_name.clone(), uref_key)).collect();
         let mut runtime_context =
             mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
 
