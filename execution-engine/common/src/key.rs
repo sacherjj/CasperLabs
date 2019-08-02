@@ -154,6 +154,15 @@ impl Key {
         Some(Key::local(seed_buff, &key_buff))
     }
 
+    pub fn as_string(&self) -> String {
+        match self {
+            Key::Account(addr) => format!("account-{}", base16::encode_lower(addr)),
+            Key::Hash(addr) => format!("hash-{}", base16::encode_lower(addr)),
+            Key::URef(uref) => uref.as_string(),
+            Key::Local(hash) => format!("local-{}", base16::encode_lower(hash)),
+        }
+    }
+
     pub fn as_uref(&self) -> Option<&URef> {
         match self {
             Key::URef(uref) => Some(uref),
