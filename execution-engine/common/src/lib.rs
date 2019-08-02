@@ -122,6 +122,7 @@ mod ext_ffi {
             amount_ptr: *const u8,
             amount_size: usize,
         ) -> i32;
+        pub fn get_balance(purse_id_ptr: *const u8, purse_id_size: usize) -> i32;
     }
 }
 

@@ -298,7 +298,16 @@ where
 
     pub fn read_ls(&mut self, key: &[u8]) -> Result<Option<Value>, Error> {
         let seed = self.seed();
-        let key = Key::local(seed, key);
+        self.read_ls_with_seed(seed, key)
+    }
+
+    /// DO NOT EXPOSE THIS VIA THE FFI
+    pub fn read_ls_with_seed(
+        &mut self,
+        seed: [u8; LOCAL_SEED_SIZE],
+        key_bytes: &[u8],
+    ) -> Result<Option<Value>, Error> {
+        let key = Key::local(seed, key_bytes);
         let validated_key = Validated::new(key, Validated::valid)?;
         self.state
             .borrow_mut()
@@ -321,6 +330,15 @@ where
         let validated_key = Validated::new(*key, |key| {
             self.validate_readable(&key).and(self.validate_key(&key))
         })?;
+        self.state
+            .borrow_mut()
+            .read(self.correlation_id, &validated_key)
+            .map_err(Into::into)
+    }
+
+    /// DO NOT EXPOSE THIS VIA THE FFI
+    pub fn read_gs_direct(&mut self, key: &Key) -> Result<Option<Value>, Error> {
+        let validated_key = Validated::new(*key, Validated::valid)?;
         self.state
             .borrow_mut()
             .read(self.correlation_id, &validated_key)
