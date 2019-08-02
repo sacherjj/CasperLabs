@@ -379,6 +379,7 @@ if __name__ == "__main__":
     # For testing adding new networks.
     import sys
     import time
+    import docker
 
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)

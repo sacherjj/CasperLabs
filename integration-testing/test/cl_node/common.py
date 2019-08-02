@@ -29,7 +29,7 @@ class TestingContext:
     bonds_file: str
     bootstrap_keypair: KeyPair
     peers_keypairs: typing.List[KeyPair]
-    docker: "DockerClient"
+    docker: DockerClient
 
 
 def random_string(length: int) -> str:
@@ -56,10 +56,3 @@ class Network:
         self.peers = peers
         self.nodes = [bootstrap] + peers
         self.engines = engines
-
-
-class WaitTimeoutError(Exception):
-    def __init__(self, predicate: "PredicateProtocol", timeout: int) -> None:
-        super().__init__()
-        self.predicate = predicate
-        self.timeout = timeout

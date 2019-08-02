@@ -9,7 +9,7 @@ from multiprocessing import Process, Queue
 from queue import Empty
 from typing import Any, Dict, Optional, Tuple, Union
 from docker import DockerClient
-
+from docker.models.containers import Container
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 from test.cl_node.common import random_string
 from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
@@ -38,7 +38,7 @@ class LoggingThread(threading.Thread):
     def __init__(
         self,
         terminate_thread_event: threading.Event,
-        container: "Container",
+        container: Container,
         logger: logging.Logger,
     ) -> None:
         super().__init__()

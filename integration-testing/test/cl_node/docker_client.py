@@ -13,15 +13,16 @@ from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
 from test.cl_node.nonce_registry import NonceRegistry
 from pathlib import Path
+from test.cl_node.docker_node import DockerNode
 
 
 def resource(file_name):
-    RESOURCES_PATH = "../../resources/"
-    return Path(os.path.dirname(os.path.realpath(__file__)), RESOURCES_PATH, file_name)
+    resources_path = "../../resources/"
+    return Path(os.path.dirname(os.path.realpath(__file__)), resources_path, file_name)
 
 
 class DockerClient(CasperLabsClient, LoggingMixin):
-    def __init__(self, node: "DockerNode"):
+    def __init__(self, node: DockerNode):
         self.node = node
         self.abi = (
             None

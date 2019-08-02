@@ -7,7 +7,7 @@ from typing import List
 import pytest
 import typing_extensions
 
-from .common import Network, WaitTimeoutError
+from .common import Network
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
 
@@ -18,6 +18,13 @@ class PredicateProtocol(typing_extensions.Protocol):
 
     def is_satisfied(self) -> bool:
         ...
+
+
+class WaitTimeoutError(Exception):
+    def __init__(self, predicate: PredicateProtocol, timeout: int) -> None:
+        super().__init__()
+        self.predicate = predicate
+        self.timeout = timeout
 
 
 class LogsContainMessage:

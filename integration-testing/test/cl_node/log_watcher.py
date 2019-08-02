@@ -3,6 +3,7 @@ import logging
 import threading
 import time
 from typing import Any
+from docker.models.containers import Container
 
 
 class LogWatcherThread(threading.Thread):
@@ -12,7 +13,7 @@ class LogWatcherThread(threading.Thread):
     Replaces full log parsing and searching with wait methods.
     """
 
-    def __init__(self, container: "Container") -> None:
+    def __init__(self, container: Container) -> None:
         super().__init__()
         self.located_event = threading.Event()
         self.stop_event = threading.Event()
@@ -54,7 +55,7 @@ class LogWatcherThread(threading.Thread):
 class TextInLogLine(LogWatcherThread):
     search_text = None
 
-    def __init__(self, container: "Container") -> None:
+    def __init__(self, container: Container) -> None:
         super().__init__(container)
 
     def condition_met(self, line: str) -> bool:
