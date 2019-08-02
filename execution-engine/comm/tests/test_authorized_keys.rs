@@ -38,7 +38,7 @@ fn should_deploy_with_authorized_identity_key() {
 #[ignore]
 #[test]
 fn should_raise_auth_failure_with_invalid_key() {
-    // tests that authorized keys that does not belong to account raises AuthorizationFailure
+    // tests that authorized keys that does not belong to account raises AuthorizationError
     let key_1 = [254; 32];
     assert_ne!(GENESIS_ADDR, key_1);
     // Basic deploy with single key
@@ -67,13 +67,13 @@ fn should_raise_auth_failure_with_invalid_key() {
     assert!(deploy_result.has_precondition_failure());
     let message = deploy_result.get_precondition_failure().get_message();
 
-    assert_eq!(message, format!("{}", error::Error::AuthorizationFailure))
+    assert_eq!(message, format!("{}", error::Error::AuthorizationError))
 }
 
 #[ignore]
 #[test]
 fn should_raise_auth_failure_with_invalid_keys() {
-    // tests that authorized keys that does not belong to account raises AuthorizationFailure
+    // tests that authorized keys that does not belong to account raises AuthorizationError
     let key_1 = [254; 32];
     let key_2 = [253; 32];
     let key_3 = [252; 32];
@@ -110,12 +110,12 @@ fn should_raise_auth_failure_with_invalid_keys() {
     assert!(deploy_result.has_precondition_failure());
     let message = deploy_result.get_precondition_failure().get_message();
 
-    assert_eq!(message, format!("{}", error::Error::AuthorizationFailure))
+    assert_eq!(message, format!("{}", error::Error::AuthorizationError))
 }
 
 #[ignore]
 #[test]
-fn should_raise_deploy_with_insufficient_weight() {
+fn should_raise_deploy_authorization_failure() {
     // tests that authorized keys needs sufficient cumulative weight
     let key_1 = [254; 32];
     let key_2 = [253; 32];
@@ -199,52 +199,15 @@ fn should_raise_deploy_with_insufficient_weight() {
         );
     }
 
-    // With deploy threshold == 3 using single secondary key
-    // with weight == 2 should raise deploy authorization failure.
+    // identity key (w: 1) and key_1 (w: 2) passes threshold of 3
     let result3 = WasmTestBuilder::from_result(result2)
         .exec_with_args_and_keys(
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
             4, // nonce
-            // Maintain current thresholds
-            (Weight::new(5), Weight::new(4)), //args
-            vec![PublicKey::new(key_1)],
-        )
-        .commit()
-        .finish();
-
-    {
-        let deploy_result = result3
-            .builder()
-            .get_exec_response(0)
-            .expect("should have exec response")
-            .get_success()
-            .get_deploy_results()
-            .get(0)
-            .expect("should have at least one deploy result");
-
-        assert!(deploy_result.has_execution_result(), "{:?}", deploy_result);
-        let execution_result = deploy_result.get_execution_result();
-        assert!(execution_result.has_error());
-        let error = execution_result.get_error();
-        assert!(error.has_exec_error());
-        let exec_error = error.get_exec_error();
-        assert_eq!(
-            exec_error.get_message(),
-            format!("{}", execution::Error::DeploymentAuthorizationFailure)
-        );
-    }
-
-    // identity key (w: 1) and key_1 (w: 2) passes threshold of 3
-    let result4 = WasmTestBuilder::from_result(result3)
-        .exec_with_args_and_keys(
-            GENESIS_ADDR,
-            "authorized_keys.wasm",
-            DEFAULT_BLOCK_TIME,
-            4, // nonce
             // change deployment threshold to 4
-            (Weight::new(5), Weight::new(4)), //args
+            (Weight::new(6), Weight::new(5)), //args
             vec![PublicKey::new(GENESIS_ADDR), PublicKey::new(key_1)],
         )
         .expect_success()
@@ -252,21 +215,21 @@ fn should_raise_deploy_with_insufficient_weight() {
         .finish();
 
     // deployment threshold is now 4
-    // failure: identity key weight + key_1 weight < deployment threshold
-    let result5 = WasmTestBuilder::from_result(result4)
+    // failure: key_2 weight + key_1 weight < deployment threshold
+    let result4 = WasmTestBuilder::from_result(result3)
         .exec_with_args_and_keys(
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
             5,                                // nonce
             (Weight::new(0), Weight::new(0)), //args
-            vec![PublicKey::new(GENESIS_ADDR), PublicKey::new(key_1)],
+            vec![PublicKey::new(key_2), PublicKey::new(key_1)],
         )
         .commit()
         .finish();
 
     {
-        let deploy_result = result5
+        let deploy_result = result4
             .builder()
             .get_exec_response(0)
             .expect("should have exec response")
@@ -288,7 +251,7 @@ fn should_raise_deploy_with_insufficient_weight() {
     }
 
     // success: identity key weight + key_1 weight + key_2 weight >= deployment threshold
-    WasmTestBuilder::from_result(result5)
+    WasmTestBuilder::from_result(result4)
         .exec_with_args_and_keys(
             GENESIS_ADDR,
             "authorized_keys.wasm",
@@ -308,7 +271,7 @@ fn should_raise_deploy_with_insufficient_weight() {
 
 #[ignore]
 #[test]
-fn should_authorize_deploy_with_multiple_keys_sufficient_weight() {
+fn should_authorize_deploy_with_multiple_keys() {
     // tests that authorized keys needs sufficient cumulative weight
     // and each of the associated keys is greater than threshold
 
@@ -338,23 +301,6 @@ fn should_authorize_deploy_with_multiple_keys_sufficient_weight() {
         )
         .expect_success()
         .commit()
-        // This should execute successfuly - change deploy and key management
-        // thresholds.
-        .exec_with_args_and_keys(
-            GENESIS_ADDR,
-            "authorized_keys.wasm",
-            DEFAULT_BLOCK_TIME,
-            3, // nonce
-            // Deploy threshold is equal to 3, keymgmnt is still 1.
-            // Even after verifying weights and thresholds to not
-            // lock out the account, those values should work as
-            // account now has 1. identity key with weight=1 and
-            // a key with weight=2.
-            (Weight::new(3), Weight::new(2)), //args
-            vec![PublicKey::new(GENESIS_ADDR)],
-        )
-        .expect_success()
-        .commit()
         .finish();
 
     // key_1 (w: 2) key_2 (w: 2) each passes default threshold of 1
@@ -363,10 +309,10 @@ fn should_authorize_deploy_with_multiple_keys_sufficient_weight() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            4, // nonce
+            3, // nonce
             // change deployment threshold to 4
             (Weight::new(0), Weight::new(0)), //args
-            vec![PublicKey::new(key_1), PublicKey::new(key_1)],
+            vec![PublicKey::new(key_2), PublicKey::new(key_1)],
         )
         .expect_success()
         .commit();

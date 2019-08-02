@@ -712,7 +712,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     EngineError::StorageError(storage_err) => {
                         execution_error(storage_err.to_string(), cost, effect)
                     }
-                    error @ EngineError::AuthorizationFailure => {
+                    error @ EngineError::AuthorizationError => {
                         precondition_failure(error.to_string())
                     }
                     EngineError::ExecError(exec_error) => match exec_error {

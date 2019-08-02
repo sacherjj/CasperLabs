@@ -497,13 +497,12 @@ impl AssociatedKeys {
         self.0.get(key)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&PublicKey, &Weight)> {
-        self.0.iter()
+    pub fn contains_key(&self, key: &PublicKey) -> bool {
+        self.0.contains_key(key)
     }
 
-    /// Checks whether all authorization keys are associated with this account
-    pub fn has_associated_keys(&self, authorization_keys: &[PublicKey]) -> bool {
-        authorization_keys.iter().all(|e| self.0.contains_key(e))
+    pub fn iter(&self) -> impl Iterator<Item = (&PublicKey, &Weight)> {
+        self.0.iter()
     }
 
     /// Calculates total weight of authorization keys provided by an argument
@@ -658,8 +657,10 @@ impl Account {
     }
 
     /// Checks whether all authorization keys are associated with this account
-    pub fn has_associated_keys(&self, authorization_keys: &[PublicKey]) -> bool {
-        self.associated_keys.has_associated_keys(authorization_keys)
+    pub fn can_authorize(&self, authorization_keys: &[PublicKey]) -> bool {
+        authorization_keys
+            .iter()
+            .all(|e| self.associated_keys.contains_key(e))
     }
 
     /// Checks whether the sum of the weights of all authorization keys is greater
@@ -936,11 +937,12 @@ mod tests {
     }
 
     #[test]
-    fn associated_keys_has_all_authorized() {
+    fn associated_keys_can_authorize_keys() {
         let key_1 = PublicKey::new([0; 32]);
         let key_2 = PublicKey::new([1; 32]);
         let key_3 = PublicKey::new([2; 32]);
         let mut keys = AssociatedKeys::empty();
+
         keys.add_key(key_2, Weight::new(2))
             .expect("should add key_1");
         keys.add_key(key_1, Weight::new(1))
@@ -948,11 +950,31 @@ mod tests {
         keys.add_key(key_3, Weight::new(3))
             .expect("should add key_1");
 
-        assert!(keys.has_associated_keys(&[key_3, key_2, key_1]));
-        assert!(keys.has_associated_keys(&[key_1, key_3, key_2]));
+        let account = Account::new(
+            [0u8; 32],
+            0,
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            keys,
+            // deploy: 33 (3*11)
+            ActionThresholds::new(Weight::new(33), Weight::new(48))
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
 
-        assert!(keys.has_associated_keys(&[key_1, key_2]));
-        assert!(keys.has_associated_keys(&[key_1]));
+        assert!(account.can_authorize(&[key_3, key_2, key_1]));
+        assert!(account.can_authorize(&[key_1, key_3, key_2]));
+
+        assert!(account.can_authorize(&[key_1, key_2]));
+        assert!(account.can_authorize(&[key_1]));
+
+        assert!(!account.can_authorize(&[key_1, key_2, PublicKey::new([42; 32])]));
+        assert!(!account.can_authorize(&[PublicKey::new([42; 32]), key_1, key_2]));
+        assert!(!account.can_authorize(&[
+            PublicKey::new([43; 32]),
+            PublicKey::new([44; 32]),
+            PublicKey::new([42; 32])
+        ]));
     }
 
     #[test]
