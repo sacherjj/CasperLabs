@@ -40,6 +40,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "casperlabs-contract-ffi"
 version = "0.10.0"
 dependencies = [
+ "binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",

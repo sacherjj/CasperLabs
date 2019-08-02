@@ -69,6 +69,20 @@ object Main {
           contractCode,
           privateKey
         )
+      case Transfer(
+          amount,
+          recipientPublicKeyBase64,
+          nonce,
+          contractCode,
+          privateKey
+          ) =>
+        DeployRuntime.transferCLI(
+          nonce,
+          contractCode,
+          privateKey,
+          recipientPublicKeyBase64,
+          amount
+        )
       case Deploy(
           from,
           nonce,

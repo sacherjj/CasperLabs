@@ -33,6 +33,13 @@ final case class Bond(
     sessionCode: Option[File],
     privateKey: File
 ) extends Configuration
+final case class Transfer(
+    amount: Long,
+    recipientPublicKeyBase64: String,
+    nonce: Long,
+    sessionCode: Option[File],
+    privateKey: File
+) extends Configuration
 final case class Unbond(
     amount: Option[Long],
     nonce: Long,
@@ -99,10 +106,18 @@ object Configuration {
         )
       case options.bond =>
         Bond(
-          options.unbond.amount(),
-          options.unbond.nonce(),
-          options.unbond.session.toOption,
-          options.unbond.privateKey()
+          options.bond.amount(),
+          options.bond.nonce(),
+          options.bond.session.toOption,
+          options.bond.privateKey()
+        )
+      case options.transfer =>
+        Transfer(
+          options.transfer.amount(),
+          options.transfer.targetAccount(),
+          options.transfer.nonce(),
+          options.transfer.session.toOption,
+          options.transfer.privateKey()
         )
       case options.visualizeBlocks =>
         VisualizeDag(

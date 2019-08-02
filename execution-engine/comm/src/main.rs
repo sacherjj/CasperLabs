@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
-use execution_engine::engine_state::EngineState;
+use execution_engine::engine_state::{EngineConfig, EngineState};
 use lmdb::DatabaseFlags;
 
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
@@ -77,6 +77,11 @@ const ARG_LOG_LEVEL: &str = "loglevel";
 const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
 const ARG_LOG_LEVEL_HELP: &str = "[ fatal | error | warning | info | debug ]";
 
+// use-payment-code feature flag
+const ARG_USE_PAYMENT_CODE: &str = "use-payment-code";
+const ARG_USE_PAYMENT_CODE_SHORT: &str = "x";
+const ARG_USE_PAYMENT_CODE_HELP: &str = "Enables the use of payment code";
+
 // runnable
 const SIGINT_HANDLE_EXPECT: &str = "Error setting Ctrl-C handler";
 const RUNNABLE_CHECK_INTERVAL_SECONDS: u64 = 3;
@@ -111,7 +116,9 @@ fn main() {
 
     let map_size = get_map_size(matches);
 
-    let _server = get_grpc_server(&socket, data_dir, map_size);
+    let engine_config: EngineConfig = get_engine_config(matches);
+
+    let _server = get_grpc_server(&socket, data_dir, map_size, engine_config);
 
     log_listening_message(&socket);
 
@@ -174,6 +181,12 @@ fn get_args() -> ArgMatches<'static> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name(ARG_USE_PAYMENT_CODE)
+                .short(ARG_USE_PAYMENT_CODE_SHORT)
+                .long(ARG_USE_PAYMENT_CODE)
+                .help(ARG_USE_PAYMENT_CODE_HELP),
+        )
+        .arg(
             Arg::with_name(ARG_SOCKET)
                 .required(true)
                 .help(ARG_SOCKET_HELP)
@@ -225,9 +238,20 @@ fn get_map_size(matches: &ArgMatches) -> usize {
     page_size * pages
 }
 
+/// Parses `use-payment-code` argument and returns an [`EngineConfig`].
+fn get_engine_config(matches: &ArgMatches) -> EngineConfig {
+    let use_payment_code = matches.is_present(ARG_USE_PAYMENT_CODE);
+    EngineConfig::new().use_payment_code(use_payment_code)
+}
+
 /// Builds and returns a gRPC server.
-fn get_grpc_server(socket: &socket::Socket, data_dir: PathBuf, map_size: usize) -> grpc::Server {
-    let engine_state = get_engine_state(data_dir, map_size);
+fn get_grpc_server(
+    socket: &socket::Socket,
+    data_dir: PathBuf,
+    map_size: usize,
+    engine_config: EngineConfig,
+) -> grpc::Server {
+    let engine_state = get_engine_state(data_dir, map_size, engine_config);
 
     engine_server::new(socket.as_str(), engine_state)
         .build()
@@ -235,7 +259,11 @@ fn get_grpc_server(socket: &socket::Socket, data_dir: PathBuf, map_size: usize) 
 }
 
 /// Builds and returns engine global state
-fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGlobalState> {
+fn get_engine_state(
+    data_dir: PathBuf,
+    map_size: usize,
+    engine_config: EngineConfig,
+) -> EngineState<LmdbGlobalState> {
     let environment = {
         let ret = LmdbEnvironment::new(&data_dir, map_size).expect(LMDB_ENVIRONMENT_EXPECT);
         Arc::new(ret)
@@ -250,7 +278,7 @@ fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGloba
     let global_state = LmdbGlobalState::empty(Arc::clone(&environment), Arc::clone(&trie_store))
         .expect(LMDB_GLOBAL_STATE_EXPECT);
 
-    EngineState::new(global_state)
+    EngineState::new(global_state, engine_config)
 }
 
 /// Builds and returns log_settings

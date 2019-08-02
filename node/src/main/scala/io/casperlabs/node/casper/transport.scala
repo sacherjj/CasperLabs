@@ -9,17 +9,20 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.foldable._
 import cats.syntax.functor._
+import com.github.ghik.silencer.silent
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
+import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.util.comm.CasperPacketHandler
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
-import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import io.casperlabs.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.rp._
 import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
@@ -31,13 +34,15 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
+
 import scala.concurrent.duration._
 
 /** Create the Casper stack using the TransportLayer and CasperPacketHandler. */
 package object transport {
-  implicit def eitherTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
+  def eitherTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
 
+  //@silent("is never used")
   def apply(
       port: Int,
       conf: Configuration,
@@ -58,8 +63,11 @@ package object transport {
       executionEngineService: ExecutionEngineService[Effect],
       finalizationHandler: LastFinalizedBlockHashContainer[Effect],
       filesApiEff: FilesAPI[Effect],
+      validation: Validation[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {
+    implicit val rpConfAsk = effects.rpConfAsk(rpConfState)
+    implicit val timeEff   = Time[Effect]
     for {
       tcpConnections <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
 
@@ -68,7 +76,7 @@ package object transport {
         (folder.deleteDirectory[Task]().whenA(folder.toFile.exists()) *> folder.pure[Task]).toEffect
       }
 
-      transport = {
+      implicit0(transport: TransportLayer[Task]) = {
         effects.tcpTransportLayer(
           port,
           conf.tls.certificate,
@@ -78,22 +86,15 @@ package object transport {
           commTmpFolder
         )(grpcScheduler, log, metrics, tcpConnections)
       }
-      transportEff = TransportLayer.eitherTTransportLayer(Monad[Task], log, transport)
+      implicit0(transportEff: TransportLayer[Effect]) = TransportLayer
+        .eitherTTransportLayer[Task]
 
-      lab    <- LastApprovedBlock.of[Task].toEffect
-      labEff = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
+      implicit0(lab: LastApprovedBlock[Task]) <- LastApprovedBlock.of[Task].toEffect
 
-      rpConfAsk    = effects.rpConfAsk(rpConfState)
-      rpConfAskEff = eitherTrpConfAsk(rpConfAsk)
-      peerNodeAsk  = effects.peerNodeAsk(rpConfState)
+      implicit0(labEff: LastApprovedBlock[Effect]) = LastApprovedBlock
+        .eitherTLastApprovedBlock[CommError, Task]
 
-      connectionsCellEff: ConnectionsCell[Effect] = Cell.eitherTCell(Monad[Task], connectionsCell)
-
-      nodeDiscoveryEff: NodeDiscovery[Effect] = NodeDiscovery
-        .eitherTNodeDiscovery(Monad[Task], nodeDiscovery)
-
-      time                  = effects.time
-      timeEff: Time[Effect] = Time.eitherTTime(Monad[Task], time)
+      peerNodeAsk = effects.peerNodeAsk(rpConfState)
 
       defaultTimeout = conf.server.defaultTimeout
 
@@ -102,48 +103,18 @@ package object transport {
                                 conf.casper,
                                 defaultTimeout,
                                 _.value
-                              )(
-                                labEff,
-                                metricsEff,
-                                blockStore,
-                                connectionsCellEff,
-                                nodeDiscoveryEff,
-                                transportEff,
-                                ErrorHandler[Effect],
-                                rpConfAskEff,
-                                safetyOracle,
-                                Sync[Effect],
-                                Concurrent[Effect],
-                                timeEff,
-                                logEff,
-                                multiParentCasperRef,
-                                blockDagStorage,
-                                executionEngineService,
-                                finalizationHandler,
-                                filesApiEff,
-                                scheduler
                               )
 
-      packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
-        Applicative[Effect],
-        Log.eitherTLog(Monad[Task], log),
-        ErrorHandler[Effect]
-      )
+      implicit0(packetHandler: PacketHandler[Effect]) = PacketHandler
+        .pf[Effect](casperPacketHandler.handle)(
+          Applicative[Effect],
+          Log.eitherTLog(Monad[Task], log),
+          ErrorHandler[Effect]
+        )
 
       // Start receiving messages from peers.
       _ <- transportEff.receive(
-            pm =>
-              HandleMessages.handle[Effect](pm, defaultTimeout)(
-                Sync[Effect],
-                logEff,
-                timeEff,
-                metricsEff,
-                transportEff,
-                ErrorHandler[Effect],
-                packetHandler,
-                connectionsCellEff,
-                rpConfAskEff
-              ),
+            pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
       _ <- logEff.info(s"Started transport layer on port $port.")
@@ -161,15 +132,7 @@ package object transport {
                        transport,
                        metrics
                      ).toEffect
-                 _ <- refreshConnections(
-                       timeEff,
-                       logEff,
-                       metricsEff,
-                       connectionsCellEff,
-                       rpConfAskEff,
-                       transportEff,
-                       nodeDiscoveryEff
-                     )
+                 _ <- refreshConnections
                } yield ()).forever
              }
 

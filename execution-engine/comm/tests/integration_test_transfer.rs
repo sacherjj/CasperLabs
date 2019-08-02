@@ -87,7 +87,7 @@ fn should_transfer_to_account() {
     let account_key = Key::Account(ACCOUNT_1_ADDR);
 
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, Default::default());
 
     // Run genesis
 
@@ -185,7 +185,7 @@ fn should_transfer_from_account_to_account() {
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, Default::default());
 
     // Run genesis
 
@@ -334,7 +334,7 @@ fn should_transfer_to_existing_account() {
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, Default::default());
 
     // Run genesis
 
@@ -489,7 +489,7 @@ fn should_transfer_to_existing_account() {
 #[test]
 fn should_fail_when_insufficient_funds() {
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, Default::default());
 
     // Run genesis
 
@@ -602,7 +602,7 @@ fn should_create_purse() {
     let genesis_account_key = Key::Account(GENESIS_ADDR);
     let account_key = Key::Account(ACCOUNT_1_ADDR);
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, Default::default());
 
     // Run genesis & set up an account
 
