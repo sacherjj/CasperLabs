@@ -860,6 +860,26 @@ where
             Err(_) => Ok(PurseTransferResult::TransferError),
         }
     }
+
+    fn get_balance(&mut self, purse_id: PurseId) -> Result<Option<U512>, Error> {
+        let seed = self.get_mint_contract_uref()?.addr();
+
+        let key = purse_id.value().addr().to_bytes()?;
+
+        let uref_key = match self.context.read_ls_with_seed(seed, &key)? {
+            Some(Value::Key(uref_key @ Key::URef(_))) => uref_key,
+            Some(_) => panic!("expected Value::Key(Key::Uref(_))"),
+            None => return Ok(None),
+        };
+
+        let ret = match self.context.read_gs_direct(&uref_key)? {
+            Some(Value::UInt512(balance)) => Some(balance),
+            Some(_) => panic!("expected Value::UInt512(_)"),
+            None => None,
+        };
+
+        Ok(ret)
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -1237,6 +1257,28 @@ where
                     amount_size,
                 )?;
                 Ok(Some(RuntimeValue::I32(ret.into())))
+            }
+
+            FunctionIndex::GetBalanceIndex => {
+                // args(0) = pointer to purse_id input
+                // args(1) = length of purse_id
+                let (ptr, ptr_size): (u32, u32) = Args::parse(args)?;
+
+                let purse_id: PurseId = {
+                    let bytes = self.bytes_from_mem(ptr, ptr_size as usize)?;
+                    deserialize(&bytes).map_err(Error::BytesRepr)?
+                };
+
+                let ret = match self.get_balance(purse_id)? {
+                    Some(balance) => {
+                        let balance_bytes = balance.to_bytes().map_err(Error::BytesRepr)?;
+                        self.host_buf = balance_bytes;
+                        self.host_buf.len() as i32
+                    }
+                    None => 0i32,
+                };
+
+                Ok(Some(RuntimeValue::I32(ret)))
             }
         }
     }

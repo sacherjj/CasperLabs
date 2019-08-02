@@ -402,6 +402,25 @@ pub fn create_purse() -> PurseId {
     }
 }
 
+/// Gets the balance of a given purse
+pub fn get_balance(purse_id: PurseId) -> Option<U512> {
+    let (purse_id_ptr, purse_id_size, _bytes) = to_ptr(&purse_id);
+
+    let balance_bytes: Vec<u8> = unsafe {
+        let value_size = ext_ffi::get_balance(purse_id_ptr, purse_id_size) as usize;
+        if value_size == 0 {
+            return None;
+        }
+        let dest_ptr = alloc_bytes(value_size);
+        ext_ffi::get_read(dest_ptr);
+        Vec::from_raw_parts(dest_ptr, value_size, value_size)
+    };
+
+    let balance: U512 = deserialize(&balance_bytes).unwrap_or_else(|_| revert(666));
+
+    Some(balance)
+}
+
 pub fn main_purse() -> PurseId {
     // TODO: this could be more efficient, bringing the entire account
     // object across the host/wasm boundary only to use 32 bytes of
