@@ -155,7 +155,7 @@ fn should_raise_deploy_with_insufficient_weight() {
             // lock out the account, those values should work as
             // account now has 1. identity key with weight=1 and
             // a key with weight=2.
-            (Weight::new(3), Weight::new(4)), //args
+            (Weight::new(4), Weight::new(3)), //args
             vec![PublicKey::new(GENESIS_ADDR)],
         )
         .expect_success()
@@ -171,7 +171,7 @@ fn should_raise_deploy_with_insufficient_weight() {
             DEFAULT_BLOCK_TIME,
             4, // nonce
             // Next deploy will see deploy threshold == 4, keymgmnt == 5
-            (Weight::new(4), Weight::new(5)), //args
+            (Weight::new(5), Weight::new(4)), //args
             vec![PublicKey::new(key_1)],
         )
         .commit()
@@ -208,7 +208,7 @@ fn should_raise_deploy_with_insufficient_weight() {
             DEFAULT_BLOCK_TIME,
             4, // nonce
             // Maintain current thresholds
-            (Weight::new(4), Weight::new(5)), //args
+            (Weight::new(5), Weight::new(4)), //args
             vec![PublicKey::new(key_1)],
         )
         .commit()
@@ -244,7 +244,7 @@ fn should_raise_deploy_with_insufficient_weight() {
             DEFAULT_BLOCK_TIME,
             4, // nonce
             // change deployment threshold to 4
-            (Weight::new(4), Weight::new(5)), //args
+            (Weight::new(5), Weight::new(4)), //args
             vec![PublicKey::new(GENESIS_ADDR), PublicKey::new(key_1)],
         )
         .expect_success()
@@ -286,7 +286,7 @@ fn should_raise_deploy_with_insufficient_weight() {
             format!("{}", execution::Error::DeploymentAuthorizationFailure)
         );
     }
-    
+
     // success: identity key weight + key_1 weight + key_2 weight >= deployment threshold
     WasmTestBuilder::from_result(result5)
         .exec_with_args_and_keys(
@@ -295,12 +295,15 @@ fn should_raise_deploy_with_insufficient_weight() {
             DEFAULT_BLOCK_TIME,
             5,                                // nonce
             (Weight::new(0), Weight::new(0)), //args
-            vec![PublicKey::new(GENESIS_ADDR), PublicKey::new(key_1), PublicKey::new(key_2)],
+            vec![
+                PublicKey::new(GENESIS_ADDR),
+                PublicKey::new(key_1),
+                PublicKey::new(key_2),
+            ],
         )
         .commit()
         .expect_success()
         .finish();
-
 }
 
 #[ignore]
@@ -347,7 +350,7 @@ fn should_authorize_deploy_with_multiple_keys_sufficient_weight() {
             // lock out the account, those values should work as
             // account now has 1. identity key with weight=1 and
             // a key with weight=2.
-            (Weight::new(2), Weight::new(3)), //args
+            (Weight::new(3), Weight::new(2)), //args
             vec![PublicKey::new(GENESIS_ADDR)],
         )
         .expect_success()
