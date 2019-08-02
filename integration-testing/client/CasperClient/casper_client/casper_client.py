@@ -23,6 +23,7 @@ import struct
 import json
 from operator import add
 from functools import reduce
+import ast
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
 from .control_pb2_grpc import ControlServiceStub
@@ -386,11 +387,28 @@ def guarded_command(function):
     return wrapper
 
 
+def _hexify_line(line):
+    if ': ' not in line:
+        return line
+    left, right = line.split(': ', 1)
+    if right[0] == '"' and right[-1] == '"':
+        bytes_repr = right.strip()[1:-1]
+
+        h = ast.literal_eval(f"b'{bytes_repr}'")
+        return len(h) == 32 and f'{left}: "{h.hex()}"' or line
+    else:
+        return line
+
+
+def hexify(s):
+    return "\n".join(_hexify_line(line) for line in s.splitlines())
+
+
 def _show_blocks(response):
     count = 0
     for block in response:
-        print('------------- block {} ---------------'.format(block.blockNumber))
-        print(block)
+        print('------------- block {} ---------------'.format(count))
+        print(hexify(str(block)))
         print('-----------------------------------------------------\n')
         count += 1
     print('count:', count)
