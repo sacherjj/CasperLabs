@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use grpc::RequestOptions;
 
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+use common::value::account::PublicKey;
 use execution_engine::engine_state::EngineState;
 use storage::global_state::in_memory::InMemoryGlobalState;
 
@@ -46,6 +47,7 @@ fn should_execute_contracts_which_provide_extra_urefs() {
         DEFAULT_BLOCK_TIME,
         1,
         (),
+        vec![PublicKey::new(GENESIS_ADDR)],
     );
 
     let exec_response = engine_state
@@ -75,6 +77,7 @@ fn should_execute_contracts_which_provide_extra_urefs() {
         DEFAULT_BLOCK_TIME,
         1,
         (),
+        vec![PublicKey::new(GENESIS_ADDR)],
     );
 
     let exec_response = engine_state

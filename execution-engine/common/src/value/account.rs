@@ -1,7 +1,7 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
 use crate::key::{addr_to_hex, Key, UREF_SIZE};
 use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
-use alloc::collections::btree_map::BTreeMap;
+use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
@@ -497,8 +497,23 @@ impl AssociatedKeys {
         self.0.get(key)
     }
 
+    pub fn contains_key(&self, key: &PublicKey) -> bool {
+        self.0.contains_key(key)
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (&PublicKey, &Weight)> {
         self.0.iter()
+    }
+
+    /// Calculates total weight of authorization keys provided by an argument
+    pub fn calculate_keys_weight(&self, authorization_keys: &BTreeSet<PublicKey>) -> Weight {
+        let total = authorization_keys
+            .iter()
+            .filter_map(|key| self.0.get(key))
+            .map(|w| w.value())
+            .sum();
+
+        Weight::new(total)
     }
 }
 
@@ -639,6 +654,23 @@ impl Account {
     ) -> Result<(), SetThresholdFailure> {
         // TODO(mpapierski): Authorized keys check EE-377
         self.action_thresholds.set_threshold(action_type, weight)
+    }
+
+    /// Checks whether all authorization keys are associated with this account
+    pub fn can_authorize(&self, authorization_keys: &BTreeSet<PublicKey>) -> bool {
+        authorization_keys
+            .iter()
+            .all(|e| self.associated_keys.contains_key(e))
+    }
+
+    /// Checks whether the sum of the weights of all authorization keys is greater
+    /// or equal to deploy threshold.
+    pub fn can_deploy_with(&self, authorization_keys: &BTreeSet<PublicKey>) -> bool {
+        let total_weight = self
+            .associated_keys
+            .calculate_keys_weight(authorization_keys);
+
+        total_weight >= *self.action_thresholds().deployment()
     }
 }
 
@@ -839,9 +871,10 @@ mod tests {
         Account, AccountActivity, ActionThresholds, AddKeyFailure, AssociatedKeys, BlockTime,
         PublicKey, PurseId, Weight, KEY_SIZE, MAX_KEYS,
     };
-    use alloc::collections::btree_map::BTreeMap;
+    use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
     use alloc::vec::Vec;
     use core::convert::TryFrom;
+    use core::iter::FromIterator;
 
     #[test]
     fn incremented_nonce() {
@@ -902,6 +935,123 @@ mod tests {
         let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk).is_ok());
         assert!(keys.remove_key(&PublicKey([1u8; KEY_SIZE])).is_err());
+    }
+
+    #[test]
+    fn associated_keys_can_authorize_keys() {
+        let key_1 = PublicKey::new([0; 32]);
+        let key_2 = PublicKey::new([1; 32]);
+        let key_3 = PublicKey::new([2; 32]);
+        let mut keys = AssociatedKeys::empty();
+
+        keys.add_key(key_2, Weight::new(2))
+            .expect("should add key_1");
+        keys.add_key(key_1, Weight::new(1))
+            .expect("should add key_1");
+        keys.add_key(key_3, Weight::new(3))
+            .expect("should add key_1");
+
+        let account = Account::new(
+            [0u8; 32],
+            0,
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            keys,
+            // deploy: 33 (3*11)
+            ActionThresholds::new(Weight::new(33), Weight::new(48))
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_3, key_2, key_1])));
+        assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_1, key_3, key_2])));
+
+        assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_1, key_2])));
+        assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_1])));
+
+        assert!(!account.can_authorize(&BTreeSet::from_iter(vec![
+            key_1,
+            key_2,
+            PublicKey::new([42; 32])
+        ])));
+        assert!(!account.can_authorize(&BTreeSet::from_iter(vec![
+            PublicKey::new([42; 32]),
+            key_1,
+            key_2
+        ])));
+        assert!(!account.can_authorize(&BTreeSet::from_iter(vec![
+            PublicKey::new([43; 32]),
+            PublicKey::new([44; 32]),
+            PublicKey::new([42; 32])
+        ])));
+    }
+
+    #[test]
+    fn associated_keys_calculate_keys_once() {
+        let key_1 = PublicKey::new([0; 32]);
+        let key_2 = PublicKey::new([1; 32]);
+        let key_3 = PublicKey::new([2; 32]);
+        let mut keys = AssociatedKeys::empty();
+
+        keys.add_key(key_2, Weight::new(2))
+            .expect("should add key_1");
+        keys.add_key(key_1, Weight::new(1))
+            .expect("should add key_1");
+        keys.add_key(key_3, Weight::new(3))
+            .expect("should add key_1");
+
+        assert_eq!(
+            keys.calculate_keys_weight(&BTreeSet::from_iter(vec![
+                key_1, key_2, key_3, key_1, key_2, key_3,
+            ])),
+            Weight::new(1 + 2 + 3)
+        );
+    }
+
+    #[test]
+    fn account_can_deploy_with() {
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
+            res.add_key(PublicKey::new([2u8; 32]), Weight::new(11))
+                .expect("should add key 1");
+            res.add_key(PublicKey::new([3u8; 32]), Weight::new(11))
+                .expect("should add key 2");
+            res.add_key(PublicKey::new([4u8; 32]), Weight::new(11))
+                .expect("should add key 3");
+            res
+        };
+        let account = Account::new(
+            [0u8; 32],
+            0,
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            associated_keys,
+            // deploy: 33 (3*11)
+            ActionThresholds::new(Weight::new(33), Weight::new(48))
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        // sum: 22, required 33 - can't deploy
+        assert!(!account.can_deploy_with(&BTreeSet::from_iter(vec![
+            PublicKey::new([3u8; 32]),
+            PublicKey::new([2u8; 32]),
+        ])));
+
+        // sum: 33, required 33 - can deploy
+        assert!(account.can_deploy_with(&BTreeSet::from_iter(vec![
+            PublicKey::new([4u8; 32]),
+            PublicKey::new([3u8; 32]),
+            PublicKey::new([2u8; 32]),
+        ])));
+
+        // sum: 34, required 33 - can deploy
+        assert!(account.can_deploy_with(&BTreeSet::from_iter(vec![
+            PublicKey::new([2u8; 32]),
+            PublicKey::new([1u8; 32]),
+            PublicKey::new([4u8; 32]),
+            PublicKey::new([3u8; 32]),
+        ])));
     }
 
     #[test]

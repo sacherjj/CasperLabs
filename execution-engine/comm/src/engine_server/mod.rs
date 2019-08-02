@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt::Debug;
@@ -523,8 +523,8 @@ where
             };
 
             // Parse all authorization keys from IPC into a vector
-            let authorized_keys: Vec<PublicKey> = {
-                let maybe_keys: Result<Vec<_>, EngineError> = deploy
+            let authorized_keys: BTreeSet<PublicKey> = {
+                let maybe_keys: Result<BTreeSet<_>, EngineError> = deploy
                     .authorization_keys
                     .iter()
                     .map(|key_bytes| {
@@ -555,7 +555,7 @@ where
                     module_bytes,
                     args,
                     address,
-                    &authorized_keys,
+                    authorized_keys,
                     blocktime,
                     nonce,
                     prestate_hash,

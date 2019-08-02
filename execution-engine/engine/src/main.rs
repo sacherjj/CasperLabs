@@ -12,11 +12,11 @@ extern crate storage;
 extern crate wasm_prep;
 
 use clap::{App, Arg, ArgMatches};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::prelude::*;
-use std::iter::Iterator;
+use std::iter::{self, FromIterator, Iterator};
 use std::str;
 
 use common::key::Key;
@@ -227,7 +227,7 @@ fn main() {
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
             account_addr,
-            &[public_key],
+            BTreeSet::from_iter(iter::once(public_key)),
             BlockTime(timestamp),
             nonce,
             state_hash,

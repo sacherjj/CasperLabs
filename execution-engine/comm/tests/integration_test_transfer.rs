@@ -13,7 +13,7 @@ use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineServi
 use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::uref::{AccessRights, URef};
-use common::value::account::PurseId;
+use common::value::account::{PublicKey, PurseId};
 use common::value::{Value, U512};
 use execution_engine::engine_state::EngineState;
 use shared::transform::Transform;
@@ -135,6 +135,7 @@ fn should_transfer_to_account() {
         DEFAULT_BLOCK_TIME,
         1,
         ACCOUNT_1_ADDR,
+        vec![PublicKey::new(GENESIS_ADDR)],
     );
 
     let exec_response = engine_state
@@ -222,6 +223,7 @@ fn should_transfer_from_account_to_account() {
         DEFAULT_BLOCK_TIME,
         1,
         ACCOUNT_1_ADDR,
+        vec![PublicKey::new(GENESIS_ADDR)],
     );
 
     let exec_1_response = engine_state
@@ -286,6 +288,7 @@ fn should_transfer_from_account_to_account() {
         DEFAULT_BLOCK_TIME,
         1,
         (),
+        vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
 
     let exec_2_response = engine_state
@@ -382,6 +385,7 @@ fn should_transfer_to_existing_account() {
         DEFAULT_BLOCK_TIME,
         1,
         ACCOUNT_1_ADDR,
+        vec![PublicKey::new(GENESIS_ADDR)],
     );
 
     let exec_response = engine_state
@@ -446,6 +450,7 @@ fn should_transfer_to_existing_account() {
         DEFAULT_BLOCK_TIME,
         1,
         (),
+        vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
 
     let exec_response = engine_state
@@ -511,6 +516,7 @@ fn should_fail_when_insufficient_funds() {
         DEFAULT_BLOCK_TIME,
         1,
         ACCOUNT_1_ADDR,
+        vec![PublicKey::new(GENESIS_ADDR)],
     );
 
     let exec_response = engine_state
@@ -546,6 +552,7 @@ fn should_fail_when_insufficient_funds() {
         DEFAULT_BLOCK_TIME,
         1,
         (),
+        vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
 
     let exec_response = engine_state
@@ -575,6 +582,7 @@ fn should_fail_when_insufficient_funds() {
         DEFAULT_BLOCK_TIME,
         2,
         (),
+        vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
 
     let exec_response = engine_state
@@ -639,6 +647,7 @@ fn should_create_purse() {
         DEFAULT_BLOCK_TIME,
         1,
         ACCOUNT_1_ADDR,
+        vec![PublicKey::new(GENESIS_ADDR)],
     );
 
     let exec_response = engine_state
@@ -681,6 +690,7 @@ fn should_create_purse() {
         DEFAULT_BLOCK_TIME,
         1,
         (),
+        vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
 
     let exec_response = engine_state

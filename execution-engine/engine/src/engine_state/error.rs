@@ -16,6 +16,8 @@ pub enum Error {
     ExecError(::execution::Error),
     #[fail(display = "Storage error: {}", _0)]
     StorageError(storage::error::Error),
+    #[fail(display = "Authorization failure: not authorized.")]
+    AuthorizationError,
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {

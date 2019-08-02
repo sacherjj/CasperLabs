@@ -42,6 +42,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "authorized-keys"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
 name = "autocfg"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
