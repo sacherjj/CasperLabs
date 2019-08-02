@@ -1,0 +1,65 @@
+digraph deploy_processing_finite_state_machine {
+/*
+    For visualisation install the Graphviz package: https://www.graphviz.org
+    Compile to image using the example command: dot -Gdpi=100 -Tjpeg -o deploys.jpeg deploys_processing_fsm.gv
+*/
+	initial[shape="ellipse" label="Initial state"];
+	rejected[shape="circle" label="Rejected"];
+	check_hashes[shape="diamond" label="Are hashes correct?"];
+	check_signatures[shape="diamond" label="Are signatures correct?"];
+	check_preexistence[shape="diamond" label="Does it already exist in the finalized part of the DAG of the node?"];
+	check_session_and_payment_code[shape="diamond" label="Does it have session and payment code?"];
+	check_nonce_step_one[shape="diamond" label="Does the node contain 'processed' deploy from the same account with a higher or equal nonce?"]
+    check_nonce_step_two[shape="diamond" label="Does it have the same deploy hash?"];
+	check_wasm[shape="diamond" label="Are the WASM codes correct?"];
+
+	pending[shape="circle" label="Pending"];
+	processed[shape="circle" label="Processed"];
+	deleted[shape="circle" label="Deleted from buffer"];
+
+	check_computation_result[shape="diamond" label="What the result of computing the deploy in the execution engine?"];
+	valid_block[shape="diamond" label="Is the block valid?"];
+	create_block[shape="box" label="Create a new block"];
+	store_block[shape="box" label="Store the block"];
+
+	initial -> check_hashes [label="Receive a deploy from a client"];
+
+	check_hashes -> check_signatures [label="Yes"];
+	check_hashes -> rejected [label="No"];
+
+	check_signatures -> check_preexistence [label="Yes"];
+	check_signatures -> rejected [label="No"];
+
+	check_preexistence -> check_session_and_payment_code [label="No"];
+	check_preexistence -> rejected [label="Yes"];
+
+	check_session_and_payment_code -> check_wasm [label="Yes"];
+	check_session_and_payment_code -> rejected [label="No"];
+
+	check_wasm -> check_nonce_step_one [label="Yes"];
+	check_wasm -> rejected [label="No"];
+
+	check_nonce_step_one -> pending [label="No"];
+	check_nonce_step_one -> check_nonce_step_two [label="Yes"];
+
+	check_nonce_step_two -> pending [label="Yes"];
+	check_nonce_step_two -> rejected [label="No"];
+
+	pending -> check_computation_result [label="Create and propose a new block"];
+	check_computation_result -> deleted [label="Precondition failure"];
+	check_computation_result -> pending [label="Invalid nonce"];
+	check_computation_result -> create_block [label="Success"];
+
+	create_block -> valid_block;
+
+	valid_block -> store_block [label="Yes"];
+
+	store_block -> processed;
+	processed -> pending [label="The block is orphaned"];
+	processed -> deleted [label="The block is finalized"];
+
+	initial -> valid_block [label="Receive a new block from a peer"];
+
+	pending -> initial [label="The node is restarted"];
+	processed -> initial [label="The node is restarted"];
+}
