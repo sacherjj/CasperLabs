@@ -317,3 +317,80 @@ fn should_authorize_deploy_with_multiple_keys() {
         .expect_success()
         .commit();
 }
+
+#[ignore]
+#[test]
+fn should_not_authorize_deploy_with_duplicated_keys() {
+    // tests that authorized keys needs sufficient cumulative weight
+    // and each of the associated keys is greater than threshold
+    let key_1 = [254; 32];
+    assert_ne!(GENESIS_ADDR, key_1);
+    // Basic deploy with single key
+    let result1 = WasmTestBuilder::default()
+        .run_genesis(GENESIS_ADDR, HashMap::new())
+        // Reusing a test contract that would add new key
+        .exec_with_args(
+            GENESIS_ADDR,
+            "add_update_associated_key.wasm",
+            DEFAULT_BLOCK_TIME,
+            1,
+            PublicKey::new(key_1),
+        )
+        .expect_success()
+        .commit()
+        .exec_with_args_and_keys(
+            GENESIS_ADDR,
+            "authorized_keys.wasm",
+            DEFAULT_BLOCK_TIME,
+            2, // nonce
+            // change deployment threshold to 3
+            (Weight::new(4), Weight::new(3)), //args
+            vec![PublicKey::new(GENESIS_ADDR)],
+        )
+        .expect_success()
+        .commit()
+        .finish();
+
+    // success: identity key weight + key_1 weight + key_2 weight >= deployment threshold
+    let final_result = WasmTestBuilder::from_result(result1)
+        .exec_with_args_and_keys(
+            GENESIS_ADDR,
+            "authorized_keys.wasm",
+            DEFAULT_BLOCK_TIME,
+            3,                                // nonce
+            (Weight::new(0), Weight::new(0)), //args
+            vec![
+                PublicKey::new(key_1),
+                PublicKey::new(key_1),
+                PublicKey::new(key_1),
+                PublicKey::new(key_1),
+                PublicKey::new(key_1),
+                PublicKey::new(key_1),
+                PublicKey::new(key_1),
+                PublicKey::new(key_1),
+                PublicKey::new(key_1),
+                PublicKey::new(key_1),
+            ],
+        )
+        .commit()
+        .finish();
+    let deploy_result = final_result
+        .builder()
+        .get_exec_response(0)
+        .expect("should have exec response")
+        .get_success()
+        .get_deploy_results()
+        .get(0)
+        .expect("should have at least one deploy result");
+
+    assert!(deploy_result.has_execution_result(), "{:?}", deploy_result);
+    let execution_result = deploy_result.get_execution_result();
+    assert!(execution_result.has_error());
+    let error = execution_result.get_error();
+    assert!(error.has_exec_error());
+    let exec_error = error.get_exec_error();
+    assert_eq!(
+        exec_error.get_message(),
+        format!("{}", execution::Error::DeploymentAuthorizationFailure)
+    );
+}

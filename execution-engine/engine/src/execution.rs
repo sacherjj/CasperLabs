@@ -1426,7 +1426,7 @@ pub trait Executor<A> {
         parity_module: A,
         args: &[u8],
         account: Key,
-        _authorized_keys: Vec<PublicKey>,
+        authorized_keys: HashSet<PublicKey>,
         blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
@@ -1446,7 +1446,7 @@ impl Executor<Module> for WasmiExecutor {
         parity_module: Module,
         args: &[u8],
         acct_key: Key,
-        authorized_keys: Vec<PublicKey>,
+        authorized_keys: HashSet<PublicKey>,
         blocktime: BlockTime,
         nonce: u64,
         gas_limit: u64,
@@ -1480,7 +1480,7 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
-        if authorized_keys.is_empty() || !account.can_authorize(&authorized_keys) {
+        if authorized_keys.is_empty() || !account.can_authorize(authorized_keys.iter()) {
             return ExecutionResult::precondition_failure(
                 ::engine_state::error::Error::AuthorizationError,
             );
@@ -1525,7 +1525,7 @@ impl Executor<Module> for WasmiExecutor {
 
         // Check if authorized keys can deploy by comparing sum of their weights
         // with a deploy threshold.
-        if !account.can_deploy_with(&authorized_keys) {
+        if !account.can_deploy_with(authorized_keys.iter()) {
             return ExecutionResult::precondition_failure(
                 Error::DeploymentAuthorizationFailure.into(),
             );
@@ -1585,8 +1585,8 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::collections::btree_map::BTreeMap;
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap, HashSet};
+    use std::iter::{self, FromIterator};
     use std::rc::Rc;
 
     use parity_wasm::builder::ModuleBuilder;
@@ -1717,7 +1717,7 @@ mod tests {
             parity_module,
             &[],
             account_key,
-            vec![PublicKey::new(account_address)],
+            HashSet::from_iter(iter::once(PublicKey::new(account_address))),
             BlockTime(0),
             invalid_nonce,
             100u64,

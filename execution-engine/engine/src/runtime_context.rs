@@ -35,7 +35,7 @@ pub struct RuntimeContext<'a, R> {
     // Original account for read only tasks taken before execution
     account: &'a Account,
     args: Vec<Vec<u8>>,
-    authorization_keys: Vec<PublicKey>,
+    authorization_keys: HashSet<PublicKey>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
@@ -58,7 +58,7 @@ where
         uref_lookup: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
-        authorization_keys: Vec<PublicKey>,
+        authorization_keys: HashSet<PublicKey>,
         account: &'a Account,
         base_key: Key,
         blocktime: BlockTime,
@@ -87,7 +87,7 @@ where
         }
     }
 
-    pub fn authorization_keys(&self) -> &Vec<PublicKey> {
+    pub fn authorization_keys(&self) -> &HashSet<PublicKey> {
         &self.authorization_keys
     }
 
@@ -718,7 +718,7 @@ where
 mod tests {
     use std::cell::RefCell;
     use std::collections::{BTreeMap, HashMap, HashSet};
-    use std::iter::once;
+    use std::iter::{once, FromIterator};
     use std::rc::Rc;
 
     use rand::RngCore;
@@ -825,7 +825,7 @@ mod tests {
             uref_map,
             known_urefs,
             Vec::new(),
-            vec![PublicKey::new([0; 32])],
+            HashSet::from_iter(once(PublicKey::new([0; 32]))),
             &account,
             base_key,
             BlockTime(0),
@@ -1121,7 +1121,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            vec![PublicKey::new(base_acc_addr)],
+            HashSet::from_iter(once(PublicKey::new(base_acc_addr))),
             &account,
             contract_key,
             BlockTime(0),
@@ -1174,7 +1174,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            vec![PublicKey::new(base_acc_addr)],
+            HashSet::from_iter(once(PublicKey::new(base_acc_addr))),
             &account,
             other_contract_key,
             BlockTime(0),
@@ -1537,7 +1537,7 @@ mod tests {
         let mut chacha_rng = create_rng(base_acc_addr, 0);
         let uref_name = "Foo".to_owned();
         let uref_key = random_uref_key(&mut chacha_rng, AccessRights::READ);
-        let mut uref_map = std::iter::once((uref_name.clone(), uref_key)).collect();
+        let mut uref_map = once((uref_name.clone(), uref_key)).collect();
         let mut runtime_context =
             mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
 

@@ -1,7 +1,7 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
 use crate::key::{addr_to_hex, Key, UREF_SIZE};
 use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
-use alloc::collections::btree_map::BTreeMap;
+use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
@@ -506,8 +506,12 @@ impl AssociatedKeys {
     }
 
     /// Calculates total weight of authorization keys provided by an argument
-    pub fn calculate_keys_weight(&self, authorization_keys: &[PublicKey]) -> Weight {
-        let total = authorization_keys
+    pub fn calculate_keys_weight<'a>(
+        &self,
+        authorization_keys: impl Iterator<Item = &'a PublicKey>,
+    ) -> Weight {
+        let unique_keys: BTreeSet<&'a PublicKey> = authorization_keys.collect();
+        let total = unique_keys
             .iter()
             .filter_map(|key| self.0.get(key))
             .map(|w| w.value())
@@ -657,15 +661,19 @@ impl Account {
     }
 
     /// Checks whether all authorization keys are associated with this account
-    pub fn can_authorize(&self, authorization_keys: &[PublicKey]) -> bool {
-        authorization_keys
-            .iter()
-            .all(|e| self.associated_keys.contains_key(e))
+    pub fn can_authorize<'a>(
+        &self,
+        mut authorization_keys: impl Iterator<Item = &'a PublicKey>,
+    ) -> bool {
+        authorization_keys.all(|e| self.associated_keys.contains_key(e))
     }
 
     /// Checks whether the sum of the weights of all authorization keys is greater
     /// or equal to deploy threshold.
-    pub fn can_deploy_with(&self, authorization_keys: &[PublicKey]) -> bool {
+    pub fn can_deploy_with<'a>(
+        &self,
+        authorization_keys: impl Iterator<Item = &'a PublicKey>,
+    ) -> bool {
         let total_weight = self
             .associated_keys
             .calculate_keys_weight(authorization_keys);
@@ -962,19 +970,42 @@ mod tests {
             AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
-        assert!(account.can_authorize(&[key_3, key_2, key_1]));
-        assert!(account.can_authorize(&[key_1, key_3, key_2]));
+        assert!(account.can_authorize([key_3, key_2, key_1].iter()));
+        assert!(account.can_authorize([key_1, key_3, key_2].iter()));
 
-        assert!(account.can_authorize(&[key_1, key_2]));
-        assert!(account.can_authorize(&[key_1]));
+        assert!(account.can_authorize([key_1, key_2].iter()));
+        assert!(account.can_authorize([key_1].iter()));
 
-        assert!(!account.can_authorize(&[key_1, key_2, PublicKey::new([42; 32])]));
-        assert!(!account.can_authorize(&[PublicKey::new([42; 32]), key_1, key_2]));
-        assert!(!account.can_authorize(&[
-            PublicKey::new([43; 32]),
-            PublicKey::new([44; 32]),
-            PublicKey::new([42; 32])
-        ]));
+        assert!(!account.can_authorize([key_1, key_2, PublicKey::new([42; 32])].iter()));
+        assert!(!account.can_authorize([PublicKey::new([42; 32]), key_1, key_2].iter()));
+        assert!(!account.can_authorize(
+            [
+                PublicKey::new([43; 32]),
+                PublicKey::new([44; 32]),
+                PublicKey::new([42; 32])
+            ]
+            .iter()
+        ));
+    }
+
+    #[test]
+    fn associated_keys_calculate_keys_once() {
+        let key_1 = PublicKey::new([0; 32]);
+        let key_2 = PublicKey::new([1; 32]);
+        let key_3 = PublicKey::new([2; 32]);
+        let mut keys = AssociatedKeys::empty();
+
+        keys.add_key(key_2, Weight::new(2))
+            .expect("should add key_1");
+        keys.add_key(key_1, Weight::new(1))
+            .expect("should add key_1");
+        keys.add_key(key_3, Weight::new(3))
+            .expect("should add key_1");
+
+        assert_eq!(
+            keys.calculate_keys_weight([key_1, key_2, key_3, key_1, key_2, key_3,].iter()),
+            Weight::new(1 + 2 + 3)
+        );
     }
 
     #[test]
@@ -1002,22 +1033,29 @@ mod tests {
         );
 
         // sum: 22, required 33 - can't deploy
-        assert!(!account.can_deploy_with(&[PublicKey::new([3u8; 32]), PublicKey::new([2u8; 32]),]));
+        assert!(!account
+            .can_deploy_with([PublicKey::new([3u8; 32]), PublicKey::new([2u8; 32]),].iter()));
 
         // sum: 33, required 33 - can deploy
-        assert!(account.can_deploy_with(&[
-            PublicKey::new([4u8; 32]),
-            PublicKey::new([3u8; 32]),
-            PublicKey::new([2u8; 32]),
-        ]));
+        assert!(account.can_deploy_with(
+            [
+                PublicKey::new([4u8; 32]),
+                PublicKey::new([3u8; 32]),
+                PublicKey::new([2u8; 32]),
+            ]
+            .iter()
+        ));
 
         // sum: 34, required 33 - can deploy
-        assert!(account.can_deploy_with(&[
-            PublicKey::new([2u8; 32]),
-            PublicKey::new([1u8; 32]),
-            PublicKey::new([4u8; 32]),
-            PublicKey::new([3u8; 32]),
-        ]));
+        assert!(account.can_deploy_with(
+            [
+                PublicKey::new([2u8; 32]),
+                PublicKey::new([1u8; 32]),
+                PublicKey::new([4u8; 32]),
+                PublicKey::new([3u8; 32]),
+            ]
+            .iter()
+        ));
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt::Debug;
@@ -523,8 +523,8 @@ where
             };
 
             // Parse all authorization keys from IPC into a vector
-            let authorized_keys: Vec<PublicKey> = {
-                let maybe_keys: Result<Vec<_>, EngineError> = deploy
+            let authorized_keys: HashSet<PublicKey> = {
+                let maybe_keys: Result<HashSet<_>, EngineError> = deploy
                     .authorization_keys
                     .iter()
                     .map(|key_bytes| {
