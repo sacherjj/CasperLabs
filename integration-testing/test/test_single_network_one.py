@@ -128,7 +128,7 @@ def test_transfer_to_accounts(one_node_network):
 def balance(node, account_address, block_hash):
     try:
         return node.client.get_balance(account_address, block_hash)
-    except:
+    except Exception:
         return 0
 
 
@@ -208,7 +208,7 @@ def test_multiple_propose(one_node_network, wasm):
     number_of_blocks = node.client.get_blocks_count(100)
 
     try:
-        result = node.client.propose()
+        _ = node.client.propose()
         assert False, "Second propose must not succeed, should throw"
     except NonZeroExitCodeError as e:
         assert e.exit_code == 1, "Second propose should fail"
@@ -270,25 +270,15 @@ block_hash_queries = [
 
 @pytest.mark.parametrize("query, expected", block_hash_queries)
 def test_query_state_error(node, client, block_hash, query, expected):
-    if not "block_hash" in query:
+    if "block_hash" not in query:
         query["block_hash"] = block_hash
 
-    if not "key" in query:
+    if "key" not in query:
         query["key"] = node.from_address
 
     with pytest.raises(NonZeroExitCodeError) as excinfo:
-        response = client.query_state(**query)
+        _ = client.query_state(**query)
     assert expected in excinfo.value.output
-
-
-@pytest.fixture(scope="module")
-def node(one_node_network):
-    return one_node_network.docker_nodes[0]
-
-
-@pytest.fixture(scope="module")
-def client(node):
-    return node.d_client
 
 
 def test_revert_subcall(client, node):

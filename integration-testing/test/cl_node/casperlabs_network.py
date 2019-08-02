@@ -1,3 +1,4 @@
+from __future__ import annotations
 import logging
 import os
 import threading
@@ -17,9 +18,8 @@ from test.cl_node.wait import (
     wait_for_peers_count_at_least,
 )
 from typing import Callable, Dict, List
-
-import docker
-import docker.errors
+from docker import DockerClient
+from docker.errors import NotFound
 import inspect
 
 
@@ -40,7 +40,7 @@ class CasperLabsNetwork:
     Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
 
-    def __init__(self, docker_client: "DockerClient", extra_docker_params: Dict = None):
+    def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
         self.extra_docker_params = extra_docker_params or {}
         self._next_key_number = 0
         self.docker_client = docker_client
@@ -217,7 +217,7 @@ class CasperLabsNetwork:
             for network_name in self._created_networks:
                 try:
                     self.docker_client.networks.get(network_name).remove()
-                except (docker.errors.NotFound, Exception) as e:
+                except (NotFound, Exception) as e:
                     logging.warning(
                         f"Exception in cleanup while trying to remove network {network_name}: {str(e)}"
                     )
@@ -377,8 +377,6 @@ class CustomConnectionNetwork(CasperLabsNetwork):
 
 if __name__ == "__main__":
     # For testing adding new networks.
-
-    import logging
     import sys
     import time
 

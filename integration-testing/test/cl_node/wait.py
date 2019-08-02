@@ -11,6 +11,7 @@ from .common import Network, WaitTimeoutError
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
 
+
 class PredicateProtocol(typing_extensions.Protocol):
     def __str__(self) -> str:
         ...
@@ -373,7 +374,9 @@ def wait_for_finalised_hash(node: DockerNode, hash_string: str, timeout_seconds:
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
-def wait_for_new_fork_choice_tip_block(node: DockerNode, block: str, timeout_seconds: int):
+def wait_for_new_fork_choice_tip_block(
+    node: DockerNode, block: str, timeout_seconds: int
+):
     predicate = NewForkChoiceTipBlock(node, block)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
@@ -404,12 +407,16 @@ def wait_for_node_started(node: DockerNode, startup_timeout: int, times: int = 1
     wait_on_using_wall_clock_time(predicate, startup_timeout)
 
 
-def wait_for_approved_block_received_handler_state(node: DockerNode, timeout_seconds: int):
+def wait_for_approved_block_received_handler_state(
+    node: DockerNode, timeout_seconds: int
+):
     predicate = ApprovedBlockReceivedHandlerStateEntered(node)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
-def wait_for_requested_for_fork_tip(node: DockerNode, timeout_seconds: int, times: int = 1):
+def wait_for_requested_for_fork_tip(
+    node: DockerNode, timeout_seconds: int, times: int = 1
+):
     predicate = RequestedForkTip(node, times)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 

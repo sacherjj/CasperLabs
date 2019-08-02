@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -25,7 +27,7 @@ def humanify(line):
         return line
     try:
         _, payload = line.split("payload=")
-    except:
+    except Exception:
         return line
 
     d = json.loads(payload)
@@ -34,7 +36,10 @@ def humanify(line):
 
 class LoggingThread(threading.Thread):
     def __init__(
-        self, terminate_thread_event: "Event", container: "Container", logger: "Logger"
+        self,
+        terminate_thread_event: threading.Event,
+        container: "Container",
+        logger: logging.Logger,
     ) -> None:
         super().__init__()
         self.terminate_thread_event = terminate_thread_event

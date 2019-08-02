@@ -48,7 +48,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
             stdout=True,
         )
         r = container.wait()
-        error, status_code = r["Error"], r["StatusCode"]
+        status_code = r["StatusCode"]
         stdout = container.logs(stdout=True, stderr=False).decode("utf-8")
         stderr = container.logs(stdout=False, stderr=True).decode("utf-8")
 
@@ -158,7 +158,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         try:
             r = self.invoke_client(command)
             return r
-        except:
+        except Exception:
             if nonce is None:
                 NonceRegistry.revert(address)
             raise

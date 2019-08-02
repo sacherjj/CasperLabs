@@ -82,7 +82,7 @@ class PythonClient(CasperLabsClient, LoggingMixin):
                 args,
             )
             return r
-        except:
+        except Exception:
             if nonce is None:
                 NonceRegistry.revert(address)
             raise
