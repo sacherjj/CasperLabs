@@ -320,6 +320,7 @@ impl Default for WasmTestBuilder {
 }
 
 /// A wrapper type to disambiguate builder from an actual result
+#[derive(Clone)]
 pub struct WasmTestResult(WasmTestBuilder);
 
 impl WasmTestResult {
