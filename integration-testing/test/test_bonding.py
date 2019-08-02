@@ -224,7 +224,26 @@ def test_invalid_unbonding(one_node_network_fn):
     r = node1.client.show_deploys(block_hash2)[0]
     assert r.is_error is True
     assert r.error_message == "Exit code: 6"
+    block2 = node1.client.show_block(block_hash2)
+    block_ds = parse_show_block(block2)
+    item = list(
+        filter(
+            lambda x: x.stake == bonding_amount
+            and x.validator_public_key == node1.genesis_account.public_key_hex,
+            block_ds.summary.header.state.bonds,
+        )
+    )
+    assert len(item) == 1
 
+    block_hash2 = node1.unbond(
+        session_contract=UNBONDING_CONTRACT,
+        payment_contract=UNBONDING_CONTRACT,
+        maybe_amount=None,
+    )
+    assert block_hash2 is not None
+    r = node1.client.show_deploys(block_hash2)[0]
+    assert r.is_error is True
+    assert r.error_message == "Exit code: 6"
     block2 = node1.client.show_block(block_hash2)
     block_ds = parse_show_block(block2)
     item = list(
