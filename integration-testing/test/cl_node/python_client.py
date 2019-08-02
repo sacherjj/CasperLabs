@@ -7,10 +7,11 @@ from test.cl_node import LoggingMixin
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.nonce_registry import NonceRegistry
 from casper_client import CasperClient, ABI, InternalError
+from test.cl_node.docker_node import DockerNode
 
 
 class PythonClient(CasperLabsClient, LoggingMixin):
-    def __init__(self, node: "DockerNode"):
+    def __init__(self, node: DockerNode):
         super(PythonClient, self).__init__()
         self.node = node
         self.abi = ABI

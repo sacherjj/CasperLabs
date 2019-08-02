@@ -9,7 +9,7 @@ import typing_extensions
 
 from .common import Network, WaitTimeoutError
 from test.cl_node.client_parser import parse_show_blocks
-
+from test.cl_node.docker_node import DockerNode
 
 class PredicateProtocol(typing_extensions.Protocol):
     def __str__(self) -> str:
@@ -20,7 +20,7 @@ class PredicateProtocol(typing_extensions.Protocol):
 
 
 class LogsContainMessage:
-    def __init__(self, node: "Node", message: str, times: int = 1) -> None:
+    def __init__(self, node: DockerNode, message: str, times: int = 1) -> None:
         self.node = node
         self.message = message
         self.times = times
@@ -34,7 +34,7 @@ class LogsContainMessage:
 
 
 class LogsContainOneOf:
-    def __init__(self, node: "Node", messages: List[str]) -> None:
+    def __init__(self, node: DockerNode, messages: List[str]) -> None:
         self.node = node
         self.messages = messages
 
@@ -47,7 +47,7 @@ class LogsContainOneOf:
 
 
 class NodeStarted(LogsContainMessage):
-    def __init__(self, node: "Node", times: int) -> None:
+    def __init__(self, node: DockerNode, times: int) -> None:
         super().__init__(
             node,
             "io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs",
@@ -56,7 +56,7 @@ class NodeStarted(LogsContainMessage):
 
 
 class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):
-    def __init__(self, node: "Node") -> None:
+    def __init__(self, node: DockerNode) -> None:
         super().__init__(
             node,
             [
@@ -67,14 +67,14 @@ class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):
 
 
 class NewForkChoiceTipBlock(LogsContainMessage):
-    def __init__(self, node: "Node", block: str) -> None:
+    def __init__(self, node: DockerNode, block: str) -> None:
         super().__init__(node, f"New fork-choice tip is block {block[:10]}....")
 
 
 class RegexBlockRequest:
     regex = None
 
-    def __init__(self, node: "Node", node_name: str) -> None:
+    def __init__(self, node: DockerNode, node_name: str) -> None:
         self.regex = re.compile(self.regex.format(node_name))
         self.node = node
 
@@ -98,7 +98,7 @@ class SendingApprovedBlockRequest(RegexBlockRequest):
 class ConnectedToOtherNode(RegexBlockRequest):
     regex = r"(Connected to casperlabs:)|(Listening for traffic on casperlabs:)"
 
-    def __init__(self, node: "Node", node_name: str, times: int) -> None:
+    def __init__(self, node: DockerNode, node_name: str, times: int) -> None:
         self.times = times
         super().__init__(node, node_name)
 
@@ -108,22 +108,22 @@ class ConnectedToOtherNode(RegexBlockRequest):
 
 
 class ApprovedBlockReceived(LogsContainMessage):
-    def __init__(self, node: "Node") -> None:
+    def __init__(self, node: DockerNode) -> None:
         super().__init__(node, "Valid ApprovedBlock received!")
 
 
 class RequestedForkTip(LogsContainMessage):
-    def __init__(self, node: "Node", times: int) -> None:
+    def __init__(self, node: DockerNode, times: int) -> None:
         super().__init__(node, "Requested fork tip from peers", times)
 
 
 class WaitForGoodBye(LogsContainMessage):
-    def __init__(self, node: "Node") -> None:
+    def __init__(self, node: DockerNode) -> None:
         super().__init__(node, "Goodbye.")
 
 
 class MetricsAvailable:
-    def __init__(self, node: "Node", number_of_blocks: int) -> None:
+    def __init__(self, node: DockerNode, number_of_blocks: int) -> None:
         self.node = node
         self.number_of_blocks = number_of_blocks
 
@@ -140,7 +140,7 @@ class MetricsAvailable:
 
 
 class TotalBlocksOnNode:
-    def __init__(self, node: "Node", number_of_blocks: int) -> None:
+    def __init__(self, node: DockerNode, number_of_blocks: int) -> None:
         self.node = node
         self.number_of_blocks = number_of_blocks
 
@@ -173,7 +173,7 @@ class TotalBlocksOnNode:
 
 
 class NodeDidNotGossip:
-    def __init__(self, node: "Node") -> None:
+    def __init__(self, node: DockerNode) -> None:
         self.node = node
 
     def is_satisfied(self) -> bool:
@@ -193,7 +193,7 @@ class NodeDidNotGossip:
         return int(accepted_blocks.group(1)) == 0 and int(rejected_blocks.group(1)) == 0
 
 
-def get_new_blocks_requests_total(node: "Node") -> int:
+def get_new_blocks_requests_total(node: DockerNode) -> int:
     _, data = node.get_metrics()
     new_blocks_requests = re.compile(
         r"^casperlabs_comm_grpc_GossipService_NewBlocks_requests_total (\d+).0\s*$",
@@ -204,7 +204,7 @@ def get_new_blocks_requests_total(node: "Node") -> int:
 
 
 class HasAtLeastPeers:
-    def __init__(self, node: "Node", minimum_peers_number: int) -> None:
+    def __init__(self, node: DockerNode, minimum_peers_number: int) -> None:
         self.node = node
         self.minimum_peers_number = minimum_peers_number
         self.metric_regex = re.compile(
@@ -231,7 +231,7 @@ class HasAtLeastPeers:
 
 
 class HasPeersExactly:
-    def __init__(self, node: "Node", peers_number: int) -> None:
+    def __init__(self, node: DockerNode, peers_number: int) -> None:
         self.node = node
         self.peers_number = peers_number
         self.metric_regex = re.compile(
@@ -258,7 +258,7 @@ class HasPeersExactly:
 
 
 class BlockContainsString:
-    def __init__(self, node: "Node", block_hash: str, expected_string: str) -> None:
+    def __init__(self, node: DockerNode, block_hash: str, expected_string: str) -> None:
         self.node = node
         self.block_hash = block_hash
         self.expected_string = expected_string
@@ -275,12 +275,12 @@ class BlockContainsString:
 
 
 class LastFinalisedHash(LogsContainMessage):
-    def __init__(self, node: "Node", hash_string: str) -> None:
+    def __init__(self, node: DockerNode, hash_string: str) -> None:
         super().__init__(node, f"New last finalized block hash is {hash_string}")
 
 
 class BlocksCountAtLeast:
-    def __init__(self, node: "Node", blocks_count: int, depth: int) -> None:
+    def __init__(self, node: DockerNode, blocks_count: int, depth: int) -> None:
         self.node = node
         self.blocks_count = blocks_count
         self.depth = depth
@@ -362,23 +362,23 @@ def wait_on_using_wall_clock_time(
 
 
 def wait_for_block_contains(
-    node: "Node", block_hash: str, expected_string: str, timeout_seconds: int
+    node: DockerNode, block_hash: str, expected_string: str, timeout_seconds: int
 ):
     predicate = BlockContainsString(node, block_hash, expected_string)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
-def wait_for_finalised_hash(node: "Node", hash_string: str, timeout_seconds: int):
+def wait_for_finalised_hash(node: DockerNode, hash_string: str, timeout_seconds: int):
     predicate = LastFinalisedHash(node, hash_string)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
-def wait_for_new_fork_choice_tip_block(node: "Node", block: str, timeout_seconds: int):
+def wait_for_new_fork_choice_tip_block(node: DockerNode, block: str, timeout_seconds: int):
     predicate = NewForkChoiceTipBlock(node, block)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
-def wait_for_genesis_block(node: "Node", timeout_seconds: int = 60):
+def wait_for_genesis_block(node: DockerNode, timeout_seconds: int = 60):
     predicate = BlocksCountAtLeast(node, 1, 1)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
@@ -399,75 +399,75 @@ def wait_for_block_hashes_propagated_to_all_nodes(
     )
 
 
-def wait_for_node_started(node: "Node", startup_timeout: int, times: int = 1):
+def wait_for_node_started(node: DockerNode, startup_timeout: int, times: int = 1):
     predicate = NodeStarted(node, times)
     wait_on_using_wall_clock_time(predicate, startup_timeout)
 
 
-def wait_for_approved_block_received_handler_state(node: "Node", timeout_seconds: int):
+def wait_for_approved_block_received_handler_state(node: DockerNode, timeout_seconds: int):
     predicate = ApprovedBlockReceivedHandlerStateEntered(node)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
-def wait_for_requested_for_fork_tip(node: "Node", timeout_seconds: int, times: int = 1):
+def wait_for_requested_for_fork_tip(node: DockerNode, timeout_seconds: int, times: int = 1):
     predicate = RequestedForkTip(node, times)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
-def wait_for_good_bye(node: "Node", timeout_seconds: int):
+def wait_for_good_bye(node: DockerNode, timeout_seconds: int):
     predicate = WaitForGoodBye(node)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
 def wait_for_received_approved_block_request(
-    node: "Node", node_name: str, timeout_seconds: int
+    node: DockerNode, node_name: str, timeout_seconds: int
 ):
     predicate = ReceivedApprovedBlockRequest(node, node_name)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
 def wait_for_sending_approved_block_request(
-    node: "Node", node_name: str, timeout_seconds: int
+    node: DockerNode, node_name: str, timeout_seconds: int
 ):
     predicate = SendingApprovedBlockRequest(node, node_name)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
-def wait_for_streamed_packet(node: "Node", node_name: str, timeout_seconds: int):
+def wait_for_streamed_packet(node: DockerNode, node_name: str, timeout_seconds: int):
     predicate = StreamedPacketRequest(node, node_name)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
 def wait_for_peers_count_at_least(
-    node: "Node", npeers: int, timeout_seconds: int
+    node: DockerNode, npeers: int, timeout_seconds: int
 ) -> None:
     predicate = HasAtLeastPeers(node, npeers)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
 def wait_for_peers_count_exactly(
-    node: "Node", npeers: int, timeout_seconds: int
+    node: DockerNode, npeers: int, timeout_seconds: int
 ) -> None:
     predicate = HasPeersExactly(node, npeers)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
 def wait_for_metrics_and_assert_blocks_avaialable(
-    node: "Node", timeout_seconds: int, number_of_blocks: int
+    node: DockerNode, timeout_seconds: int, number_of_blocks: int
 ) -> None:
     predicate = MetricsAvailable(node, number_of_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
 def wait_for_gossip_metrics_and_assert_blocks_gossiped(
-    node: "Node", timeout_seconds: int, number_of_blocks: int
+    node: DockerNode, timeout_seconds: int, number_of_blocks: int
 ) -> None:
     predicate = NodeDidNotGossip(node)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
 def wait_for_count_the_blocks_on_node(
-    node: "Node", timeout_seconds: int = 10, number_of_blocks: int = 1
+    node: DockerNode, timeout_seconds: int = 10, number_of_blocks: int = 1
 ) -> None:
     predicate = TotalBlocksOnNode(node, number_of_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
@@ -519,7 +519,7 @@ def wait_for_approved_block_received(network: "Network", timeout: int) -> None:
 
 
 def wait_for_connected_to_node(
-    node: "Node", other_node_name: str, timeout: int, times: int = 1
+    node: DockerNode, other_node_name: str, timeout: int, times: int = 1
 ) -> None:
     predicate = ConnectedToOtherNode(node, other_node_name, times)
     wait_on_using_wall_clock_time(predicate, timeout)
