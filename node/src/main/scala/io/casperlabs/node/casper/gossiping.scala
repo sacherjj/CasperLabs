@@ -583,8 +583,8 @@ package object gossiping {
 
                       override def onDownloaded(blockHash: ByteString) =
                         // Calling `addBlock` during validation has already stored the block,
-                        // so we have nothing more to do here.
-                        ().pure[F]
+                        // so we have nothing more to do here with the consensus.
+                        synchronizer.downloaded(blockHash)
 
                       override def listTips =
                         for {

@@ -43,8 +43,11 @@ object Synchronizer {
         maxTotal: Int,
         total: Int
     ) extends SyncError
-    final case class Unreachable(summary: BlockSummary, requestedDepth: Int Refined Positive)
-        extends SyncError
+    final case class Unreachable(
+        summary: BlockSummary,
+        requestedDepth: Int Refined Positive,
+        reason: String
+    ) extends SyncError
     final case class TooMany(hash: ByteString, limit: Int Refined Positive)        extends SyncError
     final case class TooDeep(hashes: Set[ByteString], limit: Int Refined Positive) extends SyncError
     final case class ValidationError(summary: BlockSummary, reason: Throwable)     extends SyncError
@@ -59,8 +62,8 @@ object Synchronizer {
           s"Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries.map(hex)}"
         case SyncError.TooWide(maxBranchingFactor, maxTotal, total) =>
           s"Returned dag seems to be exponentially wide, max branching factor: $maxBranchingFactor, max total summaries: $maxTotal, total returned: $total"
-        case SyncError.Unreachable(summary, requestedDepth) =>
-          s"During streaming source returned unreachable block summary: ${hex(summary)}, requested depth: $requestedDepth"
+        case SyncError.Unreachable(summary, requestedDepth, reason) =>
+          s"During streaming source returned unreachable block summary: ${hex(summary)}, requested depth: $requestedDepth, reason: $reason"
         case SyncError.ValidationError(summary, e) =>
           s"Failed to validated the block summary: ${hex(summary)}, reason: $e"
         case SyncError.MissingDependencies(hashes) =>

@@ -525,7 +525,7 @@ object GossipServiceCasperTestNodeFactory {
         request: StreamAncestorBlockSummariesRequest
     ): Iterant[F, consensus.BlockSummary] =
       Iterant
-        .liftF(Log[F].info(s"Recevied request for ancestors of ${request.targetBlockHashes
+        .liftF(Log[F].info(s"Received request for ancestors of ${request.targetBlockHashes
           .map(PrettyPrinter.buildString(_))}"))
         .flatMap { _ =>
           underlying.streamAncestorBlockSummaries(request)

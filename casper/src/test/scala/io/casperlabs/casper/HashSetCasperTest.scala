@@ -370,7 +370,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   }
 
   //todo we need some genenis Contract to pass this test
-//  it should "allow bonding and distribute the joining fee" in {
+// it should "allow bonding and distribute the joining fee" in {
 //    val nodes =
 //      HashSetCasperTestNode.network(
 //        validatorKeys :+ otherSk,
@@ -747,13 +747,13 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       // this block will be propagated to all nodes and force nodes(2) to ask for missing blocks.
       br <- deploy(nodes(0), makeDeployA()) // block h1
 
-      // node(0) just created this block, so it should have it.
+      // node(0) just created this block, soit should have it.
       _ <- nodes(0).casperEff.contains(br) shouldBeF true
       // Let every node get everything.
       _ <- List.fill(22)(propagate(nodes)).toList.sequence
       // By now node(2) should have received all dependencies and added block h1
       _ <- nodes(2).casperEff.contains(br) shouldBeF true
-      // And if we create one more block on top of h1 it should be the only parent.
+      // And if we create one more block on top of h1it should be the only parent.
       nr <- deploy(nodes(2), makeDeployA())
       _ = nr.header.get.parentHashes.map(PrettyPrinter.buildString(_)) shouldBe Seq(
         PrettyPrinter.buildString(br.blockHash)
@@ -845,7 +845,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       // node(1) should have both block2 and block3 at this point and recognize the equivocation.
       // Because node(1) will also see that the signedBlock3 is building on top of signedBlock1Prime,
-      // it should download signedBlock1Prime as an `AdmissibleEquivocation`; otherwise if it didn't
+      //it should download signedBlock1Prime as an `AdmissibleEquivocation`; otherwise if it didn't
       // have an offspring it would be an `IgnorableEquivocation` and dropped.
       _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
@@ -1268,7 +1268,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- nodes(1).casperEff.deploy(deployB)
       createB         <- nodes(1).casperEff.createBlock
       Created(blockB) = createB
-      // nodes(1) should have more weight then nodes(0) so it should take over
+      // nodes(1) should have more weight then nodes(0) soit should take over
       _  <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
       s1 <- nodes(0).casperState.read
       _  = s1.deployBuffer.pendingDeploys should contain key (deployA.deployHash)
