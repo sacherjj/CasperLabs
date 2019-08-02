@@ -59,14 +59,14 @@ clean:
 
 .PHONY: deb
 deb:
-	cd comm && $(CARGO) deb
+	cd engine-grpc-server && $(CARGO) deb
 
 comm/.rpm:
-	cd comm && $(CARGO) rpm init
+	cd engine-grpc-server && $(CARGO) rpm init
 
 .PHONY: rpm
 rpm: comm/.rpm
-	cd comm && $(CARGO) rpm build
+	cd engine-grpc-server && $(CARGO) rpm build
 
 target/system-contracts.tar.gz: $(SYSTEM_CONTRACTS)
 	tar -czf $@ -C $(CONTRACT_TARGET_DIR) $(PACKAGED_SYSTEM_CONTRACTS)
@@ -76,11 +76,11 @@ package-system-contracts: target/system-contracts.tar.gz
 
 .PHONY: publish
 publish:
-	cd common && $(CARGO) publish
+	cd contract-ffi && $(CARGO) publish
 
 .PHONY: check-publish
 check-publish:
-	cd common && $(CARGO) publish --dry-run
+	cd contract-ffi && $(CARGO) publish --dry-run
 
 .PHONY: bench
 bench:

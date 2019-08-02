@@ -77,8 +77,8 @@ docker-push/%: docker-build/%
 
 
 cargo-package-all: \
-	.make/cargo-package/execution-engine/common \
-	cargo-native-packager/execution-engine/comm \
+	.make/cargo-package/execution-engine/contract-ffi \
+	cargo-native-packager/execution-engine/engine-grpc-server \
 	package-system-contracts
 
 # Drone is already running commands in the `builderenv`, no need to delegate.
@@ -91,7 +91,7 @@ cargo-native-packager/%:
 
 # We need to publish the libraries the contracts are supposed to use.
 cargo-publish-all: \
-	.make/cargo-publish/execution-engine/common
+	.make/cargo-publish/execution-engine/contract-ffi
 
 cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
 
@@ -134,7 +134,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		cargo-native-packager/execution-engine/comm \
+		cargo-native-packager/execution-engine/engine-grpc-server \
 		$(RUST_SRC)
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/target/debian)
@@ -368,7 +368,7 @@ execution-engine/target/system-contracts.tar.gz: \
 execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
 		.make/install/protoc
-	cd execution-engine/comm && \
+	cd execution-engine/engine-grpc-server && \
 	cargo --locked build --release
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
