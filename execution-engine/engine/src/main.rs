@@ -208,7 +208,8 @@ fn main() {
     let global_state = InMemoryGlobalState::from_pairs(CorrelationId::new(), &init_state)
         .expect("Could not create global state");
     let mut state_hash: Blake2bHash = global_state.root_hash;
-    let engine_state = EngineState::new(global_state);
+
+    let engine_state = EngineState::new(global_state, Default::default());
 
     let wasmi_executor = WasmiExecutor;
     let wasm_costs = WasmCosts::from_version(protocol_version).unwrap_or_else(|| {

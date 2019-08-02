@@ -8,6 +8,7 @@ import cats.effect.{Concurrent, Timer}
 import cats.implicits._
 import cats.temp.par.Par
 import io.casperlabs.blockstorage._
+import io.casperlabs.casper
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
@@ -17,6 +18,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
+import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node
@@ -81,6 +83,9 @@ class TransportLayerCasperTestNode[F[_]](
 
   implicit val labF =
     LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
+
+  implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
+  implicit val validation        = new ValidationImpl[F]
 
   implicit val lastFinalizedBlockHashContainer =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)

@@ -7,7 +7,9 @@ import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
@@ -82,7 +84,7 @@ object Servers {
     )
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStore: ExecutionEngineService](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStore: ExecutionEngineService: Validation](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,

@@ -25,7 +25,7 @@ const GENESIS_ADDR: [u8; 32] = [0u8; 32];
 #[test]
 fn should_execute_contracts_which_provide_extra_urefs() {
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, Default::default());
 
     // run genesis
 

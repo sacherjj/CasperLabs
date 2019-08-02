@@ -17,10 +17,12 @@ use tracking_copy::TrackingCopy;
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::Preprocessor;
 
+pub use self::engine_config::EngineConfig;
 use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;
 use self::genesis::{create_genesis_effects, GenesisResult};
 
+pub mod engine_config;
 pub mod error;
 pub mod execution_effect;
 pub mod execution_result;
@@ -28,9 +30,9 @@ pub mod genesis;
 pub mod op;
 pub mod utils;
 
+#[derive(Debug)]
 pub struct EngineState<H> {
-    // Tracks the "state" of the blockchain (or is an interface to it).
-    // I think it should be constrained with a lifetime parameter.
+    config: EngineConfig,
     state: Arc<Mutex<H>>,
 }
 
@@ -39,9 +41,13 @@ where
     H: History,
     H::Error: Into<execution::Error>,
 {
-    pub fn new(state: H) -> EngineState<H> {
+    pub fn new(state: H, config: EngineConfig) -> EngineState<H> {
         let state = Arc::new(Mutex::new(state));
-        EngineState { state }
+        EngineState { config, state }
+    }
+
+    pub fn config(&self) -> &EngineConfig {
+        &self.config
     }
 
     #[allow(clippy::too_many_arguments)]

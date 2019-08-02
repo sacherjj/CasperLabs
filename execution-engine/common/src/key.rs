@@ -4,9 +4,10 @@ use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 
 use crate::alloc::vec::Vec;
+use crate::base16;
 use crate::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
 use crate::contract_api::pointers::*;
-use crate::uref::{URef, UREF_SIZE_SERIALIZED};
+use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 
 const ACCOUNT_ID: u8 = 0;
 const HASH_ID: u8 = 1;
@@ -79,6 +80,15 @@ impl core::fmt::Debug for Key {
 
 use alloc::string::String;
 
+/// Drops "0x" prefix from the input string and turns rest of it into slice.
+fn drop_hex_prefix(s: &str) -> &str {
+    if s.starts_with("0x") {
+        &s[2..]
+    } else {
+        &s
+    }
+}
+
 impl Key {
     pub fn to_u_ptr<T>(self) -> Option<UPointer<T>> {
         if let Key::URef(uref) = self {
@@ -109,6 +119,39 @@ impl Key {
             Key::URef(uref) => Key::URef(uref.remove_access_rights()),
             other => other,
         }
+    }
+
+    /// Creates an instance of [Key::Hash] variant from the base16 encoded String.
+    /// Returns `None` if [addr] is not valid Blake2b hash.
+    pub fn parse_hash(addr: &str) -> Option<Key> {
+        let mut buff = [0u8; 32];
+        let parsed_addr = drop_hex_prefix(addr);
+        match binascii::hex2bin(parsed_addr.as_bytes(), &mut buff) {
+            Ok(_) => Some(Key::Hash(buff)),
+            _ => None,
+        }
+    }
+
+    /// Creates an instance of [Key::URef] variant from the base16 encoded String.
+    /// Returns `None` if [addr] is not valid Blake2b hash.
+    pub fn parse_uref(addr: &str, access_rights: AccessRights) -> Option<Key> {
+        let mut buff = [0u8; 32];
+        let parsed_addr = drop_hex_prefix(&addr);
+        match binascii::hex2bin(parsed_addr.as_bytes(), &mut buff) {
+            Ok(_) => Some(Key::URef(URef::new(buff, access_rights))),
+            _ => None,
+        }
+    }
+
+    /// Creates an instance of [Key::Local] variant from the base16 encoded String.
+    /// Returns `None` if either [seed] or [key_hash] is not valid Blake2b hash.
+    pub fn parse_local(seed: &str, key_hash: &str) -> Option<Key> {
+        let mut seed_buff = [0u8; 32];
+        let parsed_seed = drop_hex_prefix(seed);
+        let parsed_key = drop_hex_prefix(key_hash);
+        let _ = binascii::hex2bin(parsed_seed.as_bytes(), &mut seed_buff).ok()?;
+        let key_buff = base16::decode_lower(parsed_key).ok()?;
+        Some(Key::local(seed_buff, &key_buff))
     }
 
     pub fn as_uref(&self) -> Option<&URef> {
@@ -290,6 +333,76 @@ mod tests {
             format!("{}", local_key),
             format!("Key::Local({})", expected_hash)
         );
+    }
+
+    #[test]
+    fn parse_local_with_arbitrary_length() {
+        let short_key = {
+            let mut output = [0; 64];
+            binascii::bin2hex(&[42u8; 32], &mut output).ok().unwrap();
+            String::from_utf8(output.to_vec()).unwrap()
+        };
+
+        let long_key = {
+            let mut output = [0; 255 * 2];
+            binascii::bin2hex(&[42u8; 255], &mut output).ok().unwrap();
+            String::from_utf8(output.to_vec()).unwrap()
+        };
+
+        let seed = "01020102010201020102010201020102";
+
+        let local1 = Key::parse_local(seed, &short_key).expect("should parse local with short key");
+        let local2 = Key::parse_local(seed, &long_key).expect("should parse local with long key");
+
+        // verifies that the arbitrary key length doesn't get truncated
+        assert_ne!(local1, local2);
+    }
+
+    use proptest::prelude::*;
+    use proptest::string::{string_regex, RegexGeneratorStrategy};
+
+    /// Create a base16 string of [[length]] size.
+    fn base16_str_arb(length: usize) -> RegexGeneratorStrategy<String> {
+        string_regex(&format!("[0-9a-f]{{{}}}", length)).unwrap()
+    }
+
+    proptest! {
+
+        #[test]
+        fn should_parse_32_base16_to_key(base16_addr in base16_str_arb(32)) {
+            assert!(Key::parse_hash(&base16_addr).is_some());
+            assert!(Key::parse_uref(&base16_addr, AccessRights::READ).is_some());
+            assert!(Key::parse_local(&base16_addr, &base16_addr).is_some());
+        }
+
+        #[test]
+        fn should_parse_64_base16_to_key(base16_addr in base16_str_arb(64)) {
+            assert!(Key::parse_hash(&base16_addr).is_some());
+            assert!(Key::parse_uref(&base16_addr, AccessRights::READ).is_some());
+            assert!(Key::parse_local(&base16_addr, &base16_addr).is_some());
+        }
+
+        #[test]
+        fn should_fail_parse_invalid_length_base16_to_key(base16_addr in base16_str_arb(70)) {
+            assert!(Key::parse_hash(&base16_addr).is_none());
+            assert!(Key::parse_uref(&base16_addr, AccessRights::READ).is_none());
+            assert!(Key::parse_local(&base16_addr, &base16_addr).is_none());
+        }
+
+        #[test]
+        fn should_fail_parse_not_base16_input(invalid_addr in "[f-z]{32}") {
+            // Only a-f characters are valid hex.
+            assert!(Key::parse_hash(&invalid_addr).is_none());
+            assert!(Key::parse_uref(&invalid_addr, AccessRights::READ).is_none());
+            assert!(Key::parse_local(&invalid_addr, &invalid_addr).is_none());
+        }
+
+        #[test]
+        fn should_parse_base16_0x_prefixed(base16_addr in base16_str_arb(64)) {
+            let preppended = format!("0x{}", &base16_addr);
+            assert!(Key::parse_hash(&preppended).is_some());
+            assert_eq!(Key::parse_hash(&preppended), Key::parse_hash(&base16_addr));
+        }
     }
     #[test]
     fn abuse_vec_key() {

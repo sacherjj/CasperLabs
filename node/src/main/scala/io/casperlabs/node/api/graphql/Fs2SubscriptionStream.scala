@@ -69,7 +69,7 @@ private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit val ec: Exec
 
   override def recover[T](stream: Stream[F, T])(fn: Throwable => T): Stream[F, T] =
     stream.recover {
-      case e: Throwable => fn(e)
+      case NonFatal(e) => fn(e)
     }
 }
 

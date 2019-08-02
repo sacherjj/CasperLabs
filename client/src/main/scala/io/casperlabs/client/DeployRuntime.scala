@@ -227,13 +227,37 @@ object DeployRuntime {
       eff.attempt
     })
 
+  def transferCLI[F[_]: Sync: DeployService: FilesAPI](
+      nonce: Long,
+      sessionCode: Option[File],
+      privateKeyFile: File,
+      recipientPublicKeyBase64: String,
+      amount: Long
+  ): F[Unit] =
+    for {
+      rawPrivateKey <- readFileAsString[F](privateKeyFile)
+      privateKey <- MonadThrowable[F].fromOption(
+                     Ed25519.tryParsePrivateKey(rawPrivateKey),
+                     new IllegalArgumentException(
+                       s"Failed to parse private key file ${privateKeyFile.getPath()}"
+                     )
+                   )
+      publicKey <- MonadThrowable[F].fromOption(
+                    Ed25519.tryToPublic(privateKey),
+                    new RuntimeException(
+                      "Failed to compute Ed25519 public key from given private key."
+                    )
+                  )
+      _ <- transfer[F](nonce, sessionCode, publicKey, privateKey, recipientPublicKeyBase64, amount)
+    } yield ()
+
   def transfer[F[_]: Sync: DeployService: FilesAPI](
       nonce: Long,
       sessionCode: Option[File],
       senderPublicKey: PublicKey,
       senderPrivateKey: PrivateKey,
       recipientPublicKeyBase64: String,
-      amount: Int,
+      amount: Long,
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
@@ -247,7 +271,7 @@ object DeployRuntime {
       sessionCode <- readFileOrDefault[F](sessionCode, TRANSFER_WASM_FILE)
       // currently, sessionCode == paymentCode in order to get some gas limit for the execution
       paymentCode = sessionCode.toList.toArray
-      args        = serializeArgs(Array(serializeArray(account), serializeInt(amount)))
+      args        = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
