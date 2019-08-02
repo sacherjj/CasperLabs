@@ -194,23 +194,18 @@ fn should_run_purse_to_account_transfer() {
 
     let genesis_transforms = transfer_result.builder().get_genesis_transforms();
 
-    // TODO: This is the local key based on an unit value created in mint. This needs needs improvement. This value was copied from a genesis transforms.
-    let expected_local_key = Key::Local([
-        0x49, 0x54, 0x5c, 0xe8, 0x86, 0x3c, 0x16, 0x71, 0xa9, 0x38, 0x10, 0xc2, 0x2e, 0xe0, 0x75,
-        0x15, 0x66, 0xe6, 0x09, 0xce, 0xa9, 0x99, 0xa1, 0xd6, 0xfb, 0xcf, 0x20, 0x3f, 0xb1, 0xbb,
-        0x77, 0x88,
-    ]);
-
-    let genesis_balance_uref_transform = &genesis_transforms[&expected_local_key];
-
-    let balance_uref = if let Transform::Write(Value::Key(uref)) = genesis_balance_uref_transform {
-        uref
-    } else {
-        panic!(
-            "Expected uref, received {:?}",
-            genesis_balance_uref_transform
-        );
-    };
+    let balance_uref = genesis_transforms
+        .iter()
+        .find_map(|(k, t)| match (k, t) {
+            (uref @ Key::URef(_), Transform::Write(Value::UInt512(x)))
+                if *x == U512::from(1_000_000) =>
+            // 1_000_000 is the initial balance of genesis
+            {
+                Some(*uref)
+            }
+            _ => None,
+        })
+        .expect("Could not find genesis account balance uref");
 
     let updated_balance = &transform[&balance_uref.normalize()];
     assert_eq!(updated_balance, &Transform::AddUInt512(U512::from(1)));
