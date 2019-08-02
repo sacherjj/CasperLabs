@@ -29,17 +29,17 @@ class TestingContext:
     bonds_file: str
     bootstrap_keypair: KeyPair
     peers_keypairs: typing.List[KeyPair]
-    docker: 'DockerClient'
+    docker: "DockerClient"
 
 
 def random_string(length: int) -> str:
-    return ''.join(random.choice(string.ascii_letters) for _ in range(length)).lower()
+    return "".join(random.choice(string.ascii_letters) for _ in range(length)).lower()
 
 
 def make_tempfile(prefix: str, content: str) -> str:
     fd, path = tempfile.mkstemp(dir="/tmp", prefix=prefix)
 
-    with os.fdopen(fd, 'w') as tmp:
+    with os.fdopen(fd, "w") as tmp:
         tmp.write(content)
 
     return path
@@ -59,7 +59,7 @@ class Network:
 
 
 class WaitTimeoutError(Exception):
-    def __init__(self, predicate: 'PredicateProtocol', timeout: int) -> None:
+    def __init__(self, predicate: "PredicateProtocol", timeout: int) -> None:
         super().__init__()
         self.predicate = predicate
         self.timeout = timeout
