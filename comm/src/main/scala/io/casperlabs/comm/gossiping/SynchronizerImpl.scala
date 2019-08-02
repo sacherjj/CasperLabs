@@ -21,8 +21,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import scala.util.control.NonFatal
 
-// TODO: Optimise to heap-safe
-class SynchronizerImpl[F[_]: Sync: Log: Metrics](
+class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     connectToGossip: Node => F[GossipService[F]],
     backend: SynchronizerImpl.Backend[F],
     maxPossibleDepth: Int Refined Positive,
@@ -30,11 +29,31 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
     maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
     maxDepthAncestorsRequest: Int Refined Positive,
     maxInitialBlockCount: Int Refined Positive,
-    isInitialRef: Ref[F, Boolean]
+    // Before the initial sync has succeeded we allow more depth.
+    isInitialRef: Ref[F, Boolean],
+    // Only allow 1 sync per node at a time to not traverse the same thing twice.
+    sourceSemaphores: Ref[F, Map[Node, Semaphore[F]]]
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
 
   import io.casperlabs.comm.gossiping.SynchronizerImpl._
+
+  private def getSemaphore(source: Node): F[Semaphore[F]] =
+    sourceSemaphores.get.map(_.get(source)).flatMap {
+      case Some(semaphore) =>
+        semaphore.pure[F]
+      case None =>
+        for {
+          s0 <- Semaphore[F](1)
+          s1 <- sourceSemaphores.modify { ss =>
+                 ss.get(source) map { s1 =>
+                   ss -> s1
+                 } getOrElse {
+                   ss.updated(source, s0) -> s0
+                 }
+               }
+        } yield s1
+    }
 
   override def syncDag(
       source: Node,
@@ -70,10 +89,14 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
       _ <- Metrics[F].incrementCounter(if (res.isLeft) "syncs_failed" else "syncs_succeeded")
     } yield res
 
-    effect.onError {
-      case NonFatal(e) =>
-        Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e) *>
-          Metrics[F].incrementCounter("syncs_failed")
+    getSemaphore(source).flatMap { semaphore =>
+      semaphore.withPermit {
+        effect.onError {
+          case NonFatal(e) =>
+            Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e) *>
+              Metrics[F].incrementCounter("syncs_failed")
+        }
+      }
     }
   }
 
@@ -311,6 +334,29 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
 object SynchronizerImpl {
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(GossipingMetricsSource, "Synchronizer")
+
+  def apply[F[_]: Concurrent: Log: Metrics](
+      connectToGossip: Node => F[GossipService[F]],
+      backend: SynchronizerImpl.Backend[F],
+      maxPossibleDepth: Int Refined Positive,
+      minBlockCountToCheckBranchingFactor: Int Refined NonNegative,
+      maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
+      maxDepthAncestorsRequest: Int Refined Positive,
+      maxInitialBlockCount: Int Refined Positive,
+      isInitialRef: Ref[F, Boolean]
+  ) = Ref[F].of(Map.empty[Node, Semaphore[F]]).map { semaphores =>
+    new SynchronizerImpl[F](
+      connectToGossip,
+      backend,
+      maxPossibleDepth,
+      minBlockCountToCheckBranchingFactor,
+      maxBranchingFactor,
+      maxDepthAncestorsRequest,
+      maxInitialBlockCount,
+      isInitialRef,
+      semaphores
+    )
+  }
 
   /** Export base 0 values so we have non-empty series for charts. */
   def establishMetrics[F[_]: Monad: Metrics] =

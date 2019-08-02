@@ -503,40 +503,38 @@ package object gossiping {
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
       _ <- SynchronizerImpl.establishMetrics[F]
-      underlying <- Sync[F].delay {
-                     new SynchronizerImpl[F](
-                       connectToGossip,
-                       new SynchronizerImpl.Backend[F] {
-                         override def tips: F[List[ByteString]] =
-                           for {
-                             casper    <- unsafeGetCasper[F]
-                             dag       <- casper.blockDag
-                             tipHashes <- casper.estimator(dag)
-                           } yield tipHashes.toList
+      underlying <- SynchronizerImpl[F](
+                     connectToGossip,
+                     new SynchronizerImpl.Backend[F] {
+                       override def tips: F[List[ByteString]] =
+                         for {
+                           casper    <- unsafeGetCasper[F]
+                           dag       <- casper.blockDag
+                           tipHashes <- casper.estimator(dag)
+                         } yield tipHashes.toList
 
-                         override def justifications: F[List[ByteString]] =
-                           for {
-                             casper <- unsafeGetCasper[F]
-                             dag    <- casper.blockDag
-                             latest <- dag.latestMessageHashes
-                           } yield latest.values.toList
+                       override def justifications: F[List[ByteString]] =
+                         for {
+                           casper <- unsafeGetCasper[F]
+                           dag    <- casper.blockDag
+                           latest <- dag.latestMessageHashes
+                         } yield latest.values.toList
 
-                         override def validate(blockSummary: BlockSummary): F[Unit] =
-                           Validation[F].blockSummary(blockSummary, conf.casper.chainId)
+                       override def validate(blockSummary: BlockSummary): F[Unit] =
+                         Validation[F].blockSummary(blockSummary, conf.casper.chainId)
 
-                         override def notInDag(blockHash: ByteString): F[Boolean] =
-                           isInDag(blockHash).map(!_)
-                       },
-                       maxPossibleDepth = conf.server.syncMaxPossibleDepth,
-                       minBlockCountToCheckBranchingFactor =
-                         conf.server.syncMinBlockCountToCheckBranchingFactor,
-                       // Really what we should be looking at is the width at any rank being less than the number of validators.
-                       maxBranchingFactor = conf.server.syncMaxBranchingFactor,
-                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
-                       maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
-                       isInitialRef = isInitialRef
-                     )
-                   }
+                       override def notInDag(blockHash: ByteString): F[Boolean] =
+                         isInDag(blockHash).map(!_)
+                     },
+                     maxPossibleDepth = conf.server.syncMaxPossibleDepth,
+                     minBlockCountToCheckBranchingFactor =
+                       conf.server.syncMinBlockCountToCheckBranchingFactor,
+                     // Really what we should be looking at is the width at any rank being less than the number of validators.
+                     maxBranchingFactor = conf.server.syncMaxBranchingFactor,
+                     maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
+                     maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
+                     isInitialRef = isInitialRef
+                   )
       stashing <- StashingSynchronizer.wrap(underlying, awaitApproved)
     } yield stashing
   }
