@@ -416,7 +416,7 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
         Vec::from_raw_parts(dest_ptr, value_size, value_size)
     };
 
-    let balance: U512 = deserialize(&balance_bytes).unwrap_or_else(|_| revert(666));
+    let balance: U512 = deserialize(&balance_bytes).unwrap_or_else(|_| revert(100));
 
     Some(balance)
 }
