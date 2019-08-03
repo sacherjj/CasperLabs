@@ -13,4 +13,4 @@ default = []
 std = ["cl_std/std"]
 
 [dependencies]
-cl_std = { path = "../../../common", package = "casperlabs-contract-ffi" }
+cl_std = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

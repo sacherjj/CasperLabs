@@ -8,5 +8,5 @@ name = "getcallercall"
 crate-type = ["cdylib"]
 
 [dependencies]
-common = { package = "casperlabs-contract-ffi", path = "../../../../execution-engine/common/" }
+common = { package = "casperlabs-contract-ffi", path = "../../../../execution-engine/contract-ffi" }
 
