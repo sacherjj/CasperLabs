@@ -30,6 +30,7 @@ import io.grpc.ManagedChannel
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
+import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.validation.Validation
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import monix.eval.TaskLike
@@ -45,7 +46,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: Validation](
+  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
       port: Int,
       conf: Configuration,
       grpcScheduler: Scheduler
@@ -168,7 +169,8 @@ package object gossiping {
     } yield cont
 
   /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: Validation](
+  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployBuffer: Validation](
+      validatorId: Option[ValidatorIdentity],
       chainId: String,
       block: Block
   ): F[Unit] =
@@ -183,7 +185,7 @@ package object gossiping {
             state       <- Cell.mvarCell[F, CasperState](CasperState())
             executor    <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
             dag         <- BlockDagStorage[F].getRepresentation
-            (status, _) <- executor.validateAndAddBlock(None, dag, block)(state)
+            (status, _) <- executor.validateAndAddBlock(validatorId)(None, dag, block)(state)
           } yield status
 
         case None =>
@@ -287,7 +289,7 @@ package object gossiping {
         )
       }
 
-  def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: Validation](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: DeployBuffer: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
@@ -314,7 +316,7 @@ package object gossiping {
                                       s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
                                     )
                                 } *>
-                                validateAndAddBlock(conf.casper.chainId, block)
+                                validateAndAddBlock(validatorId, conf.casper.chainId, block)
 
                             override def storeBlock(block: Block): F[Unit] =
                               // Validation has already stored it.
@@ -335,7 +337,7 @@ package object gossiping {
                         )
     } yield downloadManager
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: Validation](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F]
@@ -466,7 +468,11 @@ package object gossiping {
                                    _ <- Log[F].info(
                                          s"Trying to store generated Genesis candidate ${show(genesis.blockHash)}"
                                        )
-                                   _ <- validateAndAddBlock(conf.casper.chainId, genesis)
+                                   _ <- validateAndAddBlock(
+                                         validatorId,
+                                         conf.casper.chainId,
+                                         genesis
+                                       )
                                  } yield genesis
                                }
 

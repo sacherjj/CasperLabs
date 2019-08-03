@@ -2,30 +2,29 @@ package io.casperlabs.node.api
 
 import cats.effect._
 import cats.implicits._
-import com.google.protobuf.empty.Empty
 import com.google.protobuf.ByteString
+import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.casper.consensus.state
+import io.casperlabs.casper.consensus.{state, Block}
+import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.comm.ServiceError.InvalidArgument
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
-import io.casperlabs.comm.ServiceError.InvalidArgument
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.validation.Validation
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStore: ExecutionEngineService: Validation]()
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStore: ExecutionEngineService: DeployBuffer: Validation]()
       : F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       new CasperGrpcMonix.CasperService {

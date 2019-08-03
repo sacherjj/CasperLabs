@@ -148,7 +148,6 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
     underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
   def fetchDependencies: F[Unit]   = underlying.fetchDependencies
-  def bufferedDeploys              = underlying.bufferedDeploys
   def faultToleranceThreshold      = underlying.faultToleranceThreshold
 
   override def createBlock: F[CreateBlockStatus] =

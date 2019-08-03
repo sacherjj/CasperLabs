@@ -87,9 +87,6 @@ class TransportLayerCasperTestNode[F[_]](
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
-  implicit val lastFinalizedBlockHashContainer =
-    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
-
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
       new MultiParentCasperImpl.StatelessExecutor(chainId),

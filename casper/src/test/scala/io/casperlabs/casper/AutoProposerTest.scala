@@ -1,19 +1,19 @@
 package io.casperlabs.casper
 
-import cats._
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import org.scalatest._
-import org.scalacheck.Arbitrary.arbitrary
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Log, Time}
-import io.casperlabs.casper.consensus._
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalatest._
 
 import scala.concurrent.duration._
 
@@ -32,7 +32,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   it should "propose if more than max-count deploys are accumulated within max-interval" in TestFixture(
     maxInterval = 5.seconds,
     maxCount = 2
-  ) { _ => implicit casperRef =>
+  ) { _ => implicit casperRef => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
       _      <- casper.deploy(sampleDeployData)
@@ -47,7 +47,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   it should "propose if less than max-count deploys are accumulated after max-interval" in TestFixture(
     maxInterval = 250.millis,
     maxCount = 10
-  ) { _ => implicit casperRef =>
+  ) { _ => implicit casperRef => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
       _      <- casper.deploy(sampleDeployData)
@@ -61,7 +61,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   it should "not propose if none of the thresholds are reached" in TestFixture(
     maxInterval = 1.second,
     maxCount = 2
-  ) { _ => implicit casperRef =>
+  ) { _ => implicit casperRef => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
       _      <- casper.deploy(sampleDeployData)
@@ -73,7 +73,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   it should "not propose if there are no new deploys" in TestFixture(
     maxInterval = 1.second,
     maxCount = 1
-  ) { _ => implicit casperRef =>
+  ) { _ => implicit casperRef => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
       d1     = sampleDeployData
@@ -93,7 +93,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   it should "not stop if the proposal fails" in TestFixture(
     maxInterval = 1.second,
     maxCount = 1
-  ) { _ => implicit casperRef =>
+  ) { _ => implicit casperRef => implicit deployBuffer =>
     val defectiveCasper = new MockMultiParentCasper[Task]() {
       override def createBlock: Task[CreateBlockStatus] =
         throw new RuntimeException("Oh no!")
@@ -112,10 +112,8 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
 }
 
 object AutoProposerTest {
-  import io.casperlabs.casper.protocol._
-  import io.casperlabs.blockstorage.BlockDagRepresentation
-
   import Scheduler.Implicits.global
+  import io.casperlabs.blockstorage.BlockDagRepresentation
   implicit val log     = new Log.NOPLog[Task]()
   implicit val metrics = new Metrics.MetricsNOP[Task]()
 
@@ -134,23 +132,24 @@ object AutoProposerTest {
         maxInterval: FiniteDuration,
         maxCount: Int
     )(
-        f: AutoProposer[Task] => MultiParentCasperRef[Task] => Task[Unit]
+        f: AutoProposer[Task] => MultiParentCasperRef[Task] => DeployBuffer[Task] => Task[Unit]
     ): Unit = {
-
-      implicit val emptyRef = MultiParentCasperRef.unsafe[Task]()
-
       val resources = for {
-        blockApiLock <- Resource.liftF(Semaphore[Task](1))
+        implicit0(deployBuffer: DeployBuffer[Task]) <- Resource.liftF(
+                                                        MockDeployBuffer.create[Task]()
+                                                      )
+        implicit0(emptyRef: MultiParentCasperRef[Task]) = MultiParentCasperRef.unsafe[Task]()
+        blockApiLock                                    <- Resource.liftF(Semaphore[Task](1))
         proposer <- AutoProposer[Task](
                      checkInterval = checkInterval,
                      maxInterval = maxInterval,
                      maxCount = maxCount,
                      blockApiLock = blockApiLock
                    )
-      } yield (proposer, emptyRef)
+      } yield (proposer, emptyRef, deployBuffer)
 
       val test = resources.use {
-        case (proposer, casperRef) => f(proposer)(casperRef)
+        case (proposer, casperRef, deployBuffer) => f(proposer)(casperRef)(deployBuffer)
       }
 
       test.runSyncUnsafe(5.seconds)
@@ -158,38 +157,33 @@ object AutoProposerTest {
   }
 
   object MockMultiParentCasper {
-    def apply[F[_]: Sync: MultiParentCasperRef] =
+    def apply[F[_]: Sync: MultiParentCasperRef: DeployBuffer] =
       for {
         c <- Sync[F].delay(new MockMultiParentCasper[F]())
         _ <- MultiParentCasperRef[F].set(c)
       } yield c
   }
 
-  class MockMultiParentCasper[F[_]: Sync] extends MultiParentCasper[F] {
+  class MockMultiParentCasper[F[_]: Sync: DeployBuffer] extends MultiParentCasper[F] {
 
-    @volatile var deployBuffer  = DeployBuffer.empty
     @volatile var proposalCount = 0
 
     override def deploy(deployData: Deploy): F[Either[Throwable, Unit]] =
-      Sync[F].delay {
-        deployBuffer = deployBuffer.add(deployData)
+      DeployBuffer[F].addAsPending(List(deployData)) >> Sync[F].delay {
         Right(())
       }
 
-    override def bufferedDeploys: F[DeployBuffer] =
-      deployBuffer.pure[F]
-
     override def createBlock: F[CreateBlockStatus] =
-      Sync[F].delay {
-        proposalCount += 1
-        val keys = deployBuffer.pendingDeploys.keySet.toSet
-        deployBuffer = deployBuffer.processed(keys)
+      for {
+        pending <- DeployBuffer[F].readPending
+        _       <- DeployBuffer[F].markAsProcessed(pending).whenA(pending.nonEmpty)
+        _       <- Sync[F].delay(proposalCount += 1)
+      } yield {
         // Doesn't matter what we return in this test.
-        if (keys.nonEmpty) Created(Block()) else NoNewDeploys
+        if (pending.nonEmpty) Created(Block()) else NoNewDeploys
       }
 
-    override def addBlock(block: Block): F[BlockStatus] = ???
-
+    override def addBlock(block: Block): F[BlockStatus]                               = ???
     override def contains(block: Block): F[Boolean]                                   = ???
     override def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[ByteString]] = ???
     override def blockDag: F[BlockDagRepresentation[F]]                               = ???

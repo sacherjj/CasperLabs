@@ -71,9 +71,6 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
-  implicit val lastFinalizedBlockHashContainer =
-    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
-
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it
   // - test tries to give a block created by node A to node B without gossiping

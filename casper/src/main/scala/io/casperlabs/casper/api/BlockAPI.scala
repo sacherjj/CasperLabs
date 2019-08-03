@@ -11,6 +11,7 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
+import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.protocol.{
   BlockInfoWithoutTuplespace,
   BlockQuery,
@@ -334,7 +335,7 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F](_))
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, accountPublicKey, timestamp)))
 
-  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore](
+  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore: DeployBuffer](
       deployHashBase16: String
   ): F[Option[DeployInfo]] =
     // LMDB throws an exception if a key isn't 32 bytes long, so we fail-fast here
@@ -375,16 +376,14 @@ object BlockAPI {
             } yield info.some
 
           case _ =>
-            casper.bufferedDeploys.map { deploys =>
-              deploys.get(deployHash) map { deploy =>
-                DeployInfo().withDeploy(deploy)
-              }
-            }
+            DeployBuffer[F]
+              .getPendingOrProcessed(deployHash)
+              .map(_.map(DeployInfo().withDeploy))
         }
       }
     }
 
-  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore](
+  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore: DeployBuffer](
       deployHashBase16: String
   ): F[DeployInfo] =
     getDeployInfoOpt[F](deployHashBase16).flatMap(

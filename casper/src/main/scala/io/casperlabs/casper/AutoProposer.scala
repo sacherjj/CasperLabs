@@ -6,6 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Log, Time}
 
@@ -14,7 +15,7 @@ import scala.util.control.NonFatal
 
 /** Propose a block automatically whenever a timespan has elapsed or
   * we have more than a certain number of new deploys in the buffer. */
-class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef](
+class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef: DeployBuffer](
     checkInterval: FiniteDuration,
     maxInterval: FiniteDuration,
     maxCount: Int,
@@ -33,9 +34,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
 
       val snapshot = for {
         currentMillis <- Time[F].currentMillis
-        casper        <- MultiParentCasperRef[F].get
-        deployBuffer  <- casper.fold(DeployBuffer.empty.pure[F])(_.bufferedDeploys)
-        deploys       = deployBuffer.pendingDeploys.keySet
+        deploys       <- DeployBuffer[F].readPendingHashes.map(_.toSet)
       } yield (currentMillis, currentMillis - startMillis, deploys)
 
       snapshot flatMap {
@@ -76,7 +75,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
 object AutoProposer {
 
   /** Start the proposal loop in the background. */
-  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
+  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployBuffer](
       checkInterval: FiniteDuration,
       maxInterval: FiniteDuration,
       maxCount: Int,

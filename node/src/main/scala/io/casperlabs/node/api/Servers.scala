@@ -7,6 +7,7 @@ import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
+import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
 import io.casperlabs.casper.validation.Validation
@@ -84,7 +85,7 @@ object Servers {
     )
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStore: ExecutionEngineService: Validation](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStore: ExecutionEngineService: DeployBuffer: Validation](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
@@ -109,7 +110,7 @@ object Servers {
         logStarted[F]("External", port, maybeSslContext.isDefined)
       )
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStore: ContextShift: FinalizedBlocksStream: ExecutionEngineService](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStore: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployBuffer](
       port: Int,
       conf: Configuration,
       id: NodeIdentifier,
