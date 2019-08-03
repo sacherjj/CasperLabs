@@ -412,3 +412,79 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(node, contrac
 
     block_hash = propose(node)
     assert deploy_hash4 in deploy_hashes(node, block_hash)
+
+
+#################################### Python CLI ##################################################
+
+import subprocess
+import pytest
+from pytest import raises
+import os
+import logging
+from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
+import logging
+
+CLI = 'casper_client'
+
+class CLIErrorExit(Exception):
+    def __init__(self, cp):
+        self.cp = cp
+
+
+@pytest.fixture(scope='module')
+def cli(one_node_network):
+
+    node = one_node_network.docker_nodes[0]
+    host = os.environ.get('TAG_NAME', None) and node.container_name or 'localhost'
+    port = node.grpc_external_docker_port
+
+    def invoker(*args):
+        command_line = [CLI, "--host", f"{host}", "--port", f"{port}"] + list(args)
+        logging.info(f"EXECUTING: {' '.join(command_line)}")
+        #if args[0] == 'show-deploys':
+        #    import time; time.sleep(10000)
+        cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if cp.returncode != 0:
+            raise CLIErrorExit(cp)
+        return cp.stdout.decode('utf-8')
+    return invoker
+ 
+
+def test_cli_no_parameters(cli):
+    with raises(CLIErrorExit):
+        cli()
+
+
+def test_cli_help(cli):
+    out = cli('--help')
+    assert 'Casper' in out
+
+    
+def test_cli_show_blocks(cli):
+    blocks = parse_show_blocks(cli('show-blocks', '--depth', '1000'))
+    assert len(blocks) > 0
+
+    for block in blocks:
+        block_hash = block.summary.block_hash
+        assert len(block_hash) == 32 * 2  # hex
+
+
+def test_cli_deploy_propose_and_show_deploys(cli, one_node_network):
+    account = one_node_network.docker_nodes[0].test_account
+    deploy_response = cli('deploy',
+                          '--from', account.public_key_hex,
+                          '--nonce', '1',
+                          '--payment', 'resources/test_helloname.wasm',
+                          '--session', 'resources/test_helloname.wasm',
+                          '--gas-limit', '500000', # TODO: currently required, not sure if should betest_cli_deploy_propose_and_show_deploys
+                          '--private-key', str(account.private_key_path),
+                          '--public-key', str(account.public_key_path))
+    # 'Success! Deploy hash: xxxxxxxxx...'
+    deploy_hash = deploy_response.split()[3]
+
+    # 'Success! Block hash: xxxxxxxxx...'
+    block_hash = cli('propose').split()[3]
+    deploys = parse_show_deploys(cli('show-deploys', block_hash))
+    deploy_hashes = [d.deploy.deploy_hash for d in deploys]
+    assert deploy_hash in deploy_hashes
+
