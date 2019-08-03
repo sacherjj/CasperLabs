@@ -364,6 +364,8 @@ lazy val blockStorage = (project in file("block-storage"))
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       lmdbjava,
       sqlLite,
+      doobieCore,
+      doobieHikari,
       flyway,
       catsCore,
       catsEffect,
