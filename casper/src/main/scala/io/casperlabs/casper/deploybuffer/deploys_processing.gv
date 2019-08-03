@@ -57,12 +57,11 @@ digraph deploy_processing_finite_state_machine {
 	create_block -> valid_block;
 
 	valid_block -> store_block [label="yes"];
+	valid_block -> pending [label="no"];
 
 	store_block -> processed;
 	processed -> pending [label="block orphaned"];
 	processed -> deleted [label="block finalized"];
-
-	initialized -> valid_block [label="peer block received"];
 
 	pending -> initialized [label="restart node"];
 	processed -> initialized [label="restart node"];
