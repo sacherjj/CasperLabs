@@ -251,6 +251,8 @@ class CasperClient:
                              header = header,
                              body = body)
 
+        # TODO: Deploy returns Empty, error handing via exceptions, apparently,
+        # so no point in returning it.
         return self.casperService.Deploy(casper.DeployRequest(deploy = d)), deploy_hash
 
     @api
@@ -387,27 +389,39 @@ def guarded_command(function):
     return wrapper
 
 
-def _hexify_line(line):
-    if ': ' not in line:
-        return line
-    left, right = line.split(': ', 1)
-    if right[0] == '"' and right[-1] == '"':
-        bytes_repr = right.strip()[1:-1]
-
-        h = ast.literal_eval(f"b'{bytes_repr}'")
-        return len(h) == 32 and f'{left}: "{h.hex()}"' or line
-    else:
-        return line
-
-
 def hexify(s):
-    return "\n".join(_hexify_line(line) for line in s.splitlines())
+
+    def parse_bytes_literal(s):
+        bytes_repr = s.strip()[1:-1]
+        return ast.literal_eval(f"b'{bytes_repr}'")
 
 
-def _show_blocks(response):
+    def hexify_line(line):
+        if ': ' not in line:
+            return line
+
+        left, right = line.split(': ', 1)
+
+        if left.endswith('sig'):
+            sig = parse_bytes_literal(right)
+            return f'{left}: "{sig.hex()}"'
+
+        if not (right[0] == right[-1] == '"'):
+            return line
+
+        # See if it is 32 bytes after parsing, if yes assume it is a hash
+        # and should be printed in hex format.
+        # TODO: do this for specific keywords only (need to find them out)
+        h = parse_bytes_literal(right)
+        return len(h) == 32 and f'{left}: "{h.hex()}"' or line
+
+    return "\n".join(hexify_line(line) for line in s.splitlines())
+
+
+def _show_blocks(response, element_name='block'):
     count = 0
     for block in response:
-        print('------------- block {} ---------------'.format(count))
+        print(f'------------- {element_name} {count} ---------------')
         print(hexify(str(block)))
         print('-----------------------------------------------------\n')
         count += 1
@@ -423,26 +437,23 @@ def _show_block(response):
 
 @guarded_command
 def deploy_command(casper_client, args):
-    response, deploy_hash = casper_client.deploy(getattr(args,'from'),
-                                                 args.gas_limit,
-                                                 args.gas_price, 
-                                                 args.payment or args.session,
-                                                 args.session,
-                                                 args.nonce,
-                                                 args.public_key or None,
-                                                 args.private_key or None,
-                                                 args.args and ABI.args_from_json(args.args) or None)
-    print (f'{response.message}. Deploy hash: {deploy_hash}')
-    if not response.success:
-        return 1
+    kwargs = dict(from_addr = getattr(args,'from'),
+                  gas_limit = args.gas_limit,
+                  gas_price = args.gas_price, 
+                  payment = args.payment or args.session,
+                  session = args.session,
+                  nonce = args.nonce,
+                  public_key = args.public_key or None,
+                  private_key = args.private_key or None,
+                  args = args.args and ABI.args_from_json(args.args) or None)
+    _, deploy_hash = casper_client.deploy(**kwargs)
+    print (f'Success! Deploy hash: {deploy_hash.hex()}')
 
 
 @guarded_command
 def propose_command(casper_client, args):
     response = casper_client.propose()
-    print(response.message)
-    if not response.success:
-        return 1
+    print(f"Success! Block hash: {response.block_hash.hex()}")
 
 
 @guarded_command
@@ -471,15 +482,16 @@ def query_state_command(casper_client, args):
 
 @guarded_command
 def show_deploy_command(casper_client, args):
-    response = casper_client.showDeploy(args.hash)
+    response = casper_client.showDeploy(args.hash, full_view=False)
     print (response)
     
 
 @guarded_command
 def show_deploys_command(casper_client, args):
-    response = casper_client.showDeploys(args.hash)
+    response = casper_client.showDeploys(args.hash, full_view=False)
+    _show_blocks(response, element_name='deploy')
     for deployInfo in response:
-        print(response)
+        print(deployInfo)
 
 
 def main():
