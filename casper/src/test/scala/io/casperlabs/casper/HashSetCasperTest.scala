@@ -747,13 +747,13 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       // this block will be propagated to all nodes and force nodes(2) to ask for missing blocks.
       br <- deploy(nodes(0), makeDeployA()) // block h1
 
-      // node(0) just created this block, soit should have it.
+      // node(0) just created this block, so it should have it.
       _ <- nodes(0).casperEff.contains(br) shouldBeF true
       // Let every node get everything.
       _ <- List.fill(22)(propagate(nodes)).toList.sequence
       // By now node(2) should have received all dependencies and added block h1
       _ <- nodes(2).casperEff.contains(br) shouldBeF true
-      // And if we create one more block on top of h1it should be the only parent.
+      // And if we create one more block on top of h1 it should be the only parent.
       nr <- deploy(nodes(2), makeDeployA())
       _ = nr.header.get.parentHashes.map(PrettyPrinter.buildString(_)) shouldBe Seq(
         PrettyPrinter.buildString(br.blockHash)
@@ -1268,7 +1268,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- nodes(1).casperEff.deploy(deployB)
       createB         <- nodes(1).casperEff.createBlock
       Created(blockB) = createB
-      // nodes(1) should have more weight then nodes(0) soit should take over
+      // nodes(1) should have more weight then nodes(0) so it should take over
       _  <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
       s1 <- nodes(0).casperState.read
       _  = s1.deployBuffer.pendingDeploys should contain key (deployA.deployHash)

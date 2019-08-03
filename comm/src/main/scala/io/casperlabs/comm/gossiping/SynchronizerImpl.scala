@@ -193,7 +193,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     syncedSummariesRef.update { syncedSummaries =>
       syncState.summaries.values.foldLeft(syncedSummaries) {
         case (syncedSummaries, summary) =>
-          val ss = syncedSummaries.get(summary.blockHash).getOrElse(SyncedSummary(summary))
+          val ss = syncedSummaries.getOrElse(summary.blockHash, SyncedSummary(summary))
           syncedSummaries + (summary.blockHash -> ss.addSource(source))
       }
     }
