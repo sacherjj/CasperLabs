@@ -346,42 +346,42 @@ object GossipServiceCasperTestNodeFactory {
 
         (downloadManager, downloadManagerShutdown) = downloadManagerR
 
-        synchronizer = new SynchronizerImpl[F](
-          connectToGossip = connectToGossip,
-          backend = new SynchronizerImpl.Backend[F] {
-            override def tips: F[List[ByteString]] =
-              for {
-                dag       <- casper.blockDag
-                tipHashes <- casper.estimator(dag)
-              } yield tipHashes.toList
+        synchronizer <- SynchronizerImpl[F](
+                         connectToGossip = connectToGossip,
+                         backend = new SynchronizerImpl.Backend[F] {
+                           override def tips: F[List[ByteString]] =
+                             for {
+                               dag       <- casper.blockDag
+                               tipHashes <- casper.estimator(dag)
+                             } yield tipHashes.toList
 
-            override def justifications: F[List[ByteString]] =
-              for {
-                dag    <- casper.blockDag
-                latest <- dag.latestMessageHashes
-              } yield latest.values.toList
+                           override def justifications: F[List[ByteString]] =
+                             for {
+                               dag    <- casper.blockDag
+                               latest <- dag.latestMessageHashes
+                             } yield latest.values.toList
 
-            override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
-              for {
-                _ <- Log[F].debug(
-                      s"Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
-                    )
-                _ <- Validation[F].blockSummary(
-                      blockSummary,
-                      "casperlabs"
-                    )
-              } yield ()
+                           override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
+                             for {
+                               _ <- Log[F].debug(
+                                     s"Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
+                                   )
+                               _ <- Validation[F].blockSummary(
+                                     blockSummary,
+                                     "casperlabs"
+                                   )
+                             } yield ()
 
-            override def notInDag(blockHash: ByteString): F[Boolean] =
-              isInDag(blockHash).map(!_)
-          },
-          maxPossibleDepth = Int.MaxValue,
-          minBlockCountToCheckBranchingFactor = Int.MaxValue,
-          maxBranchingFactor = 2.0,
-          maxDepthAncestorsRequest = 1, // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
-          maxInitialBlockCount = Int.MaxValue,
-          isInitialRef = Ref.unsafe[F, Boolean](false)
-        )
+                           override def notInDag(blockHash: ByteString): F[Boolean] =
+                             isInDag(blockHash).map(!_)
+                         },
+                         maxPossibleDepth = Int.MaxValue,
+                         minBlockCountToCheckBranchingFactor = Int.MaxValue,
+                         maxBranchingFactor = 2.0,
+                         maxDepthAncestorsRequest = 1, // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
+                         maxInitialBlockCount = Int.MaxValue,
+                         isInitialRef = Ref.unsafe[F, Boolean](false)
+                       )
 
         server <- GossipServiceServer[F](
                    backend = new GossipServiceServer.Backend[F] {
@@ -525,7 +525,7 @@ object GossipServiceCasperTestNodeFactory {
         request: StreamAncestorBlockSummariesRequest
     ): Iterant[F, consensus.BlockSummary] =
       Iterant
-        .liftF(Log[F].info(s"Recevied request for ancestors of ${request.targetBlockHashes
+        .liftF(Log[F].info(s"Received request for ancestors of ${request.targetBlockHashes
           .map(PrettyPrinter.buildString(_))}"))
         .flatMap { _ =>
           underlying.streamAncestorBlockSummaries(request)

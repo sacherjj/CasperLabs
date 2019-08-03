@@ -286,7 +286,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
   ): F[Boolean] =
     for {
       faultTolerance <- FinalityDetector[F].normalizedFaultTolerance(dag, blockHash)
-      _ <- Log[F].info(
+      _ <- Log[F].trace(
             s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance; threshold is $faultToleranceThreshold"
           )
     } yield faultTolerance > faultToleranceThreshold

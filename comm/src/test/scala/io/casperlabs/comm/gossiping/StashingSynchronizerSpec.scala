@@ -157,6 +157,8 @@ object StashingSynchronizerSpec {
           case Right(e) => Task.now(e.asLeft[Vector[BlockSummary]])
         }
       }
+
+    def downloaded(blockHash: ByteString): Task[Unit] = Task.unit
   }
 
   object TestFixture {
