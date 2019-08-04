@@ -471,12 +471,8 @@ def propose_command(casper_client, args):
 
 @guarded_command
 def show_block_command(casper_client, args):
-    try:
-        response = casper_client.showBlock(args.hash, full_view=True)
-        return _show_block(response)
-    except InternalError as e:
-        print(str(e))
-        return 1
+    response = casper_client.showBlock(args.hash, full_view=True)
+    return _show_block(response)
 
 
 @guarded_command
