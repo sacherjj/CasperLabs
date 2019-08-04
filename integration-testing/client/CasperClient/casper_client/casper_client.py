@@ -113,7 +113,13 @@ class InternalError(Exception):
     and this exception thrown instead, so the user does
     not have to worry about handling any other exceptions.
     """
-    pass
+    def __init__(self, status = '', details = ''):
+        super(InternalError, self).__init__()
+        self.status = status
+        self.details = details
+
+    def __str__(self):
+        return f'{self.status}: {self.details}'
 
 
 def api(function):
@@ -129,9 +135,12 @@ def api(function):
     def wrapper(*args, **kwargs):
         try:
             return function(*args, **kwargs)
+        except SyntaxError:
+            raise
+        except grpc._channel._Rendezvous as e:
+            raise InternalError(str(e.code()), e.details())
         except Exception as e:
-            raise InternalError() from e
-
+            raise InternalError(details=str(e)) from e
     return wrapper
 
 
@@ -390,6 +399,7 @@ def guarded_command(function):
 
 
 def hexify(s):
+    """Replace cryptographic hashes and signatures with their base 16 representation."""
 
     def parse_bytes_literal(s):
         bytes_repr = s.strip()[1:-1]
@@ -429,10 +439,13 @@ def _show_blocks(response, element_name='block'):
 
 
 def _show_block(response):
-    if response.status != 'Success':
-        print(response.status)
-        return 1
-    print(response)
+    print(hexify(str(response)))
+
+
+@guarded_command
+def no_command(casper_client, args):
+    print('You must provide a command. --help for documentation of commands.')
+    return 1
 
 
 @guarded_command
@@ -458,8 +471,12 @@ def propose_command(casper_client, args):
 
 @guarded_command
 def show_block_command(casper_client, args):
-    response = casper_client.showBlock(args.hash)
-    return _show_block(response)
+    try:
+        response = casper_client.showBlock(args.hash, full_view=True)
+        return _show_block(response)
+    except InternalError as e:
+        print(str(e))
+        return 1
 
 
 @guarded_command
@@ -471,27 +488,27 @@ def show_blocks_command(casper_client, args):
 @guarded_command
 def vdag_command(casper_client, args):
     response = casper_client.visualizeDag(args.depth)
-    print(response.content)
+    # TODO: call Graphviz
+    print (hexify(str(response)))
 
 
 @guarded_command
 def query_state_command(casper_client, args):
     response = casper_client.queryState(args.block_hash, args.key, args.path, getattr(args, 'type'))
-    print(response.result)
+    import pdb; pdb.set_trace()
+    print(hexify(response.result))
 
 
 @guarded_command
 def show_deploy_command(casper_client, args):
     response = casper_client.showDeploy(args.hash, full_view=False)
-    print (response)
+    print (hexify(str(response)))
     
 
 @guarded_command
 def show_deploys_command(casper_client, args):
     response = casper_client.showDeploys(args.hash, full_view=False)
     _show_blocks(response, element_name='deploy')
-    for deployInfo in response:
-        print(deployInfo)
 
 
 def main():
@@ -511,6 +528,8 @@ def main():
             self.parser.add_argument('--internal-port', required=False, default=DEFAULT_INTERNAL_PORT, type=int,
                                      help='Port used for internal gRPC API.')
             self.sp = self.parser.add_subparsers(help='Choose a request')
+
+            self.parser.set_defaults(function=no_command)
 
         def addCommand(self, command: str, function, help, arguments):
             command_parser = self.sp.add_parser(command, help=help)

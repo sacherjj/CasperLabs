@@ -441,9 +441,7 @@ def cli(one_node_network):
     def invoker(*args):
         command_line = [CLI, "--host", f"{host}", "--port", f"{port}"] + list(args)
         logging.info(f"EXECUTING: {' '.join(command_line)}")
-        #if args[0] == 'show-deploys':
-        #    import time; time.sleep(10000)
-        cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if cp.returncode != 0:
             raise CLIErrorExit(cp)
         return cp.stdout.decode('utf-8')
@@ -451,32 +449,46 @@ def cli(one_node_network):
  
 
 def test_cli_no_parameters(cli):
-    with raises(CLIErrorExit):
+    with raises(CLIErrorExit) as ex_info:
         cli()
+    assert "You must provide a command" in str(ex_info.value)
 
 
 def test_cli_help(cli):
     out = cli('--help')
+    # deploy,propose,show-block,show-blocks,show-deploy,show-deploys,vdag,query-state
     assert 'Casper' in out
 
     
-def test_cli_show_blocks(cli):
-    blocks = parse_show_blocks(cli('show-blocks', '--depth', '1000'))
+def test_cli_show_blocks_and_show_block(cli):
+    blocks = parse_show_blocks(cli('show-blocks', '--depth', '1'))
     assert len(blocks) > 0
 
     for block in blocks:
         block_hash = block.summary.block_hash
         assert len(block_hash) == 32 * 2  # hex
 
+        b = parse(cli('show-block', block_hash))
+        assert block_hash == b.summary.block_hash
 
-def test_cli_deploy_propose_and_show_deploys(cli, one_node_network):
+
+def test_cli_show_block_not_found(cli):
+    block_hash = '00' * 32
+    with raises(CLIErrorExit) as ex_info:
+        parse(cli('show-block', block_hash))
+    # StatusCode.NOT_FOUND: Cannot find block matching hash 0000000000000000000000000000000000000000000000000000000000000000
+    assert "NOT_FOUND" in str(ex_info.value)
+    assert "Cannot find block matching hash" in str(ex_info.value)
+
+
+def test_cli_deploy_propose_show_deploys_and_show_deploy(cli, one_node_network):
     account = one_node_network.docker_nodes[0].test_account
     deploy_response = cli('deploy',
                           '--from', account.public_key_hex,
                           '--nonce', '1',
                           '--payment', 'resources/test_helloname.wasm',
                           '--session', 'resources/test_helloname.wasm',
-                          '--gas-limit', '500000', # TODO: currently required, not sure if should betest_cli_deploy_propose_and_show_deploys
+                          '--gas-limit', '500000', # TODO: currently required, not sure if it should be
                           '--private-key', str(account.private_key_path),
                           '--public-key', str(account.public_key_path))
     # 'Success! Deploy hash: xxxxxxxxx...'
@@ -487,4 +499,7 @@ def test_cli_deploy_propose_and_show_deploys(cli, one_node_network):
     deploys = parse_show_deploys(cli('show-deploys', block_hash))
     deploy_hashes = [d.deploy.deploy_hash for d in deploys]
     assert deploy_hash in deploy_hashes
+    
+    deploy_info = parse(cli('show-deploy', deploy_hash))
+    assert deploy_info.deploy.deploy_hash == deploy_hash
 
