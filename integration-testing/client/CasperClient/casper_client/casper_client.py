@@ -349,6 +349,30 @@ class CasperClient:
         q.path_segments.extend(name for name in path.split('/') if name)
         return self.casperService.GetBlockState(casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q))
 
+    @api
+    def balance(self, address: str, block_hash: str):
+        value = self.queryState(block_hash, address, "", "address")
+        
+        account = None
+        try:
+            account = value.account
+        except KeyError:
+            return InternalError('', f"Expected Account type value under {address}.")
+
+        urefs = [u for u in account.known_urefs if u.name == 'mint']
+        if len(urefs) == 0:
+            raise InternalError('', "Account's known_urefs map did not contain Mint contract address.")
+        mintPublic = urefs[0]
+        mintPrivate = self.queryState(block_hash, mintPublic.key.uref.uref.hex(), "", "uref")
+
+        mintPrivateHex = mintPrivate.key.uref.uref.hex()
+        purseAddrHex = ABI.byte_array(account.purse_id.uref).hex()
+        localKeyValue = f"{mintPrivateHex}:{purseAddrHex}"
+
+        balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
+        balance = self.queryState(block_hash, balanceURef.key.uref.uref.hex(), "", "uref")
+        return int(balance.big_int.value)
+        
 
     @api
     def showDeploy(self, deploy_hash_base16: str, full_view=True):
@@ -493,11 +517,16 @@ def query_state_command(casper_client, args):
     response = casper_client.queryState(args.block_hash, args.key, args.path, getattr(args, 'type'))
     print(hexify(str(response)))
 
+@guarded_command
+def balance_command(casper_client, args):
+    response = casper_client.balance(args.address, args.block_hash)
+    print(response)
+
 
 @guarded_command
 def show_deploy_command(casper_client, args):
     response = casper_client.showDeploy(args.hash, full_view=False)
-    print (hexify(str(response)))
+    print(hexify(str(response)))
     
 
 @guarded_command
@@ -578,6 +607,11 @@ def main():
                        [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
                        [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'),
                                                help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
+
+
+    parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
+                      [[('-a', '--address'), dict(required=True, type=str, help="Account's public key in hex.")],
+                       [('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')]])
 
     sys.exit(parser.run())
 

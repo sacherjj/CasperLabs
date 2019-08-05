@@ -481,7 +481,7 @@ def test_cli_show_block_not_found(cli):
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
-def test_cli_deploy_propose_show_deploys_show_deploy_and_query_state(cli, one_node_network):
+def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli, one_node_network):
     account = one_node_network.docker_nodes[0].test_account
     deploy_response = cli('deploy',
                           '--from', account.public_key_hex,
@@ -503,10 +503,12 @@ def test_cli_deploy_propose_show_deploys_show_deploy_and_query_state(cli, one_no
     deploy_info = parse(cli('show-deploy', deploy_hash))
     assert deploy_info.deploy.deploy_hash == deploy_hash
 
-    
     result = parse(cli('query-state',
                        '--block-hash', block_hash,
                        '--type', 'address',
                        '--key', account.public_key_hex,
                        '--path', ""))
     assert 'hello_name' in [u.name for u in result.account.known_urefs]
+
+    balance = int(cli('balance', '--address', account.public_key_hex, '--block-hash', block_hash))
+    assert balance == 1000000
