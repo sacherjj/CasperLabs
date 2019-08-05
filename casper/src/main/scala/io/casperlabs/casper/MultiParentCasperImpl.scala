@@ -313,25 +313,26 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
     } yield ()
 
   /** Add a deploy to the buffer, if the code passes basic validation. */
-  def deploy(deploy: Deploy): F[Either[Throwable, Unit]] =
-    (deploy.getBody.session, deploy.getBody.payment) match {
-      //TODO: verify sig immediately (again, so we fail fast)
-      case (Some(session), Some(payment)) =>
-        val req = ExecutionEngineService[F].verifyWasm(ValidateRequest(session.code, payment.code))
+  def deploy(deploy: Deploy): F[Either[Throwable, Unit]] = validatorId match {
+    case Some(_) =>
+      (deploy.getBody.session, deploy.getBody.payment) match {
+        case (Some(session), Some(payment)) =>
+          val req =
+            ExecutionEngineService[F].verifyWasm(ValidateRequest(session.code, payment.code))
 
-        EitherT(req)
-          .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
-          .flatMapF(_ => addDeploy(deploy))
-          .value
-      // TODO: Genesis doesn't have payment code; does it come here?
-      case (None, _) | (_, None) =>
-        Either
-          .left[Throwable, Unit](
-            // TODO: Use IllegalArgument from comms.
-            new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
-          )
-          .pure[F]
-    }
+          EitherT(req)
+            .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
+            .flatMapF(_ => addDeploy(deploy))
+            .value
+        case (None, _) | (_, None) =>
+          new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
+            .asLeft[Unit]
+            .pure[F]
+            .widen
+      }
+    case None =>
+      new IllegalStateException(s"Node is in read-only mode.").asLeft[Unit].pure[F].widen
+  }
 
   /** Add a deploy to the buffer, to be executed later. */
   private def addDeploy(deploy: Deploy): F[Either[Throwable, Unit]] = {

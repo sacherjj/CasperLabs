@@ -113,6 +113,8 @@ object BlockAPI {
               Metrics[F].incrementCounter("deploys-success") *> ().pure[F]
             case Left(ex: IllegalArgumentException) =>
               MonadThrowable[F].raiseError[Unit](InvalidArgument(ex.getMessage))
+            case Left(ex: IllegalStateException) =>
+              MonadThrowable[F].raiseError[Unit](FailedPrecondition(ex.getMessage))
             case Left(ex) =>
               MonadThrowable[F].raiseError[Unit](ex)
           }
