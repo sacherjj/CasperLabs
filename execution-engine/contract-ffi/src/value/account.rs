@@ -510,8 +510,7 @@ impl AssociatedKeys {
         let total = authorization_keys
             .iter()
             .filter_map(|key| self.0.get(key))
-            .map(|w| w.value())
-            .sum();
+            .fold(0u8, |acc, w| acc.saturating_add(w.value()));
 
         Weight::new(total)
     }
