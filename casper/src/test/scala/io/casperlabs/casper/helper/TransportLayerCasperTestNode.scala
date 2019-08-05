@@ -11,6 +11,7 @@ import io.casperlabs.blockstorage._
 import io.casperlabs.casper
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
@@ -31,6 +32,7 @@ import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
+import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.shared.{Cell, Log, Time}
 
 import scala.collection.mutable
@@ -69,9 +71,11 @@ class TransportLayerCasperTestNode[F[_]](
     )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
   implicit val logEff: LogStub[F] = new LogStub[F](local.host, printEnabled = false)
-  implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
-  implicit val transportLayerEff  = tle
-  implicit val rpConfAsk          = createRPConfAsk[F](local)
+  implicit val deployBufferEff: DeployBuffer[F] =
+    MockDeployBuffer.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
+  implicit val connectionsCell   = Cell.unsafe[F, Connections](Connect.Connections.empty)
+  implicit val transportLayerEff = tle
+  implicit val rpConfAsk         = createRPConfAsk[F](local)
 
   implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
 

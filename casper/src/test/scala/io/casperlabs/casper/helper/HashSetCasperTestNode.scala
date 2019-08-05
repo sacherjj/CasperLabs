@@ -63,7 +63,7 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val logEff: LogStub[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
-  implicit val deployBufferEff: DeployBuffer[F] = MockDeployBuffer.unsafeCreate[F]()
+  implicit val deployBufferEff: DeployBuffer[F]
   implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
   implicit val safetyOracleEff: FinalityDetector[F]

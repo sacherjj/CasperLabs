@@ -697,8 +697,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     /** Create a block from a deploy and add it on that node. */
     def deploy(node: HashSetCasperTestNode[Effect], dd: Deploy): Effect[Block] =
       for {
-        createBlockResult1    <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
-        Created(signedBlock1) = createBlockResult1
+        _                     <- node.casperEff.deploy(dd)
+        Created(signedBlock1) <- node.casperEff.createBlock
         _                     <- node.casperEff.addBlock(signedBlock1)
       } yield signedBlock1
 
@@ -754,7 +754,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(2).casperEff.contains(br) shouldBeF true
       // And if we create one more block on top of h1 it should be the only parent.
       nr <- deploy(nodes(2), makeDeployA())
-      _ = nr.header.get.parentHashes.map(PrettyPrinter.buildString(_)) shouldBe Seq(
+      _ = nr.header.get.parentHashes.map(PrettyPrinter.buildString) shouldBe Seq(
         PrettyPrinter.buildString(br.blockHash)
       )
 
@@ -1137,7 +1137,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _                <- checkLastFinalizedBlock(nodes(0), block1)
       deployBufferSize <- nodes(0).deployBufferEff.sizePendingOrProcessed()
-      _                = deployBufferSize should be(5) // deploys from blocks 2-7
+      _                = deployBufferSize should be(1)
 
       Created(block7) <- nodes(0).casperEff
                           .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
@@ -1147,7 +1147,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _                <- checkLastFinalizedBlock(nodes(0), block2)
       deployBufferSize <- nodes(0).deployBufferEff.sizePendingOrProcessed()
-      _                = deployBufferSize should be(5) // deploys from blocks 3-7
+      _                = deployBufferSize should be(2) // deploys contained in block 4 and block 7
 
       Created(block8) <- nodes(1).casperEff
                           .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
@@ -1157,7 +1157,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _                <- checkLastFinalizedBlock(nodes(0), block3)
       deployBufferSize <- nodes(0).deployBufferEff.sizePendingOrProcessed()
-      _                = deployBufferSize should be(5) // deploys from blocks 4-8
+      _                = deployBufferSize should be(2) // deploys contained in block 4 and block 7
 
       Created(block9) <- nodes(2).casperEff
                           .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
@@ -1167,7 +1167,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _                <- checkLastFinalizedBlock(nodes(0), block4)
       deployBufferSize <- nodes(0).deployBufferEff.sizePendingOrProcessed()
-      _                = deployBufferSize should be(5) // deploys from blocks 5-9
+      _                = deployBufferSize should be(1) // deploys contained in block 7
 
       Created(block10) <- nodes(0).casperEff
                            .deploy(deployDatas(9)) *> nodes(0).casperEff.createBlock
@@ -1177,7 +1177,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _                <- checkLastFinalizedBlock(nodes(0), block5)
       deployBufferSize <- nodes(0).deployBufferEff.sizePendingOrProcessed()
-      _                = deployBufferSize should be(5) // deploys from blocks 6-10
+      _                = deployBufferSize should be(2) // deploys contained in block 7 and block 10
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
