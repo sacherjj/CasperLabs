@@ -105,13 +105,9 @@ class FinalityDetectorTest
             case (_, msgs) => msgs.lastOption.map(_.blockHash)
           }.toSet
           _ = lowestLevelZeroMsgs shouldBe Set(b2.blockHash, b3.blockHash)
-          _ <- dag.justificationToBlocks(b2.blockHash) shouldBeF Some(Set(b4.blockHash))
-          _ <- dag.justificationToBlocks(b3.blockHash) shouldBeF Some(
-                Set(b4.blockHash, b5.blockHash)
-              )
-          _ <- dag.justificationToBlocks(b4.blockHash) shouldBeF Some(
-                Set(b6.blockHash, b7.blockHash)
-              )
+          _ <- dag.justificationToBlocks(b2.blockHash) shouldBeF Set(b4.blockHash)
+          _ <- dag.justificationToBlocks(b3.blockHash) shouldBeF Set(b4.blockHash, b5.blockHash)
+          _ <- dag.justificationToBlocks(b4.blockHash) shouldBeF Set(b6.blockHash, b7.blockHash)
           sweepResult <- finalityDetectorEffect.sweep(
                           dag,
                           Set(v1, v2),

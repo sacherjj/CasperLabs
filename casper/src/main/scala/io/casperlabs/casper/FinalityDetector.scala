@@ -51,9 +51,10 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     for {
       weights      <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
       committeeOpt <- findBestCommittee(dag, candidateBlockHash, weights)
-    } yield committeeOpt
-      .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
-      .getOrElse(0f)
+    } yield
+      committeeOpt
+        .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
+        .getOrElse(0f)
 
   def levelZeroMsgs(
       dag: DagRepresentation[F],
@@ -212,10 +213,8 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     val stream = DagOperations.bfToposortTraverseF(lowestLevelZeroMsgs)(
       b =>
         for {
-          bsOpt <- dag.justificationToBlocks(b.blockHash)
-          filterBs <- bsOpt
-                       .getOrElse(Set.empty)
-                       .toList
+          bsOpt <- blockDag.justificationToBlocks(b.blockHash)
+          filterBs <- bsOpt.toList
                        .traverse(
                          dag.lookup
                        )
@@ -244,9 +243,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
             // after update current block's tag information,
             // we need update its children seen blocks's level information as well
             blockWithSpecifiedJustification <- dag.justificationToBlocks(b.blockHash)
-            updatedBlockLevelTags <- blockWithSpecifiedJustification
-                                      .getOrElse(Set.empty)
-                                      .toList
+            updatedBlockLevelTags <- blockWithSpecifiedJustification.toList
                                       .foldLeftM(updatedBlockLevelTags) {
                                         case (acc, child) =>
                                           for {

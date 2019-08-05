@@ -97,10 +97,10 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
           } yield result
       }
 
-    def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
+    def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
       justificationMap.get(blockHash) match {
         case Some(blocks) =>
-          Option(blocks).pure[F]
+          blocks.pure[F]
         case None =>
           for {
             blockOpt <- BlockStorage[F].getBlockMessage(blockHash)
@@ -108,17 +108,16 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
                        case Some(block) =>
                          val number = block.getHeader.rank
                          if (number >= sortOffset) {
-                           none[Set[BlockHash]].pure[F]
+                           Set.empty[BlockHash].pure[F]
                          } else {
                            lock.withPermit(
-                             for {
-                               oldDagInfo <- loadCheckpoint(number)
-                             } yield oldDagInfo.flatMap(
-                               _.justificationMap.get(blockHash)
+                             loadCheckpoint(number).map(
+                               _.flatMap(_.justificationMap.get(blockHash))
+                                 .getOrElse(Set.empty)
                              )
                            )
                          }
-                       case None => none[Set[BlockHash]].pure[F]
+                       case None => Set.empty[BlockHash].pure[F]
                      }
           } yield result
       }
