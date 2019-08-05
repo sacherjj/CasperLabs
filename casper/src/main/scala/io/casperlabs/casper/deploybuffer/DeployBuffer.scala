@@ -110,10 +110,10 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       deploys: List[Deploy],
       status: Int
   ): F[Unit] = {
-    val writeToDeploysTable = Update[(ByteString, ByteString, ByteString)](
-      "INSERT INTO deploys (hash, account, data) VALUES (?, ?, ?)"
+    val writeToDeploysTable = Update[(ByteString, ByteString)](
+      "INSERT INTO deploys (hash, data) VALUES (?, ?)"
     ).updateMany(deploys.map { d =>
-      (d.deployHash, d.getHeader.accountPublicKey, d.toByteString)
+      (d.deployHash, d.toByteString)
     })
 
     def writeToBufferedDeploysTable(currentTimeEpochSeconds: Long) =

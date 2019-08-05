@@ -3,7 +3,6 @@
 CREATE TABLE deploys
 (
     hash    BLOB PRIMARY KEY NOT NULL,
-    account BLOB             NOT NULL,
     data    BLOB             NOT NULL
 );
 
@@ -17,8 +16,7 @@ CREATE TABLE buffered_deploys
     -- Needed for expiring deploys preventing disk space overfilling
     -- Since Unix epoch
     receive_time_seconds INTEGER          NOT NULL,
-    FOREIGN KEY (hash) REFERENCES deploys (hash),
-    FOREIGN KEY (account) REFERENCES deploys (account)
+    FOREIGN KEY (hash) REFERENCES deploys (hash)
 ) WITHOUT ROWID;
 
 -- Useful readings: http://www.sqlitetutorial.net/sqlite-index/
