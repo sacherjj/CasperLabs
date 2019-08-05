@@ -1,3 +1,5 @@
+-- Related to the io.casperlabs.casper.deploybuffer.DeployBufferImpl
+
 CREATE TABLE deploys
 (
     hash    BLOB PRIMARY KEY NOT NULL,
@@ -22,10 +24,15 @@ CREATE TABLE buffered_deploys
 -- Useful readings: http://www.sqlitetutorial.net/sqlite-index/
 --                  https://www.sqlite.org/queryplanner.html
 --                  https://www.sqlite.org/optoverview.html
-CREATE INDEX idx_buffered_deploys_status ON buffered_deploys (status);
-CREATE INDEX idx_buffered_deploys_account_status ON buffered_deploys (account, status);
-CREATE INDEX idx_buffered_deploys_hash_status ON buffered_deploys (hash, status);
-CREATE INDEX idx_buffered_deploys_status_update_time ON buffered_deploys (status, update_time_seconds);
-CREATE INDEX idx_buffered_deploys_hash_status_update_time ON buffered_deploys (hash, status, update_time_seconds);
-CREATE INDEX idx_buffered_deploys_status_receive_time ON buffered_deploys (status, receive_time_seconds);
-CREATE INDEX idx_deploys_status_data ON deploys (data);
+
+-- readHashesByStatus
+CREATE INDEX idx_buffered_deploys_status_hash ON buffered_deploys (status, hash);
+
+-- readByAccountAndStatus, only 'processed' deploys are filtered by account at the moment, so using partial index
+CREATE INDEX idx_buffered_deploys_account_status ON buffered_deploys (account, status) WHERE status = 1;
+
+-- cleanupDiscarded, only 'discarded' deploys affected, so using partial index
+CREATE INDEX idx_buffered_deploys_status_update_time ON buffered_deploys (status, update_time_seconds) WHERE status = 2;
+
+-- markAsDiscarded, only 'pending' deploys affected, so using partial index
+CREATE INDEX idx_buffered_deploys_status_receive_time ON buffered_deploys (status, receive_time_seconds) WHERE status = 0;

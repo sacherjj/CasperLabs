@@ -82,6 +82,9 @@ import scala.concurrent.duration.FiniteDuration
 class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     implicit val xa: Transactor[F]
 ) extends DeployBuffer[F] {
+  // Do not forget updating Flyway migration scripts at:
+  // block-storage/src/main/resources/db/migrations
+
   // Deploys not yet included in a block
   private val PendingStatusCode = 0
   // Deploys that have been processed at least once,
