@@ -126,11 +126,11 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
           .tupleLeft(InvalidUnslashableBlock: BlockStatus)
 
     Validation[F].preTimestamp(block).attempt.flatMap {
-      case Right(None) => addBlock(statelessExecutor.validateAndAddBlock(validatorId))
+      case Right(None) => addBlock(statelessExecutor.validateAndAddBlock)
       case Right(Some(delay)) =>
         Time[F].sleep(delay) >> Log[F].info(
           s"Block ${PrettyPrinter.buildString(block)} is ahead for $delay from now, will retry adding later"
-        ) >> addBlock(statelessExecutor.validateAndAddBlock(validatorId))
+        ) >> addBlock(statelessExecutor.validateAndAddBlock)
       case _ =>
         Log[F].warn(validation.ignore(block, "block timestamp exceeded threshold")) >> addBlock(
           handleInvalidTimestamp
@@ -596,8 +596,6 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
                                  case ((attempts, updatedDag), block) =>
                                    for {
                                      (status, updatedDag) <- statelessExecutor.validateAndAddBlock(
-                                                              validatorId
-                                                            )(
                                                               StatelessExecutor
                                                                 .Context(
                                                                   genesis,
@@ -627,14 +625,11 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
 
     val addedBlockHashes = addedBlocks.map(_.blockHash)
 
-    // Mark our (not peers) deploys we have observed in blocks as processed
-    // Peer deploys processed during block validation in StatelessExecutor
-    val processedDeploys = addedBlocks.flatMap { block =>
-      val ds = block.getBody.deploys.map(_.getDeploy)
-      validatorId.fold(ds)(id => if (ProtoUtil.createdBy(id, block)) ds else Nil)
-    }.toList
+    // Mark deploys we have observed in blocks as processed
+    val processedDeploys =
+      addedBlocks.flatMap(block => block.getBody.deploys.map(_.getDeploy)).toList
 
-    DeployBuffer[F].markAsProcessed(processedDeploys).whenA(processedDeploys.nonEmpty) >>
+    DeployBuffer[F].markAsProcessed(processedDeploys) >>
       Cell[F, CasperState].modify { s =>
         s.copy(
           blockBuffer = s.blockBuffer.filterNot(kv => addedBlockHashes(kv._1)),
@@ -704,7 +699,7 @@ object MultiParentCasperImpl {
      * Save the block if everything checks out.
      * We want to catch equivocations only after we confirm that the block completing
      * the equivocation is otherwise valid. */
-    def validateAndAddBlock(validatorId: Option[ValidatorIdentity])(
+    def validateAndAddBlock(
         maybeContext: Option[StatelessExecutor.Context],
         dag: BlockDagRepresentation[F],
         block: Block
@@ -775,13 +770,7 @@ object MultiParentCasperImpl {
 
       validationStatus.flatMap {
         case Right(effects) =>
-          // Adding as processed only deploys from peer blocks
-          // Our deploys processed during block creation
-          //TODO: Store with processing results, NODE-666
-          DeployBuffer[F]
-            .addAsProcessed(block.getBody.deploys.map(_.getDeploy).toList)
-            .whenA(validatorId.fold(true)(!ProtoUtil.createdBy(_, block))) >>
-            addEffects(Valid, block, effects, dag).tupleLeft(Valid)
+          addEffects(Valid, block, effects, dag).tupleLeft(Valid)
 
         case Left(DropErrorWrapper(invalid)) =>
           // These exceptions are coming from the validation checks that used to happen outside attemptAdd,

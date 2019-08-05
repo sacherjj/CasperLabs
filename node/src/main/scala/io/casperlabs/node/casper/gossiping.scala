@@ -1,5 +1,7 @@
 package io.casperlabs.node.casper
 
+import java.util.concurrent.{TimeUnit, TimeoutException}
+
 import cats._
 import cats.effect._
 import cats.effect.concurrent._
@@ -9,9 +11,11 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.BlockApproverProtocol
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{LegacyConversions, _}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
@@ -20,24 +24,18 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
-import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.shared.{Cell, FilesAPI, Log, Resources, Time}
+import io.casperlabs.shared.{Cell, FilesAPI, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
-import java.util.concurrent.{TimeUnit, TimeoutException}
-
-import io.casperlabs.casper.deploybuffer.DeployBuffer
-import io.casperlabs.casper.validation.Validation
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import monix.eval.TaskLike
 import monix.execution.Scheduler
 
 import scala.concurrent.duration._
-import scala.io.Source
 import scala.util.Random
 import scala.util.control.NoStackTrace
 
@@ -170,7 +168,6 @@ package object gossiping {
 
   /** Validate the genesis candidate or any new block via Casper. */
   private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployBuffer: Validation](
-      validatorId: Option[ValidatorIdentity],
       chainId: String,
       block: Block
   ): F[Unit] =
@@ -185,7 +182,7 @@ package object gossiping {
             state       <- Cell.mvarCell[F, CasperState](CasperState())
             executor    <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
             dag         <- BlockDagStorage[F].getRepresentation
-            (status, _) <- executor.validateAndAddBlock(validatorId)(None, dag, block)(state)
+            (status, _) <- executor.validateAndAddBlock(None, dag, block)(state)
           } yield status
 
         case None =>
@@ -316,7 +313,7 @@ package object gossiping {
                                       s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
                                     )
                                 } *>
-                                validateAndAddBlock(validatorId, conf.casper.chainId, block)
+                                validateAndAddBlock(conf.casper.chainId, block)
 
                             override def storeBlock(block: Block): F[Unit] =
                               // Validation has already stored it.
@@ -469,7 +466,6 @@ package object gossiping {
                                          s"Trying to store generated Genesis candidate ${show(genesis.blockHash)}"
                                        )
                                    _ <- validateAndAddBlock(
-                                         validatorId,
                                          conf.casper.chainId,
                                          genesis
                                        )

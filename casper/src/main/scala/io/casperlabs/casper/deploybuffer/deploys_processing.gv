@@ -29,7 +29,6 @@ digraph deploy_processing_finite_state_machine {
 	store_block[shape="box" label="store block"];
 
 	initialized -> check_hashes [label="deploy received"];
-	initialized -> check_block [label="peer block received"];
 
 	check_hashes -> check_signatures [label="yes"];
 	check_hashes -> rejected [label="no"];
