@@ -68,21 +68,30 @@ After connection is complete, all node logs will show `Peers: 2`.
 ## Cleanup
 To cleanup the network stopping and removing all containers run the command `make clean`.
 
+## Signing Deploys
+
+To sign deploy you'll need to [generate and ed25519 keypair](/hack/VALIDATOR.md#setting-up-keys) and save them into `docker/keys`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments.
+
 ## Deploy some WASM code
 
 Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
 
 ```console
 ACCOUNT_ID="$(cat .casperlabs/genesis/system-account/account-id-hex)"
+mkdir keys/system-account
+cp .casperlabs/genesis/system-account/account-private.pem keys/system-account/
+cp .casperlabs/genesis/system-account/account-public.pem keys/system-account/
 ./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
-     --from "$ACCOUNT_ID" \
      --gas-price 1 \
+     --from "$ACCOUNT_ID" \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
-     --nonce 1
+     --nonce 1 \
+     --public-key /keys/system-account/account-public.pem \
+     --private-key /keys/system-account/account-private.pem
 ```
 
-As you may notice we make use of the `system-account` for deploys signing. This is temporal until we the add ability to create new custom accounts.
+As you may notice we make use of the `system-account` for deploys signing. This is temporary until we the add ability to create new custom accounts as part of Genesis.
 
 After a successful deploy, you should see the following response:
 
@@ -103,27 +112,6 @@ Response: Success! Block f876efed8d... created and added.
 ```
 
 If you check the log output, each node should get the block and provide some feedback about the execution as well.
-
-### Signing Deploys
-
-To sign deploy you'll need to [generate and ed25519 keypair](/hack/VALIDATOR.md#setting-up-keys) and save them into `docker/keys`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments, for example:
-
-```console
-ACCOUNT_ID="$(cat .casperlabs/genesis/system-account/account-id-hex)"
-mkdir keys/system-account
-cp .casperlabs/genesis/system-account/account-private.pem keys/system-account/
-cp .casperlabs/genesis/system-account/account-public.pem keys/system-account/
-./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
-     --gas-price 1 \
-     --from "$ACCOUNT_ID" \
-     --session /data/helloname.wasm \
-     --payment /data/helloname.wasm \
-     --nonce 1 \
-     --public-key /keys/system-account/account-public.pem \
-     --private-key /keys/system-account/account-private.pem
-```
-
-As you may notice we make use of the `system-account` for deploys signing. This is temporal until we the add ability to create new custom accounts.
 
 ## Monitoring
 

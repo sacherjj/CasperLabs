@@ -302,10 +302,6 @@ private[configuration] final case class Options private (
       gen[Path]("Path to the Wasm file which contains the Proof-of-Stake contract")
 
     @scallop
-    val casperIgnoreDeploySignature =
-      gen[Flag]("Bypass deploy hash and signature validation, for debug purposes.")
-
-    @scallop
     val casperAutoProposeEnabled =
       gen[Flag]("Enable auto-proposal of blocks.")
 

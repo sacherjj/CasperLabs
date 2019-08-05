@@ -401,6 +401,6 @@ object HashSetCasperTestNode {
       : Validation[F] =
     new ValidationImpl[F] {
       // Tests are not signing the deploys.
-      override def deploySignatures(b: Block): F[Unit] = ().pure[F]
+      override def deploySignature(d: consensus.Deploy): F[Boolean] = true.pure[F]
     }
 }

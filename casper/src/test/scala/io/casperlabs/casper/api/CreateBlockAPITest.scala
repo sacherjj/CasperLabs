@@ -31,13 +31,14 @@ import scala.concurrent.duration._
 class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCasperTestNodeFactory {
   import HashSetCasperTest._
   import HashSetCasperTestNode.Effect
-  import DeriveValidation._
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
   implicit val metrics              = new Metrics.MetricsNOP[Task]
   implicit val raiseValidateErr =
     casper.validation.raiseValidateErrorThroughApplicativeError[Effect]
   implicit val logEff = new LogStub[Effect]
+
+  implicit val validation = HashSetCasperTestNode.makeValidation[Effect]
 
   private val (validatorKeys, validators)                      = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                            = createBonds(validators)
@@ -74,10 +75,10 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
         implicit casperRef: MultiParentCasperRef[Effect]
     ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
       for {
-        t1 <- (BlockAPI.deploy[Effect](deploys.head, ignoreDeploySignature = true) *> BlockAPI
+        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI
                .createBlock[Effect](blockApiLock)).value.start
         _ <- Time[Task].sleep(2.second)
-        t2 <- (BlockAPI.deploy[Effect](deploys.last, ignoreDeploySignature = true) *> BlockAPI
+        t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
                .createBlock[Effect](blockApiLock)).value.start //should fail because other not done
         r1 <- t1.join
         r2 <- t2.join
@@ -114,9 +115,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
     ): Effect[Unit] =
       for {
         d <- ProtoUtil.basicDeploy[Effect](1L)
-        _ <- BlockAPI.deploy[Effect](d, ignoreDeploySignature = true)
+        _ <- BlockAPI.deploy[Effect](d)
         _ <- BlockAPI.createBlock[Effect](blockApiLock)
-        _ <- BlockAPI.deploy[Effect](d, ignoreDeploySignature = true)
+        _ <- BlockAPI.deploy[Effect](d)
       } yield ()
 
     try {
