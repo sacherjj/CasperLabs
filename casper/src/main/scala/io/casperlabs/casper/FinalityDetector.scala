@@ -305,7 +305,9 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
 
     }
 
-  /* finding the best level 1 committee for a given candidate block */
+  /*
+   * Finds the best level-1 committee for a given candidate block
+   */
   def findBestCommittee(
       blockDag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash,
