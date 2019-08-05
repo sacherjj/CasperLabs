@@ -68,8 +68,8 @@ class GossipServiceCasperTestNode[F[_]](
     case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
   }
 
-  implicit val raiseInvalidBlock         = casper.validation.raiseValidateErrorThroughApplicativeError[F]
-  implicit val validation: Validation[F] = new ValidationImpl[F]
+  implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
+  implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
   implicit val lastFinalizedBlockHashContainer =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)

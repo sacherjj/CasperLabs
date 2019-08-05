@@ -157,6 +157,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       // Checks that need the body.
       _ <- blockHash(block)
       _ <- deployCount(block)
+      _ <- deployHashes(block)
+      _ <- deploySignatures(block)
     } yield ()
   }
 
@@ -531,6 +533,36 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         _ <- Log[F].warn(ignore(b, s"block deploy count does not match to the amount of deploys."))
         _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployCount)
       } yield ()
+    }
+
+  def deployHashes(
+      b: Block
+  ): F[Unit] =
+    b.getBody.deploys.toList.findM(d => deployHash(d.getDeploy).map(!_)).flatMap {
+      case None =>
+        Applicative[F].unit
+      case Some(d) =>
+        for {
+          _ <- Log[F]
+                .warn(ignore(b, s"${PrettyPrinter.buildString(d.getDeploy)} has invalid hash."))
+          _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployHash)
+        } yield ()
+    }
+
+  def deploySignatures(
+      b: Block
+  ): F[Unit] =
+    b.getBody.deploys.toList.findM(d => deploySignature(d.getDeploy).map(!_)).flatMap {
+      case None =>
+        Applicative[F].unit
+      case Some(d) =>
+        for {
+          _ <- Log[F]
+                .warn(
+                  ignore(b, s"${PrettyPrinter.buildString(d.getDeploy)} has invalid signature.")
+                )
+          _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeploySignature)
+        } yield ()
     }
 
   /**
