@@ -18,6 +18,7 @@ members = [
     "contracts/test/ee-401-regression-call",
     "contracts/test/ee-441-rng-state",
     "contracts/test/ee-539-regression",
+    "contracts/test/ee-536-regression",
     "contracts/test/get-blocktime",
     "contracts/test/get-caller",
     "contracts/test/get-caller-subcall",
