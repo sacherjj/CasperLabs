@@ -83,34 +83,38 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
         case None => List.empty[BlockMetadata].pure[F]
       }
 
+    /*
+     * Traverses back the j-DAG of `block` (one step at a time), following `validator`'s blocks
+     * and collecting them as long as they are descendants of the `candidateBlockHash`.
+     */
     def previousAgreedBlockFromTheSameValidator(
         blockDag: BlockDagRepresentation[F],
         block: BlockMetadata,
         candidateBlockHash: BlockHash,
         validator: Validator
-    ): F[List[BlockMetadata]] =
-      (for {
-        previousHash <- OptionT.fromOption[F](
-                         block.justifications
-                           .find(
-                             _.validatorPublicKey == validator
-                           )
-                           .map(_.latestBlockHash)
-                       )
-        previousMsg <- OptionT(blockDag.lookup(previousHash))
-        continue <- OptionT.liftF(
-                     ProtoUtil.isInMainChain[F](
-                       blockDag,
-                       candidateBlockHash,
-                       previousHash
-                     )
-                   )
-        previousMsgs = if (continue) {
-          List(previousMsg)
-        } else {
-          List.empty[BlockMetadata]
-        }
-      } yield previousMsgs).fold(List.empty[BlockMetadata])(id)
+    ): F[List[BlockMetadata]] = {
+      // Assumes that validator always includes his last message as justification.
+      val previousHashO = block.justifications
+        .find(
+          _.validatorPublicKey == validator
+        )
+        .map(_.latestBlockHash)
+
+      previousHashO match {
+        case Some(previousHash) =>
+          ProtoUtil
+            .isInMainChain[F](blockDag, candidateBlockHash, previousHash)
+            .flatMap[List[BlockMetadata]](
+              isActiveVote =>
+                // If parent block of `block` is not in the main chain of `candidateBlockHash`
+                // we don't include it in the set of level-0 messages.
+                if (isActiveVote) blockDag.lookup(previousHash).map(_.toList)
+                else List.empty[BlockMetadata].pure[F]
+            )
+        case None =>
+          List.empty[BlockMetadata].pure[F]
+      }
+    }
 
     validators.foldLeftM(Map.empty[Validator, List[BlockMetadata]]) {
       case (acc, v) =>
