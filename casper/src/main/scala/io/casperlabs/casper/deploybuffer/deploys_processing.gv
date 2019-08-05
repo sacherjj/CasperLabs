@@ -2,6 +2,8 @@ digraph deploy_processing_finite_state_machine {
 /*
     For visualisation install the Graphviz package: https://www.graphviz.org
     Compile to image using the example command: dot -Gdpi=100 -Tjpeg -o deploys.jpeg deploys_processing_fsm.gv
+
+    Don't forget to update the docs/deploys_processing.svg on change
 */
 	initialized[shape="ellipse" label="Initialized"];
 	rejected[shape="circle" label="Rejected"];

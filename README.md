@@ -17,6 +17,7 @@ The open-source CasperLabs project is building a decentralized, economic, censor
 - [Deploying Contracts](docs/CONTRACTS.md)
 - [Querying](docs/QUERYING.md)
 - [Contributing](CONTRIBUTING.md)
+- [Useful Diagrams](docs/DIAGRAMS.md)
 
 ## Getting Help
 
