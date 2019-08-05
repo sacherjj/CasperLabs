@@ -1,7 +1,7 @@
 #![cfg_attr(not(test), no_std)]
 #![feature(alloc)]
 
-#[cfg_attr(test, macro_use)]
+#[macro_use]
 extern crate alloc;
 
 mod error;
@@ -13,17 +13,18 @@ use alloc::vec::Vec;
 
 use cl_std::contract_api;
 use cl_std::key::Key;
-use cl_std::uref::URef;
+use cl_std::uref::{AccessRights, URef};
 use cl_std::value::account::{BlockTime, PublicKey, PurseId};
 use cl_std::value::U512;
 
-use crate::error::{Error, Result, ResultExt};
+use crate::error::{Error, PurseLookupError, Result, ResultExt};
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
 use crate::stakes::{ContractStakes, StakesProvider};
 
 /// The uref name where the PoS purse is stored. It contains all staked tokens, and all unbonded
 /// tokens that are yet to be paid out.
 const BONDING_PURSE_KEY: &str = "pos_bonding_purse";
+const PAYMENT_PURSE_KEY: &str = "pos_payment_purse";
 
 /// The time from a bonding request until the bond becomes effective and part of the stake.
 const BOND_DELAY: u64 = 0;
@@ -118,6 +119,21 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec
     Ok(unbonds)
 }
 
+/// Attempts to look up a purse from the known_urefs.
+fn get_purse_id(name: &str) -> core::result::Result<PurseId, PurseLookupError> {
+    contract_api::get_uref(name)
+        .ok_or(PurseLookupError::KeyNotFound)
+        .and_then(|key| match key {
+            Key::URef(uref) => Ok(PurseId::new(uref)),
+            _ => Err(PurseLookupError::KeyUnexpectedType),
+        })
+}
+
+/// Returns the purse for accepting payment for tranasactions.
+fn get_payment_purse() -> Result<PurseId> {
+    get_purse_id(PAYMENT_PURSE_KEY).map_err(PurseLookupError::payment)
+}
+
 #[no_mangle]
 pub extern "C" fn call() {
     let method_name: String = contract_api::get_arg(0);
@@ -190,6 +206,16 @@ pub extern "C" fn call() {
                     entry.amount,
                 );
             }
+        }
+        "get_payment_purse" => {
+            let purse = get_payment_purse().unwrap_or_revert();
+            // Limit the access rights so only balance query and deposit are allowed.
+            let rights_controlled_purse =
+                PurseId::new(URef::new(purse.value().addr(), AccessRights::READ_ADD));
+            contract_api::ret(
+                &rights_controlled_purse,
+                &vec![rights_controlled_purse.value()],
+            );
         }
         _ => {}
     }
