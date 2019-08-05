@@ -441,6 +441,8 @@ def cli(one_node_network):
     def invoker(*args):
         command_line = [CLI, "--host", f"{host}", "--port", f"{port}"] + list(args)
         logging.info(f"EXECUTING: {' '.join(command_line)}")
+        #if args[0] == 'query-state':
+        #    import time; time.sleep(1000)
         cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if cp.returncode != 0:
             raise CLIErrorExit(cp)
@@ -481,7 +483,7 @@ def test_cli_show_block_not_found(cli):
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
-def test_cli_deploy_propose_show_deploys_and_show_deploy(cli, one_node_network):
+def test_cli_deploy_propose_show_deploys_show_deploy_and_query_state(cli, one_node_network):
     account = one_node_network.docker_nodes[0].test_account
     deploy_response = cli('deploy',
                           '--from', account.public_key_hex,
@@ -503,3 +505,10 @@ def test_cli_deploy_propose_show_deploys_and_show_deploy(cli, one_node_network):
     deploy_info = parse(cli('show-deploy', deploy_hash))
     assert deploy_info.deploy.deploy_hash == deploy_hash
 
+    
+    result = parse(cli('query-state',
+                       '--block-hash', block_hash,
+                       '--type', 'address',
+                       '--key', account.public_key_hex,
+                       '--path', ""))
+    assert 'hello_name' in [u.name for u in result.account.known_urefs]

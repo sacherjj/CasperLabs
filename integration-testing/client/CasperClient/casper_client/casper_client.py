@@ -15,6 +15,7 @@ sys.path.append(str(root))
 import time
 import argparse
 import grpc
+from grpc._channel import _Rendezvous
 import functools
 from pyblake2 import blake2b
 import ed25519
@@ -24,6 +25,7 @@ import json
 from operator import add
 from functools import reduce
 import ast
+from collections import defaultdict
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
 from .control_pb2_grpc import ControlServiceStub
@@ -137,7 +139,7 @@ def api(function):
             return function(*args, **kwargs)
         except SyntaxError:
             raise
-        except grpc._channel._Rendezvous as e:
+        except _Rendezvous as e:
             raise InternalError(str(e.code()), e.details())
         except Exception as e:
             raise InternalError(details=str(e)) from e
@@ -330,24 +332,22 @@ class CasperClient:
         :param key:               Base16 encoding of the base key
         :param path:              Path to the value to query. Must be of the form
                                   'key1/key2/.../keyn'
-        :param keyType:           Type of base key. Must be one of 'hash', 'uref',
-                                  'address'.
+        :param keyType:           Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'.
+                                  For 'local' key type, 'key' value format is {seed}:{rest},
+                                  where both parts are hex encoded."
         :return:                  QueryStateResponse object
         """
         def key_variant(keyType):
-            return {'hash': casper.StateQuery.KeyVariant.HASH,
-                    'uref': casper.StateQuery.KeyVariant.UREF,
-                    'address': casper.StateQuery.KeyVariant.ADDRESS}[keyType]
+            d = defaultdict(lambda *args: casper.StateQuery.KeyVariant.KEY_VARIANT_UNSPECIFIED)
+            d.update({'hash': casper.StateQuery.KeyVariant.HASH,
+                      'uref': casper.StateQuery.KeyVariant.UREF,
+                      'address': casper.StateQuery.KeyVariant.ADDRESS,
+                      'local': casper.StateQuery.KeyVariant.LOCAL})
+            return d[keyType]
 
-        def path_segments(path):
-            return path.split('/')
-
-        return self.casperService.GetBlockState(
-            casper.GetBlockStateRequest(block_hash_base16 = blockHash,
-                                        query = casper.StateQuery(
-                                                    key_variant = key_variant(keyType),
-                                                    key_base16 = key,
-                                                    path_segments = path_segments(path))))
+        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
+        q.path_segments.extend(path) #.split('/'))
+        return self.casperService.GetBlockState(casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q))
 
 
     @api
@@ -491,8 +491,7 @@ def vdag_command(casper_client, args):
 @guarded_command
 def query_state_command(casper_client, args):
     response = casper_client.queryState(args.block_hash, args.key, args.path, getattr(args, 'type'))
-    import pdb; pdb.set_trace()
-    print(hexify(response.result))
+    print(hexify(str(response)))
 
 
 @guarded_command
@@ -577,7 +576,8 @@ def main():
                       [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
                        [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
                        [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
-                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address'), help="Type of base key. Must be one of 'hash', 'uref', 'address'")]])
+                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'),
+                                               help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
 
     sys.exit(parser.run())
 
