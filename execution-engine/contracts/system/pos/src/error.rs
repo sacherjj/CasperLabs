@@ -20,6 +20,8 @@ pub enum Error {
     StakesNotFound,
     PaymentPurseNotFound,
     PaymentPurseKeyUnexpectedType,
+    BondingPurseNotFound,
+    BondingPurseKeyUnexpectedType,
     // TODO: Put these in their own enum, and wrap them separately in `BondingError` and
     // `UnbondingError`.
     QueueNotStoredAsByteArray,
@@ -48,6 +50,8 @@ impl Into<u32> for Error {
             Error::StakesNotFound => 0x100 + 1,
             Error::PaymentPurseNotFound => 0x100 + 2,
             Error::PaymentPurseKeyUnexpectedType => 0x100 + 3,
+            Error::BondingPurseNotFound => 0x100 + 4,
+            Error::BondingPurseKeyUnexpectedType => 0x100 + 5,
             Error::QueueNotStoredAsByteArray => 0x200,
             Error::QueueDeserializationFailed => 0x200 + 1,
             Error::QueueDeserializationExtraBytes => 0x200 + 2,
@@ -73,6 +77,13 @@ pub enum PurseLookupError {
 }
 
 impl PurseLookupError {
+    pub fn bonding(err: PurseLookupError) -> Error {
+        match err {
+            PurseLookupError::KeyNotFound => Error::BondingPurseNotFound,
+            PurseLookupError::KeyUnexpectedType => Error::BondingPurseKeyUnexpectedType,
+        }
+    }
+
     pub fn payment(err: PurseLookupError) -> Error {
         match err {
             PurseLookupError::KeyNotFound => Error::PaymentPurseNotFound,

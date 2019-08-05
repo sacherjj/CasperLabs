@@ -134,14 +134,16 @@ fn get_payment_purse() -> Result<PurseId> {
     get_purse_id(PAYMENT_PURSE_KEY).map_err(PurseLookupError::payment)
 }
 
+/// Returns the purse for holding bonds
+fn get_bonding_purse() -> Result<PurseId> {
+    get_purse_id(BONDING_PURSE_KEY).map_err(PurseLookupError::bonding)
+}
+
 #[no_mangle]
 pub extern "C" fn call() {
     let method_name: String = contract_api::get_arg(0);
     let timestamp = contract_api::get_blocktime();
-    let pos_purse = match contract_api::get_uref(BONDING_PURSE_KEY) {
-        Some(Key::URef(uref)) => PurseId::new(uref),
-        _ => panic!("PoS purse ID not found"),
-    };
+    let pos_purse = get_bonding_purse().unwrap_or_revert();
 
     match method_name.as_str() {
         // Type of this method: `fn bond(amount: U512, purse: URef)`
