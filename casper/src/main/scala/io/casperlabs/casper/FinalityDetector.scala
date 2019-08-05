@@ -277,6 +277,34 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
       }
   }
 
+  /*
+   * Returns a list of validators whose latest messages are votes for `candidateBlockHash`.
+   * i.e. checks whether latest blocks from these validators are in the main chain of `candidateBlockHash`.
+   */
+  private def getAgreeingValidators(
+      blockDag: BlockDagRepresentation[F],
+      candidateBlockHash: BlockHash,
+      weights: Map[Validator, Long]
+  ): F[List[Validator]] =
+    weights.keys.toList.filterA { validator =>
+      for {
+        latestMessageHash <- blockDag
+                              .latestMessageHash(
+                                validator
+                              )
+        result <- latestMessageHash match {
+                   case Some(b) =>
+                     ProtoUtil.isInMainChain[F](
+                       blockDag,
+                       candidateBlockHash,
+                       b
+                     )
+                   case _ => false.pure[F]
+                 }
+      } yield result
+
+    }
+
   /* finding the best level 1 committee for a given candidate block */
   def findBestCommittee(
       blockDag: BlockDagRepresentation[F],
@@ -284,24 +312,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
       weights: Map[Validator, Long]
   ): F[Option[Committee]] =
     for {
-      committeeApproximation <- weights.keys.toList.filterA { validator =>
-                                 for {
-                                   latestMessageHash <- blockDag
-                                                         .latestMessageHash(
-                                                           validator
-                                                         )
-                                   result <- latestMessageHash match {
-                                              case Some(b) =>
-                                                ProtoUtil.isInMainChain[F](
-                                                  blockDag,
-                                                  candidateBlockHash,
-                                                  b
-                                                )
-                                              case _ => false.pure[F]
-                                            }
-                                 } yield result
-
-                               }
+      committeeApproximation <- getAgreeingValidators(blockDag, candidateBlockHash, weights)
       totalWeight            = weights.values.sum
       maxWeightApproximation = committeeApproximation.map(weights).sum
       // To have a committee of half the total weight,
