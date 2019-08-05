@@ -505,15 +505,29 @@ impl AssociatedKeys {
         self.0.iter()
     }
 
-    /// Calculates total weight of authorization keys provided by an argument
-    pub fn calculate_keys_weight(&self, authorization_keys: &BTreeSet<PublicKey>) -> Weight {
-        let total = authorization_keys
-            .iter()
+    /// Helper method that calculates weight for keys that comes from any
+    /// source.
+    ///
+    /// This method is not concerned about uniqueness of the passed iterable.
+    /// Uniqueness is determined based on the input collection properties,
+    /// which is either BTreeSet (in `[AssociatedKeys::calculate_keys_weight]`)
+    /// or BTreeMap (in `[AssociatedKeys::total_keys_weight]`).
+    fn calculate_any_keys_weight<'a>(&self, keys: impl Iterator<Item = &'a PublicKey>) -> Weight {
+        let total = keys
             .filter_map(|key| self.0.get(key))
             .map(|w| w.value())
             .sum();
-
         Weight::new(total)
+    }
+
+    /// Calculates total weight of authorization keys provided by an argument
+    pub fn calculate_keys_weight(&self, authorization_keys: &BTreeSet<PublicKey>) -> Weight {
+        self.calculate_any_keys_weight(authorization_keys.iter())
+    }
+
+    /// Calculates total weight of all authorization keys
+    pub fn total_keys_weight(&self) -> Weight {
+        self.calculate_any_keys_weight(self.0.keys())
     }
 }
 
@@ -628,8 +642,32 @@ impl Account {
         self.associated_keys.add_key(public_key, weight)
     }
 
+    /// Checks if subtracting passed weight from current total would make the
+    /// new cumulative weight to fall below any of the thresholds on account.
+    fn check_thresholds_for_weight_update(&self, weight: &Weight) -> Option<()> {
+        let total_weight = self.associated_keys.total_keys_weight();
+
+        // Safely calculate new weight
+        let new_weight = total_weight.value().saturating_sub(weight.value());
+
+        if new_weight < self.action_thresholds().deployment().value()
+            || new_weight < self.action_thresholds().key_management().value()
+        {
+            // Return None which indicates an error if the new weight would be
+            // lesser than any of the thresholds.
+            return None;
+        }
+        // Some unit means success
+        Some(())
+    }
+
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
         // TODO(mpapierski): Authorized keys check EE-377
+        if let Some(weight) = self.associated_keys.get(&public_key) {
+            // Check if removing this weight would fall below thresholds
+            self.check_thresholds_for_weight_update(weight)
+                .ok_or_else(|| RemoveKeyFailure::PermissionDenied)?;
+        }
         self.associated_keys.remove_key(&public_key)
     }
 
@@ -639,6 +677,14 @@ impl Account {
         weight: Weight,
     ) -> Result<(), UpdateKeyFailure> {
         // TODO(mpapierski): Authorized keys check EE-377
+        if let Some(current_weight) = self.associated_keys.get(&public_key) {
+            if weight < *current_weight {
+                let diff = Weight::new(current_weight.value() - weight.value());
+                // New weight is smaller than current weight
+                self.check_thresholds_for_weight_update(&diff)
+                    .ok_or_else(|| UpdateKeyFailure::PermissionDenied)?;
+            }
+        }
         self.associated_keys.update_key(public_key, weight)
     }
 
@@ -653,7 +699,20 @@ impl Account {
         weight: Weight,
     ) -> Result<(), SetThresholdFailure> {
         // TODO(mpapierski): Authorized keys check EE-377
+        // Verify if new threshold weight exceeds total weight of allassociated
+        // keys.
+        self.can_set_threshold(weight)?;
+        // Set new weight for given action
         self.action_thresholds.set_threshold(action_type, weight)
+    }
+
+    /// Verifies if user can set action threshold
+    pub fn can_set_threshold(&self, new_threshold: Weight) -> Result<(), SetThresholdFailure> {
+        let total_weight = self.associated_keys.total_keys_weight();
+        if new_threshold > total_weight {
+            return Err(SetThresholdFailure::PermissionDeniedError);
+        }
+        Ok(())
     }
 
     /// Checks whether all authorization keys are associated with this account
@@ -868,8 +927,9 @@ impl FromBytes for Account {
 mod tests {
     use crate::uref::{AccessRights, URef};
     use crate::value::account::{
-        Account, AccountActivity, ActionThresholds, AddKeyFailure, AssociatedKeys, BlockTime,
-        PublicKey, PurseId, Weight, KEY_SIZE, MAX_KEYS,
+        Account, AccountActivity, ActionThresholds, ActionType, AddKeyFailure, AssociatedKeys,
+        BlockTime, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
+        Weight, KEY_SIZE, MAX_KEYS,
     };
     use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
     use alloc::vec::Vec;
@@ -1055,6 +1115,24 @@ mod tests {
     }
 
     #[test]
+    fn associated_keys_total_weight() {
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
+            res.add_key(PublicKey::new([2u8; 32]), Weight::new(11))
+                .expect("should add key 1");
+            res.add_key(PublicKey::new([3u8; 32]), Weight::new(12))
+                .expect("should add key 2");
+            res.add_key(PublicKey::new([4u8; 32]), Weight::new(13))
+                .expect("should add key 3");
+            res
+        };
+        assert_eq!(
+            associated_keys.total_keys_weight(),
+            Weight::new(1 + 11 + 12 + 13)
+        );
+    }
+
+    #[test]
     fn public_key_from_slice() {
         let bytes: Vec<u8> = (0..32).collect();
         let public_key = PublicKey::try_from(&bytes[..]).expect("should create public key");
@@ -1085,5 +1163,139 @@ mod tests {
     fn should_not_create_action_thresholds_with_invalid_deployment_threshold() {
         // deployment cant be greater than key management
         ActionThresholds::new(Weight::new(5), Weight::new(1)).unwrap();
+    }
+
+    #[test]
+    fn set_action_threshold_higher_than_total_weight() {
+        let identity_key = PublicKey::new([1u8; 32]);
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_2 = PublicKey::new([3u8; 32]);
+        let key_3 = PublicKey::new([4u8; 32]);
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(identity_key, Weight::new(1));
+            res.add_key(key_1, Weight::new(2))
+                .expect("should add key 1");
+            res.add_key(key_2, Weight::new(3))
+                .expect("should add key 2");
+            res.add_key(key_3, Weight::new(4))
+                .expect("should add key 3");
+            res
+        };
+        let mut account = Account::new(
+            [0u8; 32],
+            0,
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            associated_keys,
+            // deploy: 33 (3*11)
+            ActionThresholds::new(Weight::new(33), Weight::new(48))
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        assert_eq!(
+            account
+                .set_action_threshold(ActionType::Deployment, Weight::new(1 + 2 + 3 + 4 + 1))
+                .unwrap_err(),
+            SetThresholdFailure::PermissionDeniedError,
+        );
+        assert_eq!(
+            account
+                .set_action_threshold(ActionType::Deployment, Weight::new(1 + 2 + 3 + 4 + 245))
+                .unwrap_err(),
+            SetThresholdFailure::PermissionDeniedError,
+        )
+    }
+
+    #[test]
+    fn remove_key_would_violate_action_thresholds() {
+        let identity_key = PublicKey::new([1u8; 32]);
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_2 = PublicKey::new([3u8; 32]);
+        let key_3 = PublicKey::new([4u8; 32]);
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(identity_key, Weight::new(1));
+            res.add_key(key_1, Weight::new(2))
+                .expect("should add key 1");
+            res.add_key(key_2, Weight::new(3))
+                .expect("should add key 2");
+            res.add_key(key_3, Weight::new(4))
+                .expect("should add key 3");
+            res
+        };
+        let mut account = Account::new(
+            [0u8; 32],
+            0,
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            associated_keys,
+            // deploy: 33 (3*11)
+            ActionThresholds::new(Weight::new(1 + 2 + 3 + 4), Weight::new(1 + 2 + 3 + 4 + 5))
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        assert_eq!(
+            account.remove_associated_key(key_3).unwrap_err(),
+            RemoveKeyFailure::PermissionDenied,
+        )
+    }
+
+    #[test]
+    fn updating_key_would_violate_action_thresholds() {
+        let identity_key = PublicKey::new([1u8; 32]);
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_2 = PublicKey::new([3u8; 32]);
+        let key_3 = PublicKey::new([4u8; 32]);
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(identity_key, Weight::new(1));
+            res.add_key(key_1, Weight::new(2))
+                .expect("should add key 1");
+            res.add_key(key_2, Weight::new(3))
+                .expect("should add key 2");
+            res.add_key(key_3, Weight::new(4))
+                .expect("should add key 3");
+            // 1 + 2 + 3 + 4
+            res
+        };
+        let mut account = Account::new(
+            [0u8; 32],
+            0,
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            associated_keys,
+            // deploy: 33 (3*11)
+            ActionThresholds::new(Weight::new(1 + 2 + 3 + 4), Weight::new(1 + 2 + 3 + 4 + 1))
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        // Decreases by 3
+        assert_eq!(
+            account
+                .clone()
+                .update_associated_key(key_3, Weight::new(1))
+                .unwrap_err(),
+            UpdateKeyFailure::PermissionDenied,
+        );
+
+        // increase total weight (12)
+        account
+            .update_associated_key(identity_key, Weight::new(3))
+            .unwrap();
+
+        // variant a) decrease total weight by 1 (total 11)
+        account
+            .clone()
+            .update_associated_key(key_3, Weight::new(3))
+            .unwrap();
+        // variant b) decrease total weight by 3 (total 9) - fail
+        assert_eq!(
+            account
+                .clone()
+                .update_associated_key(key_3, Weight::new(1))
+                .unwrap_err(),
+            UpdateKeyFailure::PermissionDenied
+        );
     }
 }
