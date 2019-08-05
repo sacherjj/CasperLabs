@@ -441,8 +441,6 @@ def cli(one_node_network):
     def invoker(*args):
         command_line = [CLI, "--host", f"{host}", "--port", f"{port}"] + list(args)
         logging.info(f"EXECUTING: {' '.join(command_line)}")
-        #if args[0] == 'query-state':
-        #    import time; time.sleep(1000)
         cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if cp.returncode != 0:
             raise CLIErrorExit(cp)

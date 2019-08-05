@@ -346,7 +346,7 @@ class CasperClient:
             return d[keyType]
 
         q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
-        q.path_segments.extend(path) #.split('/'))
+        q.path_segments.extend(name for name in path.split('/') if name)
         return self.casperService.GetBlockState(casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q))
 
 
