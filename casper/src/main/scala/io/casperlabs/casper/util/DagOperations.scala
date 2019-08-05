@@ -55,7 +55,8 @@ object DagOperations {
   }
 
   def bfToposortTraverseF[F[_]: Monad](
-      start: List[BlockMetadata]
+      start: List[BlockMetadata],
+      ascending: Boolean = true
   )(neighbours: BlockMetadata => F[List[BlockMetadata]]): StreamT[F, BlockMetadata] = {
     def build(
         q: mutable.PriorityQueue[BlockMetadata],
@@ -74,7 +75,10 @@ object DagOperations {
       }
 
     implicit val blockTopoOrdering: Ordering[BlockMetadata] =
-      Ordering.by[BlockMetadata, Long](_.rank).reverse
+      if (ascending)
+        Ordering.by[BlockMetadata, Long](_.rank).reverse
+      else
+        Ordering.by[BlockMetadata, Long](_.rank)
 
     StreamT.delay(
       Eval.now(build(mutable.PriorityQueue.empty[BlockMetadata] ++ start, HashSet.empty[BlockHash]))

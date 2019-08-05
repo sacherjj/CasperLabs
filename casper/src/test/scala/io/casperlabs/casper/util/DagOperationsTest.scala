@@ -55,8 +55,16 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                 .children(b.blockHash)
                 .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
           }
-          result <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 3, 4, 5, 6, 7))
-        } yield result
+          _ <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 3, 4, 5, 6, 7))
+          stream2 = DagOperations
+            .bfToposortTraverseF[Task](
+              List(BlockMetadata.fromBlock(b6), BlockMetadata.fromBlock(b7)),
+              false
+            ) { b =>
+              b.parents.traverse(l => dag.lookup(l).map(_.get))
+            }
+          _ <- stream2.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 3, 4, 5, 6, 7).reverse)
+        } yield ()
   }
 
   "Greatest common ancestor" should "be computed properly" in withStorage {
