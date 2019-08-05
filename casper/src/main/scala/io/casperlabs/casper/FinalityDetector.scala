@@ -295,7 +295,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                                                            )
                                      result <- latestMessageHash match {
                                                 case Some(b) =>
-                                                  ProtoUtil.isInMainChain(
+                                                  ProtoUtil.isInMainChain[F](
                                                     blockDag,
                                                     candidateBlockHash,
                                                     b

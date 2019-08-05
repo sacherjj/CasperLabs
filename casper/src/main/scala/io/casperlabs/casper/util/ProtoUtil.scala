@@ -52,6 +52,18 @@ object ProtoUtil {
       } yield result
     }
 
+  // If targetBlockHash is main descendant of candidateBlockHash, then
+  // it means targetBlockHash vote candidateBlockHash.
+  def isInMainChain[F[_]: Monad](
+      blockDag: BlockDagRepresentation[F],
+      candidateBlockHash: BlockHash,
+      targetBlockHash: BlockHash
+  ): F[Boolean] =
+    for {
+      candidateBlockMetadata <- blockDag.lookup(candidateBlockHash)
+      result                 <- isInMainChain(blockDag, candidateBlockMetadata.get, targetBlockHash)
+    } yield result
+
   def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStore](
       estimate: Block,
       acc: IndexedSeq[Block],
