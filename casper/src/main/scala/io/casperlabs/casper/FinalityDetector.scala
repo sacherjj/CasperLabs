@@ -47,12 +47,6 @@ object FinalityDetector {
 
 class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F] {
 
-  /**
-    * To have a committee of half the total weight,
-    * you need at least twice the weight of the agreeingValidatorToWeight to be greater than the total weight.
-    * If that is false, we don't need to compute best committee
-    * as we know the value is going to be below 0 and thus useless for finalization.
-    */
   def normalizedFaultTolerance(
       blockDag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash
@@ -286,27 +280,30 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
       weights: Map[Validator, Long]
   ): F[Option[Committee]] =
     for {
-      committeeApproximation <- weights.keys.toList.filterA {
-                                 case validator =>
-                                   for {
-                                     latestMessageHash <- blockDag
-                                                           .latestMessageHash(
-                                                             validator
-                                                           )
-                                     result <- latestMessageHash match {
-                                                case Some(b) =>
-                                                  ProtoUtil.isInMainChain[F](
-                                                    blockDag,
-                                                    candidateBlockHash,
-                                                    b
-                                                  )
-                                                case _ => false.pure[F]
-                                              }
-                                   } yield result
+      committeeApproximation <- weights.keys.toList.filterA { validator =>
+                                 for {
+                                   latestMessageHash <- blockDag
+                                                         .latestMessageHash(
+                                                           validator
+                                                         )
+                                   result <- latestMessageHash match {
+                                              case Some(b) =>
+                                                ProtoUtil.isInMainChain[F](
+                                                  blockDag,
+                                                  candidateBlockHash,
+                                                  b
+                                                )
+                                              case _ => false.pure[F]
+                                            }
+                                 } yield result
 
                                }
       totalWeight            = weights.values.sum
       maxWeightApproximation = committeeApproximation.map(weights).sum
+      // To have a committee of half the total weight,
+      // you need at least twice the weight of the maxWeightApproximation to be greater than the total weight.
+      // If that is false, we don't need to compute best committee
+      // as we know the value is going to be below 0 and thus useless for finalization.
       result <- if (2 * maxWeightApproximation <= totalWeight) {
                  none[Committee].pure[F]
                } else {
