@@ -381,8 +381,8 @@ const consistentColor = () => {
 
   return (s: string) => {
     const h = hashCode(s);
-    const c = h < 0 ? (h % steps) + steps : h % steps;
-    const i = h < 0 ? (h % cl) + cl : h % cl;
+    const c = Math.abs(h % steps);
+    const i = Math.abs(h % cl);
     return colors[i](c);
   };
 };
