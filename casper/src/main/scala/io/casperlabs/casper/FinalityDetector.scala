@@ -71,7 +71,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     blockDag.lookup(candidateBlockHash).flatMap { blockOpt =>
       blockOpt.get.parents.headOption match {
         case Some(parent) => blockDag.lookup(parent).map(_.get.weightMap)
-        case None         => blockDag.lookup(candidateBlockHash).map(_.get.weightMap)
+        case None         => blockOpt.get.weightMap.pure[F]
       }
     }
 
