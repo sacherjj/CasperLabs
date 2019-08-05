@@ -5,7 +5,7 @@ import ErrorContainer from './ErrorContainer';
 import { CleanableFormData } from './FormData';
 import AuthService from '../services/AuthService';
 import CasperService from '../services/CasperService';
-import { encodeBase64, decodeBase16 } from '../lib/Conversions';
+import { encodeBase64, decodeBase64 } from '../lib/Conversions';
 import ObservableValueMap from '../lib/ObservableValueMap';
 import BalanceService from '../services/BalanceService';
 
@@ -102,7 +102,7 @@ export class AuthContainer {
 
         const latestAccountBalance = await this.balanceService.getAccountBalance(
           latestBlockHash,
-          decodeBase16(account.publicKeyBase64)
+          decodeBase64(account.publicKeyBase64)
         );
 
         this.balances.set(account.publicKeyBase64, {
