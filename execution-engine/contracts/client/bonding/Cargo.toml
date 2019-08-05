@@ -1,0 +1,14 @@
+[package]
+name = "bonding"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["contract-ffi/std"]
+
+[dependencies]
+contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

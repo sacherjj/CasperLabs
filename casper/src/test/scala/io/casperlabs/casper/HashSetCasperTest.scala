@@ -370,7 +370,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   }
 
   //todo we need some genenis Contract to pass this test
-//  it should "allow bonding and distribute the joining fee" in {
+// it should "allow bonding and distribute the joining fee" in {
 //    val nodes =
 //      HashSetCasperTestNode.network(
 //        validatorKeys :+ otherSk,
@@ -845,7 +845,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       // node(1) should have both block2 and block3 at this point and recognize the equivocation.
       // Because node(1) will also see that the signedBlock3 is building on top of signedBlock1Prime,
-      // it should download signedBlock1Prime as an `AdmissibleEquivocation`; otherwise if it didn't
+      //it should download signedBlock1Prime as an `AdmissibleEquivocation`; otherwise if it didn't
       // have an offspring it would be an `IgnorableEquivocation` and dropped.
       _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true

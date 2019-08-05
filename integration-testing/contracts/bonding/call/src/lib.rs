@@ -20,9 +20,7 @@ pub extern "C" fn call() {
 
     let source_purse = contract_api::main_purse();
     let bonding_purse = contract_api::create_purse();
-    // Note: could be replaced with contract_api::get_arg(0) for a reusable bonding session contract
-    // (as opposed to having a hard-coded amount).
-    let bond_amount = U512::from(1);
+    let bond_amount:U512 = U512::from(contract_api::get_arg::<u32>(0));
 
     match transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount) {
         PurseTransferResult::TransferSuccessful => {

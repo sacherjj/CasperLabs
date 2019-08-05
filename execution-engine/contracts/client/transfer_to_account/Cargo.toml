@@ -1,0 +1,14 @@
+[package]
+name = "transfer_to_account"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["cl_std/std"]
+
+[dependencies]
+cl_std = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

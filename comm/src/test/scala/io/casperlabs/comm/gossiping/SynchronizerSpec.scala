@@ -51,7 +51,7 @@ class SynchronizerSpec
         genPartialDagFromTips
       ) { dag =>
         log.reset()
-        TestFixture(dag)(maxInitialBlockCount = 1, isInitial = true) { (synchronizer, _, _) =>
+        TestFixture(dag)(maxInitialBlockCount = 1, isInitial = true) { (synchronizer, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
             dagOrError.isLeft shouldBe true
             dagOrError.left.get shouldBe an[SyncError.TooMany]
@@ -77,7 +77,7 @@ class SynchronizerSpec
           )
 
         def test(cycledDag: Vector[BlockSummary]): Unit = TestFixture(cycledDag)() {
-          (synchronizer, _, _) =>
+          (synchronizer, _) =>
             synchronizer.syncDag(Node(), Set(dag.head.blockHash)) foreachL { dagOrError =>
               dagOrError.isLeft shouldBe true
               dagOrError.left.get shouldBe an[SyncError.Cycle]
@@ -97,7 +97,7 @@ class SynchronizerSpec
         arbitrary[Boolean]
       ) { (dag, n, isInitial) =>
         log.reset()
-        TestFixture(dag)(maxPossibleDepth = n, isInitial = isInitial) { (synchronizer, _, _) =>
+        TestFixture(dag)(maxPossibleDepth = n, isInitial = isInitial) { (synchronizer, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
             if (isInitial) {
               dagOrError.isLeft shouldBe false
@@ -118,7 +118,7 @@ class SynchronizerSpec
       ) { (dag, n) =>
         log.reset()
         TestFixture(dag)(maxBranchingFactor = n, minBlockCountToCheckBranchingFactor = 0) {
-          (synchronizer, _, _) =>
+          (synchronizer, _) =>
             synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
               dagOrError.isLeft shouldBe true
               dagOrError.left.get shouldBe an[SyncError.TooWide]
@@ -132,7 +132,7 @@ class SynchronizerSpec
         arbBlockSummary.arbitrary
       ) { (dag, arbitraryBlock) =>
         log.reset()
-        TestFixture(dag :+ arbitraryBlock)() { (synchronizer, _, _) =>
+        TestFixture(dag :+ arbitraryBlock)() { (synchronizer, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
             dagOrError.isLeft shouldBe true
             dagOrError.left.get shouldBe an[SyncError.Unreachable]
@@ -146,7 +146,7 @@ class SynchronizerSpec
         genPositiveInt(1, consensusConfig.dagDepth - 2)
       ) { (dag, n) =>
         log.reset()
-        TestFixture(dag)(maxDepthAncestorsRequest = n) { (synchronizer, _, _) =>
+        TestFixture(dag)(maxDepthAncestorsRequest = n) { (synchronizer, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
             dagOrError.isLeft shouldBe true
             dagOrError.left.get shouldBe an[SyncError.Unreachable]
@@ -160,7 +160,7 @@ class SynchronizerSpec
       ) { dag =>
         log.reset()
         val e = new RuntimeException("Boom!")
-        TestFixture(dag)(validate = _ => Task.raiseError[Unit](e)) { (synchronizer, _, _) =>
+        TestFixture(dag)(validate = _ => Task.raiseError[Unit](e)) { (synchronizer, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
             dagOrError.isLeft shouldBe true
             dagOrError.left.get shouldBe an[SyncError.ValidationError]
@@ -174,7 +174,7 @@ class SynchronizerSpec
         genPartialDagFromTips
       ) { dag =>
         log.reset()
-        TestFixture(dag)(notInDag = _ => Task.now(true)) { (synchronizer, _, _) =>
+        TestFixture(dag)(notInDag = _ => Task.now(true)) { (synchronizer, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
             dagOrError.isLeft shouldBe true
             dagOrError.left.get shouldBe an[SyncError.MissingDependencies]
@@ -188,7 +188,7 @@ class SynchronizerSpec
       ) { dag =>
         log.reset()
         val e = new RuntimeException("Boom!")
-        TestFixture(dag)(error = e.some) { (synchronizer, _, _) =>
+        TestFixture(dag)(error = e.some) { (synchronizer, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).attempt.foreachL { dagOrError =>
             dagOrError.isLeft shouldBe true
             dagOrError.left.get shouldBe e
@@ -198,6 +198,61 @@ class SynchronizerSpec
         }
       }
     }
+
+    "started multiple sync with the same node" should {
+      "only run one sync at a time" in forAll(
+        genPartialDagFromTips
+      ) { dag =>
+        log.reset()
+        TestFixture(dag)() { (synchronizer, variables) =>
+          for {
+            fibers <- List.range(0, 5).traverse { _ =>
+                       synchronizer
+                         .syncDag(Node(), Set(dag.head.blockHash))
+                         .map(_ => variables.requestsGauge.get())
+                         .start
+                     }
+            readings <- fibers.traverse(_.join)
+          } yield {
+            readings.max should be <= 1
+          }
+        }
+      }
+    }
+
+    "syncs repeatedy" when {
+      "using the same source" should {
+        "not traverse the DAG twice" in forAll(
+          genPartialDagFromTips
+        ) { dag =>
+          // This was copied from the iterative test.
+          log.reset()
+          val ancestorsDepthRequest: Int Refined Positive = 2
+          val grouped = {
+            val headGroup   = Vector(Vector(dag.head))
+            val generations = dag.tail.grouped(consensusConfig.dagWidth).toVector
+            val groups      = headGroup ++ generations
+            groups.grouped(ancestorsDepthRequest).toVector.map(_.flatten)
+          }
+          val finalParents = dag.takeRight(consensusConfig.dagWidth).map(_.blockHash).toSet
+          TestFixture((grouped ++ grouped): _*)(
+            maxDepthAncestorsRequest = ancestorsDepthRequest,
+            notInDag = bs => Task.now(!finalParents(bs))
+          ) { (synchronizer, variables) =>
+            for {
+              r1 <- synchronizer.syncDag(Node(), Set(dag.head.blockHash))
+              r2 <- synchronizer.syncDag(Node(), Set(dag.head.blockHash))
+              d1 = r1.fold(throw _, identity)
+              d2 = r2.fold(throw _, identity)
+            } yield {
+              d2.length should be < d1.length
+              variables.requestsCounter.get should be < ((grouped.size.toDouble / ancestorsDepthRequest).ceil.toInt + 1) * 2
+            }
+          }
+        }
+      }
+    }
+
     "asked to sync DAG" should {
       "ignore branching factor checks until specified count-threshold is reached" in forAll(
         genPartialDagFromTips(
@@ -207,7 +262,7 @@ class SynchronizerSpec
       ) { (dag, n) =>
         log.reset()
         TestFixture(dag)(maxBranchingFactor = n, minBlockCountToCheckBranchingFactor = Int.MaxValue) {
-          (synchronizer, _, _) =>
+          (synchronizer, _) =>
             synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
               dagOrError.isRight shouldBe true
               dagOrError.right.get should contain allElementsOf dag
@@ -222,9 +277,9 @@ class SynchronizerSpec
       ) { (dag, tip, justification) =>
         log.reset()
         TestFixture(dag)(tips = List(tip), justifications = List(justification)) {
-          (synchronizer, _, knownHashes) =>
+          (synchronizer, variables) =>
             synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { _ =>
-              knownHashes should contain allElementsOf (tip :: justification :: Nil)
+              variables.knownHashes should contain allElementsOf (tip :: justification :: Nil)
             }
         }
       }
@@ -244,12 +299,12 @@ class SynchronizerSpec
         TestFixture(grouped: _*)(
           maxDepthAncestorsRequest = ancestorsDepthRequest,
           notInDag = bs => Task.now(!finalParents(bs))
-        ) { (synchronizer, requestsCount, _) =>
+        ) { (synchronizer, variables) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
             dagOrError.isRight shouldBe true
             val d = dagOrError.right.get
             d should contain allElementsOf dag.dropRight(consensusConfig.dagWidth)
-            requestsCount
+            variables.requestsCounter
               .get() shouldBe (grouped.size.toDouble / ancestorsDepthRequest).ceil.toInt + 1
           }
         }
@@ -278,7 +333,7 @@ class SynchronizerSpec
           loop(Nil, List(summary)).distinct
         }
 
-        TestFixture(dag)() { (synchronizer, _, _) =>
+        TestFixture(dag)() { (synchronizer, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
             dagOrError.isRight shouldBe true
             val d = dagOrError.right.get
@@ -318,9 +373,11 @@ object SynchronizerSpec {
 
   object MockGossipService {
     def apply(
-        counter: AtomicInt,
+        requestsCounter: AtomicInt,
+        requestsGauge: AtomicInt,
         error: Option[RuntimeException],
         knownHashes: ListBuffer[ByteString],
+        // Each request will return the next DAG.
         dags: Vector[BlockSummary]*
     ): Task[GossipService[Task]] =
       Task.now {
@@ -330,13 +387,21 @@ object SynchronizerSpec {
               request: StreamAncestorBlockSummariesRequest
           ): Iterant[Task, BlockSummary] = {
             request.knownBlockHashes.foreach(h => knownHashes += h)
-            error.fold(
-              Iterant.fromSeq[Task, BlockSummary](
-                dags.lift(counter.getAndIncrement()).getOrElse(Vector.empty)
-              )
-            ) { e =>
-              Iterant.raiseError(e)
-            }
+            Iterant
+              .resource {
+                Task.delay(requestsGauge.increment())
+              } { _ =>
+                Task.delay(requestsGauge.decrement())
+              }
+              .flatMap { _ =>
+                error.fold(
+                  Iterant.fromSeq[Task, BlockSummary] {
+                    dags.lift(requestsCounter.getAndIncrement()).getOrElse(Vector.empty)
+                  }
+                ) { e =>
+                  Iterant.raiseError(e)
+                }
+              }
           }
 
           def streamDagTipBlockSummaries(
@@ -352,6 +417,12 @@ object SynchronizerSpec {
       }
   }
 
+  case class TestVariables(
+      requestsCounter: AtomicInt,
+      requestsGauge: AtomicInt,
+      knownHashes: ListBuffer[ByteString]
+  )
+
   object TestFixture {
     def apply(dags: Vector[BlockSummary]*)(
         maxPossibleDepth: Int Refined Positive = Int.MaxValue,
@@ -365,12 +436,14 @@ object SynchronizerSpec {
         error: Option[RuntimeException] = None,
         tips: List[ByteString] = Nil,
         justifications: List[ByteString] = Nil
-    )(test: (Synchronizer[Task], AtomicInt, ListBuffer[ByteString]) => Task[Unit]): Unit = {
+    )(test: (Synchronizer[Task], TestVariables) => Task[Unit]): Unit = {
       val requestsCounter = AtomicInt(0)
+      val requestsGauge   = AtomicInt(0)
       val knownHashes     = ListBuffer.empty[ByteString]
 
-      val synchronizer = new SynchronizerImpl[Task](
-        connectToGossip = _ => MockGossipService(requestsCounter, error, knownHashes, dags: _*),
+      SynchronizerImpl[Task](
+        connectToGossip =
+          _ => MockGossipService(requestsCounter, requestsGauge, error, knownHashes, dags: _*),
         backend = MockBackend(tips, justifications, notInDag, validate),
         maxPossibleDepth = maxPossibleDepth,
         minBlockCountToCheckBranchingFactor = minBlockCountToCheckBranchingFactor,
@@ -378,8 +451,10 @@ object SynchronizerSpec {
         maxDepthAncestorsRequest = maxDepthAncestorsRequest,
         maxInitialBlockCount = maxInitialBlockCount,
         isInitialRef = Ref.unsafe[Task, Boolean](isInitial)
-      )
-      test(synchronizer, requestsCounter, knownHashes).runSyncUnsafe(5.seconds)
+      ).flatMap { synchronizer =>
+          test(synchronizer, TestVariables(requestsCounter, requestsGauge, knownHashes))
+        }
+        .runSyncUnsafe(5.seconds)
     }
   }
 }

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Generator
+from typing import Generator
 
 import docker as docker_py
 import pytest
@@ -9,15 +9,11 @@ from .cl_node.casperlabs_network import (
     ThreeNodeNetwork,
     TwoNodeNetwork,
 )
-from .cl_node.wait import wait_for_genesis_block
+from docker.client import DockerClient
 
 
-if TYPE_CHECKING:
-    from docker.client import DockerClient
-
-
-@pytest.fixture(scope='session')
-def docker_client_fixture() -> Generator["DockerClient", None, None]:
+@pytest.fixture(scope="session")
+def docker_client_fixture() -> Generator[DockerClient, None, None]:
     docker_client = docker_py.from_env()
     try:
         yield docker_client
@@ -26,8 +22,15 @@ def docker_client_fixture() -> Generator["DockerClient", None, None]:
         docker_client.networks.prune()
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def one_node_network(docker_client_fixture):
+    with OneNodeNetwork(docker_client_fixture) as onn:
+        onn.create_cl_network()
+        yield onn
+
+
+@pytest.fixture(scope="function")
+def one_node_network_fn(docker_client_fixture):
     with OneNodeNetwork(docker_client_fixture) as onn:
         onn.create_cl_network()
         yield onn
@@ -40,24 +43,24 @@ def two_node_network(docker_client_fixture):
         yield tnn
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def three_node_network(docker_client_fixture):
     with ThreeNodeNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def nodes(three_node_network):
     return three_node_network.docker_nodes
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def node(one_node_network):
     return one_node_network.docker_nodes[0]
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def engine(one_node_network):
     with one_node_network as network:
         yield network.execution_engines[0]
@@ -68,7 +71,9 @@ def star_network(docker_client_fixture):
     with CustomConnectionNetwork(docker_client_fixture) as ccn:
         node_count = 4
         network_connections = [[0, n] for n in range(1, 4)]
-        ccn.create_cl_network(node_count=node_count, network_connections=network_connections)
+        ccn.create_cl_network(
+            node_count=node_count, network_connections=network_connections
+        )
         yield ccn
 
 

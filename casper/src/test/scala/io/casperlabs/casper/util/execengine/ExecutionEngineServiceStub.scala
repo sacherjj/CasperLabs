@@ -3,39 +3,47 @@ package io.casperlabs.casper.util.execengine
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
-import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper.{InvalidBlock, Validate}
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper
+import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
-import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.shared.Log
+import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
+import scala.concurrent.duration.FiniteDuration
 import scala.util.Either
 
 object ExecutionEngineServiceStub {
   type Bonds = Map[PublicKey, Long]
 
-  implicit def functorRaiseInvalidBlock[F[_]: Sync]: FunctorRaise[F, InvalidBlock] =
-    Validate.raiseValidateErrorThroughApplicativeError[F]
+  implicit def functorRaiseInvalidBlock[F[_]: Sync] =
+    casper.validation.raiseValidateErrorThroughApplicativeError[F]
 
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
       b: Block,
       dag: BlockDagRepresentation[F]
-  ): F[Either[Throwable, StateHash]] =
+  ): F[Either[Throwable, StateHash]] = {
+    implicit val time = new Time[F] {
+      override def currentMillis: F[Long]                   = 0L.pure[F]
+      override def nanoTime: F[Long]                        = 0L.pure[F]
+      override def sleep(duration: FiniteDuration): F[Unit] = Sync[F].unit
+    }
+    implicit val validation = new ValidationImpl[F]
     (for {
       parents      <- ProtoUtil.unsafeGetParents[F](b)
       merged       <- ExecEngineUtil.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil.computePrestate[F](merged)
       effects      <- ExecEngineUtil.effectsForBlock[F](b, preStateHash)
-      _            <- Validate.transactions[F](b, preStateHash, effects)
+      _            <- Validation[F].transactions(b, preStateHash, effects)
     } yield ProtoUtil.postStateHash(b)).attempt
+  }
 
   def mock[F[_]](
       runGenesisFunc: (

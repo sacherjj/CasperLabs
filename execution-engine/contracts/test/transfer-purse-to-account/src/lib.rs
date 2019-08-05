@@ -5,34 +5,12 @@
 extern crate alloc;
 extern crate cl_std;
 
-use alloc::string::String;
 use cl_std::contract_api::{
-    add_uref, call_contract, get_arg, get_uref, main_purse, new_uref, read, revert,
-    transfer_from_purse_to_account,
+    add_uref, get_arg, get_balance, main_purse, new_uref, revert, transfer_from_purse_to_account,
 };
 use cl_std::key::Key;
-use cl_std::uref::URef;
 use cl_std::value::account::{PublicKey, PurseId};
 use cl_std::value::U512;
-
-fn get_balance(purse_id: PurseId) -> Option<U512> {
-    let mint_public_hash = get_uref("mint").unwrap_or_else(|| revert(100));
-    let mint_public_uptr = mint_public_hash.to_u_ptr().unwrap_or_else(|| revert(101));
-    let mint_contract_key: Key = read(mint_public_uptr);
-
-    let mint_contract_pointer = match mint_contract_key.to_c_ptr() {
-        Some(ptr) => ptr,
-        None => revert(102),
-    };
-
-    let main_purse_uref: URef = purse_id.value();
-
-    call_contract(
-        mint_contract_pointer,
-        &(String::from("balance"), main_purse_uref),
-        &vec![main_purse_uref.into()],
-    )
-}
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -42,7 +20,7 @@ pub extern "C" fn call() {
 
     let transfer_result = transfer_from_purse_to_account(source, destination, amount);
 
-    // // Assert is done here
+    // Assert is done here
     let final_balance = get_balance(source).unwrap_or_else(|| revert(103));
 
     let result = format!("{:?}", transfer_result);

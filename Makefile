@@ -77,8 +77,8 @@ docker-push/%: docker-build/%
 
 
 cargo-package-all: \
-	.make/cargo-package/execution-engine/common \
-	cargo-native-packager/execution-engine/comm \
+	.make/cargo-package/execution-engine/contract-ffi \
+	cargo-native-packager/execution-engine/engine-grpc-server \
 	package-system-contracts
 
 # Drone is already running commands in the `builderenv`, no need to delegate.
@@ -91,7 +91,7 @@ cargo-native-packager/%:
 
 # We need to publish the libraries the contracts are supposed to use.
 cargo-publish-all: \
-	.make/cargo-publish/execution-engine/common
+	.make/cargo-publish/execution-engine/contract-ffi
 
 cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
 
@@ -134,7 +134,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		cargo-native-packager/execution-engine/comm \
+		cargo-native-packager/execution-engine/engine-grpc-server \
 		$(RUST_SRC)
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/target/debian)
@@ -247,7 +247,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
-.make/client/contracts: build-validator-contracts
+.make/client/contracts: build-client-contracts
 	mkdir -p $(dir $@) && touch $@
 
 .make/node/contracts:
@@ -335,19 +335,20 @@ package-system-contracts: \
 	mkdir -p $(dir $@) && touch $@
 
 # Compile a validator contract;
-.make/contracts/validator/%: $(RUST_SRC) .make/rustup-update
+.make/contracts/client/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$*)
-	cd execution-engine/contracts/validator/$(CONTRACT) && \
+	cd execution-engine/contracts/client/$(CONTRACT) && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@
 
-client/src/main/resources/%.wasm: .make/contracts/validator/%
+client/src/main/resources/%.wasm: .make/contracts/client/%
 	$(eval CONTRACT=$*)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
 
-build-validator-contracts: \
+build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
-	client/src/main/resources/unbonding.wasm
+	client/src/main/resources/unbonding.wasm \
+	client/src/main/resources/transfer_to_account.wasm
 
 # Package all system contracts that we have to make available for download.
 execution-engine/target/system-contracts.tar.gz: \
@@ -367,7 +368,7 @@ execution-engine/target/system-contracts.tar.gz: \
 execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
 		.make/install/protoc
-	cd execution-engine/comm && \
+	cd execution-engine/engine-grpc-server && \
 	cargo --locked build --release
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
