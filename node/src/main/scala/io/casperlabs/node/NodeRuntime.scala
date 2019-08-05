@@ -1,34 +1,40 @@
 package io.casperlabs.node
 
+import java.nio.file.Path
+
 import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.mtl.{FunctorRaise, MonadState}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
+import cats.temp.par.Par
 import com.olegpy.meow.effects._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.{
   BlockDagFileStorage,
+  BlockDagStorage,
   BlockStore,
   CachingBlockStore,
   FileLMDBIndexBlockStore
 }
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
+import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.{syncId, taskLiftEitherT}
 import io.casperlabs.comm._
-import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.discovery.NodeDiscovery._
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.rp.Connect.RPConfState
 import io.casperlabs.comm.rp._
 import io.casperlabs.metrics.Metrics
@@ -39,13 +45,15 @@ import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngine
 import io.netty.handler.ssl.ClientAuth
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
+import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.Location
+
 import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
     conf: Configuration,
-    id: NodeIdentifier,
-    scheduler: Scheduler
-)(implicit log: Log[Task]) {
+    id: NodeIdentifier
+)(implicit log: Log[Task], scheduler: Scheduler) {
 
   private[this] val loopScheduler =
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionHandler)
@@ -79,12 +87,12 @@ class NodeRuntime private[node] (
       conf      <- rpConf[Task](local, bootstrap)
     } yield conf).toEffect
 
-    val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
+    implicit val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
 
-    val logId: Log[Id]         = Log.logId
-    val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
-
-    val filesApiEff = FilesAPI.create[Effect](Sync[Effect], logEff)
+    implicit val logId: Log[Id]         = Log.logId
+    implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
+    implicit val parForEff: Par[Effect] = catsParForEffect
+    implicit val filesApiEff            = FilesAPI.create[Effect](Sync[Effect], logEff)
 
     // SSL context to use for the public facing API.
     val maybeApiSslContext = Option(conf.tls.readCertAndKey).filter(_ => conf.grpc.useTls).map {
@@ -93,7 +101,11 @@ class NodeRuntime private[node] (
     }
 
     rpConfState >>= (_.runState { implicit state =>
-      val metrics = diagnostics.effects.metrics[Task]
+      implicit val metrics     = diagnostics.effects.metrics[Task]
+      implicit val nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
+      implicit val jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
+      implicit val nodeAsk     = eitherTApplicativeAsk(effects.peerNodeAsk(state))
+
       implicit val metricsEff: Metrics[Effect] =
         Metrics.eitherT[CommError, Task](Monad[Task], metrics)
       val resources = for {
@@ -126,6 +138,7 @@ class NodeRuntime private[node] (
                                                           log,
                                                           metrics
                                                         )
+        _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
         implicit0(blockStore: BlockStore[Effect]) <- FileLMDBIndexBlockStore[Effect](
                                                       conf.server.dataDir,
@@ -147,16 +160,16 @@ class NodeRuntime private[node] (
                                                       )
                                                     }
 
-        blockDagStorage <- BlockDagFileStorage[Effect](
-                            dagStoragePath,
-                            conf.blockstorage.latestMessagesLogMaxSizeFactor,
-                            blockStore
-                          )(
-                            Concurrent[Effect],
-                            logEff,
-                            raiseIOError,
-                            metricsEff
-                          )
+        implicit0(blockDagStorage: BlockDagStorage[Effect]) <- BlockDagFileStorage[Effect](
+                                                                dagStoragePath,
+                                                                conf.blockstorage.latestMessagesLogMaxSizeFactor,
+                                                                blockStore
+                                                              )(
+                                                                Concurrent[Effect],
+                                                                logEff,
+                                                                raiseIOError,
+                                                                metricsEff
+                                                              )
 
         _ <- Resource.liftF {
               Task
@@ -168,8 +181,9 @@ class NodeRuntime private[node] (
                 .toEffect
             }
 
-        nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
-        jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
+        implicit0(raise: FunctorRaise[Effect, InvalidBlock]) = validation
+          .raiseValidateErrorThroughApplicativeError[Effect]
+        implicit0(validationEff: Validation[Effect]) = new ValidationImpl[Effect]
 
         // TODO: Only a loop started with the TransportLayer keeps filling this up,
         // so if we use the GossipService it's going to stay empty. The diagnostics
@@ -202,7 +216,7 @@ class NodeRuntime private[node] (
               blockApiLock = blockApiLock
             )(
               Concurrent[Effect],
-              Time.eitherTTime(Monad[Task], effects.time),
+              Time[Effect],
               logEff,
               metricsEff,
               multiParentCasperRef
@@ -215,17 +229,6 @@ class NodeRuntime private[node] (
                 blockingScheduler,
                 blockApiLock,
                 maybeApiSslContext
-              )(
-                logEff,
-                logId,
-                metricsEff,
-                metricsId,
-                nodeDiscovery,
-                jvmMetrics,
-                nodeMetrics,
-                connectionsCell,
-                multiParentCasperRef,
-                scheduler
               )
 
         _ <- api.Servers.externalServersR[Effect](
@@ -235,18 +238,6 @@ class NodeRuntime private[node] (
               blockApiLock,
               conf.casper.ignoreDeploySignature,
               maybeApiSslContext
-            )(
-              Concurrent[Effect],
-              TaskLike[Effect],
-              logEff,
-              multiParentCasperRef,
-              metricsEff,
-              safetyOracle,
-              blockStore,
-              executionEngineService,
-              scheduler,
-              logId,
-              metricsId
             )
 
         _ <- api.Servers.httpServerR[Effect](
@@ -261,47 +252,12 @@ class NodeRuntime private[node] (
                 port,
                 conf,
                 blockingScheduler
-              )(
-                catsParForEffect,
-                catsConcurrentEffectForEffect(scheduler),
-                logEff,
-                metricsEff,
-                Time.eitherTTime(Monad[Task], effects.time),
-                Timer[Effect],
-                safetyOracle,
-                blockStore,
-                blockDagStorage,
-                NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
-                eitherTApplicativeAsk(effects.peerNodeAsk(state)),
-                multiParentCasperRef,
-                executionEngineService,
-                finalizedBlocksStream,
-                filesApiEff,
-                scheduler,
-                logId,
-                metricsId
               )
             } else {
               casper.transport.apply(
                 port,
                 conf,
                 blockingScheduler
-              )(
-                log,
-                logEff,
-                metrics,
-                metricsEff,
-                safetyOracle,
-                blockStore,
-                blockDagStorage,
-                connectionsCell,
-                nodeDiscovery,
-                state,
-                multiParentCasperRef,
-                executionEngineService,
-                finalizedBlocksStream,
-                filesApiEff,
-                scheduler
               )
             }
 
@@ -315,6 +271,19 @@ class NodeRuntime private[node] (
       }
     })
   }
+
+  private def runRdmbsMigrations(serverDataDir: Path): Effect[Unit] =
+    Task.delay {
+      val db = serverDataDir.resolve("sqlite.db").toString
+      val conf =
+        Flyway
+          .configure()
+          .dataSource(s"jdbc:sqlite:$db", "", "")
+          .locations(new Location("classpath:db/migration"))
+      val flyway = conf.load()
+      flyway.migrate()
+      ()
+    }.toEffect
 
   /** Start periodic tasks as fibers. They'll automatically stop during shutdown. */
   private def nodeProgram(
@@ -428,6 +397,6 @@ object NodeRuntime {
   )(implicit scheduler: Scheduler, log: Log[Task]): Effect[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
-      runtime <- Task.delay(new NodeRuntime(conf, id, scheduler)).toEffect
+      runtime <- Task.delay(new NodeRuntime(conf, id)).toEffect
     } yield runtime
 }

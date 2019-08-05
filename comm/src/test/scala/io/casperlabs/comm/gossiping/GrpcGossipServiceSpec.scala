@@ -926,6 +926,7 @@ class GrpcGossipServiceSpec
                       // to `newBlocks` returns before all the syncing and downloading is finished.
                       Task.now(dag.asRight[SyncError]).delayResult(250.millis)
                     }
+                    def downloaded(blockHash: ByteString) = Task.unit
                   }
 
                   val downloadManager = new DownloadManager[Task] {
@@ -1112,6 +1113,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
   object TestEnvironment {
     private val emptySynchronizer = new Synchronizer[Task] {
       def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
+      def downloaded(blockHash: ByteString): Task[Unit]             = ???
     }
     private val emptyDownloadManager = new DownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???

@@ -1,6 +1,7 @@
 import time
 from typing import Optional
 import docker.errors
+import os
 
 
 from test.cl_node import LoggingMixin
@@ -11,7 +12,12 @@ from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
 from test.cl_node.nonce_registry import NonceRegistry
+from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
+from pathlib import Path
 
+def resource(file_name):
+    RESOURCES_PATH="../../resources/"
+    return Path(os.path.dirname(os.path.realpath(__file__)), RESOURCES_PATH, file_name)
 
 class DockerClient(CasperLabsClient, LoggingMixin):
 
@@ -113,7 +119,16 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         assert session_contract is not None
         assert payment_contract is not None
 
-        address = from_address or self.node.from_address
+        address = from_address or self.node.test_account.public_key_hex
+
+        def docker_account_path(p):
+            """Convert path of account key file to docker client's path in /data"""
+            
+            return Path(*(['/data'] + str(p).split('/')[-2:]))
+
+        public_key = docker_account_path(public_key or self.node.test_account.public_key_path)
+        private_key = docker_account_path(private_key or self.node.test_account.private_key_path)
+
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
         payment_contract = payment_contract or session_contract
 
@@ -121,18 +136,21 @@ class DockerClient(CasperLabsClient, LoggingMixin):
                    f" --gas-limit {gas_limit}"
                    f" --gas-price {gas_price}"
                    f" --session=/data/{session_contract}"
-                   f" --payment=/data/{payment_contract}")
+                   f" --payment=/data/{payment_contract}"
+                   f" --private-key={private_key}"
+                   f" --public-key={public_key}")
 
         # For testing CLI: option will not be passed to CLI if nonce is ''
         if deploy_nonce != '':
             command += f" --nonce {deploy_nonce}"
 
-        if public_key and private_key:
-            command += (f" --private-key=/data/{private_key}"
-                        f" --public-key=/data/{public_key}")
-
-        r = self.invoke_client(command)
-        return r
+        try:
+            r = self.invoke_client(command)
+            return r
+        except:
+            if nonce is None:
+                NonceRegistry.revert(address)
+            raise
 
     def show_block(self, block_hash: str) -> str:
         return self.invoke_client(f'show-block {block_hash}')

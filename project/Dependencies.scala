@@ -87,6 +87,8 @@ object Dependencies {
   val tomlScala     = "tech.sparse"       %% "toml-scala"    % "0.1.1"
   val refinement    = "eu.timepit"        %% "refined"       % "0.9.5"
   val apacheCommons = "commons-io"        % "commons-io"     % "2.6"
+  val sqlLite       = "org.xerial"        % "sqlite-jdbc"    % "3.28.0"
+  val flyway        = "org.flywaydb"      % "flyway-core"    % "5.2.4"
 
   val overrides = Seq(
     catsCore,

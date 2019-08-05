@@ -8,7 +8,9 @@ import {
   GetDeployInfoRequest,
   StreamBlockInfosRequest,
   StateQuery,
-  GetBlockStateRequest
+  GetBlockStateRequest,
+  GetBlockInfoRequest,
+  StreamBlockDeploysRequest
 } from '../grpc/io/casperlabs/node/api/casper_pb';
 import { encodeBase16 } from '../lib/Conversions';
 import { GrpcError } from './Errors';
@@ -17,6 +19,7 @@ import {
   Key
 } from '../grpc/io/casperlabs/casper/consensus/state_pb';
 import { ByteArrayArg } from '../lib/Serialization';
+import { Block } from '../grpc/io/casperlabs/casper/consensus/consensus_pb';
 
 export default class CasperService {
   constructor(
@@ -44,6 +47,82 @@ export default class CasperService {
     });
   }
 
+  /** Return the block info including statistics. */
+  getBlockInfo(
+    blockHash: ByteArray | string,
+    view?: 0 | 1
+  ): Promise<BlockInfo> {
+    return new Promise<BlockInfo>((resolve, reject) => {
+      // The API supports prefixes, which may not have even number of characters.
+      const hashBase16 =
+        typeof blockHash === 'string' ? blockHash : encodeBase16(blockHash);
+      const request = new GetBlockInfoRequest();
+      request.setBlockHashBase16(hashBase16);
+      request.setView(view === undefined ? BlockInfo.View.FULL : view);
+
+      grpc.unary(GrpcCasperService.GetBlockInfo, {
+        host: this.url,
+        request: request,
+        onEnd: res => {
+          if (res.status === grpc.Code.OK) {
+            resolve(res.message as BlockInfo);
+          } else {
+            reject(new GrpcError(res.status, res.statusMessage));
+          }
+        }
+      });
+    });
+  }
+
+  getBlockInfos(depth: number, maxRank?: number): Promise<BlockInfo[]> {
+    return new Promise<BlockInfo[]>((resolve, reject) => {
+      const request = new StreamBlockInfosRequest();
+      request.setDepth(depth);
+      request.setMaxRank(maxRank || 0);
+
+      let blocks: BlockInfo[] = [];
+
+      grpc.invoke(GrpcCasperService.StreamBlockInfos, {
+        host: this.url,
+        request: request,
+        onMessage: msg => {
+          blocks.push(msg as BlockInfo);
+        },
+        onEnd: (code, message) => {
+          if (code === grpc.Code.OK) {
+            resolve(blocks);
+          } else {
+            reject(new GrpcError(code, message));
+          }
+        }
+      });
+    });
+  }
+
+  getBlockDeploys(blockHash: ByteArray): Promise<Block.ProcessedDeploy[]> {
+    return new Promise<Block.ProcessedDeploy[]>((resolve, reject) => {
+      const request = new StreamBlockDeploysRequest();
+      request.setBlockHashBase16(encodeBase16(blockHash));
+
+      let deploys: Block.ProcessedDeploy[] = [];
+
+      grpc.invoke(GrpcCasperService.StreamBlockDeploys, {
+        host: this.url,
+        request: request,
+        onMessage: msg => {
+          deploys.push(msg as Block.ProcessedDeploy);
+        },
+        onEnd: (code, message) => {
+          if (code === grpc.Code.OK) {
+            resolve(deploys);
+          } else {
+            reject(new GrpcError(code, message));
+          }
+        }
+      });
+    });
+  }
+
   /** Get one of the blocks from the last rank. */
   getLatestBlockInfo(): Promise<BlockInfo> {
     return new Promise<BlockInfo>((resolve, reject) => {
@@ -56,10 +135,10 @@ export default class CasperService {
       grpc.invoke(GrpcCasperService.StreamBlockInfos, {
         host: this.url,
         request: request,
-        onMessage: res => {
+        onMessage: msg => {
           if (!resolved) {
             resolved = true;
-            resolve(res as BlockInfo);
+            resolve(msg as BlockInfo);
           }
         },
         onEnd: (code, message) => {
@@ -92,7 +171,7 @@ export default class CasperService {
   }
 
   /** Get the reference to the balance so we can cache it.
-   *  Returns `null` if the account doesn't exist yet.
+   *  Returns `undefined` if the account doesn't exist yet.
    */
   async getAccountBalanceUref(
     blockHash: BlockHash,

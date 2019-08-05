@@ -1,6 +1,6 @@
 import { observable } from 'mobx';
 
-abstract class FromData {
+export abstract class CleanableFormData {
   // Assigning to `error` during `clean` will cause
   // the observers to re-render.
   @observable error: string | null = null;
@@ -14,5 +14,3 @@ abstract class FromData {
     return this.error == null;
   }
 }
-
-export default FromData;

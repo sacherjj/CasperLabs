@@ -65,11 +65,12 @@ pipeline:
         - pull_request
 
   rust-compile-test-pr:
+    environment:
+      - "CARGO_FLAGS=--locked"
     commands:
-      - "cd execution-engine/"
-      - "~/.cargo/bin/cargo --locked build"
-      - "~/.cargo/bin/cargo --locked test"
-      - "./scripts/run-contract-tests.sh"
+      - "cd execution-engine"
+      - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
+      - "make test test-contracts"
       - "cd ../long-running-tests"
       - "./build-contracts.sh"
     image: "casperlabs/buildenv:latest"
@@ -82,7 +83,7 @@ pipeline:
       - "cd execution-engine"
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
-      - "~/.cargo/bin/cargo fmt --all -- --check"
+      - "make check-format"
     image: "casperlabs/buildenv:latest"
     when:
       event:
@@ -93,7 +94,7 @@ pipeline:
       - "cd execution-engine"
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
-      - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
+      - "make lint"
     image: "casperlabs/buildenv:latest"
     when:
       event:
@@ -125,10 +126,11 @@ pipeline:
         - trying
 
   rust-compile-test-bors:
+    environment:
+      - "CARGO_FLAGS=--locked"
     commands:
-      - "cd execution-engine/"
-      - "~/.cargo/bin/cargo --locked build"
-      - "~/.cargo/bin/cargo --locked test"
+      - "cd execution-engine"
+      - "make test"
     image: "casperlabs/buildenv:latest"
     when:
       branch:
@@ -140,7 +142,7 @@ pipeline:
       - "cd execution-engine"
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
-      - "~/.cargo/bin/cargo fmt --all -- --check"
+      - "make check-format"
     image: "casperlabs/buildenv:latest"
     when:
       branch:
@@ -152,7 +154,7 @@ pipeline:
       - "cd execution-engine"
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
-      - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
+      - "make lint"
     image: "casperlabs/buildenv:latest"
     when:
       branch:
@@ -161,8 +163,8 @@ pipeline:
 
   try-cargo-publish-bors:
     commands:
-      - "cd execution-engine/common"
-      - "~/.cargo/bin/cargo publish --dry-run"
+      - "cd execution-engine"
+      - "make check-publish"
     image: "casperlabs/buildenv:latest"
     when:
       branch:
@@ -171,8 +173,8 @@ pipeline:
 
   run-rust-benchmarks-bors:
     commands:
-      - "cd execution-engine/"
-      - "~/.cargo/bin/cargo bench"
+      - "cd execution-engine"
+      - "make bench"
     image: "casperlabs/buildenv:latest"
     when:
       branch:
@@ -230,9 +232,11 @@ pipeline:
 
 # The below section is for post-bors push webhooks
   rust-compile-for-make:
+    environment:
+      - "CARGO_FLAGS=--locked"
     commands:
-      - "cd execution-engine/"
-      - "~/.cargo/bin/cargo --locked build"
+      - "cd execution-engine"
+      - "make build"
     image: "casperlabs/buildenv:latest"
     when:
       branch:
@@ -312,7 +316,7 @@ pipeline:
   package-sbt-artifacts-merge:
     commands:
       - "make clean"
-      - "make build-validator-contracts"
+      - "make build-client-contracts"
       - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin node/docker:publishLocal client/docker:publishLocal"
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
@@ -338,7 +342,7 @@ pipeline:
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "make clean"
       - "make cargo-package-all"
-      - "cp execution-engine/target/blessed-contracts.tar.gz artifacts/${DRONE_BRANCH}"
+      - "cp execution-engine/target/system-contracts.tar.gz artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
       - "cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm artifacts/${DRONE_BRANCH}"
       - "WORKING_DIR=$(pwd) ; cd execution-engine/target/release/rpmbuild/SOURCES ; OS=$(uname -s | tr '[:upper:]' '[:lower:]') ; ARCH=$(uname -p) ; SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed \"s/.tar.gz//\") ; TARGET=$(ls $SOURCE*.tar.gz | sed \"s/.tar.gz/_\"$OS\"_\"$ARCH\".tar.gz/\") ; tar -xzf $SOURCE.tar.gz ; tar -czf $TARGET -C $SOURCE/usr/bin/ . && cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}"

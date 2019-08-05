@@ -19,12 +19,13 @@ import io.casperlabs.comm.ServiceError.InvalidArgument
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.casper.validation.Validation
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStore: ExecutionEngineService](
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStore: ExecutionEngineService: Validation](
       ignoreDeploySignature: Boolean
   ): F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {

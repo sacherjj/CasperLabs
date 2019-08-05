@@ -14,7 +14,7 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v -e ipc.*\.rs)
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
-TS_SRC := $(shell find explorer/ui/src explorer/server/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
+TS_SRC := $(shell find explorer/ui/src explorer/server/src explorer/grpc/generated -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
@@ -77,9 +77,9 @@ docker-push/%: docker-build/%
 
 
 cargo-package-all: \
-	.make/cargo-package/execution-engine/common \
-	cargo-native-packager/execution-engine/comm \
-	package-blessed-contracts
+	.make/cargo-package/execution-engine/contract-ffi \
+	cargo-native-packager/execution-engine/engine-grpc-server \
+	package-system-contracts
 
 # Drone is already running commands in the `builderenv`, no need to delegate.
 cargo-native-packager/%:
@@ -91,7 +91,7 @@ cargo-native-packager/%:
 
 # We need to publish the libraries the contracts are supposed to use.
 cargo-publish-all: \
-	.make/cargo-publish/execution-engine/common
+	.make/cargo-publish/execution-engine/contract-ffi
 
 cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
 
@@ -134,7 +134,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		cargo-native-packager/execution-engine/comm \
+		cargo-native-packager/execution-engine/engine-grpc-server \
 		$(RUST_SRC)
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/target/debian)
@@ -147,11 +147,11 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 .make/docker-build/test/node: \
 		.make/docker-build/universal/node \
 		hack/docker/test-node.Dockerfile \
-		package-blessed-contracts
-	# Add blessed contracts so we can use them in integration testing.
+		package-system-contracts
+	# Add system contracts so we can use them in integration testing.
 	# For live tests we should mount them from a real source.
-	mkdir -p hack/docker/.genesis/blessed-contracts
-	tar -xvzf execution-engine/target/blessed-contracts.tar.gz -C hack/docker/.genesis/blessed-contracts
+	mkdir -p hack/docker/.genesis/system-contracts
+	tar -xvzf execution-engine/target/system-contracts.tar.gz -C hack/docker/.genesis/system-contracts
 	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG) hack/docker
 	rm -rf hack/docker/.genesis
 	mkdir -p $(dir $@) && touch $@
@@ -185,13 +185,16 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Make an image to host the Casper Explorer UI and the faucet microservice.
 .make/docker-build/explorer: \
 		explorer/Dockerfile \
-		$(TS_SRC) \
 		.make/npm/explorer \
 		.make/explorer/contracts
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
-.make/npm/explorer: $(TS_SRC) .make/protoc/explorer
+.make/npm/explorer: \
+	$(TS_SRC) \
+	.make/protoc/explorer \
+	explorer/ui/package.json \
+	explorer/server/package.json
 	# CI=false so on Drone it won't fail on warnings (currently about href).
 	./hack/build/docker-buildenv.sh "\
 			cd explorer/ui     && npm install && CI=false npm run build && cd - && \
@@ -244,7 +247,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
-.make/client/contracts: build-validator-contracts
+.make/client/contracts: build-client-contracts
 	mkdir -p $(dir $@) && touch $@
 
 .make/node/contracts:
@@ -321,40 +324,41 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 
 # Compile contracts that need to go into the Genesis block.
-package-blessed-contracts: \
-	execution-engine/target/blessed-contracts.tar.gz
+package-system-contracts: \
+	execution-engine/target/system-contracts.tar.gz
 
-# Compile a blessed contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
-.make/blessed-contracts/%: $(RUST_SRC) .make/rustup-update
+# Compile a system contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
+.make/contracts/system/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$*)
-	cd execution-engine/blessed-contracts/$(CONTRACT) && \
+	cd execution-engine/contracts/system/$(CONTRACT) && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown --target-dir target
 	mkdir -p $(dir $@) && touch $@
 
 # Compile a validator contract;
-.make/validator-contracts/%: $(RUST_SRC) .make/rustup-update
+.make/contracts/client/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$*)
-	cd execution-engine/validator-contracts/$(CONTRACT) && \
+	cd execution-engine/contracts/client/$(CONTRACT) && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@
 
-client/src/main/resources/%.wasm: .make/validator-contracts/%
+client/src/main/resources/%.wasm: .make/contracts/client/%
 	$(eval CONTRACT=$*)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
 
-build-validator-contracts: \
+build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
-	client/src/main/resources/unbonding.wasm
+	client/src/main/resources/unbonding.wasm \
+	client/src/main/resources/transfer_to_account.wasm
 
-# Package all blessed contracts that we have to make available for download.
-execution-engine/target/blessed-contracts.tar.gz: \
-	.make/blessed-contracts/mint-token \
-	.make/blessed-contracts/pos
+# Package all system contracts that we have to make available for download.
+execution-engine/target/system-contracts.tar.gz: \
+	.make/contracts/system/mint-token \
+	.make/contracts/system/pos
 	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))
 	rm -rf $(ARCHIVE) $(ARCHIVE).gz
 	mkdir -p $(dir $@)
 	tar -cvf $(ARCHIVE) -T /dev/null
-	find execution-engine/blessed-contracts -wholename *.wasm | grep -v /release/deps/ | while read file; do \
+	find execution-engine/contracts/system -wholename *.wasm | grep -v /release/deps/ | while read file; do \
 		cd $$(dirname $$file); tar -rvf $(ARCHIVE) $$(basename $$file); cd -; \
 	done
 	gzip $(ARCHIVE)
@@ -364,7 +368,7 @@ execution-engine/target/blessed-contracts.tar.gz: \
 execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
 		.make/install/protoc
-	cd execution-engine/comm && \
+	cd execution-engine/engine-grpc-server && \
 	cargo --locked build --release
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.

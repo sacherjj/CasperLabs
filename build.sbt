@@ -363,6 +363,8 @@ lazy val blockStorage = (project in file("block-storage"))
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       lmdbjava,
+      sqlLite,
+      flyway,
       catsCore,
       catsEffect,
       catsMtl
@@ -593,5 +595,6 @@ lazy val casperlabs = (project in file("."))
     node,
     shared,
     smartContracts,
-    client
+    client,
+    benchmarks
   )

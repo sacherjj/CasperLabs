@@ -11,7 +11,8 @@ use common::key::Key;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pointer = if let Key::Hash(hash) = get_uref("counter") {
+    let counter_uref = get_uref("counter").unwrap_or_else(|| revert(100));
+    let pointer = if let Key::Hash(hash) = counter_uref {
         ContractPointer::Hash(hash)
     } else {
         revert(66)

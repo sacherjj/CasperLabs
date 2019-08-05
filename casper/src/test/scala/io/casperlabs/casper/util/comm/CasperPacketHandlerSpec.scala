@@ -6,6 +6,7 @@ import cats.{Applicative, ApplicativeError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, DeployHash}
 import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
+import io.casperlabs.casper
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.BlockSummary
@@ -27,6 +28,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
 }
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
 import io.casperlabs.casper.Estimator.Validator
+import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.catscontrib.ApplicativeError_
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.comm.discovery.Node
@@ -122,6 +124,9 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
     }
+    implicit val raiseInvalidBlock =
+      casper.validation.raiseValidateErrorThroughApplicativeError[Task]
+    implicit val validation = new ValidationImpl[Task]
   }
 
   "CasperPacketHandler" when {
