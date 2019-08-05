@@ -13,7 +13,6 @@ from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
 from test.cl_node.nonce_registry import NonceRegistry
 from pathlib import Path
-from test.cl_node.docker_node import DockerNode
 
 
 def resource(file_name):
@@ -22,7 +21,7 @@ def resource(file_name):
 
 
 class DockerClient(CasperLabsClient, LoggingMixin):
-    def __init__(self, node: DockerNode):
+    def __init__(self, node: "DockerNode"):  # NOQA
         self.node = node
         self.abi = (
             None
