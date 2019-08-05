@@ -1,15 +1,12 @@
 package io.casperlabs.casper
 
 import cats.Monad
-import cats.data.OptionT
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.util._
-import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.FinalityDetector.Committee
 import io.casperlabs.casper.util.DagOperations.Key.blockMetadataKey
-import io.casperlabs.catscontrib.ski.id
+import io.casperlabs.casper.util._
 import io.casperlabs.shared.Log
 
 /*
@@ -152,7 +149,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                       none[Committee].pure[F]
                     } else {
                       val quorum = blockLevelTags.values.flatMap {
-                        case blockScoreAccumulator =>
+                        blockScoreAccumulator =>
                           if (blockScoreAccumulator.blockLevel >= 1 && prunedCommittee.contains(
                                 blockScoreAccumulator.block.validatorPublicKey
                               )) {
@@ -302,7 +299,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                    case _ => false.pure[F]
                  }
       } yield result
-
     }
 
   /*
