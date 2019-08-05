@@ -39,6 +39,10 @@ object FinalityDetector {
   def apply[F[_]](implicit ev: FinalityDetector[F]): FinalityDetector[F] = ev
 
   case class Committee(validators: Set[Validator], quorum: Long)
+
+  // Calculate threshold value as described in the specification.
+  // Note that validator weights (`q` and `n`) are normalized to 1.
+  private[casper] def calculateThreshold(q: Long, n: Long): Float = (2.0f * q - n) / (2 * n)
 }
 
 class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F] {
@@ -56,25 +60,9 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     for {
       weights      <- ProtoUtil.mainParentWeightMap(blockDag, candidateBlockHash)
       committeeOpt <- findBestCommittee(blockDag, candidateBlockHash, weights)
-      t = committeeOpt
-        .map(committee => {
-          val totalWeight = weights.values.sum
-          (2 * committee.quorum - totalWeight) * 1.0f / (2 * totalWeight)
-        })
-        .getOrElse(0f)
-    } yield t
-
-  // If targetBlockHash is main descendant of candidateBlockHash, then
-  // it means targetBlockHash vote candidateBlockHash.
-  private def computeCompatibility(
-      blockDag: BlockDagRepresentation[F],
-      candidateBlockHash: BlockHash,
-      targetBlockHash: BlockHash
-  ): F[Boolean] =
-    for {
-      candidateBlockMetadata <- blockDag.lookup(candidateBlockHash)
-      result                 <- isInMainChain(blockDag, candidateBlockMetadata.get, targetBlockHash)
-    } yield result
+    } yield committeeOpt
+      .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
+      .getOrElse(0f)
 
   def levelZeroMsgs(
       blockDag: BlockDagRepresentation[F],
@@ -116,12 +104,12 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                            .map(_.latestBlockHash)
                        )
         previousMsg <- OptionT(blockDag.lookup(previousHash))
-        continue <- OptionT(
-                     computeCompatibility(
+        continue <- OptionT.liftF(
+                     ProtoUtil.isInMainChain[F](
                        blockDag,
                        candidateBlockHash,
                        previousHash
-                     ).map(_.some)
+                     )
                    )
         previousMsgs = if (continue) {
           List(previousMsg)
@@ -307,7 +295,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                                                            )
                                      result <- latestMessageHash match {
                                                 case Some(b) =>
-                                                  computeCompatibility(
+                                                  ProtoUtil.isInMainChain(
                                                     blockDag,
                                                     candidateBlockHash,
                                                     b
