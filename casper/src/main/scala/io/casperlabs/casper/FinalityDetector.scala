@@ -54,7 +54,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
       candidateBlockHash: BlockHash
   ): F[Float] =
     for {
-      weights      <- computeMainParentWeightMap(blockDag, candidateBlockHash)
+      weights      <- ProtoUtil.mainParentWeightMap(blockDag, candidateBlockHash)
       committeeOpt <- findBestCommittee(blockDag, candidateBlockHash, weights)
       t = committeeOpt
         .map(committee => {
@@ -63,17 +63,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
         })
         .getOrElse(0f)
     } yield t
-
-  def computeMainParentWeightMap(
-      blockDag: BlockDagRepresentation[F],
-      candidateBlockHash: BlockHash
-  ): F[Map[BlockHash, Long]] =
-    blockDag.lookup(candidateBlockHash).flatMap { blockOpt =>
-      blockOpt.get.parents.headOption match {
-        case Some(parent) => blockDag.lookup(parent).map(_.get.weightMap)
-        case None         => blockOpt.get.weightMap.pure[F]
-      }
-    }
 
   // If targetBlockHash is main descendant of candidateBlockHash, then
   // it means targetBlockHash vote candidateBlockHash.
