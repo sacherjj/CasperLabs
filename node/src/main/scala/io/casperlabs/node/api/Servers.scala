@@ -88,21 +88,14 @@ object Servers {
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[F],
-      ignoreDeploySignature: Boolean,
       maybeSslContext: Option[SslContext]
   )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] =
     GrpcServer(
       port = port,
       maxMessageSize = Some(maxMessageSize),
       services = List(
-        // TODO: Phase DeployService out in favor of CasperService.
         (_: Scheduler) =>
-          GrpcDeployService.instance(blockApiLock, ignoreDeploySignature) map {
-            CasperMessageGrpcMonix.bindService(_, grpcExecutor)
-          },
-        (_: Scheduler) =>
-          GrpcCasperService(ignoreDeploySignature) map {
+          GrpcCasperService() map {
             CasperGrpcMonix.bindService(_, grpcExecutor)
           }
       ),

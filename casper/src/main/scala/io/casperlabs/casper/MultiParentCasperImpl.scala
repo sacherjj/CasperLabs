@@ -914,7 +914,8 @@ object MultiParentCasperImpl {
         case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
             NeglectedInvalidBlock | NeglectedEquivocation | InvalidTransaction | InvalidBondsCache |
             InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash | InvalidDeployCount |
-            InvalidPreStateHash | InvalidPostStateHash =>
+            InvalidDeployHash | InvalidDeploySignature | InvalidPreStateHash |
+            InvalidPostStateHash =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
 
         case Processing | Processed =>
@@ -1024,7 +1025,8 @@ object MultiParentCasperImpl {
                 InvalidParents | InvalidSequenceNumber | NeglectedInvalidBlock |
                 NeglectedEquivocation | InvalidTransaction | InvalidBondsCache |
                 InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash | InvalidDeployCount |
-                InvalidPreStateHash | InvalidPostStateHash | Processing | Processed =>
+                InvalidDeployHash | InvalidDeploySignature | InvalidPreStateHash |
+                InvalidPostStateHash | Processing | Processed =>
               Log[F].debug(
                 s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $status"
               )
@@ -1090,8 +1092,9 @@ object MultiParentCasperImpl {
           case IgnorableEquivocation | InvalidUnslashableBlock | InvalidBlockNumber |
               InvalidParents | InvalidSequenceNumber | NeglectedInvalidBlock |
               NeglectedEquivocation | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
-              InvalidChainId | InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash |
-              InvalidPostStateHash | Processing | Processed =>
+              InvalidChainId | InvalidBlockHash | InvalidDeployCount | InvalidDeployHash |
+              InvalidDeploySignature | InvalidPreStateHash | InvalidPostStateHash | Processing |
+              Processed =>
             ().pure[F]
 
           case UnexpectedBlockException(_) =>

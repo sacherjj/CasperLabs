@@ -235,8 +235,6 @@ class NodeRuntime private[node] (
               conf.grpc.portExternal,
               conf.server.maxMessageSize,
               blockingScheduler,
-              blockApiLock,
-              conf.casper.ignoreDeploySignature,
               maybeApiSslContext
             )
 

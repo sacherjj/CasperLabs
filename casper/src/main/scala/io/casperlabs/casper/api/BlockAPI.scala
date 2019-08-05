@@ -54,19 +54,11 @@ object BlockAPI {
 
   @deprecated("To be removed before devnet. Use the one with `Deploy`.", "0.4")
   def deploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: Metrics](
-      d: protocol.DeployData,
-      ignoreDeploySignature: Boolean
+      d: protocol.DeployData
   ): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
       for {
         _ <- Metrics[F].incrementCounter("deploys")
-        _ <- MonadThrowable[F]
-              .raiseError {
-                Unimplemented(
-                  "Signature check on protocol.DeployData is not implemented. Use CasperService."
-                )
-              }
-              .whenA(!ignoreDeploySignature)
         n = LegacyConversions.toDeploy(d)
         r <- MultiParentCasper[F].deploy(n)
         re <- r match {
@@ -89,8 +81,7 @@ object BlockAPI {
   }
 
   def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStore: Validation: FinalityDetector: Log: Metrics](
-      d: Deploy,
-      ignoreDeploySignature: Boolean
+      d: Deploy
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
     def check(msg: String)(f: F[Boolean]): F[Unit] =
       f flatMap { ok =>
@@ -99,10 +90,8 @@ object BlockAPI {
 
     for {
       _ <- Metrics[F].incrementCounter("deploys")
-      // Doing these here while MultiParentCasper is still using the legacy deploys.
       _ <- check("Invalid deploy hash.")(Validation[F].deployHash(d))
       _ <- check("Invalid deploy signature.")(Validation[F].deploySignature(d))
-            .whenA(!ignoreDeploySignature)
 
       t = casper.faultToleranceThreshold
       _ <- ensureNotInDag[F](d, t)

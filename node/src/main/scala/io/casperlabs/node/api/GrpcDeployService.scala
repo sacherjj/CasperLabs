@@ -29,8 +29,7 @@ object GrpcDeployService {
     path.split("/").filter(_.nonEmpty)
 
   def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: FinalityDetector: BlockStore: TaskLike: ExecutionEngineService](
-      blockApiLock: Semaphore[F],
-      ignoreDeploySignature: Boolean
+      blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
   ): F[CasperMessageGrpcMonix.DeployService] = {
@@ -39,7 +38,7 @@ object GrpcDeployService {
         Task.defer(TaskLike[F].toTask(task)).executeOn(worker).attemptAndLog
 
       override def doDeploy(d: DeployData): Task[DeployServiceResponse] =
-        defer(BlockAPI.deploy[F](d, ignoreDeploySignature))
+        defer(BlockAPI.deploy[F](d))
 
       override def createBlock(e: Empty): Task[DeployServiceResponse] =
         defer(BlockAPI.createBlock[F](blockApiLock))

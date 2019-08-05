@@ -7,6 +7,7 @@ import cats.effect.{Concurrent, Timer}
 import cats.implicits._
 import cats.temp.par.Par
 import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
+import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
@@ -23,12 +24,13 @@ import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.casper.consensus.state.{Unit => _, BigInt => _, _}
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.PathOps.RichPath
-import io.casperlabs.shared.{Cell, Log}
+import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
@@ -37,6 +39,7 @@ import monix.execution.Scheduler
 import scala.collection.mutable.{Map => MutMap}
 import scala.util.Random
 import io.casperlabs.crypto.Keys
+import io.casperlabs.casper.validation.ValidationImpl
 
 /** Base class for test nodes with fields used by tests exposed as public. */
 abstract class HashSetCasperTestNode[F[_]](
@@ -393,4 +396,11 @@ object HashSetCasperTestNode {
   private def pad(x: Array[Byte], length: Int): Array[Byte] =
     if (x.length < length) Array.fill(length - x.length)(0.toByte) ++ x
     else x
+
+  def makeValidation[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
+      : Validation[F] =
+    new ValidationImpl[F] {
+      // Tests are not signing the deploys.
+      override def deploySignature(d: consensus.Deploy): F[Boolean] = true.pure[F]
+    }
 }

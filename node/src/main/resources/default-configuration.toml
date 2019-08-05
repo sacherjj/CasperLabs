@@ -251,10 +251,6 @@ approve-genesis-duration = "5minutes"
 # Timestamp for the deploys.
 # deploy-timestamp =
 
-# Ignore while client side support for signing deploys is not in place.
-ignore-deploy-signature = false
-
-
 # Enable auto-proposal of blocks.
 auto-propose-enabled = false
 

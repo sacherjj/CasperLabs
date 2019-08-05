@@ -41,7 +41,6 @@ final case class CasperConf(
     approveGenesisInterval: FiniteDuration,
     approveGenesisDuration: FiniteDuration,
     deployTimestamp: Option[Long],
-    ignoreDeploySignature: Boolean,
     autoProposeEnabled: Boolean,
     autoProposeCheckInterval: FiniteDuration,
     autoProposeMaxInterval: FiniteDuration,
