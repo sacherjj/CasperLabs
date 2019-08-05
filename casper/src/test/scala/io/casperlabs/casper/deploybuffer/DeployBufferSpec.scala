@@ -69,17 +69,24 @@ trait DeployBufferSpec
     }
 
     "(addAsPending + addAsPending) | (addAsProcessed + addAsProcessed)" should {
-      "not fail and ignore duplicates" in forAll(deploysGen(), Arbitrary.arbBool.arbitrary)(
-        (ds, b) =>
+      "not fail, ignore duplicates and insert new deploys from batch even if contains existing deploys" in forAll(
+        Arbitrary.arbBool.arbitrary
+      )(
+        b =>
           testFixture { db =>
-            val (add, read) =
-              if (b) (db.addAsPending(ds), db.readPending)
-              else (db.addAsProcessed(ds), db.readProcessed)
+            val d1 = sample(arbDeploy.arbitrary)
+            val d2 = sample(arbDeploy.arbitrary)
+
+            val (add1, add2, read) =
+              if (b) (db.addAsPending(d1), db.addAsPending(List(d1, d2)), db.readPending)
+              else (db.addAsProcessed(d1), db.addAsProcessed(List(d1, d2)), db.readProcessed)
             for {
-              _ <- add
-              _ <- add.attempt.foreachL(_ shouldBe an[Right[_, _]])
+              _ <- add1
+              _ <- add2.attempt.foreachL(_ shouldBe an[Right[_, _]])
               _ <- read
-                    .foreachL(_.sortedByHash should contain theSameElementsAs ds.sortedByHash)
+                    .foreachL(
+                      _.sortedByHash should contain theSameElementsAs List(d1, d2).sortedByHash
+                    )
             } yield ()
           }
       )
