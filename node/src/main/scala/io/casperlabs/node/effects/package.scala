@@ -2,11 +2,13 @@ package io.casperlabs.node
 
 import java.nio.file.Path
 
-import cats.{Applicative, Monad}
-import cats.data.EitherT
-import cats.effect.{Resource, Timer}
+import cats._
+import cats.effect._
+import cats.implicits._
 import cats.mtl._
 import doobie.hikari.HikariTransactor
+import doobie.implicits._
+import doobie.util.transactor.Transactor
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
@@ -17,7 +19,6 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval._
 import monix.execution._
-import monix.eval.instances._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
@@ -96,7 +97,7 @@ package object effects {
       connectionEC: ExecutionContext,
       transactionEC: ExecutionContext,
       serverDataDir: Path
-  ): Resource[Effect, HikariTransactor[Effect]] =
+  ): Resource[Effect, Transactor[Effect]] =
     HikariTransactor
       .newHikariTransactor[Effect](
         driverClassName = "org.sqlite.JDBC",
@@ -106,5 +107,12 @@ package object effects {
         pass = "",
         connectEC = connectionEC,
         transactEC = transactionEC
+      )
+      .map(
+        xa =>
+          // Foreign keys support must be enabled explicitly in SQLite
+          // https://www.sqlite.org/foreignkeys.html#fk_enable
+          Transactor.before
+            .set(xa, sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa))
       )
 }
