@@ -412,6 +412,7 @@ object BlockScoreAccumulator {
   // Though we only want to find best level 1 committee,
   // this algorithm can calculate level k in one pass
   // Support of level K is smaller or equal to support of level 1 to level K-1
+  @scala.annotation.tailrec
   private def calculateLevelAndQ(
       self: BlockScoreAccumulator,
       k: Int,
