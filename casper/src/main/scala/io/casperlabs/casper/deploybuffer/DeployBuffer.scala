@@ -115,7 +115,7 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
 
     def writeToBufferedDeploysTable(currentTimeEpochSeconds: Long) =
       Update[(ByteString, Int, ByteString, Long, Long)](
-        "INSERT INTO buffered_deploys (hash, status, account, last_accessed_at_epoch_millis, received_at) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO buffered_deploys (hash, status, account, update_time_seconds, receive_time_seconds) VALUES (?, ?, ?, ?, ?)"
       ).updateMany(deploys.map { d =>
           (
             d.deployHash,
@@ -160,15 +160,15 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       now       <- Time[F].currentMillis
       threshold = now - expirationPeriod.toMillis
       _ <- sql"""|UPDATE buffered_deploys 
-                 |SET status=$DiscardedStatusCode, last_accessed_at_epoch_millis=$now
-                 |WHERE status=$PendingStatusCode AND received_at<$threshold""".stripMargin.update.run
+                 |SET status=$DiscardedStatusCode, update_time_seconds=$now
+                 |WHERE status=$PendingStatusCode AND receive_time_seconds<$threshold""".stripMargin.update.run
             .transact(xa)
     } yield ()
 
   override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] = {
     def transaction(threshold: Long) =
       for {
-        hashes <- sql"SELECT hash FROM buffered_deploys WHERE status=$DiscardedStatusCode AND last_accessed_at_epoch_millis<$threshold"
+        hashes <- sql"SELECT hash FROM buffered_deploys WHERE status=$DiscardedStatusCode AND update_time_seconds<$threshold"
                    .query[ByteString]
                    .to[List]
         _ <- Update[ByteString](s"DELETE FROM buffered_deploys WHERE hash=?").updateMany(hashes)
@@ -186,7 +186,7 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     for {
       t <- Time[F].currentMillis
       _ <- Update[(Int, Long, ByteString, Int)](
-            s"UPDATE buffered_deploys SET status=?, last_accessed_at_epoch_millis=? WHERE hash=? AND status=?"
+            s"UPDATE buffered_deploys SET status=?, update_time_seconds=? WHERE hash=? AND status=?"
           ).updateMany(hashes.map((newStatus, t, _, prevStatus)))
             .transact(xa)
       _ <- updateMetrics()
