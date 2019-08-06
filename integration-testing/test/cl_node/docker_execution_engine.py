@@ -6,7 +6,7 @@ class DockerExecutionEngine(LoggingDockerBase):
 
     @property
     def container_type(self) -> str:
-        return 'execution-engine'
+        return "execution-engine"
 
     def _get_container(self):
         if self.config.volumes is not None:
@@ -15,13 +15,13 @@ class DockerExecutionEngine(LoggingDockerBase):
             volumes = {
                 self.socket_volume: {
                     "bind": "/opt/docker/.casperlabs/sockets",
-                    "mode": "rw"
+                    "mode": "rw",
                 }
             }
         container = self.config.docker_client.containers.run(
             self.image_name,
             name=self.container_name,
-            user='root',
+            user="root",
             detach=True,
             command=self.EXECUTION_ENGINE_COMMAND,
             network=self.config.network,

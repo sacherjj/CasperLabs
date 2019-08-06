@@ -27,6 +27,3 @@ class NonceRegistry:
             raise Exception("Registry is empty! Did you forget to call `reset()`?")
         with NonceRegistry._lock:
             NonceRegistry._registry[address] -= 1
-
-
-

@@ -6,7 +6,7 @@
     -   id: debug-statements
     -   id: flake8
         args:
-        - --ignore=E203, E501, W503
+        - --ignore=E203, E501, W503, E402
         - --exclude=(\*_pb2.py|\*_pb2_grpc.py)
 -   repo: https://github.com/ambv/black
     rev: stable
