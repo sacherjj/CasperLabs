@@ -352,16 +352,16 @@ class CasperClient:
     @api
     def balance(self, address: str, block_hash: str):
         value = self.queryState(block_hash, address, "", "address")
-        
         account = None
         try:
             account = value.account
-        except KeyError:
+        except AttributeError:
             return InternalError('', f"Expected Account type value under {address}.")
 
         urefs = [u for u in account.known_urefs if u.name == 'mint']
         if len(urefs) == 0:
             raise InternalError('', "Account's known_urefs map did not contain Mint contract address.")
+
         mintPublic = urefs[0]
         mintPrivate = self.queryState(block_hash, mintPublic.key.uref.uref.hex(), "", "uref")
 
@@ -607,7 +607,6 @@ def main():
                        [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
                        [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'),
                                                help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
-
 
     parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
                       [[('-a', '--address'), dict(required=True, type=str, help="Account's public key in hex.")],
