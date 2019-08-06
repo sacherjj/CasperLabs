@@ -644,7 +644,7 @@ impl Account {
 
     /// Checks if subtracting passed weight from current total would make the
     /// new cumulative weight to fall below any of the thresholds on account.
-    fn check_thresholds_for_weight_update(&self, weight: &Weight) -> Option<()> {
+    fn check_thresholds_for_weight_update(&self, weight: Weight) -> Option<()> {
         let total_weight = self.associated_keys.total_keys_weight();
 
         // Safely calculate new weight
@@ -665,7 +665,7 @@ impl Account {
         // TODO(mpapierski): Authorized keys check EE-377
         if let Some(weight) = self.associated_keys.get(&public_key) {
             // Check if removing this weight would fall below thresholds
-            self.check_thresholds_for_weight_update(weight)
+            self.check_thresholds_for_weight_update(*weight)
                 .ok_or_else(|| RemoveKeyFailure::PermissionDenied)?;
         }
         self.associated_keys.remove_key(&public_key)
@@ -681,7 +681,7 @@ impl Account {
             if weight < *current_weight {
                 let diff = Weight::new(current_weight.value() - weight.value());
                 // New weight is smaller than current weight
-                self.check_thresholds_for_weight_update(&diff)
+                self.check_thresholds_for_weight_update(diff)
                     .ok_or_else(|| UpdateKeyFailure::PermissionDenied)?;
             }
         }
