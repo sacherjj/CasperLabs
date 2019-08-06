@@ -16,6 +16,7 @@ from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, is_valid_account, Account
+from test.cl_node.graphql import GraphQL
 
 
 class DockerNode(LoggingDockerBase):
@@ -45,6 +46,7 @@ class DockerNode(LoggingDockerBase):
 
     def __init__(self, cl_network, config: DockerConfig, socket_volume: str):
         super().__init__(config, socket_volume)
+        self.graphql = GraphQL(self)
         self.cl_network = cl_network
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
@@ -56,7 +58,7 @@ class DockerNode(LoggingDockerBase):
         if self.is_in_docker:
             return 0
         else:
-            return self.number * 10
+            return self.number * 10 + 100
 
     @property
     def grpc_external_docker_port(self) -> int:
@@ -65,6 +67,10 @@ class DockerNode(LoggingDockerBase):
     @property
     def grpc_internal_docker_port(self) -> int:
         return self.GRPC_INTERNAL_PORT + self.docker_port_offset
+
+    @property
+    def http_port(self) -> int:
+        return self.HTTP_PORT + self.docker_port_offset
 
     @property
     def resources_folder(self) -> Path:
@@ -125,8 +131,13 @@ class DockerNode(LoggingDockerBase):
 
         :return: dict for use in docker container run to open ports based on node number
         """
-        return {f'{self.GRPC_INTERNAL_PORT}/tcp': self.grpc_internal_docker_port,
-                f'{self.GRPC_EXTERNAL_PORT}/tcp': self.grpc_external_docker_port}
+        ports = (
+            (self.GRPC_INTERNAL_PORT, self.grpc_internal_docker_port),
+            (self.GRPC_EXTERNAL_PORT, self.grpc_external_docker_port),
+            (self.HTTP_PORT, self.http_port),
+        )
+        port_dict = {f'{int_port}/tcp': ext_port for int_port, ext_port in ports}
+        return port_dict
 
     def _get_container(self):
         env = self.config.node_env.copy()
@@ -200,7 +211,6 @@ class DockerNode(LoggingDockerBase):
     @property
     def from_address(self) -> str:
         return self.cl_network.from_address(self)
-
 
     @property
     def volumes(self) -> dict:
