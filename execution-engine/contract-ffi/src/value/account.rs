@@ -661,29 +661,25 @@ impl Account {
 
     /// Checks if subtracting passed weight from current total would make the
     /// new cumulative weight to fall below any of the thresholds on account.
-    fn check_thresholds_for_weight_update(&self, weight: Weight) -> Option<()> {
+    fn check_thresholds_for_weight_update(&self, weight: Weight) -> bool {
         let total_weight = self.associated_keys.total_keys_weight();
 
         // Safely calculate new weight
         let new_weight = total_weight.value().saturating_sub(weight.value());
 
-        if new_weight < self.action_thresholds().deployment().value()
-            || new_weight < self.action_thresholds().key_management().value()
-        {
-            // Return None which indicates an error if the new weight would be
-            // lesser than any of the thresholds.
-            return None;
-        }
-        // Some unit means success
-        Some(())
+        // Returns true if the new weight would be greater or equal to all of
+        // the thresholds.
+        new_weight >= self.action_thresholds().deployment().value()
+            && new_weight >= self.action_thresholds().key_management().value()
     }
 
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
         // TODO(mpapierski): Authorized keys check EE-377
         if let Some(weight) = self.associated_keys.get(&public_key) {
             // Check if removing this weight would fall below thresholds
-            self.check_thresholds_for_weight_update(*weight)
-                .ok_or_else(|| RemoveKeyFailure::ThresholdViolation)?;
+            if !self.check_thresholds_for_weight_update(*weight) {
+                return Err(RemoveKeyFailure::ThresholdViolation);
+            }
         }
         self.associated_keys.remove_key(&public_key)
     }
@@ -698,8 +694,9 @@ impl Account {
             if weight < *current_weight {
                 let diff = Weight::new(current_weight.value() - weight.value());
                 // New weight is smaller than current weight
-                self.check_thresholds_for_weight_update(diff)
-                    .ok_or_else(|| UpdateKeyFailure::ThresholdViolation)?;
+                if !self.check_thresholds_for_weight_update(diff) {
+                    return Err(UpdateKeyFailure::ThresholdViolation);
+                }
             }
         }
         self.associated_keys.update_key(public_key, weight)
