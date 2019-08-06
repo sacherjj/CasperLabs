@@ -4,6 +4,7 @@ import random
 import string
 import tempfile
 import typing
+import re
 
 from docker.client import DockerClient
 
@@ -47,6 +48,17 @@ def make_tempfile(prefix: str, content: str) -> str:
 
 def make_tempdir(prefix: str) -> str:
     return tempfile.mkdtemp(dir="/tmp", prefix=prefix)
+
+
+def extract_deploy_hash_from_deploy_output(deploy_output: str):
+    """We're getting back something along the lines of:
+
+    Success! Deploy 7a1235d50ddb6299525f5c90af5be24fa949a7497041146d2ed943da7300c57f deployed.
+    """
+    match = re.match(r'Success! Deploy ([0-9a-f]+) deployed.', deploy_output.strip())
+    if match is None:
+        raise Exception(f'Error extracting deploy hash: {deploy_output}')
+    return match.group(1)
 
 
 class Network:
