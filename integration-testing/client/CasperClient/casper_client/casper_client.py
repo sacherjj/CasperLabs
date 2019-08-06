@@ -137,7 +137,7 @@ def api(function):
     def wrapper(*args, **kwargs):
         try:
             return function(*args, **kwargs)
-        except SyntaxError:
+        except (SyntaxError, InternalError):
             raise
         except _Rendezvous as e:
             raise InternalError(str(e.code()), e.details())
@@ -150,6 +150,14 @@ class CasperClient:
     """
     gRPC CasperLabs client.
     """
+
+    # Note, there is also casper.StateQuery.KeyVariant.KEY_VARIANT_UNSPECIFIED,
+    # but it doesn't seem to have an official string representation
+    # ("key_variant_unspecified"? "unspecified"?) and is not used by the client.
+    STATE_QUERY_KEY_VARIANT={'hash': casper.StateQuery.KeyVariant.HASH,
+                             'uref': casper.StateQuery.KeyVariant.UREF,
+                             'address': casper.StateQuery.KeyVariant.ADDRESS,
+                             'local': casper.StateQuery.KeyVariant.LOCAL}
 
     def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, internal_port: int = DEFAULT_INTERNAL_PORT):
         """
@@ -338,12 +346,10 @@ class CasperClient:
         :return:                  QueryStateResponse object
         """
         def key_variant(keyType):
-            d = defaultdict(lambda *args: casper.StateQuery.KeyVariant.KEY_VARIANT_UNSPECIFIED)
-            d.update({'hash': casper.StateQuery.KeyVariant.HASH,
-                      'uref': casper.StateQuery.KeyVariant.UREF,
-                      'address': casper.StateQuery.KeyVariant.ADDRESS,
-                      'local': casper.StateQuery.KeyVariant.LOCAL})
-            return d[keyType]
+            variant = self.STATE_QUERY_KEY_VARIANT.get(keyType.lower(), None)
+            if variant is None:
+                raise InternalError('query-state', f"{keyType} is not a known query-state key type")
+            return variant
 
         q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
         q.path_segments.extend(name for name in path.split('/') if name)
@@ -356,11 +362,11 @@ class CasperClient:
         try:
             account = value.account
         except AttributeError:
-            return InternalError('', f"Expected Account type value under {address}.")
+            return InternalError('balance', f"Expected Account type value under {address}.")
 
         urefs = [u for u in account.known_urefs if u.name == 'mint']
         if len(urefs) == 0:
-            raise InternalError('', "Account's known_urefs map did not contain Mint contract address.")
+            raise InternalError('balance', "Account's known_urefs map did not contain Mint contract address.")
 
         mintPublic = urefs[0]
         mintPrivate = self.queryState(block_hash, mintPublic.key.uref.uref.hex(), "", "uref")
