@@ -28,22 +28,14 @@ fn get_refund_purse(pos: &ContractPointer) -> Option<PurseId> {
     contract_api::call_contract(pos.clone(), &"get_refund_purse", &Vec::new())
 }
 
-fn create_purse(mint: &ContractPointer) -> PurseId {
-    contract_api::call_contract(mint.clone(), &"create", &Vec::new())
-}
-
 #[no_mangle]
 pub extern "C" fn call() {
     let pos_public: UPointer<Key> = contract_api::get_uref("pos").unwrap().to_u_ptr().unwrap();
     let pos_contract: Key = contract_api::read(pos_public);
     let pos_pointer = pos_contract.to_c_ptr().unwrap();
 
-    let mint_public: UPointer<Key> = contract_api::get_uref("mint").unwrap().to_u_ptr().unwrap();
-    let mint_contract: Key = contract_api::read(mint_public);
-    let mint_pointer = mint_contract.to_c_ptr().unwrap();
-
-    let p1 = create_purse(&mint_pointer);
-    let p2 = create_purse(&mint_pointer);
+    let p1 = contract_api::create_purse();
+    let p2 = contract_api::create_purse();
 
     // get_refund_purse should return None before setting it
     let refund_result = get_refund_purse(&pos_pointer);
