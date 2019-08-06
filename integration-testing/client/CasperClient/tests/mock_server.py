@@ -2,22 +2,18 @@
 """
 Mock gRPC server (node) used in Python client's unit tests suite.
 """
-
-import string
 from concurrent import futures
 import time
 import grpc
-import pprint
 
 from casper_client import CasperMessage_pb2
 from casper_client import CasperMessage_pb2_grpc
-from casper_client import CasperServiceStub
 from casper_client import casper_pb2_grpc
-from casper_client import empty_pb2 
+from casper_client import empty_pb2
 
-CL_GRPC_PORT_EXTERNAL=3477
+CL_GRPC_PORT_EXTERNAL = 3477
 
-HASH = 'd9d087fe5d22dbfa1bacb57d6da8d509f7191a216cee6a971de32463ff0f284f'
+HASH = "d9d087fe5d22dbfa1bacb57d6da8d509f7191a216cee6a971de32463ff0f284f"
 
 SAMPLE_DOT = """
 digraph "dag" {
@@ -63,91 +59,91 @@ digraph "dag" {
 
 
 class CasperServiceServicer(casper_pb2_grpc.CasperServiceServicer):
-  """CasperService is the way for user and dApp developer to interact with the system,
+    """CasperService is the way for user and dApp developer to interact with the system,
   including deploying contracts, looking at the DAG and querying state.
   """
 
-  def Deploy(self, request, context):
-    """Add a deploy to the deploy pool on the node,
+    def Deploy(self, request, context):
+        """Add a deploy to the deploy pool on the node,
     to be processed during subsequent block proposals.
     """
-    context.set_code(grpc.StatusCode.OK)
-    context.set_details('')
-    return empty_pb2.Empty()
+        context.set_code(grpc.StatusCode.OK)
+        context.set_details("")
+        return empty_pb2.Empty()
 
-  def GetBlockInfo(self, request, context):
-    """Get the block summary with extra information about finality.
+    def GetBlockInfo(self, request, context):
+        """Get the block summary with extra information about finality.
     """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
-  def StreamBlockInfos(self, request, context):
-    """Get slices of the DAG, going backwards, rank by rank.
+    def StreamBlockInfos(self, request, context):
+        """Get slices of the DAG, going backwards, rank by rank.
     """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
 
 class DeployServicer(CasperMessage_pb2_grpc.DeployServiceServicer):
+    def DoDeploy(self, request, context):
+        context.set_code(grpc.StatusCode.OK)
+        context.set_details("")
+        return CasperMessage_pb2.DeployServiceResponse()
 
-  def DoDeploy(self, request, context):
-    context.set_code(grpc.StatusCode.OK)
-    context.set_details('')
-    return CasperMessage_pb2.DeployServiceResponse()
+    def createBlock(self, request, context):
+        context.set_code(grpc.StatusCode.OK)
+        return CasperMessage_pb2.DeployServiceResponse()
 
-  def createBlock(self, request, context):
-    context.set_code(grpc.StatusCode.OK)
-    return CasperMessage_pb2.DeployServiceResponse()
+    def showBlock(self, request, context):
+        context.set_code(grpc.StatusCode.OK)
+        return CasperMessage_pb2.BlockQueryResponse()
 
-
-  def showBlock(self, request, context):
-    context.set_code(grpc.StatusCode.OK)
-    return CasperMessage_pb2.BlockQueryResponse()
-
-  def visualizeDag(self, request, context):
-    """Get DAG in DOT format.
+    def visualizeDag(self, request, context):
+        """Get DAG in DOT format.
     """
-    context.set_code(grpc.StatusCode.OK)
-    b = CasperMessage_pb2.VisualizeBlocksResponse()
-    b.content = SAMPLE_DOT
-    return b
+        context.set_code(grpc.StatusCode.OK)
+        b = CasperMessage_pb2.VisualizeBlocksResponse()
+        b.content = SAMPLE_DOT
+        return b
 
-  def showMainChain(self, request, context):
-    context.set_code(grpc.StatusCode.OK)
-    return CasperMessage_pb2.BlockInfoWithoutTuplespace()
+    def showMainChain(self, request, context):
+        context.set_code(grpc.StatusCode.OK)
+        return CasperMessage_pb2.BlockInfoWithoutTuplespace()
 
-  def showBlocks(self, request, context):
-    context.set_code(grpc.StatusCode.OK)
-    b = CasperMessage_pb2.BlockInfoWithoutTuplespace()
-    b.blockHash = HASH
-    yield b
+    def showBlocks(self, request, context):
+        context.set_code(grpc.StatusCode.OK)
+        b = CasperMessage_pb2.BlockInfoWithoutTuplespace()
+        b.blockHash = HASH
+        yield b
 
-  def findBlockWithDeploy(self, request, context):
-    context.set_code(grpc.StatusCode.OK)
-    b = CasperMessage_pb2.BlockQueryResponse()
-    b.status = "SUCCESS"
-    return b
+    def findBlockWithDeploy(self, request, context):
+        context.set_code(grpc.StatusCode.OK)
+        b = CasperMessage_pb2.BlockQueryResponse()
+        b.status = "SUCCESS"
+        return b
 
-  def queryState(self, request, context):
-    context.set_code(grpc.StatusCode.OK)
-    return CasperMessage_pb2.QueryStateResponse()
+    def queryState(self, request, context):
+        context.set_code(grpc.StatusCode.OK)
+        return CasperMessage_pb2.QueryStateResponse()
+
 
 ####
+
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
     CasperMessage_pb2_grpc.add_DeployServiceServicer_to_server(DeployServicer(), server)
-    port = '[::]:' + str(CL_GRPC_PORT_EXTERNAL)
+    port = "[::]:" + str(CL_GRPC_PORT_EXTERNAL)
     server.add_insecure_port(port)
     server.start()
     try:
         while True:
-            time.sleep(60*60)
+            time.sleep(60 * 60)
     except KeyboardInterrupt:
         server.stop(0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     serve()
