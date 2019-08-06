@@ -24,10 +24,6 @@ fn set_refund_purse(pos: &ContractPointer, p: &PurseId) {
     );
 }
 
-fn unset_refund_purse(pos: &ContractPointer) {
-    contract_api::call_contract::<_, ()>(pos.clone(), &"unset_refund_purse", &Vec::new());
-}
-
 fn get_refund_purse(pos: &ContractPointer) -> Option<PurseId> {
     contract_api::call_contract(pos.clone(), &"get_refund_purse", &Vec::new())
 }
@@ -74,17 +70,5 @@ pub extern "C" fn call() {
         None => contract_api::revert(5),
         Some(x) if x.value().addr() == p2.value().addr() => (),
         Some(_) => contract_api::revert(6),
-    }
-
-    // it should return None again after calling unset_refund_purse
-    unset_refund_purse(&pos_pointer);
-    if get_refund_purse(&pos_pointer).is_some() {
-        contract_api::revert(7);
-    }
-
-    // unset_refund_purse is idempotent
-    unset_refund_purse(&pos_pointer);
-    if get_refund_purse(&pos_pointer).is_some() {
-        contract_api::revert(8);
     }
 }

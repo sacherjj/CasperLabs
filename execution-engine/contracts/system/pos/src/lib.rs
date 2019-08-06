@@ -149,10 +149,6 @@ fn set_refund(purse_id: URef) {
     contract_api::add_uref(REFUND_PURSE_KEY, &Key::URef(purse_id));
 }
 
-fn unset_refund() {
-    contract_api::remove_uref(REFUND_PURSE_KEY);
-}
-
 fn get_refund_purse() -> Option<PurseId> {
     match get_purse_id(REFUND_PURSE_KEY) {
         Ok(purse_id) => Some(purse_id),
@@ -247,7 +243,6 @@ pub extern "C" fn call() {
             let purse_id: PurseId = contract_api::get_arg(1);
             set_refund(purse_id.value());
         }
-        "unset_refund_purse" => unset_refund(),
         "get_refund_purse" => {
             // We purposely choose to remove the access rights so that we do not
             // accidentally give rights for a purse to some contract that is not
