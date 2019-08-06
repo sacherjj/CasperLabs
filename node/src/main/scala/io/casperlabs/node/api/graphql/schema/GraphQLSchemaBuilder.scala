@@ -1,7 +1,7 @@
 package io.casperlabs.node.api.graphql.schema
 
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.api.BlockAPI
@@ -16,7 +16,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import sangria.schema._
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStore: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployBuffer] {
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployBuffer] {
 
   val requireFullBlockFields: Set[String] = Set("blockSizeBytes", "deployErrorCount", "deploys")
 

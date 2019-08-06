@@ -18,11 +18,11 @@ import doobie.util.transactor.Transactor
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
-  BlockStore,
-  CachingBlockStore,
-  FileLMDBIndexBlockStore
+  BlockStorage,
+  CachingBlockStorage,
+  DagStorage,
+  FileDagStorage,
+  FileLMDBIndexBlockStorage
 }
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
@@ -69,10 +69,10 @@ class NodeRuntime private[node] (
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
 
   // intra-node gossiping port.
-  private val port           = conf.server.port
-  private val kademliaPort   = conf.server.kademliaPort
-  private val blockstorePath = conf.server.dataDir.resolve("blockstore")
-  private val dagStoragePath = conf.server.dataDir.resolve("dagstorage")
+  private val port             = conf.server.port
+  private val kademliaPort     = conf.server.kademliaPort
+  private val blockStoragePath = conf.server.dataDir.resolve("blockstorage")
+  private val dagStoragePath   = conf.server.dataDir.resolve("dagstorage")
 
   /**
     * Main node entry. It will:
@@ -149,42 +149,42 @@ class NodeRuntime private[node] (
                                                         )
         _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
-        implicit0(blockStore: BlockStore[Effect]) <- FileLMDBIndexBlockStore[Effect](
-                                                      conf.server.dataDir,
-                                                      blockstorePath,
-                                                      100L * 1024L * 1024L * 4096L
+        implicit0(blockStorage: BlockStorage[Effect]) <- FileLMDBIndexBlockStorage[Effect](
+                                                          conf.server.dataDir,
+                                                          blockStoragePath,
+                                                          100L * 1024L * 1024L * 4096L
+                                                        )(
+                                                          Concurrent[Effect],
+                                                          logEff,
+                                                          raiseIOError,
+                                                          metricsEff
+                                                        ) evalMap { underlying =>
+                                                          CachingBlockStorage[Effect](
+                                                            underlying,
+                                                            maxSizeBytes =
+                                                              conf.blockstorage.cacheMaxSizeBytes
+                                                          )(
+                                                            Sync[Effect],
+                                                            metricsEff
+                                                          )
+                                                        }
+
+        implicit0(dagStorage: DagStorage[Effect]) <- FileDagStorage[Effect](
+                                                      dagStoragePath,
+                                                      conf.blockstorage.latestMessagesLogMaxSizeFactor,
+                                                      blockStorage
                                                     )(
                                                       Concurrent[Effect],
                                                       logEff,
                                                       raiseIOError,
                                                       metricsEff
-                                                    ) evalMap { underlying =>
-                                                      CachingBlockStore[Effect](
-                                                        underlying,
-                                                        maxSizeBytes =
-                                                          conf.blockstorage.cacheMaxSizeBytes
-                                                      )(
-                                                        Sync[Effect],
-                                                        metricsEff
-                                                      )
-                                                    }
-
-        implicit0(blockDagStorage: BlockDagStorage[Effect]) <- BlockDagFileStorage[Effect](
-                                                                dagStoragePath,
-                                                                conf.blockstorage.latestMessagesLogMaxSizeFactor,
-                                                                blockStore
-                                                              )(
-                                                                Concurrent[Effect],
-                                                                logEff,
-                                                                raiseIOError,
-                                                                metricsEff
-                                                              )
+                                                    )
 
         _ <- Resource.liftF {
               Task
                 .delay {
                   log.info("Cleaning block storage ...")
-                  blockStore.clear() *> blockDagStorage.clear()
+                  blockStorage.clear() *> dagStorage.clear()
                 }
                 .whenA(conf.server.cleanBlockStorage)
                 .toEffect

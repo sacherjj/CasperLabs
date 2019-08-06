@@ -74,7 +74,7 @@ def test_block_propagation(
 ):
     """
     Feature file: consensus.feature
-    Scenario: test_helloworld.wasm deploy and propose by all nodes and stored in all nodes blockstores
+    Scenario: test_helloworld.wasm deploy and propose by all nodes and stored in all nodes blockstorages
     """
 
     account = nodes[0].genesis_account

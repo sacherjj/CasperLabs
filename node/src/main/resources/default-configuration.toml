@@ -107,15 +107,15 @@ relay-max-parallel-blocks = 5
 # Maximum time to allow a peer downloading a block to consume each chunk.
 relay-block-chunk-consumer-timeout = "10second"
 
-# Use this flag to clear the blockStore and blockDagStorage
+# Use this flag to clear the blockStorage and dagStorage
 clean-block-storage = false
 
 
-# io.casperlabs.blockstorage.LMDBBlockStore.Config
+# io.casperlabs.blockstorage.LMDBBlockStorage.Config
 [lmdb]
 
 # LMDB blockstorage  map size (in bytes).
-block-store-size = 1073741824
+block-storage-size = 1073741824
 
 # LMDB blockstorage max databases.
 max-dbs = 1
@@ -127,7 +127,7 @@ max-readers = 126
 use-tls = false
 
 
-# io.casperlabs.blockstorage.BlockDagFileStorage.Config
+# io.casperlabs.blockstorage.FileDagStorage.Config
 [blockstorage]
 
 # Size factor for squashing block storage latest messages.
@@ -199,7 +199,7 @@ bonds-file = "$HOME/.casperlabs/genesis/bonds.txt"
 
 # Path to plain text file listing the public keys of validators known to the user (one per line).
 # Signatures from these validators are required in order to accept a block which starts the local
-# node's view of the blockDAG.
+# node's view of the DAG.
 # known-validators-file =
 
 # Amount of random validator keys to generate at genesis if no `bonds.txt` file is present.

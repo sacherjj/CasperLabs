@@ -6,7 +6,7 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockDagRepresentation
+import io.casperlabs.blockstorage.DagRepresentation
 import io.casperlabs.casper
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -68,7 +68,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
     }
 
     implicit val logEff       = new LogStub[Effect]
-    implicit val blockStore   = node.blockStore
+    implicit val blockStorage = node.blockStorage
     implicit val safetyOracle = node.safetyOracleEff
 
     def testProgram(blockApiLock: Semaphore[Effect])(
@@ -107,7 +107,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
 
     implicit val logEff       = new LogStub[Effect]
-    implicit val blockStore   = node.blockStore
+    implicit val blockStorage = node.blockStorage
     implicit val safetyOracle = node.safetyOracleEff
 
     def testProgram(blockApiLock: Semaphore[Effect])(
@@ -141,9 +141,9 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def addBlock(b: Block): F[BlockStatus]            = underlying.addBlock(b)
   def contains(b: Block): F[Boolean]                = underlying.contains(b)
   def deploy(d: Deploy): F[Either[Throwable, Unit]] = underlying.deploy(d)
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
+  def estimator(dag: DagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
-  def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
+  def dag: F[DagRepresentation[F]] = underlying.dag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
