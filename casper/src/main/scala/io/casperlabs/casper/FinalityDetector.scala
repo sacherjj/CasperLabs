@@ -148,15 +148,14 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                     if (prunedCommittee.isEmpty) {
                       none[Committee].pure[F]
                     } else {
-                      val quorum = blockLevelTags.values.flatMap {
-                        blockScoreAccumulator =>
-                          if (blockScoreAccumulator.blockLevel >= 1 && prunedCommittee.contains(
-                                blockScoreAccumulator.block.validatorPublicKey
-                              )) {
-                            blockScoreAccumulator.estimateQ.some
-                          } else {
-                            None
-                          }
+                      val quorum = blockLevelTags.values.flatMap { blockScoreAccumulator =>
+                        if (blockScoreAccumulator.blockLevel >= 1 && prunedCommittee.contains(
+                              blockScoreAccumulator.block.validatorPublicKey
+                            )) {
+                          blockScoreAccumulator.estimateQ.some
+                        } else {
+                          None
+                        }
                       }.min
                       Committee(prunedCommittee, quorum).some.pure[F]
                     }
