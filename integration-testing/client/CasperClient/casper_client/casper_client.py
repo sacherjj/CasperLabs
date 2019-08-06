@@ -27,6 +27,16 @@ from functools import reduce
 import ast
 from collections import defaultdict
 
+# Monkey patching of google.protobuf.text_encoding.CEscape
+# to get keys and signatures in hex when printed
+import google.protobuf.text_format
+CEscape = google.protobuf.text_format.text_encoding.CEscape
+
+def _hex(text, as_utf8):
+    return (len(text) in (32, 64)) and text.hex() or CEscape(text, as_utf8)
+
+google.protobuf.text_format.text_encoding.CEscape = _hex
+
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
 from .control_pb2_grpc import ControlServiceStub
 from . import control_pb2 as control
@@ -428,48 +438,25 @@ def guarded_command(function):
     return wrapper
 
 
-def hexify(s):
-    """Replace cryptographic hashes and signatures with their base 16 representation."""
-
-    def parse_bytes_literal(s):
-        bytes_repr = s.strip()[1:-1]
-        return ast.literal_eval(f"b'{bytes_repr}'")
-
-
-    def hexify_line(line):
-        if ': ' not in line:
-            return line
-
-        left, right = line.split(': ', 1)
-
-        if left.endswith('sig'):
-            sig = parse_bytes_literal(right)
-            return f'{left}: "{sig.hex()}"'
-
-        if not (right[0] == right[-1] == '"'):
-            return line
-
-        # See if it is 32 bytes after parsing, if yes assume it is a hash
-        # and should be printed in hex format.
-        # TODO: do this for specific keywords only (need to find them out)
-        h = parse_bytes_literal(right)
-        return len(h) == 32 and f'{left}: "{h.hex()}"' or line
-
-    return "\n".join(hexify_line(line) for line in s.splitlines())
+def hexify(o):
+    """
+    Convert protobuf message to text format with cryptographic keys and signatures in base 16.
+    """
+    return google.protobuf.text_format.MessageToString(o)
 
 
 def _show_blocks(response, element_name='block'):
     count = 0
     for block in response:
         print(f'------------- {element_name} {count} ---------------')
-        print(hexify(str(block)))
+        print(hexify(block))
         print('-----------------------------------------------------\n')
         count += 1
     print('count:', count)
 
 
 def _show_block(response):
-    print(hexify(str(response)))
+    print(hexify(response))
 
 
 @guarded_command
@@ -515,13 +502,13 @@ def show_blocks_command(casper_client, args):
 def vdag_command(casper_client, args):
     response = casper_client.visualizeDag(args.depth)
     # TODO: call Graphviz
-    print (hexify(str(response)))
+    print (hexify(response))
 
 
 @guarded_command
 def query_state_command(casper_client, args):
     response = casper_client.queryState(args.block_hash, args.key, args.path, getattr(args, 'type'))
-    print(hexify(str(response)))
+    print(hexify(response))
 
 @guarded_command
 def balance_command(casper_client, args):
@@ -532,7 +519,7 @@ def balance_command(casper_client, args):
 @guarded_command
 def show_deploy_command(casper_client, args):
     response = casper_client.showDeploy(args.hash, full_view=False)
-    print(hexify(str(response)))
+    print(hexify(response))
     
 
 @guarded_command
