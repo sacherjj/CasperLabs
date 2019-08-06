@@ -25,6 +25,7 @@ members = [
     "contracts/test/known-urefs",
     "contracts/test/local-state",
     "contracts/test/main-purse",
+    "contracts/test/pos-get-payment-purse",
     "contracts/test/remove-associated-key",
     "contracts/test/transfer-purse-to-account",
     "contracts/test/transfer-purse-to-purse",

@@ -148,7 +148,7 @@ def deploy_and_propose_expect_no_errors(node, contract):
                                          payment_contract=contract,
                                          from_address=node.genesis_account.public_key_hex,
                                          public_key=node.genesis_account.public_key_path,
-                                         private_key=node.genesis_account.private_key_path) 
+                                         private_key=node.genesis_account.private_key_path)
     r = client.show_deploys(block_hash)[0]
     assert r.is_error is False, f'error_message: {r.error_message}'
 
@@ -211,7 +211,7 @@ def block_hash(node):
     return node.deploy_and_propose(session_contract="test_helloname.wasm", payment_contract="test_helloname.wasm")
 
 block_hash_queries = [
-    ({'block_hash': "9d", 'key': "a91208047c", 'path': "file.xxx", 'key_type': "hash"},
+    ({'block_hash': "9d000000", 'key': "a91208047c", 'path': "file.xxx", 'key_type': "hash"},
      "NOT_FOUND: Cannot find block matching"),
 
     ({                    'key': "a91208047c", 'path': "file.xxx", 'key_type': "hash"},
@@ -377,7 +377,7 @@ def test_deploy_with_higher_nonce(node, contracts: List[str]):
     deploy_and_propose(node, contracts[1], 2)
 
     # The deploy with nonce 3 can be proposed now.
-    block_hash = propose(node)  
+    block_hash = propose(node)
     assert deploy_hash in deploy_hashes(node, block_hash)
 
 

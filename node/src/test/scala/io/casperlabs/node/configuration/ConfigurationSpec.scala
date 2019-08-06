@@ -115,7 +115,6 @@ class ConfigurationSpec
       approveGenesisDuration = FiniteDuration(1, TimeUnit.SECONDS),
       deployTimestamp = 1L.some,
       genesisPath = Paths.get("/tmp/genesis"),
-      ignoreDeploySignature = false,
       autoProposeEnabled = false,
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeMaxInterval = FiniteDuration(1, TimeUnit.SECONDS),

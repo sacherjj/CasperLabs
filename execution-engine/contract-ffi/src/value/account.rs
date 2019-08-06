@@ -515,8 +515,8 @@ impl AssociatedKeys {
     fn calculate_any_keys_weight<'a>(&self, keys: impl Iterator<Item = &'a PublicKey>) -> Weight {
         let total = keys
             .filter_map(|key| self.0.get(key))
-            .map(|w| w.value())
-            .sum();
+            .fold(0u8, |acc, w| acc.saturating_add(w.value()));
+
         Weight::new(total)
     }
 
@@ -1296,6 +1296,31 @@ mod tests {
                 .update_associated_key(key_3, Weight::new(1))
                 .unwrap_err(),
             UpdateKeyFailure::PermissionDenied
+        );
+    }
+
+    #[test]
+    fn overflowing_keys_weight() {
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(250));
+
+            res.add_key(PublicKey::new([2u8; 32]), Weight::new(1))
+                .expect("should add key 1");
+            res.add_key(PublicKey::new([3u8; 32]), Weight::new(2))
+                .expect("should add key 2");
+            res.add_key(PublicKey::new([4u8; 32]), Weight::new(3))
+                .expect("should add key 3");
+            res
+        };
+
+        assert_eq!(
+            associated_keys.calculate_keys_weight(&BTreeSet::from_iter(vec![
+                PublicKey::new([1; 32]), // 250
+                PublicKey::new([2; 32]), // 251
+                PublicKey::new([3; 32]), // 253
+                PublicKey::new([4; 32]), // 256 - error
+            ])),
+            Weight::new(255u8)
         );
     }
 }

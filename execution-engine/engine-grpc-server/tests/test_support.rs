@@ -101,7 +101,8 @@ pub fn create_genesis_request(
 
     let proof_of_stake_code = {
         let mut ret = DeployCode::new();
-        let wasm_bytes = test_utils::create_empty_wasm_module_bytes();
+        let contract_file = "pos.wasm";
+        let wasm_bytes = read_wasm_file_bytes(contract_file);
         let wasmi_bytes =
             WasmiBytes::new(&wasm_bytes, engine_wasm_prep::wasm_costs::WasmCosts::free())
                 .expect("should have wasmi bytes");

@@ -55,7 +55,6 @@ services:
       CL_CASPER_MINT_CODE_PATH: /root/.casperlabs/genesis/system-contracts/mint_token.wasm
       CL_CASPER_POS_CODE_PATH: /root/.casperlabs/genesis/system-contracts/pos.wasm
       CL_CASPER_AUTO_PROPOSE_ENABLED: ${CL_CASPER_AUTO_PROPOSE_ENABLED}
-      CL_CASPER_IGNORE_DEPLOY_SIGNATURE: "true"
     entrypoint:
       - sh
       - -c

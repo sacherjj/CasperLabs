@@ -37,7 +37,7 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 
-class ValidateTest
+class ValidationTest
     extends FlatSpec
     with Matchers
     with BeforeAndAfterEach
@@ -643,6 +643,69 @@ class ValidateTest
   it should "return true for valid hashes" in {
     val deploy = sample(arbitrary[consensus.Deploy])
     Validation[Task].deployHash(deploy) shouldBeF true
+  }
+
+  "Processed deploy validation" should "fail a block with a deploy having an invalid hash" in withStorage {
+    _ => _ =>
+      val block = sample {
+        for {
+          b <- arbitrary[consensus.Block]
+          h <- genHash
+        } yield b.withBody(
+          b.getBody.withDeploys(
+            b.getBody.deploys.take(1).map(x => x.withDeploy(x.getDeploy.withDeployHash(h))) ++
+              b.getBody.deploys.tail
+          )
+        )
+      }
+      for {
+        result <- ValidationImpl[Task].deployHashes(block).attempt
+        _      = result shouldBe Left(ValidateErrorWrapper(InvalidDeployHash))
+      } yield ()
+  }
+
+  it should "fail a block with a deploy having no signature" in withStorage { _ => _ =>
+    val block = sample {
+      for {
+        b <- arbitrary[consensus.Block]
+      } yield b.withBody(
+        b.getBody.withDeploys(
+          b.getBody.deploys.take(1).map(x => x.withDeploy(x.getDeploy.withApprovals(Seq.empty))) ++
+            b.getBody.deploys.tail
+        )
+      )
+    }
+    for {
+      result <- ValidationImpl[Task].deploySignatures(block).attempt
+      _      = result shouldBe Left(ValidateErrorWrapper(InvalidDeploySignature))
+    } yield ()
+  }
+
+  it should "fail a block with a deploy having an invalid signature" in withStorage { _ => _ =>
+    val block = sample {
+      for {
+        b <- arbitrary[consensus.Block]
+        h <- genHash
+      } yield b.withBody(
+        b.getBody.withDeploys(
+          b.getBody.deploys
+            .take(1)
+            .map(
+              x =>
+                x.withDeploy(
+                  x.getDeploy.withApprovals(
+                    x.getDeploy.approvals.map(a => a.withSignature(a.getSignature.withSig(h)))
+                  )
+                )
+            ) ++
+            b.getBody.deploys.tail
+        )
+      )
+    }
+    for {
+      result <- ValidationImpl[Task].deploySignatures(block).attempt
+      _      = result shouldBe Left(ValidateErrorWrapper(InvalidDeploySignature))
+    } yield ()
   }
 
   "Block hash format validation" should "fail on invalid hash" in withStorage {

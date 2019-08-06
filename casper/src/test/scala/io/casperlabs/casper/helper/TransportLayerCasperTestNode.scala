@@ -85,7 +85,7 @@ class TransportLayerCasperTestNode[F[_]](
     LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
 
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
-  implicit val validation        = new ValidationImpl[F]
+  implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
   implicit val lastFinalizedBlockHashContainer =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
