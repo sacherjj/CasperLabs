@@ -51,10 +51,9 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     for {
       weights      <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
       committeeOpt <- findBestCommittee(dag, candidateBlockHash, weights)
-    } yield
-      committeeOpt
-        .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
-        .getOrElse(0f)
+    } yield committeeOpt
+      .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
+      .getOrElse(0f)
 
   def levelZeroMsgs(
       dag: DagRepresentation[F],
@@ -213,7 +212,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     val stream = DagOperations.bfToposortTraverseF(lowestLevelZeroMsgs)(
       b =>
         for {
-          bsOpt <- blockDag.justificationToBlocks(b.blockHash)
+          bsOpt <- dag.justificationToBlocks(b.blockHash)
           filterBs <- bsOpt.toList
                        .traverse(
                          dag.lookup
@@ -274,33 +273,6 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
   }
 
   /*
-   * Returns a list of validators whose latest messages are votes for `candidateBlockHash`.
-   * i.e. checks whether latest blocks from these validators are in the main chain of `candidateBlockHash`.
-   */
-  private def getAgreeingValidators(
-      dag: DagRepresentation[F],
-      candidateBlockHash: BlockHash,
-      weights: Map[Validator, Long]
-  ): F[List[Validator]] =
-    weights.keys.toList.filterA { validator =>
-      for {
-        latestMessageHash <- dag
-                              .latestMessageHash(
-                                validator
-                              )
-        result <- latestMessageHash match {
-                   case Some(b) =>
-                     ProtoUtil.isInMainChain[F](
-                       dag,
-                       candidateBlockHash,
-                       b
-                     )
-                   case _ => false.pure[F]
-                 }
-      } yield result
-    }
-
-  /*
    * Finds the best level-1 committee for a given candidate block
    */
   def findBestCommittee(
@@ -309,30 +281,29 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
       weights: Map[Validator, Long]
   ): F[Option[Committee]] =
     for {
-      committeeApproximation <- getAgreeingValidators(dag, candidateBlockHash, weights)
-      totalWeight            = weights.values.sum
-      maxWeightApproximation = committeeApproximation.map(weights).sum
-      // To have a committee of half the total weight,
-      // you need at least twice the weight of the maxWeightApproximation to be greater than the total weight.
-      // If that is false, we don't need to compute best committee
-      // as we know the value is going to be below 0 and thus useless for finalization.
-      result <- if (2 * maxWeightApproximation <= totalWeight) {
-                 none[Committee].pure[F]
-               } else {
-                 for {
-                   levelZeroMsgs <- levelZeroMsgs(
-                                     dag,
-                                     candidateBlockHash,
-                                     committeeApproximation
-                                   )
-                   committeeMembersAfterPruning <- findBestQLoop(
-                                                    dag,
-                                                    committeeApproximation.toSet,
-                                                    levelZeroMsgs,
-                                                    weights,
-                                                    maxWeightApproximation / 2
-                                                  )
-                 } yield committeeMembersAfterPruning
+      committeeApproximationOpt <- FinalityDetectorUtil.committeeApproximation[F](
+                                    dag,
+                                    candidateBlockHash,
+                                    weights
+                                  )
+      result <- committeeApproximationOpt match {
+                 case Some((committeeApproximation, maxWeightApproximation)) =>
+                   for {
+                     levelZeroMsgs <- levelZeroMsgs(
+                                       dag,
+                                       candidateBlockHash,
+                                       committeeApproximation
+                                     )
+                     committeeMembersAfterPruning <- findBestQLoop(
+                                                      dag,
+                                                      committeeApproximation.toSet,
+                                                      levelZeroMsgs,
+                                                      weights,
+                                                      maxWeightApproximation / 2
+                                                    )
+                   } yield committeeMembersAfterPruning
+                 case None =>
+                   none[Committee].pure[F]
                }
     } yield result
 }
