@@ -1065,6 +1065,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pos-refund-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
