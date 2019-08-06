@@ -24,7 +24,13 @@ use crate::stakes::{ContractStakes, StakesProvider};
 /// The uref name where the PoS purse is stored. It contains all staked tokens, and all unbonded
 /// tokens that are yet to be paid out.
 const BONDING_PURSE_KEY: &str = "pos_bonding_purse";
+
+/// The uref name where the PoS accepts payment for computation on behalf of validators.
 const PAYMENT_PURSE_KEY: &str = "pos_payment_purse";
+
+/// The uref name where the PoS will refund unused payment back to the user. The uref
+/// this name corresponds to is set by the user.
+const REFUND_PURSE_KEY: &str = "pos_refund_purse";
 
 /// The time from a bonding request until the bond becomes effective and part of the stake.
 const BOND_DELAY: u64 = 0;
@@ -139,6 +145,24 @@ fn get_bonding_purse() -> Result<PurseId> {
     get_purse_id(BONDING_PURSE_KEY).map_err(PurseLookupError::bonding)
 }
 
+fn set_refund(purse_id: URef) {
+    contract_api::add_uref(REFUND_PURSE_KEY, &Key::URef(purse_id));
+}
+
+fn unset_refund() {
+    contract_api::remove_uref(REFUND_PURSE_KEY);
+}
+
+fn get_refund_purse() -> Option<PurseId> {
+    match get_purse_id(REFUND_PURSE_KEY) {
+        Ok(purse_id) => Some(purse_id),
+        Err(PurseLookupError::KeyNotFound) => None,
+        Err(PurseLookupError::KeyUnexpectedType) => {
+            contract_api::revert(Error::RefundPurseKeyUnexpectedType.into())
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn call() {
     let method_name: String = contract_api::get_arg(0);
@@ -218,6 +242,22 @@ pub extern "C" fn call() {
                 &rights_controlled_purse,
                 &vec![rights_controlled_purse.value()],
             );
+        }
+        "set_refund_purse" => {
+            let purse_id: PurseId = contract_api::get_arg(1);
+            set_refund(purse_id.value());
+        }
+        "unset_refund_purse" => unset_refund(),
+        "get_refund_purse" => {
+            // We purposely choose to remove the access rights so that we do not
+            // accidentally give rights for a purse to some contract that is not
+            // supposed to have it.
+            let result = get_refund_purse().map(|p| p.value().remove_access_rights());
+            if let Some(uref) = result {
+                contract_api::ret(&Some(PurseId::new(uref)), &vec![uref]);
+            } else {
+                contract_api::ret(&result, &Vec::new());
+            }
         }
         _ => {}
     }
