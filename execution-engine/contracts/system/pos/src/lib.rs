@@ -145,10 +145,14 @@ fn get_bonding_purse() -> Result<PurseId> {
     get_purse_id(BONDING_PURSE_KEY).map_err(PurseLookupError::bonding)
 }
 
+/// Sets the purse where refunds (excess funds not spent to pay for computation) will be sent.
+/// Note that if this function is never called, the default location is the main purse of
+/// the deployer's account.
 fn set_refund(purse_id: URef) {
     contract_api::add_uref(REFUND_PURSE_KEY, &Key::URef(purse_id));
 }
 
+/// Returns the currently set refund purse.
 fn get_refund_purse() -> Option<PurseId> {
     match get_purse_id(REFUND_PURSE_KEY) {
         Ok(purse_id) => Some(purse_id),
