@@ -1293,7 +1293,7 @@ mod tests {
                 .clone()
                 .update_associated_key(key_3, Weight::new(1))
                 .unwrap_err(),
-            UpdateKeyFailure::PermissionDenied,
+            UpdateKeyFailure::ThresholdViolation,
         );
 
         // increase total weight (12)
@@ -1312,7 +1312,7 @@ mod tests {
                 .clone()
                 .update_associated_key(key_3, Weight::new(1))
                 .unwrap_err(),
-            UpdateKeyFailure::PermissionDenied
+            UpdateKeyFailure::ThresholdViolation
         );
     }
 
