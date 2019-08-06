@@ -97,6 +97,10 @@ pub enum SetThresholdFailure {
     DeploymentThresholdError = 2,
     #[fail(display = "Unable to set action threshold due to insufficient permissions")]
     PermissionDeniedError = 3,
+    #[fail(
+        display = "New threshold should be lower or equal than total weight of associated keys"
+    )]
+    InsufficientTotalWeight = 4,
 }
 
 /// convert from i32 representation of `[SetThresholdFailure]`
@@ -113,6 +117,9 @@ impl TryFrom<i32> for SetThresholdFailure {
             }
             d if d == SetThresholdFailure::PermissionDeniedError as i32 => {
                 Ok(SetThresholdFailure::PermissionDeniedError)
+            }
+            d if d == SetThresholdFailure::InsufficientTotalWeight as i32 => {
+                Ok(SetThresholdFailure::InsufficientTotalWeight)
             }
             _ => Err(TryFromIntError(())),
         }
@@ -393,6 +400,8 @@ pub enum RemoveKeyFailure {
     MissingKey = 1,
     #[fail(display = "Unable to remove associated key due to insufficient permissions")]
     PermissionDenied = 2,
+    #[fail(display = "Unable to remove a key which would violate action threshold constraints")]
+    ThresholdViolation = 3,
 }
 
 /// convert from i32 representation of `[RemoveKeyFailure]`
@@ -404,6 +413,9 @@ impl TryFrom<i32> for RemoveKeyFailure {
             d if d == RemoveKeyFailure::MissingKey as i32 => Ok(RemoveKeyFailure::MissingKey),
             d if d == RemoveKeyFailure::PermissionDenied as i32 => {
                 Ok(RemoveKeyFailure::PermissionDenied)
+            }
+            d if d == RemoveKeyFailure::ThresholdViolation as i32 => {
+                Ok(RemoveKeyFailure::ThresholdViolation)
             }
             _ => Err(TryFromIntError(())),
         }
@@ -427,6 +439,8 @@ pub enum UpdateKeyFailure {
     MissingKey = 1,
     #[fail(display = "Unable to add new associated key due to insufficient permissions")]
     PermissionDenied = 2,
+    #[fail(display = "Unable to update weight that would fall below any of action thresholds")]
+    ThresholdViolation = 3,
 }
 
 /// convert from i32 representation of `[UpdateKeyFailure]`
@@ -438,6 +452,9 @@ impl TryFrom<i32> for UpdateKeyFailure {
             d if d == UpdateKeyFailure::MissingKey as i32 => Ok(UpdateKeyFailure::MissingKey),
             d if d == UpdateKeyFailure::PermissionDenied as i32 => {
                 Ok(UpdateKeyFailure::PermissionDenied)
+            }
+            d if d == UpdateKeyFailure::ThresholdViolation as i32 => {
+                Ok(UpdateKeyFailure::ThresholdViolation)
             }
             _ => Err(TryFromIntError(())),
         }
@@ -666,7 +683,7 @@ impl Account {
         if let Some(weight) = self.associated_keys.get(&public_key) {
             // Check if removing this weight would fall below thresholds
             self.check_thresholds_for_weight_update(*weight)
-                .ok_or_else(|| RemoveKeyFailure::PermissionDenied)?;
+                .ok_or_else(|| RemoveKeyFailure::ThresholdViolation)?;
         }
         self.associated_keys.remove_key(&public_key)
     }
@@ -682,7 +699,7 @@ impl Account {
                 let diff = Weight::new(current_weight.value() - weight.value());
                 // New weight is smaller than current weight
                 self.check_thresholds_for_weight_update(diff)
-                    .ok_or_else(|| UpdateKeyFailure::PermissionDenied)?;
+                    .ok_or_else(|| UpdateKeyFailure::ThresholdViolation)?;
             }
         }
         self.associated_keys.update_key(public_key, weight)
@@ -710,7 +727,7 @@ impl Account {
     pub fn can_set_threshold(&self, new_threshold: Weight) -> Result<(), SetThresholdFailure> {
         let total_weight = self.associated_keys.total_keys_weight();
         if new_threshold > total_weight {
-            return Err(SetThresholdFailure::PermissionDeniedError);
+            return Err(SetThresholdFailure::InsufficientTotalWeight);
         }
         Ok(())
     }
@@ -1197,13 +1214,13 @@ mod tests {
             account
                 .set_action_threshold(ActionType::Deployment, Weight::new(1 + 2 + 3 + 4 + 1))
                 .unwrap_err(),
-            SetThresholdFailure::PermissionDeniedError,
+            SetThresholdFailure::InsufficientTotalWeight,
         );
         assert_eq!(
             account
                 .set_action_threshold(ActionType::Deployment, Weight::new(1 + 2 + 3 + 4 + 245))
                 .unwrap_err(),
-            SetThresholdFailure::PermissionDeniedError,
+            SetThresholdFailure::InsufficientTotalWeight,
         )
     }
 
@@ -1237,7 +1254,7 @@ mod tests {
 
         assert_eq!(
             account.remove_associated_key(key_3).unwrap_err(),
-            RemoveKeyFailure::PermissionDenied,
+            RemoveKeyFailure::ThresholdViolation,
         )
     }
 

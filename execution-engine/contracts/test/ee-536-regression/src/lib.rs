@@ -26,7 +26,7 @@ pub extern "C" fn call() {
     set_action_threshold(ActionType::Deployment, Weight::new(10)).unwrap_or_else(|_| revert(201));
 
     match remove_associated_key(key_2) {
-        Err(RemoveKeyFailure::PermissionDenied) => {
+        Err(RemoveKeyFailure::ThresholdViolation) => {
             // Shouldn't be able to remove key because key threshold == 11 and removing would violate the constraint
         }
         Err(_) => revert(300),
@@ -34,7 +34,7 @@ pub extern "C" fn call() {
     }
 
     match set_action_threshold(ActionType::KeyManagement, Weight::new(255)) {
-        Err(SetThresholdFailure::PermissionDeniedError) => {
+        Err(SetThresholdFailure::InsufficientTotalWeight) => {
             // Changing key management threshold to this value would lock down account for future operations
         }
         Err(_) => revert(400),
@@ -42,7 +42,7 @@ pub extern "C" fn call() {
     }
     // Key management threshold is 11, so changing threshold of key from 10 to 11 would violate
     match update_associated_key(key_2, Weight::new(1)) {
-        Err(UpdateKeyFailure::PermissionDenied) => {
+        Err(UpdateKeyFailure::ThresholdViolation) => {
             // Changing it would mean the total weight would be identity(1) + key_1(10) + key_2(1) < key_mgmt(13)
         }
         Err(_) => revert(500),
