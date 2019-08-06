@@ -679,7 +679,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: Metrics: 
         deployBuffer = s.deployBuffer.processed(processedDeployHashes),
         dependencyDag = addedBlocks.foldLeft(s.dependencyDag) {
           case (dag, block) =>
-            DoublyLinkedDagOperations.remove(dag, block.blockHash)
+            dag.remove(block.blockHash)
         }
       )
     }
@@ -971,8 +971,7 @@ object MultiParentCasperImpl {
       Cell[F, CasperState].modify(
         s =>
           s.copy(
-            dependencyDag = DoublyLinkedDagOperations
-              .add[BlockHash](s.dependencyDag, ancestorHash, childHash)
+            dependencyDag = s.dependencyDag.add(ancestorHash, childHash)
           )
       )
   }

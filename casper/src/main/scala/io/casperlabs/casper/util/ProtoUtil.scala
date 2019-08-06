@@ -52,6 +52,18 @@ object ProtoUtil {
       } yield result
     }
 
+  // If targetBlockHash is main descendant of candidateBlockHash, then
+  // it means targetBlockHash vote candidateBlockHash.
+  def isInMainChain[F[_]: Monad](
+      blockDag: BlockDagRepresentation[F],
+      candidateBlockHash: BlockHash,
+      targetBlockHash: BlockHash
+  ): F[Boolean] =
+    for {
+      candidateBlockMetadata <- blockDag.lookup(candidateBlockHash)
+      result                 <- isInMainChain(blockDag, candidateBlockMetadata.get, targetBlockHash)
+    } yield result
+
   def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStore](
       estimate: Block,
       acc: IndexedSeq[Block],
@@ -267,6 +279,17 @@ object ProtoUtil {
 
   def weightFromSender[F[_]: Monad: BlockStore](header: Block.Header): F[Long] =
     weightFromValidator[F](header, header.validatorPublicKey)
+
+  def mainParentWeightMap[F[_]: Monad](
+      blockDag: BlockDagRepresentation[F],
+      candidateBlockHash: BlockHash
+  ): F[Map[BlockHash, Long]] =
+    blockDag.lookup(candidateBlockHash).flatMap { blockOpt =>
+      blockOpt.get.parents.headOption match {
+        case Some(parent) => blockDag.lookup(parent).map(_.get.weightMap)
+        case None         => blockOpt.get.weightMap.pure[F]
+      }
+    }
 
   def parentHashes(b: Block): Seq[ByteString] =
     b.getHeader.parentHashes

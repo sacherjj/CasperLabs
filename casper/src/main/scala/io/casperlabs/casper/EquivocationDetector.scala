@@ -103,9 +103,7 @@ object EquivocationDetector {
     blockBufferDependencyDag.parentToChildAdjacencyList.contains(block.blockHash)
 
   private def creatorJustificationHash(block: Block): Option[BlockHash] =
-    for {
-      maybeCreatorJustification <- ProtoUtil.creatorJustification(block)
-    } yield maybeCreatorJustification.latestBlockHash
+    ProtoUtil.creatorJustification(block).map(_.latestBlockHash)
 
   // See summary of algorithm above
   def checkNeglectedEquivocationsWithUpdate[F[_]: MonadThrowable: BlockStore: FunctorRaise[
