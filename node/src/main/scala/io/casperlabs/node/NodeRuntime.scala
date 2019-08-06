@@ -223,7 +223,7 @@ class NodeRuntime private[node] (
               maxInterval = conf.casper.autoProposeMaxInterval,
               maxCount = conf.casper.autoProposeMaxCount,
               blockApiLock = blockApiLock
-            )
+            ).whenA(conf.casper.autoProposeEnabled)
 
         _ <- api.Servers
               .internalServersR(
