@@ -13,15 +13,18 @@ digraph deploy_processing_finite_state_machine {
 	check_session_and_payment_code[shape="diamond" label="Has WASM?"];
 	check_nonce_step_one[shape="diamond" label="Already processed?"]
 	check_nonce_step_two[shape="diamond" label="Nonce valid?"]
-    check_nonce_step_three[shape="diamond" label="Same hash?"];
+	check_nonce_step_three[shape="diamond" label="Same hash?"];
 	check_wasm[shape="diamond" label="WASM valid?"];
+	check_ttl[shape="diamond" label="TTL expired?"];
 
 	pending[shape="circle" label="Pending"];
 	processed[shape="circle" label="Processed"];
+	finalized[shape="circle" label="Finalized"];
+	discarded[shape="circle" label="Discarded"];
 	deleted[shape="circle" label="Unbuffered"];
 
 	check_computation_result[shape="box" label="execute"];
-	valid_block[shape="diamond" label="Block valid?"];
+	check_block[shape="diamond" label="Block valid?"];
 	create_block[shape="box" label="create block"];
 	store_block[shape="box" label="store block"];
 
@@ -48,23 +51,26 @@ digraph deploy_processing_finite_state_machine {
 	check_nonce_step_two -> pending [label="yes"];
 	check_nonce_step_two -> check_nonce_step_three [label="no"];
 
-    check_nonce_step_three -> pending [label="yes"];
-    check_nonce_step_three -> rejected [label="no"];
+	check_nonce_step_three -> pending [label="yes"];
+	check_nonce_step_three -> rejected [label="no"];
 
 	pending -> check_computation_result [label="propose new block"];
+	pending -> check_ttl [label="periodic checks"];
+	check_ttl -> pending [label="no"];
+	check_ttl -> discarded [label="yes"];
+
+	discarded -> deleted [label="periodic cleanup"];
+
 	check_computation_result -> deleted [label="failed preconditions"];
 	check_computation_result -> pending [label="invalid nonce"];
 	check_computation_result -> create_block [label="success"];
 
-	create_block -> valid_block;
+	create_block -> check_block;
 
-	valid_block -> store_block [label="yes"];
-	valid_block -> pending [label="no"];
+	check_block -> store_block [label="yes"];
+	check_block -> pending [label="no"];
 
 	store_block -> processed;
 	processed -> pending [label="block orphaned"];
-	processed -> deleted [label="block finalized"];
-
-	pending -> initialized [label="restart node"];
-	processed -> initialized [label="restart node"];
+	processed -> finalized [label="block finalized"];
 }

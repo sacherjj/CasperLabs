@@ -7,8 +7,9 @@ import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.casper.consensus._, Block.Justification
+import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
+import io.casperlabs.casper.consensus._
+import Block.Justification
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -19,6 +20,7 @@ import io.casperlabs.ipc
 import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.shared.Time
 import java.util.NoSuchElementException
+
 import scala.collection.immutable
 
 object ProtoUtil {
@@ -506,6 +508,9 @@ object ProtoUtil {
       .toSet
     (missingParents union missingJustifications).toList
   }
+
+  def createdBy(validatorId: ValidatorIdentity, block: Block): Boolean =
+    block.getHeader.validatorPublicKey == ByteString.copyFrom(validatorId.publicKey)
 
   implicit class DeployOps(d: Deploy) {
     def incrementNonce(): Deploy =

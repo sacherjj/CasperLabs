@@ -6,7 +6,7 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.mtl.{FunctorRaise, MonadState}
+import cats.mtl.FunctorRaise
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
@@ -14,6 +14,7 @@ import cats.syntax.functor._
 import cats.syntax.show._
 import cats.temp.par.Par
 import com.olegpy.meow.effects._
+import doobie.util.transactor.Transactor
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.{
@@ -25,6 +26,7 @@ import io.casperlabs.blockstorage.{
 }
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
+import io.casperlabs.casper.deploybuffer.{DeployBuffer, DeployBufferImpl}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -43,7 +45,7 @@ import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import io.netty.handler.ssl.ClientAuth
-import monix.eval.{Task, TaskLike}
+import monix.eval.Task
 import monix.execution.Scheduler
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
@@ -115,7 +117,14 @@ class NodeRuntime private[node] (
                                                                               conf.grpc.socket,
                                                                               conf.server.maxMessageSize
                                                                             )
-
+        //TODO: We may want to adjust threading model for better performance
+        implicit0(doobieTransactor: Transactor[Effect]) <- effects.doobieTransactor(
+                                                            blockingScheduler,
+                                                            blockingScheduler,
+                                                            conf.server.dataDir
+                                                          )
+        implicit0(deployBuffer: DeployBuffer[Effect]) <- Resource
+                                                          .liftF(DeployBufferImpl.create[Effect])
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
         implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
@@ -214,12 +223,6 @@ class NodeRuntime private[node] (
               maxInterval = conf.casper.autoProposeMaxInterval,
               maxCount = conf.casper.autoProposeMaxCount,
               blockApiLock = blockApiLock
-            )(
-              Concurrent[Effect],
-              Time[Effect],
-              logEff,
-              metricsEff,
-              multiParentCasperRef
             ).whenA(conf.casper.autoProposeEnabled)
 
         _ <- api.Servers
@@ -258,13 +261,12 @@ class NodeRuntime private[node] (
                 blockingScheduler
               )
             }
-
-      } yield (nodeDiscovery, multiParentCasperRef)
+      } yield (nodeDiscovery, multiParentCasperRef, deployBuffer)
 
       resources.allocated flatMap {
-        case ((nodeDiscovery, multiParentCasperRef), release) =>
+        case ((nodeDiscovery, multiParentCasperRef, deployBuffer), release) =>
           handleUnrecoverableErrors {
-            nodeProgram(state, nodeDiscovery, multiParentCasperRef, release)
+            nodeProgram(state, nodeDiscovery, multiParentCasperRef, deployBuffer, release)
           }
       }
     })
@@ -289,6 +291,7 @@ class NodeRuntime private[node] (
       rpConfState: RPConfState[Task],
       nodeDiscovery: NodeDiscovery[Task],
       multiParentCasperRef: MultiParentCasperRef[Effect],
+      deployBuffer: DeployBuffer[Effect],
       release: Effect[Unit]
   ): Effect[Unit] = {
 
@@ -309,10 +312,30 @@ class NodeRuntime private[node] (
         _      <- time.sleep(30.seconds).toEffect
       } yield ()
 
+    val cleanupDiscardedDeploysLoop: Effect[Unit] = for {
+      _ <- deployBuffer.cleanupDiscarded(1.hour)
+      _ <- time.sleep(1.minute).toEffect
+    } yield ()
+
+    val checkPendingDeploysExpirationLoop: Effect[Unit] = for {
+      _ <- deployBuffer.markAsDiscarded(12.hours)
+      _ <- time.sleep(1.minute).toEffect
+    } yield ()
+
     for {
-      _       <- addShutdownHook(release).toEffect
-      _       <- info
-      _       <- Task.defer(fetchLoop.forever.value).executeOn(loopScheduler).start.toEffect
+      _ <- addShutdownHook(release).toEffect
+      _ <- info
+      _ <- Task.defer(fetchLoop.forever.value).executeOn(loopScheduler).start.toEffect
+      _ <- Task
+            .defer(cleanupDiscardedDeploysLoop.forever.value)
+            .executeOn(loopScheduler)
+            .start
+            .toEffect
+      _ <- Task
+            .defer(checkPendingDeploysExpirationLoop.forever.value)
+            .executeOn(loopScheduler)
+            .start
+            .toEffect
       host    <- peerNodeAsk.ask.toEffect.map(_.host)
       address = s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")

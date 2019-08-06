@@ -3,7 +3,7 @@ package io.casperlabs.casper.helper
 import java.nio.file.Path
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.implicits._
 import cats.temp.par.Par
 import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
@@ -11,8 +11,9 @@ import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.casper.consensus.state
+import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
+import io.casperlabs.casper.consensus.{state, Block, Bond}
+import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
@@ -20,6 +21,7 @@ import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
+import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
@@ -61,6 +63,9 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val logEff: LogStub[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
+  implicit val deployBufferEff: DeployBuffer[F]
+  implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
+    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
   implicit val safetyOracleEff: FinalityDetector[F]
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
@@ -282,7 +287,7 @@ object HashSetCasperTestNode {
       private val zero  = Array.fill(32)(0.toByte)
       private val bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
-      private def getExecutionEffect(deploy: Deploy) = {
+      private def getExecutionEffect(deploy: ipc.Deploy) = {
         // The real execution engine will get the keys from what the code changes, which will include
         // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
         // here isn't more specific to a deploy then the real thing would be.
@@ -309,7 +314,7 @@ object HashSetCasperTestNode {
 
       // Validate that account's nonces increment monotonically by 1.
       // Assumes that any account address already exists in the GlobalState with nonce = 0.
-      private def validateNonce(deploy: Deploy): Int = synchronized {
+      private def validateNonce(deploy: ipc.Deploy): Int = synchronized {
         if (!validateNonces) {
           0
         } else {
@@ -328,7 +333,7 @@ object HashSetCasperTestNode {
       override def exec(
           prestate: ByteString,
           blocktime: Long,
-          deploys: Seq[Deploy],
+          deploys: Seq[ipc.Deploy],
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =
         //This function returns the same `DeployResult` for all deploys,
@@ -357,7 +362,7 @@ object HashSetCasperTestNode {
           .pure[F]
 
       override def runGenesis(
-          deploys: Seq[Deploy],
+          deploys: Seq[ipc.Deploy],
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, GenesisResult]] =
         commit(emptyStateHash, Seq.empty).map {

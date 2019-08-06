@@ -9,6 +9,7 @@ import fs2.{Pipe, Stream}
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
+import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.node.api.graphql.GraphQLQuery._
 import io.casperlabs.node.api.graphql.ProtocolState.Subscriptions
@@ -40,7 +41,7 @@ object GraphQL {
   private implicit val logSource: LogSource = LogSource(getClass)
 
   /* Entry point */
-  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: FinalityDetector: BlockStore: FinalizedBlocksStream: ExecutionEngineService](
+  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: FinalityDetector: BlockStore: FinalizedBlocksStream: ExecutionEngineService: DeployBuffer](
       executionContext: ExecutionContext
   ): HttpRoutes[F] = {
     import io.casperlabs.node.api.graphql.RunToFuture.fromEffect
