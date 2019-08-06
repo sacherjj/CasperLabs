@@ -565,7 +565,7 @@ def main():
     parser = Parser()
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
                       [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
-                       [('-g', '--gas-limit'), dict(required=True, type=int, help='[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')],
+                       [('-g', '--gas-limit'), dict(required=False, type=int, help='[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')],
                        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
                        [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
