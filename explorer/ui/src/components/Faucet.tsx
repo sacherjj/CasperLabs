@@ -11,7 +11,7 @@ import {
   Card
 } from './Utils';
 import DataTable from './DataTable';
-import { base64to16, encodeBase16 } from '../lib/Conversions';
+import { base64to16, encodeBase16, decodeBase64 } from '../lib/Conversions';
 import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
 
 interface Props {
@@ -145,8 +145,10 @@ const StatusCell = observer((props: { request: FaucetRequest }) => {
       const attempts = info.processingResultsList.slice().reverse();
       const success = attempts.find(x => !x.isError);
       const failure = attempts.find(x => x.isError);
-      const blockHash = (result: DeployInfo.ProcessingResult.AsObject) =>
-        encodeBase16(result.blockInfo!.summary!.blockHash as ByteArray);
+      const blockHash = (result: DeployInfo.ProcessingResult.AsObject) => {
+        const h = result.blockInfo!.summary!.blockHash;
+        return encodeBase16(typeof h === 'string' ? decodeBase64(h) : h);
+      };
       if (success)
         return [
           <Icon name="check-circle" color="green" />,

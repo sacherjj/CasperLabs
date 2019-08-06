@@ -174,7 +174,6 @@ ffi_test_contracts = [
 
 def deploy_and_propose_expect_no_errors(node, contract):
     client = node.d_client
-
     block_hash = node.deploy_and_propose(
         session_contract=contract,
         payment_contract=contract,

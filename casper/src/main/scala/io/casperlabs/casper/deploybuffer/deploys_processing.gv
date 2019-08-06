@@ -1,0 +1,70 @@
+digraph deploy_processing_finite_state_machine {
+/*
+    For visualisation install the Graphviz package: https://www.graphviz.org
+    Compile to image using the example command: dot -Gdpi=100 -Tjpeg -o deploys.jpeg deploys_processing_fsm.gv
+
+    Don't forget to update the docs/deploys_processing.svg on change
+*/
+	initialized[shape="ellipse" label="Initialized"];
+	rejected[shape="circle" label="Rejected"];
+	check_hashes[shape="diamond" label="Hashes valid?"];
+	check_signatures[shape="diamond" label="Signatures valid?"];
+	check_preexistence[shape="diamond" label="In finalized DAG?"];
+	check_session_and_payment_code[shape="diamond" label="Has WASM?"];
+	check_nonce_step_one[shape="diamond" label="Already processed?"]
+	check_nonce_step_two[shape="diamond" label="Nonce valid?"]
+    check_nonce_step_three[shape="diamond" label="Same hash?"];
+	check_wasm[shape="diamond" label="WASM valid?"];
+
+	pending[shape="circle" label="Pending"];
+	processed[shape="circle" label="Processed"];
+	deleted[shape="circle" label="Unbuffered"];
+
+	check_computation_result[shape="box" label="execute"];
+	valid_block[shape="diamond" label="Block valid?"];
+	create_block[shape="box" label="create block"];
+	store_block[shape="box" label="store block"];
+
+	initialized -> check_hashes [label="deploy received"];
+
+	check_hashes -> check_signatures [label="yes"];
+	check_hashes -> rejected [label="no"];
+
+	check_signatures -> check_preexistence [label="yes"];
+	check_signatures -> rejected [label="no"];
+
+	check_preexistence -> check_session_and_payment_code [label="no"];
+	check_preexistence -> rejected [label="yes"];
+
+	check_session_and_payment_code -> check_wasm [label="yes"];
+	check_session_and_payment_code -> rejected [label="no"];
+
+	check_wasm -> check_nonce_step_one [label="yes"];
+	check_wasm -> rejected [label="no"];
+
+	check_nonce_step_one -> pending [label="no"];
+	check_nonce_step_one -> check_nonce_step_two [label="yes"];
+
+	check_nonce_step_two -> pending [label="yes"];
+	check_nonce_step_two -> check_nonce_step_three [label="no"];
+
+    check_nonce_step_three -> pending [label="yes"];
+    check_nonce_step_three -> rejected [label="no"];
+
+	pending -> check_computation_result [label="propose new block"];
+	check_computation_result -> deleted [label="failed preconditions"];
+	check_computation_result -> pending [label="invalid nonce"];
+	check_computation_result -> create_block [label="success"];
+
+	create_block -> valid_block;
+
+	valid_block -> store_block [label="yes"];
+	valid_block -> pending [label="no"];
+
+	store_block -> processed;
+	processed -> pending [label="block orphaned"];
+	processed -> deleted [label="block finalized"];
+
+	pending -> initialized [label="restart node"];
+	processed -> initialized [label="restart node"];
+}
