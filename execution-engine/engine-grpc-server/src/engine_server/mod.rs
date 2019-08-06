@@ -494,7 +494,7 @@ where
     E: Executor<A>,
     P: Preprocessor<A>,
     EngineError: From<H::Error>,
-    H::Error: Into<engine_core::execution::Error>,
+    H::Error: Into<engine_core::execution::Error> + std::fmt::Debug,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
     // the execution of ALL deploys within the block. This is because all of them share
@@ -504,9 +504,14 @@ where
     deploys
         .iter()
         .map(|deploy| {
-            let session_contract = deploy.get_session();
-            let module_bytes = &session_contract.code;
-            let args = &session_contract.args;
+            let session = deploy.get_session();
+            let session_module_bytes = &session.code;
+            let session_args = &session.args;
+
+            let payment = deploy.get_payment();
+            let payment_module_bytes = &payment.code;
+            let payment_args = &payment.args;
+
             let address = {
                 let address_len = deploy.address.len();
                 if address_len != EXPECTED_PUBLIC_KEY_LENGTH {
@@ -552,8 +557,10 @@ where
             let protocol_version = protocol_version.value;
             engine_state
                 .run_deploy(
-                    module_bytes,
-                    args,
+                    session_module_bytes,
+                    session_args,
+                    payment_module_bytes,
+                    payment_args,
                     address,
                     authorized_keys,
                     blocktime,

@@ -28,9 +28,10 @@ use contract_ffi::value::account::{
     SetThresholdFailure, UpdateKeyFailure, Weight, PUBLIC_KEY_SIZE,
 };
 use contract_ffi::value::{Account, Value, U512};
-use engine_shared::newtypes::{CorrelationId, Validated};
+use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::TypeMismatch;
 use engine_state::execution_result::ExecutionResult;
+use engine_state::genesis::GENESIS_ACCOUNT;
 use engine_storage::global_state::StateReader;
 use execution::Error::{KeyNotFound, URefNotFound};
 use function_index::FunctionIndex;
@@ -632,6 +633,14 @@ where
     }
 
     /// looks up the public mint contract key in the caller's [uref_lookup] map.
+    fn get_genesis_account_key(&mut self) -> Result<Key, Error> {
+        match self.context.get_uref(GENESIS_ACCOUNT) {
+            Some(key @ Key::Account(_)) => Ok(*key),
+            _ => Err(URefNotFound(String::from(GENESIS_ACCOUNT))),
+        }
+    }
+
+    /// looks up the public mint contract key in the caller's [uref_lookup] map.
     fn get_mint_contract_public_uref_key(&mut self) -> Result<Key, Error> {
         match self.context.get_uref(MINT_NAME) {
             Some(key @ Key::URef(_)) => Ok(*key),
@@ -749,6 +758,10 @@ where
                     ),
                     (pos_contract_uref.as_string(), pos_contract_key),
                     (mint_contract_uref.as_string(), mint_contract_key),
+                    (
+                        String::from(GENESIS_ACCOUNT),
+                        self.get_genesis_account_key()?,
+                    ),
                 ]
                 .into_iter()
                 .map(|(name, key)| {
@@ -1467,14 +1480,32 @@ pub trait Executor<A> {
         &self,
         parity_module: A,
         args: &[u8],
-        account: Key,
+        base_key: Key,
+        account: &Account,
         authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
-        nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+    ) -> ExecutionResult
+    where
+        R::Error: Into<Error>;
+
+    #[allow(clippy::too_many_arguments)]
+    fn exec_direct<R: StateReader<Key, Value>>(
+        &self,
+        parity_module: A,
+        args: &[u8],
+        keys: &mut BTreeMap<String, Key>,
+        base_key: Key,
+        account: &Account,
+        authorization_keys: BTreeSet<PublicKey>,
+        blocktime: BlockTime,
+        gas_limit: u64,
+        protocol_version: u64,
+        correlation_id: CorrelationId,
+        state: Rc<RefCell<TrackingCopy<R>>>,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -1487,10 +1518,10 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        acct_key: Key,
+        base_key: Key,
+        account: &Account,
         authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
-        nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
@@ -1501,69 +1532,11 @@ impl Executor<Module> for WasmiExecutor {
     {
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
-        #[allow(unreachable_code)]
-        let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid));
-
-        let value = match tc.borrow_mut().get(correlation_id, &validated_key) {
-            Ok(None) => {
-                return ExecutionResult::precondition_failure(
-                    ::engine_state::error::Error::AuthorizationError,
-                )
-            }
-            Err(error) => {
-                return ExecutionResult::precondition_failure(
-                    ::engine_state::error::Error::ExecError(error.into()),
-                )
-            }
-            Ok(Some(value)) => value,
-        };
-
-        let mut account = match value {
-            Value::Account(a) => a,
-            other => {
-                return ExecutionResult::precondition_failure(
-                    ::engine_state::error::Error::ExecError(Error::TypeMismatch(
-                        TypeMismatch::new("Account".to_string(), other.type_string()),
-                    )),
-                )
-            }
-        };
-
-        if authorized_keys.is_empty() || !account.can_authorize(&authorized_keys) {
-            return ExecutionResult::precondition_failure(
-                ::engine_state::error::Error::AuthorizationError,
-            );
-        }
-
-        // Check the difference of a request nonce and account nonce.
-        // Since both nonce and account's nonce are unsigned, so line below performs
-        // a checked subtraction, where underflow (or overflow) would be safe.
-        let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
-        // Difference should always be 1 greater than current nonce for a
-        // given account.
-        if delta != 1 {
-            return ExecutionResult::precondition_failure(
-                Error::InvalidNonce {
-                    deploy_nonce: nonce,
-                    expected_nonce: account.nonce() + 1,
-                }
-                .into(),
-            );
-        }
-
-        // Increment nonce in the account that would be later used through the execution
-        // lifecycle.
-        account.increment_nonce();
-        // Store updated account with new nonce
-        tc.borrow_mut().write(
-            validated_key,
-            Validated::new(account.clone().into(), Validated::valid).unwrap(),
-        );
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup_local.values().cloned());
-        let account_bytes = acct_key.as_account().unwrap();
+        let account_bytes = base_key.as_account().unwrap();
         let rng = create_rng(account_bytes, account.nonce());
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
@@ -1571,14 +1544,6 @@ impl Executor<Module> for WasmiExecutor {
         // Snapshot of effects before execution, so in case of error
         // only nonce update can be returned.
         let effects_snapshot = tc.borrow().effect();
-
-        // Check if authorized keys can deploy by comparing sum of their weights
-        // with a deploy threshold.
-        if !account.can_deploy_with(&authorized_keys) {
-            return ExecutionResult::precondition_failure(
-                Error::DeploymentAuthorizationFailure.into(),
-            );
-        }
 
         let arguments: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
@@ -1595,7 +1560,7 @@ impl Executor<Module> for WasmiExecutor {
             arguments,
             authorized_keys,
             &account,
-            acct_key,
+            base_key,
             blocktime,
             gas_limit,
             gas_counter,
@@ -1617,6 +1582,108 @@ impl Executor<Module> for WasmiExecutor {
             cost: runtime.context.gas_counter(),
         }
     }
+
+    fn exec_direct<R: StateReader<Key, Value>>(
+        &self,
+        parity_module: Module,
+        args: &[u8],
+        keys: &mut BTreeMap<String, Key>,
+        base_key: Key,
+        account: &Account,
+        authorization_keys: BTreeSet<PublicKey>,
+        blocktime: BlockTime,
+        gas_limit: u64,
+        protocol_version: u64,
+        correlation_id: CorrelationId,
+        state: Rc<RefCell<TrackingCopy<R>>>,
+    ) -> ExecutionResult
+    where
+        R::Error: Into<Error>,
+    {
+        let mut uref_lookup = keys.clone();
+        let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
+            extract_access_rights_from_keys(uref_lookup.values().cloned());
+
+        //let base_key = Key::Account(account.pub_key());
+        let rng = {
+            let rng = create_rng(account.pub_key(), account.nonce());
+            Rc::new(RefCell::new(rng))
+        };
+        let gas_counter = 0u64; // maybe const?
+        let fn_store_id = 0u32; // maybe const?
+
+        // Snapshot of effects before execution, so in case of error only nonce update can be returned.
+        let effects_snapshot = state.borrow().effect();
+
+        let args: Vec<Vec<u8>> = if args.is_empty() {
+            Vec::new()
+        } else {
+            on_fail_charge!(deserialize(args), args.len() as u64, effects_snapshot)
+        };
+
+        let context = RuntimeContext::new(
+            state,
+            &mut uref_lookup,
+            known_urefs,
+            args,
+            authorization_keys,
+            &account,
+            base_key,
+            blocktime,
+            gas_limit,
+            gas_counter,
+            fn_store_id,
+            rng,
+            protocol_version,
+            correlation_id,
+        );
+
+        let (instance, memory) =
+            on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
+
+        let mut runtime = Runtime::new(memory, parity_module, context);
+
+        match instance.invoke_export("call", &[], &mut runtime) {
+            Ok(_) => ExecutionResult::Success {
+                effect: runtime.context.effect(),
+                cost: runtime.context.gas_counter(),
+            },
+            Err(e) => {
+                if let Some(host_error) = e.as_host_error() {
+                    // `ret` Trap is a success; downcast and attempt to extract result
+                    let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
+                    match downcasted_error {
+                        Error::Ret(ref _ret_urefs) => {
+                            // NOTE: currently, ExecutionResult does not include runtime.result or extra urefs
+                            //  and thus we cannot get back a value from the executed contract...
+                            // TODO?: add ability to include extra_urefs and runtime.result to ExecutionResult::Success
+
+                            return ExecutionResult::Success {
+                                effect: runtime.context.effect(),
+                                cost: runtime.context.gas_counter(),
+                            };
+                        }
+                        Error::Revert(status) => {
+                            // Propagate revert as revert, instead of passing it as
+                            // InterpreterError.
+                            return ExecutionResult::Failure {
+                                error: Error::Revert(*status).into(),
+                                effect: effects_snapshot,
+                                cost: runtime.context.gas_counter(),
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+
+                ExecutionResult::Failure {
+                    error: Error::Interpreter(e).into(),
+                    effect: effects_snapshot,
+                    cost: runtime.context.gas_counter(),
+                }
+            }
+        }
+    }
 }
 
 /// Turns `key` into a `([u8; 32], AccessRights)` tuple.
@@ -1633,28 +1700,11 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::collections::{BTreeMap, BTreeSet, HashMap};
-    use std::iter::{self, FromIterator};
-    use std::rc::Rc;
-
-    use parity_wasm::builder::ModuleBuilder;
-    use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
     use rand::RngCore;
     use rand_chacha::ChaChaRng;
 
-    use contract_ffi::key::Key;
-    use contract_ffi::uref::{AccessRights, URef};
-    use contract_ffi::value::account::{
-        AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
-    };
-    use contract_ffi::value::{Account, Value};
-    use engine_shared::newtypes::CorrelationId;
-    use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
-    use engine_storage::global_state::StateReader;
-    use execution::{create_rng, Executor, WasmiExecutor};
-    use tracking_copy::TrackingCopy;
+    use execution::create_rng;
 
     use super::Error;
 
@@ -1714,86 +1764,6 @@ mod tests {
                 // Check if the containers are non-empty
                 assert_eq!(effect.ops.len(), 1);
                 assert_eq!(effect.transforms.len(), 1);
-            }
-        }
-    }
-
-    #[test]
-    fn invalid_nonce_no_cost_effect() {
-        let init_nonce = 1u64;
-        let invalid_nonce = init_nonce + 2;
-        struct DummyReader;
-        impl StateReader<Key, Value> for DummyReader {
-            type Error = ::engine_storage::error::Error;
-
-            fn read(
-                &self,
-                _correlation_id: CorrelationId,
-                key: &Key,
-            ) -> Result<Option<Value>, Self::Error> {
-                let pub_key: [u8; 32] = match key {
-                    Key::Account(pub_key) => *pub_key,
-                    _ => panic!("Key must be of an Account type"),
-                };
-                let acc = Account::new(
-                    pub_key,
-                    1,
-                    BTreeMap::new(),
-                    PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
-                    AssociatedKeys::new(PublicKey::new(pub_key), Weight::new(1)),
-                    Default::default(),
-                    AccountActivity::new(BlockTime(0), BlockTime(0)),
-                );
-                Ok(Some(Value::Account(acc)))
-            }
-        }
-
-        let executor = WasmiExecutor;
-        let account_address = [0u8; 32];
-        let account_key: Key = Key::Account(account_address);
-        let parity_module: Module = ModuleBuilder::new()
-            .with_import(ImportEntry::new(
-                "env".to_string(),
-                "memory".to_string(),
-                External::Memory(MemoryType::new(16, Some(::engine_wasm_prep::MEM_PAGES))),
-            ))
-            .build();
-
-        let tc: Rc<RefCell<TrackingCopy<DummyReader>>> =
-            Rc::new(RefCell::new(TrackingCopy::new(DummyReader)));
-
-        let exec_result = executor.exec(
-            parity_module,
-            &[],
-            account_key,
-            BTreeSet::from_iter(iter::once(PublicKey::new(account_address))),
-            BlockTime(0),
-            invalid_nonce,
-            100u64,
-            1u64,
-            CorrelationId::new(),
-            tc,
-        );
-
-        match exec_result {
-            ExecutionResult::Success { .. } => panic!("Expected ExecutionResult::Failure."),
-            ExecutionResult::Failure {
-                error,
-                effect,
-                cost,
-            } => {
-                assert_eq!(effect, ExecutionEffect::new(HashMap::new(), HashMap::new()));
-                assert_eq!(cost, 0);
-                if let ::engine_state::error::Error::ExecError(Error::InvalidNonce {
-                    deploy_nonce,
-                    expected_nonce,
-                }) = error
-                {
-                    assert_eq!(deploy_nonce, invalid_nonce);
-                    assert_eq!(expected_nonce, init_nonce + 1);
-                } else {
-                    panic!("Expected InvalidNonce error got: {:?}", error);
-                }
             }
         }
     }

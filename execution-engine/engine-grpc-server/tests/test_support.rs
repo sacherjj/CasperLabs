@@ -24,7 +24,7 @@ use casperlabs_engine_grpc_server::engine_server::mappings::{
 };
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_core::engine_state::utils::WasmiBytes;
-use engine_core::engine_state::EngineState;
+use engine_core::engine_state::{EngineConfig, EngineState};
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -32,6 +32,143 @@ use engine_storage::global_state::in_memory::InMemoryGlobalState;
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
+
+pub struct DeployBuilder {
+    deploy: Deploy,
+}
+
+impl DeployBuilder {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn with_address(mut self, address: [u8; 32]) -> Self {
+        self.deploy.set_address(address.to_vec());
+        self
+    }
+
+    pub fn with_payment_code(
+        mut self,
+        file_name: &str,
+        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    ) -> Self {
+        let wasm_bytes = read_wasm_file_bytes(file_name);
+        let args = args
+            .parse()
+            .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut payment = DeployCode::new();
+        payment.set_code(wasm_bytes);
+        payment.set_args(args);
+        self.deploy.set_payment(payment);
+        self
+    }
+
+    pub fn with_session_code(
+        mut self,
+        file_name: &str,
+        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    ) -> Self {
+        let wasm_bytes = read_wasm_file_bytes(file_name);
+        let args = args
+            .parse()
+            .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut session = DeployCode::new();
+        session.set_code(wasm_bytes);
+        session.set_args(args);
+        self.deploy.set_session(session);
+        self
+    }
+
+    pub fn with_nonce(mut self, nonce: u64) -> Self {
+        self.deploy.set_nonce(nonce);
+        self
+    }
+
+    pub fn with_authorization_keys(
+        mut self,
+        authorization_keys: &[contract_ffi::value::account::PublicKey],
+    ) -> Self {
+        let authorization_keys = authorization_keys
+            .iter()
+            .map(|public_key| public_key.value().to_vec())
+            .collect();
+        self.deploy.set_authorization_keys(authorization_keys);
+        self
+    }
+
+    pub fn build(self) -> Deploy {
+        self.deploy
+    }
+}
+
+impl Default for DeployBuilder {
+    fn default() -> Self {
+        let mut deploy = Deploy::new();
+        deploy.set_tokens_transferred_in_payment(1_000_000_000);
+        deploy.set_gas_price(1);
+        DeployBuilder { deploy }
+    }
+}
+
+pub struct ExecRequestBuilder {
+    deploys: Vec<Deploy>,
+    exec_request: ExecRequest,
+}
+
+impl ExecRequestBuilder {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn push_deploy(mut self, deploy: Deploy) -> Self {
+        self.deploys.push(deploy);
+        self
+    }
+
+    pub fn with_pre_state_hash(mut self, pre_state_hash: &[u8]) -> Self {
+        self.exec_request
+            .set_parent_state_hash(pre_state_hash.to_vec());
+        self
+    }
+
+    pub fn with_block_time(mut self, block_time: u64) -> Self {
+        self.exec_request.set_block_time(block_time);
+        self
+    }
+
+    pub fn with_protocol_version(mut self, version: u64) -> Self {
+        let mut protocol_version = ProtocolVersion::new();
+        protocol_version.set_value(version);
+        self.exec_request.set_protocol_version(protocol_version);
+        self
+    }
+
+    pub fn build(mut self) -> ExecRequest {
+        let mut deploys: protobuf::RepeatedField<Deploy> = <protobuf::RepeatedField<Deploy>>::new();
+        for deploy in self.deploys {
+            deploys.push(deploy);
+        }
+        self.exec_request.set_deploys(deploys);
+        self.exec_request
+    }
+}
+
+impl Default for ExecRequestBuilder {
+    fn default() -> Self {
+        let deploys = vec![];
+        let mut exec_request = ExecRequest::new();
+        exec_request.set_block_time(DEFAULT_BLOCK_TIME);
+        let mut protocol_version = ProtocolVersion::new();
+        protocol_version.set_value(1);
+        exec_request.set_protocol_version(protocol_version);
+        ExecRequestBuilder {
+            deploys,
+            exec_request,
+        }
+    }
+}
 
 pub fn get_protocol_version() -> ProtocolVersion {
     let mut protocol_version: ProtocolVersion = ProtocolVersion::new();
@@ -83,7 +220,7 @@ pub fn create_genesis_request(
     let initial_tokens = {
         let mut ret = BigInt::new();
         ret.set_bit_width(512);
-        ret.set_value("1000000".to_string());
+        ret.set_value("100000000000".to_string());
         ret
     };
 
@@ -154,46 +291,26 @@ pub fn create_query_request(
 
 pub fn create_exec_request(
     address: [u8; 32],
-    contract_file_name: &str,
+    session_contract_file_name: &str,
     pre_state_hash: &[u8],
     block_time: u64,
     nonce: u64,
     arguments: impl contract_ffi::contract_api::argsparser::ArgsParser,
     authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
 ) -> ExecRequest {
-    let args = arguments
-        .parse()
-        .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
-        .expect("should serialize args");
-    let bytes_to_deploy = read_wasm_file_bytes(contract_file_name);
+    let deploy = DeployBuilder::new()
+        .with_session_code(session_contract_file_name, arguments)
+        .with_nonce(nonce)
+        .with_address(address)
+        .with_authorization_keys(&authorized_keys)
+        .build();
 
-    let mut deploy = Deploy::new();
-    deploy.set_address(address.to_vec());
-    deploy.set_tokens_transferred_in_payment(1_000_000_000);
-    deploy.set_gas_price(1);
-    deploy.set_nonce(nonce);
-    deploy.set_authorization_keys(
-        authorized_keys
-            .into_iter()
-            .map(|public_key| public_key.value().to_vec())
-            .collect(),
-    );
-
-    let mut deploy_code = DeployCode::new();
-    deploy_code.set_code(bytes_to_deploy);
-    deploy_code.set_args(args);
-    deploy.set_session(deploy_code);
-
-    let mut exec_request = ExecRequest::new();
-    let mut deploys: protobuf::RepeatedField<Deploy> = <protobuf::RepeatedField<Deploy>>::new();
-    deploys.push(deploy);
-
-    exec_request.set_deploys(deploys);
-    exec_request.set_parent_state_hash(pre_state_hash.to_vec());
-    exec_request.set_protocol_version(get_protocol_version());
-    exec_request.set_block_time(block_time);
-
-    exec_request
+    ExecRequestBuilder::new()
+        .with_pre_state_hash(pre_state_hash)
+        .with_protocol_version(1)
+        .with_block_time(block_time)
+        .push_deploy(deploy)
+        .build()
 }
 
 #[allow(clippy::implicit_hasher)]
@@ -333,7 +450,19 @@ pub struct WasmTestBuilder {
 
 impl Default for WasmTestBuilder {
     fn default() -> WasmTestBuilder {
-        Self::new()
+        let global_state = InMemoryGlobalState::empty().expect("should create global state");
+        let engine_state = EngineState::new(global_state, Default::default());
+        WasmTestBuilder {
+            engine_state: Rc::new(engine_state),
+            exec_responses: Vec::new(),
+            genesis_hash: None,
+            post_state_hash: None,
+            transforms: Vec::new(),
+            bonded_validators: Vec::new(),
+            genesis_account: None,
+            mint_contract_uref: None,
+            genesis_transforms: None,
+        }
     }
 }
 
@@ -364,9 +493,9 @@ impl WasmTestBuilder {
         }
     }
 
-    pub fn new() -> WasmTestBuilder {
+    pub fn new(engine_config: EngineConfig) -> WasmTestBuilder {
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
-        let engine_state = EngineState::new(global_state, Default::default());
+        let engine_state = EngineState::new(global_state, engine_config);
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
@@ -464,29 +593,18 @@ impl WasmTestBuilder {
         }
     }
 
-    /// Runs a contract and after that runs actual WASM contract and expects
-    /// transformations to happen at the end of execution.
-    pub fn exec_with_args_and_keys(
+    pub fn exec_with_exec_request(
         &mut self,
-        address: [u8; 32],
-        wasm_file: &str,
-        block_time: u64,
-        nonce: u64,
-        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
-        authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
+        mut exec_request: ExecRequest,
     ) -> &mut WasmTestBuilder {
-        let exec_request = create_exec_request(
-            address,
-            &wasm_file,
-            self.post_state_hash
-                .as_ref()
-                .expect("Should have post state hash"),
-            block_time,
-            nonce,
-            args,
-            authorized_keys,
-        );
-
+        let exec_request = {
+            let hash = self
+                .post_state_hash
+                .clone()
+                .expect("expected post_state_hash");
+            exec_request.set_parent_state_hash(hash.to_vec());
+            exec_request
+        };
         let exec_response = self
             .engine_state
             .exec(RequestOptions::new(), exec_request)
@@ -510,6 +628,31 @@ impl WasmTestBuilder {
         // Cache transformations
         self.transforms.push(transforms);
         self
+    }
+
+    /// Runs a contract and after that runs actual WASM contract and expects
+    /// transformations to happen at the end of execution.
+    pub fn exec_with_args_and_keys(
+        &mut self,
+        address: [u8; 32],
+        wasm_file: &str,
+        block_time: u64,
+        nonce: u64,
+        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+        authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
+    ) -> &mut WasmTestBuilder {
+        let exec_request = create_exec_request(
+            address,
+            &wasm_file,
+            self.post_state_hash
+                .as_ref()
+                .expect("Should have post state hash"),
+            block_time,
+            nonce,
+            args,
+            authorized_keys,
+        );
+        self.exec_with_exec_request(exec_request)
     }
 
     pub fn exec_with_args(

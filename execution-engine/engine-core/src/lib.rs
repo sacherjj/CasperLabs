@@ -42,6 +42,7 @@ pub mod meter;
 pub mod resolvers;
 pub mod runtime_context;
 pub mod tracking_copy;
+pub mod tracking_copy_ext;
 pub mod utils;
 
 type URefAddr = [u8; 32];

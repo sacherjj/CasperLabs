@@ -30,6 +30,7 @@ fn should_run_ee_532_get_uref_regression_test() {
         )
         .commit()
         .finish();
+
     let deploy_result = result
         .builder()
         .get_exec_response(0)
@@ -39,8 +40,15 @@ fn should_run_ee_532_get_uref_regression_test() {
         .get(0)
         .expect("should have at least one deploy result");
 
-    assert!(deploy_result.has_precondition_failure());
-    let message = deploy_result.get_precondition_failure().get_message();
+    assert!(
+        deploy_result.has_precondition_failure(),
+        "expected precondition failure"
+    );
 
-    assert_eq!(message, format!("{}", error::Error::AuthorizationError))
+    let message = deploy_result.get_precondition_failure().get_message();
+    assert_eq!(
+        message,
+        format!("{}", error::Error::AuthorizationError),
+        "expected AuthorizationError"
+    )
 }

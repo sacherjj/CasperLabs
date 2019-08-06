@@ -716,6 +716,21 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     error @ EngineError::AuthorizationError => {
                         precondition_failure(error.to_string())
                     }
+                    EngineError::MissingSystemContractError(msg) => {
+                        execution_error(msg, cost, effect)
+                    }
+                    error @ EngineError::InsufficientPaymentError => {
+                        let msg = error.to_string();
+                        execution_error(msg, cost, effect)
+                    }
+                    error @ EngineError::DeployError => {
+                        let msg = error.to_string();
+                        execution_error(msg, cost, effect)
+                    }
+                    error @ EngineError::FinalizationError => {
+                        let msg = error.to_string();
+                        execution_error(msg, cost, effect)
+                    }
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
                             let mut deploy_result = ipc::DeployResult::new();

@@ -14,8 +14,9 @@ use cl_std::value::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let initi_uref_num = 4;
-    // Account starts with four known urefs: mint public uref, mint private uref, pos public uref & pos private uref.
+    let initi_uref_num = 5; // TODO: this is very brittle as it breaks whenever we add another default uref
+
+    // Account starts with FIVE known urefs: genesis_acct, mint public uref, mint private uref, pos public uref & pos private uref.
     assert_eq!(list_known_urefs().len(), initi_uref_num);
 
     // Add new urefs

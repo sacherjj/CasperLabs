@@ -328,7 +328,7 @@ pub extern "C" fn call() {
             let account: PublicKey = contract_api::get_arg(2);
             finalize_payment(amount_spent, account);
         }
-        _ => {}
+        _ => panic!("Unknown method name!"),
     }
 }
 

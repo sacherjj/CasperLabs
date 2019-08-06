@@ -3,6 +3,7 @@
 members = [
     "contract-ffi",
     "contracts/client/bonding",
+    "contracts/client/standard-payment",
     "contracts/client/revert",
     "contracts/client/transfer_to_account",
     "contracts/client/unbonding",

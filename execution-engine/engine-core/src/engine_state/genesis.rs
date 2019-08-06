@@ -26,6 +26,7 @@ pub const POS_PUBLIC_ADDRESS: &str = "pos_public_address";
 pub const POS_PRIVATE_ADDRESS: &str = "pos_private_address";
 pub const MINT_PUBLIC_ADDRESS: &str = "mint_public_address";
 pub const MINT_PRIVATE_ADDRESS: &str = "mint_private_address";
+pub const GENESIS_ACCOUNT: &str = "genesis_account";
 pub const GENESIS_ACCOUNT_PURSE: &str = "genesis_account_purse";
 pub const MINT_GENESIS_ACCOUNT_BALANCE_UREF: &str = "mint_genesis_account_balance_uref";
 pub const MINT_POS_BONDING_BALANCE_UREF: &str = "mint_pos_bonding_balance_uref";
@@ -106,11 +107,6 @@ fn create_mint_effects(
 ) -> Result<HashMap<Key, Value>, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
 
-    // Create pos purses
-    let pos_bonding_purse = rng.get_uref(POS_BONDING_PURSE);
-    let pos_payment_purse = rng.get_uref(POS_PAYMENT_PURSE);
-    let pos_rewards_purse = rng.get_uref(POS_REWARDS_PURSE);
-
     // Create (public_uref, mint_contract_uref)
     let public_uref = rng.get_uref(MINT_PUBLIC_ADDRESS);
     let mint_contract_uref = rng.get_uref(MINT_PRIVATE_ADDRESS);
@@ -122,22 +118,26 @@ fn create_mint_effects(
         Value::Key(Key::URef(mint_contract_uref)),
     );
 
+    let genesis_account_key = Key::Account(genesis_account_addr);
     let purse_id_uref = rng.get_uref(GENESIS_ACCOUNT_PURSE);
     let pos_public_uref = rng.get_uref(POS_PUBLIC_ADDRESS);
     let pos_private_uref = rng.get_uref(POS_PRIVATE_ADDRESS);
 
-    // Create genesis genesis_account
+    // Create genesis_account
     let genesis_account = {
-        // All blessed / system contract public urefs MUST be added to the genesis account's known_urefs
-        // TODO: do we need to deal with NamedKey ???
+        // All system contract public urefs MUST be added to the genesis account's known_urefs
         let known_urefs = vec![
-            (String::from("mint"), Key::URef(public_uref)),
-            (String::from("pos"), Key::URef(pos_public_uref)),
+            (String::from(execution::MINT_NAME), Key::URef(public_uref)),
+            (
+                String::from(execution::POS_NAME),
+                Key::URef(pos_public_uref),
+            ),
             (pos_private_uref.as_string(), Key::URef(pos_private_uref)),
             (
                 mint_contract_uref.as_string(),
                 Key::URef(mint_contract_uref),
             ),
+            (GENESIS_ACCOUNT.to_string(), genesis_account_key),
         ]
         .into_iter()
         .collect();
@@ -152,19 +152,15 @@ fn create_mint_effects(
         Value::Account(genesis_account),
     );
 
-    // Initializing and persisting mint
-
-    // Create (purse_id_local_key, balance_uref) (for mint-local state)
-
+    // Create & store (purse_id_local_key, balance_uref) (for mint-local state)
     let purse_id_local_key = create_local_key(mint_contract_uref.addr(), purse_id_uref.addr())?;
-
     let balance_uref_key: Key = rng.get_uref(MINT_GENESIS_ACCOUNT_BALANCE_UREF).into();
-
-    // Store (purse_id_local_key, balance_uref_key) in local state
-
     tmp.insert(purse_id_local_key, Value::Key(balance_uref_key));
 
-    // Store (pos_bonding_purse_local_key, pos_balance_uref_key) in local state.
+    // proof of stake
+    let pos_bonding_purse = rng.get_uref(POS_BONDING_PURSE);
+    let pos_payment_purse = rng.get_uref(POS_PAYMENT_PURSE);
+    let pos_rewards_purse = rng.get_uref(POS_REWARDS_PURSE);
     let pos_bonding_balance_key: Key = rng.get_uref(MINT_POS_BONDING_BALANCE_UREF).into();
     let pos_payment_balance_key: Key = rng.get_uref(MINT_POS_PAYMENT_BALANCE_UREF).into();
     let pos_rewards_balance_key: Key = rng.get_uref(MINT_POS_REWARDS_BALANCE_UREF).into();
@@ -198,12 +194,9 @@ fn create_mint_effects(
     tmp.insert(pos_payment_balance_key, pos_payment_balance);
     tmp.insert(pos_rewards_balance_key, pos_rewards_balance);
 
-    // Create balance
+    // Create & store balance
 
     let balance: Value = Value::UInt512(initial_tokens);
-
-    // Store (balance_uref_key, balance) in GlobalState
-
     tmp.insert(balance_uref_key, balance);
 
     // Create mint_contract

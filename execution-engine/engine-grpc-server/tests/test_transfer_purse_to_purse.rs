@@ -115,7 +115,7 @@ fn should_run_purse_to_purse_transfer() {
 
     // Final balance of the destination purse
     assert_eq!(purse_secondary_balance, &U512::from(42));
-    assert_eq!(main_purse_balance, &U512::from(999_958));
+    assert_eq!(main_purse_balance, &U512::from(99_999_999_958i64));
 }
 
 #[ignore]
@@ -136,7 +136,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
                 source,
                 target,
                 // amount
-                U512::from(9_999_999),
+                U512::from(999_999_999_999i64),
             ),
         )
         .expect_success()
@@ -222,5 +222,5 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Final balance of the destination purse equals to 0 as this purse is created as new.
     assert_eq!(purse_secondary_balance, &U512::from(0));
-    assert_eq!(main_purse_balance, &U512::from(1_000_000));
+    assert_eq!(main_purse_balance, &U512::from(100_000_000_000i64));
 }
