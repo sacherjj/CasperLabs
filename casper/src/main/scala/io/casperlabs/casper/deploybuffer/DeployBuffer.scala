@@ -11,7 +11,6 @@ import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
-import org.sqlite.{SQLiteErrorCode, SQLiteException}
 import simulacrum.typeclass
 
 import scala.concurrent.duration.FiniteDuration
@@ -132,12 +131,7 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
 
     for {
       t <- Time[F].currentMillis
-      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t))
-            .handleError {
-              case ex: SQLiteException
-                  if ex.getResultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_PRIMARYKEY =>
-            }
-            .transact(xa)
+      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t)).transact(xa)
       _ <- updateMetrics()
     } yield ()
   }
