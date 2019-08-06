@@ -32,7 +32,7 @@ class GossipServiceCasperTestNode[F[_]](
     local: Node,
     genesis: consensus.Block,
     sk: PrivateKey,
-    blockDagDir: Path,
+    dagDir: Path,
     blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
@@ -45,7 +45,7 @@ class GossipServiceCasperTestNode[F[_]](
     implicit
     concurrentF: Concurrent[F],
     blockStore: BlockStore[F],
-    blockDagStorage: BlockDagStorage[F],
+    dagStorage: DagStorage[F],
     timeEff: Time[F],
     metricEff: Metrics[F],
     casperState: Cell[F, CasperState],
@@ -54,11 +54,11 @@ class GossipServiceCasperTestNode[F[_]](
       local,
       sk,
       genesis,
-      blockDagDir,
+      dagDir,
       blockStoreDir,
       validateNonces,
       maybeMakeEE
-    )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
+    )(concurrentF, blockStore, dagStorage, metricEff, casperState) {
   implicit val deployBufferEff: DeployBuffer[F] =
     MockDeployBuffer.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
   implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
@@ -136,7 +136,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     )
 
     initStorage(genesis) flatMap {
-      case (blockDagDir, blockStoreDir, blockDagStorage, blockStore) =>
+      case (dagStorageDir, blockStoreDir, dagStorage, blockStore) =>
         for {
           blockProcessingLock <- Semaphore[F](1)
           casperState         <- Cell.mvarCell[F, CasperState](CasperState())
@@ -144,7 +144,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             identity,
             genesis,
             sk,
-            blockDagDir,
+            dagStorageDir,
             blockStoreDir,
             blockProcessingLock,
             faultToleranceThreshold,
@@ -153,7 +153,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           )(
             concurrentF,
             blockStore,
-            blockDagStorage,
+            dagStorage,
             timeEff,
             metricEff,
             casperState,
@@ -213,7 +213,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           )
 
           initStorage(genesis) flatMap {
-            case (blockDagDir, blockStoreDir, blockDagStorage, blockStore) =>
+            case (dagStorageDir, blockStoreDir, dagStorage, blockStore) =>
               for {
                 semaphore <- Semaphore[F](1)
                 casperState <- Cell.mvarCell[F, CasperState](
@@ -223,7 +223,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   peer,
                   genesis,
                   sk,
-                  blockDagDir,
+                  dagStorageDir,
                   blockStoreDir,
                   semaphore,
                   faultToleranceThreshold,
@@ -234,7 +234,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 )(
                   concurrentF,
                   blockStore,
-                  blockDagStorage,
+                  dagStorage,
                   timeEff,
                   metricEff,
                   casperState,
@@ -289,7 +289,7 @@ object GossipServiceCasperTestNodeFactory {
     ): F[Unit] = {
       def isInDag(blockHash: ByteString): F[Boolean] =
         for {
-          dag  <- casper.blockDag
+          dag  <- casper.dag
           cont <- dag.contains(blockHash)
         } yield cont
 
@@ -349,13 +349,13 @@ object GossipServiceCasperTestNodeFactory {
                          backend = new SynchronizerImpl.Backend[F] {
                            override def tips: F[List[ByteString]] =
                              for {
-                               dag       <- casper.blockDag
+                               dag       <- casper.dag
                                tipHashes <- casper.estimator(dag)
                              } yield tipHashes.toList
 
                            override def justifications: F[List[ByteString]] =
                              for {
-                               dag    <- casper.blockDag
+                               dag    <- casper.dag
                                latest <- dag.latestMessageHashes
                              } yield latest.values.toList
 

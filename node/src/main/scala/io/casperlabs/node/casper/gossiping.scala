@@ -8,7 +8,7 @@ import cats.effect.concurrent._
 import cats.implicits._
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
+import io.casperlabs.blockstorage.{BlockStore, DagStorage}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.DeployBuffer
@@ -44,7 +44,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
+  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStore: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
       port: Int,
       conf: Configuration,
       grpcScheduler: Scheduler
@@ -160,14 +160,14 @@ package object gossiping {
   }
 
   /** Check if we have a block yet. */
-  private def isInDag[F[_]: Sync: BlockDagStorage](blockHash: ByteString): F[Boolean] =
+  private def isInDag[F[_]: Sync: DagStorage](blockHash: ByteString): F[Boolean] =
     for {
-      dag  <- BlockDagStorage[F].getRepresentation
+      dag  <- DagStorage[F].getRepresentation
       cont <- dag.contains(blockHash)
     } yield cont
 
   /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployBuffer: Validation](
+  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployBuffer: Validation](
       chainId: String,
       block: Block
   ): F[Unit] =
@@ -181,7 +181,7 @@ package object gossiping {
             _           <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
             state       <- Cell.mvarCell[F, CasperState](CasperState())
             executor    <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
-            dag         <- BlockDagStorage[F].getRepresentation
+            dag         <- DagStorage[F].getRepresentation
             (status, _) <- executor.validateAndAddBlock(None, dag, block)(state)
           } yield status
 
@@ -286,7 +286,7 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef: DeployBuffer: Validation](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployBuffer: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
@@ -334,7 +334,7 @@ package object gossiping {
                         )
     } yield downloadManager
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F]
@@ -497,7 +497,7 @@ package object gossiping {
                  }
     } yield approver
 
-  def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: BlockDagStorage: Validation](
+  def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: DagStorage: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit],
@@ -511,14 +511,14 @@ package object gossiping {
                        override def tips: F[List[ByteString]] =
                          for {
                            casper    <- unsafeGetCasper[F]
-                           dag       <- casper.blockDag
+                           dag       <- casper.dag
                            tipHashes <- casper.estimator(dag)
                          } yield tipHashes.toList
 
                        override def justifications: F[List[ByteString]] =
                          for {
                            casper <- unsafeGetCasper[F]
-                           dag    <- casper.blockDag
+                           dag    <- casper.dag
                            latest <- dag.latestMessageHashes
                          } yield latest.values.toList
 
@@ -542,7 +542,7 @@ package object gossiping {
   }
 
   /** Create gossip service. */
-  def makeGossipServiceServer[F[_]: Concurrent: Par: Log: Metrics: BlockStore: BlockDagStorage: MultiParentCasperRef](
+  def makeGossipServiceServer[F[_]: Concurrent: Par: Log: Metrics: BlockStore: DagStorage: MultiParentCasperRef](
       conf: Configuration,
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
@@ -591,7 +591,7 @@ package object gossiping {
                       override def listTips =
                         for {
                           casper    <- unsafeGetCasper[F]
-                          dag       <- casper.blockDag
+                          dag       <- casper.dag
                           tipHashes <- casper.estimator(dag)
                           tips      <- tipHashes.toList.traverse(backend.getBlockSummary(_))
                         } yield tips.flatten

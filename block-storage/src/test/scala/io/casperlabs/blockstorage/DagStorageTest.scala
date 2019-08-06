@@ -6,7 +6,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
+import io.casperlabs.blockstorage.DagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.casper.consensus.Block
@@ -25,7 +25,7 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import scala.util.Random
 
 @silent("match may not be exhaustive")
-trait BlockDagStorageTest
+trait DagStorageTest
     extends FlatSpecLike
     with Matchers
     with OptionValues
@@ -33,7 +33,7 @@ trait BlockDagStorageTest
     with BeforeAndAfterAll {
   val scheduler = Scheduler.fixedPool("block-dag-storage-test-scheduler", 4)
 
-  def withDagStorage[R](f: BlockDagStorage[Task] => Task[R]): R
+  def withDagStorage[R](f: DagStorage[Task] => Task[R]): R
 
   "DAG Storage" should "be able to lookup a stored block" in {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
@@ -76,7 +76,7 @@ trait BlockDagStorageTest
 }
 
 @silent("match may not be exhaustive")
-class BlockDagFileStorageTest extends BlockDagStorageTest {
+class FileDagStorageTest extends DagStorageTest {
 
   import java.nio.file.{Files, Path}
 
@@ -104,7 +104,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     testProgram.unsafeRunSync(scheduler)
   }
 
-  override def withDagStorage[R](f: BlockDagStorage[Task] => Task[R]): R =
+  override def withDagStorage[R](f: DagStorage[Task] => Task[R]): R =
     withDagStorageLocation { (dagDataDir, blockStore) =>
       for {
         dagStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
@@ -135,11 +135,11 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def createAtDefaultLocation(
       dagDataDir: Path,
       maxSizeFactor: Int = 10
-  )(implicit blockStore: BlockStore[Task]): Task[BlockDagStorage[Task]] = {
+  )(implicit blockStore: BlockStore[Task]): Task[DagStorage[Task]] = {
     implicit val log = new shared.Log.NOPLog[Task]()
     implicit val met = new MetricsNOP[Task]
-    BlockDagFileStorage.create[Task](
-      BlockDagFileStorage.Config(
+    FileDagStorage.create[Task](
+      FileDagStorage.Config(
         dagDataDir,
         maxSizeFactor
       )
@@ -166,7 +166,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   private def lookupElements(
       blockElements: List[BlockMsgWithTransform],
-      storage: BlockDagStorage[Task],
+      storage: DagStorage[Task],
       topoSortStartBlockNumber: Long = 0,
       topoSortTailLength: Int = 5
   ): Task[LookupResult] =

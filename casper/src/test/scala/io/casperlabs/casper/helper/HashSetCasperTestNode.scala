@@ -48,7 +48,7 @@ abstract class HashSetCasperTestNode[F[_]](
     val local: Node,
     sk: PrivateKey,
     val genesis: Block,
-    val blockDagDir: Path,
+    val dagStorageDir: Path,
     val blockStoreDir: Path,
     val validateNonces: Boolean,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]]
@@ -56,7 +56,7 @@ abstract class HashSetCasperTestNode[F[_]](
     implicit
     concurrentF: Concurrent[F],
     val blockStore: BlockStore[F],
-    val blockDagStorage: BlockDagStorage[F],
+    val dagStorage: DagStorage[F],
     val metricEff: Metrics[F],
     val casperState: Cell[F, CasperState]
 ) {
@@ -88,7 +88,7 @@ abstract class HashSetCasperTestNode[F[_]](
   def initialize(): F[Unit] =
     // pre-population removed from internals of Casper
     blockStore.put(genesis.blockHash, genesis, Seq.empty) *>
-      blockDagStorage.getRepresentation.flatMap { dag =>
+      dagStorage.getRepresentation.flatMap { dag =>
         ExecutionEngineServiceStub
           .validateBlockCheckpoint[F](
             genesis,
@@ -101,14 +101,14 @@ abstract class HashSetCasperTestNode[F[_]](
   def tearDown(): F[Unit] =
     tearDownNode().map { _ =>
       blockStoreDir.recursivelyDelete()
-      blockDagDir.recursivelyDelete()
+      dagStorageDir.recursivelyDelete()
     }
 
   /** Close storage. */
   def tearDownNode(): F[Unit] =
     for {
       _ <- blockStore.close()
-      _ <- blockDagStorage.close()
+      _ <- dagStorage.close()
     } yield ()
 }
 
@@ -187,16 +187,16 @@ trait HashSetCasperTestNodeFactory {
     )
 
   protected def initStorage[F[_]: Concurrent: Log: Metrics](genesis: Block) = {
-    val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
-    val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-    val env           = Context.env(blockStoreDir, BlockDagStorageTestFixture.mapSize)
+    val dagStorageDir = DagStorageTestFixture.dagStorageDir
+    val blockStoreDir = DagStorageTestFixture.blockStorageDir
+    val env           = Context.env(blockStoreDir, DagStorageTestFixture.mapSize)
     for {
       blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
-      blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
-                          BlockDagFileStorage.Config(blockDagDir),
-                          genesis
-                        )(Concurrent[F], Log[F], blockStore, Metrics[F])
-    } yield (blockDagDir, blockStoreDir, blockDagStorage, blockStore)
+      dagStorage <- FileDagStorage.createEmptyFromGenesis[F](
+                     FileDagStorage.Config(dagStorageDir),
+                     genesis
+                   )(Concurrent[F], Log[F], blockStore, Metrics[F])
+    } yield (dagStorageDir, blockStoreDir, dagStorage, blockStore)
   }
 }
 

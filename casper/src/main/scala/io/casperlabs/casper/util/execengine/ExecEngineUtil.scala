@@ -5,7 +5,7 @@ import cats.implicits._
 import cats.kernel.Monoid
 import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
+import io.casperlabs.blockstorage.{BlockMetadata, BlockStore, DagRepresentation}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
@@ -358,7 +358,7 @@ object ExecEngineUtil {
 
   def merge[F[_]: MonadThrowable: BlockStore](
       candidateParentBlocks: Seq[Block],
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[MergeResult[TransformMap, Block]] = {
 
     def parents(b: BlockMetadata): F[List[BlockMetadata]] =

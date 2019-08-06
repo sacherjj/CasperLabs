@@ -2,7 +2,7 @@ package io.casperlabs.blockstorage.util
 import java.nio.ByteBuffer
 
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
+import io.casperlabs.blockstorage.DagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 
 object byteOps {

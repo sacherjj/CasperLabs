@@ -501,7 +501,7 @@ class GrpcGossipServiceSpec
     "streamAncestorBlockSummaries" when {
       "called with unknown target hashes" should {
         "return an empty stream" in {
-          forAll(genDagFromGenesis, arbitrary[List[ByteString]]) { (dag, targets) =>
+          forAll(genSummaryDagFromGenesis, arbitrary[List[ByteString]]) { (dag, targets) =>
             runTestUnsafe(TestData(summaries = dag)) {
               val req = StreamAncestorBlockSummariesRequest(targetBlockHashes = targets)
 
@@ -515,7 +515,7 @@ class GrpcGossipServiceSpec
 
       "called with a (default) depth of 0" should {
         val genTestCase = for {
-          dag     <- genDagFromGenesis
+          dag     <- genSummaryDagFromGenesis
           targets <- Gen.someOf(dag)
           req     = StreamAncestorBlockSummariesRequest(targetBlockHashes = targets.map(_.blockHash))
         } yield TestCase(dag, req)
@@ -530,7 +530,7 @@ class GrpcGossipServiceSpec
 
       "called with a depth of 1" should {
         val genTestCase = for {
-          dag     <- genDagFromGenesis
+          dag     <- genSummaryDagFromGenesis
           targets <- Gen.someOf(dag)
           req = StreamAncestorBlockSummariesRequest(
             targetBlockHashes = targets.map(_.blockHash),
@@ -555,7 +555,7 @@ class GrpcGossipServiceSpec
 
       "called with a depth of -1" should {
         val genTestCase = for {
-          dag     <- genDagFromGenesis
+          dag     <- genSummaryDagFromGenesis
           targets <- Gen.choose(1, dag.size).flatMap(Gen.pick(_, dag))
           req = StreamAncestorBlockSummariesRequest(
             targetBlockHashes = targets.map(_.blockHash),
@@ -573,7 +573,7 @@ class GrpcGossipServiceSpec
 
       "called with a single target and a given maximum depth value" should {
         val genTestCase = for {
-          dag    <- genDagFromGenesis
+          dag    <- genSummaryDagFromGenesis
           target <- Gen.oneOf(dag)
           depth  <- Gen.choose(0, dag.size)
           req = StreamAncestorBlockSummariesRequest(
@@ -610,7 +610,7 @@ class GrpcGossipServiceSpec
 
       "called with many targets and maximum depth" should {
         val genTestCase = for {
-          dag      <- genDagFromGenesis
+          dag      <- genSummaryDagFromGenesis
           targets  <- Gen.someOf(dag)
           maxDepth <- Gen.choose(0, dag.size)
           req = StreamAncestorBlockSummariesRequest(
@@ -675,7 +675,7 @@ class GrpcGossipServiceSpec
 
       "called with some known hashes" should {
         val genTestCase = for {
-          dag      <- genDagFromGenesis
+          dag      <- genSummaryDagFromGenesis
           targets  <- Gen.someOf(dag)
           knowns   <- Gen.someOf(dag)
           maxDepth <- Gen.choose(0, dag.size)
@@ -749,7 +749,7 @@ class GrpcGossipServiceSpec
 
     "streamDagTipBlockSummaries" should {
       "return the tips from the consensus" in {
-        forAll(genDagFromGenesis) { dag =>
+        forAll(genSummaryDagFromGenesis) { dag =>
           // Tips are the ones without children.
           val tips = dag.filterNot { parent =>
             dag.exists { child =>

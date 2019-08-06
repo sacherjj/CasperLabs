@@ -3,7 +3,7 @@ package io.casperlabs.casper
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.FinalityDetector.Committee
@@ -19,7 +19,7 @@ class FinalityDetectorTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with BlockDagStorageFixture {
+    with DagStorageFixture {
 
   behavior of "Finality Detector"
 
@@ -27,7 +27,7 @@ class FinalityDetectorTest
 
   it should "detect finality as appropriate" in withStorage {
     implicit blockStore =>
-      implicit blockDagStorage =>
+      implicit dagStorage =>
         /* The DAG looks like:
          *
          *   b8
@@ -99,7 +99,7 @@ class FinalityDetectorTest
                  bonds,
                  HashMap(v1 -> b6.blockHash, v2 -> b7.blockHash)
                )
-          dag           <- blockDagStorage.getRepresentation
+          dag           <- dagStorage.getRepresentation
           levelZeroMsgs <- finalityDetectorEffect.levelZeroMsgs(dag, b1.blockHash, List(v1, v2))
           lowestLevelZeroMsgs = levelZeroMsgs.flatMap {
             case (_, msgs) => msgs.lastOption.map(_.blockHash)
@@ -164,7 +164,7 @@ class FinalityDetectorTest
   }
 
   it should "take into account indirect justifications by non-level-zero direct justification" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       val v0 = generateValidator("Validator 0")
       val v1 = generateValidator("Validator 1")
 
@@ -237,7 +237,7 @@ class FinalityDetectorTest
                bonds,
                Map(v2 -> b6.blockHash)
              )
-        dag                    <- blockDagStorage.getRepresentation
+        dag                    <- dagStorage.getRepresentation
         committeeApproximation = List(v0, v1, v2)
         levelZeroMsgs <- finalityDetectorEffect.levelZeroMsgs(
                           dag,
@@ -270,7 +270,7 @@ class FinalityDetectorTest
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   it should "detect possible disagreements appropriately" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       val v1     = generateValidator("Validator One")
       val v2     = generateValidator("Validator Two")
       val v3     = generateValidator("Validator Three")
@@ -325,7 +325,7 @@ class FinalityDetectorTest
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
 
-        dag <- blockDagStorage.getRepresentation
+        dag <- dagStorage.getRepresentation
 
         genesisFaultTolerance <- FinalityDetector[Task]
                                   .normalizedFaultTolerance(dag, genesis.blockHash)

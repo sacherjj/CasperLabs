@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.{Applicative, ApplicativeError, Functor}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.blockstorage.{BlockStore, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
@@ -140,7 +140,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   /** Check the block without executing deploys. */
   def blockFull(
       block: Block,
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       chainId: String,
       maybeGenesis: Option[Block]
   )(implicit bs: BlockStore[F]): F[Unit] = {
@@ -381,7 +381,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   // Block number is 1 plus the maximum of block number of its justifications.
   def blockNumber(
       b: BlockSummary,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[Unit] =
     for {
       justificationMsgs <- b.getHeader.justifications.toList.traverse { justification =>
@@ -422,7 +422,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     */
   def sequenceNumber(
       b: BlockSummary,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[Unit] =
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b.getHeader).foldM(-1) {
@@ -588,7 +588,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def parents(
       b: Block,
       lastFinalizedBlockHash: BlockHash,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   )(
       implicit bs: BlockStore[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {

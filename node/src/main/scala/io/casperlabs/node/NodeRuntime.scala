@@ -18,10 +18,10 @@ import doobie.util.transactor.Transactor
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
   BlockStore,
   CachingBlockStore,
+  DagStorage,
+  FileDagStorage,
   FileLMDBIndexBlockStore
 }
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -169,22 +169,22 @@ class NodeRuntime private[node] (
                                                       )
                                                     }
 
-        implicit0(blockDagStorage: BlockDagStorage[Effect]) <- BlockDagFileStorage[Effect](
-                                                                dagStoragePath,
-                                                                conf.blockstorage.latestMessagesLogMaxSizeFactor,
-                                                                blockStore
-                                                              )(
-                                                                Concurrent[Effect],
-                                                                logEff,
-                                                                raiseIOError,
-                                                                metricsEff
-                                                              )
+        implicit0(dagStorage: DagStorage[Effect]) <- FileDagStorage[Effect](
+                                                      dagStoragePath,
+                                                      conf.blockstorage.latestMessagesLogMaxSizeFactor,
+                                                      blockStore
+                                                    )(
+                                                      Concurrent[Effect],
+                                                      logEff,
+                                                      raiseIOError,
+                                                      metricsEff
+                                                    )
 
         _ <- Resource.liftF {
               Task
                 .delay {
                   log.info("Cleaning block storage ...")
-                  blockStore.clear() *> blockDagStorage.clear()
+                  blockStore.clear() *> dagStorage.clear()
                 }
                 .whenA(conf.server.cleanBlockStorage)
                 .toEffect

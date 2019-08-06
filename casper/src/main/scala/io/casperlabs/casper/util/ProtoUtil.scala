@@ -4,7 +4,7 @@ import cats.data.OptionT
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.blockstorage.{BlockStore, DagRepresentation}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
@@ -27,9 +27,9 @@ object ProtoUtil {
   /*
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
-  // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
+  // TODO: Move into DAG and remove corresponding param once that is moved over from simulator
   def isInMainChain[F[_]: Monad](
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       candidateBlockMetadata: BlockMetadata,
       targetBlockHash: BlockHash
   ): F[Boolean] =
@@ -57,13 +57,13 @@ object ProtoUtil {
   // If targetBlockHash is main descendant of candidateBlockHash, then
   // it means targetBlockHash vote candidateBlockHash.
   def isInMainChain[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
       targetBlockHash: BlockHash
   ): F[Boolean] =
     for {
-      candidateBlockMetadata <- blockDag.lookup(candidateBlockHash)
-      result                 <- isInMainChain(blockDag, candidateBlockMetadata.get, targetBlockHash)
+      candidateBlockMetadata <- dag.lookup(candidateBlockHash)
+      result                 <- isInMainChain(dag, candidateBlockMetadata.get, targetBlockHash)
     } yield result
 
   def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStore](
@@ -184,12 +184,12 @@ object ProtoUtil {
     * we return an empty list.
     */
   def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       blockHash: BlockHash,
       goalFunc: BlockHash => Boolean = _ => false
   ): F[List[BlockHash]] =
     (for {
-      meta <- OptionT(blockDag.lookup(blockHash))
+      meta <- OptionT(dag.lookup(blockHash))
       creatorJustificationHash <- OptionT.fromOption[F](
                                    meta.justifications
                                      .find(
@@ -197,7 +197,7 @@ object ProtoUtil {
                                      )
                                      .map(_.latestBlockHash)
                                  )
-      creatorJustification <- OptionT(blockDag.lookup(creatorJustificationHash))
+      creatorJustification <- OptionT(dag.lookup(creatorJustificationHash))
       creatorJustificationAsList = if (goalFunc(creatorJustification.blockHash)) {
         List.empty[BlockHash]
       } else {
@@ -217,11 +217,11 @@ object ProtoUtil {
     weights.values.sum
 
   def minTotalValidatorWeight[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       blockHash: BlockHash,
       maxCliqueMinSize: Int
   ): F[Long] =
-    blockDag.lookup(blockHash).map { blockMetadataOpt =>
+    dag.lookup(blockHash).map { blockMetadataOpt =>
       val sortedWeights = blockMetadataOpt.get.weightMap.values.toVector.sorted
       sortedWeights.take(maxCliqueMinSize).sum
     }
@@ -243,7 +243,7 @@ object ProtoUtil {
     * @return Weight `validator` put behind the block
     */
   def weightFromValidatorByDag[F[_]: Monad](
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       blockHash: BlockHash,
       validator: Validator
   ): F[Long] =
@@ -283,12 +283,12 @@ object ProtoUtil {
     weightFromValidator[F](header, header.validatorPublicKey)
 
   def mainParentWeightMap[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       candidateBlockHash: BlockHash
   ): F[Map[BlockHash, Long]] =
-    blockDag.lookup(candidateBlockHash).flatMap { blockOpt =>
+    dag.lookup(candidateBlockHash).flatMap { blockOpt =>
       blockOpt.get.parents.headOption match {
-        case Some(parent) => blockDag.lookup(parent).map(_.get.weightMap)
+        case Some(parent) => dag.lookup(parent).map(_.get.weightMap)
         case None         => blockOpt.get.weightMap.pure[F]
       }
     }
@@ -410,7 +410,7 @@ object ProtoUtil {
 
   def signBlock[F[_]: Applicative](
       block: Block,
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       pk: PublicKey,
       sk: PrivateKey,
       sigAlgorithm: SignatureAlgorithm

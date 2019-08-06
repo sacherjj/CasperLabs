@@ -6,8 +6,8 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
-import io.casperlabs.blockstorage.BlockDagStorage.MeteredBlockDagStorage
+import io.casperlabs.blockstorage.DagRepresentation.Validator
+import io.casperlabs.blockstorage.DagStorage.MeteredDagStorage
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
 import io.casperlabs.casper.consensus.Block
@@ -20,21 +20,21 @@ import io.casperlabs.catscontrib.MonadThrowable
 import scala.collection.immutable.HashSet
 
 @silent("The outer reference in this type test cannot be checked at run time.")
-class InMemBlockDagStorage[F[_]: MonadThrowable: Log: BlockStore](
+class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStore](
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
     justificationMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
     dataLookupRef: Ref[F, Map[BlockHash, BlockMetadata]],
     topoSortRef: Ref[F, Vector[Vector[BlockHash]]]
-) extends BlockDagStorage[F] {
-  final case class InMemBlockDagRepresentation(
+) extends DagStorage[F] {
+  final case class InMemDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
       justificationMap: Map[BlockHash, Set[BlockHash]],
       dataLookup: Map[BlockHash, BlockMetadata],
       topoSortVector: Vector[Vector[BlockHash]]
-  ) extends BlockDagRepresentation[F] {
+  ) extends DagRepresentation[F] {
     def children(blockHash: BlockHash): F[Set[BlockHash]] =
       childMap.getOrElse(blockHash, Set.empty).pure[F]
     def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
@@ -70,7 +70,7 @@ class InMemBlockDagStorage[F[_]: MonadThrowable: Log: BlockStore](
         .map(_.toMap)
   }
 
-  override def getRepresentation: F[BlockDagRepresentation[F]] =
+  override def getRepresentation: F[DagRepresentation[F]] =
     for {
       _                <- lock.acquire
       latestMessages   <- latestMessagesRef.get
@@ -79,7 +79,7 @@ class InMemBlockDagStorage[F[_]: MonadThrowable: Log: BlockStore](
       dataLookup       <- dataLookupRef.get
       topoSort         <- topoSortRef.get
       _                <- lock.release
-    } yield InMemBlockDagRepresentation(
+    } yield InMemDagRepresentation(
       latestMessages,
       childMap,
       justificationMap,
@@ -87,7 +87,7 @@ class InMemBlockDagStorage[F[_]: MonadThrowable: Log: BlockStore](
       topoSort
     )
 
-  override def insert(block: Block): F[BlockDagRepresentation[F]] =
+  override def insert(block: Block): F[DagRepresentation[F]] =
     for {
       _ <- lock.acquire
       _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
@@ -153,10 +153,10 @@ class InMemBlockDagStorage[F[_]: MonadThrowable: Log: BlockStore](
   override def close(): F[Unit] = ().pure[F]
 }
 
-object InMemBlockDagStorage {
+object InMemDagStorage {
   def create[F[_]: Concurrent: Log: BlockStore](
       implicit met: Metrics[F]
-  ): F[InMemBlockDagStorage[F]] =
+  ): F[InMemDagStorage[F]] =
     for {
       lock                        <- Semaphore[F](1)
       latestMessagesRef           <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)
@@ -164,16 +164,16 @@ object InMemBlockDagStorage {
       justificationToBlocksMapRef <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
       dataLookupRef               <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
       topoSortRef                 <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
-    } yield new InMemBlockDagStorage[F](
+    } yield new InMemDagStorage[F](
       lock,
       latestMessagesRef,
       childMapRef,
       justificationToBlocksMapRef,
       dataLookupRef,
       topoSortRef
-    ) with MeteredBlockDagStorage[F] {
+    ) with MeteredDagStorage[F] {
       override implicit val m: Metrics[F] = met
-      override implicit val ms: Source    = Metrics.Source(BlockDagStorageMetricsSource, "in-mem")
+      override implicit val ms: Source    = Metrics.Source(DagStorageMetricsSource, "in-mem")
       override implicit val a: Apply[F]   = Concurrent[F]
     }
 }

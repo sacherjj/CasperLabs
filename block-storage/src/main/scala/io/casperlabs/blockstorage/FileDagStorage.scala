@@ -9,9 +9,9 @@ import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
-import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
-import io.casperlabs.blockstorage.BlockDagStorage.MeteredBlockDagStorage
+import io.casperlabs.blockstorage.FileDagStorage.{Checkpoint, CheckpointedDagInfo}
+import io.casperlabs.blockstorage.DagRepresentation.Validator
+import io.casperlabs.blockstorage.DagStorage.MeteredDagStorage
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
@@ -30,7 +30,7 @@ import io.casperlabs.shared.{Log, LogSource}
 import scala.ref.WeakReference
 import scala.util.matching.Regex
 
-private final case class BlockDagFileStorageState[F[_]: Sync](
+private final case class FileDagStorageState[F[_]: Sync](
     latestMessages: Map[Validator, BlockHash],
     childMap: Map[BlockHash, Set[BlockHash]],
     justificationMap: Map[BlockHash, Set[BlockHash]],
@@ -47,18 +47,18 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
     blockMetadataCrc: Crc32[F]
 )
 
-class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] private (
+class FileDagStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] private (
     lock: Semaphore[F],
     latestMessagesDataFilePath: Path,
     latestMessagesCrcFilePath: Path,
     latestMessagesLogMaxSizeFactor: Int,
     blockMetadataLogPath: Path,
     blockMetadataCrcPath: Path,
-    state: MonadState[F, BlockDagFileStorageState[F]]
-) extends BlockDagStorage[F] {
-  import BlockDagFileStorage._
+    state: MonadState[F, FileDagStorageState[F]]
+) extends DagStorage[F] {
+  import FileDagStorage._
 
-  private implicit val logSource = LogSource(BlockDagFileStorage.getClass)
+  private implicit val logSource = LogSource(FileDagStorage.getClass)
 
   private case class FileDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
@@ -67,7 +67,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
       dataLookup: Map[BlockHash, BlockMetadata],
       topoSortVector: Vector[Vector[BlockHash]],
       sortOffset: Long
-  ) extends BlockDagRepresentation[F] {
+  ) extends DagRepresentation[F] {
 
     // Number of the last rank in topoSortVector
     def sortEndBlockNumber = sortOffset + topoSortVector.size - 1
@@ -329,7 +329,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
       _           <- replaceFile(tmpCrc, blockMetadataCrcPath)
     } yield ()
 
-  private def representation: F[BlockDagRepresentation[F]] =
+  private def representation: F[DagRepresentation[F]] =
     (
       (state >> 'latestMessages).get,
       (state >> 'childMap).get,
@@ -339,10 +339,10 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
       (state >> 'sortOffset).get
     ) mapN FileDagRepresentation.apply
 
-  def getRepresentation: F[BlockDagRepresentation[F]] =
+  def getRepresentation: F[DagRepresentation[F]] =
     lock.withPermit(representation)
 
-  def insert(block: Block): F[BlockDagRepresentation[F]] =
+  def insert(block: Block): F[DagRepresentation[F]] =
     lock.withPermit(
       (state >> 'dataLookup).get
         .map(_.contains(block.blockHash))
@@ -461,8 +461,8 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
     )
 }
 
-object BlockDagFileStorage {
-  private implicit val logSource       = LogSource(BlockDagFileStorage.getClass)
+object FileDagStorage {
+  private implicit val logSource       = LogSource(FileDagStorage.getClass)
   private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
   type ChildrenMapAndJustificationMap =
     (Map[BlockHash, Set[BlockHash]], Map[BlockHash, Set[BlockHash]])
@@ -732,7 +732,7 @@ object BlockDagFileStorage {
 
   def create[F[_]: Concurrent: Log: BlockStore: Metrics](
       config: Config
-  ): F[BlockDagFileStorage[F]] = {
+  ): F[FileDagStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
       lock                  <- Semaphore[F](1)
@@ -782,7 +782,7 @@ object BlockDagFileStorage {
                                        config.blockMetadataLogPath,
                                        true
                                      )
-      state = BlockDagFileStorageState(
+      state = FileDagStorageState(
         latestMessages = latestMessagesMap,
         childMap = childMap,
         justificationMap = justificationMap,
@@ -797,14 +797,14 @@ object BlockDagFileStorage {
         blockMetadataCrc = calculatedDataLookupCrc
       )
 
-      res <- blockDagFileStorageState[F](config, lock, state)
+      res <- fileDagStorageState[F](config, lock, state)
     } yield res
   }
 
   def createEmptyFromGenesis[F[_]: Concurrent: Log: BlockStore: Metrics](
       config: Config,
       genesis: Block
-  ): F[BlockDagFileStorage[F]] = {
+  ): F[FileDagStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
       lock                  <- Semaphore[F](1)
@@ -841,7 +841,7 @@ object BlockDagFileStorage {
                                        config.blockMetadataLogPath,
                                        true
                                      )
-      state = BlockDagFileStorageState(
+      state = FileDagStorageState(
         latestMessages = initialLatestMessages,
         childMap = Map(genesis.blockHash         -> Set.empty[BlockHash]),
         justificationMap = Map(genesis.blockHash -> Set.empty[BlockHash]),
@@ -856,17 +856,17 @@ object BlockDagFileStorage {
         blockMetadataCrc = blockMetadataCrc
       )
 
-      res <- blockDagFileStorageState[F](config, lock, state)
+      res <- fileDagStorageState[F](config, lock, state)
     } yield res
   }
 
-  private def blockDagFileStorageState[F[_]: Concurrent: Log: BlockStore: RaiseIOError](
+  private def fileDagStorageState[F[_]: Concurrent: Log: BlockStore: RaiseIOError](
       config: Config,
       lock: Semaphore[F],
-      state: BlockDagFileStorageState[F]
+      state: FileDagStorageState[F]
   )(implicit met: Metrics[F]) =
     state.useStateByRef[F](
-      new BlockDagFileStorage[F](
+      new FileDagStorage[F](
         lock,
         config.latestMessagesLogPath,
         config.latestMessagesCrcPath,
@@ -874,9 +874,9 @@ object BlockDagFileStorage {
         config.blockMetadataLogPath,
         config.blockMetadataCrcPath,
         _
-      ) with MeteredBlockDagStorage[F] {
+      ) with MeteredDagStorage[F] {
         override implicit val m: Metrics[F] = met
-        override implicit val ms: Source    = Metrics.Source(BlockDagStorageMetricsSource, "file")
+        override implicit val ms: Source    = Metrics.Source(DagStorageMetricsSource, "file")
         override implicit val a: Apply[F]   = Concurrent[F]
       }
     )
@@ -885,12 +885,12 @@ object BlockDagFileStorage {
       dagStoragePath: Path,
       latestMessagesLogMaxSizeFactor: Int,
       blockStore: BlockStore[F]
-  ): Resource[F, BlockDagStorage[F]] =
+  ): Resource[F, DagStorage[F]] =
     Resource.make {
       for {
         _      <- fileIO.makeDirectory(dagStoragePath)
         config = Config(dagStoragePath, latestMessagesLogMaxSizeFactor)
-        storage <- BlockDagFileStorage.create(config)(
+        storage <- FileDagStorage.create(config)(
                     Concurrent[F],
                     Log[F],
                     blockStore,

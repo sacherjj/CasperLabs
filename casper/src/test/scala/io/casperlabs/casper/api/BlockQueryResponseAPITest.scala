@@ -6,10 +6,10 @@ import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
+import io.casperlabs.blockstorage.{BlockStore, DagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
+import io.casperlabs.casper.helper.{DagStorageFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil
@@ -22,7 +22,7 @@ import monix.eval.Task
 import scala.collection.immutable.HashMap
 
 @silent("deprecated")
-class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStorageFixture {
+class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFixture {
   implicit val timeEff = new LogicalTime[Task]
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
@@ -88,9 +88,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "showBlock" should "return successful block info response" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       for {
-        effects                                     <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        effects                                     <- effectsForSimpleCasperSetup(blockStore, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
         q                                           = BlockQuery(hash = secondBlockQuery)
         blockQueryResponse <- BlockAPI.showBlock[Task](q)(
@@ -116,9 +116,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   }
 
   it should "return error when no block exists" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       for {
-        effects                                     <- emptyEffects(blockStore, blockDagStorage)
+        effects                                     <- emptyEffects(blockStore, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
         q                                           = BlockQuery(hash = badTestHashQuery)
         blockQueryResponse <- BlockAPI.showBlock[Task](q)(
@@ -134,9 +134,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   }
 
   "findBlockWithDeploy" should "return successful block info response" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       for {
-        effects                                     <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        effects                                     <- effectsForSimpleCasperSetup(blockStore, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
         user                                        = ByteString.EMPTY
         timestamp                                   = 1L
@@ -163,9 +163,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   }
 
   it should "return error when no block matching query exists" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       for {
-        effects                                     <- emptyEffects(blockStore, blockDagStorage)
+        effects                                     <- emptyEffects(blockStore, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
         user                                        = ByteString.EMPTY
         timestamp                                   = 0L
@@ -183,11 +183,11 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
 
   private def effectsForSimpleCasperSetup(
       blockStore: BlockStore[Task],
-      blockDagStorage: BlockDagStorage[Task]
+      dagStorage: DagStorage[Task]
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], FinalityDetector[Task])] =
     for {
-      _ <- blockDagStorage.insert(genesisBlock)
-      _ <- blockDagStorage.insert(secondBlock)
+      _ <- dagStorage.insert(genesisBlock)
+      _ <- dagStorage.insert(secondBlock)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap[BlockHash, BlockMsgWithTransform](
                          (
@@ -199,7 +199,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
                            BlockMsgWithTransform(Some(secondBlock), Seq.empty)
                          )
                        )
-                     )(Sync[Task], blockStore, blockDagStorage)
+                     )(Sync[Task], blockStore, dagStorage)
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
@@ -208,7 +208,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
 
   private def emptyEffects(
       blockStore: BlockStore[Task],
-      blockDagStorage: BlockDagStorage[Task]
+      dagStorage: DagStorage[Task]
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], FinalityDetector[Task])] =
     for {
       casperEffect <- NoOpsCasperEffect(
@@ -222,7 +222,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
                            BlockMsgWithTransform(Some(secondBlock), Seq.empty)
                          )
                        )
-                     )(Sync[Task], blockStore, blockDagStorage)
+                     )(Sync[Task], blockStore, dagStorage)
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)

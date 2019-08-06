@@ -9,7 +9,7 @@ import cats.syntax.show._
 import eu.timepit.refined._
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
-import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
+import io.casperlabs.blockstorage.{FileDagStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeIdentifier}

@@ -3,36 +3,36 @@ package io.casperlabs.blockstorage
 import cats.implicits._
 import cats.Monad
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
+import io.casperlabs.blockstorage.DagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.metrics.Metered
 
-trait BlockDagStorage[F[_]] {
-  def getRepresentation: F[BlockDagRepresentation[F]]
-  def insert(block: Block): F[BlockDagRepresentation[F]]
+trait DagStorage[F[_]] {
+  def getRepresentation: F[DagRepresentation[F]]
+  def insert(block: Block): F[DagRepresentation[F]]
   def checkpoint(): F[Unit]
   def clear(): F[Unit]
   def close(): F[Unit]
 }
 
-object BlockDagStorage {
-  trait MeteredBlockDagStorage[F[_]] extends BlockDagStorage[F] with Metered[F] {
+object DagStorage {
+  trait MeteredDagStorage[F[_]] extends DagStorage[F] with Metered[F] {
 
-    abstract override def getRepresentation: F[BlockDagRepresentation[F]] =
+    abstract override def getRepresentation: F[DagRepresentation[F]] =
       incAndMeasure("representation", super.getRepresentation)
 
-    abstract override def insert(block: Block): F[BlockDagRepresentation[F]] =
+    abstract override def insert(block: Block): F[DagRepresentation[F]] =
       incAndMeasure("insert", super.insert(block))
 
     abstract override def checkpoint(): F[Unit] =
       incAndMeasure("checkpoint", super.checkpoint())
   }
 
-  def apply[F[_]](implicit B: BlockDagStorage[F]): BlockDagStorage[F] = B
+  def apply[F[_]](implicit B: DagStorage[F]): DagStorage[F] = B
 }
 
-trait BlockDagRepresentation[F[_]] {
+trait DagRepresentation[F[_]] {
   def children(blockHash: BlockHash): F[Set[BlockHash]]
 
   /** Return blocks that having a specify justification */
@@ -54,22 +54,22 @@ trait BlockDagRepresentation[F[_]] {
   def latestMessages: F[Map[Validator, BlockMetadata]]
 }
 
-object BlockDagRepresentation {
+object DagRepresentation {
   type Validator = ByteString
 
-  implicit class BlockDagRepresentationRich[F[_]](
-      blockDagRepresentation: BlockDagRepresentation[F]
+  implicit class DagRepresentationRich[F[_]](
+      dagRepresentation: DagRepresentation[F]
   ) {
     def getMainChildren(
         blockHash: BlockHash
     )(implicit monad: Monad[F]): F[List[BlockHash]] =
-      blockDagRepresentation
+      dagRepresentation
         .children(blockHash)
         .flatMap(
           _.toList
             .filterA(
               child =>
-                blockDagRepresentation.lookup(child).map {
+                dagRepresentation.lookup(child).map {
                   // make sure child's main parent's hash equal to `blockHash`
                   case Some(blockMetadata) => blockMetadata.parents.head == blockHash
                   case None                => false
@@ -78,5 +78,5 @@ object BlockDagRepresentation {
         )
   }
 
-  def apply[F[_]](implicit ev: BlockDagRepresentation[F]): BlockDagRepresentation[F] = ev
+  def apply[F[_]](implicit ev: DagRepresentation[F]): DagRepresentation[F] = ev
 }

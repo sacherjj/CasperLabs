@@ -11,12 +11,12 @@ import cats.implicits.none
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
   BlockStore,
+  DagStorage,
+  FileDagStorage,
   FileLMDBIndexBlockStore,
   InMemBlockStore,
-  IndexedBlockDagStorage,
+  IndexedDagStorage,
   LMDBBlockStore
 }
 import io.casperlabs.casper.protocol.ApprovedBlock
@@ -199,11 +199,11 @@ object Init {
     metricsNop
   )
 
-  def fileStorage(blockStore: BlockStore[Task]) =
-    BlockDagFileStorage
+  def fileDagStorage(blockStore: BlockStore[Task]) =
+    FileDagStorage
       .create(
-        BlockDagFileStorage.Config(
-          dir = createTempDirectory("block_dag_file_storage")
+        FileDagStorage.Config(
+          dir = createTempDirectory("dag_file_storage")
         )
       )(
         Concurrent[Task],
@@ -213,6 +213,6 @@ object Init {
       )
       .runSyncUnsafe()
 
-  def indexedStorage(blockDagStorage: BlockDagStorage[Task]) =
-    IndexedBlockDagStorage.create[Task](blockDagStorage).runSyncUnsafe()
+  def indexedDagStorage(dagStorage: DagStorage[Task]) =
+    IndexedDagStorage.create[Task](dagStorage).runSyncUnsafe()
 }

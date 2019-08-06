@@ -4,7 +4,7 @@ import cats.Monad
 import cats.effect.Sync
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.IndexedBlockDagStorage
+import io.casperlabs.blockstorage.IndexedDagStorage
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Bond
@@ -24,16 +24,12 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 @silent("deprecated")
-class ManyValidatorsTest
-    extends FlatSpec
-    with Matchers
-    with BlockGenerator
-    with BlockDagStorageFixture {
+class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
   "Show blocks" should "be processed quickly for a node with 300 validators" in {
-    val blockDagStorageDir = BlockDagStorageTestFixture.blockDagStorageDir
-    val blockStoreDir      = BlockDagStorageTestFixture.blockStorageDir
-    implicit val metrics   = new MetricsNOP[Task]()
-    implicit val log       = new Log.NOPLog[Task]()
+    val dagStorageDir    = DagStorageTestFixture.dagStorageDir
+    val blockStoreDir    = DagStorageTestFixture.blockStorageDir
+    implicit val metrics = new MetricsNOP[Task]()
+    implicit val log     = new Log.NOPLog[Task]()
     val bonds = Seq
       .fill(300)(
         ByteString.copyFromUtf8(Random.nextString(20)).substring(0, 32)
@@ -42,43 +38,43 @@ class ManyValidatorsTest
     val v1 = bonds(0).validatorPublicKey
 
     val testProgram = for {
-      blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
-      blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
-                          metrics,
-                          log,
-                          blockStore
-                        )
-      indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
+      blockStore <- DagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+      dagStorage <- DagStorageTestFixture.createDagStorage(dagStorageDir)(
+                     metrics,
+                     log,
+                     blockStore
+                   )
+      indexedDagStorage <- IndexedDagStorage.create(dagStorage)
       genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)(
                   Monad[Task],
                   Time[Task],
                   blockStore,
-                  indexedBlockDagStorage
+                  indexedDagStorage
                 )
       b <- createBlock[Task](Seq(genesis.blockHash), v1, bonds, bonds.map {
             case Bond(validator, _) => validator -> genesis.blockHash
-          }.toMap)(Monad[Task], Time[Task], blockStore, indexedBlockDagStorage)
-      _                     <- indexedBlockDagStorage.close()
+          }.toMap)(Monad[Task], Time[Task], blockStore, indexedDagStorage)
+      _                     <- indexedDagStorage.close()
       initialLatestMessages = bonds.map { case Bond(validator, _) => validator -> b }.toMap
       _ <- Sync[Task].delay {
-            BlockDagStorageTestFixture.writeInitialLatestMessages(
-              blockDagStorageDir.resolve("latest-messages-log"),
-              blockDagStorageDir.resolve("latest-messages-crc"),
+            DagStorageTestFixture.writeInitialLatestMessages(
+              dagStorageDir.resolve("latest-messages-log"),
+              dagStorageDir.resolve("latest-messages-crc"),
               initialLatestMessages
             )
           }
-      newBlockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
-                             metrics,
-                             log,
-                             blockStore
-                           )
-      newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
-      dag                       <- newIndexedBlockDagStorage.getRepresentation
-      tips                      <- Estimator.tips[Task](dag, genesis.blockHash)(Monad[Task])
+      newDagStorage <- DagStorageTestFixture.createDagStorage(dagStorageDir)(
+                        metrics,
+                        log,
+                        blockStore
+                      )
+      newIndexedDagStorage <- IndexedDagStorage.create(newDagStorage)
+      dag                  <- newIndexedDagStorage.getRepresentation
+      tips                 <- Estimator.tips[Task](dag, genesis.blockHash)(Monad[Task])
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips.toIndexedSeq
-                     )(Sync[Task], blockStore, newIndexedBlockDagStorage)
+                     )(Sync[Task], blockStore, newIndexedDagStorage)
       logEff                 = new LogStub[Task]
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)

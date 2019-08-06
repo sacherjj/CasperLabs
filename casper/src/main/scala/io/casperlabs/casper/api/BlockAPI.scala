@@ -6,7 +6,7 @@ import cats.effect.{Bracket, Concurrent, Resource}
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, StorageError}
+import io.casperlabs.blockstorage.{BlockStore, DagRepresentation, StorageError}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
@@ -217,7 +217,7 @@ object BlockAPI {
       depth: Int
   ): F[IndexedSeq[Block]] =
     for {
-      dag       <- MultiParentCasper[F].blockDag
+      dag       <- MultiParentCasper[F].dag
       tipHashes <- MultiParentCasper[F].estimator(dag)
       tipHash   = tipHashes.head
       tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
@@ -234,7 +234,7 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        dag <- MultiParentCasper[F].blockDag
+        dag <- MultiParentCasper[F].dag
         flattenedBlockInfosUntilDepth <- getFlattenedBlockInfosUntilDepth[F](
                                           depth,
                                           dag
@@ -250,7 +250,7 @@ object BlockAPI {
 
   private def getFlattenedBlockInfosUntilDepth[F[_]: MonadThrowable: MultiParentCasper: Log: FinalityDetector: BlockStore](
       depth: Int,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[List[BlockInfoWithoutTuplespace]] =
     for {
       topoSort <- dag.topoSortTail(depth)
@@ -272,7 +272,7 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        dag        <- MultiParentCasper[F].blockDag
+        dag        <- MultiParentCasper[F].dag
         tipHashes  <- MultiParentCasper[F].estimator(dag)
         tipHash    = tipHashes.head
         tip        <- ProtoUtil.unsafeGetBlock[F](tipHash)
@@ -298,7 +298,7 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
       for {
-        dag               <- MultiParentCasper[F].blockDag
+        dag               <- MultiParentCasper[F].dag
         allBlocksTopoSort <- dag.topoSort(0L)
         maybeBlock <- findBlockWithDeploy[F](
                        allBlocksTopoSort.flatten.reverse,
@@ -407,7 +407,7 @@ object BlockAPI {
       maybeBlock: Option[Block]
   ): F[BlockInfo] =
     for {
-      dag            <- MultiParentCasper[F].blockDag
+      dag            <- MultiParentCasper[F].dag
       faultTolerance <- FinalityDetector[F].normalizedFaultTolerance(dag, summary.blockHash)
       initialFault <- MultiParentCasper[F].normalizedInitialFault(
                        ProtoUtil.weightMap(summary.getHeader)
@@ -497,7 +497,7 @@ object BlockAPI {
   ): F[List[(BlockInfo, Option[Block])]] =
     unsafeWithCasper[F, List[(BlockInfo, Option[Block])]]("Could not show blocks.") {
       implicit casper =>
-        casper.blockDag flatMap { dag =>
+        casper.dag flatMap { dag =>
           maxRank match {
             case 0 => dag.topoSortTail(depth)
             case r =>
@@ -573,7 +573,7 @@ object BlockAPI {
       ) => F[A]
   ): F[A] =
     for {
-      dag                      <- MultiParentCasper[F].blockDag
+      dag                      <- MultiParentCasper[F].dag
       header                   = block.getHeader
       protocolVersion          = header.protocolVersion
       deployCount              = header.deployCount

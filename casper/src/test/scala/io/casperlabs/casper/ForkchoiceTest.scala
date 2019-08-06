@@ -6,20 +6,16 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 
 @silent("is never used")
-class ForkchoiceTest
-    extends FlatSpec
-    with Matchers
-    with BlockGenerator
-    with BlockDagStorageFixture {
+class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       val v1     = generateValidator("Validator One")
       val v2     = generateValidator("Validator Two")
       val v1Bond = Bond(v1, 2)
@@ -69,7 +65,7 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
              )
-        dag <- blockDagStorage.getRepresentation
+        dag <- dagStorage.getRepresentation
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
@@ -80,7 +76,7 @@ class ForkchoiceTest
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       val v1     = generateValidator("Validator One")
       val v2     = generateValidator("Validator Two")
       val v1Bond = Bond(v1, 2)
@@ -130,7 +126,7 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
              )
-        dag <- blockDagStorage.getRepresentation
+        dag <- dagStorage.getRepresentation
         latestBlocks = HashMap[Validator, BlockHash](
           v1 -> b8.blockHash,
           v2 -> b6.blockHash
@@ -147,7 +143,7 @@ class ForkchoiceTest
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   "Estimator on flipping forkchoice DAG" should "return the appropriate score map and forkchoice" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       val v1     = generateValidator("Validator One")
       val v2     = generateValidator("Validator Two")
       val v3     = generateValidator("Validator Three")
@@ -199,7 +195,7 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
-        dag <- blockDagStorage.getRepresentation
+        dag <- dagStorage.getRepresentation
         latestBlocks = HashMap[Validator, BlockHash](
           v1 -> b6.blockHash,
           v2 -> b8.blockHash,
@@ -217,7 +213,7 @@ class ForkchoiceTest
 
   "lmdScoring" should "propagate fixed weights on a tree" in withStorage {
     implicit blockStore =>
-      implicit blockDagStorage =>
+      implicit dagStorage =>
         /* The DAG looks like:
          *
          *
@@ -245,7 +241,7 @@ class ForkchoiceTest
           d       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
           e       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
           f       <- createBlock[Task](Seq(b.blockHash), v2, bonds)
-          dag     <- blockDagStorage.getRepresentation
+          dag     <- dagStorage.getRepresentation
           latestBlocks = HashMap[Validator, BlockHash](
             v1 -> d.blockHash,
             v2 -> e.blockHash,
@@ -265,7 +261,7 @@ class ForkchoiceTest
 
   it should "propagate fixed weights on a DAG" in withStorage {
     implicit blockStore =>
-      implicit blockDagStorage =>
+      implicit dagStorage =>
         /* The DAG looks like:
          *
          *
@@ -298,7 +294,7 @@ class ForkchoiceTest
           g       <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
           h       <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
           i       <- createBlock[Task](Seq(g.blockHash), v1, bonds)
-          dag     <- blockDagStorage.getRepresentation
+          dag     <- dagStorage.getRepresentation
           latestBlocks = HashMap[Validator, BlockHash](
             v1 -> g.blockHash,
             v2 -> h.blockHash,
@@ -320,7 +316,7 @@ class ForkchoiceTest
 
   "lmdMainchainGhost" should "pick the correct fork choice tip" in withStorage {
     implicit blockStore =>
-      implicit blockDagStorage =>
+      implicit dagStorage =>
         /* The DAG looks like:
          *
          *        i
@@ -353,7 +349,7 @@ class ForkchoiceTest
           g       <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
           h       <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
           i       <- createBlock[Task](Seq(g.blockHash), v1, bonds)
-          dag     <- blockDagStorage.getRepresentation
+          dag     <- dagStorage.getRepresentation
           latestBlocks = HashMap[Validator, BlockHash](
             v1 -> g.blockHash,
             v2 -> h.blockHash,

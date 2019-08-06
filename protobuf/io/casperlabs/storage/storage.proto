@@ -13,7 +13,7 @@ message BlockMsgWithTransform {
     repeated io.casperlabs.ipc.TransformEntry transform_entry = 2;
 }
 
-// Storage type for the BlockDagStorage
+// Storage type for the DagStore
 message BlockMetadataInternal {
     // This message in mapped to a different Scala class because of protobuf's inability to create map<bytes, int64> for
     // bonds.

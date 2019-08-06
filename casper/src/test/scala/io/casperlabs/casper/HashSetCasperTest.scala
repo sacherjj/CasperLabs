@@ -140,7 +140,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       Created(signedBlock) = createBlockResult
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock)
       _                    = logEff.warns.isEmpty should be(true)
-      dag                  <- MultiParentCasper[Effect].blockDag
+      dag                  <- MultiParentCasper[Effect].dag
       estimate             <- MultiParentCasper[Effect].estimator(dag)
       _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
       _                    = node.tearDown()
@@ -179,7 +179,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                     <- MultiParentCasper[Effect].addBlock(signedBlock2)
       _                     = logEff.warns shouldBe empty
       _                     = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
-      dag                   <- MultiParentCasper[Effect].blockDag
+      dag                   <- MultiParentCasper[Effect].dag
       estimate              <- MultiParentCasper[Effect].estimator(dag)
 
       _ = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
@@ -1408,7 +1408,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
         .withBlockHash(blockHash)
         .withHeader(header)
         .withBody(body)
-    nodes(1).casperEff.blockDag.flatMap { dag =>
+    nodes(1).casperEff.dag.flatMap { dag =>
       ProtoUtil.signBlock[Effect](
         blockThatPointsToInvalidBlock,
         dag,
@@ -1425,7 +1425,7 @@ object HashSetCasperTest {
       node: HashSetCasperTestNode[Effect]
   )(f: BlockStore[Effect] => Effect[R])(implicit metrics: Metrics[Effect], log: Log[Effect]) =
     for {
-      bs     <- BlockDagStorageTestFixture.createBlockStorage[Effect](node.blockStoreDir)
+      bs     <- DagStorageTestFixture.createBlockStorage[Effect](node.blockStoreDir)
       result <- f(bs)
       _      <- bs.close()
       _      <- Sync[Effect].delay { node.blockStoreDir.recursivelyDelete() }

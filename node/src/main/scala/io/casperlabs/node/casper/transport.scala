@@ -10,7 +10,7 @@ import cats.syntax.apply._
 import cats.syntax.foldable._
 import cats.syntax.functor._
 import com.github.ghik.silencer.silent
-import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
+import io.casperlabs.blockstorage.{BlockStore, DagStorage}
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
@@ -56,7 +56,7 @@ package object transport {
       metricsEff: Metrics[Effect],
       safetyOracle: FinalityDetector[Effect],
       blockStore: BlockStore[Effect],
-      blockDagStorage: BlockDagStorage[Effect],
+      dagStorage: DagStorage[Effect],
       connectionsCell: ConnectionsCell[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConfState: MonadState[Task, RPConf],

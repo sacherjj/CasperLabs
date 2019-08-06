@@ -1,6 +1,6 @@
 package io.casperlabs.casper.validation
 
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.blockstorage.{BlockStore, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
@@ -26,7 +26,7 @@ trait Validation[F[_]] {
   def parents(
       b: Block,
       lastFinalizedBlockHash: BlockHash,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   )(implicit bs: BlockStore[F]): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]]
 
   def blockSignature(b: BlockSummary): F[Boolean]
@@ -51,7 +51,7 @@ trait Validation[F[_]] {
 
   def blockFull(
       block: Block,
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       chainId: String,
       maybeGenesis: Option[Block]
   )(implicit bs: BlockStore[F]): F[Unit]

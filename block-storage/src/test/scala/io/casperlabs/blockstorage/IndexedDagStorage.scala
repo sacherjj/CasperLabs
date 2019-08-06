@@ -8,21 +8,21 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.crypto.hash.Blake2b256
 
-final class IndexedBlockDagStorage[F[_]: Monad](
+final class IndexedDagStorage[F[_]: Monad](
     lock: Semaphore[F],
-    underlying: BlockDagStorage[F],
+    underlying: DagStorage[F],
     idToBlocksRef: Ref[F, Map[Long, Block]],
     currentIdRef: Ref[F, Long]
-) extends BlockDagStorage[F] {
+) extends DagStorage[F] {
 
-  def getRepresentation: F[BlockDagRepresentation[F]] =
+  def getRepresentation: F[DagRepresentation[F]] =
     for {
       _      <- lock.acquire
       result <- underlying.getRepresentation
       _      <- lock.release
     } yield result
 
-  def insert(block: Block): F[BlockDagRepresentation[F]] =
+  def insert(block: Block): F[DagRepresentation[F]] =
     for {
       _          <- lock.acquire
       _          <- underlying.insert(block)
@@ -84,15 +84,15 @@ final class IndexedBlockDagStorage[F[_]: Monad](
     } yield idToBlocks(id.toLong)
 }
 
-object IndexedBlockDagStorage {
-  def apply[F[_]](implicit B: IndexedBlockDagStorage[F]): IndexedBlockDagStorage[F] = B
+object IndexedDagStorage {
+  def apply[F[_]](implicit B: IndexedDagStorage[F]): IndexedDagStorage[F] = B
 
-  def create[F[_]: Concurrent](underlying: BlockDagStorage[F]): F[IndexedBlockDagStorage[F]] =
+  def create[F[_]: Concurrent](underlying: DagStorage[F]): F[IndexedDagStorage[F]] =
     for {
       semaphore  <- Semaphore[F](1)
       idToBlocks <- Ref.of[F, Map[Long, Block]](Map.empty)
       currentId  <- Ref.of[F, Long](-1L)
-    } yield new IndexedBlockDagStorage[F](
+    } yield new IndexedDagStorage[F](
       semaphore,
       underlying,
       idToBlocks,

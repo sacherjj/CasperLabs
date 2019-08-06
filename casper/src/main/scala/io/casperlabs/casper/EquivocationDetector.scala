@@ -4,7 +4,7 @@ import cats.{Applicative, Monad}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.blockstorage.{BlockStore, DagRepresentation}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.catscontrib.MonadThrowable
@@ -69,7 +69,7 @@ object EquivocationDetector {
   def checkEquivocations[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       block: Block,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[Unit] =
     for {
       maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.getHeader.validatorPublicKey)
@@ -355,7 +355,7 @@ object EquivocationDetector {
         case Some(equivocationChild) => equivocationChildren + equivocationChild
         case None =>
           throw new Exception(
-            "creator justification ancestor with lower sequence number hasn't been added to the blockDAG yet."
+            "creator justification ancestor with lower sequence number hasn't been added to the DAG yet."
           )
       }
     } yield updatedEquivocationChildren

@@ -7,7 +7,7 @@ import java.util.zip.CRC32
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.functor._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
+import io.casperlabs.blockstorage.DagRepresentation.Validator
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
@@ -20,32 +20,32 @@ import monix.execution.Scheduler
 import org.lmdbjava.{Env, EnvFlags}
 import org.scalatest.{BeforeAndAfter, Suite}
 
-trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
-  val scheduler = Scheduler.fixedPool("block-dag-storage-fixture-scheduler", 4)
+trait DagStorageFixture extends BeforeAndAfter { self: Suite =>
+  val scheduler = Scheduler.fixedPool("dag-storage-fixture-scheduler", 4)
 
-  def withStorage[R](f: BlockStore[Task] => IndexedBlockDagStorage[Task] => Task[R]): R = {
+  def withStorage[R](f: BlockStore[Task] => IndexedDagStorage[Task] => Task[R]): R = {
     val testProgram = Sync[Task].bracket {
       Sync[Task].delay {
-        (BlockDagStorageTestFixture.blockDagStorageDir, BlockDagStorageTestFixture.blockStorageDir)
+        (DagStorageTestFixture.dagStorageDir, DagStorageTestFixture.blockStorageDir)
       }
     } {
-      case (blockDagStorageDir, blockStorageDir) =>
+      case (dagStorageDir, blockStorageDir) =>
         implicit val metrics = new MetricsNOP[Task]()
         implicit val log     = new Log.NOPLog[Task]()
         for {
-          blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
-          blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
-                              metrics,
-                              log,
-                              blockStore
-                            )
-          indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
-          result                 <- f(blockStore)(indexedBlockDagStorage)
+          blockStore <- DagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+          dagStorage <- DagStorageTestFixture.createDagStorage(dagStorageDir)(
+                         metrics,
+                         log,
+                         blockStore
+                       )
+          indexedDagStorage <- IndexedDagStorage.create(dagStorage)
+          result            <- f(blockStore)(indexedDagStorage)
         } yield result
     } {
-      case (blockDagStorageDir, blockStorageDir) =>
+      case (dagStorageDir, blockStorageDir) =>
         Sync[Task].delay {
-          blockDagStorageDir.recursivelyDelete()
+          dagStorageDir.recursivelyDelete()
           blockStorageDir.recursivelyDelete()
         }
     }
@@ -53,9 +53,9 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
   }
 }
 
-object BlockDagStorageTestFixture {
-  def blockDagStorageDir: Path = Files.createTempDirectory("casper-block-dag-storage-test-")
-  def blockStorageDir: Path    = Files.createTempDirectory("casper-block-storage-test-")
+object DagStorageTestFixture {
+  def dagStorageDir: Path   = Files.createTempDirectory("casper-dag-storage-test-")
+  def blockStorageDir: Path = Files.createTempDirectory("casper-block-storage-test-")
 
   def writeInitialLatestMessages(
       latestMessagesData: Path,
@@ -100,12 +100,12 @@ object BlockDagStorageTestFixture {
     FileLMDBIndexBlockStore.create[F](env, blockStorageDir).map(_.right.get)
   }
 
-  def createBlockDagStorage(blockDagStorageDir: Path)(
+  def createDagStorage(dagStorageDir: Path)(
       implicit metrics: Metrics[Task],
       log: Log[Task],
       blockStore: BlockStore[Task]
-  ): Task[BlockDagStorage[Task]] =
-    BlockDagFileStorage.create[Task](
-      BlockDagFileStorage.Config(blockDagStorageDir)
+  ): Task[DagStorage[Task]] =
+    FileDagStorage.create[Task](
+      FileDagStorage.Config(dagStorageDir)
     )
 }

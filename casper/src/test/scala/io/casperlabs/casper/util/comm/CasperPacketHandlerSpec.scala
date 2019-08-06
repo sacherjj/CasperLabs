@@ -5,14 +5,14 @@ import cats.syntax.show._
 import cats.{Applicative, ApplicativeError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, DeployHash}
-import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
+import io.casperlabs.blockstorage.{DagRepresentation, InMemBlockStore, InMemDagStorage}
 import io.casperlabs.casper
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.casper.helper.{
-  BlockDagStorageTestFixture,
+  DagStorageTestFixture,
   HashSetCasperTestNode,
   NoOpsCasperEffect,
   NoOpsLastFinalizedBlockHashContainer
@@ -56,7 +56,7 @@ import scala.concurrent.duration._
 class CasperPacketHandlerSpec extends WordSpec with Matchers {
   private def setup() = new {
     val scheduler                  = Scheduler.io("test")
-    val runtimeDir                 = BlockDagStorageTestFixture.blockStorageDir
+    val runtimeDir                 = DagStorageTestFixture.blockStorageDir
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = createBonds(Seq(validatorPk))
@@ -113,13 +113,13 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
     implicit val lock             = Semaphore[Task](1).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockStore       = InMemBlockStore.create[Task]
-    implicit val blockDagStorage = InMemBlockDagStorage
+    implicit val inMemDagStorage = InMemDagStorage
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new FinalityDetector[Task] {
       override def normalizedFaultTolerance(
-          blockDag: BlockDagRepresentation[Task],
+          dag: DagRepresentation[Task],
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
     }

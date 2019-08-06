@@ -4,7 +4,7 @@ import cats.Id
 import cats.effect.Sync
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
+import io.casperlabs.blockstorage.{BlockStore, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.{genesis, _}
@@ -24,7 +24,7 @@ class BlocksResponseAPITest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with BlockDagStorageFixture {
+    with DagStorageFixture {
 
   val v1     = generateValidator("Validator One")
   val v2     = generateValidator("Validator Two")
@@ -35,7 +35,7 @@ class BlocksResponseAPITest
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
   "showMainChain" should "return only blocks in the main chain" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
@@ -80,7 +80,7 @@ class BlocksResponseAPITest
               bonds,
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
-        dag  <- blockDagStorage.getRepresentation
+        dag  <- dagStorage.getRepresentation
         tips <- Estimator.tips[Task](dag, genesis.blockHash)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
@@ -101,7 +101,7 @@ class BlocksResponseAPITest
   }
 
   "showBlocks" should "return all blocks" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
@@ -146,7 +146,7 @@ class BlocksResponseAPITest
               bonds,
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
-        dag  <- blockDagStorage.getRepresentation
+        dag  <- dagStorage.getRepresentation
         tips <- Estimator.tips[Task](dag, genesis.blockHash)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
@@ -166,7 +166,7 @@ class BlocksResponseAPITest
       } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
-  it should "return until depth" in withStorage { implicit blockStore => implicit blockDagStorage =>
+  it should "return until depth" in withStorage { implicit blockStore => implicit dagStorage =>
     for {
       genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
       b2 <- createBlock[Task](
@@ -211,7 +211,7 @@ class BlocksResponseAPITest
             bonds,
             HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
           )
-      dag  <- blockDagStorage.getRepresentation
+      dag  <- dagStorage.getRepresentation
       tips <- Estimator.tips[Task](dag, genesis.blockHash)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMsgWithTransform],

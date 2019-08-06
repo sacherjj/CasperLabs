@@ -2,7 +2,7 @@ package io.casperlabs.casper.util
 
 import cats.implicits._
 import cats.{Eval, Monad}
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
+import io.casperlabs.blockstorage.{BlockMetadata, BlockStore, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.MonadThrowable
@@ -233,7 +233,7 @@ object DagOperations {
 
   def uncommonAncestors[F[_]: Monad](
       blocks: IndexedSeq[BlockMetadata],
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   )(
       implicit topoSort: Ordering[BlockMetadata]
   ): F[Map[BlockMetadata, BitSet]] = {
@@ -251,7 +251,7 @@ object DagOperations {
       b1: Block,
       b2: Block,
       genesis: Block,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[Block] =
     if (b1 == b2) {
       b1.pure[F]
