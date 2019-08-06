@@ -2,9 +2,14 @@
 
 CREATE TABLE deploys
 (
-    hash    BLOB PRIMARY KEY NOT NULL,
-    data    BLOB             NOT NULL
+    hash                BLOB PRIMARY KEY NOT NULL,
+    account             BLOB             NOT NULL,
+    -- Since Unix epoch
+    create_time_seconds INTEGER          NOT NULL,
+    data                BLOB             NOT NULL
 );
+
+CREATE INDEX idx_deploys_account_create_time_hash ON deploys (account, create_time_seconds, hash);
 
 CREATE TABLE buffered_deploys
 (
