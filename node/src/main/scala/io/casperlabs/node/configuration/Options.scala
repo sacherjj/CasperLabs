@@ -326,7 +326,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverCleanBlockStorage =
-      gen[Flag]("Use this flag to clear the blockStore and dagStorage")
+      gen[Flag]("Use this flag to clear the blockStorage and dagStorage")
 
     @scallop
     val serverUseGossiping =
@@ -480,8 +480,8 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum number of peers allowed to connect to the node.")
 
     @scallop
-    val lmdbBlockStoreSize =
-      gen[Long]("Casper BlockStore map size (in bytes).")
+    val lmdbBlockStorageSize =
+      gen[Long]("Casper BlockStorage map size (in bytes).")
 
     @scallop
     val lmdbMaxDbs =

@@ -4,7 +4,7 @@ import cats.Id
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Effect => _, _}
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.deploybuffer.DeployBuffer
@@ -85,7 +85,7 @@ object Servers {
     )
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStore: ExecutionEngineService: DeployBuffer: Validation](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployBuffer: Validation](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
@@ -110,7 +110,7 @@ object Servers {
         logStarted[F]("External", port, maybeSslContext.isDefined)
       )
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStore: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployBuffer](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployBuffer](
       port: Int,
       conf: Configuration,
       id: NodeIdentifier,

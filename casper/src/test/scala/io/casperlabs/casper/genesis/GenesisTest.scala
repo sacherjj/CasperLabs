@@ -6,7 +6,7 @@ import java.util.Base64
 
 import cats.effect.Sync
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.helper.{DagStorageFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.util.ProtoUtil
@@ -100,7 +100,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
   }
 
   it should "create a valid genesis block" in withStorage {
-    implicit blockStore => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       Task.delay(
         withGenResources {
           (
@@ -118,7 +118,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
                                        log
                                      )
               BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
-              _ <- BlockStore[Task]
+              _ <- BlockStorage[Task]
                     .put(genesis.blockHash, genesis, transforms)
               dag <- dagStorage.getRepresentation
               maybePostGenesisStateHash <- ExecutionEngineServiceStub

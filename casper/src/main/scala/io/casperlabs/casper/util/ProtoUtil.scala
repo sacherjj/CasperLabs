@@ -4,7 +4,7 @@ import cats.data.OptionT
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import io.casperlabs.blockstorage.{BlockStore, DagRepresentation}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
@@ -66,7 +66,7 @@ object ProtoUtil {
       result                 <- isInMainChain(dag, candidateBlockMetadata.get, targetBlockHash)
     } yield result
 
-  def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStore](
+  def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStorage](
       estimate: Block,
       acc: IndexedSeq[Block],
       depth: Int
@@ -95,29 +95,29 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  def unsafeGetBlockSummary[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[BlockSummary] =
+  def unsafeGetBlockSummary[F[_]: MonadThrowable: BlockStorage](hash: BlockHash): F[BlockSummary] =
     for {
-      maybeBlock <- BlockStore[F].getBlockSummary(hash)
+      maybeBlock <- BlockStorage[F].getBlockSummary(hash)
       block <- maybeBlock match {
                 case Some(b) => b.pure[F]
                 case None =>
                   MonadThrowable[F].raiseError(
                     new NoSuchElementException(
-                      s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}"
+                      s"BlockStorage is missing hash ${PrettyPrinter.buildString(hash)}"
                     )
                   )
               }
     } yield block
 
-  def unsafeGetBlock[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[Block] =
+  def unsafeGetBlock[F[_]: MonadThrowable: BlockStorage](hash: BlockHash): F[Block] =
     for {
-      maybeBlock <- BlockStore[F].getBlockMessage(hash)
+      maybeBlock <- BlockStorage[F].getBlockMessage(hash)
       block <- maybeBlock match {
                 case Some(b) => b.pure[F]
                 case None =>
                   MonadThrowable[F].raiseError(
                     new NoSuchElementException(
-                      s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}"
+                      s"BlockStorage is missing hash ${PrettyPrinter.buildString(hash)}"
                     )
                   )
               }
@@ -133,7 +133,7 @@ object ProtoUtil {
           validator == header.validatorPublicKey
       }
 
-  def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
+  def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStorage](
       b: Block,
       seqNum: SequenceNumber
   ): F[Option[Block]] =
@@ -148,7 +148,7 @@ object ProtoUtil {
     }
 
   // TODO: Replace with getCreatorJustificationAsListUntilGoal
-  def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
+  def getCreatorJustificationAsList[F[_]: Monad: BlockStorage](
       block: Block,
       validator: Validator,
       goalFunc: Block => Boolean = _ => false
@@ -159,7 +159,7 @@ object ProtoUtil {
     maybeCreatorJustificationHash match {
       case Some(creatorJustificationHash) =>
         for {
-          maybeCreatorJustification <- BlockStore[F].getBlockMessage(
+          maybeCreatorJustification <- BlockStorage[F].getBlockMessage(
                                         creatorJustificationHash.latestBlockHash
                                       )
           maybeCreatorJustificationAsList = maybeCreatorJustification match {
@@ -226,10 +226,12 @@ object ProtoUtil {
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  private def mainParent[F[_]: Monad: BlockStore](header: Block.Header): F[Option[BlockSummary]] = {
+  private def mainParent[F[_]: Monad: BlockStorage](
+      header: Block.Header
+  ): F[Option[BlockSummary]] = {
     val maybeParentHash = header.parentHashes.headOption
     maybeParentHash match {
-      case Some(parentHash) => BlockStore[F].getBlockSummary(parentHash)
+      case Some(parentHash) => BlockStorage[F].getBlockSummary(parentHash)
       case None             => none[BlockSummary].pure[F]
     }
   }
@@ -259,7 +261,7 @@ object ProtoUtil {
       }
     } yield result
 
-  def weightFromValidator[F[_]: Monad: BlockStore](
+  def weightFromValidator[F[_]: Monad: BlockStorage](
       header: Block.Header,
       validator: Validator
   ): F[Long] =
@@ -270,16 +272,16 @@ object ProtoUtil {
         .getOrElse(weightMap(header).getOrElse(validator, 0L)) //no parents means genesis -- use itself
     } yield weightFromValidator
 
-  def weightFromValidator[F[_]: Monad: BlockStore](
+  def weightFromValidator[F[_]: Monad: BlockStorage](
       b: Block,
       validator: ByteString
   ): F[Long] =
     weightFromValidator[F](b.getHeader, validator)
 
-  def weightFromSender[F[_]: Monad: BlockStore](b: Block): F[Long] =
+  def weightFromSender[F[_]: Monad: BlockStorage](b: Block): F[Long] =
     weightFromValidator[F](b, b.getHeader.validatorPublicKey)
 
-  def weightFromSender[F[_]: Monad: BlockStore](header: Block.Header): F[Long] =
+  def weightFromSender[F[_]: Monad: BlockStorage](header: Block.Header): F[Long] =
     weightFromValidator[F](header, header.validatorPublicKey)
 
   def mainParentWeightMap[F[_]: Monad](
@@ -296,7 +298,7 @@ object ProtoUtil {
   def parentHashes(b: Block): Seq[ByteString] =
     b.getHeader.parentHashes
 
-  def unsafeGetParents[F[_]: MonadThrowable: BlockStore](b: Block): F[List[Block]] =
+  def unsafeGetParents[F[_]: MonadThrowable: BlockStorage](b: Block): F[List[Block]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
     } handleErrorWith {
@@ -352,7 +354,7 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: MonadThrowable: BlockStore](
+  def toLatestMessage[F[_]: MonadThrowable: BlockStorage](
       justifications: Seq[Justification]
   ): F[immutable.Map[Validator, BlockMetadata]] =
     justifications.toList.foldM(Map.empty[Validator, BlockMetadata]) {

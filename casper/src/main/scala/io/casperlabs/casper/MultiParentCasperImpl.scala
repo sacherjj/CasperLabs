@@ -7,7 +7,7 @@ import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStore, DagRepresentation, DagStorage}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, DagStorage}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
@@ -50,7 +50,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityDetector: BlockStore: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation](
+class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -217,7 +217,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       deployHashes <- DeployBuffer[F].readProcessedHashes
       blockHashes <- deployHashes
                       .traverse { deployHash =>
-                        BlockStore[F]
+                        BlockStorage[F]
                           .findBlockHashesWithDeployhash(deployHash)
                       }
                       .map(_.flatten.distinct)
@@ -287,7 +287,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       .map(_.blockBuffer.contains(block.blockHash))
       .ifM(
         true.pure[F],
-        BlockStore[F].contains(block.blockHash)
+        BlockStorage[F].contains(block.blockHash)
       )
 
   /** Add a deploy to the buffer, if the code passes basic validation. */
@@ -454,7 +454,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       parentSet        = parents.map(_.blockHash).toSet
       deployToBlocksMap <- processedDeploys
                             .traverse { deploy =>
-                              BlockStore[F]
+                              BlockStorage[F]
                                 .findBlockHashesWithDeployhash(deploy.deployHash)
                                 .map(deploy -> _)
                             }
@@ -662,7 +662,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Sync: Log: Time: FinalityDetector: BlockStore: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: Cell[
+  def create[F[_]: Sync: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: Cell[
     ?[_],
     CasperState
   ]](
@@ -689,7 +689,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStore: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
       chainId: String
   ) {
     //TODO pull out
@@ -893,7 +893,7 @@ object MultiParentCasperImpl {
         effects: Seq[ipc.TransformEntry]
     ): F[DagRepresentation[F]] =
       for {
-        _          <- BlockStore[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
+        _          <- BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
         updatedDag <- DagStorage[F].insert(block)
       } yield updatedDag
 
@@ -927,7 +927,7 @@ object MultiParentCasperImpl {
     def establishMetrics[F[_]: Metrics]: F[Unit] =
       Metrics[F].incrementCounter("gas_spent", 0L)(CasperMetricsSource)
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStore: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
+    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
         chainId: String
     ): F[StatelessExecutor[F]] =
       for {

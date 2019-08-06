@@ -8,7 +8,7 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.DagRepresentation.Validator
 import io.casperlabs.blockstorage.DagStorage.MeteredDagStorage
-import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
+import io.casperlabs.blockstorage.BlockStorage.{BlockHash, MeteredBlockStorage}
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.crypto.codec.Base16
@@ -20,7 +20,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import scala.collection.immutable.HashSet
 
 @silent("The outer reference in this type test cannot be checked at run time.")
-class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStore](
+class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStorage](
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
@@ -154,7 +154,7 @@ class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStore](
 }
 
 object InMemDagStorage {
-  def create[F[_]: Concurrent: Log: BlockStore](
+  def create[F[_]: Concurrent: Log: BlockStorage](
       implicit met: Metrics[F]
   ): F[InMemDagStorage[F]] =
     for {

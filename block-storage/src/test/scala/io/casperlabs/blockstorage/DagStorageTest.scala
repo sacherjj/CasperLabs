@@ -7,7 +7,7 @@ import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.DagRepresentation.Validator
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStorage.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
@@ -31,7 +31,7 @@ trait DagStorageTest
     with OptionValues
     with GeneratorDrivenPropertyChecks
     with BeforeAndAfterAll {
-  val scheduler = Scheduler.fixedPool("block-dag-storage-test-scheduler", 4)
+  val scheduler = Scheduler.fixedPool("dag-storage-test-scheduler", 4)
 
   def withDagStorage[R](f: DagStorage[Task] => Task[R]): R
 
@@ -82,65 +82,65 @@ class FileDagStorageTest extends DagStorageTest {
 
   private[this] def mkTmpDir(): Path = Files.createTempDirectory("casperlabs-dag-storage-test-")
 
-  def withDagStorageLocation[R](f: (Path, BlockStore[Task]) => Task[R]): R = {
+  def withDagStorageLocation[R](f: (Path, BlockStorage[Task]) => Task[R]): R = {
     val testProgram = Sync[Task].bracket {
       Sync[Task].delay {
         (mkTmpDir(), mkTmpDir())
       }
     } {
-      case (dagDataDir, blockStoreDataDir) =>
+      case (dagStorageDataDir, blockStorageDataDir) =>
         for {
-          blockStore <- createBlockStore(blockStoreDataDir)
-          result     <- f(dagDataDir, blockStore)
-          _          <- blockStore.close()
+          blockStorage <- createBlockStorage(blockStorageDataDir)
+          result       <- f(dagStorageDataDir, blockStorage)
+          _            <- blockStorage.close()
         } yield result
     } {
-      case (dagDataDir, blockStoreDataDir) =>
+      case (dagStorageDataDir, blockStorageDataDir) =>
         Sync[Task].delay {
-          dagDataDir.recursivelyDelete()
-          blockStoreDataDir.recursivelyDelete()
+          dagStorageDataDir.recursivelyDelete()
+          blockStorageDataDir.recursivelyDelete()
         }
     }
     testProgram.unsafeRunSync(scheduler)
   }
 
   override def withDagStorage[R](f: DagStorage[Task] => Task[R]): R =
-    withDagStorageLocation { (dagDataDir, blockStore) =>
+    withDagStorageLocation { (dagStorageDataDir, blockStorage) =>
       for {
-        dagStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+        dagStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
         result     <- f(dagStorage)
         _          <- dagStorage.close()
       } yield result
     }
 
-  private def defaultLatestMessagesLog(dagDataDir: Path): Path =
-    dagDataDir.resolve("latest-messages-log")
+  private def defaultLatestMessagesLog(dagStorageDataDir: Path): Path =
+    dagStorageDataDir.resolve("latest-messages-log")
 
-  private def defaultBlockMetadataLog(dagDataDir: Path): Path =
-    dagDataDir.resolve("block-metadata-log")
+  private def defaultBlockMetadataLog(dagStorageDataDir: Path): Path =
+    dagStorageDataDir.resolve("block-metadata-log")
 
-  private def defaultBlockMetadataCrc(dagDataDir: Path): Path =
-    dagDataDir.resolve("block-metadata-crc")
+  private def defaultBlockMetadataCrc(dagStorageDataDir: Path): Path =
+    dagStorageDataDir.resolve("block-metadata-crc")
 
-  private def defaultCheckpointsDir(dagDataDir: Path): Path =
-    dagDataDir.resolve("checkpoints")
+  private def defaultCheckpointsDir(dagStorageDataDir: Path): Path =
+    dagStorageDataDir.resolve("checkpoints")
 
-  private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
+  private def createBlockStorage(blockStorageDataDir: Path): Task[BlockStorage[Task]] = {
     implicit val log = new Log.NOPLog[Task]()
     implicit val met = new MetricsNOP[Task]
-    val env          = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
-    FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
+    val env          = Context.env(blockStorageDataDir, 100L * 1024L * 1024L * 4096L)
+    FileLMDBIndexBlockStorage.create[Task](env, blockStorageDataDir).map(_.right.get)
   }
 
   private def createAtDefaultLocation(
-      dagDataDir: Path,
+      dagStorageDataDir: Path,
       maxSizeFactor: Int = 10
-  )(implicit blockStore: BlockStore[Task]): Task[DagStorage[Task]] = {
+  )(implicit blockStorage: BlockStorage[Task]): Task[DagStorage[Task]] = {
     implicit val log = new shared.Log.NOPLog[Task]()
     implicit val met = new MetricsNOP[Task]
     FileDagStorage.create[Task](
       FileDagStorage.Config(
-        dagDataDir,
+        dagStorageDataDir,
         maxSizeFactor
       )
     )
@@ -258,12 +258,12 @@ class FileDagStorageTest extends DagStorageTest {
 
   it should "be able to restore state on startup" in {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
-      withDagStorageLocation { (dagDataDir, blockStore) =>
+      withDagStorageLocation { (dagStorageDataDir, blockStorage) =>
         for {
-          firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
+          firstStorage  <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           _             <- blockElements.traverse_(b => firstStorage.insert(b.getBlockMessage))
           _             <- firstStorage.close()
-          secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          secondStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           result        <- lookupElements(blockElements, secondStorage)
           _             <- secondStorage.close()
         } yield testLookupElementsResult(result, blockElements.flatMap(_.blockMessage))
@@ -283,12 +283,12 @@ class FileDagStorageTest extends DagStorageTest {
         case Nil =>
           Nil
       }
-      withDagStorageLocation { (dagDataDir, blockStore) =>
+      withDagStorageLocation { (dagStorageDataDir, blockStorage) =>
         for {
-          firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
+          firstStorage  <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           _             <- blockElementsWithGenesis.traverse_(b => firstStorage.insert(b.getBlockMessage))
           _             <- firstStorage.close()
-          secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          secondStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           result        <- lookupElements(blockElementsWithGenesis, secondStorage)
           _             <- secondStorage.close()
         } yield testLookupElementsResult(result, blockElementsWithGenesis.flatMap(_.blockMessage))
@@ -299,15 +299,15 @@ class FileDagStorageTest extends DagStorageTest {
   it should "be able to restore state from the previous two instances" in {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { firstBlockElements =>
       forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { secondBlockElements =>
-        withDagStorageLocation { (dagDataDir, blockStore) =>
+        withDagStorageLocation { (dagStorageDataDir, blockStorage) =>
           for {
-            firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
+            firstStorage  <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
             _             <- firstBlockElements.traverse_(b => firstStorage.insert(b.getBlockMessage))
             _             <- firstStorage.close()
-            secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+            secondStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
             _             <- secondBlockElements.traverse_(b => secondStorage.insert(b.getBlockMessage))
             _             <- secondStorage.close()
-            thirdStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
+            thirdStorage  <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
             result        <- lookupElements(firstBlockElements ++ secondBlockElements, thirdStorage)
             _             <- thirdStorage.close()
           } yield testLookupElementsResult(
@@ -321,21 +321,21 @@ class FileDagStorageTest extends DagStorageTest {
 
   it should "be able to restore latest messages on startup with appended 64 garbage bytes" in {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
-      withDagStorageLocation { (dagDataDir, blockStore) =>
+      withDagStorageLocation { (dagStorageDataDir, blockStorage) =>
         for {
-          firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          firstStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           _            <- blockElements.traverse_(b => firstStorage.insert(b.getBlockMessage))
           _            <- firstStorage.close()
           garbageBytes = Array.fill[Byte](64)(0)
           _            <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
           _ <- Sync[Task].delay {
                 Files.write(
-                  defaultLatestMessagesLog(dagDataDir),
+                  defaultLatestMessagesLog(dagStorageDataDir),
                   garbageBytes,
                   StandardOpenOption.APPEND
                 )
               }
-          secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          secondStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           result        <- lookupElements(blockElements, secondStorage)
           _             <- secondStorage.close()
         } yield testLookupElementsResult(result, blockElements.flatMap(_.blockMessage))
@@ -346,21 +346,21 @@ class FileDagStorageTest extends DagStorageTest {
   it should "be able to restore data lookup on startup with appended garbage block metadata" in {
     forAll(blockElementsWithParentsGen, blockMsgWithTransformGen, minSize(0), sizeRange(10)) {
       (blockElements, garbageBlock) =>
-        withDagStorageLocation { (dagDataDir, blockStore) =>
+        withDagStorageLocation { (dagStorageDataDir, blockStorage) =>
           for {
-            firstStorage      <- createAtDefaultLocation(dagDataDir)(blockStore)
+            firstStorage      <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
             _                 <- blockElements.traverse_(b => firstStorage.insert(b.getBlockMessage))
             _                 <- firstStorage.close()
             garbageByteString = BlockMetadata.fromBlock(garbageBlock.getBlockMessage).toByteString
             garbageBytes      = garbageByteString.size.toByteString.concat(garbageByteString).toByteArray
             _ <- Sync[Task].delay {
                   Files.write(
-                    defaultBlockMetadataLog(dagDataDir),
+                    defaultBlockMetadataLog(dagStorageDataDir),
                     garbageBytes,
                     StandardOpenOption.APPEND
                   )
                 }
-            secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+            secondStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
             result        <- lookupElements(blockElements, secondStorage)
             _             <- secondStorage.close()
           } yield testLookupElementsResult(result, blockElements.flatMap(_.blockMessage))
@@ -369,12 +369,14 @@ class FileDagStorageTest extends DagStorageTest {
   }
 
   it should "be able to handle fully corrupted latest messages log file" in withDagStorageLocation {
-    (dagDataDir, blockStore) =>
+    (dagStorageDataDir, blockStorage) =>
       val garbageBytes = Array.fill[Byte](789)(0)
       for {
-        _                   <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
-        _                   <- Sync[Task].delay { Files.write(defaultLatestMessagesLog(dagDataDir), garbageBytes) }
-        storage             <- createAtDefaultLocation(dagDataDir)(blockStore)
+        _ <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
+        _ <- Sync[Task].delay {
+              Files.write(defaultLatestMessagesLog(dagStorageDataDir), garbageBytes)
+            }
+        storage             <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
         dag                 <- storage.getRepresentation
         latestMessageHashes <- dag.latestMessageHashes
         latestMessages      <- dag.latestMessages
@@ -390,14 +392,14 @@ class FileDagStorageTest extends DagStorageTest {
         blockWithNewHashesGen(blockElements.flatMap(_.blockMessage)),
         blockWithNewHashesGen(blockElements.flatMap(_.blockMessage))
       ) { (secondBlockElements, thirdBlockElements) =>
-        withDagStorageLocation { (dagDataDir, blockStore) =>
+        withDagStorageLocation { (dagStorageDataDir, blockStorage) =>
           for {
-            firstStorage  <- createAtDefaultLocation(dagDataDir, 2)(blockStore)
+            firstStorage  <- createAtDefaultLocation(dagStorageDataDir, 2)(blockStorage)
             _             <- blockElements.traverse_(b => firstStorage.insert(b.getBlockMessage))
             _             <- secondBlockElements.traverse_(firstStorage.insert)
             _             <- thirdBlockElements.traverse_(firstStorage.insert)
             _             <- firstStorage.close()
-            secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+            secondStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
             result        <- lookupElements(blockElements, secondStorage)
             _             <- secondStorage.close()
           } yield testLookupElementsResult(
@@ -413,24 +415,24 @@ class FileDagStorageTest extends DagStorageTest {
 
   it should "be able to load checkpoints" in {
     forAll(blockElementsWithParentsGen, minSize(1), sizeRange(2)) { blockElements =>
-      withDagStorageLocation { (dagDataDir, blockStore) =>
+      withDagStorageLocation { (dagStorageDataDir, blockStorage) =>
         for {
-          firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          firstStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           _ <- blockElements.traverse_(
                 b =>
-                  blockStore.put(b.getBlockMessage.blockHash, b) *> firstStorage.insert(
+                  blockStorage.put(b.getBlockMessage.blockHash, b) *> firstStorage.insert(
                     b.getBlockMessage
                   )
               )
           _ <- firstStorage.close()
           _ <- Sync[Task].delay {
                 Files.move(
-                  defaultBlockMetadataLog(dagDataDir),
-                  defaultCheckpointsDir(dagDataDir).resolve("0-1")
+                  defaultBlockMetadataLog(dagStorageDataDir),
+                  defaultCheckpointsDir(dagStorageDataDir).resolve("0-1")
                 )
-                Files.delete(defaultBlockMetadataCrc(dagDataDir))
+                Files.delete(defaultBlockMetadataCrc(dagStorageDataDir))
               }
-          secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          secondStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           result        <- lookupElements(blockElements, secondStorage)
           _             <- secondStorage.close()
         } yield testLookupElementsResult(
@@ -443,24 +445,24 @@ class FileDagStorageTest extends DagStorageTest {
 
   it should "be able to clear and continue working" in {
     forAll(blockElementsWithParentsGen, minSize(1), sizeRange(2)) { blockElements =>
-      withDagStorageLocation { (dagDataDir, blockStore) =>
+      withDagStorageLocation { (dagStorageDataDir, blockStorage) =>
         for {
-          firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          firstStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           _ <- blockElements.traverse_(
                 b =>
-                  blockStore.put(b.getBlockMessage.blockHash, b) *> firstStorage.insert(
+                  blockStorage.put(b.getBlockMessage.blockHash, b) *> firstStorage.insert(
                     b.getBlockMessage
                   )
               )
           _             = firstStorage.close()
-          secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          secondStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           elements      <- lookupElements(blockElements, secondStorage)
           _ = testLookupElementsResult(
             elements,
             blockElements.flatMap(_.blockMessage)
           )
           _      <- secondStorage.clear()
-          _      <- blockStore.clear()
+          _      <- blockStorage.clear()
           result <- lookupElements(blockElements, secondStorage)
           _      <- secondStorage.close()
         } yield result match {

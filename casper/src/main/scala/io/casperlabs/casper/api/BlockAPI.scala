@@ -6,7 +6,7 @@ import cats.effect.{Bracket, Concurrent, Resource}
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStore, DagRepresentation, StorageError}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, StorageError}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
@@ -81,7 +81,7 @@ object BlockAPI {
       )
   }
 
-  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStore: Validation: FinalityDetector: Log: Metrics](
+  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: Validation: FinalityDetector: Log: Metrics](
       d: Deploy
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
     def check(msg: String)(f: F[Boolean]): F[Unit] =
@@ -112,11 +112,11 @@ object BlockAPI {
   }
 
   /** Check that we don't have this deploy already in the finalized part of the DAG. */
-  private def ensureNotInDag[F[_]: MonadThrowable: MultiParentCasperRef: BlockStore: FinalityDetector: Log](
+  private def ensureNotInDag[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: FinalityDetector: Log](
       d: Deploy,
       faultToleranceThreshold: Float
   ): F[Unit] =
-    BlockStore[F]
+    BlockStorage[F]
       .findBlockHashesWithDeployhash(d.deployHash)
       .flatMap(
         _.toList.traverse(blockHash => getBlockInfo[F](Base16.encode(blockHash.toByteArray)))
@@ -213,7 +213,7 @@ object BlockAPI {
   // FIX: Not used at the moment - in RChain it's being used in method like `getListeningName*`
   @deprecated("To be removed before devnet.", "0.4")
   @silent("is never used")
-  private def getMainChainFromTip[F[_]: MonadThrowable: MultiParentCasper: Log: FinalityDetector: BlockStore](
+  private def getMainChainFromTip[F[_]: MonadThrowable: MultiParentCasper: Log: FinalityDetector: BlockStorage](
       depth: Int
   ): F[IndexedSeq[Block]] =
     for {
@@ -226,7 +226,7 @@ object BlockAPI {
 
   // TOOD extract common code from show blocks
   @deprecated("To be removed before devnet. Use `getBlockInfos`.", "0.4")
-  def showBlocks[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStore](
+  def showBlocks[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStorage](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
     val errorMessage =
@@ -248,7 +248,7 @@ object BlockAPI {
     )
   }
 
-  private def getFlattenedBlockInfosUntilDepth[F[_]: MonadThrowable: MultiParentCasper: Log: FinalityDetector: BlockStore](
+  private def getFlattenedBlockInfosUntilDepth[F[_]: MonadThrowable: MultiParentCasper: Log: FinalityDetector: BlockStorage](
       depth: Int,
       dag: DagRepresentation[F]
   ): F[List[BlockInfoWithoutTuplespace]] =
@@ -264,7 +264,7 @@ object BlockAPI {
     } yield result
 
   @deprecated("To be removed before devnet.", "0.4")
-  def showMainChain[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStore](
+  def showMainChain[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStorage](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
     val errorMessage =
@@ -287,9 +287,9 @@ object BlockAPI {
     )
   }
 
-  // TODO: Replace with call to BlockStore
+  // TODO: Replace with call to BlockStorage
   @deprecated("To be removed before devnet. Will add `getDeployInfo`.", "0.4")
-  def findBlockWithDeploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStore](
+  def findBlockWithDeploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStorage](
       accountPublicKey: ByteString,
       timestamp: Long
   ): F[BlockQueryResponse] = {
@@ -326,7 +326,7 @@ object BlockAPI {
     )
   }
 
-  private def findBlockWithDeploy[F[_]: MonadThrowable: Log: BlockStore](
+  private def findBlockWithDeploy[F[_]: MonadThrowable: Log: BlockStorage](
       blockHashes: Vector[BlockHash],
       accountPublicKey: ByteString,
       timestamp: Long
@@ -335,7 +335,7 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F](_))
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, accountPublicKey, timestamp)))
 
-  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore: DeployBuffer](
+  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployBuffer](
       deployHashBase16: String
   ): F[Option[DeployInfo]] =
     // LMDB throws an exception if a key isn't 32 bytes long, so we fail-fast here
@@ -345,7 +345,7 @@ object BlockAPI {
       unsafeWithCasper[F, Option[DeployInfo]]("Could not show deploy.") { implicit casper =>
         val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
 
-        BlockStore[F].findBlockHashesWithDeployhash(deployHash) flatMap {
+        BlockStorage[F].findBlockHashesWithDeployhash(deployHash) flatMap {
           case blockHashes if blockHashes.nonEmpty =>
             for {
               blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
@@ -383,7 +383,7 @@ object BlockAPI {
       }
     }
 
-  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore: DeployBuffer](
+  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployBuffer](
       deployHashBase16: String
   ): F[DeployInfo] =
     getDeployInfoOpt[F](deployHashBase16).flatMap(
@@ -393,7 +393,7 @@ object BlockAPI {
       )(_.pure[F])
     )
 
-  def getBlockDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStore](
+  def getBlockDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage](
       blockHashBase16: String
   ): F[Seq[Block.ProcessedDeploy]] =
     unsafeWithCasper[F, Seq[Block.ProcessedDeploy]]("Could not show deploys.") { implicit casper =>
@@ -429,13 +429,13 @@ object BlockAPI {
         .withStatus(status)
     } yield info
 
-  def makeBlockInfo[F[_]: Monad: BlockStore: MultiParentCasper: FinalityDetector](
+  def makeBlockInfo[F[_]: Monad: BlockStorage: MultiParentCasper: FinalityDetector](
       summary: BlockSummary,
       full: Boolean
   ): F[(BlockInfo, Option[Block])] =
     for {
       maybeBlock <- if (full) {
-                     BlockStore[F]
+                     BlockStorage[F]
                        .get(summary.blockHash)
                        .map(_.get.blockMessage)
                    } else {
@@ -444,12 +444,12 @@ object BlockAPI {
       info <- makeBlockInfo[F](summary, maybeBlock)
     } yield (info, maybeBlock)
 
-  def getBlockInfoWithBlock[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore](
+  def getBlockInfoWithBlock[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
       blockHash: BlockHash,
       full: Boolean = false
   ): F[(BlockInfo, Option[Block])] =
     unsafeWithCasper[F, (BlockInfo, Option[Block])]("Could not show block.") { implicit casper =>
-      BlockStore[F].getBlockSummary(blockHash).flatMap { maybeSummary =>
+      BlockStorage[F].getBlockSummary(blockHash).flatMap { maybeSummary =>
         maybeSummary.fold(
           MonadThrowable[F]
             .raiseError[(BlockInfo, Option[Block])](
@@ -459,14 +459,14 @@ object BlockAPI {
       }
     }
 
-  def getBlockInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore](
+  def getBlockInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
       blockHashBase16: String,
       full: Boolean = false
   ): F[Option[(BlockInfo, Option[Block])]] =
     unsafeWithCasper[F, Option[(BlockInfo, Option[Block])]]("Could not show block.") {
       implicit casper =>
         getByHashPrefix[F, BlockSummary](blockHashBase16)(
-          BlockStore[F].getBlockSummary(_)
+          BlockStorage[F].getBlockSummary(_)
         ).flatMap { maybeSummary =>
           maybeSummary.fold(none[(BlockInfo, Option[Block])].pure[F])(
             makeBlockInfo[F](_, full).map(_.some)
@@ -474,7 +474,7 @@ object BlockAPI {
         }
     }
 
-  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore](
+  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
       blockHashBase16: String,
       full: Boolean = false
   ): F[BlockInfo] =
@@ -490,7 +490,7 @@ object BlockAPI {
   /** Return block infos and maybe according blocks (if 'full' is true) in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfosMaybeWithBlocks[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore](
+  def getBlockInfosMaybeWithBlocks[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
       depth: Int,
       maxRank: Long = 0,
       full: Boolean = false
@@ -517,7 +517,7 @@ object BlockAPI {
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStore](
+  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
       depth: Int,
       maxRank: Long = 0,
       full: Boolean = false
@@ -525,7 +525,7 @@ object BlockAPI {
     getBlockInfosMaybeWithBlocks[F](depth, maxRank, full).map(_.map(_._1))
 
   @deprecated("To be removed before devnet. Use `getBlockInfo`.", "0.4")
-  def showBlock[F[_]: Monad: MultiParentCasperRef: Log: FinalityDetector: BlockStore](
+  def showBlock[F[_]: Monad: MultiParentCasperRef: Log: FinalityDetector: BlockStorage](
       q: BlockQuery
   ): F[BlockQueryResponse] = {
     val errorMessage =
@@ -534,7 +534,7 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         maybeBlock <- getByHashPrefix[F, Block](q.hash)(
-                       BlockStore[F].get(_).map(_ flatMap (_.blockMessage))
+                       BlockStorage[F].get(_).map(_ flatMap (_.blockMessage))
                      )
         blockQueryResponse <- maybeBlock match {
                                case Some(block) =>
@@ -558,7 +558,7 @@ object BlockAPI {
     )
   }
 
-  private def getBlockInfo[A, F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStore](
+  private def getBlockInfo[A, F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
       block: Block,
       constructor: (
           Block,
@@ -596,17 +596,17 @@ object BlockAPI {
                   )
     } yield blockInfo
 
-  private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStore](
+  private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
       block: Block
   ): F[BlockInfoWithTuplespace] =
     getBlockInfo[BlockInfoWithTuplespace, F](block, constructBlockInfo[F] _)
 
-  private def getBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStore](
+  private def getBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
       block: Block
   ): F[BlockInfoWithoutTuplespace] =
     getBlockInfo[BlockInfoWithoutTuplespace, F](block, constructBlockInfoWithoutTuplespace[F] _)
 
-  private def constructBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStore](
+  private def constructBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
       block: Block,
       protocolVersion: Long,
       deployCount: Int,
@@ -634,7 +634,7 @@ object BlockAPI {
       )
       .pure[F]
 
-  private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStore](
+  private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
       block: Block,
       protocolVersion: Long,
       deployCount: Int,
@@ -659,14 +659,14 @@ object BlockAPI {
       sender = PrettyPrinter.buildStringNoLimit(block.getHeader.validatorPublicKey)
     ).pure[F]
 
-  private def getByHashPrefix[F[_]: Monad: MultiParentCasper: BlockStore, A](
+  private def getByHashPrefix[F[_]: Monad: MultiParentCasper: BlockStorage, A](
       blockHashBase16: String
   )(f: ByteString => F[Option[A]]): F[Option[A]] =
     if (blockHashBase16.length == 64) {
       f(ByteString.copyFrom(Base16.decode(blockHashBase16)))
     } else {
       for {
-        maybeHash <- BlockStore[F].findBlockHash { h =>
+        maybeHash <- BlockStorage[F].findBlockHash { h =>
                       Base16.encode(h.toByteArray).startsWith(blockHashBase16)
                     }
         maybeA <- maybeHash.fold(none[A].pure[F])(f(_))

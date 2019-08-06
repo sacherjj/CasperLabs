@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.{Apply, Monad}
-import io.casperlabs.blockstorage.BlockStore.{BlockHash, DeployHash, MeteredBlockStore}
+import io.casperlabs.blockstorage.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
@@ -13,13 +13,13 @@ import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.language.higherKinds
 
-class InMemBlockStore[F[_]] private (
+class InMemBlockStorage[F[_]] private (
     implicit
     monadF: Monad[F],
     refF: Ref[F, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]],
     reverseIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]],
     approvedBlockRef: Ref[F, Option[ApprovedBlock]]
-) extends BlockStore[F] {
+) extends BlockStorage[F] {
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     refF.get.map(_.get(blockHash).map(_._1))
@@ -66,7 +66,7 @@ class InMemBlockStore[F[_]] private (
     monadF.pure(())
 }
 
-object InMemBlockStore {
+object InMemBlockStorage {
   def create[F[_]](
       implicit
       monadF: Monad[F],
@@ -74,8 +74,8 @@ object InMemBlockStore {
       reverseIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]],
       approvedBlockRef: Ref[F, Option[ApprovedBlock]],
       metricsF: Metrics[F]
-  ): BlockStore[F] =
-    new InMemBlockStore[F] with MeteredBlockStore[F] {
+  ): BlockStorage[F] =
+    new InMemBlockStorage[F] with MeteredBlockStorage[F] {
       override implicit val m: Metrics[F] = metricsF
       override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "in-mem")
       override implicit val a: Apply[F]   = monadF

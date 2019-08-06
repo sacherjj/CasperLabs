@@ -23,7 +23,7 @@ import org.scalatest.{BeforeAndAfter, Suite}
 trait DagStorageFixture extends BeforeAndAfter { self: Suite =>
   val scheduler = Scheduler.fixedPool("dag-storage-fixture-scheduler", 4)
 
-  def withStorage[R](f: BlockStore[Task] => IndexedDagStorage[Task] => Task[R]): R = {
+  def withStorage[R](f: BlockStorage[Task] => IndexedDagStorage[Task] => Task[R]): R = {
     val testProgram = Sync[Task].bracket {
       Sync[Task].delay {
         (DagStorageTestFixture.dagStorageDir, DagStorageTestFixture.blockStorageDir)
@@ -33,14 +33,14 @@ trait DagStorageFixture extends BeforeAndAfter { self: Suite =>
         implicit val metrics = new MetricsNOP[Task]()
         implicit val log     = new Log.NOPLog[Task]()
         for {
-          blockStore <- DagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+          blockStorage <- DagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
           dagStorage <- DagStorageTestFixture.createDagStorage(dagStorageDir)(
                          metrics,
                          log,
-                         blockStore
+                         blockStorage
                        )
           indexedDagStorage <- IndexedDagStorage.create(dagStorage)
-          result            <- f(blockStore)(indexedDagStorage)
+          result            <- f(blockStorage)(indexedDagStorage)
         } yield result
     } {
       case (dagStorageDir, blockStorageDir) =>
@@ -95,15 +95,15 @@ object DagStorageTestFixture {
 
   def createBlockStorage[F[_]: Concurrent: Metrics: Log](
       blockStorageDir: Path
-  ): F[BlockStore[F]] = {
+  ): F[BlockStorage[F]] = {
     val env = Context.env(blockStorageDir, mapSize)
-    FileLMDBIndexBlockStore.create[F](env, blockStorageDir).map(_.right.get)
+    FileLMDBIndexBlockStorage.create[F](env, blockStorageDir).map(_.right.get)
   }
 
   def createDagStorage(dagStorageDir: Path)(
       implicit metrics: Metrics[Task],
       log: Log[Task],
-      blockStore: BlockStore[Task]
+      blockStorage: BlockStorage[Task]
   ): Task[DagStorage[Task]] =
     FileDagStorage.create[Task](
       FileDagStorage.Config(dagStorageDir)

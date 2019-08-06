@@ -4,7 +4,7 @@ import cats.Id
 import cats.effect.Sync
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStore, IndexedDagStorage}
+import io.casperlabs.blockstorage.{BlockStorage, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.{genesis, _}
@@ -35,7 +35,7 @@ class BlocksResponseAPITest
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
   "showMainChain" should "return only blocks in the main chain" in withStorage {
-    implicit blockStore => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
@@ -95,13 +95,13 @@ class BlocksResponseAPITest
                            casperRef,
                            logEff,
                            finalityDetectorEffect,
-                           blockStore
+                           blockStorage
                          )
       } yield blocksResponse.length should be(5)
   }
 
   "showBlocks" should "return all blocks" in withStorage {
-    implicit blockStore => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
@@ -161,12 +161,12 @@ class BlocksResponseAPITest
                            casperRef,
                            logEff,
                            finalityDetectorEffect,
-                           blockStore
+                           blockStorage
                          )
       } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
-  it should "return until depth" in withStorage { implicit blockStore => implicit dagStorage =>
+  it should "return until depth" in withStorage { implicit blockStorage => implicit dagStorage =>
     for {
       genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
       b2 <- createBlock[Task](
@@ -226,7 +226,7 @@ class BlocksResponseAPITest
                          casperRef,
                          logEff,
                          finalityDetectorEffect,
-                         blockStore
+                         blockStorage
                        )
     } yield blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }

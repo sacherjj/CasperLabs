@@ -68,7 +68,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
     }
 
     implicit val logEff       = new LogStub[Effect]
-    implicit val blockStore   = node.blockStore
+    implicit val blockStorage = node.blockStorage
     implicit val safetyOracle = node.safetyOracleEff
 
     def testProgram(blockApiLock: Semaphore[Effect])(
@@ -107,7 +107,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
 
     implicit val logEff       = new LogStub[Effect]
-    implicit val blockStore   = node.blockStore
+    implicit val blockStorage = node.blockStorage
     implicit val safetyOracle = node.safetyOracleEff
 
     def testProgram(blockApiLock: Semaphore[Effect])(

@@ -11,7 +11,7 @@ from test.cl_node.wait import (
 
 
 # TODO: Fix finalized hash portion
-def ignore_test_persistent_dag_store(two_node_network):
+def ignore_test_persistent_dag_storage(two_node_network):
     """
     Feature file: storage.feature
     Scenario: Stop a node in network, and restart it. Assert that it downloads only latest block not the whole DAG.
@@ -47,7 +47,7 @@ def ignore_test_persistent_dag_store(two_node_network):
 def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_network):
     """
     Feature file: storage.feature
-    Scenario: Stop nodes and restart with correct dag and blockstore
+    Scenario: Stop nodes and restart with correct dag and blockstorage
     """
     tnn = two_node_network
     node0, node1 = tnn.docker_nodes

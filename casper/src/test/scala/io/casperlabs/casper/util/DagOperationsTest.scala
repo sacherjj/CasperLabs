@@ -23,7 +23,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "bfToposortTraverseF" should "lazily breadth-first and order by rank when traverse a DAG with effectful neighbours" in withStorage {
-    implicit blockStore =>
+    implicit blockStorage =>
       implicit dagStorage =>
         /*
          * DAG Looks like this:
@@ -60,7 +60,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "Greatest common ancestor" should "be computed properly" in withStorage {
-    implicit blockStore =>
+    implicit blockStorage =>
       implicit dagStorage =>
         /*
          * DAG Looks like this:
@@ -96,7 +96,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "uncommon ancestors" should "be computed properly" in withStorage {
-    implicit blockStore =>
+    implicit blockStorage =>
       implicit dagStorage =>
         /*
          *  DAG Looks like this:

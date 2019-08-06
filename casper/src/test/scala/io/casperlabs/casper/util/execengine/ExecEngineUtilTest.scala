@@ -3,7 +3,7 @@ package io.casperlabs.casper.util.execengine
 import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStore, DagRepresentation}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
@@ -37,7 +37,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
-    implicit blockStore => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       val genesisDeploys = Vector(
         ByteString.EMPTY
       ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
@@ -112,7 +112,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       deploy: Seq[consensus.Deploy],
       protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
-      implicit blockStore: BlockStore[Task],
+      implicit blockStorage: BlockStorage[Task],
       executionEngineService: ExecutionEngineService[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
@@ -128,7 +128,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
-    implicit blockStore =>
+    implicit blockStorage =>
       _ =>
         // reference costs
         // deploy each Rholang program separately and record its cost
@@ -157,7 +157,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
   }
 
   "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
-    implicit blockStore => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
           (_, _) => new Throwable("failed when run genesis").asLeft.pure[Task],

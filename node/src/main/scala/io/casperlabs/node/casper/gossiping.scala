@@ -8,7 +8,7 @@ import cats.effect.concurrent._
 import cats.implicits._
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStore, DagStorage}
+import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.DeployBuffer
@@ -44,7 +44,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStore: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
+  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
       port: Int,
       conf: Configuration,
       grpcScheduler: Scheduler
@@ -94,7 +94,7 @@ package object gossiping {
       awaitApproval <- makeFiberResource {
                         genesisApprover.awaitApproval >>= { genesisBlockHash =>
                           for {
-                            maybeGenesis <- BlockStore[F].get(genesisBlockHash)
+                            maybeGenesis <- BlockStorage[F].get(genesisBlockHash)
                             genesisStore <- MonadThrowable[F].fromOption(
                                              maybeGenesis,
                                              NotFound(
@@ -167,7 +167,7 @@ package object gossiping {
     } yield cont
 
   /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployBuffer: Validation](
+  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployBuffer: Validation](
       chainId: String,
       block: Block
   ): F[Unit] =
@@ -286,7 +286,7 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployBuffer: Validation](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployBuffer: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
@@ -334,7 +334,7 @@ package object gossiping {
                         )
     } yield downloadManager
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F]
@@ -450,7 +450,7 @@ package object gossiping {
           )
 
         override def getBlock(blockHash: ByteString): F[Option[Block]] =
-          BlockStore[F]
+          BlockStorage[F]
             .get(blockHash)
             .map(_.map(_.getBlockMessage))
       }
@@ -542,7 +542,7 @@ package object gossiping {
   }
 
   /** Create gossip service. */
-  def makeGossipServiceServer[F[_]: Concurrent: Par: Log: Metrics: BlockStore: DagStorage: MultiParentCasperRef](
+  def makeGossipServiceServer[F[_]: Concurrent: Par: Log: Metrics: BlockStorage: DagStorage: MultiParentCasperRef](
       conf: Configuration,
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
@@ -555,11 +555,11 @@ package object gossiping {
                       isInDag(blockHash)
 
                     override def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]] =
-                      BlockStore[F]
+                      BlockStorage[F]
                         .getBlockSummary(blockHash)
 
                     override def getBlock(blockHash: ByteString): F[Option[Block]] =
-                      BlockStore[F]
+                      BlockStorage[F]
                         .get(blockHash)
                         .map(_.map(_.getBlockMessage))
                   }

@@ -9,15 +9,15 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits.none
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStorage.BlockHash
 import io.casperlabs.blockstorage.{
-  BlockStore,
+  BlockStorage,
   DagStorage,
   FileDagStorage,
-  FileLMDBIndexBlockStore,
-  InMemBlockStore,
+  FileLMDBIndexBlockStorage,
+  InMemBlockStorage,
   IndexedDagStorage,
-  LMDBBlockStore
+  LMDBBlockStorage
 }
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
@@ -34,7 +34,7 @@ import monix.execution.Scheduler.Implicits.global
 import scala.collection.immutable.IndexedSeq
 import scala.util.Random
 
-object StoreBenchSuite {
+object StorageBenchSuite {
   import scala.language.implicitConversions
 
   implicit def strToByteStr(str: String): ByteString =
@@ -45,7 +45,7 @@ object StoreBenchSuite {
 
   private val props = {
     val p  = new Properties()
-    val in = getClass.getResourceAsStream("/block-store-benchmark.properties")
+    val in = getClass.getResourceAsStream("/block-storage-benchmark.properties")
     p.load(in)
     in.close()
     p
@@ -161,25 +161,25 @@ object StoreBenchSuite {
 }
 
 object Init {
-  import StoreBenchSuite._
+  import StorageBenchSuite._
 
   def createPath(path: String) =
     Paths.get(s"/tmp/$path-${UUID.randomUUID()}")
 
-  def lmdbBlockStore = LMDBBlockStore.create[Task](
-    LMDBBlockStore.Config(
-      dir = createPath("lmdb_block_store"),
-      blockStoreSize = 1073741824L * 12,
+  def lmdbBlockStorage = LMDBBlockStorage.create[Task](
+    LMDBBlockStorage.Config(
+      dir = createPath("lmdb_block_storage"),
+      blockStorageSize = 1073741824L * 12,
       maxDbs = 1,
       maxReaders = 126,
       useTls = false
     )
   )
 
-  def fileLmdbIndexBlockStore =
-    FileLMDBIndexBlockStore
+  def fileLmdbIndexBlockStorage =
+    FileLMDBIndexBlockStorage
       .create[Task](
-        FileLMDBIndexBlockStore.Config(
+        FileLMDBIndexBlockStorage.Config(
           storagePath = createPath("file_lmdb_storage"),
           indexPath = createPath("file_lmdb_index"),
           approvedBlockPath = createPath("file_lmdb_approvedBlock"),
@@ -191,15 +191,15 @@ object Init {
       .right
       .get
 
-  def inMemBlockStore = InMemBlockStore.create[Task](
+  def inMemBlockStorage = InMemBlockStorage.create[Task](
     Monad[Task],
-    InMemBlockStore.emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)].runSyncUnsafe(),
-    InMemBlockStore.emptyMapRef[Task, Seq[BlockHash]].runSyncUnsafe(),
+    InMemBlockStorage.emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)].runSyncUnsafe(),
+    InMemBlockStorage.emptyMapRef[Task, Seq[BlockHash]].runSyncUnsafe(),
     Ref[Task].of(none[ApprovedBlock]).runSyncUnsafe(),
     metricsNop
   )
 
-  def fileDagStorage(blockStore: BlockStore[Task]) =
+  def fileDagStorage(blockStorage: BlockStorage[Task]) =
     FileDagStorage
       .create(
         FileDagStorage.Config(
@@ -208,7 +208,7 @@ object Init {
       )(
         Concurrent[Task],
         logNop,
-        blockStore,
+        blockStorage,
         metricsNop
       )
       .runSyncUnsafe()

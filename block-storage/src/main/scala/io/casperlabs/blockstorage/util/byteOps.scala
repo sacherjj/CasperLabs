@@ -3,7 +3,7 @@ import java.nio.ByteBuffer
 
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.DagRepresentation.Validator
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStorage.BlockHash
 
 object byteOps {
   implicit class ByteBufferRich(val byteBuffer: ByteBuffer) extends AnyVal {

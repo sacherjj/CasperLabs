@@ -4,7 +4,7 @@ import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStore, DagRepresentation, IndexedDagStorage}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
 import io.casperlabs.casper.util.ProtoUtil
@@ -23,7 +23,7 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedDagStorage: ExecutionEngineService: Log](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: ExecutionEngineService: Log](
       id: Int,
       genesis: Block
   ): F[Block] =
@@ -39,7 +39,7 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Sync: BlockStore: ExecutionEngineService: Log](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStorage: ExecutionEngineService: Log](
       b: Block,
       genesis: Block,
       dag: DagRepresentation[F]
@@ -52,7 +52,7 @@ object BlockGenerator {
                )
     } yield (result.postStateHash, result.deploysForBlock)
 
-  def injectPostStateHash[F[_]: Monad: BlockStore: IndexedDagStorage](
+  def injectPostStateHash[F[_]: Monad: BlockStorage: IndexedDagStorage](
       id: Int,
       b: Block,
       postGenStateHash: StateHash,
@@ -65,11 +65,11 @@ object BlockGenerator {
     // NOTE: Storing this under the original block hash.
     val updatedBlock =
       ProtoUtil.unsignedBlockProto(updatedBlockBody, updatedBlockHeader).withBlockHash(b.blockHash)
-    BlockStore[F].put(b.blockHash, updatedBlock, Seq.empty) *>
+    BlockStorage[F].put(b.blockHash, updatedBlock, Seq.empty) *>
       IndexedDagStorage[F].inject(id, updatedBlock)
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Log: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: Log: ExecutionEngineService](
       b: Block,
       genesis: Block,
       dag: DagRepresentation[F]
@@ -95,7 +95,7 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: Time: BlockStore: IndexedDagStorage](
+  def createBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -133,7 +133,7 @@ trait BlockGenerator {
       serializedBlockHash = block.blockHash
       modifiedBlock       <- IndexedDagStorage[F].insertIndexed(block)
       // NOTE: Block hash should be recalculated.
-      _ <- BlockStore[F]
+      _ <- BlockStorage[F]
             .put(serializedBlockHash, modifiedBlock, Seq.empty)
     } yield modifiedBlock
 }

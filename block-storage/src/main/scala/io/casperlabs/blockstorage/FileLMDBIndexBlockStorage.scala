@@ -10,9 +10,9 @@ import cats.effect.{Concurrent, ExitCase, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
+import io.casperlabs.blockstorage.BlockStorage.{BlockHash, MeteredBlockStorage}
 import io.casperlabs.shared.Resources.withResource
-import io.casperlabs.blockstorage.FileLMDBIndexBlockStore.Checkpoint
+import io.casperlabs.blockstorage.FileLMDBIndexBlockStorage.Checkpoint
 import io.casperlabs.blockstorage.StorageError.StorageErr
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.fileIO
@@ -34,13 +34,13 @@ import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
-private final case class FileLMDBIndexBlockStoreState[F[_]: Sync](
+private final case class FileLMDBIndexBlockStorageState[F[_]: Sync](
     blockMessageRandomAccessFile: RandomAccessIO[F],
     checkpoints: Map[Int, Checkpoint],
     currentIndex: Int
 )
 
-class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
+class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
     lock: Semaphore[F],
     env: Env[ByteBuffer],
     index: Dbi[ByteBuffer],
@@ -49,8 +49,8 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     storagePath: Path,
     approvedBlockPath: Path,
     checkpointsDir: Path,
-    state: MonadState[F, FileLMDBIndexBlockStoreState[F]]
-) extends BlockStore[F] {
+    state: MonadState[F, FileLMDBIndexBlockStorageState[F]]
+) extends BlockStorage[F] {
   private case class IndexEntry(checkpointIndex: Int, offset: Long)
   private object IndexEntry {
     def load(byteBuffer: ByteBuffer): IndexEntry = {
@@ -281,7 +281,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     )
 }
 
-object FileLMDBIndexBlockStore {
+object FileLMDBIndexBlockStorage {
   private val checkpointPattern: Regex = "([0-9]+)".r
 
   final case class Config(
@@ -340,13 +340,13 @@ object FileLMDBIndexBlockStore {
 
   def create[F[_]: Concurrent: Log: Metrics](
       env: Env[ByteBuffer],
-      blockStoreDataDir: Path
-  ): F[StorageErr[BlockStore[F]]] =
+      blockStorageDataDir: Path
+  ): F[StorageErr[BlockStorage[F]]] =
     create(
       env,
-      blockStoreDataDir.resolve("storage"),
-      blockStoreDataDir.resolve("approved-block"),
-      blockStoreDataDir.resolve("checkpoints")
+      blockStorageDataDir.resolve("storage"),
+      blockStorageDataDir.resolve("approved-block"),
+      blockStorageDataDir.resolve("checkpoints")
     )
 
   def create[F[_]: Monad: Concurrent: Log: Metrics](
@@ -354,12 +354,12 @@ object FileLMDBIndexBlockStore {
       storagePath: Path,
       approvedBlockPath: Path,
       checkpointsDirPath: Path
-  ): F[StorageErr[BlockStore[F]]] = {
+  ): F[StorageErr[BlockStorage[F]]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
       lock <- Semaphore[F](1)
       index <- Sync[F].delay {
-                env.openDbi(s"block_store_index", MDB_CREATE)
+                env.openDbi(s"block_storage_index", MDB_CREATE)
               }
       blockSummaryDB <- Sync[F].delay {
                          env.openDbi("blockSummaries", MDB_CREATE)
@@ -374,7 +374,7 @@ object FileLMDBIndexBlockStore {
                  case Right(sortedCheckpoints) =>
                    val checkpointsMap = sortedCheckpoints.map(c => c.index -> c).toMap
                    val currentIndex   = sortedCheckpoints.lastOption.map(_.index + 1).getOrElse(0)
-                   val initialState = FileLMDBIndexBlockStoreState[F](
+                   val initialState = FileLMDBIndexBlockStorageState[F](
                      blockMessageRandomAccessFile,
                      checkpointsMap,
                      currentIndex
@@ -382,8 +382,8 @@ object FileLMDBIndexBlockStore {
 
                    initialState.useStateByRef[F] { st =>
                      val metricsF = Metrics[F]
-                     val store: BlockStore[F] =
-                       new FileLMDBIndexBlockStore[F](
+                     val store: BlockStorage[F] =
+                       new FileLMDBIndexBlockStorage[F](
                          lock,
                          env,
                          index,
@@ -393,7 +393,7 @@ object FileLMDBIndexBlockStore {
                          approvedBlockPath,
                          checkpointsDirPath,
                          st
-                       ) with MeteredBlockStore[F] {
+                       ) with MeteredBlockStorage[F] {
                          override implicit val m: Metrics[F] = metricsF
                          override implicit val ms: Source =
                            Metrics.Source(BlockStorageMetricsSource, "file-lmdb")
@@ -401,12 +401,14 @@ object FileLMDBIndexBlockStore {
                        }
                      store.asRight[StorageError]
                    }
-                 case Left(e) => e.asLeft[BlockStore[F]].pure[F]
+                 case Left(e) => e.asLeft[BlockStorage[F]].pure[F]
                }
     } yield result
   }
 
-  def create[F[_]: Monad: Concurrent: Log: Metrics](config: Config): F[StorageErr[BlockStore[F]]] =
+  def create[F[_]: Monad: Concurrent: Log: Metrics](
+      config: Config
+  ): F[StorageErr[BlockStorage[F]]] =
     for {
       notExists <- Sync[F].delay(Files.notExists(config.indexPath))
       _         <- Sync[F].delay(Files.createDirectories(config.indexPath)).whenA(notExists)
@@ -429,16 +431,16 @@ object FileLMDBIndexBlockStore {
 
   def apply[F[_]: Concurrent: Log: RaiseIOError: Metrics](
       dataDir: Path,
-      blockstorePath: Path,
+      blockStoragePath: Path,
       mapSize: Long
-  ): Resource[F, BlockStore[F]] =
+  ): Resource[F, BlockStorage[F]] =
     Resource.make {
       for {
-        _             <- fileIO.makeDirectory(dataDir)
-        _             <- fileIO.makeDirectory(blockstorePath)
-        blockstoreEnv = Context.env(blockstorePath, mapSize)
-        storage <- FileLMDBIndexBlockStore
-                    .create(blockstoreEnv, blockstorePath)
+        _               <- fileIO.makeDirectory(dataDir)
+        _               <- fileIO.makeDirectory(blockStoragePath)
+        blockStorageEnv = Context.env(blockStoragePath, mapSize)
+        storage <- FileLMDBIndexBlockStorage
+                    .create(blockStorageEnv, blockStoragePath)
                     .map(_.right.get)
       } yield storage
     }(_.close())

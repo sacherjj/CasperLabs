@@ -26,7 +26,7 @@ class FinalityDetectorTest
   implicit val logEff = new LogStub[Task]
 
   it should "detect finality as appropriate" in withStorage {
-    implicit blockStore =>
+    implicit blockStorage =>
       implicit dagStorage =>
         /* The DAG looks like:
          *
@@ -164,7 +164,7 @@ class FinalityDetectorTest
   }
 
   it should "take into account indirect justifications by non-level-zero direct justification" in withStorage {
-    implicit blockStore => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       val v0 = generateValidator("Validator 0")
       val v1 = generateValidator("Validator 1")
 
@@ -270,7 +270,7 @@ class FinalityDetectorTest
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   it should "detect possible disagreements appropriately" in withStorage {
-    implicit blockStore => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       val v1     = generateValidator("Validator One")
       val v2     = generateValidator("Validator Two")
       val v3     = generateValidator("Validator Three")

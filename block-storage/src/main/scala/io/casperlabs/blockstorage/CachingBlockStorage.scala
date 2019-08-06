@@ -5,7 +5,7 @@ import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.common.cache.{Cache, CacheBuilder, Weigher}
-import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
+import io.casperlabs.blockstorage.BlockStorage.{BlockHash, MeteredBlockStorage}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.metrics.{Metered, Metrics}
@@ -16,10 +16,10 @@ import scala.collection.JavaConverters._
   * (e.g. ones that return a deploy, or ones that want block statistics)
   * don't have to hit the disk based storage. It is assumed that users
   * will mostly be interested in the front of the DAG. */
-class CachingBlockStore[F[_]: Sync](
-    underlying: BlockStore[F],
+class CachingBlockStorage[F[_]: Sync](
+    underlying: BlockStorage[F],
     cache: Cache[BlockHash, BlockMsgWithTransform]
-) extends BlockStore[F] {
+) extends BlockStorage[F] {
 
   private def cacheOrUnderlying[A](fromCache: => Option[A], fromUnderlying: F[Option[A]]) =
     Sync[F].delay(fromCache) flatMap {
@@ -71,12 +71,12 @@ class CachingBlockStore[F[_]: Sync](
     underlying.close()
 }
 
-object CachingBlockStore {
+object CachingBlockStorage {
   def apply[F[_]: Sync: Metrics](
-      underlying: BlockStore[F],
+      underlying: BlockStorage[F],
       maxSizeBytes: Long,
       name: String = "cache"
-  ): F[BlockStore[F]] = {
+  ): F[BlockStorage[F]] = {
     val metricsF = Metrics[F]
     for {
       cache <- Sync[F].delay {
@@ -89,10 +89,10 @@ object CachingBlockStore {
                   })
                   .build[BlockHash, BlockMsgWithTransform]()
               }
-      store = new CachingBlockStore[F](
+      store = new CachingBlockStorage[F](
         underlying,
         cache
-      ) with MeteredBlockStore[F] {
+      ) with MeteredBlockStorage[F] {
         override implicit val m: Metrics[F] = metricsF
         override implicit val ms: Metrics.Source =
           Metrics.Source(BlockStorageMetricsSource, name)

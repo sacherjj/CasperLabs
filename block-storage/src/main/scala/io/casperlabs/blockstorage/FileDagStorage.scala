@@ -12,7 +12,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.FileDagStorage.{Checkpoint, CheckpointedDagInfo}
 import io.casperlabs.blockstorage.DagRepresentation.Validator
 import io.casperlabs.blockstorage.DagStorage.MeteredDagStorage
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStorage.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
@@ -47,7 +47,7 @@ private final case class FileDagStorageState[F[_]: Sync](
     blockMetadataCrc: Crc32[F]
 )
 
-class FileDagStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] private (
+class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private (
     lock: Semaphore[F],
     latestMessagesDataFilePath: Path,
     latestMessagesCrcFilePath: Path,
@@ -78,7 +78,7 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] private (
           children.pure[F]
         case None =>
           for {
-            blockOpt <- BlockStore[F].getBlockMessage(blockHash)
+            blockOpt <- BlockStorage[F].getBlockMessage(blockHash)
             result <- blockOpt match {
                        case Some(block) =>
                          val number = block.getHeader.rank
@@ -103,7 +103,7 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] private (
           Option(blocks).pure[F]
         case None =>
           for {
-            blockOpt <- BlockStore[F].getBlockMessage(blockHash)
+            blockOpt <- BlockStorage[F].getBlockMessage(blockHash)
             result <- blockOpt match {
                        case Some(block) =>
                          val number = block.getHeader.rank
@@ -127,11 +127,11 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] private (
       dataLookup
         .get(blockHash)
         .fold(
-          BlockStore[F].getBlockMessage(blockHash).map(_.map(BlockMetadata.fromBlock))
+          BlockStorage[F].getBlockMessage(blockHash).map(_.map(BlockMetadata.fromBlock))
         )(blockMetadata => Option(blockMetadata).pure[F])
 
     def contains(blockHash: BlockHash): F[Boolean] =
-      dataLookup.get(blockHash).fold(BlockStore[F].contains(blockHash))(_ => true.pure[F])
+      dataLookup.get(blockHash).fold(BlockStorage[F].contains(blockHash))(_ => true.pure[F])
 
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
       topoSort(startBlockNumber, sortEndBlockNumber)
@@ -469,7 +469,7 @@ object FileDagStorage {
 
   final case class Config(
       @ignore
-      @relativeToDataDir("block-dag-file-storage")
+      @relativeToDataDir("dag-file-storage")
       dir: Path = Paths.get("nonreachable"),
       latestMessagesLogMaxSizeFactor: Int = 10
   ) extends SubConfig {
@@ -730,7 +730,7 @@ object FileDagStorage {
                }
     } yield result
 
-  def create[F[_]: Concurrent: Log: BlockStore: Metrics](
+  def create[F[_]: Concurrent: Log: BlockStorage: Metrics](
       config: Config
   ): F[FileDagStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
@@ -801,7 +801,7 @@ object FileDagStorage {
     } yield res
   }
 
-  def createEmptyFromGenesis[F[_]: Concurrent: Log: BlockStore: Metrics](
+  def createEmptyFromGenesis[F[_]: Concurrent: Log: BlockStorage: Metrics](
       config: Config,
       genesis: Block
   ): F[FileDagStorage[F]] = {
@@ -860,7 +860,7 @@ object FileDagStorage {
     } yield res
   }
 
-  private def fileDagStorageState[F[_]: Concurrent: Log: BlockStore: RaiseIOError](
+  private def fileDagStorageState[F[_]: Concurrent: Log: BlockStorage: RaiseIOError](
       config: Config,
       lock: Semaphore[F],
       state: FileDagStorageState[F]
@@ -884,7 +884,7 @@ object FileDagStorage {
   def apply[F[_]: Concurrent: Log: RaiseIOError: Metrics](
       dagStoragePath: Path,
       latestMessagesLogMaxSizeFactor: Int,
-      blockStore: BlockStore[F]
+      blockStorage: BlockStorage[F]
   ): Resource[F, DagStorage[F]] =
     Resource.make {
       for {
@@ -893,7 +893,7 @@ object FileDagStorage {
         storage <- FileDagStorage.create(config)(
                     Concurrent[F],
                     Log[F],
-                    blockStore,
+                    blockStorage,
                     Metrics[F]
                   )
       } yield storage

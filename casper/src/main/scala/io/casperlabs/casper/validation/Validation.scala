@@ -1,6 +1,6 @@
 package io.casperlabs.casper.validation
 
-import io.casperlabs.blockstorage.{BlockStore, DagRepresentation}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
@@ -17,7 +17,7 @@ trait Validation[F[_]] {
 
   def neglectedInvalidBlock(block: Block, invalidBlockTracker: Set[BlockHash]): F[Unit]
 
-  def blockSender(block: BlockSummary)(implicit bs: BlockStore[F]): F[Boolean]
+  def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean]
 
   def blockSummary(summary: BlockSummary, chainId: String): F[Unit]
 
@@ -27,7 +27,7 @@ trait Validation[F[_]] {
       b: Block,
       lastFinalizedBlockHash: BlockHash,
       dag: DagRepresentation[F]
-  )(implicit bs: BlockStore[F]): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]]
+  )(implicit bs: BlockStorage[F]): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]]
 
   def blockSignature(b: BlockSummary): F[Boolean]
 
@@ -54,7 +54,7 @@ trait Validation[F[_]] {
       dag: DagRepresentation[F],
       chainId: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStore[F]): F[Unit]
+  )(implicit bs: BlockStorage[F]): F[Unit]
 
   def preTimestamp(b: Block): F[Option[FiniteDuration]]
 }

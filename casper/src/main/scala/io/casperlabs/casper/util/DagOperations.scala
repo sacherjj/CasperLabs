@@ -2,7 +2,7 @@ package io.casperlabs.casper.util
 
 import cats.implicits._
 import cats.{Eval, Monad}
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStore, DagRepresentation}
+import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.MonadThrowable
@@ -247,7 +247,7 @@ object DagOperations {
   //Based on that, we compute by finding the first block from genesis for which there
   //exists a child of that block which is an ancestor of b1 or b2 but not both.
   @deprecated("Use uncommonAncestors", "0.1")
-  def greatestCommonAncestorF[F[_]: MonadThrowable: BlockStore](
+  def greatestCommonAncestorF[F[_]: MonadThrowable: BlockStorage](
       b1: Block,
       b2: Block,
       genesis: Block,

@@ -251,17 +251,17 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                                         case (acc, child) =>
                                           for {
                                             childBlock <- dag.lookup(child).map(_.get)
-                                            childBlockStore = acc
+                                            childBlockStorage = acc
                                               .getOrElse(
                                                 child,
                                                 BlockScoreAccumulator.empty(childBlock)
                                               )
-                                            updatedChildBlockStore = BlockScoreAccumulator
+                                            updatedChildBlockStorage = BlockScoreAccumulator
                                               .inheritFromParent(
-                                                childBlockStore,
+                                                childBlockStorage,
                                                 updatedBlockScore
                                               )
-                                          } yield acc.updated(child, updatedChildBlockStore)
+                                          } yield acc.updated(child, updatedChildBlockStorage)
                                       }
             vid = b.validatorPublicKey
             updatedValidatorLevel = if (committeeApproximation.contains(vid)) {

@@ -1,7 +1,7 @@
 package io.casperlabs.blockstorage.benchmarks
 
 import io.casperlabs.blockstorage.DagStorage
-import io.casperlabs.blockstorage.benchmarks.StoreBenchSuite._
+import io.casperlabs.blockstorage.benchmarks.StorageBenchSuite._
 import io.casperlabs.blockstorage.benchmarks.Init._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -14,7 +14,7 @@ abstract class DagStorageBench {
 
   @Setup(Level.Iteration)
   def setupWithRandomData(): Unit = {
-    (0 until StoreBenchSuite.preAllocSize) foreach { _ =>
+    (0 until StorageBenchSuite.preAllocSize) foreach { _ =>
       dagStorage.insert(randomBlockMessage).runSyncUnsafe()
     }
     System.gc()
@@ -36,33 +36,33 @@ abstract class DagStorageBench {
   def insert() =
     dagStorage
       .insert(
-        StoreBenchSuite.blocksIter.next()._2.blockMessage.get
+        StorageBenchSuite.blocksIter.next()._2.blockMessage.get
       )
       .runSyncUnsafe()
 }
 
-class FileDagStorageWithLmdbBlockStoreBench extends DagStorageBench {
-  override val dagStorage = fileDagStorage(lmdbBlockStore)
+class FileDagStorageWithLmdbBlockStorageBench extends DagStorageBench {
+  override val dagStorage = fileDagStorage(lmdbBlockStorage)
 }
 
-class FileDagStorageWithInMemBlockStoreBench extends DagStorageBench {
-  override val dagStorage = fileDagStorage(inMemBlockStore)
+class FileDagStorageWithInMemBlockStorageBench extends DagStorageBench {
+  override val dagStorage = fileDagStorage(inMemBlockStorage)
 }
 
-class FileDagStorageWithFileLmdbIndexBlockStoreBench extends DagStorageBench {
-  override val dagStorage = fileDagStorage(Init.fileLmdbIndexBlockStore)
+class FileDagStorageWithFileLmdbIndexBlockStorageBench extends DagStorageBench {
+  override val dagStorage = fileDagStorage(fileLmdbIndexBlockStorage)
 }
 
-class IndexedDagStorageWithFileLmdbStorageBench extends DagStorageBench {
+class IndexedDagStorageWithLmdbBlockStorageBench extends DagStorageBench {
   override val dagStorage: DagStorage[Task] =
     indexedDagStorage(
-      fileDagStorage(Init.lmdbBlockStore)
+      fileDagStorage(lmdbBlockStorage)
     )
 }
 
-class IndexedDagStorageWithFileLmdbIndexBench extends DagStorageBench {
+class IndexedDagStorageWithFileLmdbIndexBlockStorageBench extends DagStorageBench {
   override val dagStorage: DagStorage[Task] =
     indexedDagStorage(
-      fileDagStorage(Init.fileLmdbIndexBlockStore)
+      fileDagStorage(fileLmdbIndexBlockStorage)
     )
 }

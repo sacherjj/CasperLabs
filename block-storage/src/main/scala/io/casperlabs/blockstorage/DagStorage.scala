@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.Monad
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.DagRepresentation.Validator
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStorage.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.metrics.Metered
 

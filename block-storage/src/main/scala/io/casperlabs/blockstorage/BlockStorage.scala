@@ -12,8 +12,8 @@ import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.language.higherKinds
 
-trait BlockStore[F[_]] {
-  import BlockStore.{BlockHash, BlockMessage}
+trait BlockStorage[F[_]] {
+  import BlockStorage.{BlockHash, BlockMessage}
 
   def put(
       blockMsgWithTransform: BlockMsgWithTransform
@@ -56,10 +56,10 @@ trait BlockStore[F[_]] {
   def close(): F[Unit]
 }
 
-object BlockStore {
+object BlockStorage {
   type BlockMessage = Block
 
-  trait MeteredBlockStore[F[_]] extends BlockStore[F] with Metered[F] {
+  trait MeteredBlockStorage[F[_]] extends BlockStorage[F] with Metered[F] {
 
     abstract override def get(
         blockHash: BlockHash
@@ -89,18 +89,18 @@ object BlockStore {
       incAndMeasure("contains", super.contains(blockHash))
   }
 
-  implicit class RichBlockStore[F[_]](blockStore: BlockStore[F]) {
+  implicit class RichBlockStorage[F[_]](blockStorage: BlockStorage[F]) {
     def getBlockMessage(
         blockHash: BlockHash
     )(implicit applicative: Applicative[F]): F[Option[BlockMessage]] =
-      blockStore.get(blockHash).map(it => it.flatMap(_.blockMessage))
+      blockStorage.get(blockHash).map(it => it.flatMap(_.blockMessage))
 
     def getTransforms(
         blockHash: BlockHash
     )(implicit applicative: Applicative[F]): F[Option[Seq[TransformEntry]]] =
-      blockStore.get(blockHash).map(_.map(_.transformEntry))
+      blockStorage.get(blockHash).map(_.map(_.transformEntry))
   }
-  def apply[F[_]](implicit ev: BlockStore[F]): BlockStore[F] = ev
+  def apply[F[_]](implicit ev: BlockStorage[F]): BlockStorage[F] = ev
 
   type BlockHash  = ByteString
   type DeployHash = ByteString

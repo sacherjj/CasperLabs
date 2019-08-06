@@ -11,7 +11,7 @@ import cats.effect.Bracket
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
+import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -35,7 +35,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
 
   "isInMainChain" should "classify appropriately" in withStorage {
-    implicit blockStore => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       for {
         genesis <- createBlock[Task](Seq())
         b2      <- createBlock[Task](Seq(genesis.blockHash))
@@ -51,7 +51,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   "isInMainChain" should "classify diamond DAGs appropriately" in withStorage {
-    implicit blockStore => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       for {
         genesis <- createBlock[Task](Seq())
         b2      <- createBlock[Task](Seq(genesis.blockHash))
@@ -70,7 +70,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "isInMainChain" should "classify complicated chains appropriately" in withStorage {
-    implicit blockStore => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       val v1 = generateValidator("Validator One")
       val v2 = generateValidator("Validator Two")
 

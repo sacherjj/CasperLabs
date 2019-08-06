@@ -13,9 +13,9 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import org.scalatest._
 import scala.concurrent.duration._
 
-class CachingBlockStoreTest extends WordSpecLike with Matchers {
-  import BlockStore.BlockHash
-  import CachingBlockStoreTest.TestFixture
+class CachingBlockStorageTest extends WordSpecLike with Matchers {
+  import BlockStorage.BlockHash
+  import CachingBlockStorageTest.TestFixture
 
   val sampleBlock = blockImplicits.blockMsgWithTransformGen.sample.get
 
@@ -23,7 +23,7 @@ class CachingBlockStoreTest extends WordSpecLike with Matchers {
       name: String,
       expected: A
   )(
-      get: BlockStore[Task] => BlockHash => Task[A]
+      get: BlockStorage[Task] => BlockHash => Task[A]
   ) = {
     // Store it through cache
     TestFixture() { x =>
@@ -47,7 +47,7 @@ class CachingBlockStoreTest extends WordSpecLike with Matchers {
     }
   }
 
-  "CachingBlockStore" when {
+  "CachingBlockStorage" when {
     "a block is not in the cache" should {
       "get it from the underlying store and not cache it" in {
         TestFixture() { x =>
@@ -104,7 +104,7 @@ class CachingBlockStoreTest extends WordSpecLike with Matchers {
     }
   }
 
-  "CachingBlockStore" should {
+  "CachingBlockStorage" should {
     "cache `contains`" in {
       verifyCached("contains", true) { store =>
         store.contains(_)
@@ -129,11 +129,11 @@ class CachingBlockStoreTest extends WordSpecLike with Matchers {
   }
 }
 
-object CachingBlockStoreTest {
-  import BlockStore.BlockHash
+object CachingBlockStorageTest {
+  import BlockStorage.BlockHash
   import Scheduler.Implicits.global
 
-  // Using the metrics added by MeteredBlockStore
+  // Using the metrics added by MeteredBlockStorage
   class MockMetrics() extends Metrics.MetricsNOP[Task] {
     val counterRef = Ref.unsafe[Task, Map[String, Long]](Map.empty)
 
@@ -146,8 +146,8 @@ object CachingBlockStoreTest {
   }
 
   case class TestFixture(
-      underlying: BlockStore[Task],
-      cache: BlockStore[Task],
+      underlying: BlockStorage[Task],
+      cache: BlockStorage[Task],
       metrics: MockMetrics
   )
 
@@ -159,8 +159,8 @@ object CachingBlockStoreTest {
 
       val test = {
         for {
-          underlying <- InMemBlockStore.empty[Task]
-          cache      <- CachingBlockStore[Task](underlying, maxSizeBytes)
+          underlying <- InMemBlockStorage.empty[Task]
+          cache      <- CachingBlockStorage[Task](underlying, maxSizeBytes)
           _          <- f(TestFixture(underlying, cache, metrics))
         } yield ()
       }
