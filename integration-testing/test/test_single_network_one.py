@@ -488,7 +488,6 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli
                           '--nonce', '1',
                           '--payment', 'resources/test_helloname.wasm',
                           '--session', 'resources/test_helloname.wasm',
-                          '--gas-limit', '500000', # TODO: currently required, not sure if it should be
                           '--private-key', str(account.private_key_path),
                           '--public-key', str(account.public_key_path))
     # 'Success! Deploy hash: xxxxxxxxx...'
