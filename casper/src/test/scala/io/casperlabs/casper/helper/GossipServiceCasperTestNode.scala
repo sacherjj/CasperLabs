@@ -61,7 +61,7 @@ class GossipServiceCasperTestNode[F[_]](
     )(concurrentF, blockStorage, dagStorage, metricEff, casperState) {
   implicit val deployBufferEff: DeployBuffer[F] =
     MockDeployBuffer.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
-  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
+  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorBySingleSweepImpl[F]
 
   //val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 

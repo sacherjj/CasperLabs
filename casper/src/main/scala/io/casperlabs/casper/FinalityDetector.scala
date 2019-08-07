@@ -42,7 +42,12 @@ object FinalityDetector {
   private[casper] def calculateThreshold(q: Long, n: Long): Float = (2.0f * q - n) / (2 * n)
 }
 
-class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F] {
+/*
+ * Implementation inspired by The Inspector algorithm
+ *
+ * https://hackingresear.ch/cbc-inspector/
+ */
+class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetector[F] {
 
   def normalizedFaultTolerance(
       dag: DagRepresentation[F],

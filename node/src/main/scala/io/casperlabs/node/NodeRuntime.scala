@@ -206,7 +206,7 @@ class NodeRuntime private[node] (
                                                                             .of[Effect]
                                                                         )
 
-        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorInstancesImpl[
+        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorBySingleSweepImpl[
           Effect
         ]()(
           Monad[Effect],

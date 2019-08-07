@@ -78,7 +78,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
       logEff                 = new LogStub[Task]
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
+      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
       result <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                  MonadThrowable[Task],
                  casperRef,

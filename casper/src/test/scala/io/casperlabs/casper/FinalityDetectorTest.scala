@@ -49,7 +49,7 @@ class FinalityDetectorTest
         val v2Bond = Bond(v2, 1)
         val bonds  = Seq(v1Bond, v2Bond)
 
-        implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
+        implicit val finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
 
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
@@ -169,7 +169,7 @@ class FinalityDetectorTest
       val validators = List(v0, v1, v2, v3)
 
       val bonds                           = validators.map(v => Bond(v, 1))
-      implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
+      implicit val finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
 
       /* The DAG looks like (|| means main parent)
        *
@@ -275,7 +275,7 @@ class FinalityDetectorTest
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-      implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
+      implicit val finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
