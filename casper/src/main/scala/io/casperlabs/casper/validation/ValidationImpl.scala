@@ -588,7 +588,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     */
   def parents(
       b: Block,
-      lastFinalizedBlockHash: BlockHash,
+      genesisHash: BlockHash,
       dag: DagRepresentation[F]
   )(
       implicit bs: BlockStorage[F]
@@ -598,7 +598,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.getHeader.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
+      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)

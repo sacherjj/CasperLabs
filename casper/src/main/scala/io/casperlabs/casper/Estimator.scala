@@ -17,17 +17,17 @@ object Estimator {
 
   def tips[F[_]: Monad](
       dag: DagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash
+      genesisHash: BlockHash
   ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- dag.latestMessageHashes
       result <- Estimator
-                 .tips[F](dag, lastFinalizedBlockHash, latestMessageHashes)
+                 .tips[F](dag, genesisHash, latestMessageHashes)
     } yield result.toIndexedSeq
 
   def tips[F[_]: Monad](
       dag: DagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash,
+      genesisHash: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
 
@@ -66,7 +66,7 @@ object Estimator {
 
     for {
       scores           <- lmdScoring(dag, latestMessagesHashes)
-      newMainParent    <- forkChoiceTip(dag, lastFinalizedBlockHash, scores)
+      newMainParent    <- forkChoiceTip(dag, genesisHash, scores)
       parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
       secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
@@ -101,17 +101,25 @@ object Estimator {
           }
     }
 
+  /**
+    * Computes fork choice.
+    *
+    * @param blockDag Representation of the Block DAG.
+    * @param startingBlock Starting block for the fork choice rule.
+    * @param scores Map of block's scores.
+    * @return Block hash chosen by the fork choice rule.
+    */
   def forkChoiceTip[F[_]: Monad](
       dag: DagRepresentation[F],
-      blockHash: BlockHash,
+      startingBlock: BlockHash,
       scores: Map[BlockHash, Long]
   ): F[BlockHash] =
-    dag.getMainChildren(blockHash).flatMap { mainChildren =>
+    dag.getMainChildren(startingBlock).flatMap { mainChildren =>
       {
         // make sure they are reachable from latestMessages
         val reachableMainChildren = mainChildren.filter(scores.contains)
         if (reachableMainChildren.isEmpty) {
-          blockHash.pure[F]
+          startingBlock.pure[F]
         } else {
           val highestScoreChild =
             reachableMainChildren.maxBy(b => scores(b) -> b.toStringUtf8)
