@@ -26,7 +26,8 @@ export interface Props {
 }
 
 export class BlockDAG extends React.Component<Props, {}> {
-  ref: SVGSVGElement | null = null;
+  svg: SVGSVGElement | null = null;
+  hint: HTMLDivElement | null = null;
   initialized = false;
 
   render() {
@@ -65,11 +66,17 @@ export class BlockDAG extends React.Component<Props, {}> {
               {this.props.emptyMessage || 'No blocks to show.'}
             </div>
           ) : (
-            <svg
-              width={this.props.width}
-              height={this.props.height}
-              ref={(ref: SVGSVGElement) => (this.ref = ref)}
-            ></svg>
+            <div className="svg-container">
+              <svg
+                width={this.props.width}
+                height={this.props.height}
+                ref={(ref: SVGSVGElement) => (this.svg = ref)}
+              ></svg>
+              <div
+                className="svg-hint"
+                ref={(ref: HTMLDivElement) => (this.hint = ref)}
+              ></div>
+            </div>
           )}
         </div>
         {this.props.footerMessage && (
@@ -97,7 +104,8 @@ export class BlockDAG extends React.Component<Props, {}> {
       return;
     }
 
-    const svg = d3.select(this.ref);
+    const svg = d3.select(this.svg);
+    const hint = d3.select(this.hint);
     const color = consistentColor();
 
     // Append items that will not change.
@@ -134,8 +142,8 @@ export class BlockDAG extends React.Component<Props, {}> {
     container.selectAll('g').remove();
 
     // See what the actual width and height is.
-    const width = $(this.ref!).width()!;
-    const height = $(this.ref!).height()!;
+    const width = $(this.svg!).width()!;
+    const height = $(this.svg!).height()!;
 
     let graph: Graph = toGraph(this.props.blocks);
     graph = calculateCoordinates(graph, width, height);
@@ -187,12 +195,6 @@ export class BlockDAG extends React.Component<Props, {}> {
       .style('text-anchor', 'start')
       .attr('transform', 'rotate(15)'); // rotate so a chain doesn't overlap on a small screen.
 
-    node
-      .append('title')
-      .text(
-        (d: d3Node) => `Block: ${d.id} @ ${d.rank}\nValidator: ${d.validator}`
-      );
-
     const focus = (d: any) => {
       let datum = d3.select(d3.event.target).datum() as d3Node;
       node.style('opacity', x =>
@@ -208,12 +210,17 @@ export class BlockDAG extends React.Component<Props, {}> {
           ? 0
           : 0.1
       );
+      hint.html(
+        `Block: ${datum.id} @ ${datum.rank} <br /> Validator: ${datum.validator}`
+      );
+      hint.style('display', 'block');
     };
 
     const unfocus = () => {
       label.attr('display', 'block');
       node.style('opacity', 1);
       link.style('opacity', x => (x.isJustification ? 0 : 1));
+      hint.style('display', 'none');
     };
 
     const select = (d: any) => {
