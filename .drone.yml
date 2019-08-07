@@ -511,87 +511,6 @@ steps:
   - rsync-artifacts
   - docker-publish
 
-- name: cleanup
-  commands:
-  - "docker images --filter \"dangling=true\" -q --no-trunc | xargs --no-run-if-empty docker rmi -f || true"
-  - "docker images | grep \"DRONE-${DRONE_BUILD_NUMBER}\" | awk '{print $3}' | xargs --no-run-if-empty docker rmi -f || true"
-  environment:
-    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
-  image: "casperlabs/buildenv:latest"
-  volumes:
-  - name: docker_sock	
-    path: "/var/run/docker.sock"
-  when:
-    status:
-    - failure
-    - success
-  depends_on:
-  - sbt-compile-test-pr
-  - git-status-post-scala-compile-pr
-  - rust-compile-test-pr
-  - run-cargo-fmt-pr
-  - run-rust-lints-pr
-  - sbt-test-docker-bors
-  - git-status-post-scala-compile-bors
-  - rust-compile-test-bors
-  - run-cargo-fmt-bors
-  - run-rust-lints-bors
-  - try-cargo-publish-bors
-  - run-rust-benchmarks-bors
-  - docker-build-ee-int-bors
-  - docker-keys-gen-test-bors
-  - run-integration-tests
-  - rust-compile-for-make
-  - docker-build-ee-merge
-  - docker-key-gen-merge
-  - docker-explorer-merge
-  - docker-grpcwebproxy-merge
-  - package-sbt-artifacts-merge
-  - package-ee
-  - rsync-artifacts
-  - docker-publish
-
-- name: notify
-  image: plugins/slack
-  settings:
-    webhook:
-      from_secret: slack_webhook
-    channel: alerts
-    template: 
-    - |
-      *{{ uppercasefirst build.status }}*
-      Author: {{ build.author }}
-      Drone Build: <{{ build.link }}|#{{ build.number }}>
-      Commit Link: <https://github.com/{{repo.owner}}/{{repo.name}}/commit/{{build.commit}}|{{ truncate build.commit 10 }}>
-  when:
-    status:
-    - failure
-  depends_on:
-  - sbt-compile-test-pr
-  - git-status-post-scala-compile-pr
-  - rust-compile-test-pr
-  - run-cargo-fmt-pr
-  - run-rust-lints-pr
-  - sbt-test-docker-bors
-  - git-status-post-scala-compile-bors
-  - rust-compile-test-bors
-  - run-cargo-fmt-bors
-  - run-rust-lints-bors
-  - try-cargo-publish-bors
-  - run-rust-benchmarks-bors
-  - docker-build-ee-int-bors
-  - docker-keys-gen-test-bors
-  - run-integration-tests
-  - rust-compile-for-make
-  - docker-build-ee-merge
-  - docker-key-gen-merge
-  - docker-explorer-merge
-  - docker-grpcwebproxy-merge
-  - package-sbt-artifacts-merge
-  - package-ee
-  - rsync-artifacts
-  - docker-publish
-
 volumes:
 - name: docker_sock
   host:
@@ -608,6 +527,61 @@ trigger:
   - "testing*"
   - trying
   - staging
+
+---
+kind: pipeline
+name: cleanup-notify
+
+clone:
+  disable: true
+
+steps:
+- name: cleanup-docker-images
+  commands:
+  - "docker images --filter \"dangling=true\" -q --no-trunc | xargs --no-run-if-empty docker rmi -f || true"
+  - "docker images | grep \"DRONE-${DRONE_BUILD_NUMBER}\" | awk '{print $3}' | xargs --no-run-if-empty docker rmi -f || true"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock	
+    path: "/var/run/docker.sock"
+
+- name: notify
+  image: plugins/slack
+  settings:
+    webhook:
+      from_secret: slack_webhook
+    channel: alerts
+    template: 
+    - |
+      *{{ uppercasefirst build.status }}*
+      Author: {{ build.author }}
+      Drone Build: <{{ build.link }}|#{{ build.number }}>
+      Commit Link: <https://github.com/{{repo.owner}}/{{repo.name}}/commit/{{build.commit}}|{{ truncate build.commit 10 }}>
+  when:
+    status:
+    - failure
+
+volumes:
+- name: docker_sock
+  host:
+    path: "/var/run/docker.sock"
+
+trigger:
+  status:
+  - failure
+  - success
+  branch:
+  - dev
+  - master
+  - "release-*"
+  - "testing*"
+  - trying
+  - staging
+
+depends_on:
+- build-bors-merge
 
 # Signature for Drone
 ---
