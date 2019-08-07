@@ -1,5 +1,6 @@
 import requests
 import json
+import logging
 
 
 class GraphQL:
@@ -13,6 +14,7 @@ class GraphQL:
         return f'http://{server}:{self.node.http_port}/graphql'
 
     def query(self, query_json: dict) -> dict:
+        logging.info(f'GraphQL Query to {self.url} with {query_json}')
         r = requests.post(url=self.url, json=query_json)
         return json.loads(r.text)
 
