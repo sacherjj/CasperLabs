@@ -42,7 +42,7 @@ use tracking_copy::TrackingCopy;
 use URefAddr;
 
 pub const MINT_NAME: &str = "mint";
-const POS_NAME: &str = "pos";
+pub const POS_NAME: &str = "pos";
 
 #[derive(Debug)]
 pub enum Error {
