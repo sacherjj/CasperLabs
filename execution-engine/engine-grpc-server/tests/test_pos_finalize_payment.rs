@@ -77,8 +77,13 @@ fn finalize_payment_should_pay_validators_and_refund_user() {
     let mut builder = initialize();
     let payment_amount = U512::from(300);
     let spent_amount = U512::from(75);
-    let refund_purse: Option<PurseId> = None;
-    let args = (payment_amount, refund_purse, spent_amount, ACCOUNT_ADDR);
+    let refund_purse_flag: u8 = 0;
+    let args = (
+        payment_amount,
+        refund_purse_flag,
+        spent_amount,
+        ACCOUNT_ADDR,
+    );
 
     let payment_pre_balance = get_pos_payment_purse_balance(&builder);
     let rewards_pre_balance = get_pos_rewards_purse_balance(&builder);
