@@ -150,8 +150,12 @@ export class BlockDAG extends React.Component<Props, {}> {
       .enter()
       .append('line')
       .attr('stroke', LineColor)
-      .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 2 : 1))
-      .attr('marker-end', 'url(#arrow)');
+      .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
+      .attr('marker-end', 'url(#arrow)')
+      .attr('stroke-dasharray', (d: d3Link) =>
+        d.isJustification ? '3, 3' : null
+      )
+      .attr('opacity', (d: d3Link) => (d.isJustification ? 0 : 1));
 
     const node = container
       .append('g')
@@ -198,14 +202,18 @@ export class BlockDAG extends React.Component<Props, {}> {
         graph.areNeighbours(x.id, datum.id) ? 'block' : 'none'
       );
       link.style('opacity', x =>
-        x.source.id === datum.id || x.target.id === datum.id ? 1 : 0.1
+        x.source.id === datum.id || x.target.id === datum.id
+          ? 1
+          : x.isJustification
+          ? 0
+          : 0.1
       );
     };
 
     const unfocus = () => {
       label.attr('display', 'block');
       node.style('opacity', 1);
-      link.style('opacity', 1);
+      link.style('opacity', x => (x.isJustification ? 0 : 1));
     };
 
     const select = (d: any) => {
@@ -253,6 +261,7 @@ interface d3Link {
   source: d3Node;
   target: d3Node;
   isMainParent: boolean;
+  isJustification: boolean;
 }
 
 class Graph {
@@ -300,15 +309,38 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getParentHashesList_asU8()
       .map(h => encodeBase16(h));
 
-    return parents
-      .filter(parent => nodeMap.has(parent))
-      .map(parent => {
+    let parentSet = new Set(parents);
+
+    let justifications = block
+      .getSummary()!
+      .getHeader()!
+      .getJustificationsList()
+      .map(x => encodeBase16(x.getLatestBlockHash_asU8()));
+
+    let parentLinks = parents
+      .filter(p => nodeMap.has(p))
+      .map(p => {
         return {
           source: nodeMap.get(child)!,
-          target: nodeMap.get(parent)!,
-          isMainParent: parent === parents[0]
+          target: nodeMap.get(p)!,
+          isMainParent: p === parents[0],
+          isJustification: false
         };
       });
+
+    let justificationLinks = justifications
+      .filter(x => !parentSet.has(x))
+      .filter(j => nodeMap.has(j))
+      .map(j => {
+        return {
+          source: nodeMap.get(child)!,
+          target: nodeMap.get(j)!,
+          isMainParent: false,
+          isJustification: true
+        };
+      });
+
+    return parentLinks.concat(justificationLinks);
   });
 
   return new Graph(nodes, links);
