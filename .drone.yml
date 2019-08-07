@@ -487,6 +487,7 @@ steps:
   - docker-key-gen-merge
   - docker-explorer-merge
   - docker-grpcwebproxy-merge
+  - package-sbt-artifacts-merge
 
 - name: contract-examples
   image: plugins/downstream
@@ -507,13 +508,6 @@ steps:
     event:
     - push
   depends_on:
-  - rust-compile-for-make
-  - docker-build-ee-merge
-  - docker-key-gen-merge
-  - docker-explorer-merge
-  - docker-grpcwebproxy-merge
-  - package-sbt-artifacts-merge
-  - package-ee
   - rsync-artifacts
   - docker-publish
 
