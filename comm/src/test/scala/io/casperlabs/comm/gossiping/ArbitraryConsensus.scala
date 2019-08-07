@@ -222,7 +222,7 @@ trait ArbitraryConsensus {
     }
 
   /** Grow a DAG by adding layers on top of the tips. */
-  def genDagFromGenesis(implicit c: ConsensusConfig): Gen[Vector[BlockSummary]] = {
+  def genSummaryDagFromGenesis(implicit c: ConsensusConfig): Gen[Vector[BlockSummary]] = {
     def loop(
         acc: Vector[BlockSummary],
         tips: Set[BlockSummary]
@@ -279,7 +279,7 @@ trait ArbitraryConsensus {
 
   def genBlockDagFromGenesis(implicit c: ConsensusConfig): Gen[Vector[Block]] =
     for {
-      summaries <- genDagFromGenesis
+      summaries <- genSummaryDagFromGenesis
       blocks    <- Gen.sequence(summaries.map(genBlockFromSummary))
     } yield blocks.asScala.toVector
 

@@ -1356,7 +1356,7 @@ mod tests {
         let known_urefs = HashMap::new();
         let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
             let public_key = PublicKey::new([42; 32]);
-            let weight = Weight::new(255);
+            let weight = Weight::new(155);
 
             // Add a key (this doesn't check for all invariants as `add_key`
             // is already tested in different place)
@@ -1422,6 +1422,9 @@ mod tests {
         // making sure `account_dirty` mutated
         let known_urefs = HashMap::new();
         let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            runtime_context
+                .add_associated_key(PublicKey::new([42; 32]), Weight::new(254))
+                .expect("Unable to add associated key with maximum weight");
             runtime_context
                 .set_action_threshold(ActionType::KeyManagement, Weight::new(253))
                 .expect("Unable to set action threshold KeyManagement");

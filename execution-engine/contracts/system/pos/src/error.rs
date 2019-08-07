@@ -22,6 +22,7 @@ pub enum Error {
     PaymentPurseKeyUnexpectedType,
     BondingPurseNotFound,
     BondingPurseKeyUnexpectedType,
+    RefundPurseKeyUnexpectedType,
     // TODO: Put these in their own enum, and wrap them separately in `BondingError` and
     // `UnbondingError`.
     QueueNotStoredAsByteArray,
@@ -52,6 +53,7 @@ impl Into<u32> for Error {
             Error::PaymentPurseKeyUnexpectedType => 0x100 + 3,
             Error::BondingPurseNotFound => 0x100 + 4,
             Error::BondingPurseKeyUnexpectedType => 0x100 + 5,
+            Error::RefundPurseKeyUnexpectedType => 0x100 + 6,
             Error::QueueNotStoredAsByteArray => 0x200,
             Error::QueueDeserializationFailed => 0x200 + 1,
             Error::QueueDeserializationExtraBytes => 0x200 + 2,

@@ -42,7 +42,7 @@ relay-block-chunk-consumer-timeout = "1second"
 clean-block-storage = false
 
 [lmdb]
-block-store-size = 1
+block-storage-size = 1
 max-dbs = 1
 max-readers = 1
 use-tls = false
