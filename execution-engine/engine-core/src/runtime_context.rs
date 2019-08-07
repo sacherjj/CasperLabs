@@ -614,6 +614,15 @@ where
             return Err(AddKeyFailure::PermissionDenied.into());
         }
 
+        if !self
+            .account()
+            .can_manage_keys_with(&self.authorization_keys)
+        {
+            // Exit early if authorization keys weight doesn't exceed required
+            // key management threshold
+            return Err(AddKeyFailure::PermissionDenied.into());
+        }
+
         // Converts an account's public key into a URef
         let key = Key::Account(self.account().pub_key());
 
@@ -640,6 +649,15 @@ where
         // Check permission to modify associated keys
         if self.base_key() != Key::Account(self.account().pub_key()) {
             // Exit early with error to avoid mutations
+            return Err(RemoveKeyFailure::PermissionDenied.into());
+        }
+
+        if !self
+            .account()
+            .can_manage_keys_with(&self.authorization_keys)
+        {
+            // Exit early if authorization keys weight doesn't exceed required
+            // key management threshold
             return Err(RemoveKeyFailure::PermissionDenied.into());
         }
 
@@ -676,6 +694,15 @@ where
             return Err(UpdateKeyFailure::PermissionDenied.into());
         }
 
+        if !self
+            .account()
+            .can_manage_keys_with(&self.authorization_keys)
+        {
+            // Exit early if authorization keys weight doesn't exceed required
+            // key management threshold
+            return Err(UpdateKeyFailure::PermissionDenied.into());
+        }
+
         // Converts an account's public key into a URef
         let key = Key::Account(self.account().pub_key());
 
@@ -706,6 +733,15 @@ where
         // Check permission to modify associated keys
         if self.base_key() != Key::Account(self.account().pub_key()) {
             // Exit early with error to avoid mutations
+            return Err(SetThresholdFailure::PermissionDeniedError.into());
+        }
+
+        if !self
+            .account()
+            .can_manage_keys_with(&self.authorization_keys)
+        {
+            // Exit early if authorization keys weight doesn't exceed required
+            // key management threshold
             return Err(SetThresholdFailure::PermissionDeniedError.into());
         }
 
