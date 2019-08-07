@@ -54,25 +54,25 @@ impl Into<u32> for Error {
             Error::BondTransferFailed => 7,
             Error::UnbondTransferFailed => 8,
             // System errors
-            Error::TimeWentBackwards => 0x100,
-            Error::StakesNotFound => 0x100 + 1,
-            Error::PaymentPurseNotFound => 0x100 + 2,
-            Error::PaymentPurseKeyUnexpectedType => 0x100 + 3,
-            Error::PaymentPurseBalanceNotFound => 0x100 + 4,
-            Error::BondingPurseNotFound => 0x100 + 5,
-            Error::BondingPurseKeyUnexpectedType => 0x100 + 6,
-            Error::RefundPurseKeyUnexpectedType => 0x100 + 7,
-            Error::RewardsPurseNotFound => 0x100 + 8,
-            Error::RewardsPurseKeyUnexpectedType => 0x100 + 9,
-            Error::QueueNotStoredAsByteArray => 0x200,
-            Error::QueueDeserializationFailed => 0x200 + 1,
-            Error::QueueDeserializationExtraBytes => 0x200 + 2,
-            Error::StakesKeyDeserializationFailed => 0x300,
-            Error::StakesDeserializationFailed => 0x300 + 1,
-            Error::SystemFunctionCalledByUserAccount => 0x400,
-            Error::InsufficientPaymentForAmountSpent => 0x400 + 1,
-            Error::FailedTransferToRewardsPurse => 0x400 + 2,
-            Error::FailedTransferToAccountPurse => 0x400 + 3,
+            Error::TimeWentBackwards => 256, // 0x100
+            Error::StakesNotFound => 257,
+            Error::PaymentPurseNotFound => 258,
+            Error::PaymentPurseKeyUnexpectedType => 259,
+            Error::PaymentPurseBalanceNotFound => 260,
+            Error::BondingPurseNotFound => 261,
+            Error::BondingPurseKeyUnexpectedType => 262,
+            Error::RefundPurseKeyUnexpectedType => 263,
+            Error::RewardsPurseNotFound => 264,
+            Error::RewardsPurseKeyUnexpectedType => 265,
+            Error::QueueNotStoredAsByteArray => 512, // 0x200
+            Error::QueueDeserializationFailed => 513,
+            Error::QueueDeserializationExtraBytes => 514,
+            Error::StakesKeyDeserializationFailed => 768, // 0x300
+            Error::StakesDeserializationFailed => 769,
+            Error::SystemFunctionCalledByUserAccount => 1024, // 0x400
+            Error::InsufficientPaymentForAmountSpent => 1025,
+            Error::FailedTransferToRewardsPurse => 1026,
+            Error::FailedTransferToAccountPurse => 1027,
         }
     }
 }
