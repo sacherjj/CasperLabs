@@ -1,13 +1,16 @@
 import grpc
 
-class ProxyServicer:
 
-    def __init__(self, node_host: str,
-                       node_port: int,
-                       service_stub = None,
-                       unary_stream_methods = [],
-                       pre_callback = lambda name, request: request,
-                       post_callback = lambda name, request, response: None):
+class ProxyServicer:
+    def __init__(
+        self,
+        node_host: str,
+        node_port: int,
+        service_stub=None,
+        unary_stream_methods=[],
+        pre_callback=lambda name, request: request,
+        post_callback=lambda name, request, response: None,
+    ):
 
         self.node_host = node_host
         self.node_port = node_port
@@ -15,7 +18,6 @@ class ProxyServicer:
         self.unary_stream_methods = unary_stream_methods
         self.pre_callback = pre_callback
         self.post_callback = post_callback
-
 
     def __getattr__(self, name):
         node_address = f"{self.node_host}:{self.node_port}"
@@ -35,5 +37,3 @@ class ProxyServicer:
                 yield from vs
 
         return g if name in self.unary_stream_methods else f
-        
-

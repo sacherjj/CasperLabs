@@ -10,13 +10,15 @@ class CasperLabsNodeAddressNotFoundError(Exception):
 
 
 class NonZeroExitCodeError(Exception):
-    def __init__(self, command: Tuple[Union[int, str], ...], exit_code: int, output: str):
+    def __init__(
+        self, command: Tuple[Union[int, str], ...], exit_code: int, output: str
+    ):
         self.command = command
         self.exit_code = exit_code
         self.output = output
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({repr(self.command)}, {self.exit_code}, {repr(self.output)})'
+        return f"{self.__class__.__name__}({repr(self.command)}, {self.exit_code}, {repr(self.output)})"
 
 
 class CommandTimeoutError(Exception):

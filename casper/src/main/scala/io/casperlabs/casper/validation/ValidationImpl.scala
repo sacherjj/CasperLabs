@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.{Applicative, ApplicativeError, Functor}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
@@ -140,10 +140,10 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   /** Check the block without executing deploys. */
   def blockFull(
       block: Block,
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       chainId: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStore[F]): F[Unit] = {
+  )(implicit bs: BlockStorage[F]): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
     for {
       _ <- checkDroppable(
@@ -234,7 +234,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       } yield signatoriesVerified && keysMatched
     }
 
-  def blockSender(block: BlockSummary)(implicit bs: BlockStore[F]): F[Boolean] =
+  def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean] =
     for {
       weight <- ProtoUtil.weightFromSender[F](block.getHeader)
       result <- if (weight > 0) true.pure[F]
@@ -318,11 +318,12 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     */
   def missingBlocks(
       block: BlockSummary
-  )(implicit bs: BlockStore[F]): F[Unit] =
+  )(implicit bs: BlockStorage[F]): F[Unit] =
     for {
-      parentsPresent <- block.getHeader.parentHashes.toList.forallM(p => BlockStore[F].contains(p))
+      parentsPresent <- block.getHeader.parentHashes.toList
+                         .forallM(p => BlockStorage[F].contains(p))
       justificationsPresent <- block.getHeader.justifications.toList
-                                .forallM(j => BlockStore[F].contains(j.latestBlockHash))
+                                .forallM(j => BlockStorage[F].contains(j.latestBlockHash))
       _ <- FunctorRaise[F, InvalidBlock]
             .raise[Unit](MissingBlocks)
             .whenA(!parentsPresent || !justificationsPresent)
@@ -331,7 +332,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   // This is not a slashable offence
   def timestamp(
       b: BlockSummary
-  )(implicit bs: BlockStore[F]): F[Unit] =
+  )(implicit bs: BlockStorage[F]): F[Unit] =
     for {
       currentTime  <- Time[F].currentMillis
       timestamp    = b.getHeader.timestamp
@@ -381,7 +382,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   // Block number is 1 plus the maximum of block number of its justifications.
   def blockNumber(
       b: BlockSummary,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[Unit] =
     for {
       justificationMsgs <- b.getHeader.justifications.toList.traverse { justification =>
@@ -422,7 +423,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     */
   def sequenceNumber(
       b: BlockSummary,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[Unit] =
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b.getHeader).foldM(-1) {
@@ -588,9 +589,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def parents(
       b: Block,
       lastFinalizedBlockHash: BlockHash,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   )(
-      implicit bs: BlockStore[F]
+      implicit bs: BlockStorage[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
     def printHashes(hashes: Iterable[ByteString]) =
       hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")

@@ -9,7 +9,7 @@ from test.cl_node.docker_node import DockerNode
 from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
 from test.cl_node.nonce_registry import NonceRegistry
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS  # TODO: remove
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, is_valid_account, Account
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, Account
 from test.cl_node.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
     wait_for_approved_block_received_handler_state,
@@ -17,16 +17,16 @@ from test.cl_node.wait import (
     wait_for_peers_count_at_least,
 )
 from typing import Callable, Dict, List
-
-import docker
-import docker.errors
+from docker import DockerClient
+from docker.errors import NotFound
 import inspect
 
 
 def test_name():
     for f in inspect.stack():
-        if (f.function not in ('test_name', 'test_account')
-            and ('_test_' in f.function or f.function.startswith('test_'))):
+        if f.function not in ("test_name", "test_account") and (
+            "_test_" in f.function or f.function.startswith("test_")
+        ):
             return f.function
 
 
@@ -39,14 +39,16 @@ class CasperLabsNetwork:
     Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
 
-    def __init__(self, docker_client: 'DockerClient', extra_docker_params: Dict = None):
+    def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
         self.extra_docker_params = extra_docker_params or {}
         self._next_key_number = 0
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []
         self._created_networks: List[str] = []
         NonceRegistry.reset()
-        self._lock = threading.RLock()  # protect self.cl_nodes and self._created_networks
+        self._lock = (
+            threading.RLock()
+        )  # protect self.cl_nodes and self._created_networks
         self._accounts_lock = threading.Lock()
         self.test_accounts = {}
         self.next_key = 1
@@ -70,7 +72,6 @@ class CasperLabsNetwork:
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
 
-
     def test_account(self, node) -> str:
         name = test_name()
         if not name:
@@ -82,19 +83,24 @@ class CasperLabsNetwork:
         elif name not in self.test_accounts:
             with self._accounts_lock:
                 self.test_accounts[name] = Account(self.next_key)
-                logging.info(f"=== Creating test account #{self.next_key} {self.test_accounts[name].public_key_hex} for {name} ")
+                logging.info(
+                    f"=== Creating test account #{self.next_key} {self.test_accounts[name].public_key_hex} for {name} "
+                )
                 block_hash = node.transfer_to_account(self.next_key, 1000000)
                 # Waiting for the block with transaction that created new account to propagate to all nodes.
                 # Expensive, but some tests may rely on it.
-                wait_for_block_hash_propagated_to_all_nodes(node.cl_network.docker_nodes, block_hash)
+                wait_for_block_hash_propagated_to_all_nodes(
+                    node.cl_network.docker_nodes, block_hash
+                )
                 for deploy in node.client.show_deploys(block_hash):
-                    assert deploy.is_error is False, f"Account creation failed: {deploy}"
+                    assert (
+                        deploy.is_error is False
+                    ), f"Account creation failed: {deploy}"
                 self.next_key += 1
         return self.test_accounts[name]
-        
+
     def from_address(self, node) -> str:
         return self.test_account(node).public_key_hex
-
 
     def get_key(self):
         key_pair = PREGENERATED_KEYPAIRS[self._next_key_number]
@@ -109,11 +115,11 @@ class CasperLabsNetwork:
 
     def create_docker_network(self) -> str:
         with self._lock:
-            tag_name = os.environ.get("TAG_NAME") or 'test'
-            network_name = f'casperlabs_{random_string(5)}_{tag_name}'
+            tag_name = os.environ.get("TAG_NAME") or "test"
+            network_name = f"casperlabs_{random_string(5)}_{tag_name}"
             self._created_networks.append(network_name)
             self.docker_client.networks.create(network_name, driver="bridge")
-            logging.info(f'Docker network {network_name} created.')
+            logging.info(f"Docker network {network_name} created.")
             return network_name
 
     def _add_cl_node(self, config: DockerConfig) -> None:
@@ -131,15 +137,17 @@ class CasperLabsNetwork:
 
     def add_bootstrap(self, config: DockerConfig) -> None:
         if self.node_count > 0:
-            raise Exception('There can be only one bootstrap')
+            raise Exception("There can be only one bootstrap")
         config.is_bootstrap = True
         self._add_cl_node(config)
         self.wait_method(wait_for_node_started, 0)
 
-    def add_cl_node(self, config: DockerConfig, network_with_bootstrap: bool = True) -> None:
+    def add_cl_node(
+        self, config: DockerConfig, network_with_bootstrap: bool = True
+    ) -> None:
         with self._lock:
             if self.node_count == 0:
-                raise Exception('Must create bootstrap first')
+                raise Exception("Must create bootstrap first")
             config.bootstrap_address = self.cl_nodes[0].node.address
             if network_with_bootstrap:
                 config.network = self.cl_nodes[0].node.network
@@ -160,13 +168,17 @@ class CasperLabsNetwork:
             node = self.cl_nodes[node_number].node
             node.truncate_logs()
             node.start()
-            wait_for_approved_block_received_handler_state(node, node.config.command_timeout)
+            wait_for_approved_block_received_handler_state(
+                node, node.config.command_timeout
+            )
 
     def wait_for_peers(self) -> None:
         if self.node_count < 2:
             return
         for cl_node in self.cl_nodes:
-            wait_for_peers_count_at_least(cl_node.node, self.node_count - 1, cl_node.config.command_timeout)
+            wait_for_peers_count_at_least(
+                cl_node.node, self.node_count - 1, cl_node.config.command_timeout
+            )
 
     def wait_method(self, method: Callable, node_number: int) -> None:
         """
@@ -187,7 +199,10 @@ class CasperLabsNetwork:
     def __exit__(self, exception_type, exception_value, traceback=None):
         if exception_type is not None:
             import traceback as tb
-            logging.error(f'Python Exception Occurred: {exception_type} {exception_value} {tb.format_exc()}')
+
+            logging.error(
+                f"Python Exception Occurred: {exception_type} {exception_value} {tb.format_exc()}"
+            )
 
         with self._lock:
             for node in self.cl_nodes:
@@ -201,8 +216,10 @@ class CasperLabsNetwork:
             for network_name in self._created_networks:
                 try:
                     self.docker_client.networks.get(network_name).remove()
-                except (docker.errors.NotFound, Exception) as e:
-                    logging.warning(f"Exception in cleanup while trying to remove network {network_name}: {str(e)}")
+                except (NotFound, Exception) as e:
+                    logging.warning(
+                        f"Exception in cleanup while trying to remove network {network_name}: {str(e)}"
+                    )
 
 
 class OneNodeNetwork(CasperLabsNetwork):
@@ -210,21 +227,24 @@ class OneNodeNetwork(CasperLabsNetwork):
 
     def create_cl_network(self):
         kp = self.get_key()
-        config = DockerConfig(self.docker_client,
-                              node_private_key=kp.private_key,
-                              node_public_key=kp.public_key,
-                              network=self.create_docker_network())
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+        )
         self.add_bootstrap(config)
 
 
 class TwoNodeNetwork(CasperLabsNetwork):
-
     def create_cl_network(self):
         kp = self.get_key()
-        config = DockerConfig(self.docker_client,
-                              node_private_key=kp.private_key,
-                              node_public_key=kp.public_key,
-                              network=self.create_docker_network())
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+        )
         self.add_bootstrap(config)
 
         self.add_new_node_to_network()
@@ -233,10 +253,12 @@ class TwoNodeNetwork(CasperLabsNetwork):
 class ThreeNodeNetwork(CasperLabsNetwork):
     def create_cl_network(self):
         kp = self.get_key()
-        config = DockerConfig(self.docker_client,
-                              node_private_key=kp.private_key,
-                              node_public_key=kp.public_key,
-                              network=self.create_docker_network())
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+        )
         self.add_bootstrap(config)
 
         for _ in range(1, 3):
@@ -245,18 +267,21 @@ class ThreeNodeNetwork(CasperLabsNetwork):
             self.add_cl_node(config)
 
         for node_number in range(1, 3):
-            self.wait_method(wait_for_approved_block_received_handler_state, node_number)
+            self.wait_method(
+                wait_for_approved_block_received_handler_state, node_number
+            )
         self.wait_for_peers()
 
 
 class MultiNodeJoinedNetwork(CasperLabsNetwork):
-
     def create_cl_network(self, node_count=10):
         kp = self.get_key()
-        config = DockerConfig(self.docker_client,
-                              node_private_key=kp.private_key,
-                              node_public_key=kp.public_key,
-                              network=self.create_docker_network())
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+        )
         self.add_bootstrap(config)
 
         for _ in range(1, node_count):
@@ -265,13 +290,16 @@ class MultiNodeJoinedNetwork(CasperLabsNetwork):
             self.add_cl_node(config)
 
         for node_number in range(1, node_count):
-            self.wait_method(wait_for_approved_block_received_handler_state, node_number)
+            self.wait_method(
+                wait_for_approved_block_received_handler_state, node_number
+            )
         self.wait_for_peers()
 
 
 class CustomConnectionNetwork(CasperLabsNetwork):
-
-    def create_cl_network(self, node_count: int = 3, network_connections: List[List[int]] = None) -> None:
+    def create_cl_network(
+        self, node_count: int = 3, network_connections: List[List[int]] = None
+    ) -> None:
         """
         Allow creation of a network where all nodes are not connected to node-0's network and therefore each other.
 
@@ -288,24 +316,30 @@ class CustomConnectionNetwork(CasperLabsNetwork):
         """
         self.network_names = {}
         kp = self.get_key()
-        config = DockerConfig(self.docker_client,
-                              node_private_key=kp.private_key,
-                              node_public_key=kp.public_key,
-                              network=self.create_docker_network())
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+        )
         self.add_bootstrap(config)
 
         for i in range(1, node_count):
             kp = self.get_key()
-            config = DockerConfig(self.docker_client,
-                                  node_private_key=kp.private_key,
-                                  network=self.create_docker_network())
+            config = DockerConfig(
+                self.docker_client,
+                node_private_key=kp.private_key,
+                network=self.create_docker_network(),
+            )
             self.add_cl_node(config, network_with_bootstrap=False)
 
         for network_members in network_connections:
             self.connect(network_members)
 
         for node_number in range(1, node_count):
-            self.wait_method(wait_for_approved_block_received_handler_state, node_number)
+            self.wait_method(
+                wait_for_approved_block_received_handler_state, node_number
+            )
 
         # Calculate how many peers should be connected to each node.
         # Assumes duplicate network connections are not given, else wait_for_peers will time out.
@@ -317,10 +351,12 @@ class CustomConnectionNetwork(CasperLabsNetwork):
         timeout = self.docker_nodes[0].timeout
         for node_num, peer_count in enumerate(peer_counts):
             if peer_count > 0:
-                wait_for_peers_count_at_least(self.docker_nodes[node_num], peer_count, timeout)
+                wait_for_peers_count_at_least(
+                    self.docker_nodes[node_num], peer_count, timeout
+                )
 
     def connect(self, network_members):
-        # TODO: We should probably merge CustomConnectionNetwork with CasperLabsNetwork, 
+        # TODO: We should probably merge CustomConnectionNetwork with CasperLabsNetwork,
         # move its functionality into CasperLabsNetwork.
         with self._lock:
             network_name = self.create_docker_network()
@@ -338,19 +374,20 @@ class CustomConnectionNetwork(CasperLabsNetwork):
             del self.network_names[tuple(connection)]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # For testing adding new networks.
-
-    import logging
     import sys
     import time
+    import docker
 
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     handler.setFormatter(formatter)
     root.addHandler(handler)
 

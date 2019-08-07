@@ -3,7 +3,7 @@ package io.casperlabs.casper
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, DagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.DeployBuffer
@@ -24,12 +24,12 @@ trait Casper[F[_], A] {
   def addBlock(block: Block): F[BlockStatus]
   def contains(block: Block): F[Boolean]
   def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
-  def estimator(dag: BlockDagRepresentation[F]): F[A]
+  def estimator(dag: DagRepresentation[F]): F[A]
   def createBlock: F[CreateBlockStatus]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
-  def blockDag: F[BlockDagRepresentation[F]]
+  def dag: F[DagRepresentation[F]]
   def fetchDependencies: F[Unit]
   // This is the weight of faults that have been accumulated so far.
   // We want the clique oracle to give us a fault tolerance that is greater than
@@ -42,9 +42,9 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
 
-  def forkChoiceTip[F[_]: MultiParentCasper: MonadThrowable: BlockStore]: F[Block] =
+  def forkChoiceTip[F[_]: MultiParentCasper: MonadThrowable: BlockStorage]: F[Block] =
     for {
-      dag       <- MultiParentCasper[F].blockDag
+      dag       <- MultiParentCasper[F].dag
       tipHashes <- MultiParentCasper[F].estimator(dag)
       tipHash   = tipHashes.head
       tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
@@ -53,7 +53,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  private def init[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: ExecutionEngineService: Validation](
+  private def init[F[_]: Concurrent: Log: BlockStorage: DagStorage: ExecutionEngineService: Validation](
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap
@@ -66,7 +66,7 @@ sealed abstract class MultiParentCasperInstances {
                     )
     } yield (blockProcessingLock, casperState)
 
-  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: Metrics: ErrorHandler: FinalityDetector: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation](
+  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: Metrics: ErrorHandler: FinalityDetector: BlockStorage: RPConfAsk: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,
@@ -91,7 +91,7 @@ sealed abstract class MultiParentCasperInstances {
     } yield casper
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,

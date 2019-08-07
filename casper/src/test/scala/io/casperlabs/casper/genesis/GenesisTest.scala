@@ -6,9 +6,9 @@ import java.util.Base64
 
 import cats.effect.Sync
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.{DagStorageFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
@@ -21,7 +21,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
-class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
+class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
   import GenesisTest._
 
   it should "throw exception when bonds file does not exist" in withGenResources {
@@ -100,7 +100,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   }
 
   it should "create a valid genesis block" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       Task.delay(
         withGenResources {
           (
@@ -118,9 +118,9 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
                                        log
                                      )
               BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
-              _ <- BlockStore[Task]
+              _ <- BlockStorage[Task]
                     .put(genesis.blockHash, genesis, transforms)
-              dag <- blockDagStorage.getRepresentation
+              dag <- dagStorage.getRepresentation
               maybePostGenesisStateHash <- ExecutionEngineServiceStub
                                             .validateBlockCheckpoint[Task](
                                               genesis,

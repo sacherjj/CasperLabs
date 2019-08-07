@@ -3,7 +3,7 @@ package io.casperlabs.casper
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockDagRepresentation
+import io.casperlabs.blockstorage.DagRepresentation
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 
@@ -16,17 +16,17 @@ object Estimator {
   implicit val decreasingOrder = Ordering[Long].reverse
 
   def tips[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       lastFinalizedBlockHash: BlockHash
   ): F[IndexedSeq[BlockHash]] =
     for {
-      latestMessageHashes <- blockDag.latestMessageHashes
+      latestMessageHashes <- dag.latestMessageHashes
       result <- Estimator
-                 .tips[F](blockDag, lastFinalizedBlockHash, latestMessageHashes)
+                 .tips[F](dag, lastFinalizedBlockHash, latestMessageHashes)
     } yield result.toIndexedSeq
 
   def tips[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       lastFinalizedBlockHash: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
@@ -42,7 +42,7 @@ object Estimator {
         b: BlockHash,
         scores: Map[BlockHash, Long]
     ): F[List[BlockHash]] =
-      blockDag
+      dag
         .children(b)
         .map(_.filter(scores.contains))
         .map(c => if (c.isEmpty) List(b) else c.toList)
@@ -65,8 +65,8 @@ object Estimator {
       } yield result
 
     for {
-      scores           <- lmdScoring(blockDag, latestMessagesHashes)
-      newMainParent    <- forkChoiceTip(blockDag, lastFinalizedBlockHash, scores)
+      scores           <- lmdScoring(dag, latestMessagesHashes)
+      newMainParent    <- forkChoiceTip(dag, lastFinalizedBlockHash, scores)
       parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
       secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
@@ -83,18 +83,18 @@ object Estimator {
     * @return Scores map.
     */
   def lmdScoring[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[Map[BlockHash, Long]] =
     latestMessagesHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
       case (acc, (validator, latestMessageHash)) =>
         DagOperations
           .bfTraverseF[F, BlockHash](List(latestMessageHash))(
-            hash => blockDag.lookup(hash).map(_.get.parents.take(1))
+            hash => dag.lookup(hash).map(_.get.parents.take(1))
           )
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
-              weightFromValidatorByDag(blockDag, blockHash, validator).map(weight => {
+              weightFromValidatorByDag(dag, blockHash, validator).map(weight => {
                 val oldValue = acc2.getOrElse(blockHash, 0L)
                 acc2.updated(blockHash, weight + oldValue)
               })
@@ -102,11 +102,11 @@ object Estimator {
     }
 
   def forkChoiceTip[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       blockHash: BlockHash,
       scores: Map[BlockHash, Long]
   ): F[BlockHash] =
-    blockDag.getMainChildren(blockHash).flatMap { mainChildren =>
+    dag.getMainChildren(blockHash).flatMap { mainChildren =>
       {
         // make sure they are reachable from latestMessages
         val reachableMainChildren = mainChildren.filter(scores.contains)
@@ -116,7 +116,7 @@ object Estimator {
           val highestScoreChild =
             reachableMainChildren.maxBy(b => scores(b) -> b.toStringUtf8)
           forkChoiceTip[F](
-            blockDag,
+            dag,
             highestScoreChild,
             scores
           )
