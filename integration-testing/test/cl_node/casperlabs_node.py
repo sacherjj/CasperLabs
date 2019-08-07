@@ -10,12 +10,15 @@ class CasperLabsNode:
     DockerNode handles client calls
 
     """
+
     def __init__(self, network, config):
         self.config = config
         self.socket_volume = self.create_socket_volume()
-        self.execution_engine = DockerExecutionEngine(config, socket_volume=self.socket_volume)
+        self.execution_engine = DockerExecutionEngine(
+            config, socket_volume=self.socket_volume
+        )
         self.node = DockerNode(network, config, socket_volume=self.socket_volume)
-        self.name = f'cl_node-{self.config.number}'
+        self.name = f"cl_node-{self.config.number}"
 
     def create_socket_volume(self) -> str:
         volume_name = f"cl_socket_{random_string(5)}"

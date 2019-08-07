@@ -42,7 +42,7 @@ relay-block-chunk-consumer-timeout = "1second"
 clean-block-storage = false
 
 [lmdb]
-block-store-size = 1
+block-storage-size = 1
 max-dbs = 1
 max-readers = 1
 use-tls = false
@@ -81,7 +81,6 @@ approve-genesis = false
 approve-genesis-interval = "1second"
 approve-genesis-duration = "1second"
 deploy-timestamp = 1
-ignore-deploy-signature = false
 auto-propose-enabled = false
 auto-propose-check-interval = "1second"
 auto-propose-max-interval = "1second"

@@ -192,16 +192,13 @@ dependencies = [
 name = "casperlabs-engine-core"
 version = "0.1.0"
 dependencies = [
- "binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "casperlabs-contract-ffi 0.10.0",
  "casperlabs-engine-shared 0.2.0",
  "casperlabs-engine-storage 0.1.0",
  "casperlabs-engine-wasm-prep 0.1.0",
- "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked-hash-map 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "matches 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -467,6 +464,13 @@ dependencies = [
 
 [[package]]
 name = "ee-441-rng-state"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
+name = "ee-536-regression"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.10.0",
@@ -1052,6 +1056,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "pos"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
+name = "pos-get-payment-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
+name = "pos-refund-purse"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.10.0",

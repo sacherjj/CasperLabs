@@ -4,9 +4,10 @@ import cats.Id
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Effect => _, _}
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
+import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
 import io.casperlabs.casper.validation.Validation
@@ -84,25 +85,18 @@ object Servers {
     )
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStore: ExecutionEngineService: Validation](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployBuffer: Validation](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[F],
-      ignoreDeploySignature: Boolean,
       maybeSslContext: Option[SslContext]
   )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] =
     GrpcServer(
       port = port,
       maxMessageSize = Some(maxMessageSize),
       services = List(
-        // TODO: Phase DeployService out in favor of CasperService.
         (_: Scheduler) =>
-          GrpcDeployService.instance(blockApiLock, ignoreDeploySignature) map {
-            CasperMessageGrpcMonix.bindService(_, grpcExecutor)
-          },
-        (_: Scheduler) =>
-          GrpcCasperService(ignoreDeploySignature) map {
+          GrpcCasperService() map {
             CasperGrpcMonix.bindService(_, grpcExecutor)
           }
       ),
@@ -116,7 +110,7 @@ object Servers {
         logStarted[F]("External", port, maybeSslContext.isDefined)
       )
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStore: ContextShift: FinalizedBlocksStream: ExecutionEngineService](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployBuffer](
       port: Int,
       conf: Configuration,
       id: NodeIdentifier,

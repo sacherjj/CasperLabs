@@ -4,11 +4,12 @@ import cats.data.OptionT
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.casper.consensus._, Block.Justification
+import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
+import io.casperlabs.casper.consensus._
+import Block.Justification
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -19,15 +20,16 @@ import io.casperlabs.ipc
 import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.shared.Time
 import java.util.NoSuchElementException
+
 import scala.collection.immutable
 
 object ProtoUtil {
   /*
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
-  // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
+  // TODO: Move into DAG and remove corresponding param once that is moved over from simulator
   def isInMainChain[F[_]: Monad](
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       candidateBlockMetadata: BlockMetadata,
       targetBlockHash: BlockHash
   ): F[Boolean] =
@@ -52,7 +54,19 @@ object ProtoUtil {
       } yield result
     }
 
-  def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStore](
+  // If targetBlockHash is main descendant of candidateBlockHash, then
+  // it means targetBlockHash vote candidateBlockHash.
+  def isInMainChain[F[_]: Monad](
+      dag: DagRepresentation[F],
+      candidateBlockHash: BlockHash,
+      targetBlockHash: BlockHash
+  ): F[Boolean] =
+    for {
+      candidateBlockMetadata <- dag.lookup(candidateBlockHash)
+      result                 <- isInMainChain(dag, candidateBlockMetadata.get, targetBlockHash)
+    } yield result
+
+  def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStorage](
       estimate: Block,
       acc: IndexedSeq[Block],
       depth: Int
@@ -81,29 +95,29 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  def unsafeGetBlockSummary[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[BlockSummary] =
+  def unsafeGetBlockSummary[F[_]: MonadThrowable: BlockStorage](hash: BlockHash): F[BlockSummary] =
     for {
-      maybeBlock <- BlockStore[F].getBlockSummary(hash)
+      maybeBlock <- BlockStorage[F].getBlockSummary(hash)
       block <- maybeBlock match {
                 case Some(b) => b.pure[F]
                 case None =>
                   MonadThrowable[F].raiseError(
                     new NoSuchElementException(
-                      s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}"
+                      s"BlockStorage is missing hash ${PrettyPrinter.buildString(hash)}"
                     )
                   )
               }
     } yield block
 
-  def unsafeGetBlock[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[Block] =
+  def unsafeGetBlock[F[_]: MonadThrowable: BlockStorage](hash: BlockHash): F[Block] =
     for {
-      maybeBlock <- BlockStore[F].getBlockMessage(hash)
+      maybeBlock <- BlockStorage[F].getBlockMessage(hash)
       block <- maybeBlock match {
                 case Some(b) => b.pure[F]
                 case None =>
                   MonadThrowable[F].raiseError(
                     new NoSuchElementException(
-                      s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}"
+                      s"BlockStorage is missing hash ${PrettyPrinter.buildString(hash)}"
                     )
                   )
               }
@@ -119,7 +133,7 @@ object ProtoUtil {
           validator == header.validatorPublicKey
       }
 
-  def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
+  def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStorage](
       b: Block,
       seqNum: SequenceNumber
   ): F[Option[Block]] =
@@ -134,7 +148,7 @@ object ProtoUtil {
     }
 
   // TODO: Replace with getCreatorJustificationAsListUntilGoal
-  def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
+  def getCreatorJustificationAsList[F[_]: Monad: BlockStorage](
       block: Block,
       validator: Validator,
       goalFunc: Block => Boolean = _ => false
@@ -145,7 +159,7 @@ object ProtoUtil {
     maybeCreatorJustificationHash match {
       case Some(creatorJustificationHash) =>
         for {
-          maybeCreatorJustification <- BlockStore[F].getBlockMessage(
+          maybeCreatorJustification <- BlockStorage[F].getBlockMessage(
                                         creatorJustificationHash.latestBlockHash
                                       )
           maybeCreatorJustificationAsList = maybeCreatorJustification match {
@@ -170,12 +184,12 @@ object ProtoUtil {
     * we return an empty list.
     */
   def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       blockHash: BlockHash,
       goalFunc: BlockHash => Boolean = _ => false
   ): F[List[BlockHash]] =
     (for {
-      meta <- OptionT(blockDag.lookup(blockHash))
+      meta <- OptionT(dag.lookup(blockHash))
       creatorJustificationHash <- OptionT.fromOption[F](
                                    meta.justifications
                                      .find(
@@ -183,7 +197,7 @@ object ProtoUtil {
                                      )
                                      .map(_.latestBlockHash)
                                  )
-      creatorJustification <- OptionT(blockDag.lookup(creatorJustificationHash))
+      creatorJustification <- OptionT(dag.lookup(creatorJustificationHash))
       creatorJustificationAsList = if (goalFunc(creatorJustification.blockHash)) {
         List.empty[BlockHash]
       } else {
@@ -203,19 +217,21 @@ object ProtoUtil {
     weights.values.sum
 
   def minTotalValidatorWeight[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       blockHash: BlockHash,
       maxCliqueMinSize: Int
   ): F[Long] =
-    blockDag.lookup(blockHash).map { blockMetadataOpt =>
+    dag.lookup(blockHash).map { blockMetadataOpt =>
       val sortedWeights = blockMetadataOpt.get.weightMap.values.toVector.sorted
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  private def mainParent[F[_]: Monad: BlockStore](header: Block.Header): F[Option[BlockSummary]] = {
+  private def mainParent[F[_]: Monad: BlockStorage](
+      header: Block.Header
+  ): F[Option[BlockSummary]] = {
     val maybeParentHash = header.parentHashes.headOption
     maybeParentHash match {
-      case Some(parentHash) => BlockStore[F].getBlockSummary(parentHash)
+      case Some(parentHash) => BlockStorage[F].getBlockSummary(parentHash)
       case None             => none[BlockSummary].pure[F]
     }
   }
@@ -229,7 +245,7 @@ object ProtoUtil {
     * @return Weight `validator` put behind the block
     */
   def weightFromValidatorByDag[F[_]: Monad](
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       blockHash: BlockHash,
       validator: Validator
   ): F[Long] =
@@ -245,7 +261,7 @@ object ProtoUtil {
       }
     } yield result
 
-  def weightFromValidator[F[_]: Monad: BlockStore](
+  def weightFromValidator[F[_]: Monad: BlockStorage](
       header: Block.Header,
       validator: Validator
   ): F[Long] =
@@ -256,22 +272,33 @@ object ProtoUtil {
         .getOrElse(weightMap(header).getOrElse(validator, 0L)) //no parents means genesis -- use itself
     } yield weightFromValidator
 
-  def weightFromValidator[F[_]: Monad: BlockStore](
+  def weightFromValidator[F[_]: Monad: BlockStorage](
       b: Block,
       validator: ByteString
   ): F[Long] =
     weightFromValidator[F](b.getHeader, validator)
 
-  def weightFromSender[F[_]: Monad: BlockStore](b: Block): F[Long] =
+  def weightFromSender[F[_]: Monad: BlockStorage](b: Block): F[Long] =
     weightFromValidator[F](b, b.getHeader.validatorPublicKey)
 
-  def weightFromSender[F[_]: Monad: BlockStore](header: Block.Header): F[Long] =
+  def weightFromSender[F[_]: Monad: BlockStorage](header: Block.Header): F[Long] =
     weightFromValidator[F](header, header.validatorPublicKey)
+
+  def mainParentWeightMap[F[_]: Monad](
+      dag: DagRepresentation[F],
+      candidateBlockHash: BlockHash
+  ): F[Map[BlockHash, Long]] =
+    dag.lookup(candidateBlockHash).flatMap { blockOpt =>
+      blockOpt.get.parents.headOption match {
+        case Some(parent) => dag.lookup(parent).map(_.get.weightMap)
+        case None         => blockOpt.get.weightMap.pure[F]
+      }
+    }
 
   def parentHashes(b: Block): Seq[ByteString] =
     b.getHeader.parentHashes
 
-  def unsafeGetParents[F[_]: MonadThrowable: BlockStore](b: Block): F[List[Block]] =
+  def unsafeGetParents[F[_]: MonadThrowable: BlockStorage](b: Block): F[List[Block]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
     } handleErrorWith {
@@ -327,7 +354,7 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: MonadThrowable: BlockStore](
+  def toLatestMessage[F[_]: MonadThrowable: BlockStorage](
       justifications: Seq[Justification]
   ): F[immutable.Map[Validator, BlockMetadata]] =
     justifications.toList.foldM(Map.empty[Validator, BlockMetadata]) {
@@ -385,7 +412,7 @@ object ProtoUtil {
 
   def signBlock[F[_]: Applicative](
       block: Block,
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       pk: PublicKey,
       sk: PrivateKey,
       sigAlgorithm: SignatureAlgorithm
@@ -483,6 +510,9 @@ object ProtoUtil {
       .toSet
     (missingParents union missingJustifications).toList
   }
+
+  def createdBy(validatorId: ValidatorIdentity, block: Block): Boolean =
+    block.getHeader.validatorPublicKey == ByteString.copyFrom(validatorId.publicKey)
 
   implicit class DeployOps(d: Deploy) {
     def incrementNonce(): Deploy =

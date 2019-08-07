@@ -126,7 +126,7 @@ lazy val casper = (project in file("casper"))
     )
   )
   .dependsOn(
-    blockStorage   % "compile->compile;test->test",
+    storage        % "compile->compile;test->test",
     comm           % "compile->compile;test->test",
     shared         % "compile->compile;test->test",
     smartContracts % "compile->compile;test->test",
@@ -354,16 +354,18 @@ lazy val node = (project in file("node"))
   )
   .dependsOn(casper, comm, crypto)
 
-lazy val blockStorage = (project in file("block-storage"))
+lazy val storage = (project in file("storage"))
   .enablePlugins(JmhPlugin)
   .settings(commonSettings: _*)
   .settings(jmhSettings: _*)
   .settings(
-    name := "block-storage",
+    name := "storage",
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       lmdbjava,
       sqlLite,
+      doobieCore,
+      doobieHikari,
       flyway,
       catsCore,
       catsEffect,
@@ -586,7 +588,7 @@ lazy val gatling = (project in file("gatling"))
 lazy val casperlabs = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(
-    blockStorage,
+    storage,
     casper,
     comm,
     crypto,

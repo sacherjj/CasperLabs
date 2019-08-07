@@ -9,7 +9,7 @@ import cats.syntax.show._
 import eu.timepit.refined._
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
-import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
+import io.casperlabs.blockstorage.{FileDagStorage, LMDBBlockStorage}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
@@ -115,7 +115,6 @@ class ConfigurationSpec
       approveGenesisDuration = FiniteDuration(1, TimeUnit.SECONDS),
       deployTimestamp = 1L.some,
       genesisPath = Paths.get("/tmp/genesis"),
-      ignoreDeploySignature = false,
       autoProposeEnabled = false,
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeMaxInterval = FiniteDuration(1, TimeUnit.SECONDS),
@@ -126,9 +125,9 @@ class ConfigurationSpec
       key = Paths.get("/tmp/test"),
       secureRandomNonBlocking = false
     )
-    val lmdb = LMDBBlockStore.Config(
-      dir = Paths.get("/tmp/lmdb-block-store"),
-      blockStoreSize = 1L,
+    val lmdb = LMDBBlockStorage.Config(
+      dir = Paths.get("/tmp/lmdb-block-storage"),
+      blockStorageSize = 1L,
       maxDbs = 1,
       maxReaders = 1,
       useTls = false

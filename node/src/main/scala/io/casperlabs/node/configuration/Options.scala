@@ -266,7 +266,7 @@ private[configuration] final case class Options private (
       gen[Path](
         "Path to plain text file listing the public keys of validators known to the user (one per line). " +
           "Signatures from these validators are required in order to accept a block which starts the local" +
-          s"node's view of the blockDAG."
+          s"node's view of the DAG."
       )
     @scallop
     val casperWalletsFile =
@@ -302,10 +302,6 @@ private[configuration] final case class Options private (
       gen[Path]("Path to the Wasm file which contains the Proof-of-Stake contract")
 
     @scallop
-    val casperIgnoreDeploySignature =
-      gen[Flag]("Bypass deploy hash and signature validation, for debug purposes.")
-
-    @scallop
     val casperAutoProposeEnabled =
       gen[Flag]("Enable auto-proposal of blocks.")
 
@@ -330,7 +326,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverCleanBlockStorage =
-      gen[Flag]("Use this flag to clear the blockStore and blockDagStorage")
+      gen[Flag]("Use this flag to clear the blockStorage and dagStorage")
 
     @scallop
     val serverUseGossiping =
@@ -484,8 +480,8 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum number of peers allowed to connect to the node.")
 
     @scallop
-    val lmdbBlockStoreSize =
-      gen[Long]("Casper BlockStore map size (in bytes).")
+    val lmdbBlockStorageSize =
+      gen[Long]("Casper BlockStorage map size (in bytes).")
 
     @scallop
     val lmdbMaxDbs =

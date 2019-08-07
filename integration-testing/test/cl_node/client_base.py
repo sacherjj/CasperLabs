@@ -3,20 +3,21 @@ from typing import Optional
 
 
 class CasperLabsClient(ABC):
-
     @property
     @abstractmethod
     def client_type(self) -> str:
-        return 'abstract'
+        return "abstract"
 
     @abstractmethod
-    def deploy(self,
-               from_address: str = None,
-               gas_limit: int = 1000000,
-               gas_price: int = 1,
-               nonce: int = None,  # nonce == None means framework should provide correct nonce
-               session_contract: Optional[str] = None,
-               payment_contract: Optional[str] = None) -> str:
+    def deploy(
+        self,
+        from_address: str = None,
+        gas_limit: int = 1000000,
+        gas_price: int = 1,
+        nonce: int = None,  # nonce == None means framework should provide correct nonce
+        session_contract: Optional[str] = None,
+        payment_contract: Optional[str] = None,
+    ) -> str:
         pass
 
     @abstractmethod
