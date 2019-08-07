@@ -25,8 +25,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     connectToGossip: Node => F[GossipService[F]],
     backend: SynchronizerImpl.Backend[F],
     maxPossibleDepth: Int Refined Positive,
-    minBlockCountToCheckBranchingFactor: Int Refined NonNegative,
-    maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
+    minBlockCountToCheckWidth: Int Refined NonNegative,
+    maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
     maxDepthAncestorsRequest: Int Refined Positive,
     maxInitialBlockCount: Int Refined Positive,
     // Before the initial sync has succeeded we allow more depth.
@@ -298,21 +298,22 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       }
     }
 
-  // TODO: Rewrite this check to be based on the number of validators:
-  // at any rank the DAG cannot be wider then the number of validators,
-  // otherwise some of them would be equivocating (which is fine, up to a threshold of 0.33).
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
     val depth = syncState.distanceFromOriginalTarget.values.toList.maximumOption.getOrElse(0)
-    val maxTotal =
-      if (maxBranchingFactor <= 1) depth
-      else {
-        ((math.pow(maxBranchingFactor, depth.toDouble) - 1) / (maxBranchingFactor - 1)).ceil.toInt
-      }
-    val total = syncState.summaries.size
-    if (total > minBlockCountToCheckBranchingFactor &&
+    val maxValidatorCountAtTargets = syncState.originalTargets.map { t =>
+      syncState.summaries.get(t).fold(1)(s => s.getHeader.getState.bonds.size)
+    }.max
+    // Validators can come and leave at a certain rate. If someone unbonded at every step along
+    // the way we'd get as wide a graph as we can get.
+    val maxValidators = maxValidatorCountAtTargets + Math.ceil(depth * maxBondingRate).toInt
+    // Estimate the most conservative estimate to be with 33% of the validators all equivocating
+    // at every rank, and use the average maximum validator count as a higher bound.
+    val maxTotal = Math.ceil((maxValidators + maxValidatorCountAtTargets) / 2 * depth * 1.33).toInt
+    val total    = syncState.summaries.size
+    if (total > minBlockCountToCheckWidth &&
         total > syncState.originalTargets.size &&
         total > maxTotal) {
-      EitherT((TooWide(maxBranchingFactor, maxTotal, total): SyncError).asLeft[Unit].pure[F])
+      EitherT((TooWide(maxBondingRate, depth, maxTotal, total): SyncError).asLeft[Unit].pure[F])
     } else {
       EitherT(().asRight[SyncError].pure[F])
     }
@@ -379,8 +380,8 @@ object SynchronizerImpl {
       connectToGossip: Node => F[GossipService[F]],
       backend: SynchronizerImpl.Backend[F],
       maxPossibleDepth: Int Refined Positive,
-      minBlockCountToCheckBranchingFactor: Int Refined NonNegative,
-      maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
+      minBlockCountToCheckWidth: Int Refined NonNegative,
+      maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
       maxDepthAncestorsRequest: Int Refined Positive,
       maxInitialBlockCount: Int Refined Positive,
       isInitialRef: Ref[F, Boolean]
@@ -393,8 +394,8 @@ object SynchronizerImpl {
         connectToGossip,
         backend,
         maxPossibleDepth,
-        minBlockCountToCheckBranchingFactor,
-        maxBranchingFactor,
+        minBlockCountToCheckWidth,
+        maxBondingRate,
         maxDepthAncestorsRequest,
         maxInitialBlockCount,
         isInitialRef,
