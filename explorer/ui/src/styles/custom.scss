@@ -50,3 +50,16 @@ button.link:hover {
 button.icon-button {
   color: inherit;
 }
+
+div.svg-container {
+  position: relative;
+}
+div.svg-hint {
+  position: absolute;
+  bottom: 0;
+  display: none;
+  opacity: 0.75;
+  background-color: #666666;
+  color: white;
+  padding: 5px;
+}
