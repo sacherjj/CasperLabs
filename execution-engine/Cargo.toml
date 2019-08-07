@@ -32,6 +32,7 @@ members = [
     "contracts/test/transfer-purse-to-purse",
     "contracts/test/transfer-to-account-01",
     "contracts/test/transfer-to-account-02",
+    "contracts/test/key-management-thresholds",
     "engine-core",
     "engine-grpc-server",
     "engine-metrics-scraper",
