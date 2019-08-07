@@ -119,8 +119,10 @@ fn should_raise_deploy_authorization_failure() {
     // tests that authorized keys needs sufficient cumulative weight
     let key_1 = [254; 32];
     let key_2 = [253; 32];
+    let key_3 = [252; 32];
     assert_ne!(GENESIS_ADDR, key_1);
     assert_ne!(GENESIS_ADDR, key_2);
+    assert_ne!(GENESIS_ADDR, key_3);
     // Basic deploy with single key
     let result1 = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
@@ -143,13 +145,22 @@ fn should_raise_deploy_authorization_failure() {
         )
         .expect_success()
         .commit()
+        .exec_with_args(
+            GENESIS_ADDR,
+            "add_update_associated_key.wasm",
+            DEFAULT_BLOCK_TIME,
+            3,
+            PublicKey::new(key_3),
+        )
+        .expect_success()
+        .commit()
         // This should execute successfuly - change deploy and key management
         // thresholds.
         .exec_with_args_and_keys(
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            3, // nonce
+            4, // nonce
             // Deploy threshold is equal to 3, keymgmnt is still 1.
             // Even after verifying weights and thresholds to not
             // lock out the account, those values should work as
@@ -169,7 +180,7 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            4, // nonce
+            5, // nonce
             // Next deploy will see deploy threshold == 4, keymgmnt == 5
             (Weight::new(5), Weight::new(4)), //args
             vec![PublicKey::new(key_1)],
@@ -205,10 +216,15 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            4, // nonce
+            5, // nonce
             // change deployment threshold to 4
             (Weight::new(6), Weight::new(5)), //args
-            vec![PublicKey::new(GENESIS_ADDR), PublicKey::new(key_1)],
+            vec![
+                PublicKey::new(GENESIS_ADDR),
+                PublicKey::new(key_1),
+                PublicKey::new(key_2),
+                PublicKey::new(key_3),
+            ],
         )
         .expect_success()
         .commit()
@@ -221,7 +237,7 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            5,                                // nonce
+            6,                                // nonce
             (Weight::new(0), Weight::new(0)), //args
             vec![PublicKey::new(key_2), PublicKey::new(key_1)],
         )
@@ -256,12 +272,13 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            5,                                // nonce
+            6,                                // nonce
             (Weight::new(0), Weight::new(0)), //args
             vec![
                 PublicKey::new(GENESIS_ADDR),
                 PublicKey::new(key_1),
                 PublicKey::new(key_2),
+                PublicKey::new(key_3),
             ],
         )
         .commit()

@@ -756,6 +756,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "key-management-thresholds"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
 name = "known-urefs"
 version = "0.1.0"
 dependencies = [
