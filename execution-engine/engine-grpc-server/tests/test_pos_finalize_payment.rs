@@ -23,6 +23,8 @@ use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 mod test_support;
 
 const FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
+const LOCAL_REFUND_PURSE: &str = "local_refund_purse";
+const POS_REFUND_PURSE_NAME: &str = "pos_refund_purse";
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const ACCOUNT_ADDR: [u8; 32] = [1u8; 32];
@@ -111,6 +113,50 @@ fn finalize_payment_should_pay_validators_and_refund_user() {
     assert!(payment_post_balance.is_zero()); // payment purse always ends with zero balance
 }
 
+#[ignore]
+#[test]
+fn finalize_payment_should_refund_to_specified_purse() {
+    let mut builder = initialize();
+    let payment_amount = U512::from(300);
+    let spent_amount = U512::from(75);
+    let refund_purse_flag: u8 = 1;
+    let args = (
+        payment_amount,
+        refund_purse_flag,
+        spent_amount,
+        ACCOUNT_ADDR,
+    );
+
+    let payment_pre_balance = get_pos_payment_purse_balance(&builder);
+    let rewards_pre_balance = get_pos_rewards_purse_balance(&builder);
+    let refund_pre_balance = get_named_account_balance(&builder, SYSTEM_ADDR, LOCAL_REFUND_PURSE)
+        .unwrap_or_else(U512::zero);
+
+    assert!(get_pos_refund_purse(&builder).is_none()); // refund_purse always starts unset
+    assert!(payment_pre_balance.is_zero()); // payment purse always starts with zero balance
+
+    builder
+        .exec_with_args(SYSTEM_ADDR, FINALIZE_PAYMENT, DEFAULT_BLOCK_TIME, 1, args)
+        .expect_success()
+        .commit();
+
+    let payment_post_balance = get_pos_payment_purse_balance(&builder);
+    let rewards_post_balance = get_pos_rewards_purse_balance(&builder);
+    let refund_post_balance = get_named_account_balance(&builder, SYSTEM_ADDR, LOCAL_REFUND_PURSE)
+        .expect("should have refund balance");
+
+    assert_eq!(rewards_pre_balance + spent_amount, rewards_post_balance); // validators get paid
+
+    // user gets refund
+    assert_eq!(
+        refund_pre_balance + payment_amount - spent_amount,
+        refund_post_balance
+    );
+
+    assert!(get_pos_refund_purse(&builder).is_none()); // refund_purse always ends unset
+    assert!(payment_post_balance.is_zero()); // payment purse always ends with zero balance
+}
+
 fn get_pos_payment_purse_balance(builder: &WasmTestBuilder) -> U512 {
     let purse_id = get_pos_purse_id_by_name(builder, POS_PAYMENT_PURSE)
         .expect("should find PoS payment purse");
@@ -123,17 +169,30 @@ fn get_pos_rewards_purse_balance(builder: &WasmTestBuilder) -> U512 {
     get_purse_balance(builder, purse_id)
 }
 
-fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Option<PurseId> {
+fn get_pos_refund_purse(builder: &WasmTestBuilder) -> Option<Key> {
+    let pos_contract = get_pos_contract(builder);
+
+    pos_contract
+        .urefs_lookup()
+        .get(POS_REFUND_PURSE_NAME)
+        .cloned()
+}
+
+fn get_pos_contract(builder: &WasmTestBuilder) -> Contract {
     let genesis_key = Key::Account(GENESIS_ADDR);
     let pos_uref: Key = builder
         .query(None, genesis_key, &[POS_NAME])
         .and_then(|v| v.try_into().ok())
         .expect("should find PoS URef");
 
-    let pos_contract: Contract = builder
+    builder
         .query(None, pos_uref, &[])
         .and_then(|v| v.try_into().ok())
-        .expect("should find PoS Contract");
+        .expect("should find PoS Contract")
+}
+
+fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Option<PurseId> {
+    let pos_contract = get_pos_contract(builder);
 
     pos_contract
         .urefs_lookup()
@@ -153,6 +212,27 @@ fn get_account_balance(builder: &WasmTestBuilder, account_address: [u8; 32]) -> 
     let purse_id = account.purse_id();
 
     get_purse_balance(builder, purse_id)
+}
+
+fn get_named_account_balance(
+    builder: &WasmTestBuilder,
+    account_address: [u8; 32],
+    name: &str,
+) -> Option<U512> {
+    let account_key = Key::Account(account_address);
+
+    let account: Account = builder
+        .query(None, account_key, &[])
+        .and_then(|v| v.try_into().ok())
+        .expect("should find balance uref");
+
+    let purse_id = account
+        .urefs_lookup()
+        .get(name)
+        .and_then(Key::as_uref)
+        .map(|u| PurseId::new(*u));
+
+    purse_id.map(|id| get_purse_balance(builder, id))
 }
 
 fn get_purse_balance(builder: &WasmTestBuilder, purse_id: PurseId) -> U512 {
