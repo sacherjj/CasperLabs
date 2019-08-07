@@ -6,8 +6,9 @@ PYTEST_ARGS="-vv -ra "
 if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "test" ]]; then
     # We only want to limit maxfail in CI
     PYTEST_ARGS="${PYTEST_ARGS} --maxfail=3 --tb=short"
-else
+elif [[ "$TAG_NAME" != "test" ]]; then
     # We want to compile contracts if run locally
+    # But we can't if tag is "test" as we can't compile Rust in local docker.
     ./contracts/build_contracts.sh
 fi
 
