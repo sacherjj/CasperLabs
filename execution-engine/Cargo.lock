@@ -1076,6 +1076,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pos-finalize-payment"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
 name = "pos-get-payment-purse"
 version = "0.1.0"
 dependencies = [
