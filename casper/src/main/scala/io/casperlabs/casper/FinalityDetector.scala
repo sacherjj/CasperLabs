@@ -64,65 +64,13 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
       dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
       validators: List[Validator]
-  ): F[Map[Validator, List[BlockMetadata]]] = {
-
-    // Get level zero messages of the specified validator
-    def levelZeroMsgsOfValidator(
-        validator: Validator
-    ): F[List[BlockMetadata]] =
-      dag.latestMessage(validator).flatMap {
-        case Some(latestMsgByValidator) =>
-          DagOperations
-            .bfTraverseF[F, BlockMetadata](List(latestMsgByValidator))(
-              previousAgreedBlockFromTheSameValidator(
-                dag,
-                _,
-                candidateBlockHash,
-                validator
-              )
-            )
-            .toList
-        case None => List.empty[BlockMetadata].pure[F]
-      }
-
-    /*
-     * Traverses back the j-DAG of `block` (one step at a time), following `validator`'s blocks
-     * and collecting them as long as they are descendants of the `candidateBlockHash`.
-     */
-    def previousAgreedBlockFromTheSameValidator(
-        dag: DagRepresentation[F],
-        block: BlockMetadata,
-        candidateBlockHash: BlockHash,
-        validator: Validator
-    ): F[List[BlockMetadata]] = {
-      // Assumes that validator always includes his last message as justification.
-      val previousHashO = block.justifications
-        .find(
-          _.validatorPublicKey == validator
-        )
-        .map(_.latestBlockHash)
-
-      previousHashO match {
-        case Some(previousHash) =>
-          ProtoUtil
-            .isInMainChain[F](dag, candidateBlockHash, previousHash)
-            .flatMap[List[BlockMetadata]](
-              isActiveVote =>
-                // If parent block of `block` is not in the main chain of `candidateBlockHash`
-                // we don't include it in the set of level-0 messages.
-                if (isActiveVote) dag.lookup(previousHash).map(_.toList)
-                else List.empty[BlockMetadata].pure[F]
-            )
-        case None =>
-          List.empty[BlockMetadata].pure[F]
-      }
-    }
-
+  ): F[Map[Validator, List[BlockMetadata]]] =
     validators.foldLeftM(Map.empty[Validator, List[BlockMetadata]]) {
       case (acc, v) =>
-        levelZeroMsgsOfValidator(v).map(acc.updated(v, _))
+        FinalityDetectorUtil
+          .levelZeroMsgsOfValidator(dag, v, candidateBlockHash)
+          .map(acc.updated(v, _))
     }
-  }
 
   // Reducing L to a committee with quorum q
   // In a loop, prune L to quorum q, and prune L to the set of validators with a block in L_k,
