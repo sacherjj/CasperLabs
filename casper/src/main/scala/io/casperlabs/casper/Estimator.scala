@@ -17,17 +17,17 @@ object Estimator {
 
   def tips[F[_]: Monad](
       dag: DagRepresentation[F],
-      genesisHash: BlockHash
+      stopHash: BlockHash
   ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- dag.latestMessageHashes
       result <- Estimator
-                 .tips[F](dag, genesisHash, latestMessageHashes)
+                 .tips[F](dag, stopHash, latestMessageHashes)
     } yield result.toIndexedSeq
 
   def tips[F[_]: Monad](
       dag: DagRepresentation[F],
-      genesisHash: BlockHash,
+      stopHash: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
 
@@ -65,8 +65,8 @@ object Estimator {
       } yield result
 
     for {
-      scores           <- lmdScoring(dag, latestMessagesHashes)
-      newMainParent    <- forkChoiceTip(dag, genesisHash, scores)
+      scores           <- lmdScoring(dag, stopHash, latestMessagesHashes)
+      newMainParent    <- forkChoiceTip(dag, stopHash, scores)
       parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
       secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
@@ -78,12 +78,15 @@ object Estimator {
   /** Computes scores for LMD GHOST.
     *
     * Starts at the latest messages from currently bonded validators
-    * and traverses up to the Genesis, collecting scores per block.
+    * and traverses up to the stop hash, collecting blocks' scores
+    * (which is the weight of validators who include that block as main parent of their block).
     *
+    * @param stopHash Block at which we stop computing scores. Should be latest common ancestor of `latestMessagesHashes`.
     * @return Scores map.
     */
   def lmdScoring[F[_]: Monad](
       dag: DagRepresentation[F],
+      stopHash: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[Map[BlockHash, Long]] =
     latestMessagesHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
@@ -92,6 +95,7 @@ object Estimator {
           .bfTraverseF[F, BlockHash](List(latestMessageHash))(
             hash => dag.lookup(hash).map(_.get.parents.take(1))
           )
+          .takeUntil(_ != stopHash)
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
               weightFromValidatorByDag(dag, blockHash, validator).map(weight => {
@@ -104,7 +108,7 @@ object Estimator {
   /**
     * Computes fork choice.
     *
-    * @param blockDag Representation of the Block DAG.
+    * @param dag Representation of the Block DAG.
     * @param startingBlock Starting block for the fork choice rule.
     * @param scores Map of block's scores.
     * @return Block hash chosen by the fork choice rule.
