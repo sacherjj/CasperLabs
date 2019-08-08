@@ -420,7 +420,7 @@ object ProtoUtil {
     val validator = ByteString.copyFrom(pk)
     for {
       latestMessageOpt <- dag.latestMessage(validator)
-      seqNum           = latestMessageOpt.fold(0)(_.validatorBlockSeqNum) + 1
+      seqNum           = latestMessageOpt.fold(-1)(_.validatorBlockSeqNum) + 1
       header = {
         assert(block.header.isDefined, "A block without a header doesn't make sense")
         block.getHeader
