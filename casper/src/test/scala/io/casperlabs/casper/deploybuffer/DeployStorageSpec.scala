@@ -4,8 +4,9 @@ import cats.data.NonEmptyList
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
+import io.casperlabs.crypto.codec.Base16
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest._
@@ -14,16 +15,17 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import scala.concurrent.duration._
 import scala.util.Random
 
-/* Trait for testing various implementations of DeployBuffer */
-@silent(".*")
-trait DeployBufferSpec
+/* Trait for testing various implementations of DeployStorageReader and DeployStorageWriter */
+trait DeployStorageSpec
     extends WordSpec
     with Matchers
     with ArbitraryConsensus
     with GeneratorDrivenPropertyChecks {
 
-  /* Implement this method in descendants substituting various DeployBuffer implementations */
-  protected def testFixture(test: DeployBuffer[Task] => Task[Unit]): Unit
+  /* Implement this method in descendants substituting various DeployStorageReader and DeployStorageWriter implementations */
+  protected def testFixture(
+      test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit]
+  ): Unit
 
   private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
@@ -36,14 +38,15 @@ trait DeployBufferSpec
       deploys <- Gen.listOfN(n, arbDeploy.arbitrary)
     } yield deploys
 
-  "DeployBuffer" when {
+  "DeployStorageReader and DeployStorageWriter" when {
     "((addAsPending + markAsDiscarded) | (addAsProcessed + markAsFinalized)) + getPendingOrProcessed" should {
       "return None" in forAll(deploysGen(), Arbitrary.arbBool.arbitrary) { (ds, bool) =>
-        testFixture { db =>
+        testFixture { (reader, writer) =>
           for {
-            _ <- if (bool) db.addAsPending(ds) >> db.markAsDiscarded(ds)
-                else db.addAsProcessed(ds) >> db.markAsFinalized(ds)
-            _ <- db.getPendingOrProcessed(chooseHash(ds)).foreachL(_ shouldBe None)
+            _ <- if (bool)
+                  writer.addAsPending(ds) >> writer.markAsDiscarded(ds)
+                else writer.addAsProcessed(ds) >> writer.markAsFinalized(ds)
+            _ <- reader.getPendingOrProcessed(chooseHash(ds)).foreachL(_ shouldBe None)
           } yield ()
         }
       }
@@ -55,15 +58,15 @@ trait DeployBufferSpec
         Arbitrary.arbBool.arbitrary,
         Arbitrary.arbBool.arbitrary
       ) { (ds, pendingOrProcessed, secondStep) =>
-        testFixture { db =>
+        testFixture { (reader, writer) =>
           for {
             _ <- if (pendingOrProcessed)
-                  db.addAsPending(ds) >> (if (secondStep) db.markAsProcessed(ds)
-                                          else Task.unit)
+                  writer.addAsPending(ds) >> (if (secondStep) writer.markAsProcessed(ds)
+                                              else Task.unit)
                 else
-                  db.addAsProcessed(ds) >> (if (secondStep) db.markAsPending(ds)
-                                            else Task.unit)
-            _ <- db.getPendingOrProcessed(chooseHash(ds)).foreachL(_ should not be empty)
+                  writer.addAsProcessed(ds) >> (if (secondStep) writer.markAsPending(ds)
+                                                else Task.unit)
+            _ <- reader.getPendingOrProcessed(chooseHash(ds)).foreachL(_ should not be empty)
           } yield ()
         }
       }
@@ -74,13 +77,19 @@ trait DeployBufferSpec
         Arbitrary.arbBool.arbitrary
       )(
         b =>
-          testFixture { db =>
+          testFixture { (reader, writer) =>
             val d1 = sample(arbDeploy.arbitrary)
             val d2 = sample(arbDeploy.arbitrary)
 
             val (add1, add2, read) =
-              if (b) (db.addAsPending(d1), db.addAsPending(List(d1, d2)), db.readPending)
-              else (db.addAsProcessed(d1), db.addAsProcessed(List(d1, d2)), db.readProcessed)
+              if (b)
+                (writer.addAsPending(d1), writer.addAsPending(List(d1, d2)), reader.readPending)
+              else
+                (
+                  writer.addAsProcessed(d1),
+                  writer.addAsProcessed(List(d1, d2)),
+                  reader.readProcessed
+                )
             for {
               _ <- add1
               _ <- add2.attempt.foreachL(_ shouldBe an[Right[_, _]])
@@ -111,7 +120,7 @@ trait DeployBufferSpec
     }
 
     "readProcessedByAccount" should {
-      "return only processed deploys with appropriate account" in testFixture { db =>
+      "return only processed deploys with appropriate account" in testFixture { (reader, writer) =>
         val pending   = sample(arbDeploy.arbitrary)
         val processed = sample(arbDeploy.arbitrary)
         val finalized = sample(arbDeploy.arbitrary)
@@ -122,13 +131,12 @@ trait DeployBufferSpec
             .withDeployHash(sample(genHash))
         for {
           //given
-          _ <- db.addAsPending(pending)
-          _ <- db.addAsProcessed(List(processed, wrongAccount))
-          _ <- db.addAsDiscarded(discarded)
-          _ <- db.addAsFinalized(finalized)
+          _ <- writer.addAsPending(pending)
+          _ <- writer.addAsProcessed(List(processed, wrongAccount))
+          _ <- writer.addAsDiscarded(discarded)
+          _ <- writer.addAsFinalized(finalized)
           //when
-          p <- db
-                .readProcessedByAccount(processed.getHeader.accountPublicKey)
+          p <- reader.readProcessedByAccount(processed.getHeader.accountPublicKey)
           //should
         } yield {
           p shouldBe List(processed)
@@ -137,7 +145,7 @@ trait DeployBufferSpec
     }
 
     "markAsPending" should {
-      "affect only processed deploys" in testFixture { db =>
+      "affect only processed deploys" in testFixture { (reader, writer) =>
         val pending   = sample(arbDeploy.arbitrary)
         val processed = sample(arbDeploy.arbitrary)
         val finalized = sample(arbDeploy.arbitrary)
@@ -145,14 +153,14 @@ trait DeployBufferSpec
         val all       = List(pending, processed, finalized, discarded)
         for {
           //given
-          _ <- db.addAsPending(pending)
-          _ <- db.addAsProcessed(processed)
-          _ <- db.addAsDiscarded(discarded)
-          _ <- db.addAsFinalized(finalized)
+          _ <- writer.addAsPending(pending)
+          _ <- writer.addAsProcessed(processed)
+          _ <- writer.addAsDiscarded(discarded)
+          _ <- writer.addAsFinalized(finalized)
           //when
-          _ <- db.markAsPending(all)
+          _ <- writer.markAsPending(all)
           //should
-          p <- db.readPending
+          p <- reader.readPending
         } yield {
           p should contain theSameElementsAs List(pending, processed)
         }
@@ -160,7 +168,7 @@ trait DeployBufferSpec
     }
 
     "markAsProcessed" should {
-      "affect only pending deploys" in testFixture { db =>
+      "affect only pending deploys" in testFixture { (reader, writer) =>
         val pending   = sample(arbDeploy.arbitrary)
         val processed = sample(arbDeploy.arbitrary)
         val finalized = sample(arbDeploy.arbitrary)
@@ -168,14 +176,14 @@ trait DeployBufferSpec
         val all       = List(pending, processed, finalized, discarded)
         for {
           //given
-          _ <- db.addAsPending(pending)
-          _ <- db.addAsProcessed(processed)
-          _ <- db.addAsDiscarded(discarded)
-          _ <- db.addAsFinalized(finalized)
+          _ <- writer.addAsPending(pending)
+          _ <- writer.addAsProcessed(processed)
+          _ <- writer.addAsDiscarded(discarded)
+          _ <- writer.addAsFinalized(finalized)
           //when
-          _ <- db.markAsProcessed(all)
+          _ <- writer.markAsProcessed(all)
           //should
-          p <- db.readProcessed
+          p <- reader.readProcessed
         } yield {
           p should contain theSameElementsAs List(pending, processed)
         }
@@ -183,7 +191,7 @@ trait DeployBufferSpec
     }
 
     "markAsFinalized" should {
-      "affect only processed deploys" in testFixture { db =>
+      "affect only processed deploys" in testFixture { (reader, writer) =>
         val pending   = sample(arbDeploy.arbitrary)
         val processed = sample(arbDeploy.arbitrary)
         val finalized = sample(arbDeploy.arbitrary)
@@ -191,22 +199,22 @@ trait DeployBufferSpec
         val all       = List(pending, processed, finalized, discarded)
         for {
           //given
-          _ <- db.addAsPending(pending)
-          _ <- db.addAsProcessed(processed)
-          _ <- db.addAsDiscarded(discarded)
-          _ <- db.addAsFinalized(finalized)
+          _ <- writer.addAsPending(pending)
+          _ <- writer.addAsProcessed(processed)
+          _ <- writer.addAsDiscarded(discarded)
+          _ <- writer.addAsFinalized(finalized)
           //when
-          _ <- db.markAsFinalized(all)
+          _ <- writer.markAsFinalized(all)
           //should
-          _ <- db.readProcessed.foreachL(_ shouldBe empty)
-          _ <- db.readPending.foreachL(_ shouldBe List(pending))
-          _ <- db.discardedNum().foreachL(_ shouldBe 1)
+          _ <- reader.readProcessed.foreachL(_ shouldBe empty)
+          _ <- reader.readPending.foreachL(_ shouldBe List(pending))
+          _ <- writer.discardedNum().foreachL(_ shouldBe 1)
         } yield ()
       }
     }
 
     "markAsDiscarded" should {
-      "affect only pending deploys" in testFixture { db =>
+      "affect only pending deploys" in testFixture { (reader, writer) =>
         val pending   = sample(arbDeploy.arbitrary)
         val processed = sample(arbDeploy.arbitrary)
         val finalized = sample(arbDeploy.arbitrary)
@@ -214,16 +222,16 @@ trait DeployBufferSpec
         val all       = List(pending, processed, finalized, discarded)
         for {
           //given
-          _ <- db.addAsPending(pending)
-          _ <- db.addAsProcessed(processed)
-          _ <- db.addAsDiscarded(discarded)
-          _ <- db.addAsFinalized(finalized)
+          _ <- writer.addAsPending(pending)
+          _ <- writer.addAsProcessed(processed)
+          _ <- writer.addAsDiscarded(discarded)
+          _ <- writer.addAsFinalized(finalized)
           //when
-          _ <- db.markAsDiscarded(all)
+          _ <- writer.markAsDiscarded(all)
           //should
-          _ <- db.readProcessed.foreachL(_ shouldBe List(processed))
-          _ <- db.readPending.foreachL(_ shouldBe empty)
-          _ <- db.discardedNum().foreachL(_ shouldBe 2)
+          _ <- reader.readProcessed.foreachL(_ shouldBe List(processed))
+          _ <- reader.readPending.foreachL(_ shouldBe empty)
+          _ <- writer.discardedNum().foreachL(_ shouldBe 2)
         } yield ()
       }
     }
@@ -234,16 +242,16 @@ trait DeployBufferSpec
         Arbitrary.arbBool.arbitrary
       )(
         (ds: List[Deploy], b: Boolean) =>
-          testFixture { db =>
+          testFixture { (reader, writer) =>
             for {
-              _ <- if (b) db.addAsPending(ds) >> db.markAsDiscarded(ds)
-                  else db.addAsProcessed(ds) >> db.markAsFinalized(ds)
+              _ <- if (b) writer.addAsPending(ds) >> writer.markAsDiscarded(ds)
+                  else writer.addAsProcessed(ds) >> writer.markAsFinalized(ds)
               _ <- (
-                    db.readPending,
-                    db.readPendingHashes,
-                    db.readProcessed,
-                    db.readProcessedHashes,
-                    db.readProcessedByAccount(chooseAccount(ds))
+                    reader.readPending,
+                    reader.readPendingHashes,
+                    reader.readProcessed,
+                    reader.readProcessedHashes,
+                    reader.readProcessedByAccount(chooseAccount(ds))
                   ).mapN {
                     (pending, pendingHashes, processed, processedHashes, processedByAccount) =>
                       pending shouldBe empty
@@ -258,40 +266,41 @@ trait DeployBufferSpec
     }
 
     "cleanupDiscarded" should {
-      "delete discarded deploys only older than 'now - expirationPeriod'" in testFixture { db =>
-        val first  = sample(arbDeploy.arbitrary)
-        val second = sample(arbDeploy.arbitrary)
-        for {
-          _ <- db.addAsPending(List(first, second))
-          _ <- db.markAsDiscarded(List(first))
-          _ <- Task.sleep(1.second)
-          _ <- db.markAsDiscarded(List(second))
-          _ <- db.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 1)
-          _ <- Task.sleep(1.second)
-          _ <- db.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 1)
-          _ <- Task.sleep(1.second)
-          _ <- db.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 0)
-        } yield ()
+      "delete discarded deploys only older than 'now - expirationPeriod'" in testFixture {
+        (_, writer) =>
+          val first  = sample(arbDeploy.arbitrary)
+          val second = sample(arbDeploy.arbitrary)
+          for {
+            _ <- writer.addAsPending(List(first, second))
+            _ <- writer.markAsDiscarded(List(first))
+            _ <- Task.sleep(1.second)
+            _ <- writer.markAsDiscarded(List(second))
+            _ <- writer.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 1)
+            _ <- Task.sleep(1.second)
+            _ <- writer.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 1)
+            _ <- Task.sleep(1.second)
+            _ <- writer.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 0)
+          } yield ()
       }
     }
 
     "markAsDiscarded(duration)" should {
       "mark only pending deploys were added more than 'now - expirationPeriod' time ago" in testFixture {
-        db =>
+        (reader, writer) =>
           val first  = sample(arbDeploy.arbitrary)
           val second = sample(arbDeploy.arbitrary)
           for {
-            _ <- db.addAsPending(List(first))
-            _ <- db.pendingNum.foreachL(_ shouldBe 1)
+            _ <- writer.addAsPending(List(first))
+            _ <- reader.pendingNum.foreachL(_ shouldBe 1)
             _ <- Task.sleep(1.second)
-            _ <- db.addAsProcessed(List(second))
-            _ <- db.markAsPending(List(second))
-            _ <- db.pendingNum.foreachL(_ shouldBe 2)
-            _ <- db.markAsDiscarded(expirationPeriod = 500.millis)
-            _ <- db.pendingNum.foreachL(_ shouldBe 1)
+            _ <- writer.addAsProcessed(List(second))
+            _ <- writer.markAsPending(List(second))
+            _ <- reader.pendingNum.foreachL(_ shouldBe 2)
+            _ <- writer.markAsDiscarded(expirationPeriod = 500.millis)
+            _ <- reader.pendingNum.foreachL(_ shouldBe 1)
             _ <- Task.sleep(1.second)
-            _ <- db.markAsDiscarded(expirationPeriod = 500.millis)
-            _ <- db.pendingNum.foreachL(_ shouldBe 0)
+            _ <- writer.markAsDiscarded(expirationPeriod = 500.millis)
+            _ <- reader.pendingNum.foreachL(_ shouldBe 0)
           } yield ()
       }
     }
@@ -303,18 +312,18 @@ trait DeployBufferSpec
   private def chooseAccount(deploys: List[Deploy]): ByteString =
     deploys(Random.nextInt(deploys.size)).getHeader.accountPublicKey
 
-  private implicit class DeployBufferOps(db: DeployBuffer[Task]) {
-    def addAsPending(d: Deploy): Task[Unit] =
-      db.addAsPending(List(d))
-    def addAsProcessed(d: Deploy): Task[Unit] =
-      db.addAsProcessed(List(d))
+  private implicit class DeployStorageWriterOps(writer: DeployStorageWriter[Task]) {
+    def addAsPending(d: Deploy): Task[Unit]   = writer.addAsPending(List(d))
+    def addAsProcessed(d: Deploy): Task[Unit] = writer.addAsProcessed(List(d))
     def addAsDiscarded(d: Deploy): Task[Unit] =
-      db.addAsPending(List(d)) >> db.markAsDiscarded(List(d))
+      writer.addAsPending(List(d)) >> writer.markAsDiscarded(List((d)))
     def addAsFinalized(d: Deploy): Task[Unit] =
-      db.addAsProcessed(List(d)) >> db.markAsFinalized(List(d))
-    def discardedNum(): Task[Int] =
-      Task.sleep(50.millis) >> db.cleanupDiscarded(Duration.Zero)
-    def pendingNum: Task[Int] = db.readPending.map(_.size)
+      writer.addAsProcessed(List(d)) >> writer.markAsFinalized(List(d))
+    def discardedNum(): Task[Int] = Task.sleep(50.millis) >> writer.cleanupDiscarded(Duration.Zero)
+  }
+
+  private implicit class DeployStorageReaderOps(reader: DeployStorageReader[Task]) {
+    def pendingNum: Task[Int] = reader.readPending.map(_.size)
   }
 
   private implicit class DeploysOps(ds: List[Deploy]) {

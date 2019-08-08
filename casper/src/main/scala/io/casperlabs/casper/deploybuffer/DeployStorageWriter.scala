@@ -1,23 +1,21 @@
 package io.casperlabs.casper.deploybuffer
 
 import cats._
-import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
-import io.casperlabs.casper.CasperMetricsSource
-import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.blockstorage.DeployStorageMetricsSource
+import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
 import simulacrum.typeclass
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 
-//TODO: Doobie docs suggests exposing API as ConnectionIO to allow API users choose transaction model
-@typeclass trait DeployBuffer[F[_]] {
+@typeclass trait DeployStorageWriter[F[_]] {
   /* Should not fail if the same deploy added twice */
   def addAsPending(deploys: List[Deploy]): F[Unit]
 
@@ -63,27 +61,11 @@ import scala.concurrent.duration.FiniteDuration
   /** Deletes discarded deploys that are older than 'now - expirationPeriod'.
     * @return Number of deleted deploys */
   def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int]
-
-  def readProcessed: F[List[Deploy]]
-
-  def readProcessedByAccount(account: ByteString): F[List[Deploy]]
-
-  def readProcessedHashes: F[List[ByteString]]
-
-  def readPending: F[List[Deploy]]
-
-  def readPendingHashes: F[List[ByteString]]
-
-  def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]]
-
-  def sizePendingOrProcessed(): F[Long]
-
-  def getByHashes(l: List[ByteString]): F[List[Deploy]]
 }
 
-class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
+class SQLiteDeployStorageWriter[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     implicit val xa: Transactor[F]
-) extends DeployBuffer[F] {
+) extends DeployStorageWriter[F] {
   // Do not forget updating Flyway migration scripts at:
   // block-storage/src/main/resources/db/migrations
 
@@ -95,12 +77,12 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
   // Deploys that have been discarded for some reason and should be deleted after a while
   private val DiscardedStatusCode = 2
 
-  import DeployBufferImpl.metricsSource
+  private val StatusMessageTtlExpired = "TTL expired"
+
+  import SQLiteDeployStorageWriter.metricsSource
 
   private implicit val metaByteString: Meta[ByteString] =
     Meta[Array[Byte]].imap(ByteString.copyFrom)(_.toByteArray)
-  private implicit val readDeploy: Read[Deploy] =
-    Read[Array[Byte]].map(Deploy.parseFrom)
 
   override def addAsPending(deploys: List[Deploy]): F[Unit] =
     insertNewDeploys(deploys, PendingStatusCode)
@@ -113,14 +95,14 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       status: Int
   ): F[Unit] = {
     val writeToDeploysTable = Update[(ByteString, ByteString, Long, ByteString)](
-      "INSERT OR IGNORE INTO deploys (hash, account, create_time_seconds, data) VALUES (?, ?, ?, ?)"
+      "INSERT OR IGNORE INTO deploys (hash, account, create_time_millis, data) VALUES (?, ?, ?, ?)"
     ).updateMany(deploys.map { d =>
-      (d.deployHash, d.getHeader.accountPublicKey, d.getHeader.timestamp / 1000L, d.toByteString)
+      (d.deployHash, d.getHeader.accountPublicKey, d.getHeader.timestamp, d.toByteString)
     })
 
     def writeToBufferedDeploysTable(currentTimeEpochSeconds: Long) =
       Update[(ByteString, Int, ByteString, Long, Long)](
-        "INSERT OR IGNORE INTO buffered_deploys (hash, status, account, update_time_seconds, receive_time_seconds) VALUES (?, ?, ?, ?, ?)"
+        "INSERT OR IGNORE INTO buffered_deploys (hash, status, account, update_time_millis, receive_time_millis) VALUES (?, ?, ?, ?, ?)"
       ).updateMany(deploys.map { d =>
           (
             d.deployHash,
@@ -152,23 +134,27 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       .transact(xa)
       .void
 
+  private def setStatus(
+      hashes: List[ByteString],
+      newStatus: Int,
+      prevStatus: Int
+  ): F[Unit] =
+    for {
+      t <- Time[F].currentMillis
+      _ <- Update[(Int, Long, ByteString, Int)](
+            s"UPDATE buffered_deploys SET status=?, update_time_millis=? WHERE hash=? AND status=?"
+          ).updateMany(hashes.map((newStatus, t, _, prevStatus)))
+            .transact(xa)
+      _ <- updateMetrics()
+    } yield ()
+
   override def markAsDiscardedByHashes(hashes: List[ByteString]): F[Unit] =
     setStatus(hashes, DiscardedStatusCode, PendingStatusCode)
-
-  override def markAsDiscarded(expirationPeriod: FiniteDuration): F[Unit] =
-    for {
-      now       <- Time[F].currentMillis
-      threshold = now - expirationPeriod.toMillis
-      _ <- sql"""|UPDATE buffered_deploys 
-                 |SET status=$DiscardedStatusCode, update_time_seconds=$now
-                 |WHERE status=$PendingStatusCode AND receive_time_seconds<$threshold""".stripMargin.update.run
-            .transact(xa)
-    } yield ()
 
   override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] = {
     def transaction(threshold: Long) =
       for {
-        hashes <- sql"SELECT hash FROM buffered_deploys WHERE status=$DiscardedStatusCode AND update_time_seconds<$threshold"
+        hashes <- sql"SELECT hash FROM buffered_deploys WHERE status=$DiscardedStatusCode AND update_time_millis<$threshold"
                    .query[ByteString]
                    .to[List]
         _ <- Update[ByteString](s"DELETE FROM buffered_deploys WHERE hash=?").updateMany(hashes)
@@ -182,58 +168,15 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     } yield deletedNum
   }
 
-  private def setStatus(hashes: List[ByteString], newStatus: Int, prevStatus: Int): F[Unit] =
+  override def markAsDiscarded(expirationPeriod: FiniteDuration): F[Unit] =
     for {
-      t <- Time[F].currentMillis
-      _ <- Update[(Int, Long, ByteString, Int)](
-            s"UPDATE buffered_deploys SET status=?, update_time_seconds=? WHERE hash=? AND status=?"
-          ).updateMany(hashes.map((newStatus, t, _, prevStatus)))
+      now       <- Time[F].currentMillis
+      threshold = now - expirationPeriod.toMillis
+      _ <- sql"""|UPDATE buffered_deploys 
+              |SET status=$DiscardedStatusCode, update_time_millis=$now, status_message=$StatusMessageTtlExpired
+              |WHERE status=$PendingStatusCode AND receive_time_millis<$threshold""".stripMargin.update.run
             .transact(xa)
-      _ <- updateMetrics()
     } yield ()
-
-  override def readProcessed: F[List[Deploy]] =
-    readByStatus(ProcessedStatusCode)
-
-  override def readProcessedByAccount(account: ByteString): F[List[Deploy]] =
-    readByAccountAndStatus(account, ProcessedStatusCode)
-
-  override def readProcessedHashes: F[List[ByteString]] =
-    readHashesByStatus(ProcessedStatusCode)
-
-  override def readPending: F[List[Deploy]] =
-    readByStatus(PendingStatusCode)
-
-  override def readPendingHashes: F[List[ByteString]] =
-    readHashesByStatus(PendingStatusCode)
-
-  private def readByStatus(status: Int): F[List[Deploy]] =
-    sql"""|SELECT data FROM deploys
-          |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-          |WHERE bd.status=$status""".stripMargin
-      .query[Deploy]
-      .to[List]
-      .transact(xa)
-
-  private def readByAccountAndStatus(account: ByteString, status: Int): F[List[Deploy]] =
-    sql"""|SELECT data FROM deploys
-          |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-          |WHERE bd.account=$account AND bd.status=$status""".stripMargin
-      .query[Deploy]
-      .to[List]
-      .transact(xa)
-
-  private def readHashesByStatus(status: Int): F[List[ByteString]] =
-    sql"SELECT hash FROM buffered_deploys WHERE status=$status"
-      .query[ByteString]
-      .to[List]
-      .transact(xa)
-
-  override def sizePendingOrProcessed(): F[Long] =
-    sql"SELECT COUNT(hash) FROM buffered_deploys WHERE status=$PendingStatusCode OR status=$ProcessedStatusCode"
-      .query[Long]
-      .unique
-      .transact(xa)
 
   private def countByStatus(status: Int): F[Long] =
     sql"SELECT COUNT(hash) FROM buffered_deploys WHERE status=$status"
@@ -248,32 +191,17 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       _         <- Metrics[F].setGauge("pending_deploys", pending)
       _         <- Metrics[F].setGauge("processed_deploys", processed)
     } yield ()
-
-  override def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]] =
-    sql"""|SELECT data FROM deploys
-          |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-          |WHERE bd.hash=$hash AND (bd.status=$PendingStatusCode OR bd.status=$ProcessedStatusCode)""".stripMargin
-      .query[Deploy]
-      .option
-      .transact(xa)
-
-  override def getByHashes(l: List[ByteString]): F[List[Deploy]] =
-    NonEmptyList
-      .fromList[ByteString](l)
-      .fold(List.empty[Deploy].pure[F])(nel => {
-        val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
-        q.query.to[List].transact(xa)
-      })
 }
 
-object DeployBufferImpl {
-  private implicit val metricsSource: Source = Metrics.Source(CasperMetricsSource, "DeployBuffers")
+object SQLiteDeployStorageWriter {
+  private implicit val metricsSource: Source = Metrics.Source(DeployStorageMetricsSource, "sqlite")
 
-  def create[F[_]: Metrics: Time: Sync](implicit xa: Transactor[F]): F[DeployBufferImpl[F]] =
+  def create[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
+      implicit xa: Transactor[F]
+  ): F[DeployStorageWriter[F]] =
     for {
-      _            <- establishMetrics[F]
-      deployBuffer <- Sync[F].delay(new DeployBufferImpl[F])
-    } yield deployBuffer
+      _ <- establishMetrics[F]
+    } yield new SQLiteDeployStorageWriter[F]: DeployStorageWriter[F]
 
   /** Export base 0 values so we have non-empty series for charts. */
   private def establishMetrics[F[_]: Monad: Metrics]: F[Unit] =

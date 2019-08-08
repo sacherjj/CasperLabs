@@ -3,18 +3,19 @@ package io.casperlabs.casper.helper
 import java.nio.file.Path
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Concurrent, Timer}
 import cats.implicits._
+import cats.mtl.FunctorRaise
 import cats.temp.par.Par
 import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
-import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
-import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
+import io.casperlabs.casper.deploybuffer.{DeployStorage, MockDeployStorage}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
@@ -25,12 +26,11 @@ import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
-import io.casperlabs.casper.consensus.state.{Unit => _, BigInt => _, _}
-import io.casperlabs.casper.validation.Validation
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
+import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -40,8 +40,6 @@ import monix.execution.Scheduler
 
 import scala.collection.mutable.{Map => MutMap}
 import scala.util.Random
-import io.casperlabs.crypto.Keys
-import io.casperlabs.casper.validation.ValidationImpl
 
 /** Base class for test nodes with fields used by tests exposed as public. */
 abstract class HashSetCasperTestNode[F[_]](
@@ -63,7 +61,8 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val logEff: LogStub[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
-  implicit val deployBufferEff: DeployBuffer[F]
+  implicit val deployStorage: DeployStorage[F] =
+    MockDeployStorage.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
   implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
   implicit val safetyOracleEff: FinalityDetector[F]

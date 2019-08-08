@@ -10,7 +10,7 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.{state, Block}
-import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.InvalidArgument
@@ -24,7 +24,7 @@ import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployBuffer: Validation]()
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Validation]()
       : F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       new CasperGrpcMonix.CasperService {

@@ -16,7 +16,10 @@ import org.scalatest._
 import scala.concurrent.duration._
 import scala.util.Try
 
-class DeployBufferImplSpec extends DeployBufferSpec with BeforeAndAfterEach with BeforeAndAfterAll {
+class SQLiteDeployStorageSpec
+    extends DeployStorageSpec
+    with BeforeAndAfterEach
+    with BeforeAndAfterAll {
   private val db = Paths.get("/", "tmp", "deploy_buffer_spec.db")
 
   private implicit val xa: Transactor[Task] = Transactor
@@ -45,12 +48,15 @@ class DeployBufferImplSpec extends DeployBufferSpec with BeforeAndAfterEach with
     conf.load()
   }
 
-  override protected def testFixture(test: DeployBuffer[Task] => Task[Unit]): Unit = {
+  override protected def testFixture(
+      test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit]
+  ): Unit = {
     val program = for {
-      _            <- Task(cleanupTables())
-      _            <- Task(setupTables())
-      deployBuffer <- DeployBufferImpl.create[Task]
-      _            <- test(deployBuffer)
+      _      <- Task(cleanupTables())
+      _      <- Task(setupTables())
+      reader = SQLiteDeployStorageReader.create[Task]
+      writer <- SQLiteDeployStorageWriter.create[Task]
+      _      <- test(reader, writer)
     } yield ()
     program.runSyncUnsafe(5.seconds)
   }

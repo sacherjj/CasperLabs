@@ -5,16 +5,17 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.Deploy
-import io.casperlabs.casper.deploybuffer.MockDeployBuffer.Metadata
+import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.deploybuffer.MockDeployStorage.Metadata
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.Log
 
 import scala.concurrent.duration.FiniteDuration
 
-class MockDeployBuffer[F[_]: Monad: Log](
+class MockDeployStorage[F[_]: Monad: Log](
     deploysWithMetadataRef: Ref[F, Map[Deploy, Metadata]]
-) extends DeployBuffer[F] {
+) extends DeployStorageWriter[F]
+    with DeployStorageReader[F] {
 
   // Deploys not yet included in a block
   private val PendingStatusCode = 0
@@ -39,7 +40,9 @@ class MockDeployBuffer[F[_]: Monad: Log](
   private def addWithStatus(deploys: List[Deploy], status: Int): F[Unit] =
     deploysWithMetadataRef.update(
       _ ++ deploys
-        .map(d => (d, Metadata(status, System.currentTimeMillis(), System.currentTimeMillis())))
+        .map(
+          d => (d, Metadata(status, now, now))
+        )
         .toMap
     )
 
@@ -74,7 +77,7 @@ class MockDeployBuffer[F[_]: Monad: Log](
   private def setStatus(hashes: List[ByteString], newStatus: Int, prevStatus: Int): F[Unit] =
     deploysWithMetadataRef.update(_.map {
       case (deploy, Metadata(`prevStatus`, _, createdAt)) if hashes.toSet(deploy.deployHash) =>
-        (deploy, Metadata(newStatus, System.currentTimeMillis(), createdAt))
+        (deploy, Metadata(newStatus, now, createdAt))
       case x => x
     }) >> logCurrentState()
 
@@ -83,8 +86,11 @@ class MockDeployBuffer[F[_]: Monad: Log](
       s"markAsDiscarded(expirationPeriod = ${expirationPeriod.toCoarsest.toString()})",
       deploysWithMetadataRef.update(_.map {
         case (deploy, Metadata(`PendingStatusCode`, updatedAt, createdAt))
-            if updatedAt < System.currentTimeMillis() - expirationPeriod.toMillis =>
-          (deploy, Metadata(DiscardedStatusCode, System.currentTimeMillis(), createdAt))
+            if updatedAt < now - expirationPeriod.toMillis =>
+          (
+            deploy,
+            Metadata(DiscardedStatusCode, now, createdAt)
+          )
         case x => x
       })
     )
@@ -92,7 +98,7 @@ class MockDeployBuffer[F[_]: Monad: Log](
   override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] = {
     val f: ((Deploy, Metadata)) => Boolean = (_: (Deploy, Metadata)) match {
       case (_, Metadata(`DiscardedStatusCode`, updatedAt, _))
-          if updatedAt < System.currentTimeMillis() - expirationPeriod.toMillis =>
+          if updatedAt < now - expirationPeriod.toMillis =>
         true
       case _ => false
     }
@@ -146,6 +152,8 @@ class MockDeployBuffer[F[_]: Monad: Log](
       case 0 => "pending"
       case 1 => "processed"
       case 2 => "discarded"
+      case 3 => "execution error"
+      case 4 => "execution success"
     }
 
     val getStateDesc = deploysWithMetadataRef.get.map { deploys =>
@@ -178,16 +186,22 @@ class MockDeployBuffer[F[_]: Monad: Log](
 
   private def deploysToString(ds: List[Deploy]): String    = ds.map(deployToString).mkString(", ")
   private def hashesToString(hs: List[ByteString]): String = hs.map(hashToString).mkString(", ")
+
+  private def now = System.currentTimeMillis()
 }
 
-object MockDeployBuffer {
-  case class Metadata(status: Int, updatedAt: Long, createdAt: Long)
+object MockDeployStorage {
+  case class Metadata(
+      status: Int,
+      updatedAt: Long,
+      createdAt: Long
+  )
 
-  def create[F[_]: Sync: Log](): F[DeployBuffer[F]] =
+  def create[F[_]: Sync: Log](): F[DeployStorage[F]] =
     for {
       ref <- Ref.of[F, Map[Deploy, Metadata]](Map.empty)
-    } yield new MockDeployBuffer[F](ref): DeployBuffer[F]
+    } yield new MockDeployStorage[F](ref): DeployStorage[F]
 
-  def unsafeCreate[F[_]: Sync: Log](): DeployBuffer[F] =
-    new MockDeployBuffer[F](Ref.unsafe[F, Map[Deploy, Metadata]](Map.empty))
+  def unsafeCreate[F[_]: Sync: Log](): DeployStorage[F] =
+    new MockDeployStorage[F](Ref.unsafe[F, Map[Deploy, Metadata]](Map.empty))
 }

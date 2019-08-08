@@ -12,8 +12,7 @@ import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper
-import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
@@ -22,7 +21,6 @@ import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.shared.{Cell, Log, Time}
 import monix.tail.Iterant
 
@@ -59,8 +57,6 @@ class GossipServiceCasperTestNode[F[_]](
       validateNonces,
       maybeMakeEE
     )(concurrentF, blockStorage, dagStorage, metricEff, casperState) {
-  implicit val deployBufferEff: DeployBuffer[F] =
-    MockDeployBuffer.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
   implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
 
   //val defaultTimeout = FiniteDuration(1000, MILLISECONDS)

@@ -11,6 +11,9 @@ package object blockstorage {
   val DagStorageMetricsSource: Metrics.Source =
     Metrics.Source(Metrics.BaseSource, "dag-storage")
 
+  val DeployStorageMetricsSource: Metrics.Source =
+    Metrics.Source(Metrics.BaseSource, "deploy-storage")
+
   implicit class RichBlockMsgWithTransform(b: BlockMsgWithTransform) {
     def toBlockSummary: BlockSummary =
       BlockSummary(

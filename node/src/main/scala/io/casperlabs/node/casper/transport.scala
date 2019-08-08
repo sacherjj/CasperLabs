@@ -1,7 +1,7 @@
 package io.casperlabs.node.casper
 
 import cats._
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Concurrent, Resource}
 import cats.instances.option._
 import cats.instances.unit._
 import cats.mtl.{ApplicativeAsk, MonadState}
@@ -9,12 +9,11 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.foldable._
 import cats.syntax.functor._
-import com.github.ghik.silencer.silent
 import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Catscontrib._
@@ -23,7 +22,7 @@ import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
-import io.casperlabs.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk}
+import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.rp._
 import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
@@ -64,7 +63,8 @@ package object transport {
       executionEngineService: ExecutionEngineService[Effect],
       finalizationHandler: LastFinalizedBlockHashContainer[Effect],
       filesApiEff: FilesAPI[Effect],
-      deployBuffer: DeployBuffer[Effect],
+      deployStorageWriter: DeployStorageWriter[Effect],
+      deployStorageReader: DeployStorageReader[Effect],
       validation: Validation[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {

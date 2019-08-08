@@ -12,7 +12,7 @@ import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
@@ -56,7 +56,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       _ <- Metrics[F].incrementCounter("blocks-received-again", 0)
     } yield ()
 
-  def of[F[_]: LastApprovedBlock: Metrics: BlockStorage: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Concurrent: Time: Log: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
+  def of[F[_]: LastApprovedBlock: Metrics: BlockStorage: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Concurrent: Time: Log: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorageReader: DeployStorageWriter: Validation](
       conf: CasperConf,
       delay: FiniteDuration,
       toTask: F[_] => Task[_]
@@ -95,7 +95,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     establishMetrics[F] *> handler
   }
 
-  private def defaultMode[F[_]: LastApprovedBlock: Metrics: BlockStorage: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Sync: Concurrent: Time: Log: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
+  private def defaultMode[F[_]: LastApprovedBlock: Metrics: BlockStorage: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Sync: Concurrent: Time: Log: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorageReader: DeployStorageWriter: Validation](
       conf: CasperConf,
       delay: FiniteDuration,
       toTask: F[_] => Task[_]
@@ -121,7 +121,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           }
     } yield casperPacketHandler
 
-  private def initBootstrap[F[_]: LastApprovedBlock: Metrics: BlockStorage: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Sync: Concurrent: Time: Log: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
+  private def initBootstrap[F[_]: LastApprovedBlock: Metrics: BlockStorage: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Sync: Concurrent: Time: Log: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorageReader: DeployStorageWriter: Validation](
       conf: CasperConf,
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
@@ -161,7 +161,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           }
     } yield new CasperPacketHandlerImpl[F](standalone, validatorId)
 
-  private def connectAsGenesisValidator[F[_]: LastApprovedBlock: Metrics: BlockStorage: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Sync: Concurrent: Time: Log: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
+  private def connectAsGenesisValidator[F[_]: LastApprovedBlock: Metrics: BlockStorage: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Sync: Concurrent: Time: Log: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorageReader: DeployStorageWriter: Validation](
       conf: CasperConf
   ): F[CasperPacketHandler[F]] =
     for {
@@ -184,7 +184,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
            )
     } yield new CasperPacketHandlerImpl[F](gv, validatorId)
 
-  private def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: BlockStorage: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Sync: Concurrent: Time: Log: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
+  private def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: BlockStorage: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: FinalityDetector: Sync: Concurrent: Time: Log: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorageReader: DeployStorageWriter: Validation](
       conf: CasperConf,
       approvedBlockWithTransforms: ApprovedBlockWithTransforms
   ): F[CasperPacketHandler[F]] = {
@@ -233,7 +233,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     *
     * When in this state node can't handle any other message type so it will return `F[None]`
     **/
-  private[comm] class GenesisValidatorHandler[F[_]: Sync: Concurrent: ConnectionsCell: NodeDiscovery: TransportLayer: Log: Time: Metrics: FinalityDetector: ErrorHandler: RPConfAsk: BlockStorage: LastApprovedBlock: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
+  private[comm] class GenesisValidatorHandler[F[_]: Sync: Concurrent: ConnectionsCell: NodeDiscovery: TransportLayer: Log: Time: Metrics: FinalityDetector: ErrorHandler: RPConfAsk: BlockStorage: LastApprovedBlock: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorageReader: DeployStorageWriter: Validation](
       validatorId: ValidatorIdentity,
       shardId: String,
       blockApprover: BlockApproverProtocol
@@ -318,7 +318,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   }
 
   object StandaloneCasperHandler {
-    def approveBlockInterval[F[_]: Concurrent: ConnectionsCell: NodeDiscovery: BlockStorage: TransportLayer: Log: Metrics: Time: ErrorHandler: FinalityDetector: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation](
+    def approveBlockInterval[F[_]: Concurrent: ConnectionsCell: NodeDiscovery: BlockStorage: TransportLayer: Log: Metrics: Time: ErrorHandler: FinalityDetector: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorageReader: DeployStorageWriter: Validation](
         interval: FiniteDuration,
         shardId: String,
         validatorId: Option[ValidatorIdentity],
@@ -361,7 +361,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
     * `F[None]` to all other message types.
     **/
-  private[comm] class BootstrapCasperHandler[F[_]: Concurrent: ConnectionsCell: NodeDiscovery: BlockStorage: TransportLayer: Log: Time: Metrics: ErrorHandler: FinalityDetector: RPConfAsk: LastApprovedBlock: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation](
+  private[comm] class BootstrapCasperHandler[F[_]: Concurrent: ConnectionsCell: NodeDiscovery: BlockStorage: TransportLayer: Log: Time: Metrics: ErrorHandler: FinalityDetector: RPConfAsk: LastApprovedBlock: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorageReader: DeployStorageWriter: Validation](
       shardId: String,
       validatorId: Option[ValidatorIdentity],
       validators: Set[PublicKeyBS]
@@ -633,7 +633,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       Try(NoApprovedBlockAvailable.parseFrom(msg.content.toByteArray)).toOption
     else None
 
-  private def onApprovedBlockTransition[F[_]: Concurrent: Time: Metrics: ErrorHandler: FinalityDetector: RPConfAsk: TransportLayer: ConnectionsCell: Log: BlockStorage: LastApprovedBlock: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation](
+  private def onApprovedBlockTransition[F[_]: Concurrent: Time: Metrics: ErrorHandler: FinalityDetector: RPConfAsk: TransportLayer: ConnectionsCell: Log: BlockStorage: LastApprovedBlock: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorageReader: DeployStorageWriter: Validation](
       b: ApprovedBlock,
       validators: Set[PublicKeyBS],
       validatorId: Option[ValidatorIdentity],

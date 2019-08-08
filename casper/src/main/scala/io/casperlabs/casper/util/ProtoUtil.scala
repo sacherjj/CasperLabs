@@ -1,15 +1,17 @@
 package io.casperlabs.casper.util
 
+import java.util.NoSuchElementException
+
 import cats.data.OptionT
 import cats.implicits._
 import cats.{Applicative, Monad}
-import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
+import com.google.protobuf.ByteString
+import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
+import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
-import Block.Justification
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -17,9 +19,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
-import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.shared.Time
-import java.util.NoSuchElementException
 
 import scala.collection.immutable
 
@@ -515,9 +515,6 @@ object ProtoUtil {
       .toSet
     (missingParents union missingJustifications).toList
   }
-
-  def createdBy(validatorId: ValidatorIdentity, block: Block): Boolean =
-    block.getHeader.validatorPublicKey == ByteString.copyFrom(validatorId.publicKey)
 
   implicit class DeployOps(d: Deploy) {
     def incrementNonce(): Deploy =

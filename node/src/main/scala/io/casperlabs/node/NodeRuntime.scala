@@ -26,7 +26,12 @@ import io.casperlabs.blockstorage.{
 }
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.deploybuffer.{DeployBuffer, DeployBufferImpl}
+import io.casperlabs.casper.deploybuffer.{
+  DeployStorageReader,
+  DeployStorageWriter,
+  SQLiteDeployStorageReader,
+  SQLiteDeployStorageWriter
+}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -123,8 +128,14 @@ class NodeRuntime private[node] (
                                                             blockingScheduler,
                                                             conf.server.dataDir
                                                           )
-        implicit0(deployBuffer: DeployBuffer[Effect]) <- Resource
-                                                          .liftF(DeployBufferImpl.create[Effect])
+        implicit0(deployStorageWriter: DeployStorageWriter[Effect]) <- Resource
+                                                                        .liftF(
+                                                                          SQLiteDeployStorageWriter
+                                                                            .create[Effect]
+                                                                        )
+
+        implicit0(deployStorageReader: DeployStorageReader[Effect]) = SQLiteDeployStorageReader
+          .create[Effect]
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
         implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
@@ -153,19 +164,11 @@ class NodeRuntime private[node] (
                                                           conf.server.dataDir,
                                                           blockStoragePath,
                                                           100L * 1024L * 1024L * 4096L
-                                                        )(
-                                                          Concurrent[Effect],
-                                                          logEff,
-                                                          raiseIOError,
-                                                          metricsEff
                                                         ) evalMap { underlying =>
                                                           CachingBlockStorage[Effect](
                                                             underlying,
                                                             maxSizeBytes =
                                                               conf.blockstorage.cacheMaxSizeBytes
-                                                          )(
-                                                            Sync[Effect],
-                                                            metricsEff
                                                           )
                                                         }
 
@@ -173,11 +176,6 @@ class NodeRuntime private[node] (
                                                       dagStoragePath,
                                                       conf.blockstorage.latestMessagesLogMaxSizeFactor,
                                                       blockStorage
-                                                    )(
-                                                      Concurrent[Effect],
-                                                      logEff,
-                                                      raiseIOError,
-                                                      metricsEff
                                                     )
 
         _ <- Resource.liftF {
@@ -261,12 +259,12 @@ class NodeRuntime private[node] (
                 blockingScheduler
               )
             }
-      } yield (nodeDiscovery, multiParentCasperRef, deployBuffer)
+      } yield (nodeDiscovery, multiParentCasperRef, deployStorageWriter)
 
       resources.allocated flatMap {
-        case ((nodeDiscovery, multiParentCasperRef, deployBuffer), release) =>
+        case ((nodeDiscovery, multiParentCasperRef, deployStorageWriter), release) =>
           handleUnrecoverableErrors {
-            nodeProgram(state, nodeDiscovery, multiParentCasperRef, deployBuffer, release)
+            nodeProgram(state, nodeDiscovery, multiParentCasperRef, deployStorageWriter, release)
           }
       }
     })
@@ -291,7 +289,7 @@ class NodeRuntime private[node] (
       rpConfState: RPConfState[Task],
       nodeDiscovery: NodeDiscovery[Task],
       multiParentCasperRef: MultiParentCasperRef[Effect],
-      deployBuffer: DeployBuffer[Effect],
+      deployStorageWriter: DeployStorageWriter[Effect],
       release: Effect[Unit]
   ): Effect[Unit] = {
 
@@ -313,12 +311,12 @@ class NodeRuntime private[node] (
       } yield ()
 
     val cleanupDiscardedDeploysLoop: Effect[Unit] = for {
-      _ <- deployBuffer.cleanupDiscarded(1.hour)
+      _ <- deployStorageWriter.cleanupDiscarded(1.hour)
       _ <- time.sleep(1.minute).toEffect
     } yield ()
 
     val checkPendingDeploysExpirationLoop: Effect[Unit] = for {
-      _ <- deployBuffer.markAsDiscarded(12.hours)
+      _ <- deployStorageWriter.markAsDiscarded(12.hours)
       _ <- time.sleep(1.minute).toEffect
     } yield ()
 

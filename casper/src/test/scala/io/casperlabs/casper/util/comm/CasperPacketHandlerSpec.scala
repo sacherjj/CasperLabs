@@ -10,7 +10,7 @@ import io.casperlabs.casper
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
+import io.casperlabs.casper.deploybuffer.{DeployStorage, MockDeployStorage}
 import io.casperlabs.casper.helper.{
   DagStorageTestFixture,
   HashSetCasperTestNode,
@@ -138,7 +138,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
         implicit val lastFinalizedBlockHashContainer =
           NoOpsLastFinalizedBlockHashContainer.create[Task](genesis.blockHash)
-        implicit val deployBuffer = MockDeployBuffer.unsafeCreate[Task]()
+        implicit val deployStorage: DeployStorage[Task] = MockDeployStorage.unsafeCreate[Task]()
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
             new GenesisValidatorHandler[Task](validatorId, chainId, bap)
@@ -178,7 +178,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
         implicit val lastFinalizedBlockHashContainer =
           NoOpsLastFinalizedBlockHashContainer.create[Task](genesis.blockHash)
-        implicit val deployBuffer = MockDeployBuffer.unsafeCreate[Task]()
+        implicit val deployStorage: DeployStorage[Task] = MockDeployStorage.unsafeCreate[Task]()
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
             new GenesisValidatorHandler[Task](validatorId, chainId, bap)
@@ -245,7 +245,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           c1                  = abp.run().forkAndForget.runToFuture
           implicit0(lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[Task]) = NoOpsLastFinalizedBlockHashContainer
             .create[Task](genesis.blockHash)
-          implicit0(deployBuffer: DeployBuffer[Task]) <- MockDeployBuffer.create[Task]()
+          implicit0(deployStorage: DeployStorage[Task]) <- MockDeployStorage.create[Task]()
           c2 = StandaloneCasperHandler
             .approveBlockInterval[Task](
               interval,
@@ -295,7 +295,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
         implicit val lastFinalizedBlockHashContainer =
           NoOpsLastFinalizedBlockHashContainer.create[Task](genesis.blockHash)
-        implicit val deployBuffer = MockDeployBuffer.unsafeCreate[Task]()
+        implicit val deployStorage: DeployStorage[Task] =
+          MockDeployStorage.unsafeCreate[Task]()
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
           new BootstrapCasperHandler[Task](

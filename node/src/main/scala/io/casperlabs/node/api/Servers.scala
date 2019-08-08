@@ -5,11 +5,9 @@ import cats.effect.concurrent.Semaphore
 import cats.effect.{Effect => _, _}
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStorage
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
-import io.casperlabs.casper.deploybuffer.DeployBuffer
-import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
@@ -25,6 +23,7 @@ import io.casperlabs.node.diagnostics.effects.diagnosticsService
 import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.netty.handler.ssl.SslContext
 import kamon.Kamon
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
@@ -33,7 +32,6 @@ import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 
 import scala.concurrent.ExecutionContext
-import io.netty.handler.ssl.SslContext
 
 object Servers {
 
@@ -85,7 +83,7 @@ object Servers {
     )
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployBuffer: Validation](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Validation](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
@@ -110,7 +108,7 @@ object Servers {
         logStarted[F]("External", port, maybeSslContext.isDefined)
       )
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployBuffer](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorageReader: DeployStorageWriter](
       port: Int,
       conf: Configuration,
       id: NodeIdentifier,

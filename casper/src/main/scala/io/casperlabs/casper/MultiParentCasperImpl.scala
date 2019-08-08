@@ -12,7 +12,7 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
@@ -50,7 +50,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation](
+class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorageWriter: DeployStorageReader: Validation](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -214,7 +214,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
   /** Remove deploys from the buffer which are included in block that are finalized. */
   private def removeFinalizedDeploys(dag: DagRepresentation[F]): F[Unit] =
     for {
-      deployHashes <- DeployBuffer[F].readProcessedHashes
+      deployHashes <- DeployStorageReader[F].readProcessedHashes
       blockHashes <- deployHashes
                       .traverse { deployHash =>
                         BlockStorage[F]
@@ -254,9 +254,9 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
     for {
       block              <- ProtoUtil.unsafeGetBlock[F](blockHash)
       deploysToRemove    = block.body.get.deploys.map(_.deploy.get).toList
-      initialHistorySize <- DeployBuffer[F].sizePendingOrProcessed()
-      _                  <- DeployBuffer[F].markAsFinalized(deploysToRemove)
-      deploysRemoved <- DeployBuffer[F]
+      initialHistorySize <- DeployStorageReader[F].sizePendingOrProcessed()
+      _                  <- DeployStorageWriter[F].markAsFinalized(deploysToRemove)
+      deploysRemoved <- DeployStorageReader[F]
                          .sizePendingOrProcessed()
                          .map(after => initialHistorySize - after)
     } yield deploysRemoved
@@ -316,7 +316,9 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
   private def addDeploy(deploy: Deploy): F[Either[Throwable, Unit]] = {
     def show(d: Deploy) = PrettyPrinter.buildString(d)
     (for {
-      processedDeploys <- DeployBuffer[F].readProcessedByAccount(deploy.getHeader.accountPublicKey)
+      processedDeploys <- DeployStorageReader[F].readProcessedByAccount(
+                           deploy.getHeader.accountPublicKey
+                         )
       _ <- processedDeploys
             .find { d =>
               d.getHeader.nonce >= deploy.getHeader.nonce &&
@@ -326,7 +328,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
               new IllegalArgumentException(s"${show(d)} supersedes ${show(deploy)}.")
                 .raiseError[F, Unit]
             } getOrElse ().pure[F]
-      _ <- DeployBuffer[F].addAsPending(List(deploy))
+      _ <- DeployStorageWriter[F].addAsPending(List(deploy))
       _ <- Log[F].info(s"Received ${show(deploy)}")
     } yield ()).attempt
   }
@@ -404,7 +406,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
   ): F[Seq[Deploy]] =
     for {
       orphanedDeploys <- findOrphanedDeploys(dag, parents)
-      pendingDeploys  <- DeployBuffer[F].readPendingHashes
+      pendingDeploys  <- DeployStorageReader[F].readPendingHashes
       // Pending deploys are most likely not in the past, or we'd have to go back indefinitely to
       // prove they aren't. The EE will ignore them if the nonce is less than the expected,
       // so it should be fine to include and see what happens.
@@ -436,7 +438,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       parents = merged.parents
 
       orphanedDeploys <- findOrphanedDeploys(dag, parents)
-      _               <- DeployBuffer[F].markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
+      _               <- DeployStorageWriter[F].markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
     } yield orphanedDeploys.size
 
   /** Find orphaned deploys in the processed buffer. */
@@ -445,7 +447,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       parents: Seq[Block]
   ): F[List[ByteString]] =
     for {
-      processedDeploysHashes <- DeployBuffer[F].readProcessedHashes
+      processedDeploysHashes <- DeployStorageReader[F].readProcessedHashes
       parentSet              = parents.map(_.blockHash).toSet
       deployHashToBlocksMap <- processedDeploysHashes
                                 .traverse { deployHash =>
@@ -488,13 +490,6 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
   ): F[CreateBlockStatus] =
     (for {
       now <- Time[F].currentMillis
-      result <- ExecEngineUtil
-                 .computeDeploysCheckpoint[F](
-                   merged,
-                   deploys,
-                   now,
-                   protocolVersion
-                 )
       DeploysCheckpoint(
         preStateHash,
         postStateHash,
@@ -507,7 +502,13 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
         invalidNonceDeploys,
         deploysToDiscard,
         protocolVersion
-      )                 = result
+      ) <- ExecEngineUtil
+            .computeDeploysCheckpoint[F](
+              merged,
+              deploys,
+              now,
+              protocolVersion
+            )
       dag               <- dag
       justificationMsgs <- justifications.toList.traverse(j => dag.lookup(j.latestBlockHash))
       rank              = ProtoUtil.calculateRank(justificationMsgs.flatten)
@@ -546,7 +547,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
       // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
 
-      _ <- DeployBuffer[F].markAsDiscarded(deploysToDiscard.toList.map(_.deploy)) whenA deploysToDiscard.nonEmpty
+      _ <- DeployStorageWriter[F].markAsDiscarded(deploysToDiscard.toList.map(_.deploy)) whenA deploysToDiscard.nonEmpty
     } yield status)
       .handleErrorWith {
         case ex @ SmartContractEngineError(error_msg) =>
@@ -621,7 +622,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
     val processedDeploys =
       addedBlocks.flatMap(block => block.getBody.deploys.map(_.getDeploy)).toList
 
-    DeployBuffer[F].markAsProcessed(processedDeploys) >>
+    DeployStorageWriter[F].markAsProcessed(processedDeploys) >>
       Cell[F, CasperState].modify { s =>
         s.copy(
           blockBuffer = s.blockBuffer.filterNot(kv => addedBlockHashes(kv._1)),
@@ -654,7 +655,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Sync: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: Cell[
+  def create[F[_]: Sync: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorageWriter: DeployStorageReader: Validation: Cell[
     ?[_],
     CasperState
   ]](
@@ -681,7 +682,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation](
       chainId: String
   ) {
     //TODO pull out
@@ -919,7 +920,7 @@ object MultiParentCasperImpl {
     def establishMetrics[F[_]: Metrics]: F[Unit] =
       Metrics[F].incrementCounter("gas_spent", 0L)(CasperMetricsSource)
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
+    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: DeployStorageReader: Validation](
         chainId: String
     ): F[StatelessExecutor[F]] =
       for {
