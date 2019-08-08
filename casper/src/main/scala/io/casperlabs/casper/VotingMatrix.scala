@@ -82,14 +82,10 @@ object VotingMatrixImpl {
                                           blockMetadata,
                                           validators
                                         )
-            latestBlockDagLevels = validatorToIndex
-              .map {
-                case (v, i) =>
-                  (i, latestBlockDagLevelsAsMap.getOrElse(v, 0L)) //if not, set to daglevel of Genesis block
-              }
-              .toList
-              .sortBy(_._1)
-              .map(_._2)
+            latestBlockDagLevels = fromMapToArray(
+              validatorToIndex,
+              latestBlockDagLevelsAsMap.getOrElse(_, 0L)
+            ) //if not, set to daglevel of Genesis block
             _ <- matrixRef.update(
                   matrix =>
                     matrix.updated(
@@ -110,18 +106,8 @@ object VotingMatrixImpl {
             firstLevelZeroVotes <- firstLevelZeroVotesRef.get
             validatorToIndex    <- validatorToIndexRef.get
             weightMap           <- weightMapRef.get
-            mask = validatorToIndex.toList
-              .map {
-                case (v, i) => (committeeApproximation.contains(v), i)
-              }
-              .sortBy(_._2)
-              .map(_._1)
-            weight = validatorToIndex.toList
-              .map {
-                case (v, i) => (weightMap.getOrElse(v, 0L), i)
-              }
-              .sortBy(_._2)
-              .map(_._1)
+            mask                = fromMapToArray(validatorToIndex, committeeApproximation.contains)
+            weight              = fromMapToArray(validatorToIndex, weightMap.getOrElse(_, 0L))
             committeeOpt = pruneToCommittee(
               matrix,
               firstLevelZeroVotes,
@@ -215,20 +201,30 @@ object VotingMatrixImpl {
                                                    )
                                              }
             firstLevelZeroVotesAsMap = firstLevelZeroMessagesAsList.flatten.toMap
-            firstLevelZeroVotes = validatorsToIndex
-              .map {
-                case (v, i) =>
-                  (i, firstLevelZeroVotesAsMap.get(v))
-              }
-              .toList
-              .sortBy(_._1)
-              .map(_._2)
+            firstLevelZeroVotes = fromMapToArray(
+              validatorsToIndex,
+              firstLevelZeroVotesAsMap.get
+            )
             _ <- firstLevelZeroVotesRef.set(firstLevelZeroVotes)
             // Apply the incremental update step from previous chapter (but only steps 1...3) taking M := V(i)latest
             _ <- latestMessagesOfVotes.values.toList.traverse { b =>
                   updateVotingMatrixOnNewBlock(dag, b)
                 }
           } yield ()
+
+        private def fromMapToArray[A](
+            validatorsToIndex: Map[Validator, Int],
+            mapFunction: Validator => A
+        ): List[A] =
+          validatorsToIndex
+            .map {
+              case (v, i) =>
+                (i, mapFunction(v))
+            }
+            .toList
+            .sortBy(_._1)
+            .map(_._2)
       }
+
     }
 }
