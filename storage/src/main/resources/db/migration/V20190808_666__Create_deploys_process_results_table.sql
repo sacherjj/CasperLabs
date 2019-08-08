@@ -1,0 +1,36 @@
+CREATE TABLE deploys_process_results
+(
+    -- May be NULL if deploy not included into block
+    block_hash              BLOB    NOT NULL,
+    deploy_hash             BLOB    NOT NULL,
+    account                 BLOB    NOT NULL,
+    -- Since Unix epoch
+    create_time_millis      INTEGER NOT NULL,
+    -- Since Unix epoch
+    execute_time_millis     INTEGER NOT NULL,
+    cost                    INTEGER NOT NULL,
+    execution_error_message TEXT,
+    PRIMARY KEY (deploy_hash, block_hash),
+    FOREIGN KEY (deploy_hash) REFERENCES deploys (hash)
+);
+
+CREATE INDEX idx_deploys_process_results_account_create_time_deploy_hash ON deploys_process_results (account, create_time_millis, deploy_hash);
+CREATE INDEX idx_deploys_process_results_account_execute_time_deploy_hash ON deploys_process_results (account, create_time_millis, deploy_hash);
+
+ALTER TABLE buffered_deploys
+    ADD COLUMN status_message TEXT;
+
+ALTER TABLE deploys
+    RENAME COLUMN create_time_seconds TO create_time_millis;
+ALTER TABLE buffered_deploys
+    RENAME COLUMN update_time_seconds TO update_time_millis;
+ALTER TABLE buffered_deploys
+    RENAME COLUMN receive_time_seconds TO receive_time_millis;
+
+UPDATE deploys
+SET create_time_millis=create_time_millis * 1000;
+UPDATE buffered_deploys
+SET update_time_millis=update_time_millis * 1000;
+UPDATE buffered_deploys
+SET receive_time_millis=receive_time_millis * 1000;
+
