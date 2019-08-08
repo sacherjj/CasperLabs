@@ -197,7 +197,13 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
         newFinalizedBlock <- if (finalizedChildren.isEmpty) {
                               acc.pure[F]
                             } else {
-                              finalizedChildren.traverse(loop).map(_.head)
+                              // we have find exact one new finalized block, rebuild voting matrix
+                              val newFinalizedBlock = finalizedChildren.head
+                              for {
+                                _ <- FinalityDetector[F]
+                                      .rebuildFromLatestFinalizedBlock(dag, newFinalizedBlock)
+                                f <- loop(newFinalizedBlock)
+                              } yield f
                             }
       } yield newFinalizedBlock
 
@@ -689,7 +695,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: LastFinalizedBlockHashContainer: FinalityDetector](
       chainId: String
   ) {
     //TODO pull out
@@ -893,8 +899,14 @@ object MultiParentCasperImpl {
         effects: Seq[ipc.TransformEntry]
     ): F[DagRepresentation[F]] =
       for {
-        _          <- BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
-        updatedDag <- DagStorage[F].insert(block)
+        _                        <- BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
+        updatedDag               <- DagStorage[F].insert(block)
+        latestFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
+        _ <- FinalityDetector[F].onNewBlockAddedToTheBlockDag(
+              updatedDag,
+              block,
+              latestFinalizedBlockHash
+            )
       } yield updatedDag
 
     /** Check if the block has dependencies that we don't have in store.
@@ -927,7 +939,7 @@ object MultiParentCasperImpl {
     def establishMetrics[F[_]: Metrics]: F[Unit] =
       Metrics[F].incrementCounter("gas_spent", 0L)(CasperMetricsSource)
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
+    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
         chainId: String
     ): F[StatelessExecutor[F]] =
       for {

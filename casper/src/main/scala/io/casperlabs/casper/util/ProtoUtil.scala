@@ -4,7 +4,7 @@ import cats.data.OptionT
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
+import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
@@ -17,7 +17,6 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
-import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.shared.Time
 import java.util.NoSuchElementException
 
@@ -65,6 +64,41 @@ object ProtoUtil {
       candidateBlockMetadata <- dag.lookup(candidateBlockHash)
       result                 <- isInMainChain(dag, candidateBlockMetadata.get, targetBlockHash)
     } yield result
+
+  // calculate which branch the newBlockHash vote for
+  def votedBranch[F[_]: Monad](
+      dag: DagRepresentation[F],
+      newBlockHash: BlockHash,
+      latestFinalizeBlockHash: BlockHash
+  ): F[Option[BlockHash]] =
+    for {
+      newBlock            <- dag.lookup(newBlockHash)
+      latestFinalizeBlock <- dag.lookup(latestFinalizeBlockHash)
+      r                   <- votedBranch(dag, newBlock.get, latestFinalizeBlock.get)
+    } yield r
+
+  def votedBranch[F[_]: Monad](
+      dag: DagRepresentation[F],
+      newBlock: BlockMetadata,
+      latestFinalizeBlock: BlockMetadata
+  ): F[Option[BlockHash]] =
+    if (newBlock.rank <= latestFinalizeBlock.rank) {
+      none[BlockHash].pure[F]
+    } else {
+      for {
+        result <- newBlock.parents.headOption match {
+                   case Some(mainParentHash) =>
+                     if (mainParentHash == latestFinalizeBlock.blockHash) {
+                       mainParentHash.some.pure[F]
+                     } else {
+                       dag
+                         .lookup(mainParentHash)
+                         .flatMap(b => votedBranch(dag, b.get, latestFinalizeBlock))
+                     }
+                   case None => none[BlockHash].pure[F]
+                 }
+      } yield result
+    }
 
   def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStorage](
       estimate: Block,

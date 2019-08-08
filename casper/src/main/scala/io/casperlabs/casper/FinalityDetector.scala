@@ -5,16 +5,17 @@ import cats.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.FinalityDetector.Committee
-import io.casperlabs.casper.util.DagOperations.Key.blockMetadataKey
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util._
+import io.casperlabs.casper.util.DagOperations.Key.blockMetadataKey
 import io.casperlabs.shared.Log
 
-/*
- * Implementation inspired by The Inspector algorithm
- *
- * https://hackingresear.ch/cbc-inspector/
- */
 trait FinalityDetector[F[_]] {
+  def onNewBlockAddedToTheBlockDag(
+      blockDag: DagRepresentation[F],
+      block: Block,
+      latestFinalizedBlock: BlockHash
+  ): F[Unit]
 
   /**
     * The normalizedFaultTolerance must be greater than
@@ -30,6 +31,11 @@ trait FinalityDetector[F[_]] {
       dag: DagRepresentation[F],
       candidateBlockHash: BlockHash
   ): F[Float]
+
+  def rebuildFromLatestFinalizedBlock(
+      blockDag: DagRepresentation[F],
+      newFinalizedBlock: BlockHash
+  ): F[Unit]
 }
 
 object FinalityDetector {
@@ -252,13 +258,24 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
                                                       committeeApproximation.toSet,
                                                       levelZeroMsgs,
                                                       weights,
-                                                      maxWeightApproximation / 2
+                                                      maxWeightApproximation
                                                     )
                    } yield committeeMembersAfterPruning
                  case None =>
                    none[Committee].pure[F]
                }
     } yield result
+
+  override def onNewBlockAddedToTheBlockDag(
+      dag: DagRepresentation[F],
+      block: Block,
+      latestFinalizedBlock: BlockHash
+  ): F[Unit] = ().pure[F]
+
+  override def rebuildFromLatestFinalizedBlock(
+      dag: DagRepresentation[F],
+      newFinalizedBlock: BlockHash
+  ): F[Unit] = ().pure[F]
 }
 
 /**

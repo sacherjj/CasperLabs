@@ -55,6 +55,67 @@ object FinalityDetectorUtil {
       }
     } yield result
 
+  /**
+		* Finds latest block per each validator as seen in the j-past-cone of a given block.
+		* The search is however restricted to given subset of validators.
+		*
+		* Caution 1: For some validators there may be no blocks visible in j-past-cone(block). Hence the resulting map will not contain such validators.
+		* Caution 2: the j-past-cone(b) includes block b, therefore if validatorsSubsetWeAreRestrictingTheSearchTo contains b.creator
+		* then the resulting mapping will include the entry b.creator ---> b
+		*
+		* TODO optimize it: when bonding new validator, it need search back to genesis
+		*
+		* @param blockDag
+		* @param block
+		* @param validators
+		* @return
+		*/
+  private def panoramaOfBlockByValidators[F[_]: Monad](
+      blockDag: DagRepresentation[F],
+      block: BlockMetadata,
+      validators: Set[Validator]
+  ): F[Map[Validator, BlockMetadata]] = {
+    val stream = DagOperations.bfToposortTraverseF(List(block), ascending = false) { b =>
+      b.justifications
+        .traverse(justification => {
+          blockDag.lookup(justification.latestBlockHash)
+        })
+        .map(_.flatten)
+    }
+
+    stream
+      .foldWhileLeft((validators, Map.empty[Validator, BlockMetadata])) {
+        case ((remainingValidators, acc), b) => {
+          if (remainingValidators.isEmpty) {
+            Right((remainingValidators, acc))
+          } else if (remainingValidators.contains(b.validatorPublicKey)) {
+            Left((remainingValidators - b.validatorPublicKey, acc + (b.validatorPublicKey -> b)))
+          } else {
+            Left((remainingValidators, acc))
+          }
+        }
+      }
+      .map(_._2)
+  }
+
+  def panoramaDagLevelsOfBlock[F[_]: Monad](
+      blockDag: DagRepresentation[F],
+      block: BlockMetadata,
+      validators: Set[Validator]
+  ): F[Map[Validator, Long]] =
+    for {
+      panorama <- panoramaOfBlockByValidators(blockDag, block, validators)
+      result = validators
+        .map(
+          v =>
+            if (v == block.validatorPublicKey)
+              v -> block.rank
+            else
+              v -> panorama.get(v).fold(0L)(_.rank)
+        )
+        .toMap
+    } yield result
+
   // Get level zero messages of the specified validator and specified candidateBlock
   def levelZeroMsgsOfValidator[F[_]: Monad](
       dag: DagRepresentation[F],
