@@ -6,7 +6,7 @@ import time
 from test.cl_node import LoggingMixin
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.nonce_registry import NonceRegistry
-from casper_client import CasperClient, ABI, InternalError
+from casperlabs_client import CasperLabsClient, ABI, InternalError
 
 
 class PythonClient(CasperLabsClient, LoggingMixin):
@@ -19,7 +19,7 @@ class PythonClient(CasperLabsClient, LoggingMixin):
             os.environ.get("TAG_NAME", None) and self.node.container_name or "localhost"
         )
 
-        self.client = CasperClient(
+        self.client = CasperLabsClient(
             host=host,
             internal_port=self.node.grpc_internal_docker_port,
             port=self.node.grpc_external_docker_port,
