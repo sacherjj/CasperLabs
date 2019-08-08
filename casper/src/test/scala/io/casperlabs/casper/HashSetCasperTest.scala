@@ -1385,6 +1385,36 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
+  it should "store deploys processing result when create or receive new block" in effectTest {
+    for {
+      nodes <- networkEff(
+                validatorKeys.take(2),
+                genesis,
+                transforms,
+                maybeMakeEE =
+                  Some(HashSetCasperTestNode.simpleEEApi[Effect](_, _, generateConflict = false))
+              )
+
+      deployA         <- ProtoUtil.basicDeploy[Effect](1L)
+      _               <- nodes(0).casperEff.deploy(deployA)
+      createA         <- nodes(0).casperEff.createBlock
+      Created(blockA) = createA
+      _               <- nodes(0).casperEff.addBlock(blockA) shouldBeF Valid
+      _               <- nodes(1).receive()
+
+      processingResults <- nodes(0).deployStorage.getProcessingResults(deployA.deployHash)
+      _ = processingResults.map {
+        case (blockHash, pd) => (blockHash, pd.getDeploy)
+      } shouldBe List((blockA.blockHash, deployA))
+
+      processingResults <- nodes(1).deployStorage.getProcessingResults(deployA.deployHash)
+      _ = processingResults.map {
+        case (blockHash, pd) => (blockHash, pd.getDeploy)
+      } shouldBe List((blockA.blockHash, deployA))
+      _ <- nodes.map(_.tearDown()).toList.sequence
+    } yield ()
+  }
+
   private def buildBlockWithInvalidJustification(
       nodes: IndexedSeq[HashSetCasperTestNode[Effect]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
