@@ -245,8 +245,19 @@ class DockerNode(LoggingDockerBase):
         if "from_address" not in deploy_kwargs:
             deploy_kwargs["from_address"] = self.from_address
         deploy_output = self.client.deploy(**deploy_kwargs)
-        assert "Success!" in deploy_output
-        block_hash = extract_block_hash_from_propose_output(self.client.propose())
+
+        # Hash is returned, rather than message for Python Client
+        if self._client == self.DOCKER_CLIENT:
+            assert "Success!" in deploy_output
+
+        propose_output = self.client.propose()
+
+        block_hash = None
+        if self._client == self.PYTHON_CLIENT:
+            block_hash = propose_output.block_hash.hex()
+        elif self._client == self.DOCKER_CLIENT:
+            block_hash = extract_block_hash_from_propose_output(propose_output)
+
         assert block_hash is not None
         logging.info(
             f"The block hash: {block_hash} generated for {self.container.name}"
