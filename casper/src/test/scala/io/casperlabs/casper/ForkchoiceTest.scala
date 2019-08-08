@@ -130,11 +130,8 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
              )
-        dag <- blockDagStorage.getRepresentation
-        latestBlocks = HashMap[Validator, BlockHash](
-          v1 -> b8.blockHash,
-          v2 -> b6.blockHash
-        )
+        dag          <- blockDagStorage.getRepresentation
+        latestBlocks <- dag.latestMessageHashes
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
@@ -199,12 +196,8 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
-        dag <- blockDagStorage.getRepresentation
-        latestBlocks = HashMap[Validator, BlockHash](
-          v1 -> b6.blockHash,
-          v2 -> b8.blockHash,
-          v3 -> b7.blockHash
-        )
+        dag          <- blockDagStorage.getRepresentation
+        latestBlocks <- dag.latestMessageHashes
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
@@ -218,47 +211,42 @@ class ForkchoiceTest
   "lmdScoring" should "propagate fixed weights on a tree" in withStorage {
     implicit blockStore =>
       implicit blockDagStorage =>
-        /* The DAG looks like:
+        /* The DAG looks like (|| is a main parent)
          *
          *
-         *
-         *   d  e   f
-         *    \ /   |
+         *      // ---- e
+         *   d  ||  f   |
+         *   \\//  ||   |
          *     a    b   c
-         *      \   |   /
+         *      \\ ||  //
          *       genesis
          */
 
         val v1     = generateValidator("Validator One")
         val v2     = generateValidator("Validator Two")
         val v3     = generateValidator("Validator Three")
-        val v1Bond = Bond(v1, 3)
+        val v1Bond = Bond(v1, 7)
         val v2Bond = Bond(v2, 5)
-        val v3Bond = Bond(v3, 7)
+        val v3Bond = Bond(v3, 3)
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
-
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a       <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b       <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          _       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
-          e       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
-          f       <- createBlock[Task](Seq(b.blockHash), v2, bonds)
-          dag     <- blockDagStorage.getRepresentation
-          latestBlocks = HashMap[Validator, BlockHash](
-            v1 -> d.blockHash,
-            v2 -> e.blockHash,
-            v3 -> f.blockHash
-          )
-          scores <- Estimator.lmdScoring(dag, latestBlocks)
+          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createBlock[Task](Seq(a.blockHash), v1, bonds)
+          e            <- createBlock[Task](Seq(a.blockHash, c.blockHash), v3, bonds)
+          f            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
+          dag          <- blockDagStorage.getRepresentation
+          latestBlocks <- dag.latestMessageHashes
+          scores       <- Estimator.lmdScoring(dag, latestBlocks)
           _ = scores shouldEqual Map(
             genesis.blockHash -> (3 + 5 + 7),
-            a.blockHash       -> (3 + 5),
-            b.blockHash       -> 7,
-            d.blockHash       -> 3,
-            e.blockHash       -> 5,
-            f.blockHash       -> 7
+            a.blockHash       -> (3 + 7),
+            b.blockHash       -> 5,
+            d.blockHash       -> 7,
+            e.blockHash       -> 3,
+            f.blockHash       -> 5
           )
         } yield ()
   }
@@ -269,10 +257,10 @@ class ForkchoiceTest
         /* The DAG looks like:
          *
          *
-         *        i
-         *        |
-         *        g   h
-         *       | \ /  \
+         *            ---i
+         *          /    |
+         *        g   h  |
+         *       | \ /  \|
          *       d  e   f
          *      / \/   /
          *     a  b   c
@@ -282,29 +270,25 @@ class ForkchoiceTest
         val v1     = generateValidator("Validator One")
         val v2     = generateValidator("Validator Two")
         val v3     = generateValidator("Validator Three")
-        val v1Bond = Bond(v1, 3)
+        val v1Bond = Bond(v1, 7)
         val v2Bond = Bond(v2, 5)
-        val v3Bond = Bond(v3, 7)
+        val v3Bond = Bond(v3, 3)
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a       <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b       <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d       <- createBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
-          e       <- createBlock[Task](Seq(b.blockHash), v2, bonds)
-          f       <- createBlock[Task](Seq(c.blockHash), v3, bonds)
-          g       <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
-          h       <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
-          i       <- createBlock[Task](Seq(g.blockHash), v1, bonds)
-          dag     <- blockDagStorage.getRepresentation
-          latestBlocks = HashMap[Validator, BlockHash](
-            v1 -> g.blockHash,
-            v2 -> h.blockHash,
-            v3 -> i.blockHash
-          )
-          scores <- Estimator.lmdScoring(dag, latestBlocks)
+          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+          e            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
+          f            <- createBlock[Task](Seq(c.blockHash), v3, bonds)
+          g            <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+          h            <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+          i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+          dag          <- blockDagStorage.getRepresentation
+          latestBlocks <- dag.latestMessageHashes
+          scores       <- Estimator.lmdScoring(dag, latestBlocks)
           _ = scores shouldEqual Map(
             genesis.blockHash -> (3 + 5 + 7),
             a.blockHash       -> (3 + 7),
@@ -313,7 +297,7 @@ class ForkchoiceTest
             e.blockHash       -> 5,
             g.blockHash       -> (3 + 7),
             h.blockHash       -> 5,
-            i.blockHash       -> 7
+            i.blockHash       -> 3
           )
         } yield ()
   }
@@ -323,44 +307,40 @@ class ForkchoiceTest
       implicit blockDagStorage =>
         /* The DAG looks like:
          *
-         *        i
-         *        |
-         *        g   h
-         *       | \ /  \
+         *
+         *            ---i
+         *          /    |
+         *        g   h  |
+         *       | \ /  \|
          *       d  e   f
          *      / \/   /
          *     a  b   c
          *      \ |  /
          *       genesis
          */
-
         val v1     = generateValidator("Validator One")
         val v2     = generateValidator("Validator Two")
         val v3     = generateValidator("Validator Three")
-        val v1Bond = Bond(v1, 3)
+        val v1Bond = Bond(v1, 7)
         val v2Bond = Bond(v2, 5)
-        val v3Bond = Bond(v3, 7)
+        val v3Bond = Bond(v3, 3)
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a       <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b       <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d       <- createBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
-          e       <- createBlock[Task](Seq(b.blockHash), v2, bonds)
-          f       <- createBlock[Task](Seq(c.blockHash), v3, bonds)
-          g       <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
-          h       <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
-          i       <- createBlock[Task](Seq(g.blockHash), v1, bonds)
-          dag     <- blockDagStorage.getRepresentation
-          latestBlocks = HashMap[Validator, BlockHash](
-            v1 -> g.blockHash,
-            v2 -> h.blockHash,
-            v3 -> i.blockHash
-          )
-          tips <- Estimator.tips(dag, genesis.blockHash, latestBlocks)
-          _    = tips.head shouldEqual i.blockHash
+          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+          e            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
+          f            <- createBlock[Task](Seq(c.blockHash), v3, bonds)
+          g            <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+          h            <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+          i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+          dag          <- blockDagStorage.getRepresentation
+          latestBlocks <- dag.latestMessageHashes
+          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks)
+          _            = tips.head shouldEqual i.blockHash
         } yield ()
   }
 
