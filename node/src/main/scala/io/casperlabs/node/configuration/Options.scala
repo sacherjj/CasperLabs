@@ -357,15 +357,15 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum DAG depth to allow when syncing after a new block notification.")
 
     @scallop
-    val serverSyncMinBlockCountToCheckBranchingFactor =
+    val serverSyncMinBlockCountToCheckWidth =
       gen[Int](
-        "Minimum DAG depth before we start checking the branching factor for abnormal growth."
+        "Minimum DAG size before we start checking the branching factor for abnormal growth."
       )
 
     @scallop
-    val serverSyncMaxBranchingFactor =
+    val serverSyncMaxBondingRate =
       gen[Double](
-        "Maximum branching factor to allow during syncs before terminating the operation as malicious."
+        "Maximum bonding rate per rank to allow during syncs before terminating the operation as malicious."
       )
 
     @scallop

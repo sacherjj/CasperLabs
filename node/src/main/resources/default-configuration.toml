@@ -62,11 +62,11 @@ approval-poll-interval = "30second"
 # Maximum DAG depth to allow when syncing after a new block notification.
 sync-max-possible-depth = 1000
 
-# Minimum DAG depth before we start checking the branching factor for abnormal growth.
-sync-min-block-count-to-check-branching-factor = 100
+# Minimum DAG size before we start checking the branching factor for abnormal growth.
+sync-min-block-count-to-check-width = 100
 
-# Maximum branching factor to allow during syncs before terminating the operation as malicious.
-sync-max-branching-factor = 1.5
+# Maximum bonding rate per rank to allow during syncs before terminating the operation as malicious.
+sync-max-bonding-rate = 1.0
 
 # Maximum DAG depth to ask in iterative requests during syncing.
 sync-max-depth-ancestors-request = 10

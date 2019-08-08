@@ -1,6 +1,7 @@
 from typing import List
 import logging
 import pytest
+from pytest import raises
 from test.cl_node.casperlabs_accounts import Account
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
@@ -251,7 +252,7 @@ def block_hash(node):
 block_hash_queries = [
     (
         {
-            "block_hash": "9d",
+            "block_hash": "9d000000",
             "key": "a91208047c",
             "path": "file.xxx",
             "key_type": "hash",
@@ -478,11 +479,10 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(
     assert deploy_hash4 in deploy_hashes(node, block_hash)
 
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Python CLI ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+# Python CLI #
 
 import subprocess
 import pytest
-from pytest import raises
 import os
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
 
