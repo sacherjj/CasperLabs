@@ -2,13 +2,13 @@ package io.casperlabs.shared
 
 import cats._
 import cats.implicits._
-
 import org.scalatest.{FunSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.Gen
+import org.scalacheck.{Arbitrary, Gen}
 import monix.eval.Task
 import monix.execution.Scheduler
+
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration._
 
@@ -90,6 +90,20 @@ class StreamTSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChec
         stream.takeWhile(_ < 100).toList[Int] shouldBe list.takeWhile(_ < 100)
       }
 
+    }
+
+    it(
+      "should allow taking the longest prefix of this StreamT whose elements satisfy the predicate " +
+        "and include first element that does not satisfy it"
+    ) {
+      forAll { list: List[Int] =>
+        val stream = StreamT.fromList[Id, Int](list)
+
+        val smaller     = list.takeWhile(_ < 100)
+        val stopElement = list.slice(smaller.size, smaller.size + 1)
+
+        stream.takeUntil(_ < 100).toList shouldBe (smaller ++ stopElement)
+      }
     }
 
     it("should allow dropping a finite number of terms") {
