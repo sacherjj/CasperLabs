@@ -15,13 +15,13 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.immutable.HashMap
 
 @silent("is never used")
-class FinalityDetectorTest
+class FinalityDetectorBySingleSweepTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
     with DagStorageFixture {
 
-  behavior of "Finality Detector"
+  behavior of "Finality Detector by Single Sweep"
 
   implicit val logEff = new LogStub[Task]
 
