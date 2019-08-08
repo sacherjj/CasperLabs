@@ -1,0 +1,16 @@
+[package]
+name = "set_key_thresholds"
+version = "0.1.0"
+authors = ["Joe Sacher <joes@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+name = "set_key_thresholds"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["cl_std/std"]
+
+[dependencies]
+cl_std = { package = "casperlabs-contract-ffi", path = "../../../execution-engine/contract-ffi" }

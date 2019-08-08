@@ -23,4 +23,7 @@ members = [
     "test_args/multi",
     "bonding/call",
     "unbonding/call",
+    "set_key_thresholds",
+    "key_management/add_associated_key",
+    "key_management/update_associated_key"
 ]
