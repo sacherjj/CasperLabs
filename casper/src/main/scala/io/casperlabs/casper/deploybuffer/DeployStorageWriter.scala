@@ -16,6 +16,8 @@ import simulacrum.typeclass
 import scala.concurrent.duration._
 
 @typeclass trait DeployStorageWriter[F[_]] {
+  def addAsExecuted(block: Block): F[Unit]
+
   /* Should not fail if the same deploy added twice */
   def addAsPending(deploys: List[Deploy]): F[Unit]
 
@@ -85,6 +87,55 @@ class SQLiteDeployStorageWriter[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
 
   private implicit val metaByteString: Meta[ByteString] =
     Meta[Array[Byte]].imap(ByteString.copyFrom)(_.toByteArray)
+
+  override def addAsExecuted(block: Block): F[Unit] = {
+    val writeToDeploysTable = Update[(ByteString, ByteString, Long, ByteString)](
+      "INSERT OR IGNORE INTO deploys (hash, account, create_time_millis, data) VALUES (?, ?, ?, ?)"
+    ).updateMany(
+      block.getBody.deploys.toList.map(
+        pd =>
+          (
+            pd.getDeploy.deployHash,
+            pd.getDeploy.getHeader.accountPublicKey,
+            pd.getDeploy.getHeader.timestamp,
+            pd.getDeploy.toByteString
+          )
+      )
+    )
+
+    val writeToProcessResultsTable =
+      Update[(ByteString, ByteString, ByteString, Long, Long, Long, Option[String])](
+        """
+          |INSERT OR IGNORE INTO deploys_process_results
+          |(
+          | block_hash,
+          | deploy_hash,
+          | account,
+          | create_time_millis,
+          | execute_time_millis,
+          | cost,
+          | execution_error_message
+          |) VALUES (?, ?, ?, ?, ?, ?, ?)
+          |""".stripMargin
+      ).updateMany(
+        block.getBody.deploys
+          .map(
+            pd =>
+              (
+                block.blockHash,
+                pd.getDeploy.deployHash,
+                pd.getDeploy.getHeader.accountPublicKey,
+                pd.getDeploy.getHeader.timestamp,
+                block.getHeader.timestamp,
+                pd.cost,
+                if (pd.isError) pd.errorMessage.some else none[String]
+              )
+          )
+          .toList
+      )
+
+    (writeToDeploysTable >> writeToProcessResultsTable).transact(xa).void
+  }
 
   override def addAsPending(deploys: List[Deploy]): F[Unit] =
     insertNewDeploys(deploys, PendingStatusCode)

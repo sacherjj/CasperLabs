@@ -763,7 +763,7 @@ object MultiParentCasperImpl {
         _ <- Log[F].debug(s"Block effects calculated for $hashPrefix")
       } yield blockEffects).attempt
 
-      validationStatus.flatMap {
+      DeployStorageWriter[F].addAsExecuted(block) >> validationStatus.flatMap {
         case Right(effects) =>
           addEffects(Valid, block, effects, dag).tupleLeft(Valid)
 

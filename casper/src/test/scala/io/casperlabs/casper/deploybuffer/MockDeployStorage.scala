@@ -5,6 +5,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.deploybuffer.MockDeployStorage.Metadata
 import io.casperlabs.crypto.codec.Base16
@@ -23,7 +24,37 @@ class MockDeployStorage[F[_]: Monad: Log](
   // waiting to be finalized or orphaned
   private val ProcessedStatusCode = 1
   // Deploys that have been discarded for some reason and should be deleted after a while
-  private val DiscardedStatusCode = 2
+  private val DiscardedStatusCode        = 2
+  private val ExecutionErrorStatusCode   = 3
+  private val ExecutionSuccessStatusCode = 4
+
+  override def addAsExecuted(block: Block): F[Unit] =
+    logOperation(
+      s"addAsExecuted(blockHash = ${blockHashToString(block)}, deploys = ${processedDeploysToString(block)})",
+      deploysWithMetadataRef.update { deploys =>
+        def metadata(pd: Block.ProcessedDeploy, acc: Map[Deploy, Metadata]) = {
+          val prev = acc.getOrElse(
+            pd.getDeploy,
+            Metadata(
+              if (pd.isError) ExecutionErrorStatusCode else ExecutionSuccessStatusCode,
+              now,
+              now,
+              Nil
+            )
+          )
+          prev.copy(processingResults = (block.blockHash, pd) :: prev.processingResults)
+        }
+
+        block.getBody.deploys.foldLeft(deploys) {
+          case (acc, pd) => acc + (pd.getDeploy -> metadata(pd, acc))
+        }
+      }
+    )
+
+  override def getProcessingResults(hash: ByteString): F[List[(BlockHash, Block.ProcessedDeploy)]] =
+    deploysWithMetadataRef.get.map(_.collect {
+      case (d, Metadata(_, _, _, processingResults)) if d.deployHash == hash => processingResults
+    }.toList.flatten)
 
   override def addAsPending(deploys: List[Deploy]): F[Unit] =
     logOperation(
@@ -41,7 +72,7 @@ class MockDeployStorage[F[_]: Monad: Log](
     deploysWithMetadataRef.update(
       _ ++ deploys
         .map(
-          d => (d, Metadata(status, now, now))
+          d => (d, Metadata(status, now, now, Nil))
         )
         .toMap
     )
@@ -62,7 +93,8 @@ class MockDeployStorage[F[_]: Monad: Log](
     logOperation(
       s"markAsFinalized(hashes = ${hashesToString(hashes)})",
       deploysWithMetadataRef.update(_.filter {
-        case (deploy, Metadata(`ProcessedStatusCode`, _, _)) if hashes.toSet(deploy.deployHash) =>
+        case (deploy, Metadata(`ProcessedStatusCode`, _, _, _))
+            if hashes.toSet(deploy.deployHash) =>
           false
         case _ => true
       })
@@ -76,8 +108,9 @@ class MockDeployStorage[F[_]: Monad: Log](
 
   private def setStatus(hashes: List[ByteString], newStatus: Int, prevStatus: Int): F[Unit] =
     deploysWithMetadataRef.update(_.map {
-      case (deploy, Metadata(`prevStatus`, _, createdAt)) if hashes.toSet(deploy.deployHash) =>
-        (deploy, Metadata(newStatus, now, createdAt))
+      case (deploy, Metadata(`prevStatus`, _, createdAt, processingResults))
+          if hashes.toSet(deploy.deployHash) =>
+        (deploy, Metadata(newStatus, now, createdAt, processingResults))
       case x => x
     }) >> logCurrentState()
 
@@ -85,11 +118,11 @@ class MockDeployStorage[F[_]: Monad: Log](
     logOperation(
       s"markAsDiscarded(expirationPeriod = ${expirationPeriod.toCoarsest.toString()})",
       deploysWithMetadataRef.update(_.map {
-        case (deploy, Metadata(`PendingStatusCode`, updatedAt, createdAt))
+        case (deploy, Metadata(`PendingStatusCode`, updatedAt, createdAt, processingResults))
             if updatedAt < now - expirationPeriod.toMillis =>
           (
             deploy,
-            Metadata(DiscardedStatusCode, now, createdAt)
+            Metadata(DiscardedStatusCode, now, createdAt, processingResults)
           )
         case x => x
       })
@@ -97,7 +130,7 @@ class MockDeployStorage[F[_]: Monad: Log](
 
   override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] = {
     val f: ((Deploy, Metadata)) => Boolean = (_: (Deploy, Metadata)) match {
-      case (_, Metadata(`DiscardedStatusCode`, updatedAt, _))
+      case (_, Metadata(`DiscardedStatusCode`, updatedAt, _, _))
           if updatedAt < now - expirationPeriod.toMillis =>
         true
       case _ => false
@@ -127,7 +160,7 @@ class MockDeployStorage[F[_]: Monad: Log](
 
   private def readByStatus(status: Int): F[List[Deploy]] =
     deploysWithMetadataRef.get.map(_.collect {
-      case (deploy, Metadata(`status`, _, _)) => deploy
+      case (deploy, Metadata(`status`, _, _, _)) => deploy
     }.toList)
 
   override def sizePendingOrProcessed(): F[Long] =
@@ -135,7 +168,7 @@ class MockDeployStorage[F[_]: Monad: Log](
 
   override def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]] =
     deploysWithMetadataRef.get.map(_.collectFirst {
-      case (d, Metadata(`PendingStatusCode` | `ProcessedStatusCode`, _, _))
+      case (d, Metadata(`PendingStatusCode` | `ProcessedStatusCode`, _, _, _))
           if d.deployHash == hash =>
         d
     })
@@ -187,6 +220,10 @@ class MockDeployStorage[F[_]: Monad: Log](
   private def deploysToString(ds: List[Deploy]): String    = ds.map(deployToString).mkString(", ")
   private def hashesToString(hs: List[ByteString]): String = hs.map(hashToString).mkString(", ")
 
+  private def blockHashToString(b: Block): String = Base16.encode(b.blockHash.toByteArray).take(4)
+  private def processedDeploysToString(b: Block): String =
+    b.getBody.deploys.map(pd => deployToString(pd.getDeploy)).mkString(", ")
+
   private def now = System.currentTimeMillis()
 }
 
@@ -194,7 +231,8 @@ object MockDeployStorage {
   case class Metadata(
       status: Int,
       updatedAt: Long,
-      createdAt: Long
+      createdAt: Long,
+      processingResults: List[(ByteString, Block.ProcessedDeploy)]
   )
 
   def create[F[_]: Sync: Log](): F[DeployStorage[F]] =

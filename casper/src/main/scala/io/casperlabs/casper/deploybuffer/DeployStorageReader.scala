@@ -6,6 +6,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
+import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Deploy
 import simulacrum.typeclass
 
@@ -25,6 +27,9 @@ import simulacrum.typeclass
   def sizePendingOrProcessed(): F[Long]
 
   def getByHashes(l: List[ByteString]): F[List[Deploy]]
+
+  /** @return List of blockHashes and processing results */
+  def getProcessingResults(hash: ByteString): F[List[(BlockHash, ProcessedDeploy)]]
 }
 
 class SQLiteDeployStorageReader[F[_]: Bracket[?[_], Throwable]](
@@ -48,6 +53,20 @@ class SQLiteDeployStorageReader[F[_]: Bracket[?[_], Throwable]](
   // Compiler: Cannot find or construct a Read instance for type ...
   private val readDeploy: Read[Deploy] =
     Read[Array[Byte]].map(Deploy.parseFrom)
+  private implicit val readProcessingResult: Read[(ByteString, ProcessedDeploy)] = {
+    Read[(Array[Byte], Long, Option[String])].map {
+      case (blockHash, cost, maybeError) =>
+        (
+          ByteString.copyFrom(blockHash),
+          ProcessedDeploy(
+            deploy = None,
+            cost = cost,
+            isError = maybeError.nonEmpty,
+            errorMessage = maybeError.getOrElse("")
+          )
+        )
+    }
+  }
 
   override def readProcessed: F[List[Deploy]] =
     readByStatus(ProcessedStatusCode)
@@ -107,6 +126,34 @@ class SQLiteDeployStorageReader[F[_]: Bracket[?[_], Throwable]](
         val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
         q.query[Deploy].to[List].transact(xa)
       })
+
+  override def getProcessingResults(
+      hash: ByteString
+  ): F[List[(ByteString, ProcessedDeploy)]] = {
+    val getDeploy =
+      sql"SELECT data FROM deploys WHERE hash=$hash".query[Deploy](readDeploy).unique.transact(xa)
+
+    val readProcessingResults =
+      sql"""|SELECT block_hash, cost, execution_error_message
+            |FROM deploys_process_results 
+            |WHERE deploy_hash=$hash""".stripMargin
+        .query[(ByteString, ProcessedDeploy)]
+        .to[List]
+        .transact(xa)
+
+    for {
+      blockHashesAndProcessingResults <- readProcessingResults
+      res <- if (blockHashesAndProcessingResults.isEmpty) blockHashesAndProcessingResults.pure[F]
+            else
+              getDeploy.map(
+                d =>
+                  blockHashesAndProcessingResults.map {
+                    case (blockHash, processingResult) =>
+                      (blockHash, processingResult.withDeploy(d))
+                  }
+              )
+    } yield res
+  }
 }
 
 object SQLiteDeployStorageReader {

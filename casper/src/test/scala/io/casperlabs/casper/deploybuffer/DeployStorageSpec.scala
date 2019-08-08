@@ -2,11 +2,9 @@ package io.casperlabs.casper.deploybuffer
 
 import cats.data.NonEmptyList
 import cats.implicits._
-import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
-import io.casperlabs.crypto.codec.Base16
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest._
@@ -302,6 +300,45 @@ trait DeployStorageSpec
             _ <- writer.markAsDiscarded(expirationPeriod = 500.millis)
             _ <- reader.pendingNum.foreachL(_ shouldBe 0)
           } yield ()
+      }
+    }
+
+    "addAsExecuted + addAsExecuted" should {
+      "not fail, ignore duplicates and insert new deploys from block even if contains existing deploys" in testFixture {
+        (reader, writer) =>
+          val b1         = sample(arbBlock.arbitrary)
+          val difference = sample(arbBlock.arbitrary)
+          val b2 = difference.withBody(
+            difference.getBody.withDeploys(difference.getBody.deploys ++ b1.getBody.deploys)
+          )
+
+          def processingResults(bs: Block*) =
+            bs.toList.flatMap(b => b.getBody.deploys.map((b.blockHash, _)).toList)
+
+          val deployHashesB1         = b1.getBody.deploys.map(_.getDeploy.deployHash).toList
+          val deployHashesB2         = b2.getBody.deploys.map(_.getDeploy.deployHash).toList
+          val deployHashesDifference = difference.getBody.deploys.map(_.getDeploy.deployHash).toList
+
+          for {
+            _ <- writer.addAsExecuted(b1)
+            _ <- writer.addAsExecuted(b2).attempt.foreachL(_ shouldBe an[Right[_, _]])
+            processingResultsB1 <- deployHashesB1.flatTraverse { deployHash =>
+                                    reader.getProcessingResults(deployHash)
+                                  }
+            processingResultsB2 <- deployHashesB2.flatTraverse { deployHash =>
+                                    reader.getProcessingResults(deployHash)
+                                  }
+            processingResultsDiff <- deployHashesDifference.flatTraverse { deployHash =>
+                                      reader.getProcessingResults(deployHash)
+                                    }
+          } yield {
+            processingResultsB1 should contain theSameElementsAs processingResults(
+              b1,
+              b1.copy(blockHash = b2.blockHash)
+            )
+            processingResultsB2 should contain theSameElementsAs processingResults(b1, b2)
+            processingResultsDiff should contain theSameElementsAs processingResults(difference)
+          }
       }
     }
   }
