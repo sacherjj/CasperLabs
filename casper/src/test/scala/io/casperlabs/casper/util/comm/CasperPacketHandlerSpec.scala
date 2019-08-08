@@ -9,7 +9,7 @@ import io.casperlabs.blockstorage.{DagRepresentation, InMemBlockStorage, InMemDa
 import io.casperlabs.casper
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.casper.helper.{
   DagStorageTestFixture,
@@ -122,6 +122,17 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           dag: DagRepresentation[Task],
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
+
+      override def onNewBlockAddedToTheBlockDag(
+          blockDag: DagRepresentation[Task],
+          block: Block,
+          latestFinalizedBlock: BlockHash
+      ): Task[Unit] = Task.pure(())
+
+      override def rebuildFromLatestFinalizedBlock(
+          blockDag: DagRepresentation[Task],
+          newFinalizedBlock: BlockHash
+      ): Task[Unit] = Task.pure(())
     }
     implicit val raiseInvalidBlock =
       casper.validation.raiseValidateErrorThroughApplicativeError[Task]

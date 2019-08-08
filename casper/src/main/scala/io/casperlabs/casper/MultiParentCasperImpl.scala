@@ -695,7 +695,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: LastFinalizedBlockHashContainer: FinalityDetector](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
       chainId: String
   ) {
     //TODO pull out

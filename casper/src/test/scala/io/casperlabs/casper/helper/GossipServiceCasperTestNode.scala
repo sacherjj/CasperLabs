@@ -78,7 +78,7 @@ class GossipServiceCasperTestNode[F[_]](
   // - the download manager tries to validate a block
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
-      new MultiParentCasperImpl.StatelessExecutor(chainId),
+      new MultiParentCasperImpl.StatelessExecutor[F](chainId),
       MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
       Some(validatorId),
       genesis,
