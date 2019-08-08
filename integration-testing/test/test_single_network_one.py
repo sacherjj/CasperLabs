@@ -252,7 +252,7 @@ def block_hash(node):
 block_hash_queries = [
     (
         {
-            "block_hash": "9d",
+            "block_hash": "9d000000",
             "key": "a91208047c",
             "path": "file.xxx",
             "key_type": "hash",
@@ -511,7 +511,7 @@ def cli(one_node_network):
             raise CLIErrorExit(cp)
         return cp.stdout.decode('utf-8')
     return invoker
- 
+
 
 def test_cli_no_parameters(cli):
     with raises(CLIErrorExit) as ex_info:
@@ -524,7 +524,7 @@ def test_cli_help(cli):
     # deploy,propose,show-block,show-blocks,show-deploy,show-deploys,vdag,query-state
     assert 'Casper' in out
 
-    
+
 def test_cli_show_blocks_and_show_block(cli):
     blocks = parse_show_blocks(cli('show-blocks', '--depth', '1'))
     assert len(blocks) > 0
@@ -563,7 +563,7 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli
     deploys = parse_show_deploys(cli('show-deploys', block_hash))
     deploy_hashes = [d.deploy.deploy_hash for d in deploys]
     assert deploy_hash in deploy_hashes
-    
+
     deploy_info = parse(cli('show-deploy', deploy_hash))
     assert deploy_info.deploy.deploy_hash == deploy_hash
 
