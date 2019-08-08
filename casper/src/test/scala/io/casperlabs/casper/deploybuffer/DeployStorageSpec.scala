@@ -316,7 +316,8 @@ trait DeployStorageSpec
     def addAsPending(d: Deploy): Task[Unit]   = writer.addAsPending(List(d))
     def addAsProcessed(d: Deploy): Task[Unit] = writer.addAsProcessed(List(d))
     def addAsDiscarded(d: Deploy): Task[Unit] =
-      writer.addAsPending(List(d)) >> writer.markAsDiscarded(List((d)))
+      writer.addAsPending(List(d)) >> writer.markAsDiscarded(List((d, "")))
+    def markAsDiscarded(ds: List[Deploy]): Task[Unit] = writer.markAsDiscarded(ds.map((_, "")))
     def addAsFinalized(d: Deploy): Task[Unit] =
       writer.addAsProcessed(List(d)) >> writer.markAsFinalized(List(d))
     def discardedNum(): Task[Int] = Task.sleep(50.millis) >> writer.cleanupDiscarded(Duration.Zero)

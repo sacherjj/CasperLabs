@@ -47,12 +47,14 @@ import scala.concurrent.duration._
 
   /** Will have an effect only on pending deploys.
     * After being discarded, deploys will be not be affected by any other 'mark*' methods. */
-  def markAsDiscardedByHashes(hashes: List[ByteString]): F[Unit]
+  def markAsDiscardedByHashes(hashesAndReasons: List[(ByteString, String)]): F[Unit]
 
   /** Will have an effect only on pending deploys.
     * After being discarded, deploys will be not be affected by any other 'mark*' methods. */
-  def markAsDiscarded(deploys: List[Deploy]): F[Unit] =
-    markAsDiscardedByHashes(deploys.map(_.deployHash))
+  def markAsDiscarded(deploysAndReasons: List[(Deploy, String)]): F[Unit] =
+    markAsDiscardedByHashes(deploysAndReasons.map {
+      case (d, message) => (d.deployHash, message)
+    })
 
   /** Will have an effect only on pending deploys.
     * Marks deploys as discarded that were added as pending more than 'now - expirationPeriod' time ago. */
@@ -122,10 +124,10 @@ class SQLiteDeployStorageWriter[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
   }
 
   override def markAsProcessedByHashes(hashes: List[ByteString]): F[Unit] =
-    setStatus(hashes, ProcessedStatusCode, PendingStatusCode)
+    setStatus(hashes.map((_, none[String])), ProcessedStatusCode, PendingStatusCode)
 
   override def markAsPendingByHashes(hashes: List[ByteString]): F[Unit] =
-    setStatus(hashes, PendingStatusCode, ProcessedStatusCode)
+    setStatus(hashes.map((_, none[String])), PendingStatusCode, ProcessedStatusCode)
 
   override def markAsFinalizedByHashes(hashes: List[ByteString]): F[Unit] =
     Update[(ByteString, Int)](
@@ -135,21 +137,26 @@ class SQLiteDeployStorageWriter[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       .void
 
   private def setStatus(
-      hashes: List[ByteString],
+      hashesAndStatusMessages: List[(ByteString, Option[String])],
       newStatus: Int,
       prevStatus: Int
   ): F[Unit] =
     for {
       t <- Time[F].currentMillis
-      _ <- Update[(Int, Long, ByteString, Int)](
-            s"UPDATE buffered_deploys SET status=?, update_time_millis=? WHERE hash=? AND status=?"
-          ).updateMany(hashes.map((newStatus, t, _, prevStatus)))
+      _ <- Update[(Int, Long, Option[String], ByteString, Int)](
+            s"UPDATE buffered_deploys SET status=?, update_time_millis=?, status_message=? WHERE hash=? AND status=?"
+          ).updateMany(hashesAndStatusMessages.map {
+              case (hash, maybeStatusMessage) =>
+                (newStatus, t, maybeStatusMessage, hash, prevStatus)
+            })
             .transact(xa)
       _ <- updateMetrics()
     } yield ()
 
-  override def markAsDiscardedByHashes(hashes: List[ByteString]): F[Unit] =
-    setStatus(hashes, DiscardedStatusCode, PendingStatusCode)
+  override def markAsDiscardedByHashes(hashesAndReasons: List[(ByteString, String)]): F[Unit] =
+    setStatus(hashesAndReasons.map {
+      case (h, r) => (h, r.some)
+    }, DiscardedStatusCode, PendingStatusCode)
 
   override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] = {
     def transaction(threshold: Long) =
@@ -173,8 +180,8 @@ class SQLiteDeployStorageWriter[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       now       <- Time[F].currentMillis
       threshold = now - expirationPeriod.toMillis
       _ <- sql"""|UPDATE buffered_deploys 
-              |SET status=$DiscardedStatusCode, update_time_millis=$now, status_message=$StatusMessageTtlExpired
-              |WHERE status=$PendingStatusCode AND receive_time_millis<$threshold""".stripMargin.update.run
+                 |SET status=$DiscardedStatusCode, update_time_millis=$now, status_message=$StatusMessageTtlExpired
+                 |WHERE status=$PendingStatusCode AND receive_time_millis<$threshold""".stripMargin.update.run
             .transact(xa)
     } yield ()
 

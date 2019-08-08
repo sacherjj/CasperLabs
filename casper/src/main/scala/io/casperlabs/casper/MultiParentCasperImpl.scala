@@ -547,7 +547,9 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
       // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
 
-      _ <- DeployStorageWriter[F].markAsDiscarded(deploysToDiscard.toList.map(_.deploy)) whenA deploysToDiscard.nonEmpty
+      _ <- DeployStorageWriter[F].markAsDiscarded(
+            deploysToDiscard.toList.map(pd => (pd.deploy, pd.errorMessage))
+          ) whenA deploysToDiscard.nonEmpty
     } yield status)
       .handleErrorWith {
         case ex @ SmartContractEngineError(error_msg) =>

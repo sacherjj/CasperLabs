@@ -68,10 +68,10 @@ class MockDeployStorage[F[_]: Monad: Log](
       })
     )
 
-  override def markAsDiscardedByHashes(hashes: List[ByteString]): F[Unit] =
+  override def markAsDiscardedByHashes(hashesAndReasons: List[(ByteString, String)]): F[Unit] =
     logOperation(
-      s"markAsDiscarded(hashes = ${hashesToString(hashes)})",
-      setStatus(hashes, DiscardedStatusCode, PendingStatusCode)
+      s"markAsDiscarded(hashes = ${hashesToString(hashesAndReasons.map(_._1))})",
+      setStatus(hashesAndReasons.map(_._1), DiscardedStatusCode, PendingStatusCode)
     )
 
   private def setStatus(hashes: List[ByteString], newStatus: Int, prevStatus: Int): F[Unit] =
