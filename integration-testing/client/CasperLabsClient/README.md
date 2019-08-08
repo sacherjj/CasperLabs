@@ -25,8 +25,8 @@ After installing `casperlabs-client` you can start interacting with
 
 
 ```python
-import casper_client
-client = casper_client.CasperClient('deploy.casperlabs.io', 40401)
+import casperlabs_client
+client = casperlabs_client.CasperLabsClient('deploy.casperlabs.io', 40401)
 blockInfo = next(client.showBlocks(1, full_view=False))
 for bond in blockInfo.summary.header.state.bonds:
     print(f'{bond.validator_public_key.hex()}: {bond.stake}')
@@ -73,7 +73,7 @@ response = client.deploy(from_addr="f2cbd19d054bd2b2c06ea26714275271663a5e4503d5
 
 ### Return values
 
-Return values of the API functions defined in the `CasperClient` are generally deserialized gRPC response objects 
+Return values of the API functions defined in the `CasperLabsClient` are generally deserialized gRPC response objects 
 of the corresponding requests defined in the node's gRPC service, see 
 [casper.proto](https://github.com/CasperLabs/CasperLabs/blob/master/protobuf/io/casperlabs/node/api/casper.proto).
 

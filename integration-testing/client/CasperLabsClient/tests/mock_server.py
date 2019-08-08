@@ -6,10 +6,10 @@ from concurrent import futures
 import time
 import grpc
 
-from casper_client import CasperMessage_pb2
-from casper_client import CasperMessage_pb2_grpc
-from casper_client import casper_pb2_grpc
-from casper_client import empty_pb2
+from casperlabs_client import CasperMessage_pb2
+from casperlabs_client import CasperMessage_pb2_grpc
+from casperlabs_client import casper_pb2_grpc
+from casperlabs_client import empty_pb2
 
 CL_GRPC_PORT_EXTERNAL = 3477
 
