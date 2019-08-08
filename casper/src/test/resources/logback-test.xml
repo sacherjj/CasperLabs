@@ -9,8 +9,8 @@
     </encoder>
   </appender>
 
-  <logger name="io.casperlabs.rspace" level="warn" />
-  
+  <logger name="org.flywaydb" level="warn" />
+
   <root level="info">
     <appender-ref ref="STDOUT" />
   </root>

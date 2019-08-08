@@ -11,6 +11,7 @@ import io.casperlabs.blockstorage._
 import io.casperlabs.casper
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
@@ -31,6 +32,7 @@ import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
+import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.shared.{Cell, Log, Time}
 
 import scala.collection.mutable
@@ -42,8 +44,8 @@ class TransportLayerCasperTestNode[F[_]](
     genesis: Block,
     transforms: Seq[TransformEntry],
     sk: PrivateKey,
-    blockDagDir: Path,
-    blockStoreDir: Path,
+    dagStorageDir: Path,
+    blockStorageDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     chainId: String = "casperlabs",
@@ -52,8 +54,8 @@ class TransportLayerCasperTestNode[F[_]](
 )(
     implicit
     concurrentF: Concurrent[F],
-    blockStore: BlockStore[F],
-    blockDagStorage: BlockDagStorage[F],
+    blockStorage: BlockStorage[F],
+    dagStorage: DagStorage[F],
     val errorHandlerEff: ErrorHandler[F],
     val timeEff: Time[F],
     metricEff: Metrics[F],
@@ -62,16 +64,18 @@ class TransportLayerCasperTestNode[F[_]](
       local,
       sk,
       genesis,
-      blockDagDir,
-      blockStoreDir,
+      dagStorageDir,
+      blockStorageDir,
       validateNonces,
       maybeMakeEE
-    )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
+    )(concurrentF, blockStorage, dagStorage, metricEff, casperState) {
 
   implicit val logEff: LogStub[F] = new LogStub[F](local.host, printEnabled = false)
-  implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
-  implicit val transportLayerEff  = tle
-  implicit val rpConfAsk          = createRPConfAsk[F](local)
+  implicit val deployBufferEff: DeployBuffer[F] =
+    MockDeployBuffer.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
+  implicit val connectionsCell   = Cell.unsafe[F, Connections](Connect.Connections.empty)
+  implicit val transportLayerEff = tle
+  implicit val rpConfAsk         = createRPConfAsk[F](local)
 
   implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
 
@@ -85,10 +89,7 @@ class TransportLayerCasperTestNode[F[_]](
     LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
 
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
-  implicit val validation        = new ValidationImpl[F]
-
-  implicit val lastFinalizedBlockHashContainer =
-    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
+  implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
@@ -148,7 +149,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     implicit val metricEff = new Metrics.MetricsNOP[F]
 
     initStorage(genesis) flatMap {
-      case (blockDagDir, blockStoreDir, blockDagStorage, blockStore) =>
+      case (dagStorageDir, blockStorageDir, dagStorage, blockStorage) =>
         for {
           blockProcessingLock <- Semaphore[F](1)
           casperState         <- Cell.mvarCell[F, CasperState](CasperState())
@@ -158,14 +159,14 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             genesis,
             transforms,
             sk,
-            blockDagDir,
-            blockStoreDir,
+            dagStorageDir,
+            blockStorageDir,
             blockProcessingLock,
             faultToleranceThreshold
           )(
             concurrentF,
-            blockStore,
-            blockDagStorage,
+            blockStorage,
+            dagStorage,
             errorHandler,
             logicalTime,
             metricEff,
@@ -210,7 +211,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             implicit val metricEff = new Metrics.MetricsNOP[F]
 
             initStorage(genesis) flatMap {
-              case (blockDagDir, blockStoreDir, blockDagStorage, blockStore) =>
+              case (dagStorageDir, blockStorageDir, dagStorage, blockStorage) =>
                 for {
                   semaphore <- Semaphore[F](1)
                   casperState <- Cell.mvarCell[F, CasperState](
@@ -222,16 +223,16 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                     genesis,
                     transforms,
                     sk,
-                    blockDagDir,
-                    blockStoreDir,
+                    dagStorageDir,
+                    blockStorageDir,
                     semaphore,
                     faultToleranceThreshold,
                     validateNonces = validateNonces,
                     maybeMakeEE = maybeMakeEE
                   )(
                     concurrentF,
-                    blockStore,
-                    blockDagStorage,
+                    blockStorage,
+                    dagStorage,
                     errorHandler,
                     logicalTime,
                     metricEff,

@@ -228,7 +228,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(casperlabs_block_dag_storage_file_insert_total) by (instance)",
+          "expr": "sum(casperlabs_dag_storage_file_insert_total) by (instance)",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
