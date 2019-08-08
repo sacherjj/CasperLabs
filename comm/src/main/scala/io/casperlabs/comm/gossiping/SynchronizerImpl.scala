@@ -298,16 +298,31 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       }
     }
 
+  /** Checks that at the current depth we are observing we haven't received so many blocks that it would indicate
+    * an abnormally wide, artificially generated graph. We use a simple formula to estimate the upper bound of how
+    * many blocks we can see. We assume that there is a limit on how quickly validators and bond and unbond, and
+    * that this limit can be expressed as a "bonding rate" which represents the rate of change per DAG rank.
+    * For example a rate of 0.1 would mean there can be a bonding event every 10th rank. Bonding has to happen
+    * in a way that that block is the only block at that rank, since it cannot be merged with any other block,
+    * otherwise the set of bonded validators among parents would be different and that's agains the rules.
+    * We estimate the maximum number of validators we can see by looking at how many we have at the targets,
+    * then assume that validators *unbonded* at the maximum allowed rate as we walk *backwards* along the DAG,
+    * therefore at each previous rank there were as many validators as possible. Each validator can only produce
+    * 1 block at each rank, but we allow 1/3rd of the validators to equivocate, just to be even more generous.
+    * The goal is to catch abnormal, exponential growth, not be super realistic. This gives an arithmetic
+    * progression of validator numbers, which can be used to give an upper bound on the total number of blocks
+    * at any given depth.
+    */
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
     val depth = syncState.distanceFromOriginalTarget.values.toList.maximumOption.getOrElse(0)
     val maxValidatorCountAtTargets = syncState.originalTargets.map { t =>
       syncState.summaries.get(t).fold(1)(s => s.getHeader.getState.bonds.size)
     }.max
     // Validators can come and leave at a certain rate. If someone unbonded at every step along
-    // the way we'd get as wide a graph as we can get.
+    // the way we'd get as wide a graph as we can get (looking back).
     val maxValidators = maxValidatorCountAtTargets + Math.ceil(depth * maxBondingRate).toInt
-    // Estimate the most conservative estimate to be with 33% of the validators all equivocating
-    // at every rank, and use the average maximum validator count as a higher bound.
+    // Use the most conservative estimate by allowing 33% of the validators all equivocating
+    // at every rank, and using the average maximum validator count as a higher bound.
     val maxTotal = Math.ceil((maxValidators + maxValidatorCountAtTargets) / 2 * depth * 1.33).toInt
     val total    = syncState.summaries.size
     if (total > minBlockCountToCheckWidth &&
