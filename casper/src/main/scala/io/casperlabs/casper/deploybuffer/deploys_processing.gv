@@ -28,6 +28,8 @@ digraph deploy_processing_finite_state_machine {
 	create_block[shape="box" label="create block"];
 	store_block[shape="box" label="store block"];
 
+	store_deploys_process_results[shape="box" label="store deploy process results"];
+
 	initialized -> check_hashes [label="deploy received"];
 
 	check_hashes -> check_signatures [label="yes"];
@@ -73,4 +75,6 @@ digraph deploy_processing_finite_state_machine {
 	store_block -> processed;
 	processed -> pending [label="block orphaned"];
 	processed -> finalized [label="block finalized"];
+
+	initialized -> store_deploys_process_results [label="peer block received"];
 }
