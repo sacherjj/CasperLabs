@@ -34,7 +34,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   implicit val logEff                  = new LogStub[Task]()
   implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
 
-  "isInMainChain" should "classify appropriately" in withStorage {
+  "isInMainChain and votedBranch" should "classify appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       for {
         genesis <- createBlock[Task](Seq())
@@ -46,11 +46,12 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b3.blockHash) shouldBeF true
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b2.blockHash) shouldBeF false
-        result <- isInMainChain(dag, BlockMetadata.fromBlock(b3), genesis.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), genesis.blockHash) shouldBeF false
+        result <- votedBranch(dag, genesis.blockHash, b3.blockHash) shouldBeF Some(b2.blockHash)
       } yield result
   }
 
-  "isInMainChain" should "classify diamond DAGs appropriately" in withStorage {
+  "isInMainChain and votedBranch" should "classify diamond DAGs appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       for {
         genesis <- createBlock[Task](Seq())
@@ -64,12 +65,18 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b4.blockHash) shouldBeF true
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b4.blockHash) shouldBeF true
-        result <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b4.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b4.blockHash) shouldBeF false
+        _      <- votedBranch(dag, genesis.blockHash, b2.blockHash) shouldBeF Some(b2.blockHash)
+        _      <- votedBranch(dag, genesis.blockHash, b3.blockHash) shouldBeF Some(b3.blockHash)
+        _      <- votedBranch(dag, genesis.blockHash, b4.blockHash) shouldBeF Some(b2.blockHash)
+        _      <- votedBranch(dag, b2.blockHash, b4.blockHash) shouldBeF Some(b4.blockHash)
+        _      <- votedBranch(dag, b3.blockHash, b4.blockHash) shouldBeF None
+        result <- votedBranch(dag, b2.blockHash, b3.blockHash) shouldBeF None
       } yield result
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
-  "isInMainChain" should "classify complicated chains appropriately" in withStorage {
+  "isInMainChain and votedBranch" should "classify complicated chains appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       val v1 = generateValidator("Validator One")
       val v2 = generateValidator("Validator Two")
@@ -95,7 +102,15 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(b7), b8.blockHash) shouldBeF true
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b6.blockHash) shouldBeF true
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b8.blockHash) shouldBeF true
-        result <- isInMainChain(dag, BlockMetadata.fromBlock(b4), b2.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b4), b2.blockHash) shouldBeF false
+        _      <- votedBranch(dag, genesis.blockHash, b2.blockHash) shouldBeF Some(b2.blockHash)
+        _      <- votedBranch(dag, genesis.blockHash, b3.blockHash) shouldBeF Some(b3.blockHash)
+        _      <- votedBranch(dag, genesis.blockHash, b4.blockHash) shouldBeF Some(b2.blockHash)
+        _      <- votedBranch(dag, genesis.blockHash, b5.blockHash) shouldBeF Some(b2.blockHash)
+        _      <- votedBranch(dag, genesis.blockHash, b8.blockHash) shouldBeF Some(b2.blockHash)
+        _      <- votedBranch(dag, b4.blockHash, b8.blockHash) shouldBeF Some(b7.blockHash)
+        result <- votedBranch(dag, b5.blockHash, b8.blockHash) shouldBeF None
       } yield result
   }
+
 }

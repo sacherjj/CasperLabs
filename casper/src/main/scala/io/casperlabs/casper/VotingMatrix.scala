@@ -91,7 +91,7 @@ object VotingMatrixImpl {
                     matrix.updated(
                       validatorToIndex(blockMetadata.validatorPublicKey),
                       latestBlockDagLevels
-                    )
+                  )
                 )
           } yield ()
 
@@ -178,8 +178,8 @@ object VotingMatrixImpl {
                                                  ProtoUtil
                                                    .votedBranch[F](
                                                      dag,
-                                                     b.blockHash,
-                                                     newFinalizedBlock
+                                                     newFinalizedBlock,
+                                                     b.blockHash
                                                    )
                                                    .map {
                                                      _.map(

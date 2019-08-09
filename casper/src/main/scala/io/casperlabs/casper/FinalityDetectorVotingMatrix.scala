@@ -17,9 +17,10 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] extends Final
     for {
       weights      <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
       committeeOpt <- findCommit(dag, candidateBlockHash, weights)
-    } yield committeeOpt
-      .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
-      .getOrElse(0f)
+    } yield
+      committeeOpt
+        .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
+        .getOrElse(0f)
 
   private def findCommit(
       dag: DagRepresentation[F],
@@ -51,7 +52,7 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] extends Final
       latestFinalizedBlock: BlockHash
   ): F[Unit] =
     for {
-      votedBranch <- ProtoUtil.votedBranch(dag, block.blockHash, latestFinalizedBlock)
+      votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)
       _ <- votedBranch match {
             case Some(branch) =>
               val blockMetadata = BlockMetadata.fromBlock(block)

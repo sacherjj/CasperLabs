@@ -65,22 +65,22 @@ object ProtoUtil {
       result                 <- isInMainChain(dag, candidateBlockMetadata.get, targetBlockHash)
     } yield result
 
-  // calculate which branch the newBlockHash vote for
+  // calculate which branch of latestFinalizedBlockHash that the newBlockHash vote for
   def votedBranch[F[_]: Monad](
       dag: DagRepresentation[F],
-      newBlockHash: BlockHash,
-      latestFinalizeBlockHash: BlockHash
+      latestFinalizeBlockHash: BlockHash,
+      newBlockHash: BlockHash
   ): F[Option[BlockHash]] =
     for {
       newBlock            <- dag.lookup(newBlockHash)
       latestFinalizeBlock <- dag.lookup(latestFinalizeBlockHash)
-      r                   <- votedBranch(dag, newBlock.get, latestFinalizeBlock.get)
+      r                   <- votedBranch(dag, latestFinalizeBlock.get, newBlock.get)
     } yield r
 
   def votedBranch[F[_]: Monad](
       dag: DagRepresentation[F],
-      newBlock: BlockMetadata,
-      latestFinalizeBlock: BlockMetadata
+      latestFinalizeBlock: BlockMetadata,
+      newBlock: BlockMetadata
   ): F[Option[BlockHash]] =
     if (newBlock.rank <= latestFinalizeBlock.rank) {
       none[BlockHash].pure[F]
@@ -89,11 +89,11 @@ object ProtoUtil {
         result <- newBlock.parents.headOption match {
                    case Some(mainParentHash) =>
                      if (mainParentHash == latestFinalizeBlock.blockHash) {
-                       mainParentHash.some.pure[F]
+                       newBlock.blockHash.some.pure[F]
                      } else {
                        dag
                          .lookup(mainParentHash)
-                         .flatMap(b => votedBranch(dag, b.get, latestFinalizeBlock))
+                         .flatMap(b => votedBranch(dag, latestFinalizeBlock, b.get))
                      }
                    case None => none[BlockHash].pure[F]
                  }
