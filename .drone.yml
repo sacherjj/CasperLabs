@@ -98,6 +98,18 @@ steps:
   depends_on:
   - rust-compile-test-pr
 
+- name: black-and-flake8
+  commands:
+  - "python3 -m pip install pipenv"
+  - "cd integration-testing"
+  - "./run_flake8_black.sh"
+  image: "casperlabs/buildenv:latest"
+  when:
+    event:
+    - pull_request
+  depends_on:
+  - rust-compile-test-pr
+
 # This section is for bors' branches only
 - name: sbt-test-docker-bors
   commands:
