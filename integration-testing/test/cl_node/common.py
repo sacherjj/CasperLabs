@@ -12,23 +12,6 @@ from .errors import (
     UnexpectedShowBlocksOutputFormatError,
 )
 
-TAG = os.environ.get("TAG_NAME", None)
-if TAG is None:
-    TAG = "test"
-
-DEFAULT_NODE_IMAGE = f"casperlabs/node:{TAG}"
-DEFAULT_ENGINE_IMAGE = f"casperlabs/execution-engine:{TAG}"
-DEFAULT_CLIENT_IMAGE = f"casperlabs/client:{TAG}"
-CL_NODE_BINARY = "/opt/docker/bin/bootstrap"
-CL_NODE_DIRECTORY = "/root/.casperlabs"
-CL_NODE_DEPLOY_DIR = f"{CL_NODE_DIRECTORY}/deploy"
-CL_GENESIS_DIR = f"{CL_NODE_DIRECTORY}/genesis"
-CL_SOCKETS_DIR = f"{CL_NODE_DIRECTORY}/sockets"
-CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
-CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
-GRPC_SOCKET_FILE = f"{CL_SOCKETS_DIR}/.casper-node.sock"
-EXECUTION_ENGINE_COMMAND = ".casperlabs/sockets/.casper-node.sock"
-
 HELLO_NAME = "test_helloname.wasm"
 HELLO_WORLD = "test_helloworld.wasm"
 COUNTER_CALL = "test_countercall.wasm"
@@ -38,11 +21,6 @@ BONDING_CONTRACT = "test_bondingcall.wasm"
 UNBONDING_CONTRACT = "test_unbondingcall.wasm"
 INVALID_BONDING_CONTRACT = "test_invalid_bondingcall.wasm"
 INVALID_UNBONDING_CONTRACT = "test_invalid_unbondingcall.wasm"
-
-
-HOST_MOUNT_DIR = f"/tmp/resources_{TAG}"
-HOST_GENESIS_DIR = f"{HOST_MOUNT_DIR}/genesis"
-HOST_BOOTSTRAP_DIR = f"{HOST_MOUNT_DIR}/bootstrap_certificate"
 
 
 @dataclasses.dataclass(eq=True, frozen=True)
