@@ -26,12 +26,7 @@ import io.casperlabs.blockstorage.{
 }
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.deploybuffer.{
-  DeployStorageReader,
-  DeployStorageWriter,
-  SQLiteDeployStorageReader,
-  SQLiteDeployStorageWriter
-}
+import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageWriter, SQLiteDeployStorage}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -128,14 +123,9 @@ class NodeRuntime private[node] (
                                                             blockingScheduler,
                                                             conf.server.dataDir
                                                           )
-        implicit0(deployStorageWriter: DeployStorageWriter[Effect]) <- Resource
-                                                                        .liftF(
-                                                                          SQLiteDeployStorageWriter
-                                                                            .create[Effect]
-                                                                        )
-
-        implicit0(deployStorageReader: DeployStorageReader[Effect]) = SQLiteDeployStorageReader
-          .create[Effect]
+        implicit0(deployStorage: DeployStorage[Effect]) <- Resource.liftF(
+                                                            SQLiteDeployStorage.create[Effect]
+                                                          )
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
         implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
@@ -259,12 +249,12 @@ class NodeRuntime private[node] (
                 blockingScheduler
               )
             }
-      } yield (nodeDiscovery, multiParentCasperRef, deployStorageWriter)
+      } yield (nodeDiscovery, multiParentCasperRef, deployStorage)
 
       resources.allocated flatMap {
-        case ((nodeDiscovery, multiParentCasperRef, deployStorageWriter), release) =>
+        case ((nodeDiscovery, multiParentCasperRef, deployStorage), release) =>
           handleUnrecoverableErrors {
-            nodeProgram(state, nodeDiscovery, multiParentCasperRef, deployStorageWriter, release)
+            nodeProgram(state, nodeDiscovery, multiParentCasperRef, deployStorage, release)
           }
       }
     })

@@ -15,8 +15,7 @@ import scala.concurrent.duration.FiniteDuration
 
 class MockDeployStorage[F[_]: Monad: Log](
     deploysWithMetadataRef: Ref[F, Map[Deploy, Metadata]]
-) extends DeployStorageWriter[F]
-    with DeployStorageReader[F] {
+) extends DeployStorage[F] {
 
   // Deploys not yet included in a block
   private val PendingStatusCode = 0

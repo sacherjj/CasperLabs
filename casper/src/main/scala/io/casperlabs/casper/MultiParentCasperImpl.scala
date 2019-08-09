@@ -12,7 +12,7 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
@@ -50,7 +50,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorageWriter: DeployStorageReader: Validation](
+class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -657,7 +657,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Sync: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorageWriter: DeployStorageReader: Validation: Cell[
+  def create[F[_]: Sync: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: Cell[
     ?[_],
     CasperState
   ]](
@@ -922,7 +922,7 @@ object MultiParentCasperImpl {
     def establishMetrics[F[_]: Metrics]: F[Unit] =
       Metrics[F].incrementCounter("gas_spent", 0L)(CasperMetricsSource)
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: DeployStorageReader: Validation](
+    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation](
         chainId: String
     ): F[StatelessExecutor[F]] =
       for {

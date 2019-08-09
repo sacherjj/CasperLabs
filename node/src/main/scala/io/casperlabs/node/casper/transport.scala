@@ -13,7 +13,7 @@ import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Catscontrib._
@@ -63,8 +63,7 @@ package object transport {
       executionEngineService: ExecutionEngineService[Effect],
       finalizationHandler: LastFinalizedBlockHashContainer[Effect],
       filesApiEff: FilesAPI[Effect],
-      deployStorageWriter: DeployStorageWriter[Effect],
-      deployStorageReader: DeployStorageReader[Effect],
+      deployStorage: DeployStorage[Effect],
       validation: Validation[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {

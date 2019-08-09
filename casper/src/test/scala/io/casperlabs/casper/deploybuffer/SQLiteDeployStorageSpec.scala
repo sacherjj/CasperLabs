@@ -52,11 +52,10 @@ class SQLiteDeployStorageSpec
       test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit]
   ): Unit = {
     val program = for {
-      _      <- Task(cleanupTables())
-      _      <- Task(setupTables())
-      reader = SQLiteDeployStorageReader.create[Task]
-      writer <- SQLiteDeployStorageWriter.create[Task]
-      _      <- test(reader, writer)
+      _       <- Task(cleanupTables())
+      _       <- Task(setupTables())
+      storage <- SQLiteDeployStorage.create[Task]
+      _       <- test(storage, storage)
     } yield ()
     program.runSyncUnsafe(5.seconds)
   }

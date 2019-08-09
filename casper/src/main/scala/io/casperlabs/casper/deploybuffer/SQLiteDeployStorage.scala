@@ -1,12 +1,14 @@
 package io.casperlabs.casper.deploybuffer
 
 import cats._
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
 import io.casperlabs.blockstorage.DeployStorageMetricsSource
+import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
@@ -15,61 +17,10 @@ import simulacrum.typeclass
 
 import scala.concurrent.duration._
 
-@typeclass trait DeployStorageWriter[F[_]] {
-  def addAsExecuted(block: Block): F[Unit]
-
-  /* Should not fail if the same deploy added twice */
-  def addAsPending(deploys: List[Deploy]): F[Unit]
-
-  /* Should not fail if the same deploy added twice */
-  def addAsProcessed(deploys: List[Deploy]): F[Unit]
-
-  /* Will have an effect only on pending deploys */
-  def markAsProcessedByHashes(hashes: List[ByteString]): F[Unit]
-
-  /* Will have an effect only on pending deploys */
-  def markAsProcessed(deploys: List[Deploy]): F[Unit] =
-    markAsProcessedByHashes(deploys.map(_.deployHash))
-
-  /* Will have an effect only on processed deploys */
-  def markAsPendingByHashes(hashes: List[ByteString]): F[Unit]
-
-  /* Will have an effect only on processed deploys */
-  def markAsPending(deploys: List[Deploy]): F[Unit] =
-    markAsPendingByHashes(deploys.map(_.deployHash))
-
-  /** Will have an effect only on processed deploys.
-    * After being finalized, deploys will be not be affected by any other 'mark*' methods. */
-  def markAsFinalizedByHashes(hashes: List[ByteString]): F[Unit]
-
-  /** Will have an effect only on processed deploys.
-    * After being finalized, deploys will be not be affected by any other 'mark*' methods. */
-  def markAsFinalized(deploys: List[Deploy]): F[Unit] =
-    markAsFinalizedByHashes(deploys.map(_.deployHash))
-
-  /** Will have an effect only on pending deploys.
-    * After being discarded, deploys will be not be affected by any other 'mark*' methods. */
-  def markAsDiscardedByHashes(hashesAndReasons: List[(ByteString, String)]): F[Unit]
-
-  /** Will have an effect only on pending deploys.
-    * After being discarded, deploys will be not be affected by any other 'mark*' methods. */
-  def markAsDiscarded(deploysAndReasons: List[(Deploy, String)]): F[Unit] =
-    markAsDiscardedByHashes(deploysAndReasons.map {
-      case (d, message) => (d.deployHash, message)
-    })
-
-  /** Will have an effect only on pending deploys.
-    * Marks deploys as discarded that were added as pending more than 'now - expirationPeriod' time ago. */
-  def markAsDiscarded(expirationPeriod: FiniteDuration): F[Unit]
-
-  /** Deletes discarded deploys that are older than 'now - expirationPeriod'.
-    * @return Number of deleted deploys */
-  def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int]
-}
-
-class SQLiteDeployStorageWriter[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
-    implicit val xa: Transactor[F]
-) extends DeployStorageWriter[F] {
+class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
+    implicit val xa: Transactor[F],
+    metricsSource: Source
+) extends DeployStorage[F] {
   // Do not forget updating Flyway migration scripts at:
   // block-storage/src/main/resources/db/migrations
 
@@ -83,10 +34,26 @@ class SQLiteDeployStorageWriter[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
 
   private val StatusMessageTtlExpired = "TTL expired"
 
-  import SQLiteDeployStorageWriter.metricsSource
-
   private implicit val metaByteString: Meta[ByteString] =
     Meta[Array[Byte]].imap(ByteString.copyFrom)(_.toByteArray)
+  // Doesn't work as implicit
+  // Compiler: Cannot find or construct a Read instance for type ...
+  private implicit val readDeploy: Read[Deploy] =
+    Read[Array[Byte]].map(Deploy.parseFrom)
+  private implicit val readProcessingResult: Read[(ByteString, ProcessedDeploy)] = {
+    Read[(Array[Byte], Long, Option[String])].map {
+      case (blockHash, cost, maybeError) =>
+        (
+          ByteString.copyFrom(blockHash),
+          ProcessedDeploy(
+            deploy = None,
+            cost = cost,
+            isError = maybeError.nonEmpty,
+            errorMessage = maybeError.getOrElse("")
+          )
+        )
+    }
+  }
 
   override def addAsExecuted(block: Block): F[Unit] = {
     val writeToDeploysTable = Update[(ByteString, ByteString, Long, ByteString)](
@@ -249,17 +216,104 @@ class SQLiteDeployStorageWriter[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       _         <- Metrics[F].setGauge("pending_deploys", pending)
       _         <- Metrics[F].setGauge("processed_deploys", processed)
     } yield ()
+
+  override def readProcessed: F[List[Deploy]] =
+    readByStatus(ProcessedStatusCode)
+
+  private def readByStatus(status: Int): F[List[Deploy]] =
+    sql"""|SELECT data FROM deploys
+          |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
+          |WHERE bd.status=$status""".stripMargin
+      .query[Deploy]
+      .to[List]
+      .transact(xa)
+
+  override def readProcessedByAccount(account: ByteString): F[List[Deploy]] =
+    readByAccountAndStatus(account, ProcessedStatusCode)
+
+  private def readByAccountAndStatus(account: ByteString, status: Int): F[List[Deploy]] =
+    sql"""|SELECT data FROM deploys
+          |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
+          |WHERE bd.account=$account AND bd.status=$status""".stripMargin
+      .query[Deploy]
+      .to[List]
+      .transact(xa)
+
+  override def readProcessedHashes: F[List[ByteString]] =
+    readHashesByStatus(ProcessedStatusCode)
+
+  override def readPending: F[List[Deploy]] =
+    readByStatus(PendingStatusCode)
+
+  override def readPendingHashes: F[List[ByteString]] =
+    readHashesByStatus(PendingStatusCode)
+
+  private def readHashesByStatus(status: Int): F[List[ByteString]] =
+    sql"SELECT hash FROM buffered_deploys WHERE status=$status"
+      .query[ByteString]
+      .to[List]
+      .transact(xa)
+
+  override def sizePendingOrProcessed(): F[Long] =
+    sql"SELECT COUNT(hash) FROM buffered_deploys WHERE status=$PendingStatusCode OR status=$ProcessedStatusCode"
+      .query[Long]
+      .unique
+      .transact(xa)
+
+  override def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]] =
+    sql"""|SELECT data FROM deploys
+          |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
+          |WHERE bd.hash=$hash AND (bd.status=$PendingStatusCode OR bd.status=$ProcessedStatusCode)""".stripMargin
+      .query[Deploy]
+      .option
+      .transact(xa)
+
+  override def getByHashes(l: List[ByteString]): F[List[Deploy]] =
+    NonEmptyList
+      .fromList[ByteString](l)
+      .fold(List.empty[Deploy].pure[F])(nel => {
+        val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
+        q.query[Deploy].to[List].transact(xa)
+      })
+
+  override def getProcessingResults(
+      hash: ByteString
+  ): F[List[(ByteString, ProcessedDeploy)]] = {
+    val getDeploy =
+      sql"SELECT data FROM deploys WHERE hash=$hash".query[Deploy].unique.transact(xa)
+
+    val readProcessingResults =
+      sql"""|SELECT block_hash, cost, execution_error_message
+            |FROM deploys_process_results 
+            |WHERE deploy_hash=$hash""".stripMargin
+        .query[(ByteString, ProcessedDeploy)]
+        .to[List]
+        .transact(xa)
+
+    for {
+      blockHashesAndProcessingResults <- readProcessingResults
+      res <- if (blockHashesAndProcessingResults.isEmpty) blockHashesAndProcessingResults.pure[F]
+            else
+              getDeploy.map(
+                d =>
+                  blockHashesAndProcessingResults.map {
+                    case (blockHash, processingResult) =>
+                      (blockHash, processingResult.withDeploy(d))
+                  }
+              )
+    } yield res
+  }
 }
 
-object SQLiteDeployStorageWriter {
+object SQLiteDeployStorage {
   private implicit val metricsSource: Source = Metrics.Source(DeployStorageMetricsSource, "sqlite")
 
   def create[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       implicit xa: Transactor[F]
-  ): F[DeployStorageWriter[F]] =
+  ): F[DeployStorage[F]] =
     for {
       _ <- establishMetrics[F]
-    } yield new SQLiteDeployStorageWriter[F]: DeployStorageWriter[F]
+    } yield new SQLiteDeployStorage[F]: DeployStorage[F]
 
   /** Export base 0 values so we have non-empty series for charts. */
   private def establishMetrics[F[_]: Monad: Metrics]: F[Unit] =
