@@ -102,7 +102,7 @@ class StreamTSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChec
         val smaller     = list.takeWhile(_ < 100)
         val stopElement = list.slice(smaller.size, smaller.size + 1)
 
-        stream.takeUntil(_ < 100).toList shouldBe (smaller ++ stopElement)
+        stream.takeUntil(_ >= 100).toList shouldBe (smaller ++ stopElement)
       }
     }
 

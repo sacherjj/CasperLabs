@@ -189,15 +189,15 @@ sealed abstract class StreamT[F[_], +A] { self =>
     *
     * @param pred predicate
     * @param functor
-    * @return Stream where last element does not satisfy the predicate.
+    * @return Stream where last element satisfies the predicate.
     */
   def takeUntil(pred: A => Boolean)(implicit functor: Applicative[F]): StreamT[F, A] =
     self match {
-      case SCons(curr, lazyTail) if pred(curr) =>
-        StreamT.cons(curr, lazyTail.map(_.map(_.takeUntil(pred))))
-      case SCons(curr, _)  => StreamT.cons(curr, Eval.now(StreamT.empty[F, A].pure[F]))
-      case SLazy(lazyTail) => StreamT.delay(lazyTail.map(_.map(_.takeUntil(pred))))
-      case _: SNil[F]      => StreamT.empty[F, A]
+      case SCons(curr, _) if pred(curr) =>
+        StreamT.cons(curr, Eval.now(StreamT.empty[F, A].pure[F]))
+      case SCons(curr, lazyTail) => StreamT.cons(curr, lazyTail.map(_.map(_.takeUntil(pred))))
+      case SLazy(lazyTail)       => StreamT.delay(lazyTail.map(_.map(_.takeUntil(pred))))
+      case _: SNil[F]            => StreamT.empty[F, A]
     }
 
   def dropWhile(p: A => Boolean)(implicit functor: Functor[F]): StreamT[F, A] = self match {

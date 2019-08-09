@@ -98,7 +98,7 @@ object Estimator {
           .bfTraverseF[F, BlockHash](List(latestMessageHash))(
             hash => dag.lookup(hash).map(_.get.parents.take(1))
           )
-          .takeUntil(_ != stopHash)
+          .takeUntil(_ == stopHash)
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
               weightFromValidatorByDag(dag, blockHash, validator).map(weight => {
