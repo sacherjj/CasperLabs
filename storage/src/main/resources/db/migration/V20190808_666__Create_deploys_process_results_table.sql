@@ -18,6 +18,7 @@ CREATE TABLE deploys_process_results
 
 CREATE INDEX idx_deploys_process_results_account_create_time_deploy_hash ON deploys_process_results (account, create_time_millis, deploy_hash);
 CREATE INDEX idx_deploys_process_results_account_execute_time_deploy_hash ON deploys_process_results (account, create_time_millis, deploy_hash);
+CREATE INDEX idx_deploys_process_results_account_deploy_hash ON deploys_process_results (deploy_hash);
 
 ALTER TABLE buffered_deploys
     ADD COLUMN status_message TEXT;
