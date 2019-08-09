@@ -71,12 +71,13 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     )
 
     val writeToProcessResultsTable =
-      Update[(ByteString, ByteString, ByteString, Long, Long, Long, Option[String])](
+      Update[(ByteString, ByteString, Int, ByteString, Long, Long, Long, Option[String])](
         """
           |INSERT OR IGNORE INTO deploys_process_results
           |(
           | block_hash,
           | deploy_hash,
+          | deploy_position,
           | account,
           | create_time_millis,
           | execute_time_millis,
@@ -85,20 +86,19 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
           |) VALUES (?, ?, ?, ?, ?, ?, ?)
           |""".stripMargin
       ).updateMany(
-        block.getBody.deploys
-          .map(
-            pd =>
-              (
-                block.blockHash,
-                pd.getDeploy.deployHash,
-                pd.getDeploy.getHeader.accountPublicKey,
-                pd.getDeploy.getHeader.timestamp,
-                block.getHeader.timestamp,
-                pd.cost,
-                if (pd.isError) pd.errorMessage.some else none[String]
-              )
-          )
-          .toList
+        block.getBody.deploys.zipWithIndex.map {
+          case (pd, deployPosition) =>
+            (
+              block.blockHash,
+              pd.getDeploy.deployHash,
+              deployPosition,
+              pd.getDeploy.getHeader.accountPublicKey,
+              pd.getDeploy.getHeader.timestamp,
+              block.getHeader.timestamp,
+              pd.cost,
+              if (pd.isError) pd.errorMessage.some else none[String]
+            )
+        }.toList
       )
 
     (writeToDeploysTable >> writeToProcessResultsTable).transact(xa).void
