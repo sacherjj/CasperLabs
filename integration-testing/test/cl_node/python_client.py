@@ -61,7 +61,7 @@ class PythonClient(CasperLabsClient, LoggingMixin):
                      f'nonce={deploy_nonce})')
 
         try:
-            r = self.client.deploy(address.encode('UTF-8'),
+            r = self.client.deploy(bytes.fromhex(address),
                                    gas_limit,
                                    gas_price,
                                    payment_contract_path,
