@@ -72,4 +72,10 @@ trait ArbitraryImplicits {
       d <- Gen.choose(1.0, 10.0)
     } yield refineV[GreaterEqual[W.`1.0`.T]](d).right.get
   }
+
+  implicit val gte0DoubleGen: Arbitrary[Refined[Double, GreaterEqual[W.`0.0`.T]]] = Arbitrary {
+    for {
+      d <- Gen.choose(0.0, 10.0)
+    } yield refineV[GreaterEqual[W.`0.0`.T]](d).right.get
+  }
 }

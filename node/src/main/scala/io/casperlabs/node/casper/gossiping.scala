@@ -529,10 +529,8 @@ package object gossiping {
                          isInDag(blockHash).map(!_)
                      },
                      maxPossibleDepth = conf.server.syncMaxPossibleDepth,
-                     minBlockCountToCheckBranchingFactor =
-                       conf.server.syncMinBlockCountToCheckBranchingFactor,
-                     // Really what we should be looking at is the width at any rank being less than the number of validators.
-                     maxBranchingFactor = conf.server.syncMaxBranchingFactor,
+                     minBlockCountToCheckWidth = conf.server.syncMinBlockCountToCheckWidth,
+                     maxBondingRate = conf.server.syncMaxBondingRate,
                      maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
                      maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
                      isInitialRef = isInitialRef

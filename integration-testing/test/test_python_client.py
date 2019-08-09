@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from pytest import fixture
 
-from casper_client import ABI
+from casperlabs_client import ABI
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 
 

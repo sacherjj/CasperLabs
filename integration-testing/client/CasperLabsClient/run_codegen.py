@@ -18,8 +18,8 @@ import re
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 
 PROTOBUF_DIR = f"{THIS_DIRECTORY}/../../../protobuf"
-PROTO_DIR = f"{THIS_DIRECTORY}/casper_client/proto"
-PACKAGE_DIR = f"{THIS_DIRECTORY}/casper_client"
+PROTO_DIR = f"{THIS_DIRECTORY}/casperlabs_client/proto"
+PACKAGE_DIR = f"{THIS_DIRECTORY}/casperlabs_client"
 
 
 def make_dirs(path):

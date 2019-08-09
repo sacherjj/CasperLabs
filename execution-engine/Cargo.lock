@@ -470,6 +470,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ee-532-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
 name = "ee-536-regression"
 version = "0.1.0"
 dependencies = [
@@ -1063,6 +1070,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "pos"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
+name = "pos-finalize-payment"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.10.0",

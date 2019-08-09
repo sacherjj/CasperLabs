@@ -25,16 +25,17 @@ import struct
 import json
 from operator import add
 from functools import reduce
-import ast
-from collections import defaultdict
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
 import google.protobuf.text_format
+
 CEscape = google.protobuf.text_format.text_encoding.CEscape
+
 
 def _hex(text, as_utf8):
     return (len(text) in (32, 64)) and text.hex() or CEscape(text, as_utf8)
+
 
 google.protobuf.text_format.text_encoding.CEscape = _hex
 
@@ -128,13 +129,14 @@ class InternalError(Exception):
     and this exception thrown instead, so the user does
     not have to worry about handling any other exceptions.
     """
-    def __init__(self, status = '', details = ''):
+
+    def __init__(self, status="", details=""):
         super(InternalError, self).__init__()
         self.status = status
         self.details = details
 
     def __str__(self):
-        return f'{self.status}: {self.details}'
+        return f"{self.status}: {self.details}"
 
 
 def api(function):
@@ -157,10 +159,11 @@ def api(function):
             raise InternalError(str(e.code()), e.details())
         except Exception as e:
             raise InternalError(details=str(e)) from e
+
     return wrapper
 
 
-class CasperClient:
+class CasperLabsClient:
     """
     gRPC CasperLabs client.
     """
@@ -168,10 +171,12 @@ class CasperClient:
     # Note, there is also casper.StateQuery.KeyVariant.KEY_VARIANT_UNSPECIFIED,
     # but it doesn't seem to have an official string representation
     # ("key_variant_unspecified"? "unspecified"?) and is not used by the client.
-    STATE_QUERY_KEY_VARIANT={'hash': casper.StateQuery.KeyVariant.HASH,
-                             'uref': casper.StateQuery.KeyVariant.UREF,
-                             'address': casper.StateQuery.KeyVariant.ADDRESS,
-                             'local': casper.StateQuery.KeyVariant.LOCAL}
+    STATE_QUERY_KEY_VARIANT = {
+        "hash": casper.StateQuery.KeyVariant.HASH,
+        "uref": casper.StateQuery.KeyVariant.UREF,
+        "address": casper.StateQuery.KeyVariant.ADDRESS,
+        "local": casper.StateQuery.KeyVariant.LOCAL,
+    }
 
     def __init__(
         self,
@@ -298,17 +303,22 @@ class CasperClient:
         )
 
         deploy_hash = hash(serialize(header))
-        d = consensus.Deploy(deploy_hash = deploy_hash,
-                             approvals = [consensus.Approval(approver_public_key = account_public_key,
-                                                             signature = sign(deploy_hash))]
-                                         if account_public_key
-                                         else [],
-                             header = header,
-                             body = body)
+        d = consensus.Deploy(
+            deploy_hash=deploy_hash,
+            approvals=[
+                consensus.Approval(
+                    approver_public_key=account_public_key, signature=sign(deploy_hash)
+                )
+            ]
+            if account_public_key
+            else [],
+            header=header,
+            body=body,
+        )
 
         # TODO: Deploy returns Empty, error handing via exceptions, apparently,
         # so no point in returning it.
-        return self.casperService.Deploy(casper.DeployRequest(deploy = d)), deploy_hash
+        return self.casperService.Deploy(casper.DeployRequest(deploy=d)), deploy_hash
 
     @api
     def showBlocks(self, depth: int = 1, max_rank=0, full_view=True):
@@ -400,12 +410,16 @@ class CasperClient:
 
             variant = self.STATE_QUERY_KEY_VARIANT.get(keyType.lower(), None)
             if variant is None:
-                raise InternalError('query-state', f"{keyType} is not a known query-state key type")
+                raise InternalError(
+                    "query-state", f"{keyType} is not a known query-state key type"
+                )
             return variant
 
         q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
-        q.path_segments.extend(name for name in path.split('/') if name)
-        return self.casperService.GetBlockState(casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q))
+        q.path_segments.extend(name for name in path.split("/") if name)
+        return self.casperService.GetBlockState(
+            casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q)
+        )
 
     @api
     def balance(self, address: str, block_hash: str):
@@ -414,23 +428,32 @@ class CasperClient:
         try:
             account = value.account
         except AttributeError:
-            return InternalError('balance', f"Expected Account type value under {address}.")
+            return InternalError(
+                "balance", f"Expected Account type value under {address}."
+            )
 
-        urefs = [u for u in account.known_urefs if u.name == 'mint']
+        urefs = [u for u in account.known_urefs if u.name == "mint"]
         if len(urefs) == 0:
-            raise InternalError('balance', "Account's known_urefs map did not contain Mint contract address.")
+            raise InternalError(
+                "balance",
+                "Account's known_urefs map did not contain Mint contract address.",
+            )
 
         mintPublic = urefs[0]
-        mintPrivate = self.queryState(block_hash, mintPublic.key.uref.uref.hex(), "", "uref")
+        mintPrivate = self.queryState(
+            block_hash, mintPublic.key.uref.uref.hex(), "", "uref"
+        )
 
         mintPrivateHex = mintPrivate.key.uref.uref.hex()
         purseAddrHex = ABI.byte_array(account.purse_id.uref).hex()
         localKeyValue = f"{mintPrivateHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
-        balance = self.queryState(block_hash, balanceURef.key.uref.uref.hex(), "", "uref")
+        balance = self.queryState(
+            block_hash, balanceURef.key.uref.uref.hex(), "", "uref"
+        )
         return int(balance.big_int.value)
-        
+
     @api
     def showDeploy(self, deploy_hash_base16: str, full_view=True):
         """
@@ -499,12 +522,12 @@ def hexify(o):
     return google.protobuf.text_format.MessageToString(o)
 
 
-def _show_blocks(response, element_name='block'):
+def _show_blocks(response, element_name="block"):
     count = 0
     for block in response:
-        print(f'------------- {element_name} {count} ---------------')
+        print(f"------------- {element_name} {count} ---------------")
         print(hexify(block))
-        print('-----------------------------------------------------\n')
+        print("-----------------------------------------------------\n")
         count += 1
     print("count:", count)
 
@@ -514,71 +537,77 @@ def _show_block(response):
 
 
 @guarded_command
-def no_command(casper_client, args):
-    print('You must provide a command. --help for documentation of commands.')
+def no_command(casperlabs_client, args):
+    print("You must provide a command. --help for documentation of commands.")
     return 1
 
 
 @guarded_command
-def deploy_command(casper_client, args):
-    kwargs = dict(from_addr = getattr(args,'from'),
-                  gas_limit = None,
-                  gas_price = args.gas_price, 
-                  payment = args.payment or args.session,
-                  session = args.session,
-                  nonce = args.nonce,
-                  public_key = args.public_key or None,
-                  private_key = args.private_key or None,
-                  args = args.args and ABI.args_from_json(args.args) or None)
-    _, deploy_hash = casper_client.deploy(**kwargs)
-    print (f'Success! Deploy hash: {deploy_hash.hex()}')
+def deploy_command(casperlabs_client, args):
+    kwargs = dict(
+        from_addr=getattr(args, "from"),
+        gas_limit=None,
+        gas_price=args.gas_price,
+        payment=args.payment or args.session,
+        session=args.session,
+        nonce=args.nonce,
+        public_key=args.public_key or None,
+        private_key=args.private_key or None,
+        args=args.args and ABI.args_from_json(args.args) or None,
+    )
+    _, deploy_hash = casperlabs_client.deploy(**kwargs)
+    print(f"Success! Deploy hash: {deploy_hash.hex()}")
 
 
 @guarded_command
-def propose_command(casper_client, args):
-    response = casper_client.propose()
+def propose_command(casperlabs_client, args):
+    response = casperlabs_client.propose()
     print(f"Success! Block hash: {response.block_hash.hex()}")
 
 
 @guarded_command
-def show_block_command(casper_client, args):
-    response = casper_client.showBlock(args.hash, full_view=True)
+def show_block_command(casperlabs_client, args):
+    response = casperlabs_client.showBlock(args.hash, full_view=True)
     return _show_block(response)
 
 
 @guarded_command
-def show_blocks_command(casper_client, args):
-    response = casper_client.showBlocks(args.depth)
+def show_blocks_command(casperlabs_client, args):
+    response = casperlabs_client.showBlocks(args.depth)
     _show_blocks(response)
 
 
 @guarded_command
-def vdag_command(casper_client, args):
-    response = casper_client.visualizeDag(args.depth)
+def vdag_command(casperlabs_client, args):
+    response = casperlabs_client.visualizeDag(args.depth)
     # TODO: call Graphviz
-    print (hexify(response))
-
-
-@guarded_command
-def query_state_command(casper_client, args):
-    response = casper_client.queryState(args.block_hash, args.key, args.path, getattr(args, 'type'))
     print(hexify(response))
 
+
 @guarded_command
-def balance_command(casper_client, args):
-    response = casper_client.balance(args.address, args.block_hash)
+def query_state_command(casperlabs_client, args):
+    response = casperlabs_client.queryState(
+        args.block_hash, args.key, args.path, getattr(args, "type")
+    )
+    print(hexify(response))
+
+
+@guarded_command
+def balance_command(casperlabs_client, args):
+    response = casperlabs_client.balance(args.address, args.block_hash)
     print(response)
 
 
 @guarded_command
-def show_deploy_command(casper_client, args):
-    response = casper_client.showDeploy(args.hash, full_view=False)
+def show_deploy_command(casperlabs_client, args):
+    response = casperlabs_client.showDeploy(args.hash, full_view=False)
     print(hexify(response))
-    
+
+
 @guarded_command
-def show_deploys_command(casper_client, args):
-    response = casper_client.showDeploys(args.hash, full_view=False)
-    _show_blocks(response, element_name='deploy')
+def show_deploys_command(casperlabs_client, args):
+    response = casperlabs_client.showDeploys(args.hash, full_view=False)
+    _show_blocks(response, element_name="deploy")
 
 
 def main():
@@ -635,10 +664,12 @@ def main():
 
             args = self.parser.parse_args()
             return args.function(
-                CasperClient(args.host, args.port, args.internal_port), args
+                CasperLabsClient(args.host, args.port, args.internal_port), args
             )
 
     parser = Parser()
+
+    # fmt: off
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
                       [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
                        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
@@ -679,9 +710,9 @@ def main():
     parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
                       [[('-a', '--address'), dict(required=True, type=str, help="Account's public key in hex.")],
                        [('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')]])
-
+    # fmt:on
     sys.exit(parser.run())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

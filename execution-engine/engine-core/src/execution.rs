@@ -42,7 +42,7 @@ use tracking_copy::TrackingCopy;
 use URefAddr;
 
 pub const MINT_NAME: &str = "mint";
-const POS_NAME: &str = "pos";
+pub const POS_NAME: &str = "pos";
 
 #[derive(Debug)]
 pub enum Error {
@@ -1503,12 +1503,19 @@ impl Executor<Module> for WasmiExecutor {
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
         #[allow(unreachable_code)]
         let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid));
-        let value = on_fail_charge! {
-            match tc.borrow_mut().get(correlation_id, &validated_key) {
-                Ok(None) => Err(Error::KeyNotFound(acct_key)),
-                Err(error) => Err(error.into()),
-                Ok(Some(value)) => Ok(value)
+
+        let value = match tc.borrow_mut().get(correlation_id, &validated_key) {
+            Ok(None) => {
+                return ExecutionResult::precondition_failure(
+                    ::engine_state::error::Error::AuthorizationError,
+                )
             }
+            Err(error) => {
+                return ExecutionResult::precondition_failure(
+                    ::engine_state::error::Error::ExecError(error.into()),
+                )
+            }
+            Ok(Some(value)) => value,
         };
 
         let mut account = match value {
