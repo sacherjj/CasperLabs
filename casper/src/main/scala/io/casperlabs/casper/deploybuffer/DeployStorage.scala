@@ -76,7 +76,7 @@ import scala.concurrent.duration._
 
   def getByHashes(l: List[ByteString]): F[List[Deploy]]
 
-  /** @return List of blockHashes and processing results */
+  /** @return List of blockHashes and processing results in descendant order by execution time (block creation timestamp)*/
   def getProcessingResults(hash: ByteString): F[List[(BlockHash, ProcessedDeploy)]]
 }
 

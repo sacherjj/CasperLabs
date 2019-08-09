@@ -283,9 +283,10 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       sql"SELECT data FROM deploys WHERE hash=$hash".query[Deploy].unique.transact(xa)
 
     val readProcessingResults =
-      sql"""|SELECT block_hash, cost, execution_error_message
+      sql"""|SELECT block_hash, cost, execution_error_message 
             |FROM deploys_process_results 
-            |WHERE deploy_hash=$hash""".stripMargin
+            |WHERE deploy_hash=$hash 
+            |ORDER BY execute_time_millis DESC""".stripMargin
         .query[(ByteString, ProcessedDeploy)]
         .to[List]
         .transact(xa)
