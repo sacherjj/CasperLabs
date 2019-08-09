@@ -83,7 +83,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
           | execute_time_millis,
           | cost,
           | execution_error_message
-          |) VALUES (?, ?, ?, ?, ?, ?, ?)
+          |) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           |""".stripMargin
       ).updateMany(
         block.getBody.deploys.zipWithIndex.map {
