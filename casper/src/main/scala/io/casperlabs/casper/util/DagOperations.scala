@@ -298,19 +298,23 @@ object DagOperations {
   def latestCommonAncestorF[F[_]: MonadThrowable, A: Eq: Ordering](
       a: A,
       b: A
-  )(next: A => F[List[A]]): F[A] =
+  )(next: A => F[A]): F[A] =
     if (Eq[A].eqv(a, b)) {
       a.pure[F]
     } else {
       Ordering[A].compare(a, b) match {
         case -1 =>
           // Block B2 is "higher" in the chain
-          next(b).flatMap(n => latestCommonAncestorF(a +: n)(next))
+          next(b).flatMap(latestCommonAncestorF(a, _)(next))
         case 0 =>
           // Both blocks have the same rank but they're different blocks.
-          (next(a), next(b)).mapN(_ ++ _).flatMap(latestCommonAncestorF(_)(next))
+          for {
+            aa  <- next(a)
+            bb  <- next(b)
+            lca <- latestCommonAncestorF(aa, bb)(next)
+          } yield lca
         case 1 =>
-          next(a).flatMap(n => latestCommonAncestorF(b +: n)(next))
+          next(a).flatMap(latestCommonAncestorF(b, _)(next))
       }
     }
 
@@ -318,7 +322,7 @@ object DagOperations {
     */
   def latestCommonAncestorF[F[_]: MonadThrowable, A: Eq: Ordering](
       starters: List[A]
-  )(next: A => F[List[A]]): F[A] =
+  )(next: A => F[A]): F[A] =
     starters.foldLeftM(starters.head)(latestCommonAncestorF(_, _)(next))
 
   /** Computes Latest Common Ancestor of a set of blocks by following main-parent
@@ -344,7 +348,7 @@ object DagOperations {
     starters
       .traverse(next(identity))
       .flatMap(
-        latestCommonAncestorF[F, BlockMetadata](_)(next[BlockMetadata](_.blockHash)(_).map(List(_)))
+        latestCommonAncestorF[F, BlockMetadata](_)(next[BlockMetadata](_.blockHash)(_))
       )
       .map(_.blockHash)
   }
