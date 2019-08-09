@@ -32,7 +32,7 @@ import scala.annotation.tailrec
   ): F[Unit]
 }
 
-object VotingMatrixImpl {
+object VotingMatrix {
   // (consensus value, dagLevel of the block)
   type Vote = (BlockHash, Long)
   def of[F[_]: Concurrent]: F[VotingMatrix[F]] =
@@ -49,24 +49,32 @@ object VotingMatrixImpl {
             currentVoteValue: BlockHash
         ): F[Unit] =
           for {
-            _                   <- updateVotingMatrixOnNewBlock(dag, blockMetadata)
-            voter               = blockMetadata.validatorPublicKey
-            currentDagLevel     = blockMetadata.rank
-            firstLevelZeroVotes <- firstLevelZeroVotesRef.get
-            validatorToIndex    <- validatorToIndexRef.get
-            indexOfVoter        = validatorToIndex(voter)
-            rowOpt              = firstLevelZeroVotes(indexOfVoter)
-            _ = rowOpt match {
-              case Some((finalVoteValue, _)) =>
-                if (finalVoteValue != currentVoteValue)
-                  firstLevelZeroVotesRef.update(
-                    l => l.updated(indexOfVoter, (currentVoteValue, currentDagLevel).some)
-                  )
-              case None =>
-                firstLevelZeroVotesRef.update(
-                  l => l.updated(indexOfVoter, (currentVoteValue, currentDagLevel).some)
-                )
-            }
+            validatorToIndex <- validatorToIndexRef.get
+            voter            = blockMetadata.validatorPublicKey
+            _ <- if (!validatorToIndex.contains(voter)) {
+                  // the creator of block is a new validator after creating the latestFinalizedBlock
+                  ().pure[F]
+                } else {
+                  for {
+                    _                   <- updateVotingMatrixOnNewBlock(dag, blockMetadata)
+                    currentDagLevel     = blockMetadata.rank
+                    firstLevelZeroVotes <- firstLevelZeroVotesRef.get
+
+                    indexOfVoter = validatorToIndex(voter)
+                    rowOpt       = firstLevelZeroVotes(indexOfVoter)
+                    _ = rowOpt match {
+                      case Some((finalVoteValue, _)) =>
+                        if (finalVoteValue != currentVoteValue)
+                          firstLevelZeroVotesRef.update(
+                            l => l.updated(indexOfVoter, (currentVoteValue, currentDagLevel).some)
+                          )
+                      case None =>
+                        firstLevelZeroVotesRef.update(
+                          l => l.updated(indexOfVoter, (currentVoteValue, currentDagLevel).some)
+                        )
+                    }
+                  } yield ()
+                }
           } yield ()
 
         private def updateVotingMatrixOnNewBlock(
@@ -74,24 +82,25 @@ object VotingMatrixImpl {
             blockMetadata: BlockMetadata
         ): F[Unit] =
           for {
-            weightMap        <- weightMapRef.get
             validatorToIndex <- validatorToIndexRef.get
-            validators       = weightMap.keySet
+            validators       = validatorToIndex.keySet
             latestBlockDagLevelsAsMap <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                                           dag,
                                           blockMetadata,
                                           validators
                                         )
-            latestBlockDagLevels = fromMapToArray(
+            // in cases where latest message of V(i) is not well defined concept, put 0 (zero) in the corresponding cell
+            panoramaM = fromMapToArray(
               validatorToIndex,
               latestBlockDagLevelsAsMap.getOrElse(_, 0L)
-            ) //if not, set to daglevel of Genesis block
+            )
+            // Replace row i in voting-matrix by panoramaM
             _ <- matrixRef.update(
                   matrix =>
                     matrix.updated(
                       validatorToIndex(blockMetadata.validatorPublicKey),
-                      latestBlockDagLevels
-                  )
+                      panoramaM
+                    )
                 )
           } yield ()
 
@@ -108,7 +117,7 @@ object VotingMatrixImpl {
             weightMap           <- weightMapRef.get
             mask                = fromMapToArray(validatorToIndex, committeeApproximation.contains)
             weight              = fromMapToArray(validatorToIndex, weightMap.getOrElse(_, 0L))
-            committeeOpt = pruneToCommittee(
+            committeeOpt = pruneLoop(
               matrix,
               firstLevelZeroVotes,
               candidateBlockHash,
@@ -124,7 +133,7 @@ object VotingMatrixImpl {
           } yield committee
 
         @tailrec
-        private def pruneToCommittee(
+        private def pruneLoop(
             matrix: List[List[Long]],
             firstLevelZeroVotes: List[Option[Vote]],
             candidateBlockHash: BlockHash,
@@ -136,14 +145,14 @@ object VotingMatrixImpl {
             .filter { case (_, rowIndex) => mask(rowIndex) }
             .foldLeft((mask, false, 0L)) {
               case ((newMask, prunedValidator, maxTotalWeight), (row, rowIndex)) =>
-                val count = firstLevelZeroVotes.zipWithIndex.map {
+                val voteSum = firstLevelZeroVotes.zipWithIndex.map {
                   case (Some((consensusValue, dagLevel)), columnIndex) =>
                     if (consensusValue == candidateBlockHash && dagLevel <= row(columnIndex))
                       weight(columnIndex)
                     else 0L
                   case _ => 0L
                 }.sum
-                if (count >= q) {
+                if (voteSum >= q) {
                   (newMask, prunedValidator, maxTotalWeight + weight(rowIndex))
                 } else {
                   (newMask.updated(rowIndex, false), true, maxTotalWeight)
@@ -151,9 +160,10 @@ object VotingMatrixImpl {
             }
           if (prunedValidator) {
             if (maxTotalWeight < q)
+              // terminate finality detection, finality is not reached yet.
               None
             else
-              pruneToCommittee(matrix, firstLevelZeroVotes, candidateBlockHash, newMask, q, weight)
+              pruneLoop(matrix, firstLevelZeroVotes, candidateBlockHash, newMask, q, weight)
           } else {
             (mask, maxTotalWeight).some
           }
@@ -165,14 +175,19 @@ object VotingMatrixImpl {
         ): F[Unit] =
           for {
             // todo(abner)  use a lock to atomically update these state
-            weights               <- ProtoUtil.mainParentWeightMap(dag, newFinalizedBlock)
-            _                     <- weightMapRef.set(weights)
-            validators            = weights.keySet
-            validatorsToIndex     = validators.zipWithIndex.toMap
-            _                     <- validatorToIndexRef.set(validatorsToIndex)
-            latestMessages        <- dag.latestMessages
-            latestMessagesOfVotes = latestMessages.filterKeys(validators)
-            latestVoteValueOfVotesAsList <- latestMessagesOfVotes.toList
+            // start a new game, get weightMap and validatorSet from new finalized block's main parent
+            weights    <- ProtoUtil.mainParentWeightMap(dag, newFinalizedBlock)
+            _          <- weightMapRef.set(weights)
+            validators = weights.keySet
+            n          = validators.size
+            _          <- matrixRef.set(List.fill(n, n)(0))
+            _          <- firstLevelZeroVotesRef.set(List.fill(n)(None))
+            // assigns numeric identifiers 0, ..., N-1 to all validators
+            validatorsToIndex      = validators.zipWithIndex.toMap
+            _                      <- validatorToIndexRef.set(validatorsToIndex)
+            latestMessages         <- dag.latestMessages
+            latestMessagesOfVoters = latestMessages.filterKeys(validators)
+            latestVoteValueOfVotesAsList <- latestMessagesOfVoters.toList
                                              .traverse {
                                                case (v, b) =>
                                                  ProtoUtil
@@ -207,11 +222,14 @@ object VotingMatrixImpl {
             )
             _ <- firstLevelZeroVotesRef.set(firstLevelZeroVotes)
             // Apply the incremental update step from previous chapter (but only steps 1...3) taking M := V(i)latest
-            _ <- latestMessagesOfVotes.values.toList.traverse { b =>
+            _ <- latestMessagesOfVoters.values.toList.traverse { b =>
                   updateVotingMatrixOnNewBlock(dag, b)
                 }
           } yield ()
 
+        // return an Array, whose size equals to the size of validatorsToIndex and
+        // for v in validatorsToIndex.key
+        //   Arr[validatorsToIndex[v]] = mapFunction[v]
         private def fromMapToArray[A](
             validatorsToIndex: Map[Validator, Int],
             mapFunction: Validator => A

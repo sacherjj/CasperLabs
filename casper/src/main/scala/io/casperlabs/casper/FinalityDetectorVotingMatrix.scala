@@ -17,10 +17,9 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] extends Final
     for {
       weights      <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
       committeeOpt <- findCommit(dag, candidateBlockHash, weights)
-    } yield
-      committeeOpt
-        .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
-        .getOrElse(0f)
+    } yield committeeOpt
+      .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
+      .getOrElse(0f)
 
   private def findCommit(
       dag: DagRepresentation[F],
@@ -57,8 +56,12 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] extends Final
             case Some(branch) =>
               val blockMetadata = BlockMetadata.fromBlock(block)
               VotingMatrix[F].updateVoterPerspective(dag, blockMetadata, branch)
+            // if block don't vote any main child of latestFinalizedBlock,
+            // then we don't update voting matrix
             case None =>
-              ().pure[F]
+              Log[F].info(
+                s"the block ${PrettyPrinter.buildString(block)} don't vote any main child of latestFinalizedBlock"
+              )
           }
     } yield ()
 
