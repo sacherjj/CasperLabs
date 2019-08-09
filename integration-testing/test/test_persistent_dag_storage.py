@@ -1,4 +1,4 @@
-from test.cl_node.casperlabsnode import HELLO_NAME
+from test.cl_node.common import HELLO_NAME
 from test.cl_node.wait import (
     wait_for_connected_to_node,
     wait_for_finalised_hash,

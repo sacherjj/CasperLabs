@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
-from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
+from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.docker_base import LoggingDockerBase
 from test.cl_node.docker_client import DockerClient
 from test.cl_node.errors import CasperLabsNodeAddressNotFoundError

@@ -4,7 +4,7 @@ import pytest
 from pytest import raises
 from test.cl_node.casperlabs_accounts import Account
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
-from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
+from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import wait_for_genesis_block
