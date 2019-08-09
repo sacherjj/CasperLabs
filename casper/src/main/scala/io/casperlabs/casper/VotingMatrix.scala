@@ -221,8 +221,11 @@ object VotingMatrix {
               firstLevelZeroVotesAsMap.get
             )
             _ <- firstLevelZeroVotesRef.set(firstLevelZeroVotes)
+            latestMessagesToUpdated = latestMessagesOfVoters.filterKeys(
+              firstLevelZeroVotesAsMap.contains
+            )
             // Apply the incremental update step from previous chapter (but only steps 1...3) taking M := V(i)latest
-            _ <- latestMessagesOfVoters.values.toList.traverse { b =>
+            _ <- latestMessagesToUpdated.values.toList.traverse { b =>
                   updateVotingMatrixOnNewBlock(dag, b)
                 }
           } yield ()
