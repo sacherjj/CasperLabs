@@ -10,9 +10,9 @@ CREATE TABLE deploys_process_results
     execute_time_millis     INTEGER NOT NULL,
     cost                    INTEGER NOT NULL,
     execution_error_message TEXT,
-    PRIMARY KEY (deploy_hash, block_hash),
+    PRIMARY KEY (block_hash, deploy_hash),
     FOREIGN KEY (deploy_hash) REFERENCES deploys (hash)
-);
+) WITHOUT ROWID;
 
 CREATE INDEX idx_deploys_process_results_account_create_time_deploy_hash ON deploys_process_results (account, create_time_millis, deploy_hash);
 CREATE INDEX idx_deploys_process_results_account_execute_time_deploy_hash ON deploys_process_results (account, create_time_millis, deploy_hash);
