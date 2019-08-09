@@ -42,6 +42,7 @@ class ConfigurationSpec
       workers = 1
     )
 
+  // Random value generators for refined types are in ArbitraryImplicits.
   val defaultConf: Configuration = {
     val server = Configuration.Server(
       host = "test".some,
@@ -68,8 +69,8 @@ class ConfigurationSpec
       approvalRelayFactor = 1,
       approvalPollInterval = FiniteDuration(1, TimeUnit.SECONDS),
       syncMaxPossibleDepth = 1,
-      syncMinBlockCountToCheckBranchingFactor = 1,
-      syncMaxBranchingFactor = 1.0,
+      syncMinBlockCountToCheckWidth = 1,
+      syncMaxBondingRate = 1.0,
       syncMaxDepthAncestorsRequest = 1,
       initSyncMaxNodes = 1,
       initSyncMinSuccessful = 1,

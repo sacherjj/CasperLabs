@@ -18,6 +18,6 @@ fi
 
 pip install pipenv
 pipenv sync
-pipenv run client/CasperClient/install.sh
+pipenv run client/CasperLabsClient/install.sh
 pipenv run pytest ${PYTEST_ARGS} $TEST_RUN_ARGS
 pipenv run python3 ./docker_cleanup_assurance.py

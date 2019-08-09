@@ -470,6 +470,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ee-532-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
 name = "ee-536-regression"
 version = "0.1.0"
 dependencies = [
@@ -753,6 +760,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "key-management-thresholds"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]
@@ -1056,6 +1070,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "pos"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
+
+[[package]]
+name = "pos-finalize-payment"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.10.0",
@@ -1368,6 +1389,13 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "winapi 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "revert"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
 ]
 
 [[package]]

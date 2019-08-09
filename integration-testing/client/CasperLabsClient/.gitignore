@@ -2,6 +2,6 @@
 *_pb2_grpc.py
 build
 dist
-casper_client/proto
+casperlabs_client/proto
 report.json
 *.egg-info

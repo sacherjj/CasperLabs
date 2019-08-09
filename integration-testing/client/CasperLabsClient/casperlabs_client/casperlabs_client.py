@@ -11,17 +11,12 @@ file = Path(__file__).resolve()
 parent, root = file.parent, file.parents[1]
 sys.path.append(str(root))
 
-# Additionally remove the current file's directory from sys.path
-try:
-    sys.path.remove(str(parent))
-except ValueError:  # Already removed
-    pass
-
 # end of hack #
 
 import time
 import argparse
 import grpc
+from grpc._channel import _Rendezvous
 import functools
 from pyblake2 import blake2b
 import ed25519
@@ -30,6 +25,19 @@ import struct
 import json
 from operator import add
 from functools import reduce
+
+# Monkey patching of google.protobuf.text_encoding.CEscape
+# to get keys and signatures in hex when printed
+import google.protobuf.text_format
+
+CEscape = google.protobuf.text_format.text_encoding.CEscape
+
+
+def _hex(text, as_utf8):
+    return (len(text) in (32, 64)) and text.hex() or CEscape(text, as_utf8)
+
+
+google.protobuf.text_format.text_encoding.CEscape = _hex
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
 from .control_pb2_grpc import ControlServiceStub
@@ -122,7 +130,13 @@ class InternalError(Exception):
     not have to worry about handling any other exceptions.
     """
 
-    pass
+    def __init__(self, status="", details=""):
+        super(InternalError, self).__init__()
+        self.status = status
+        self.details = details
+
+    def __str__(self):
+        return f"{self.status}: {self.details}"
 
 
 def api(function):
@@ -139,16 +153,30 @@ def api(function):
     def wrapper(*args, **kwargs):
         try:
             return function(*args, **kwargs)
+        except (SyntaxError, InternalError):
+            raise
+        except _Rendezvous as e:
+            raise InternalError(str(e.code()), e.details())
         except Exception as e:
-            raise InternalError() from e
+            raise InternalError(details=str(e)) from e
 
     return wrapper
 
 
-class CasperClient:
+class CasperLabsClient:
     """
     gRPC CasperLabs client.
     """
+
+    # Note, there is also casper.StateQuery.KeyVariant.KEY_VARIANT_UNSPECIFIED,
+    # but it doesn't seem to have an official string representation
+    # ("key_variant_unspecified"? "unspecified"?) and is not used by the client.
+    STATE_QUERY_KEY_VARIANT = {
+        "hash": casper.StateQuery.KeyVariant.HASH,
+        "uref": casper.StateQuery.KeyVariant.UREF,
+        "address": casper.StateQuery.KeyVariant.ADDRESS,
+        "local": casper.StateQuery.KeyVariant.LOCAL,
+    }
 
     def __init__(
         self,
@@ -211,8 +239,8 @@ class CasperClient:
         on the configuration of the Casper instance.
 
         :param from_addr:     Purse address that will be used to pay for the deployment.
-        :param gas_limit:     The amount of gas to use for the transaction (unused gas
-                              is refunded). Must be positive integer.
+        :param gas_limit:     [DEPRECATED and IGNORED] The amount of gas to use for the transaction
+                              (unused gas is refunded). Must be positive integer.
         :param gas_price:     The price of gas for this transaction in units dust/gas.
                               Must be positive integer.
         :param payment:       Path to the file with payment code.
@@ -288,6 +316,8 @@ class CasperClient:
             body=body,
         )
 
+        # TODO: Deploy returns Empty, error handing via exceptions, apparently,
+        # so no point in returning it.
         return self.casperService.Deploy(casper.DeployRequest(deploy=d)), deploy_hash
 
     @api
@@ -370,31 +400,59 @@ class CasperClient:
         :param key:               Base16 encoding of the base key
         :param path:              Path to the value to query. Must be of the form
                                   'key1/key2/.../keyn'
-        :param keyType:           Type of base key. Must be one of 'hash', 'uref',
-                                  'address'.
+        :param keyType:           Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'.
+                                  For 'local' key type, 'key' value format is {seed}:{rest},
+                                  where both parts are hex encoded."
         :return:                  QueryStateResponse object
         """
 
         def key_variant(keyType):
-            return {
-                "hash": casper.StateQuery.KeyVariant.HASH,
-                "uref": casper.StateQuery.KeyVariant.UREF,
-                "address": casper.StateQuery.KeyVariant.ADDRESS,
-            }[keyType]
 
-        def path_segments(path):
-            return path.split("/")
+            variant = self.STATE_QUERY_KEY_VARIANT.get(keyType.lower(), None)
+            if variant is None:
+                raise InternalError(
+                    "query-state", f"{keyType} is not a known query-state key type"
+                )
+            return variant
 
+        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
+        q.path_segments.extend(name for name in path.split("/") if name)
         return self.casperService.GetBlockState(
-            casper.GetBlockStateRequest(
-                block_hash_base16=blockHash,
-                query=casper.StateQuery(
-                    key_variant=key_variant(keyType),
-                    key_base16=key,
-                    path_segments=path_segments(path),
-                ),
-            )
+            casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q)
         )
+
+    @api
+    def balance(self, address: str, block_hash: str):
+        value = self.queryState(block_hash, address, "", "address")
+        account = None
+        try:
+            account = value.account
+        except AttributeError:
+            return InternalError(
+                "balance", f"Expected Account type value under {address}."
+            )
+
+        urefs = [u for u in account.known_urefs if u.name == "mint"]
+        if len(urefs) == 0:
+            raise InternalError(
+                "balance",
+                "Account's known_urefs map did not contain Mint contract address.",
+            )
+
+        mintPublic = urefs[0]
+        mintPrivate = self.queryState(
+            block_hash, mintPublic.key.uref.uref.hex(), "", "uref"
+        )
+
+        mintPrivateHex = mintPrivate.key.uref.uref.hex()
+        purseAddrHex = ABI.byte_array(account.purse_id.uref).hex()
+        localKeyValue = f"{mintPrivateHex}:{purseAddrHex}"
+
+        balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
+        balance = self.queryState(
+            block_hash, balanceURef.key.uref.uref.hex(), "", "uref"
+        )
+        return int(balance.big_int.value)
 
     @api
     def showDeploy(self, deploy_hash_base16: str, full_view=True):
@@ -457,89 +515,102 @@ def guarded_command(function):
     return wrapper
 
 
-def _show_blocks(response):
+def hexify(o):
+    """
+    Convert protobuf message to text format with cryptographic keys and signatures in base 16.
+    """
+    return google.protobuf.text_format.MessageToString(o)
+
+
+def _show_blocks(response, element_name="block"):
     count = 0
     for block in response:
-        print("------------- block {} ---------------".format(block.blockNumber))
-        print(block)
+        print(f"------------- {element_name} {count} ---------------")
+        print(hexify(block))
         print("-----------------------------------------------------\n")
         count += 1
     print("count:", count)
 
 
 def _show_block(response):
-    if response.status != "Success":
-        print(response.status)
-        return 1
-    print(response)
+    print(hexify(response))
 
 
 @guarded_command
-def deploy_command(casper_client, args):
-    response, deploy_hash = casper_client.deploy(
-        getattr(args, "from"),
-        args.gas_limit,
-        args.gas_price,
-        args.payment or args.session,
-        args.session,
-        args.nonce,
-        args.public_key or None,
-        args.private_key or None,
-        args.args and ABI.args_from_json(args.args) or None,
+def no_command(casperlabs_client, args):
+    print("You must provide a command. --help for documentation of commands.")
+    return 1
+
+
+@guarded_command
+def deploy_command(casperlabs_client, args):
+    kwargs = dict(
+        from_addr=getattr(args, "from"),
+        gas_limit=None,
+        gas_price=args.gas_price,
+        payment=args.payment or args.session,
+        session=args.session,
+        nonce=args.nonce,
+        public_key=args.public_key or None,
+        private_key=args.private_key or None,
+        args=args.args and ABI.args_from_json(args.args) or None,
     )
-    print(f"{response.message}. Deploy hash: {deploy_hash}")
-    if not response.success:
-        return 1
+    _, deploy_hash = casperlabs_client.deploy(**kwargs)
+    print(f"Success! Deploy hash: {deploy_hash.hex()}")
 
 
 @guarded_command
-def propose_command(casper_client, args):
-    response = casper_client.propose()
-    print(response.message)
-    if not response.success:
-        return 1
+def propose_command(casperlabs_client, args):
+    response = casperlabs_client.propose()
+    print(f"Success! Block hash: {response.block_hash.hex()}")
 
 
 @guarded_command
-def show_block_command(casper_client, args):
-    response = casper_client.showBlock(args.hash)
+def show_block_command(casperlabs_client, args):
+    response = casperlabs_client.showBlock(args.hash, full_view=True)
     return _show_block(response)
 
 
 @guarded_command
-def show_blocks_command(casper_client, args):
-    response = casper_client.showBlocks(args.depth)
+def show_blocks_command(casperlabs_client, args):
+    response = casperlabs_client.showBlocks(args.depth)
     _show_blocks(response)
 
 
 @guarded_command
-def vdag_command(casper_client, args):
-    response = casper_client.visualizeDag(args.depth)
-    print(response.content)
+def vdag_command(casperlabs_client, args):
+    response = casperlabs_client.visualizeDag(args.depth)
+    # TODO: call Graphviz
+    print(hexify(response))
 
 
 @guarded_command
-def query_state_command(casper_client, args):
-    response = casper_client.queryState(
+def query_state_command(casperlabs_client, args):
+    response = casperlabs_client.queryState(
         args.block_hash, args.key, args.path, getattr(args, "type")
     )
-    print(response.result)
+    print(hexify(response))
 
 
 @guarded_command
-def show_deploy_command(casper_client, args):
-    response = casper_client.showDeploy(args.hash)
+def balance_command(casperlabs_client, args):
+    response = casperlabs_client.balance(args.address, args.block_hash)
     print(response)
 
 
 @guarded_command
-def show_deploys_command(casper_client, args):
-    response = casper_client.showDeploys(args.hash)
-    for deployInfo in response:
-        print(response)
+def show_deploy_command(casperlabs_client, args):
+    response = casperlabs_client.showDeploy(args.hash, full_view=False)
+    print(hexify(response))
 
 
-def command_line_tool():
+@guarded_command
+def show_deploys_command(casperlabs_client, args):
+    response = casperlabs_client.showDeploys(args.hash, full_view=False)
+    _show_blocks(response, element_name="deploy")
+
+
+def main():
     """
     Parse command line and call an appropriate command.
     """
@@ -578,6 +649,8 @@ def command_line_tool():
             )
             self.sp = self.parser.add_subparsers(help="Choose a request")
 
+            self.parser.set_defaults(function=no_command)
+
         def addCommand(self, command: str, function, help, arguments):
             command_parser = self.sp.add_parser(command, help=help)
             command_parser.set_defaults(function=function)
@@ -591,202 +664,55 @@ def command_line_tool():
 
             args = self.parser.parse_args()
             return args.function(
-                CasperClient(args.host, args.port, args.internal_port), args
+                CasperLabsClient(args.host, args.port, args.internal_port), args
             )
 
     parser = Parser()
-    parser.addCommand(
-        "deploy",
-        deploy_command,
-        "Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance",
-        [
-            [
-                ("-f", "--from"),
-                dict(
-                    required=True,
-                    type=lambda x: bytes(x, "utf-8"),
-                    help="Purse address that will be used to pay for the deployment.",
-                ),
-            ],
-            [
-                ("-g", "--gas-limit"),
-                dict(
-                    required=True,
-                    type=int,
-                    help="[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
-                ),
-            ],
-            [
-                ("--gas-price",),
-                dict(
-                    required=False,
-                    type=int,
-                    default=10,
-                    help="The price of gas for this transaction in units dust/gas. Must be positive integer.",
-                ),
-            ],
-            [
-                ("-n", "--nonce"),
-                dict(
-                    required=True,
-                    type=int,
-                    help="This allows you to overwrite your own pending transactions that use the same nonce.",
-                ),
-            ],
-            [
-                ("-p", "--payment"),
-                dict(
-                    required=False,
-                    type=str,
-                    default=None,
-                    help="Path to the file with payment code, by default fallbacks to the --session code",
-                ),
-            ],
-            [
-                ("-s", "--session"),
-                dict(
-                    required=True, type=str, help="Path to the file with session code"
-                ),
-            ],
-            [
-                ("--args",),
-                dict(
-                    required=False,
-                    type=str,
-                    help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]',
-                ),
-            ],
-            [
-                ("--private-key",),
-                dict(
-                    required=True,
-                    type=str,
-                    help="Path to the file with account public key (Ed25519)",
-                ),
-            ],
-            [
-                ("--public-key",),
-                dict(
-                    required=True,
-                    type=str,
-                    help="Path to the file with account private key (Ed25519)",
-                ),
-            ],
-        ],
-    )
 
-    parser.addCommand(
-        "propose",
-        propose_command,
-        "Force a node to propose a block based on its accumulated deploys.",
-        [],
-    )
+    # fmt: off
+    parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
+                      [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
+                       [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
+                       [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
+                       [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
+                       [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
+                       [('--args',), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
+                       [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
+                       [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 
-    parser.addCommand(
-        "show-block",
-        show_block_command,
-        "View properties of a block known by Casper on an existing running node. Output includes: parent hashes, storage contents of the tuplespace.",
-        [[("hash",), dict(type=str, help="the hash value of the block")]],
-    )
+    parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 
-    parser.addCommand(
-        "show-blocks",
-        show_blocks_command,
-        "View list of blocks in the current Casper view on an existing running node.",
-        [
-            [
-                ("-d", "--depth"),
-                dict(required=True, type=int, help="depth in terms of block height"),
-            ]
-        ],
-    )
+    parser.addCommand('show-block', show_block_command, 'View properties of a block known by Casper on an existing running node. Output includes: parent hashes, storage contents of the tuplespace.',
+                      [[('hash',), dict(type=str, help='the hash value of the block')]])
 
-    parser.addCommand(
-        "show-deploy",
-        show_deploy_command,
-        "View properties of a deploy known by Casper on an existing running node.",
-        [[("hash",), dict(type=str, help="Value of the deploy hash, base16 encoded.")]],
-    )
+    parser.addCommand('show-blocks', show_blocks_command, 'View list of blocks in the current Casper view on an existing running node.',
+                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')]])
 
-    parser.addCommand(
-        "show-deploys",
-        show_deploys_command,
-        "View deploys included in a block.",
-        [[("hash",), dict(type=str, help="Value of the block hash, base16 encoded.")]],
-    )
+    parser.addCommand('show-deploy', show_deploy_command, 'View properties of a deploy known by Casper on an existing running node.',
+                      [[('hash',), dict(type=str, help='Value of the deploy hash, base16 encoded.')]])
 
-    parser.addCommand(
-        "vdag",
-        vdag_command,
-        "DAG in DOT format",
-        [
-            [
-                ("-d", "--depth"),
-                dict(required=True, type=int, help="depth in terms of block height"),
-            ],
-            [
-                ("-o", "--out"),
-                dict(
-                    required=False,
-                    type=str,
-                    help="output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0",
-                ),
-            ],
-            [
-                ("-s", "--show-justification-lines"),
-                dict(
-                    action="store_true", help="if justification lines should be shown"
-                ),
-            ],
-            [
-                ("--stream",),
-                dict(
-                    required=False,
-                    choices=("single-output", "multiple-outputs"),
-                    help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'",
-                ),
-            ],
-        ],
-    )
+    parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
+                      [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
 
-    parser.addCommand(
-        "query-state",
-        query_state_command,
-        "Query a value in the global state.",
-        [
-            [
-                ("-b", "--block-hash"),
-                dict(
-                    required=True,
-                    type=str,
-                    help="Hash of the block to query the state of",
-                ),
-            ],
-            [
-                ("-k", "--key"),
-                dict(required=True, type=str, help="Base16 encoding of the base key"),
-            ],
-            [
-                ("-p", "--path"),
-                dict(
-                    required=True,
-                    type=str,
-                    help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'",
-                ),
-            ],
-            [
-                ("-t", "--type"),
-                dict(
-                    required=True,
-                    choices=("hash", "uref", "address"),
-                    help="Type of base key. Must be one of 'hash', 'uref', 'address'",
-                ),
-            ],
-        ],
-    )
+    parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
+                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')],
+                       [('-o', '--out'), dict(required=False, type=str, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
+                       [('-s', '--show-justification-lines'), dict(action='store_true', help='if justification lines should be shown')],
+                       [('--stream',), dict(required=False, choices=('single-output', 'multiple-outputs'), help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'")]])
 
+    parser.addCommand('query-state', query_state_command, 'Query a value in the global state.',
+                      [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
+                       [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
+                       [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
+                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'),
+                                               help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
+
+    parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
+                      [[('-a', '--address'), dict(required=True, type=str, help="Account's public key in hex.")],
+                       [('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')]])
+    # fmt:on
     sys.exit(parser.run())
 
 
 if __name__ == "__main__":
-    command_line_tool()
+    main()

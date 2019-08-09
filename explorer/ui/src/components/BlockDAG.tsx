@@ -26,7 +26,8 @@ export interface Props {
 }
 
 export class BlockDAG extends React.Component<Props, {}> {
-  ref: SVGSVGElement | null = null;
+  svg: SVGSVGElement | null = null;
+  hint: HTMLDivElement | null = null;
   initialized = false;
 
   render() {
@@ -65,11 +66,17 @@ export class BlockDAG extends React.Component<Props, {}> {
               {this.props.emptyMessage || 'No blocks to show.'}
             </div>
           ) : (
-            <svg
-              width={this.props.width}
-              height={this.props.height}
-              ref={(ref: SVGSVGElement) => (this.ref = ref)}
-            ></svg>
+            <div className="svg-container">
+              <svg
+                width={this.props.width}
+                height={this.props.height}
+                ref={(ref: SVGSVGElement) => (this.svg = ref)}
+              ></svg>
+              <div
+                className="svg-hint"
+                ref={(ref: HTMLDivElement) => (this.hint = ref)}
+              ></div>
+            </div>
           )}
         </div>
         {this.props.footerMessage && (
@@ -97,7 +104,8 @@ export class BlockDAG extends React.Component<Props, {}> {
       return;
     }
 
-    const svg = d3.select(this.ref);
+    const svg = d3.select(this.svg);
+    const hint = d3.select(this.hint);
     const color = consistentColor();
 
     // Append items that will not change.
@@ -134,8 +142,8 @@ export class BlockDAG extends React.Component<Props, {}> {
     container.selectAll('g').remove();
 
     // See what the actual width and height is.
-    const width = $(this.ref!).width()!;
-    const height = $(this.ref!).height()!;
+    const width = $(this.svg!).width()!;
+    const height = $(this.svg!).height()!;
 
     let graph: Graph = toGraph(this.props.blocks);
     graph = calculateCoordinates(graph, width, height);
@@ -150,8 +158,12 @@ export class BlockDAG extends React.Component<Props, {}> {
       .enter()
       .append('line')
       .attr('stroke', LineColor)
-      .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 2 : 1))
-      .attr('marker-end', 'url(#arrow)');
+      .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
+      .attr('marker-end', 'url(#arrow)')
+      .attr('stroke-dasharray', (d: d3Link) =>
+        d.isJustification ? '3, 3' : null
+      )
+      .attr('opacity', (d: d3Link) => (d.isJustification ? 0 : 1));
 
     const node = container
       .append('g')
@@ -183,12 +195,6 @@ export class BlockDAG extends React.Component<Props, {}> {
       .style('text-anchor', 'start')
       .attr('transform', 'rotate(15)'); // rotate so a chain doesn't overlap on a small screen.
 
-    node
-      .append('title')
-      .text(
-        (d: d3Node) => `Block: ${d.id} @ ${d.rank}\nValidator: ${d.validator}`
-      );
-
     const focus = (d: any) => {
       let datum = d3.select(d3.event.target).datum() as d3Node;
       node.style('opacity', x =>
@@ -198,14 +204,23 @@ export class BlockDAG extends React.Component<Props, {}> {
         graph.areNeighbours(x.id, datum.id) ? 'block' : 'none'
       );
       link.style('opacity', x =>
-        x.source.id === datum.id || x.target.id === datum.id ? 1 : 0.1
+        x.source.id === datum.id || x.target.id === datum.id
+          ? 1
+          : x.isJustification
+          ? 0
+          : 0.1
       );
+      hint.html(
+        `Block: ${datum.id} @ ${datum.rank} <br /> Validator: ${datum.validator}`
+      );
+      hint.style('display', 'block');
     };
 
     const unfocus = () => {
       label.attr('display', 'block');
       node.style('opacity', 1);
-      link.style('opacity', 1);
+      link.style('opacity', x => (x.isJustification ? 0 : 1));
+      hint.style('display', 'none');
     };
 
     const select = (d: any) => {
@@ -253,6 +268,7 @@ interface d3Link {
   source: d3Node;
   target: d3Node;
   isMainParent: boolean;
+  isJustification: boolean;
 }
 
 class Graph {
@@ -300,15 +316,38 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getParentHashesList_asU8()
       .map(h => encodeBase16(h));
 
-    return parents
-      .filter(parent => nodeMap.has(parent))
-      .map(parent => {
+    let parentSet = new Set(parents);
+
+    let justifications = block
+      .getSummary()!
+      .getHeader()!
+      .getJustificationsList()
+      .map(x => encodeBase16(x.getLatestBlockHash_asU8()));
+
+    let parentLinks = parents
+      .filter(p => nodeMap.has(p))
+      .map(p => {
         return {
           source: nodeMap.get(child)!,
-          target: nodeMap.get(parent)!,
-          isMainParent: parent === parents[0]
+          target: nodeMap.get(p)!,
+          isMainParent: p === parents[0],
+          isJustification: false
         };
       });
+
+    let justificationLinks = justifications
+      .filter(x => !parentSet.has(x))
+      .filter(j => nodeMap.has(j))
+      .map(j => {
+        return {
+          source: nodeMap.get(child)!,
+          target: nodeMap.get(j)!,
+          isMainParent: false,
+          isJustification: true
+        };
+      });
+
+    return parentLinks.concat(justificationLinks);
   });
 
   return new Graph(nodes, links);

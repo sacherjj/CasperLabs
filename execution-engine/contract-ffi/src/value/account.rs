@@ -655,7 +655,6 @@ impl Account {
         public_key: PublicKey,
         weight: Weight,
     ) -> Result<(), AddKeyFailure> {
-        // TODO(mpapierski): Authorized keys check EE-377
         self.associated_keys.add_key(public_key, weight)
     }
 
@@ -674,7 +673,6 @@ impl Account {
     }
 
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
-        // TODO(mpapierski): Authorized keys check EE-377
         if let Some(weight) = self.associated_keys.get(&public_key) {
             // Check if removing this weight would fall below thresholds
             if !self.check_thresholds_for_weight_update(*weight) {
@@ -689,7 +687,6 @@ impl Account {
         public_key: PublicKey,
         weight: Weight,
     ) -> Result<(), UpdateKeyFailure> {
-        // TODO(mpapierski): Authorized keys check EE-377
         if let Some(current_weight) = self.associated_keys.get(&public_key) {
             if weight < *current_weight {
                 let diff = Weight::new(current_weight.value() - weight.value());
@@ -703,7 +700,6 @@ impl Account {
     }
 
     pub fn get_associated_key_weight(&self, public_key: PublicKey) -> Option<&Weight> {
-        // TODO(mpapierski): Authorized keys check EE-377
         self.associated_keys.get(&public_key)
     }
 
@@ -712,7 +708,6 @@ impl Account {
         action_type: ActionType,
         weight: Weight,
     ) -> Result<(), SetThresholdFailure> {
-        // TODO(mpapierski): Authorized keys check EE-377
         // Verify if new threshold weight exceeds total weight of allassociated
         // keys.
         self.can_set_threshold(weight)?;
@@ -744,6 +739,16 @@ impl Account {
             .calculate_keys_weight(authorization_keys);
 
         total_weight >= *self.action_thresholds().deployment()
+    }
+
+    /// Checks whether the sum of the weights of all authorization keys is greater
+    /// or equal to key management threshold.
+    pub fn can_manage_keys_with(&self, authorization_keys: &BTreeSet<PublicKey>) -> bool {
+        let total_weight = self
+            .associated_keys
+            .calculate_keys_weight(authorization_keys);
+
+        total_weight >= *self.action_thresholds().key_management()
     }
 }
 
@@ -1144,6 +1149,52 @@ mod tests {
             associated_keys.total_keys_weight(),
             Weight::new(1 + 11 + 12 + 13)
         );
+    }
+
+    #[test]
+    fn account_can_manage_keys_with() {
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
+            res.add_key(PublicKey::new([2u8; 32]), Weight::new(11))
+                .expect("should add key 1");
+            res.add_key(PublicKey::new([3u8; 32]), Weight::new(11))
+                .expect("should add key 2");
+            res.add_key(PublicKey::new([4u8; 32]), Weight::new(11))
+                .expect("should add key 3");
+            res
+        };
+        let account = Account::new(
+            [0u8; 32],
+            0,
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            associated_keys,
+            // deploy: 33 (3*11)
+            ActionThresholds::new(Weight::new(11), Weight::new(33))
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        // sum: 22, required 33 - can't manage
+        assert!(!account.can_manage_keys_with(&BTreeSet::from_iter(vec![
+            PublicKey::new([3u8; 32]),
+            PublicKey::new([2u8; 32]),
+        ])));
+
+        // sum: 33, required 33 - can manage
+        assert!(account.can_manage_keys_with(&BTreeSet::from_iter(vec![
+            PublicKey::new([4u8; 32]),
+            PublicKey::new([3u8; 32]),
+            PublicKey::new([2u8; 32]),
+        ])));
+
+        // sum: 34, required 33 - can manage
+        assert!(account.can_manage_keys_with(&BTreeSet::from_iter(vec![
+            PublicKey::new([2u8; 32]),
+            PublicKey::new([1u8; 32]),
+            PublicKey::new([4u8; 32]),
+            PublicKey::new([3u8; 32]),
+        ])));
     }
 
     #[test]

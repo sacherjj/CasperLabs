@@ -10,7 +10,7 @@ import os
 from concurrent import futures
 import pytest
 
-from casper_client import (CasperClient, CasperMessage_pb2_grpc, CasperMessage_pb2, casper_pb2_grpc, empty_pb2)
+from casperlabs_client import (CasperLabsClient, CasperMessage_pb2_grpc, CasperMessage_pb2, casper_pb2_grpc, empty_pb2)
 import mock_server
 import grpc
 
@@ -25,7 +25,7 @@ SESSION = resource("old_wasm/test_helloname.wasm")
 
 HASH = 'd9d087fe5d22dbfa1bacb57d6da8d509f7191a216cee6a971de32463ff0f284f'
 
-client = CasperClient(port = mock_server.CL_GRPC_PORT_EXTERNAL)
+client = CasperLabsClient(port = mock_server.CL_GRPC_PORT_EXTERNAL)
 
 
 @pytest.fixture()
