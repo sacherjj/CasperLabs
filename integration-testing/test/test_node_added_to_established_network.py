@@ -1,4 +1,4 @@
-from test.cl_node.casperlabsnode import HELLO_NAME
+from test.cl_node.common import HELLO_NAME
 from test.cl_node.wait import (
     get_new_blocks_requests_total,
     wait_for_block_hashes_propagated_to_all_nodes,

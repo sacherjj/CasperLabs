@@ -1,4 +1,4 @@
-from test.cl_node.casperlabsnode import BONDING_CONTRACT, UNBONDING_CONTRACT
+from test.cl_node.common import BONDING_CONTRACT, UNBONDING_CONTRACT
 from test.cl_node.client_parser import parse_show_block
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.casperlabs_network import OneNodeNetwork
