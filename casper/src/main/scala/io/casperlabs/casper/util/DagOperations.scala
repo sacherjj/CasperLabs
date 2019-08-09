@@ -54,9 +54,14 @@ object DagOperations {
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[k.K])))
   }
 
+  val blockTopoOrderingAsc: Ordering[BlockMetadata] =
+    Ordering.by[BlockMetadata, Long](_.rank).reverse
+
   def bfToposortTraverseF[F[_]: Monad](
       start: List[BlockMetadata]
-  )(neighbours: BlockMetadata => F[List[BlockMetadata]]): StreamT[F, BlockMetadata] = {
+  )(
+      neighbours: BlockMetadata => F[List[BlockMetadata]]
+  )(implicit ord: Ordering[BlockMetadata]): StreamT[F, BlockMetadata] = {
     def build(
         q: mutable.PriorityQueue[BlockMetadata],
         prevVisited: HashSet[BlockHash]
@@ -72,9 +77,6 @@ object DagOperations {
             newQ    = q ++ ns.filterNot(b => visited(b.blockHash))
           } yield StreamT.cons(curr, Eval.always(build(newQ, visited)))
       }
-
-    implicit val blockTopoOrdering: Ordering[BlockMetadata] =
-      Ordering.by[BlockMetadata, Long](_.rank).reverse
 
     StreamT.delay(
       Eval.now(build(mutable.PriorityQueue.empty[BlockMetadata] ++ start, HashSet.empty[BlockHash]))

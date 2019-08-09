@@ -48,7 +48,8 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
           b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
           b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
 
-          dag <- dagStorage.getRepresentation
+          implicit0(dagTopoOrderingAsc: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingAsc
+          dag                                                    <- dagStorage.getRepresentation
           stream = DagOperations.bfToposortTraverseF[Task](List(BlockMetadata.fromBlock(genesis))) {
             b =>
               dag
