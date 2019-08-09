@@ -271,7 +271,6 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorF(dag, latestBlocks.values.toList)
-          _            = assert(lca == genesis.blockHash) //TODO: remove
           scores       <- Estimator.lmdScoring(dag, lca, latestBlocks)
           _ = scores shouldEqual Map(
             genesis.blockHash -> (3 + 5 + 7),
@@ -371,7 +370,6 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorF(dag, latestBlocks.values.toList)
-          _            = assert(lca == genesis.blockHash) //TODO: remove
           scores       <- Estimator.lmdScoring(dag, lca, latestBlocks)
           _ = scores shouldEqual Map(
             genesis.blockHash -> (3 + 5 + 7),
@@ -498,7 +496,6 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           dag          <- blockDagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorF(dag, latestBlocks.values.toList)
-          _            = assert(lca == f.blockHash) //TODO: remove
           scores <- Estimator
                      .lmdScoring(dag, lca, latestBlocks)
           _ = scores shouldEqual Map(
