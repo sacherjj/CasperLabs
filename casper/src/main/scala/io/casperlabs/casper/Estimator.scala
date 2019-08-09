@@ -1,6 +1,7 @@
 package io.casperlabs.casper
 
 import cats.Monad
+import io.casperlabs.catscontrib.MonadThrowable
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.DagRepresentation
@@ -15,19 +16,19 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Long].reverse
 
-  def tips[F[_]: Monad](
+  def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      stopHash: BlockHash
+      genesis: BlockHash
   ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- dag.latestMessageHashes
       result <- Estimator
-                 .tips[F](dag, stopHash, latestMessageHashes)
+                 .tips[F](dag, genesis, latestMessageHashes)
     } yield result.toIndexedSeq
 
-  def tips[F[_]: Monad](
+  def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      stopHash: BlockHash,
+      genesis: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
 
@@ -65,8 +66,10 @@ object Estimator {
       } yield result
 
     for {
-      scores           <- lmdScoring(dag, stopHash, latestMessagesHashes)
-      newMainParent    <- forkChoiceTip(dag, stopHash, scores)
+      lca <- if (latestMessagesHashes.isEmpty) genesis.pure[F]
+            else DagOperations.latestCommonAncestorF(dag, latestMessagesHashes.values.toList)
+      scores           <- lmdScoring(dag, lca, latestMessagesHashes)
+      newMainParent    <- forkChoiceTip(dag, lca, scores)
       parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
       secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
