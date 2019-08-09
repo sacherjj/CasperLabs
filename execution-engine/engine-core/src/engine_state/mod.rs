@@ -211,8 +211,6 @@ where
             Ok(session_result)
         } else {
             // PAYMENT PRECONDITIONS
-            // TODO?: add an error variant for invalid system contract wire up to account?
-            // otherwise someone can deploy w/ an account with removed mint / pos urefs and crash EE
 
             // Get mint system contract URef from account (an account on a different network may have a mint other than the CLMint)
             // payment_code_spec_6: system contract validity
