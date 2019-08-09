@@ -314,11 +314,11 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
        *       j  k  l
        *      / \/   |
        *     g  h   i
-       *      \ |  /
-       *        f
-       *      / |
-       *     d  e
-       *    |   | \
+       *     |\ |  /|
+       *     |  f   |
+       *     |/ |   |
+       *     d  e   |
+       *    |   | \ |
        *    a   b  c
        *     \  | /
        *     genesis
@@ -353,9 +353,17 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
               v2,
               justifications = Map(v1 -> d.blockHash, v2 -> e.blockHash)
             )
-        g <- createBlock[Task](Seq(f.blockHash), v1, justifications = Map(v2 -> f.blockHash))
+        g <- createBlock[Task](
+              Seq(f.blockHash),
+              v1,
+              justifications = Map(v1 -> d.blockHash, v2 -> f.blockHash)
+            )
         h <- createBlock[Task](Seq(f.blockHash), v2, justifications = Map(v2 -> f.blockHash))
-        i <- createBlock[Task](Seq(f.blockHash), v3, justifications = Map(v2 -> f.blockHash))
+        i <- createBlock[Task](
+              Seq(f.blockHash),
+              v3,
+              justifications = Map(v2 -> f.blockHash, v3 -> c.blockHash)
+            )
         j <- createBlock[Task](
               Seq(g.blockHash, h.blockHash),
               v1,
