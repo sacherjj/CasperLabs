@@ -4,7 +4,6 @@ import logging
 import time
 
 from test.cl_node import LoggingMixin
-from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.nonce_registry import NonceRegistry
 from casperlabs_client import CasperLabsClient, ABI, InternalError
 

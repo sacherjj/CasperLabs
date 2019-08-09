@@ -168,21 +168,22 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version='0.3.13',
-    packages=find_packages(exclude=['tests']),
-    setup_requires=['protobuf==3.9.0',
-                    'grpcio-tools>=1.20',
-                    'in-place==0.4.0',
-                    'grpcio>=1.20'],
-    install_requires=['protobuf==3.9.0',
-                      'grpcio>=1.20',
-                      'pyblake2==1.1.2',
-                      'ed25519==1.4'],
-    cmdclass={
-        'install': CInstall,
-        'develop': CDevelop,
-    },
-    description='Python Client for interacting with a CasperLabs Node',
+    version="0.3.13",
+    packages=find_packages(exclude=["tests"]),
+    setup_requires=[
+        "protobuf==3.9.1",
+        "grpcio-tools>=1.20",
+        "in-place==0.4.0",
+        "grpcio>=1.20",
+    ],
+    install_requires=[
+        "protobuf==3.9.1",
+        "grpcio>=1.20",
+        "pyblake2==1.1.2",
+        "ed25519==1.4",
+    ],
+    cmdclass={"install": CInstall, "develop": CDevelop},
+    description="Python Client for interacting with a CasperLabs Node",
     long_description=long_description,
     long_description_content_type="text/markdown",
     include_package_data=True,
@@ -204,7 +205,9 @@ setup(
         "Source": "https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperLabsClient",
         "Readme": "https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperLabsClient/README.md",
     },
-    entry_points = {
-        "console_scripts": ['casperlabs_client = casperlabs_client.casperlabs_client:main']
+    entry_points={
+        "console_scripts": [
+            "casperlabs_client = casperlabs_client.casperlabs_client:main"
+        ]
     },
 )
