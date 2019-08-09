@@ -4,6 +4,7 @@ import cats.implicits._
 import cats.{Eval, Monad}
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.StreamT
@@ -286,4 +287,67 @@ object DagOperations {
               )
       } yield gca.get
     }
+
+  private def missingDependencyError(b: BlockHash): Throwable =
+    new IllegalStateException(s"Missing ${PrettyPrinter.buildString(b)} block dependency.")
+
+  /** Computes Latest Common Ancestor of two blocks based on their justifications.
+    *
+    * @param dag Representation of the DAG.
+    * @param b1Hash Hash of the first block.
+    * @param b2Hash Hash of the second block.
+    * @tparam F Effect type.
+    * @return Hash of the block that is the LCA of b1Hash and b2Hash.
+    */
+  def latestCommonAncestorF[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      b1Hash: BlockHash,
+      b2Hash: BlockHash
+  ): F[BlockHash] =
+    if (b1Hash == b2Hash) {
+      b1Hash.pure[F]
+    } else {
+      for {
+        b1 <- dag
+               .lookup(b1Hash)
+               .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(b1Hash)))
+        b2 <- dag
+               .lookup(b2Hash)
+               .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(b2Hash)))
+        lca <- math.signum(b1.rank - b2.rank) match {
+                case -1 =>
+                  // Block B2 is "higher" in the chain
+                  latestCommonAncestorF(
+                    dag,
+                    b1.blockHash +: b2.justifications.map(_.latestBlockHash)
+                  )
+                case 0 =>
+                  // Both blocks have the same rank but they're different blocks.
+                  latestCommonAncestorF(
+                    dag,
+                    b1.justifications.map(_.latestBlockHash) ++ b2.justifications.map(
+                      _.latestBlockHash
+                    )
+                  )
+                case 1 =>
+                  latestCommonAncestorF(
+                    dag,
+                    b2.blockHash +: b1.justifications.map(_.latestBlockHash)
+                  )
+              }
+      } yield lca
+    }
+
+  /** Computes Latest Common Ancestor of the set of blocks.
+    *
+    * @param dag Representation of the DAG.
+    * @param starters List of starting blocks' hashes.
+    * @tparam F Effect type.
+    * @return Hash of the LCA block.
+    */
+  def latestCommonAncestorF[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      starters: List[BlockHash]
+  ): F[BlockHash] =
+    starters.foldLeftM(starters.head)(latestCommonAncestorF(dag, _, _))
 }
