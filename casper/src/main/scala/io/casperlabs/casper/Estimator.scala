@@ -4,8 +4,9 @@ import cats.Monad
 import io.casperlabs.catscontrib.MonadThrowable
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.DagRepresentation
-import io.casperlabs.casper.util.DagOperations
+import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
+import io.casperlabs.casper.util.{implicits, DagOperations}
+import implicits.{eqBlockHash, showBlockHash}
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 
 import scala.collection.immutable.{Map, Set}
@@ -67,7 +68,8 @@ object Estimator {
 
     for {
       lca <- if (latestMessagesHashes.isEmpty) genesis.pure[F]
-            else DagOperations.latestCommonAncestorF(dag, latestMessagesHashes.values.toList)
+            else
+              DagOperations.latestCommonAncestorsMainParent(dag, latestMessagesHashes.values.toList)
       scores           <- lmdScoring(dag, lca, latestMessagesHashes)
       newMainParent    <- forkChoiceTip(dag, lca, scores)
       parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)

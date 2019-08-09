@@ -1,7 +1,7 @@
 package io.casperlabs.casper.util
 
 import cats.implicits._
-import cats.{Eval, Monad}
+import cats.{Eq, Eval, Monad, Show}
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
@@ -57,6 +57,8 @@ object DagOperations {
 
   val blockTopoOrderingAsc: Ordering[BlockMetadata] =
     Ordering.by[BlockMetadata, Long](_.rank).reverse
+
+  val blockTopoOrderingDesc: Ordering[BlockMetadata] = Ordering.by(_.rank)
 
   def bfToposortTraverseF[F[_]: Monad](
       start: List[BlockMetadata]
@@ -288,66 +290,57 @@ object DagOperations {
       } yield gca.get
     }
 
-  private def missingDependencyError(b: BlockHash): Throwable =
-    new IllegalStateException(s"Missing ${PrettyPrinter.buildString(b)} block dependency.")
+  private def missingDependencyError[A: Show](a: A): Throwable =
+    new IllegalStateException(s"Missing ${Show[A].show(a)} dependency.")
 
-  /** Computes Latest Common Ancestor of two blocks based on their justifications.
-    *
-    * @param dag Representation of the DAG.
-    * @param b1Hash Hash of the first block.
-    * @param b2Hash Hash of the second block.
-    * @tparam F Effect type.
-    * @return Hash of the block that is the LCA of b1Hash and b2Hash.
+  /** Computes Latest Common Ancestor of two elements.
     */
-  def latestCommonAncestorF[F[_]: MonadThrowable](
-      dag: DagRepresentation[F],
-      b1Hash: BlockHash,
-      b2Hash: BlockHash
-  ): F[BlockHash] =
-    if (b1Hash == b2Hash) {
-      b1Hash.pure[F]
+  def latestCommonAncestorF[F[_]: MonadThrowable, A: Show: Eq, B: Ordering](
+      a: A,
+      b: A
+  )(lookup: A => F[Option[B]], next: B => List[A]): F[A] =
+    if (Eq[A].eqv(a, b)) {
+      a.pure[F]
     } else {
       for {
-        b1 <- dag
-               .lookup(b1Hash)
-               .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(b1Hash)))
-        b2 <- dag
-               .lookup(b2Hash)
-               .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(b2Hash)))
-        lca <- math.signum(b1.rank - b2.rank) match {
+        b1 <- lookup(a)
+               .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(a)))
+        b2 <- lookup(b)
+               .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(b)))
+        lca <- Ordering[B].compare(b1, b2) match {
                 case -1 =>
                   // Block B2 is "higher" in the chain
-                  latestCommonAncestorF(
-                    dag,
-                    b1.blockHash +: b2.justifications.map(_.latestBlockHash)
-                  )
+                  latestCommonAncestorF(a +: next(b2))(lookup, next)
                 case 0 =>
                   // Both blocks have the same rank but they're different blocks.
-                  latestCommonAncestorF(
-                    dag,
-                    b1.justifications.map(_.latestBlockHash) ++ b2.justifications.map(
-                      _.latestBlockHash
-                    )
-                  )
+                  latestCommonAncestorF(next(b1) ++ next(b2))(lookup, next)
                 case 1 =>
-                  latestCommonAncestorF(
-                    dag,
-                    b2.blockHash +: b1.justifications.map(_.latestBlockHash)
-                  )
+                  latestCommonAncestorF(b +: next(b1))(lookup, next)
               }
       } yield lca
     }
 
-  /** Computes Latest Common Ancestor of the set of blocks.
-    *
-    * @param dag Representation of the DAG.
-    * @param starters List of starting blocks' hashes.
-    * @tparam F Effect type.
-    * @return Hash of the LCA block.
+  /** Computes Latest Common Ancestor of the set of elements.
     */
-  def latestCommonAncestorF[F[_]: MonadThrowable](
+  def latestCommonAncestorF[F[_]: MonadThrowable, A: Show: Eq, B: Ordering](
+      starters: List[A]
+  )(lookup: A => F[Option[B]], next: B => List[A]): F[A] =
+    starters.foldLeftM(starters.head)(latestCommonAncestorF(_, _)(lookup, next))
+
+  /** Computes Latest Common Ancestor of a set of blocks by following main-parent
+    * vertices.
+    *
+    * @param dag Representation of a DAG.
+    * @param starters Starting blocks.
+    * @tparam F Effect type.
+    * @return Latest Common Ancestor of starting blocks.
+    */
+  def latestCommonAncestorsMainParent[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       starters: List[BlockHash]
-  ): F[BlockHash] =
-    starters.foldLeftM(starters.head)(latestCommonAncestorF(dag, _, _))
+  ): F[BlockHash] = {
+    implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
+    import io.casperlabs.casper.util.implicits.{eqBlockHash, showBlockHash}
+    latestCommonAncestorF[F, BlockHash, BlockMetadata](starters)(dag.lookup, _.parents.take(1))
+  }
 }
