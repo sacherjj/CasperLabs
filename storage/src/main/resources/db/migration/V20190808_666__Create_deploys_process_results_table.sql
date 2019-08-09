@@ -16,8 +16,8 @@ CREATE TABLE deploys_process_results
     FOREIGN KEY (deploy_hash) REFERENCES deploys (hash)
 ) WITHOUT ROWID;
 
-CREATE INDEX idx_deploys_process_results_account_create_time_deploy_hash ON deploys_process_results (account, create_time_millis, deploy_hash);
-CREATE INDEX idx_deploys_process_results_account_execute_time_deploy_hash ON deploys_process_results (account, create_time_millis, deploy_hash);
+CREATE INDEX idx_deploys_process_results_account_create_time ON deploys_process_results (create_time_millis);
+CREATE INDEX idx_deploys_process_results_account_execute_time ON deploys_process_results (execute_time_millis);
 CREATE INDEX idx_deploys_process_results_account_deploy_hash ON deploys_process_results (deploy_hash);
 
 ALTER TABLE buffered_deploys
