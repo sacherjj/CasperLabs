@@ -13,11 +13,13 @@ import cats.mtl.MonadState
 import cats.mtl.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.casper.{FinalityDetectorBySingleSweepImpl, FinalityDetectorUtil}
 import monix.eval.Task
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
@@ -113,4 +115,104 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
       } yield result
   }
 
+  "panoramaDagLevelsOfBlock" should "properly return the panorama of message B" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val v0 = generateValidator("Validator 0")
+      val v1 = generateValidator("Validator 1")
+
+      val v2         = generateValidator("Validator 2")
+      val v3         = generateValidator("Validator 3")
+      val validators = List(v0, v1, v2, v3)
+
+      val bonds = validators.map(v => Bond(v, 1))
+
+      /* The DAG looks like (|| means main parent)
+			 *
+			 *        v0  v1    v2  v3
+			 *
+			 *                  b7
+			 *                  ||
+			 *                  b6
+			 *                //   \
+			 *             //       b5
+			 *          //   /----/ ||
+			 *        b4  b3        ||
+			 *        || //         ||
+			 *        b1            b2
+			 *         \\         //
+			 *            genesis
+			 *
+			 */
+      for {
+        genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+        b1 <- createBlock[Task](
+               Seq(genesis.blockHash),
+               v0,
+               bonds,
+               Map(v0 -> genesis.blockHash)
+             )
+        b2 <- createBlock[Task](
+               Seq(genesis.blockHash),
+               v3,
+               bonds,
+               Map(v3 -> genesis.blockHash)
+             )
+        b3 <- createBlock[Task](
+               Seq(b1.blockHash),
+               v1,
+               bonds,
+               Map(v0 -> b1.blockHash, v1 -> genesis.blockHash)
+             )
+        b4 <- createBlock[Task](
+               Seq(b1.blockHash),
+               v0,
+               bonds,
+               Map(v0 -> b1.blockHash)
+             )
+        // b5 vote for b2 instead of b1
+        b5 <- createBlock[Task](
+               Seq(b2.blockHash),
+               v3,
+               bonds,
+               Map(v1 -> b3.blockHash, v3 -> b2.blockHash)
+             )
+        b6 <- createBlock[Task](
+               Seq(b4.blockHash),
+               v2,
+               bonds,
+               Map(v0 -> b4.blockHash, v2 -> genesis.blockHash, v3 -> b5.blockHash)
+             )
+        b7 <- createBlock[Task](
+               Seq(b6.blockHash),
+               v2,
+               bonds,
+               Map(v2 -> b6.blockHash)
+             )
+        dag <- blockDagStorage.getRepresentation
+        v4  = generateValidator("Validator 4")
+        panorama <- FinalityDetectorUtil.panoramaOfBlockByValidators(
+                     dag,
+                     BlockMetadata.fromBlock(b7),
+                     validators.toSet + v4
+                   )
+        _ = panorama shouldEqual Map(
+          v0 -> BlockMetadata.fromBlock(b4),
+          v1 -> BlockMetadata.fromBlock(b3),
+          v2 -> BlockMetadata.fromBlock(b7),
+          v3 -> BlockMetadata.fromBlock(b5)
+        )
+        panoramaDagLevel <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
+                             dag,
+                             BlockMetadata.fromBlock(b7),
+                             validators.toSet + v4
+                           )
+        _ = panoramaDagLevel shouldEqual Map(
+          v0 -> b4.getHeader.rank,
+          v1 -> b3.getHeader.rank,
+          v2 -> b7.getHeader.rank,
+          v3 -> b5.getHeader.rank,
+          v4 -> 0
+        )
+      } yield ()
+  }
 }

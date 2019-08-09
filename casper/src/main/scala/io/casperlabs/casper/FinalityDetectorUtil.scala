@@ -60,8 +60,8 @@ object FinalityDetectorUtil {
 		* The search is however restricted to given subset of validators.
 		*
 		* Caution 1: For some validators there may be no blocks visible in j-past-cone(block). Hence the resulting map will not contain such validators.
-		* Caution 2: the j-past-cone(b) includes block b, therefore if validatorsSubsetWeAreRestrictingTheSearchTo contains b.creator
-		* then the resulting mapping will include the entry b.creator ---> b
+		* Caution 2: the j-past-cone(b) includes block b, therefore if validators contains b.creator
+		* then the resulting map will include the entry b.creator ---> b
 		*
 		* TODO optimize it: when bonding new validator, it need search back to genesis
 		*
@@ -70,7 +70,7 @@ object FinalityDetectorUtil {
 		* @param validators
 		* @return
 		*/
-  private def panoramaOfBlockByValidators[F[_]: Monad](
+  private[casper] def panoramaOfBlockByValidators[F[_]: Monad](
       blockDag: DagRepresentation[F],
       block: BlockMetadata,
       validators: Set[Validator]
@@ -87,6 +87,7 @@ object FinalityDetectorUtil {
       .foldWhileLeft((validators, Map.empty[Validator, BlockMetadata])) {
         case ((remainingValidators, acc), b) => {
           if (remainingValidators.isEmpty) {
+            // stop traversal if all validators find its latest block
             Right((remainingValidators, acc))
           } else if (remainingValidators.contains(b.validatorPublicKey)) {
             Left((remainingValidators - b.validatorPublicKey, acc + (b.validatorPublicKey -> b)))
