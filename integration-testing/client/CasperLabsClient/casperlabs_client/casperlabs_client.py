@@ -163,7 +163,7 @@ def api(function):
     return wrapper
 
 
-class CasperClient:
+class CasperLabsClient:
     """
     gRPC CasperLabs client.
     """
@@ -537,13 +537,13 @@ def _show_block(response):
 
 
 @guarded_command
-def no_command(casper_client, args):
+def no_command(casperlabs_client, args):
     print("You must provide a command. --help for documentation of commands.")
     return 1
 
 
 @guarded_command
-def deploy_command(casper_client, args):
+def deploy_command(casperlabs_client, args):
     kwargs = dict(
         from_addr=getattr(args, "from"),
         gas_limit=None,
@@ -555,58 +555,58 @@ def deploy_command(casper_client, args):
         private_key=args.private_key or None,
         args=args.args and ABI.args_from_json(args.args) or None,
     )
-    _, deploy_hash = casper_client.deploy(**kwargs)
+    _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy hash: {deploy_hash.hex()}")
 
 
 @guarded_command
-def propose_command(casper_client, args):
-    response = casper_client.propose()
+def propose_command(casperlabs_client, args):
+    response = casperlabs_client.propose()
     print(f"Success! Block hash: {response.block_hash.hex()}")
 
 
 @guarded_command
-def show_block_command(casper_client, args):
-    response = casper_client.showBlock(args.hash, full_view=True)
+def show_block_command(casperlabs_client, args):
+    response = casperlabs_client.showBlock(args.hash, full_view=True)
     return _show_block(response)
 
 
 @guarded_command
-def show_blocks_command(casper_client, args):
-    response = casper_client.showBlocks(args.depth)
+def show_blocks_command(casperlabs_client, args):
+    response = casperlabs_client.showBlocks(args.depth)
     _show_blocks(response)
 
 
 @guarded_command
-def vdag_command(casper_client, args):
-    response = casper_client.visualizeDag(args.depth)
+def vdag_command(casperlabs_client, args):
+    response = casperlabs_client.visualizeDag(args.depth)
     # TODO: call Graphviz
     print(hexify(response))
 
 
 @guarded_command
-def query_state_command(casper_client, args):
-    response = casper_client.queryState(
+def query_state_command(casperlabs_client, args):
+    response = casperlabs_client.queryState(
         args.block_hash, args.key, args.path, getattr(args, "type")
     )
     print(hexify(response))
 
 
 @guarded_command
-def balance_command(casper_client, args):
-    response = casper_client.balance(args.address, args.block_hash)
+def balance_command(casperlabs_client, args):
+    response = casperlabs_client.balance(args.address, args.block_hash)
     print(response)
 
 
 @guarded_command
-def show_deploy_command(casper_client, args):
-    response = casper_client.showDeploy(args.hash, full_view=False)
+def show_deploy_command(casperlabs_client, args):
+    response = casperlabs_client.showDeploy(args.hash, full_view=False)
     print(hexify(response))
 
 
 @guarded_command
-def show_deploys_command(casper_client, args):
-    response = casper_client.showDeploys(args.hash, full_view=False)
+def show_deploys_command(casperlabs_client, args):
+    response = casperlabs_client.showDeploys(args.hash, full_view=False)
     _show_blocks(response, element_name="deploy")
 
 
@@ -664,7 +664,7 @@ def main():
 
             args = self.parser.parse_args()
             return args.function(
-                CasperClient(args.host, args.port, args.internal_port), args
+                CasperLabsClient(args.host, args.port, args.internal_port), args
             )
 
     parser = Parser()

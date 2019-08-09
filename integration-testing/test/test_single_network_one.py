@@ -486,7 +486,8 @@ import pytest
 import os
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
 
-CLI = "casper_client"
+
+CLI = "casperlabs_client"
 
 
 class CLIErrorExit(Exception):

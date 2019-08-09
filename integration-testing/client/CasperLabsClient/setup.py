@@ -18,8 +18,8 @@ from distutils.spawn import find_executable
 
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 PROTOBUF_DIR = f"{THIS_DIRECTORY}/../../../protobuf"
-PROTO_DIR = f"{THIS_DIRECTORY}/casper_client/proto"
-PACKAGE_DIR = f"{THIS_DIRECTORY}/casper_client"
+PROTO_DIR = f"{THIS_DIRECTORY}/casperlabs_client/proto"
+PACKAGE_DIR = f"{THIS_DIRECTORY}/casperlabs_client"
 NAME = "casperlabs_client"
 
 
@@ -202,10 +202,12 @@ setup(
     ],
     python_requires=">=3.6.0",
     project_urls={
-        "Source": "https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperClient",
-        "Readme": "https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperClient/README.md",
+        "Source": "https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperLabsClient",
+        "Readme": "https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperLabsClient/README.md",
     },
     entry_points={
-        "console_scripts": ["casper_client = casper_client.casper_client:main"]
+        "console_scripts": [
+            "casperlabs_client = casperlabs_client.casperlabs_client:main"
+        ]
     },
 )

@@ -9,7 +9,7 @@ set -o xtrace
 
 CL_GRPC_PORT_EXTERNAL=40401 #3477
 CLI="$HOME/CasperLabs/client/target/universal/stage/bin/casperlabs-client -- --host localhost --port $CL_GRPC_PORT_EXTERNAL "
-CLI="../casper_client/casper_client.py"
+CLI="../casperlabs_client/casperlabs_client.py"
 
 RESOURCES_PATH=../../../../integration-testing/resources/
 

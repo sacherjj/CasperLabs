@@ -166,7 +166,6 @@ class DockerNode(LoggingDockerBase):
             hostname=self.container_name,
             environment=env,
         )
-        # self.client = CasperClient(port=self.config.grpc_port)
         return container
 
     @property

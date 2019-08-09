@@ -16,7 +16,7 @@ use grpc::RequestOptions;
 use casperlabs_engine_grpc_server::engine_server::ipc;
 use casperlabs_engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, ExecRequest, ExecResponse, GenesisRequest,
-    GenesisResponse, TransformEntry,
+    GenesisResponse, QueryRequest, TransformEntry,
 };
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use casperlabs_engine_grpc_server::engine_server::mappings::{
@@ -136,6 +136,20 @@ pub fn create_genesis_request(
     ret.set_genesis_validators(grpc_genesis_validators.into());
 
     (ret, contracts)
+}
+
+pub fn create_query_request(
+    post_state: Vec<u8>,
+    base_key: &contract_ffi::key::Key,
+    path: Vec<String>,
+) -> QueryRequest {
+    let mut query_request = QueryRequest::new();
+
+    query_request.set_state_hash(post_state);
+    query_request.set_base_key(base_key.into());
+    query_request.set_path(path.into());
+
+    query_request
 }
 
 pub fn create_exec_request(
@@ -421,6 +435,33 @@ impl WasmTestBuilder {
         self.bonded_validators.push(genesis_validators);
         self.genesis_transforms = Some(genesis_transforms);
         self
+    }
+
+    pub fn query(
+        &self,
+        maybe_post_state: Option<Vec<u8>>,
+        base_key: contract_ffi::key::Key,
+        path: &[&str],
+    ) -> Option<contract_ffi::value::Value> {
+        let post_state = maybe_post_state
+            .or_else(|| self.post_state_hash.clone())
+            .expect("builder must have a post-state hash");
+
+        let path_vec: Vec<String> = path.iter().map(|s| String::from(*s)).collect();
+
+        let query_request = create_query_request(post_state, &base_key, path_vec);
+
+        let query_response = self
+            .engine_state
+            .query(RequestOptions::new(), query_request)
+            .wait_drop_metadata()
+            .expect("should query");
+
+        if query_response.has_success() {
+            query_response.get_success().try_into().ok()
+        } else {
+            None
+        }
     }
 
     /// Runs a contract and after that runs actual WASM contract and expects
