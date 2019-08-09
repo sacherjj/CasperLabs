@@ -668,208 +668,49 @@ def main():
             )
 
     parser = Parser()
-    parser.addCommand(
-        "deploy",
-        deploy_command,
-        "Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance",
-        [
-            [
-                ("-f", "--from"),
-                dict(
-                    required=True,
-                    type=lambda x: bytes(x, "utf-8"),
-                    help="Purse address that will be used to pay for the deployment.",
-                ),
-            ],
-            [
-                ("--gas-price",),
-                dict(
-                    required=False,
-                    type=int,
-                    default=10,
-                    help="The price of gas for this transaction in units dust/gas. Must be positive integer.",
-                ),
-            ],
-            [
-                ("-n", "--nonce"),
-                dict(
-                    required=True,
-                    type=int,
-                    help="This allows you to overwrite your own pending transactions that use the same nonce.",
-                ),
-            ],
-            [
-                ("-p", "--payment"),
-                dict(
-                    required=False,
-                    type=str,
-                    default=None,
-                    help="Path to the file with payment code, by default fallbacks to the --session code",
-                ),
-            ],
-            [
-                ("-s", "--session"),
-                dict(
-                    required=True, type=str, help="Path to the file with session code"
-                ),
-            ],
-            [
-                ("--args",),
-                dict(
-                    required=False,
-                    type=str,
-                    help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]',
-                ),
-            ],
-            [
-                ("--private-key",),
-                dict(
-                    required=True,
-                    type=str,
-                    help="Path to the file with account public key (Ed25519)",
-                ),
-            ],
-            [
-                ("--public-key",),
-                dict(
-                    required=True,
-                    type=str,
-                    help="Path to the file with account private key (Ed25519)",
-                ),
-            ],
-        ],
-    )
 
-    parser.addCommand(
-        "propose",
-        propose_command,
-        "Force a node to propose a block based on its accumulated deploys.",
-        [],
-    )
+    # fmt: off
+    parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
+                      [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
+                       [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
+                       [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
+                       [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
+                       [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
+                       [('--args',), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
+                       [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
+                       [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 
-    parser.addCommand(
-        "show-block",
-        show_block_command,
-        "View properties of a block known by Casper on an existing running node. Output includes: parent hashes, storage contents of the tuplespace.",
-        [[("hash",), dict(type=str, help="the hash value of the block")]],
-    )
+    parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 
-    parser.addCommand(
-        "show-blocks",
-        show_blocks_command,
-        "View list of blocks in the current Casper view on an existing running node.",
-        [
-            [
-                ("-d", "--depth"),
-                dict(required=True, type=int, help="depth in terms of block height"),
-            ]
-        ],
-    )
+    parser.addCommand('show-block', show_block_command, 'View properties of a block known by Casper on an existing running node. Output includes: parent hashes, storage contents of the tuplespace.',
+                      [[('hash',), dict(type=str, help='the hash value of the block')]])
 
-    parser.addCommand(
-        "show-deploy",
-        show_deploy_command,
-        "View properties of a deploy known by Casper on an existing running node.",
-        [[("hash",), dict(type=str, help="Value of the deploy hash, base16 encoded.")]],
-    )
+    parser.addCommand('show-blocks', show_blocks_command, 'View list of blocks in the current Casper view on an existing running node.',
+                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')]])
 
-    parser.addCommand(
-        "show-deploys",
-        show_deploys_command,
-        "View deploys included in a block.",
-        [[("hash",), dict(type=str, help="Value of the block hash, base16 encoded.")]],
-    )
+    parser.addCommand('show-deploy', show_deploy_command, 'View properties of a deploy known by Casper on an existing running node.',
+                      [[('hash',), dict(type=str, help='Value of the deploy hash, base16 encoded.')]])
 
-    parser.addCommand(
-        "vdag",
-        vdag_command,
-        "DAG in DOT format",
-        [
-            [
-                ("-d", "--depth"),
-                dict(required=True, type=int, help="depth in terms of block height"),
-            ],
-            [
-                ("-o", "--out"),
-                dict(
-                    required=False,
-                    type=str,
-                    help="output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0",
-                ),
-            ],
-            [
-                ("-s", "--show-justification-lines"),
-                dict(
-                    action="store_true", help="if justification lines should be shown"
-                ),
-            ],
-            [
-                ("--stream",),
-                dict(
-                    required=False,
-                    choices=("single-output", "multiple-outputs"),
-                    help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'",
-                ),
-            ],
-        ],
-    )
+    parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
+                      [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
 
-    parser.addCommand(
-        "query-state",
-        query_state_command,
-        "Query a value in the global state.",
-        [
-            [
-                ("-b", "--block-hash"),
-                dict(
-                    required=True,
-                    type=str,
-                    help="Hash of the block to query the state of",
-                ),
-            ],
-            [
-                ("-k", "--key"),
-                dict(required=True, type=str, help="Base16 encoding of the base key"),
-            ],
-            [
-                ("-p", "--path"),
-                dict(
-                    required=True,
-                    type=str,
-                    help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'",
-                ),
-            ],
-            [
-                ("-t", "--type"),
-                dict(
-                    required=True,
-                    choices=("hash", "uref", "address", "local"),
-                    help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.",
-                ),
-            ],
-        ],
-    )
+    parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
+                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')],
+                       [('-o', '--out'), dict(required=False, type=str, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
+                       [('-s', '--show-justification-lines'), dict(action='store_true', help='if justification lines should be shown')],
+                       [('--stream',), dict(required=False, choices=('single-output', 'multiple-outputs'), help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'")]])
 
-    parser.addCommand(
-        "balance",
-        balance_command,
-        "Returns the balance of the account at the specified block.",
-        [
-            [
-                ("-a", "--address"),
-                dict(required=True, type=str, help="Account's public key in hex."),
-            ],
-            [
-                ("-b", "--block-hash"),
-                dict(
-                    required=True,
-                    type=str,
-                    help="Hash of the block to query the state of",
-                ),
-            ],
-        ],
-    )
+    parser.addCommand('query-state', query_state_command, 'Query a value in the global state.',
+                      [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
+                       [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
+                       [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
+                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'),
+                                               help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
 
+    parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
+                      [[('-a', '--address'), dict(required=True, type=str, help="Account's public key in hex.")],
+                       [('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')]])
+    # fmt:on
     sys.exit(parser.run())
 
 
