@@ -13,8 +13,8 @@ pub extern "C" fn call() {
     // Looks like weight in state.rs is u32
     let km_weight: u32 = get_arg(0);
     let key_management_threshold = Weight::new(km_weight as u8);
-    let dp_weight: u32 = get_arg(1);
-    let deploy_threshold = Weight::new(dp_weight as u8);
+    let dep_weight: u32 = get_arg(1);
+    let deploy_threshold = Weight::new(dep_weight as u8);
 
     if key_management_threshold != Weight::new(0) {
         set_action_threshold(ActionType::KeyManagement, key_management_threshold)
