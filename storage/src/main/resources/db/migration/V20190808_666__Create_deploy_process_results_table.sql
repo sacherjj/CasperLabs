@@ -16,7 +16,7 @@ CREATE TABLE deploy_process_results
     FOREIGN KEY (deploy_hash) REFERENCES deploys (hash)
 ) WITHOUT ROWID;
 
-CREATE INDEX idx_deploy_process_results_deploy_hash ON deploy_process_results (deploy_hash);
+CREATE UNIQUE INDEX idx_deploy_process_results_deploy_hash ON deploy_process_results (deploy_hash, block_hash);
 
 ALTER TABLE buffered_deploys
     ADD COLUMN status_message TEXT;
