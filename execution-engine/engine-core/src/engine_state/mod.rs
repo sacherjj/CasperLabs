@@ -212,7 +212,7 @@ where
         } else {
             // PAYMENT PRECONDITIONS
 
-            // Get mint system contract URef from account (an account on a different network may have a mint other than the CLMint)
+            // Get mint system contract URef from account (an account on a different network may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
             let mint_public_uref: Key = match account.urefs_lookup().get(MINT_NAME) {
                 Some(uref) => uref.normalize(),
@@ -235,7 +235,7 @@ where
                 }
             };
 
-            // Get proof of stake system contract URef from account (an account on a different network may have a mint other than the CLPoS)
+            // Get proof of stake system contract URef from account (an account on a different network may have have a pos contract other than the CLPoS)
             // payment_code_spec_6: system contract validity
             let proof_of_stake_public_uref: Key = match account.urefs_lookup().get(POS_NAME) {
                 Some(uref) => uref.normalize(),
