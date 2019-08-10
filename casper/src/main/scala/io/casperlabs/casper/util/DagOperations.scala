@@ -339,16 +339,16 @@ object DagOperations {
   ): F[BlockHash] = {
     implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
     import io.casperlabs.casper.util.implicits.{eqBlockMetadata, showBlockHash}
-    def next[A](f: A => BlockHash): A => F[BlockMetadata] =
+    def lookup[A](f: A => BlockHash): A => F[BlockMetadata] =
       el =>
         dag
           .lookup(f(el))
           .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(f(el))))
 
     starters
-      .traverse(next(identity))
+      .traverse(lookup(identity))
       .flatMap(
-        latestCommonAncestorF[F, BlockMetadata](_)(next[BlockMetadata](_.blockHash)(_))
+        latestCommonAncestorF[F, BlockMetadata](_)(lookup[BlockMetadata](_.parents.head)(_))
       )
       .map(_.blockHash)
   }
