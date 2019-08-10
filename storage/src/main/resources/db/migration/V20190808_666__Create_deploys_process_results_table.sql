@@ -12,13 +12,11 @@ CREATE TABLE deploys_process_results
     execute_time_millis     INTEGER NOT NULL,
     cost                    INTEGER NOT NULL,
     execution_error_message TEXT,
-    PRIMARY KEY (block_hash, deploy_hash),
+    PRIMARY KEY (block_hash, deploy_position),
     FOREIGN KEY (deploy_hash) REFERENCES deploys (hash)
 ) WITHOUT ROWID;
 
-CREATE INDEX idx_deploys_process_results_account_create_time ON deploys_process_results (create_time_millis);
-CREATE INDEX idx_deploys_process_results_account_execute_time ON deploys_process_results (execute_time_millis);
-CREATE INDEX idx_deploys_process_results_account_deploy_hash ON deploys_process_results (deploy_hash);
+CREATE INDEX idx_deploys_process_results_deploy_hash ON deploys_process_results (deploy_hash);
 
 ALTER TABLE buffered_deploys
     ADD COLUMN status_message TEXT;
