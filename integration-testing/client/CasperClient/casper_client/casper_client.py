@@ -3,21 +3,6 @@
 CasperLabs Client API library and command line tool.
 """
 
-# Hack to fix the relative imports problems #
-import sys
-from pathlib import Path
-file = Path(__file__).resolve()
-parent, root = file.parent, file.parents[1]
-sys.path.append(str(root))
-
-# Additionally remove the current file's directory from sys.path
-try:
-    sys.path.remove(str(parent))
-except ValueError: # Already removed
-    pass
-
-# end of hack #
-
 import time
 import argparse
 import grpc
@@ -29,6 +14,22 @@ import struct
 import json
 from operator import add
 from functools import reduce
+
+# Hack to fix the relative imports problems #
+import sys
+from pathlib import Path
+
+file = Path(__file__).resolve()
+parent, root = file.parent, file.parents[1]
+sys.path.append(str(root))
+
+# Additionally remove the current file's directory from sys.path
+try:
+    sys.path.remove(str(parent))
+except ValueError:  # Already removed
+    pass
+
+# end of hack #
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
 from .control_pb2_grpc import ControlServiceStub
@@ -44,7 +45,7 @@ from . import consensus_pb2 as consensus
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
 from . import info_pb2 as info
 
-DEFAULT_HOST = '127.0.0.1'
+DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
 
@@ -55,12 +56,12 @@ class ABI:
 
     @staticmethod
     def u32(n: int):
-        return struct.pack('<I', n)
+        return struct.pack("<I", n)
 
     @staticmethod
     def u64(n: int):
-        return struct.pack('<Q', n)
-        
+        return struct.pack("<Q", n)
+
     @staticmethod
     def byte_array(a: bytes):
         return ABI.u32(len(a)) + a
@@ -68,7 +69,7 @@ class ABI:
     @staticmethod
     def account(a: bytes):
         if len(a) != 32:
-            raise Exception('Account must be 32 bytes long')
+            raise Exception("Account must be 32 bytes long")
         return ABI.byte_array(a)
 
     @staticmethod
@@ -89,12 +90,14 @@ class ABI:
 
         for arg in args:
             if len(arg) != 1:
-                raise Exception(f'Wrong encoding of value in {arg}. Only one pair of type and value allowed.')
+                raise Exception(
+                    f"Wrong encoding of value in {arg}. Only one pair of type and value allowed."
+                )
 
         def python_value(typ, value: str):
-            if typ in ('u32', 'u64'):
+            if typ in ("u32", "u64"):
                 return int(value)
-            elif typ == 'account':
+            elif typ == "account":
                 return bytearray.fromhex(value)
             raise ValueError(f"Unknown type {typ}, expected ('u32', 'u64', 'account')")
 
@@ -118,7 +121,15 @@ class InternalError(Exception):
     and this exception thrown instead, so the user does
     not have to worry about handling any other exceptions.
     """
+
     pass
+
+
+def _get_view(full_view: bool):
+    if full_view:
+        return info.BlockInfo.View.FULL
+    else:
+        return info.BlockInfo.View.BASIC
 
 
 def api(function):
@@ -130,6 +141,7 @@ def api(function):
     :param function: function to be decorated
     :return:
     """
+
     @functools.wraps(function)
     def wrapper(*args, **kwargs):
         try:
@@ -145,7 +157,12 @@ class CasperClient:
     gRPC CasperLabs client.
     """
 
-    def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, internal_port: int = DEFAULT_INTERNAL_PORT):
+    def __init__(
+        self,
+        host: str = DEFAULT_HOST,
+        port: int = DEFAULT_PORT,
+        internal_port: int = DEFAULT_INTERNAL_PORT,
+    ):
         """
         CasperLabs client's constructor.
 
@@ -160,13 +177,12 @@ class CasperClient:
         client = self
 
         class GRPCService:
-
             def __init__(self, port, serviceStub):
                 self.port = port
                 self.serviceStub = serviceStub
 
             def __getattr__(self, name):
-                address = client.host + ':' + str(self.port)
+                address = client.host + ":" + str(self.port)
 
                 def f(*args):
                     with grpc.insecure_channel(address) as channel:
@@ -174,17 +190,31 @@ class CasperClient:
 
                 def g(*args):
                     with grpc.insecure_channel(address) as channel:
-                        yield from getattr(self.serviceStub(channel), name[:-len('_stream')])(*args)
+                        yield from getattr(
+                            self.serviceStub(channel), name[: -len("_stream")]
+                        )(*args)
 
-                return name.endswith('_stream') and g or f
+                if name.endswith("_stream"):
+                    return g
+                else:
+                    return f
 
         self.casperService = GRPCService(self.port, CasperServiceStub)
         self.controlService = GRPCService(self.internal_port, ControlServiceStub)
 
     @api
-    def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = 10, 
-               payment: str = None, session: str = None, nonce: int = 0,
-               public_key: str = None, private_key: str = None, args: bytes = None):
+    def deploy(
+        self,
+        from_addr: bytes = None,
+        gas_limit: int = None,
+        gas_price: int = 10,
+        payment: str = None,
+        session: str = None,
+        nonce: int = 0,
+        public_key: str = None,
+        private_key: str = None,
+        args: bytes = None,
+    ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
         The deploy will be packaged and sent as a block to the network depending
@@ -205,7 +235,8 @@ class CasperClient:
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
-        payment = payment or session
+        if not payment:
+            payment = session
 
         def hash(data: bytes) -> bytes:
             h = blake2b(digest_size=32)
@@ -213,53 +244,75 @@ class CasperClient:
             return h.digest()
 
         def read_binary(file_name: str):
-            with open(file_name, 'rb') as f:
+            with open(file_name, "rb") as f:
                 return f.read()
 
         def read_pem_key(file_name: str):
             with open(file_name) as f:
-                s = [l for l in f.readlines() if l and not l.startswith('-----')][0].strip()
-                r = base64.b64decode(s) 
-                return len(r) % 32 == 0 and r[:32] or r[-32:]
-                
+                s = [l for l in f.readlines() if l and not l.startswith("-----")][
+                    0
+                ].strip()
+                r = base64.b64decode(s)
+                if len(r) % 32 == 0:
+                    return r[:32]
+                else:
+                    return r[-32:]
 
         def read_code(file_name: str, abi_encoded_args: bytes = None):
-            return consensus.Deploy.Code(code = read_binary(file_name),
-                                         args = abi_encoded_args)
+            return consensus.Deploy.Code(
+                code=read_binary(file_name), args=abi_encoded_args
+            )
 
         def sign(data: bytes):
-            return (private_key
-                    and consensus.Signature(sig_algorithm = 'ed25519',
-                                            sig = ed25519.SigningKey(read_pem_key(private_key)).sign(data)))
+            if private_key:
+                return consensus.Signature(
+                    sig_algorithm="ed25519",
+                    sig=ed25519.SigningKey(read_pem_key(private_key)).sign(data),
+                )
 
         def serialize(o) -> bytes:
             return o.SerializeToString()
 
         # args must go to payment as well for now cause otherwise we'll get GASLIMIT error:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
-        body = consensus.Deploy.Body(session = read_code(session, args),
-                                     payment = read_code(payment, payment == session and args or None))
+        payment_args = args if payment == session else None
+        body = consensus.Deploy.Body(
+            session=read_code(session, args), payment=read_code(payment, payment_args)
+        )
 
-        account_public_key = public_key and read_pem_key(public_key)
-        header = consensus.Deploy.Header(account_public_key = account_public_key, 
-                                         nonce = nonce,
-                                         timestamp = int(time.time()),
-                                         gas_price = gas_price,
-                                         body_hash = hash(serialize(body)))
+        approval_public_key = None
+        if public_key:
+            approval_public_key = read_pem_key(public_key)
+
+        if from_addr is None:
+            account_public_key = approval_public_key
+        else:
+            account_public_key = from_addr
+
+        header = consensus.Deploy.Header(
+            account_public_key=account_public_key,
+            nonce=nonce,
+            timestamp=int(time.time()),
+            gas_price=gas_price,
+            body_hash=hash(serialize(body)),
+        )
 
         deploy_hash = hash(serialize(header))
-        d = consensus.Deploy(deploy_hash = deploy_hash,
-                             approvals = [consensus.Approval(approver_public_key = account_public_key,
-                                                             signature = sign(deploy_hash))]
-                                         if account_public_key
-                                         else [],
-                             header = header,
-                             body = body)
+        approvals = []
+        if approval_public_key:
+            approvals.append(
+                consensus.Approval(
+                    approver_public_key=approval_public_key, signature=sign(deploy_hash)
+                )
+            )
+        d = consensus.Deploy(
+            deploy_hash=deploy_hash, approvals=approvals, header=header, body=body
+        )
 
-        return self.casperService.Deploy(casper.DeployRequest(deploy = d)), deploy_hash
+        return self.casperService.Deploy(casper.DeployRequest(deploy=d)), deploy_hash
 
     @api
-    def showBlocks(self, depth: int=1, max_rank=0, full_view=True):
+    def showBlocks(self, depth: int = 1, max_rank=0, full_view=True):
         """
         Get slices of the DAG, going backwards, rank by rank.
 
@@ -270,10 +323,10 @@ class CasperClient:
         :return:          Generator of block info objects.
         """
         yield from self.casperService.StreamBlockInfos_stream(
-            casper.StreamBlockInfosRequest(depth=depth,
-                                           max_rank=max_rank,
-                                           view=(full_view and info.BlockInfo.View.FULL
-                                                 or info.BlockInfo.View.BASIC)))
+            casper.StreamBlockInfosRequest(
+                depth=depth, max_rank=max_rank, view=_get_view(full_view)
+            )
+        )
 
     @api
     def showBlock(self, block_hash_base16: str, full_view=True):
@@ -285,9 +338,10 @@ class CasperClient:
         :return:          object representing the retrieved block
         """
         return self.casperService.GetBlockInfo(
-                casper.GetBlockInfoRequest(block_hash_base16=block_hash_base16,
-                                           view=(full_view and info.BlockInfo.View.FULL
-                                                 or info.BlockInfo.View.BASIC)))
+            casper.GetBlockInfoRequest(
+                block_hash_base16=block_hash_base16, view=_get_view(full_view)
+            )
+        )
 
     @api
     def propose(self):
@@ -299,7 +353,13 @@ class CasperClient:
         return self.controlService.Propose(control.ProposeRequest())
 
     @api
-    def visualizeDag(self, depth: int, out: str = None, show_justification_lines: bool = False, stream: str = None):
+    def visualizeDag(
+        self,
+        depth: int,
+        out: str = None,
+        show_justification_lines: bool = False,
+        stream: str = None,
+    ):
         """
         Retrieve DAG in DOT format.
 
@@ -313,7 +373,7 @@ class CasperClient:
                                           valid values are 'single-output', 'multiple-outputs'
         :return:                          VisualizeBlocksResponse object
         """
-        raise Exception('Not implemented yet')
+        raise Exception("Not implemented yet")
 
     @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
@@ -328,21 +388,27 @@ class CasperClient:
                                   'address'.
         :return:                  QueryStateResponse object
         """
+
         def key_variant(keyType):
-            return {'hash': casper.StateQuery.KeyVariant.HASH,
-                    'uref': casper.StateQuery.KeyVariant.UREF,
-                    'address': casper.StateQuery.KeyVariant.ADDRESS}[keyType]
+            return {
+                "hash": casper.StateQuery.KeyVariant.HASH,
+                "uref": casper.StateQuery.KeyVariant.UREF,
+                "address": casper.StateQuery.KeyVariant.ADDRESS,
+            }[keyType]
 
         def path_segments(path):
-            return path.split('/')
+            return path.split("/")
 
         return self.casperService.GetBlockState(
-            casper.GetBlockStateRequest(block_hash_base16 = blockHash,
-                                        query = casper.StateQuery(
-                                                    key_variant = key_variant(keyType),
-                                                    key_base16 = key,
-                                                    path_segments = path_segments(path))))
-
+            casper.GetBlockStateRequest(
+                block_hash_base16=blockHash,
+                query=casper.StateQuery(
+                    key_variant=key_variant(keyType),
+                    key_base16=key,
+                    path_segments=path_segments(path),
+                ),
+            )
+        )
 
     @api
     def showDeploy(self, deploy_hash_base16: str, full_view=True):
@@ -350,9 +416,10 @@ class CasperClient:
         Retrieve information about a single deploy by hash.
         """
         return self.casperService.GetDeployInfo(
-                casper.GetDeployInfoRequest(deploy_hash_base16=deploy_hash_base16,
-                                            view=(full_view and info.DeployInfo.View.FULL
-                                                  or info.DeployInfo.View.BASIC)))
+            casper.GetDeployInfoRequest(
+                deploy_hash_base16=deploy_hash_base16, view=_get_view(full_view)
+            )
+        )
 
     @api
     def showDeploys(self, block_hash_base16: str, full_view=True):
@@ -360,9 +427,10 @@ class CasperClient:
         Get the processed deploys within a block.
         """
         yield from self.casperService.StreamBlockDeploys_stream(
-                    casper.StreamBlockDeploysRequest(block_hash_base16=block_hash_base16,
-                                                     view=(full_view and info.DeployInfo.View.FULL
-                                                           or info.DeployInfo.View.BASIC)))
+            casper.StreamBlockDeploysRequest(
+                block_hash_base16=block_hash_base16, view=_get_view(full_view)
+            )
+        )
 
 
 def guarded_command(function):
@@ -376,6 +444,7 @@ def guarded_command(function):
     :param function:  function to be decorated
     :return:
     """
+
     @functools.wraps(function)
     def wrapper(*args, **kwargs):
         try:
@@ -395,15 +464,15 @@ def guarded_command(function):
 def _show_blocks(response):
     count = 0
     for block in response:
-        print('------------- block {} ---------------'.format(block.blockNumber))
+        print(f"------------- block {block.blockNumber} ---------------")
         print(block)
-        print('-----------------------------------------------------\n')
+        print("-----------------------------------------------------\n")
         count += 1
-    print('count:', count)
+    print("count:", count)
 
 
 def _show_block(response):
-    if response.status != 'Success':
+    if response.status != "Success":
         print(response.status)
         return 1
     print(response)
@@ -411,16 +480,19 @@ def _show_block(response):
 
 @guarded_command
 def deploy_command(casper_client, args):
-    response, deploy_hash = casper_client.deploy(getattr(args,'from'),
-                                                 args.gas_limit,
-                                                 args.gas_price, 
-                                                 args.payment or args.session,
-                                                 args.session,
-                                                 args.nonce,
-                                                 args.public_key or None,
-                                                 args.private_key or None,
-                                                 args.args and ABI.args_from_json(args.args) or None)
-    print (f'{response.message}. Deploy hash: {deploy_hash}')
+    args_abi = ABI.args_from_json(args.args) if args.args else None
+    response, deploy_hash = casper_client.deploy(
+        getattr(args, "from"),
+        args.gas_limit,
+        args.gas_price,
+        args.payment or args.session,
+        args.session,
+        args.nonce,
+        args.public_key or None,
+        args.private_key or None,
+        args_abi,
+    )
+    print(f"{response.message}. Deploy hash: {deploy_hash}")
     if not response.success:
         return 1
 
@@ -453,15 +525,17 @@ def vdag_command(casper_client, args):
 
 @guarded_command
 def query_state_command(casper_client, args):
-    response = casper_client.queryState(args.block_hash, args.key, args.path, getattr(args, 'type'))
+    response = casper_client.queryState(
+        args.block_hash, args.key, args.path, getattr(args, "type")
+    )
     print(response.result)
 
 
 @guarded_command
 def show_deploy_command(casper_client, args):
     response = casper_client.showDeploy(args.hash)
-    print (response)
-    
+    print(response)
+
 
 @guarded_command
 def show_deploys_command(casper_client, args):
@@ -478,15 +552,36 @@ def command_line_tool():
     class Parser:
         def __init__(self):
             self.parser = argparse.ArgumentParser(add_help=False)
-            self.parser.add_argument('--help', action='help', default=argparse.SUPPRESS,
-                                     help='show this help message and exit')
-            self.parser.add_argument('-h', '--host', required=False, default=DEFAULT_HOST, type=str,
-                                     help='Hostname or IP of node on which gRPC service is running.')
-            self.parser.add_argument('-p', '--port', required=False, default=DEFAULT_PORT, type=int,
-                                     help='Port used for external gRPC API.')
-            self.parser.add_argument('--internal-port', required=False, default=DEFAULT_INTERNAL_PORT, type=int,
-                                     help='Port used for internal gRPC API.')
-            self.sp = self.parser.add_subparsers(help='Choose a request')
+            self.parser.add_argument(
+                "--help",
+                action="help",
+                default=argparse.SUPPRESS,
+                help="show this help message and exit",
+            )
+            self.parser.add_argument(
+                "-h",
+                "--host",
+                required=False,
+                default=DEFAULT_HOST,
+                type=str,
+                help="Hostname or IP of node on which gRPC service is running.",
+            )
+            self.parser.add_argument(
+                "-p",
+                "--port",
+                required=False,
+                default=DEFAULT_PORT,
+                type=int,
+                help="Port used for external gRPC API.",
+            )
+            self.parser.add_argument(
+                "--internal-port",
+                required=False,
+                default=DEFAULT_INTERNAL_PORT,
+                type=int,
+                help="Port used for internal gRPC API.",
+            )
+            self.sp = self.parser.add_subparsers(help="Choose a request")
 
         def addCommand(self, command: str, function, help, arguments):
             command_parser = self.sp.add_parser(command, help=help)
@@ -500,48 +595,209 @@ def command_line_tool():
                 return 1
 
             args = self.parser.parse_args()
-            return args.function(CasperClient(args.host, args.port, args.internal_port), args)
+            return args.function(
+                CasperClient(args.host, args.port, args.internal_port), args
+            )
 
     parser = Parser()
-    parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
-                      [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
-                       [('-g', '--gas-limit'), dict(required=True, type=int, help='[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')],
-                       [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
-                       [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
-                       [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
-                       [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
-                       [('--args',), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
-                       [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
-                       [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
+    parser.addCommand(
+        "deploy",
+        deploy_command,
+        "Deploy a smart contract source file to Casper on an existing running node. "
+        "The deploy will be packaged and sent as a block to the network depending on the "
+        "configuration of the Casper instance",
+        [
+            [
+                ("-f", "--from"),
+                dict(
+                    required=True,
+                    type=lambda x: bytes(x, "utf-8"),
+                    help="Purse address that will be used to pay for the deployment.",
+                ),
+            ],
+            [
+                ("-g", "--gas-limit"),
+                dict(
+                    required=True,
+                    type=int,
+                    help="[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). "
+                         "Must be positive integer.",
+                ),
+            ],
+            [
+                ("--gas-price",),
+                dict(
+                    required=False,
+                    type=int,
+                    default=10,
+                    help="The price of gas for this transaction in units dust/gas. Must be positive integer.",
+                ),
+            ],
+            [
+                ("-n", "--nonce"),
+                dict(
+                    required=True,
+                    type=int,
+                    help="This allows you to overwrite your own pending transactions that use the same nonce.",
+                ),
+            ],
+            [
+                ("-p", "--payment"),
+                dict(
+                    required=False,
+                    type=str,
+                    default=None,
+                    help="Path to the file with payment code, by default fallbacks to the --session code",
+                ),
+            ],
+            [
+                ("-s", "--session"),
+                dict(
+                    required=True, type=str, help="Path to the file with session code"
+                ),
+            ],
+            [
+                ("--args",),
+                dict(
+                    required=False,
+                    type=str,
+                    help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]',
+                ),
+            ],
+            [
+                ("--private-key",),
+                dict(
+                    required=True,
+                    type=str,
+                    help="Path to the file with account public key (Ed25519)",
+                ),
+            ],
+            [
+                ("--public-key",),
+                dict(
+                    required=True,
+                    type=str,
+                    help="Path to the file with account private key (Ed25519)",
+                ),
+            ],
+        ],
+    )
 
-    parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
+    parser.addCommand(
+        "propose",
+        propose_command,
+        "Force a node to propose a block based on its accumulated deploys.",
+        [],
+    )
 
-    parser.addCommand('show-block', show_block_command, 'View properties of a block known by Casper on an existing running node. Output includes: parent hashes, storage contents of the tuplespace.',
-                      [[('hash',), dict(type=str, help='the hash value of the block')]])
+    parser.addCommand(
+        "show-block",
+        show_block_command,
+        "View properties of a block known by Casper on an existing running node. Output includes: "
+        "parent hashes, storage contents of the tuplespace.",
+        [[("hash",), dict(type=str, help="the hash value of the block")]],
+    )
 
-    parser.addCommand('show-blocks', show_blocks_command, 'View list of blocks in the current Casper view on an existing running node.',
-                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')]])
+    parser.addCommand(
+        "show-blocks",
+        show_blocks_command,
+        "View list of blocks in the current Casper view on an existing running node.",
+        [
+            [
+                ("-d", "--depth"),
+                dict(required=True, type=int, help="depth in terms of block height"),
+            ]
+        ],
+    )
 
-    parser.addCommand('show-deploy', show_deploy_command, 'View properties of a deploy known by Casper on an existing running node.',
-                      [[('hash',), dict(type=str, help='Value of the deploy hash, base16 encoded.')]])
+    parser.addCommand(
+        "show-deploy",
+        show_deploy_command,
+        "View properties of a deploy known by Casper on an existing running node.",
+        [[("hash",), dict(type=str, help="Value of the deploy hash, base16 encoded.")]],
+    )
 
-    parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
-                      [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
+    parser.addCommand(
+        "show-deploys",
+        show_deploys_command,
+        "View deploys included in a block.",
+        [[("hash",), dict(type=str, help="Value of the block hash, base16 encoded.")]],
+    )
 
-    parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
-                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')],
-                       [('-o', '--out'), dict(required=False, type=str, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
-                       [('-s', '--show-justification-lines'), dict(action='store_true', help='if justification lines should be shown')],
-                       [('--stream',), dict(required=False, choices=('single-output', 'multiple-outputs'), help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'")]])
+    parser.addCommand(
+        "vdag",
+        vdag_command,
+        "DAG in DOT format",
+        [
+            [
+                ("-d", "--depth"),
+                dict(required=True, type=int, help="depth in terms of block height"),
+            ],
+            [
+                ("-o", "--out"),
+                dict(
+                    required=False,
+                    type=str,
+                    help="output image filename, outputs to stdout if not specified, must end with one of the png, "
+                         "svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0",
+                ),
+            ],
+            [
+                ("-s", "--show-justification-lines"),
+                dict(
+                    action="store_true", help="if justification lines should be shown"
+                ),
+            ],
+            [
+                ("--stream",),
+                dict(
+                    required=False,
+                    choices=("single-output", "multiple-outputs"),
+                    help="subscribe to changes, '--out' has to be specified, valid values are "
+                         "'single-output', 'multiple-outputs'",
+                ),
+            ],
+        ],
+    )
 
-    parser.addCommand('query-state', query_state_command, 'Query a value in the global state.',
-                      [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
-                       [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
-                       [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
-                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address'), help="Type of base key. Must be one of 'hash', 'uref', 'address'")]])
+    parser.addCommand(
+        "query-state",
+        query_state_command,
+        "Query a value in the global state.",
+        [
+            [
+                ("-b", "--block-hash"),
+                dict(
+                    required=True,
+                    type=str,
+                    help="Hash of the block to query the state of",
+                ),
+            ],
+            [
+                ("-k", "--key"),
+                dict(required=True, type=str, help="Base16 encoding of the base key"),
+            ],
+            [
+                ("-p", "--path"),
+                dict(
+                    required=True,
+                    type=str,
+                    help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'",
+                ),
+            ],
+            [
+                ("-t", "--type"),
+                dict(
+                    required=True,
+                    choices=("hash", "uref", "address"),
+                    help="Type of base key. Must be one of 'hash', 'uref', 'address'",
+                ),
+            ],
+        ],
+    )
 
     sys.exit(parser.run())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     command_line_tool()
