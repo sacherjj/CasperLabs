@@ -226,48 +226,13 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
         val v3Bond = Bond(v3, 3)
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a <- createBlock[Task](
-                Seq(genesis.blockHash),
-                v1,
-                bonds,
-                justifications =
-                  Map(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-              )
-          b <- createBlock[Task](
-                Seq(genesis.blockHash),
-                v2,
-                bonds,
-                justifications =
-                  Map(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-              )
-          c <- createBlock[Task](
-                Seq(genesis.blockHash),
-                v3,
-                bonds,
-                justifications =
-                  Map(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-              )
-          d <- createBlock[Task](
-                Seq(a.blockHash),
-                v1,
-                bonds,
-                justifications =
-                  Map(v1 -> a.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-              )
-          e <- createBlock[Task](
-                Seq(a.blockHash, c.blockHash),
-                v3,
-                bonds,
-                justifications = Map(v1 -> a.blockHash, v2 -> genesis.blockHash, v3 -> c.blockHash)
-              )
-          f <- createBlock[Task](
-                Seq(b.blockHash),
-                v2,
-                bonds,
-                justifications =
-                  Map(v1 -> genesis.blockHash, v2 -> b.blockHash, v3 -> genesis.blockHash)
-              )
+          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createBlock[Task](Seq(a.blockHash), v1, bonds)
+          e            <- createBlock[Task](Seq(a.blockHash, c.blockHash), v3, bonds)
+          f            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
@@ -308,65 +273,16 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a <- createBlock[Task](
-                Seq(genesis.blockHash),
-                v1,
-                bonds,
-                justifications =
-                  Map(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-              )
-          b <- createBlock[Task](
-                Seq(genesis.blockHash),
-                v2,
-                bonds,
-                justifications =
-                  Map(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-              )
-          c <- createBlock[Task](
-                Seq(genesis.blockHash),
-                v3,
-                bonds,
-                justifications =
-                  Map(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-              )
-          d <- createBlock[Task](
-                Seq(a.blockHash, b.blockHash),
-                v1,
-                bonds,
-                justifications = Map(v1 -> a.blockHash, v2 -> b.blockHash, v3 -> genesis.blockHash)
-              )
-          e <- createBlock[Task](
-                Seq(b.blockHash),
-                v2,
-                bonds,
-                justifications = Map(v1 -> genesis.blockHash, v2 -> b.blockHash, v3 -> c.blockHash)
-              )
-          f <- createBlock[Task](
-                Seq(c.blockHash),
-                v3,
-                bonds,
-                justifications =
-                  Map(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> c.blockHash)
-              )
-          g <- createBlock[Task](
-                Seq(d.blockHash, e.blockHash),
-                v1,
-                bonds,
-                justifications = Map(v1 -> d.blockHash, v2 -> e.blockHash, v3 -> genesis.blockHash)
-              )
-          h <- createBlock[Task](
-                Seq(e.blockHash, f.blockHash),
-                v2,
-                bonds,
-                justifications = Map(v1 -> genesis.blockHash, v2 -> e.blockHash, v3 -> f.blockHash)
-              )
-          i <- createBlock[Task](
-                Seq(g.blockHash, f.blockHash),
-                v3,
-                bonds,
-                justifications = Map(v1 -> g.blockHash, v2 -> h.blockHash, v3 -> f.blockHash)
-              )
+          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+          e            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
+          f            <- createBlock[Task](Seq(c.blockHash), v3, bonds)
+          g            <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+          h            <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+          i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
@@ -415,84 +331,24 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
-          a <- createBlock[Task](
-                Seq(genesis.blockHash),
-                v1,
-                bonds,
-                justifications = Map(ByteString.EMPTY -> genesis.blockHash)
-              )
-          b <- createBlock[Task](
-                Seq(genesis.blockHash),
-                v2,
-                bonds,
-                justifications = Map(ByteString.EMPTY -> genesis.blockHash)
-              )
-          c <- createBlock[Task](
-                Seq(genesis.blockHash),
-                v3,
-                bonds,
-                justifications = Map(ByteString.EMPTY -> genesis.blockHash)
-              )
-          d <- createBlock[Task](
-                Seq(a.blockHash),
-                v1,
-                bonds,
-                justifications = Map(v1 -> a.blockHash)
-              )
-          e <- createBlock[Task](
-                Seq(b.blockHash, c.blockHash),
-                v2,
-                bonds,
-                justifications = Map(v2 -> b.blockHash, v3 -> c.blockHash)
-              )
-          f <- createBlock[Task](
-                Seq(d.blockHash, e.blockHash),
-                v2,
-                bonds,
-                justifications = Map(v1 -> d.blockHash, v2 -> e.blockHash)
-              )
-          g <- createBlock[Task](
-                Seq(f.blockHash),
-                v1,
-                bonds,
-                justifications = Map(v2 -> f.blockHash)
-              )
-          h <- createBlock[Task](
-                Seq(f.blockHash),
-                v2,
-                bonds,
-                justifications = Map(v2 -> f.blockHash)
-              )
-          i <- createBlock[Task](
-                Seq(f.blockHash),
-                v3,
-                bonds,
-                justifications = Map(v2 -> f.blockHash)
-              )
-          j <- createBlock[Task](
-                Seq(g.blockHash, h.blockHash),
-                v1,
-                bonds,
-                justifications = Map(v1 -> g.blockHash, v2 -> h.blockHash)
-              )
-          k <- createBlock[Task](
-                Seq(h.blockHash),
-                v2,
-                bonds,
-                justifications = Map(v1 -> h.blockHash)
-              )
+          a       <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b       <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
+          e       <- createBlock[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
+          f       <- createBlock[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
+          g       <- createBlock[Task](Seq(f.blockHash), v1, bonds)
+          h       <- createBlock[Task](Seq(f.blockHash), v2, bonds)
+          i       <- createBlock[Task](Seq(f.blockHash), v3, bonds)
+          j       <- createBlock[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
+          k       <- createBlock[Task](Seq(h.blockHash), v2, bonds)
           l <- createBlock[Task](
                 Seq(i.blockHash),
                 v3,
                 bonds,
                 justifications = Map(v3 -> i.blockHash)
               )
-          m <- createBlock[Task](
-                Seq(j.blockHash, k.blockHash, l.blockHash),
-                v2,
-                bonds,
-                justifications = Map(v1 -> j.blockHash, v2 -> k.blockHash, v3 -> l.blockHash)
-              )
+          m            <- createBlock[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
           dag          <- blockDagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
