@@ -763,7 +763,7 @@ object MultiParentCasperImpl {
         _ <- Log[F].debug(s"Block effects calculated for $hashPrefix")
       } yield blockEffects).attempt
 
-      DeployStorageWriter[F].addAsExecuted(block) >> validationStatus.flatMap {
+      validationStatus.flatMap {
         case Right(effects) =>
           addEffects(Valid, block, effects, dag).tupleLeft(Valid)
 
@@ -890,6 +890,7 @@ object MultiParentCasperImpl {
       for {
         _          <- BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
         updatedDag <- DagStorage[F].insert(block)
+        _          <- DeployStorageWriter[F].addAsExecuted(block)
       } yield updatedDag
 
     /** Check if the block has dependencies that we don't have in store.

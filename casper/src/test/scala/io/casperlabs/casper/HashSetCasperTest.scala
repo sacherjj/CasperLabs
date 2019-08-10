@@ -1385,7 +1385,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  it should "store deploys processing result when create or receive new block" in effectTest {
+  it should "store deploys processing result when create or receive new valid block" in effectTest {
     for {
       nodes <- networkEff(
                 validatorKeys.take(2),
@@ -1397,8 +1397,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       deployA         <- ProtoUtil.basicDeploy[Effect](1L)
       _               <- nodes(0).casperEff.deploy(deployA)
-      createA         <- nodes(0).casperEff.createBlock
-      Created(blockA) = createA
+      Created(blockA) <- nodes(0).casperEff.createBlock
       _               <- nodes(0).casperEff.addBlock(blockA) shouldBeF Valid
       _               <- nodes(1).receive()
 
@@ -1411,6 +1410,38 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ = processingResults.map {
         case (blockHash, pd) => (blockHash, pd.getDeploy)
       } shouldBe List((blockA.blockHash, deployA))
+      _ <- nodes.map(_.tearDown()).toList.sequence
+    } yield ()
+  }
+
+  it should "not store deploys processing result when create or receive new invalid block" in effectTest {
+    for {
+      nodes <- networkEff(
+                validatorKeys.take(2),
+                genesis,
+                transforms,
+                maybeMakeEE =
+                  Some(HashSetCasperTestNode.simpleEEApi[Effect](_, _, generateConflict = false))
+              )
+
+      deployA         <- ProtoUtil.basicDeploy[Effect](1L)
+      _               <- nodes(0).casperEff.deploy(deployA)
+      Created(blockA) <- nodes(0).casperEff.createBlock
+      invalidBlockA = BlockUtil.resignBlock(
+        blockA.withHeader(blockA.getHeader.withTimestamp(Long.MaxValue)),
+        nodes(0).validatorId.privateKey
+      )
+      blockStatus <- nodes(0).casperEff.addBlock(invalidBlockA)
+      _           = blockStatus shouldBe an[InvalidBlock]
+      // nodes(0) won't relay invalid block
+      _ <- nodes(1).receive()
+      _ <- nodes(1).casperEff.contains(invalidBlockA) shouldBeF (false)
+      // adding manually
+      blockStatus <- nodes(1).casperEff.addBlock(invalidBlockA)
+      _           = blockStatus shouldBe an[InvalidBlock]
+      _ <- nodes(0).deployStorage
+            .getProcessingResults(deployA.deployHash) shouldBeF (Nil)
+      _ <- nodes(1).deployStorage.getProcessingResults(deployA.deployHash) shouldBeF (Nil)
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
