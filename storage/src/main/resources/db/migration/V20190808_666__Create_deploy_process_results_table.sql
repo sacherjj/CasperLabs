@@ -1,4 +1,4 @@
-CREATE TABLE deploys_process_results
+CREATE TABLE deploy_process_results
 (
     -- May be NULL if deploy not included into block
     block_hash              BLOB    NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE deploys_process_results
     FOREIGN KEY (deploy_hash) REFERENCES deploys (hash)
 ) WITHOUT ROWID;
 
-CREATE INDEX idx_deploys_process_results_deploy_hash ON deploys_process_results (deploy_hash);
+CREATE INDEX idx_deploy_process_results_deploy_hash ON deploy_process_results (deploy_hash);
 
 ALTER TABLE buffered_deploys
     ADD COLUMN status_message TEXT;

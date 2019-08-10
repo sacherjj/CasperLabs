@@ -73,7 +73,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     val writeToProcessResultsTable =
       Update[(ByteString, ByteString, Int, ByteString, Long, Long, Long, Option[String])](
         """
-          |INSERT OR IGNORE INTO deploys_process_results
+          |INSERT OR IGNORE INTO deploy_process_results
           |(
           | block_hash,
           | deploy_hash,
@@ -284,7 +284,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
 
     val readProcessingResults =
       sql"""|SELECT block_hash, cost, execution_error_message 
-            |FROM deploys_process_results 
+            |FROM deploy_process_results 
             |WHERE deploy_hash=$hash 
             |ORDER BY execute_time_millis DESC""".stripMargin
         .query[(ByteString, ProcessedDeploy)]
