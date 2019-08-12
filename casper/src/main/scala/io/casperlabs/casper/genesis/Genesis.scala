@@ -86,7 +86,7 @@ object Genesis {
       request = ipc
         .GenesisRequest()
         .withAddress(ByteString.copyFrom(accountPublicKey))
-        .withInitialTokens(
+        .withInitialMotes(
           state
             .BigInt(
               initialTokens.toString,

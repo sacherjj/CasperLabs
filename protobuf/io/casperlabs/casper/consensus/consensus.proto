@@ -39,7 +39,7 @@ message Deploy {
         uint64 nonce = 2;
         // Current time milliseconds.
         uint64 timestamp = 3;
-        // Conversion rate between the cost of Wasm opcodes and the tokens sent by the `payment_code`.
+        // Conversion rate between the cost of Wasm opcodes and the motes sent by the `payment_code`.
         uint64 gas_price = 4;
         // Hash of the body structure as a whole.
         bytes body_hash = 5;
@@ -48,7 +48,9 @@ message Deploy {
     message Body {
         // Wasm code of the smart contract to be executed.
         Code session = 1;
-        // Wasm code that transfers some tokens to the validators as payment in exchange to run the Deploy.
+        // Wasm code that transfers some motes to the validators as payment in exchange to run the Deploy.
+        // Note: the word "mote" means "a tiny piece of a substance". Here we are referring to the smallest,
+        // indivisible unit of the CL token. This is the equivalent of a Satoshi on Bitcoin or a Wei on Ethereum.
         Code payment = 2;
     }
 

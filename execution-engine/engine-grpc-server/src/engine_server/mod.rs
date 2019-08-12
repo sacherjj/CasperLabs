@@ -364,7 +364,7 @@ where
             ret
         };
 
-        let initial_tokens: U512 = match genesis_request.get_initial_tokens().try_into() {
+        let initial_tokens: U512 = match genesis_request.get_initial_motes().try_into() {
             Ok(initial_tokens) => initial_tokens,
             Err(err) => {
                 let err_msg = format!("{:?}", err);
@@ -548,7 +548,7 @@ where
             let nonce = deploy.nonce;
             // TODO: is the rounding in this division ok?
             let gas_limit =
-                (deploy.tokens_transferred_in_payment as u64) / (deploy.gas_price as u64);
+                (deploy.motes_transferred_in_payment as u64) / (deploy.gas_price as u64);
             let protocol_version = protocol_version.value;
             engine_state
                 .run_deploy(
