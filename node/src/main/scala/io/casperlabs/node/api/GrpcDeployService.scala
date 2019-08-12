@@ -6,7 +6,7 @@ import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.api.BlockAPI
@@ -28,7 +28,7 @@ object GrpcDeployService {
   def splitPath(path: String): Seq[String] =
     path.split("/").filter(_.nonEmpty)
 
-  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: FinalityDetector: BlockStore: TaskLike: ExecutionEngineService](
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: FinalityDetector: BlockStorage: TaskLike: ExecutionEngineService](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler

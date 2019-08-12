@@ -1,0 +1,14 @@
+[package]
+name = "revert"
+version = "0.1.0"
+authors = ["Henry Till <henrytill@gmail.com>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["contract-ffi/std"]
+
+[dependencies]
+contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

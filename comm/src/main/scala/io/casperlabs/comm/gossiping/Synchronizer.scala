@@ -39,7 +39,8 @@ object Synchronizer {
   }
   object SyncError {
     final case class TooWide(
-        maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
+        maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
+        depth: Int,
         maxTotal: Int,
         total: Int
     ) extends SyncError
@@ -60,8 +61,8 @@ object Synchronizer {
           s"Returned DAG is too big, limit: $limit, exceeded hash: ${hex(summary)}"
         case SyncError.TooDeep(summaries, limit) =>
           s"Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries.map(hex)}"
-        case SyncError.TooWide(maxBranchingFactor, maxTotal, total) =>
-          s"Returned dag seems to be exponentially wide, max branching factor: $maxBranchingFactor, max total summaries: $maxTotal, total returned: $total"
+        case SyncError.TooWide(maxBondingRate, depth, maxTotal, total) =>
+          s"Returned dag seems to be too wide at depth $depth, max bonding rate: $maxBondingRate, max total summaries: $maxTotal, total returned: $total"
         case SyncError.Unreachable(summary, requestedDepth, reason) =>
           s"During streaming source returned unreachable block summary: ${hex(summary)}, requested depth: $requestedDepth, reason: $reason"
         case SyncError.ValidationError(summary, e) =>

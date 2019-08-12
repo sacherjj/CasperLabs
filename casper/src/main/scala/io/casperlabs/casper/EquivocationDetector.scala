@@ -4,7 +4,7 @@ import cats.{Applicative, Monad}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.catscontrib.MonadThrowable
@@ -69,7 +69,7 @@ object EquivocationDetector {
   def checkEquivocations[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       block: Block,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[Unit] =
     for {
       maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.getHeader.validatorPublicKey)
@@ -106,7 +106,7 @@ object EquivocationDetector {
     ProtoUtil.creatorJustification(block).map(_.latestBlockHash)
 
   // See summary of algorithm above
-  def checkNeglectedEquivocationsWithUpdate[F[_]: MonadThrowable: BlockStore: FunctorRaise[
+  def checkNeglectedEquivocationsWithUpdate[F[_]: MonadThrowable: BlockStorage: FunctorRaise[
     ?[_],
     InvalidBlock
   ]](
@@ -120,7 +120,7 @@ object EquivocationDetector {
       )
     )(FunctorRaise[F, InvalidBlock].raise[Unit](NeglectedEquivocation), Monad[F].unit)
 
-  private def isNeglectedEquivocationDetectedWithUpdate[F[_]: MonadThrowable: BlockStore](
+  private def isNeglectedEquivocationDetectedWithUpdate[F[_]: MonadThrowable: BlockStorage](
       block: Block,
       genesis: Block
   )(implicit state: Cell[F, CasperState]): F[Boolean] =
@@ -141,7 +141,7 @@ object EquivocationDetector {
     *
     * @return Whether a neglected equivocation was discovered.
     */
-  private def updateEquivocationsTracker[F[_]: MonadThrowable: BlockStore](
+  private def updateEquivocationsTracker[F[_]: MonadThrowable: BlockStorage](
       block: Block,
       equivocationRecord: EquivocationRecord,
       genesis: Block
@@ -172,7 +172,7 @@ object EquivocationDetector {
           } else ().pure[F]
     } yield neglectedEquivocationDetected
 
-  private def getEquivocationDiscoveryStatus[F[_]: MonadThrowable: BlockStore](
+  private def getEquivocationDiscoveryStatus[F[_]: MonadThrowable: BlockStorage](
       block: Block,
       equivocationRecord: EquivocationRecord,
       genesis: Block
@@ -199,7 +199,7 @@ object EquivocationDetector {
     }
   }
 
-  private def getEquivocationDiscoveryStatusForBondedValidator[F[_]: MonadThrowable: BlockStore](
+  private def getEquivocationDiscoveryStatusForBondedValidator[F[_]: MonadThrowable: BlockStorage](
       equivocationRecord: EquivocationRecord,
       latestMessages: Map[Validator, BlockHash],
       stake: Long,
@@ -224,7 +224,7 @@ object EquivocationDetector {
       Applicative[F].pure(EquivocationDetected)
     }
 
-  private def isEquivocationDetectable[F[_]: MonadThrowable: BlockStore](
+  private def isEquivocationDetectable[F[_]: MonadThrowable: BlockStorage](
       latestMessages: Seq[(Validator, BlockHash)],
       equivocationRecord: EquivocationRecord,
       equivocationChildren: Set[Block],
@@ -242,7 +242,7 @@ object EquivocationDetector {
         )
     }
 
-  private def isEquivocationDetectableAfterViewingBlock[F[_]: MonadThrowable: BlockStore](
+  private def isEquivocationDetectableAfterViewingBlock[F[_]: MonadThrowable: BlockStorage](
       justificationBlockHash: BlockHash,
       equivocationRecord: EquivocationRecord,
       equivocationChildren: Set[Block],
@@ -264,7 +264,7 @@ object EquivocationDetector {
       } yield equivocationDetected
     }
 
-  private def isEquivocationDetectableThroughChildren[F[_]: MonadThrowable: BlockStore](
+  private def isEquivocationDetectableThroughChildren[F[_]: MonadThrowable: BlockStorage](
       equivocationRecord: EquivocationRecord,
       equivocationChildren: Set[Block],
       remainder: Seq[(Validator, BlockHash)],
@@ -295,7 +295,7 @@ object EquivocationDetector {
     } yield equivocationDetected
   }
 
-  private def maybeAddEquivocationChild[F[_]: MonadThrowable: BlockStore](
+  private def maybeAddEquivocationChild[F[_]: MonadThrowable: BlockStorage](
       justificationBlock: Block,
       equivocatingValidator: Validator,
       equivocationBaseBlockSeqNum: SequenceNumber,
@@ -341,7 +341,7 @@ object EquivocationDetector {
       }
     }
 
-  private def addEquivocationChild[F[_]: Monad: BlockStore](
+  private def addEquivocationChild[F[_]: Monad: BlockStorage](
       justificationBlock: Block,
       equivocationBaseBlockSeqNum: SequenceNumber,
       equivocationChildren: Set[Block]
@@ -355,7 +355,7 @@ object EquivocationDetector {
         case Some(equivocationChild) => equivocationChildren + equivocationChild
         case None =>
           throw new Exception(
-            "creator justification ancestor with lower sequence number hasn't been added to the blockDAG yet."
+            "creator justification ancestor with lower sequence number hasn't been added to the DAG yet."
           )
       }
     } yield updatedEquivocationChildren

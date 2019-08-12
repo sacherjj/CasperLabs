@@ -25,8 +25,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     connectToGossip: Node => F[GossipService[F]],
     backend: SynchronizerImpl.Backend[F],
     maxPossibleDepth: Int Refined Positive,
-    minBlockCountToCheckBranchingFactor: Int Refined NonNegative,
-    maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
+    minBlockCountToCheckWidth: Int Refined NonNegative,
+    maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
     maxDepthAncestorsRequest: Int Refined Positive,
     maxInitialBlockCount: Int Refined Positive,
     // Before the initial sync has succeeded we allow more depth.
@@ -298,21 +298,37 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       }
     }
 
-  // TODO: Rewrite this check to be based on the number of validators:
-  // at any rank the DAG cannot be wider then the number of validators,
-  // otherwise some of them would be equivocating (which is fine, up to a threshold of 0.33).
+  /** Checks that at the current depth we are observing we haven't received so many blocks that it would indicate
+    * an abnormally wide, artificially generated graph. We use a simple formula to estimate the upper bound of how
+    * many blocks we can see. We assume that there is a limit on how quickly validators and bond and unbond, and
+    * that this limit can be expressed as a "bonding rate" which represents the rate of change per DAG rank.
+    * For example a rate of 0.1 would mean there can be a bonding event every 10th rank. Bonding has to happen
+    * in a way that that block is the only block at that rank, since it cannot be merged with any other block,
+    * otherwise the set of bonded validators among parents would be different and that's agains the rules.
+    * We estimate the maximum number of validators we can see by looking at how many we have at the targets,
+    * then assume that validators *unbonded* at the maximum allowed rate as we walk *backwards* along the DAG,
+    * therefore at each previous rank there were as many validators as possible. Each validator can only produce
+    * 1 block at each rank, but we allow 1/3rd of the validators to equivocate, just to be even more generous.
+    * The goal is to catch abnormal, exponential growth, not be super realistic. This gives an arithmetic
+    * progression of validator numbers, which can be used to give an upper bound on the total number of blocks
+    * at any given depth.
+    */
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
     val depth = syncState.distanceFromOriginalTarget.values.toList.maximumOption.getOrElse(0)
-    val maxTotal =
-      if (maxBranchingFactor <= 1) depth
-      else {
-        ((math.pow(maxBranchingFactor, depth.toDouble) - 1) / (maxBranchingFactor - 1)).ceil.toInt
-      }
-    val total = syncState.summaries.size
-    if (total > minBlockCountToCheckBranchingFactor &&
+    val maxValidatorCountAtTargets = syncState.originalTargets.map { t =>
+      syncState.summaries.get(t).fold(1)(s => s.getHeader.getState.bonds.size)
+    }.max
+    // Validators can come and leave at a certain rate. If someone unbonded at every step along
+    // the way we'd get as wide a graph as we can get (looking back).
+    val maxValidators = maxValidatorCountAtTargets + Math.ceil(depth * maxBondingRate).toInt
+    // Use the most conservative estimate by allowing 33% of the validators all equivocating
+    // at every rank, and using the average maximum validator count as a higher bound.
+    val maxTotal = Math.ceil((maxValidators + maxValidatorCountAtTargets) / 2 * depth * 1.33).toInt
+    val total    = syncState.summaries.size
+    if (total > minBlockCountToCheckWidth &&
         total > syncState.originalTargets.size &&
         total > maxTotal) {
-      EitherT((TooWide(maxBranchingFactor, maxTotal, total): SyncError).asLeft[Unit].pure[F])
+      EitherT((TooWide(maxBondingRate, depth, maxTotal, total): SyncError).asLeft[Unit].pure[F])
     } else {
       EitherT(().asRight[SyncError].pure[F])
     }
@@ -379,8 +395,8 @@ object SynchronizerImpl {
       connectToGossip: Node => F[GossipService[F]],
       backend: SynchronizerImpl.Backend[F],
       maxPossibleDepth: Int Refined Positive,
-      minBlockCountToCheckBranchingFactor: Int Refined NonNegative,
-      maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
+      minBlockCountToCheckWidth: Int Refined NonNegative,
+      maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
       maxDepthAncestorsRequest: Int Refined Positive,
       maxInitialBlockCount: Int Refined Positive,
       isInitialRef: Ref[F, Boolean]
@@ -393,8 +409,8 @@ object SynchronizerImpl {
         connectToGossip,
         backend,
         maxPossibleDepth,
-        minBlockCountToCheckBranchingFactor,
-        maxBranchingFactor,
+        minBlockCountToCheckWidth,
+        maxBondingRate,
         maxDepthAncestorsRequest,
         maxInitialBlockCount,
         isInitialRef,

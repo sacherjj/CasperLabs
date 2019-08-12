@@ -99,6 +99,15 @@ pipeline:
     when:
       event:
         - pull_request
+  black-and-flake8:
+    commands:
+      - "python3 -m pip install pipenv"
+      - "cd integration-testing"
+      - "./run_flake8_black.sh"
+    image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
 # This section is for bors' branches only
   sbt-test-docker-bors:

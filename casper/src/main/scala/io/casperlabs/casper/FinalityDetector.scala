@@ -2,7 +2,7 @@ package io.casperlabs.casper
 
 import cats.Monad
 import cats.implicits._
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata}
+import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.FinalityDetector.Committee
 import io.casperlabs.casper.util.DagOperations.Key.blockMetadataKey
@@ -27,7 +27,7 @@ trait FinalityDetector[F[_]] {
     * @return normalizedFaultTolerance float between -1 and 1
     */
   def normalizedFaultTolerance(
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       candidateBlockHash: BlockHash
   ): F[Float]
 }
@@ -45,18 +45,18 @@ object FinalityDetector {
 class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F] {
 
   def normalizedFaultTolerance(
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       candidateBlockHash: BlockHash
   ): F[Float] =
     for {
-      weights      <- ProtoUtil.mainParentWeightMap(blockDag, candidateBlockHash)
-      committeeOpt <- findBestCommittee(blockDag, candidateBlockHash, weights)
+      weights      <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
+      committeeOpt <- findBestCommittee(dag, candidateBlockHash, weights)
     } yield committeeOpt
       .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
       .getOrElse(0f)
 
   def levelZeroMsgs(
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
       validators: List[Validator]
   ): F[Map[Validator, List[BlockMetadata]]] = {
@@ -65,12 +65,12 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     def levelZeroMsgsOfValidator(
         validator: Validator
     ): F[List[BlockMetadata]] =
-      blockDag.latestMessage(validator).flatMap {
+      dag.latestMessage(validator).flatMap {
         case Some(latestMsgByValidator) =>
           DagOperations
             .bfTraverseF[F, BlockMetadata](List(latestMsgByValidator))(
               previousAgreedBlockFromTheSameValidator(
-                blockDag,
+                dag,
                 _,
                 candidateBlockHash,
                 validator
@@ -85,7 +85,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
      * and collecting them as long as they are descendants of the `candidateBlockHash`.
      */
     def previousAgreedBlockFromTheSameValidator(
-        blockDag: BlockDagRepresentation[F],
+        dag: DagRepresentation[F],
         block: BlockMetadata,
         candidateBlockHash: BlockHash,
         validator: Validator
@@ -100,12 +100,12 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
       previousHashO match {
         case Some(previousHash) =>
           ProtoUtil
-            .isInMainChain[F](blockDag, candidateBlockHash, previousHash)
+            .isInMainChain[F](dag, candidateBlockHash, previousHash)
             .flatMap[List[BlockMetadata]](
               isActiveVote =>
                 // If parent block of `block` is not in the main chain of `candidateBlockHash`
                 // we don't include it in the set of level-0 messages.
-                if (isActiveVote) blockDag.lookup(previousHash).map(_.toList)
+                if (isActiveVote) dag.lookup(previousHash).map(_.toList)
                 else List.empty[BlockMetadata].pure[F]
             )
         case None =>
@@ -123,7 +123,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
   // In a loop, prune L to quorum q, and prune L to the set of validators with a block in L_k,
   // until both steps don't change L anymore.
   def pruningLoop(
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[BlockMetadata]],
       weightMap: Map[Validator, Long],
@@ -132,7 +132,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
   ): F[Option[Committee]] =
     for {
       sweepResult <- sweep(
-                      blockDag,
+                      dag,
                       committeeApproximation,
                       levelZeroMsgs,
                       q,
@@ -160,12 +160,12 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                       Committee(prunedCommittee, quorum).some.pure[F]
                     }
                   } else {
-                    pruningLoop(blockDag, prunedCommittee, levelZeroMsgs, weightMap, q, k)
+                    pruningLoop(dag, prunedCommittee, levelZeroMsgs, weightMap, q, k)
                   }
     } yield committee
 
   def findBestQLoop(
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[BlockMetadata]],
       weightMap: Map[Validator, Long],
@@ -175,7 +175,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
   ): F[Option[Committee]] =
     for {
       committeeOpt <- pruningLoop(
-                       blockDag,
+                       dag,
                        committeeApproximation,
                        levelZeroMsgs,
                        weightMap,
@@ -186,7 +186,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                  case None => qBestCommittee.pure[F]
                  case Some(committee) =>
                    findBestQLoop(
-                     blockDag,
+                     dag,
                      committee.validators,
                      levelZeroMsgs,
                      weightMap,
@@ -199,7 +199,7 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
 
   // Tag level information for each block in one-pass
   def sweep(
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[BlockMetadata]],
       q: Long,
@@ -212,12 +212,12 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
     val stream = DagOperations.bfToposortTraverseF(lowestLevelZeroMsgs)(
       b =>
         for {
-          bsOpt <- blockDag.justificationToBlocks(b.blockHash)
+          bsOpt <- dag.justificationToBlocks(b.blockHash)
           filterBs <- bsOpt
                        .getOrElse(Set.empty)
                        .toList
                        .traverse(
-                         blockDag.lookup
+                         dag.lookup
                        )
                        .map(_.flatten)
         } yield filterBs
@@ -243,25 +243,25 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
           for {
             // after update current block's tag information,
             // we need update its children seen blocks's level information as well
-            blockWithSpecifiedJustification <- blockDag.justificationToBlocks(b.blockHash)
+            blockWithSpecifiedJustification <- dag.justificationToBlocks(b.blockHash)
             updatedBlockLevelTags <- blockWithSpecifiedJustification
                                       .getOrElse(Set.empty)
                                       .toList
                                       .foldLeftM(updatedBlockLevelTags) {
                                         case (acc, child) =>
                                           for {
-                                            childBlock <- blockDag.lookup(child).map(_.get)
-                                            childBlockStore = acc
+                                            childBlock <- dag.lookup(child).map(_.get)
+                                            childBlockStorage = acc
                                               .getOrElse(
                                                 child,
                                                 BlockScoreAccumulator.empty(childBlock)
                                               )
-                                            updatedChildBlockStore = BlockScoreAccumulator
+                                            updatedChildBlockStorage = BlockScoreAccumulator
                                               .inheritFromParent(
-                                                childBlockStore,
+                                                childBlockStorage,
                                                 updatedBlockScore
                                               )
-                                          } yield acc.updated(child, updatedChildBlockStore)
+                                          } yield acc.updated(child, updatedChildBlockStorage)
                                       }
             vid = b.validatorPublicKey
             updatedValidatorLevel = if (committeeApproximation.contains(vid)) {
@@ -281,20 +281,20 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
    * i.e. checks whether latest blocks from these validators are in the main chain of `candidateBlockHash`.
    */
   private def getAgreeingValidators(
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
       weights: Map[Validator, Long]
   ): F[List[Validator]] =
     weights.keys.toList.filterA { validator =>
       for {
-        latestMessageHash <- blockDag
+        latestMessageHash <- dag
                               .latestMessageHash(
                                 validator
                               )
         result <- latestMessageHash match {
                    case Some(b) =>
                      ProtoUtil.isInMainChain[F](
-                       blockDag,
+                       dag,
                        candidateBlockHash,
                        b
                      )
@@ -307,12 +307,12 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
    * Finds the best level-1 committee for a given candidate block
    */
   def findBestCommittee(
-      blockDag: BlockDagRepresentation[F],
+      dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
       weights: Map[Validator, Long]
   ): F[Option[Committee]] =
     for {
-      committeeApproximation <- getAgreeingValidators(blockDag, candidateBlockHash, weights)
+      committeeApproximation <- getAgreeingValidators(dag, candidateBlockHash, weights)
       totalWeight            = weights.values.sum
       maxWeightApproximation = committeeApproximation.map(weights).sum
       // To have a committee of half the total weight,
@@ -324,12 +324,12 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                } else {
                  for {
                    levelZeroMsgs <- levelZeroMsgs(
-                                     blockDag,
+                                     dag,
                                      candidateBlockHash,
                                      committeeApproximation
                                    )
                    committeeMembersAfterPruning <- findBestQLoop(
-                                                    blockDag,
+                                                    dag,
                                                     committeeApproximation.toSet,
                                                     levelZeroMsgs,
                                                     weights,

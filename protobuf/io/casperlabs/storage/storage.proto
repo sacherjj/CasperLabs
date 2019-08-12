@@ -6,14 +6,14 @@ import "io/casperlabs/casper/consensus/consensus.proto";
 import "io/casperlabs/ipc/ipc.proto";
 import "scalapb/scalapb.proto";
 
-// This is the content storing in BlockStore, the reason why we need it is that,
+// This is the content storing in BlockStorage, the reason why we need it is that,
 // we take protobuf as the way to (de)serializer.
 message BlockMsgWithTransform {
     io.casperlabs.casper.consensus.Block block_message = 1;
     repeated io.casperlabs.ipc.TransformEntry transform_entry = 2;
 }
 
-// Storage type for the BlockDagStorage
+// Storage type for the DagStorage
 message BlockMetadataInternal {
     // This message in mapped to a different Scala class because of protobuf's inability to create map<bytes, int64> for
     // bonds.

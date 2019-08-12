@@ -4,7 +4,7 @@ import cats.{Id, Monad}
 import com.github.ghik.silencer.silent
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockMetadata
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
@@ -14,11 +14,7 @@ import scala.collection.immutable.BitSet
 
 @silent("deprecated")
 @silent("is never used")
-class DagOperationsTest
-    extends FlatSpec
-    with Matchers
-    with BlockGenerator
-    with BlockDagStorageFixture {
+class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
 
   "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
     implicit val intKey = DagOperations.Key.identity[Int]
@@ -27,8 +23,8 @@ class DagOperationsTest
   }
 
   "bfToposortTraverseF" should "lazily breadth-first and order by rank when traverse a DAG with effectful neighbours" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStorage =>
+      implicit dagStorage =>
         /*
          * DAG Looks like this:
          *
@@ -52,7 +48,7 @@ class DagOperationsTest
           b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
           b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
 
-          dag <- blockDagStorage.getRepresentation
+          dag <- dagStorage.getRepresentation
           stream = DagOperations.bfToposortTraverseF[Task](List(BlockMetadata.fromBlock(genesis))) {
             b =>
               dag
@@ -64,8 +60,8 @@ class DagOperationsTest
   }
 
   "Greatest common ancestor" should "be computed properly" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStorage =>
+      implicit dagStorage =>
         /*
          * DAG Looks like this:
          *
@@ -89,7 +85,7 @@ class DagOperationsTest
           b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
           b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
 
-          dag <- blockDagStorage.getRepresentation
+          dag <- dagStorage.getRepresentation
 
           _      <- DagOperations.greatestCommonAncestorF[Task](b1, b5, genesis, dag) shouldBeF b1
           _      <- DagOperations.greatestCommonAncestorF[Task](b3, b2, genesis, dag) shouldBeF b1
@@ -100,8 +96,8 @@ class DagOperationsTest
   }
 
   "uncommon ancestors" should "be computed properly" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStorage =>
+      implicit dagStorage =>
         /*
          *  DAG Looks like this:
          *
@@ -126,7 +122,7 @@ class DagOperationsTest
           b6      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
           b7      <- createBlock[Task](Seq(b2.blockHash, b5.blockHash))
 
-          dag <- blockDagStorage.getRepresentation
+          dag <- dagStorage.getRepresentation
 
           ordering <- dag.deriveOrdering(0L)
           _ <- DagOperations.uncommonAncestors(Vector(b6, b7), dag)(Monad[Task], ordering) shouldBeF Map(

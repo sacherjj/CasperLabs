@@ -21,10 +21,22 @@ use crate::error::{Error, PurseLookupError, Result, ResultExt};
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
 use crate::stakes::{ContractStakes, StakesProvider};
 
+/// Account used to run system functions (in particular `finalize_payment`).
+const SYSTEM_ACCOUNT: [u8; 32] = [0u8; 32];
+
 /// The uref name where the PoS purse is stored. It contains all staked tokens, and all unbonded
 /// tokens that are yet to be paid out.
 const BONDING_PURSE_KEY: &str = "pos_bonding_purse";
+
+/// The uref name where the PoS accepts payment for computation on behalf of validators.
 const PAYMENT_PURSE_KEY: &str = "pos_payment_purse";
+
+/// The uref name where the PoS holds validator earnings before distributing them.
+const REWARDS_PURSE_KEY: &str = "pos_rewards_purse";
+
+/// The uref name where the PoS will refund unused payment back to the user. The uref
+/// this name corresponds to is set by the user.
+const REFUND_PURSE_KEY: &str = "pos_refund_purse";
 
 /// The time from a bonding request until the bond becomes effective and part of the stake.
 const BOND_DELAY: u64 = 0;
@@ -139,6 +151,83 @@ fn get_bonding_purse() -> Result<PurseId> {
     get_purse_id(BONDING_PURSE_KEY).map_err(PurseLookupError::bonding)
 }
 
+/// Returns the purse for holding validator earnings
+fn get_rewards_purse() -> Result<PurseId> {
+    get_purse_id(REWARDS_PURSE_KEY).map_err(PurseLookupError::rewards)
+}
+
+/// Sets the purse where refunds (excess funds not spent to pay for computation) will be sent.
+/// Note that if this function is never called, the default location is the main purse of
+/// the deployer's account.
+fn set_refund(purse_id: URef) {
+    contract_api::add_uref(REFUND_PURSE_KEY, &Key::URef(purse_id));
+}
+
+/// Returns the currently set refund purse.
+fn get_refund_purse() -> Option<PurseId> {
+    match get_purse_id(REFUND_PURSE_KEY) {
+        Ok(purse_id) => Some(purse_id),
+        Err(PurseLookupError::KeyNotFound) => None,
+        Err(PurseLookupError::KeyUnexpectedType) => {
+            contract_api::revert(Error::RefundPurseKeyUnexpectedType.into())
+        }
+    }
+}
+
+/// Transfers funds from the payment purse to the validator rewards
+/// purse, as well as to the refund purse, depending on how much
+/// was spent on the computation. This function maintains the invariant
+/// that the balance of the payment purse is zero at the beginning and
+/// end of each deploy and that the refund purse is unset at the beginning
+/// and end of each deploy.
+fn finalize_payment(amount_spent: U512, account: PublicKey) {
+    let caller = contract_api::get_caller();
+    if caller.value() != SYSTEM_ACCOUNT {
+        contract_api::revert(Error::SystemFunctionCalledByUserAccount.into());
+    }
+
+    let payment_purse = get_payment_purse().unwrap_or_revert();
+    let total = contract_api::get_balance(payment_purse)
+        .unwrap_or_else(|| contract_api::revert(Error::PaymentPurseBalanceNotFound.into()));
+    if total < amount_spent {
+        contract_api::revert(Error::InsufficientPaymentForAmountSpent.into());
+    }
+    let refund_amount = total - amount_spent;
+
+    let rewards_purse = get_rewards_purse().unwrap_or_revert();
+    let refund_purse = get_refund_purse();
+    contract_api::remove_uref(REFUND_PURSE_KEY); //unset refund purse after reading it
+
+    // pay validators
+    if let contract_api::PurseTransferResult::TransferError =
+        contract_api::transfer_from_purse_to_purse(payment_purse, rewards_purse, amount_spent)
+    {
+        contract_api::revert(Error::FailedTransferToRewardsPurse.into());
+    }
+
+    // give refund
+    if !refund_amount.is_zero() {
+        if let Some(purse) = refund_purse {
+            if let contract_api::PurseTransferResult::TransferError =
+                contract_api::transfer_from_purse_to_purse(payment_purse, purse, refund_amount)
+            {
+                // on case of failure to transfer to refund purse we fall back on the account's main purse
+                refund_to_account(payment_purse, account, refund_amount)
+            }
+        } else {
+            refund_to_account(payment_purse, account, refund_amount);
+        }
+    }
+}
+
+fn refund_to_account(payment_purse: PurseId, account: PublicKey, amount: U512) {
+    if let contract_api::TransferResult::TransferError =
+        contract_api::transfer_from_purse_to_account(payment_purse, account, amount)
+    {
+        contract_api::revert(Error::FailedTransferToAccountPurse.into());
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn call() {
     let method_name: String = contract_api::get_arg(0);
@@ -218,6 +307,26 @@ pub extern "C" fn call() {
                 &rights_controlled_purse,
                 &vec![rights_controlled_purse.value()],
             );
+        }
+        "set_refund_purse" => {
+            let purse_id: PurseId = contract_api::get_arg(1);
+            set_refund(purse_id.value());
+        }
+        "get_refund_purse" => {
+            // We purposely choose to remove the access rights so that we do not
+            // accidentally give rights for a purse to some contract that is not
+            // supposed to have it.
+            let result = get_refund_purse().map(|p| p.value().remove_access_rights());
+            if let Some(uref) = result {
+                contract_api::ret(&Some(PurseId::new(uref)), &vec![uref]);
+            } else {
+                contract_api::ret(&result, &Vec::new());
+            }
+        }
+        "finalize_payment" => {
+            let amount_spent: U512 = contract_api::get_arg(1);
+            let account: PublicKey = contract_api::get_arg(2);
+            finalize_payment(amount_spent, account);
         }
         _ => {}
     }

@@ -32,8 +32,8 @@ class GossipServiceCasperTestNode[F[_]](
     local: Node,
     genesis: consensus.Block,
     sk: PrivateKey,
-    blockDagDir: Path,
-    blockStoreDir: Path,
+    dagDir: Path,
+    blockStorageDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     validateNonces: Boolean = true,
@@ -44,8 +44,8 @@ class GossipServiceCasperTestNode[F[_]](
 )(
     implicit
     concurrentF: Concurrent[F],
-    blockStore: BlockStore[F],
-    blockDagStorage: BlockDagStorage[F],
+    blockStorage: BlockStorage[F],
+    dagStorage: DagStorage[F],
     timeEff: Time[F],
     metricEff: Metrics[F],
     casperState: Cell[F, CasperState],
@@ -54,11 +54,11 @@ class GossipServiceCasperTestNode[F[_]](
       local,
       sk,
       genesis,
-      blockDagDir,
-      blockStoreDir,
+      dagDir,
+      blockStorageDir,
       validateNonces,
       maybeMakeEE
-    )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
+    )(concurrentF, blockStorage, dagStorage, metricEff, casperState) {
   implicit val deployBufferEff: DeployBuffer[F] =
     MockDeployBuffer.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
   implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
@@ -136,7 +136,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     )
 
     initStorage(genesis) flatMap {
-      case (blockDagDir, blockStoreDir, blockDagStorage, blockStore) =>
+      case (dagStorageDir, blockStorageDir, dagStorage, blockStorage) =>
         for {
           blockProcessingLock <- Semaphore[F](1)
           casperState         <- Cell.mvarCell[F, CasperState](CasperState())
@@ -144,16 +144,16 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             identity,
             genesis,
             sk,
-            blockDagDir,
-            blockStoreDir,
+            dagStorageDir,
+            blockStorageDir,
             blockProcessingLock,
             faultToleranceThreshold,
             relaying = relaying,
             gossipService = new TestGossipService[F]()
           )(
             concurrentF,
-            blockStore,
-            blockDagStorage,
+            blockStorage,
+            dagStorage,
             timeEff,
             metricEff,
             casperState,
@@ -213,7 +213,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           )
 
           initStorage(genesis) flatMap {
-            case (blockDagDir, blockStoreDir, blockDagStorage, blockStore) =>
+            case (dagStorageDir, blockStorageDir, dagStorage, blockStorage) =>
               for {
                 semaphore <- Semaphore[F](1)
                 casperState <- Cell.mvarCell[F, CasperState](
@@ -223,8 +223,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   peer,
                   genesis,
                   sk,
-                  blockDagDir,
-                  blockStoreDir,
+                  dagStorageDir,
+                  blockStorageDir,
                   semaphore,
                   faultToleranceThreshold,
                   relaying = relaying,
@@ -233,8 +233,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   maybeMakeEE = maybeMakeEE
                 )(
                   concurrentF,
-                  blockStore,
-                  blockDagStorage,
+                  blockStorage,
+                  dagStorage,
                   timeEff,
                   metricEff,
                   casperState,
@@ -242,7 +242,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 )
                 _ <- gossipService.init(
                       node.casperEff,
-                      blockStore,
+                      blockStorage,
                       relaying,
                       connectToGossip
                     )
@@ -283,13 +283,13 @@ object GossipServiceCasperTestNodeFactory {
     /** Casper is created a bit later then the TestGossipService instance. */
     def init(
         casper: MultiParentCasperImpl[F],
-        blockStore: BlockStore[F],
+        blockStorage: BlockStorage[F],
         relaying: Relaying[F],
         connectToGossip: GossipService.Connector[F]
     ): F[Unit] = {
       def isInDag(blockHash: ByteString): F[Boolean] =
         for {
-          dag  <- casper.blockDag
+          dag  <- casper.dag
           cont <- dag.contains(blockHash)
         } yield cont
 
@@ -349,13 +349,13 @@ object GossipServiceCasperTestNodeFactory {
                          backend = new SynchronizerImpl.Backend[F] {
                            override def tips: F[List[ByteString]] =
                              for {
-                               dag       <- casper.blockDag
+                               dag       <- casper.dag
                                tipHashes <- casper.estimator(dag)
                              } yield tipHashes.toList
 
                            override def justifications: F[List[ByteString]] =
                              for {
-                               dag    <- casper.blockDag
+                               dag    <- casper.dag
                                latest <- dag.latestMessageHashes
                              } yield latest.values.toList
 
@@ -374,8 +374,8 @@ object GossipServiceCasperTestNodeFactory {
                              isInDag(blockHash).map(!_)
                          },
                          maxPossibleDepth = Int.MaxValue,
-                         minBlockCountToCheckBranchingFactor = Int.MaxValue,
-                         maxBranchingFactor = 2.0,
+                         minBlockCountToCheckWidth = Int.MaxValue,
+                         maxBondingRate = 1.0,
                          maxDepthAncestorsRequest = 1, // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
                          maxInitialBlockCount = Int.MaxValue,
                          isInitialRef = Ref.unsafe[F, Boolean](false)
@@ -391,13 +391,13 @@ object GossipServiceCasperTestNodeFactory {
                      ): F[Option[consensus.BlockSummary]] =
                        Log[F].debug(
                          s"Retrieving block summary ${PrettyPrinter.buildString(blockHash)} from storage."
-                       ) *> blockStore.getBlockSummary(blockHash)
+                       ) *> blockStorage.getBlockSummary(blockHash)
 
                      override def getBlock(blockHash: ByteString): F[Option[consensus.Block]] =
                        Log[F].debug(
                          s"Retrieving block ${PrettyPrinter.buildString(blockHash)} from storage."
                        ) *>
-                         blockStore
+                         blockStorage
                            .get(blockHash)
                            .map(_.map(mwt => mwt.getBlockMessage))
                    },

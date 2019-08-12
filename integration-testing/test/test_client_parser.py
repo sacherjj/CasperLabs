@@ -1,7 +1,6 @@
 from test.cl_node.client_parser import parse, parse_show_blocks
 
 
-
 SHOW_BLOCKS = """
 ------------- block @ 0 ---------------
 summary {
@@ -216,13 +215,15 @@ processing_results {
 
 def test_client_parser_deploy():
     r = parse(DEPLOY)
-    assert len (r.processing_results.block_info.summary.header.justifications) == 10
+    assert len(r.processing_results.block_info.summary.header.justifications) == 10
 
 
 def test_client_parser_list_of_values_of_primitive_types():
-    r = parse("""
+    r = parse(
+        """
     values: 0
     values: 1
-    """)
+    """
+    )
 
     assert r.values == [0, 1]

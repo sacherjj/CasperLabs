@@ -113,7 +113,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
 
 object AutoProposerTest {
   import Scheduler.Implicits.global
-  import io.casperlabs.blockstorage.BlockDagRepresentation
+  import io.casperlabs.blockstorage.DagRepresentation
   implicit val log     = new Log.NOPLog[Task]()
   implicit val metrics = new Metrics.MetricsNOP[Task]()
 
@@ -183,13 +183,13 @@ object AutoProposerTest {
         if (pending.nonEmpty) Created(Block()) else NoNewDeploys
       }
 
-    override def addBlock(block: Block): F[BlockStatus]                               = ???
-    override def contains(block: Block): F[Boolean]                                   = ???
-    override def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[ByteString]] = ???
-    override def blockDag: F[BlockDagRepresentation[F]]                               = ???
-    override def fetchDependencies: F[Unit]                                           = ???
-    override def normalizedInitialFault(weights: Map[ByteString, Long]): F[Float]     = ???
-    override def lastFinalizedBlock: F[Block]                                         = ???
-    override def faultToleranceThreshold                                              = 0f
+    override def addBlock(block: Block): F[BlockStatus]                           = ???
+    override def contains(block: Block): F[Boolean]                               = ???
+    override def estimator(dag: DagRepresentation[F]): F[IndexedSeq[ByteString]]  = ???
+    override def dag: F[DagRepresentation[F]]                                     = ???
+    override def fetchDependencies: F[Unit]                                       = ???
+    override def normalizedInitialFault(weights: Map[ByteString, Long]): F[Float] = ???
+    override def lastFinalizedBlock: F[Block]                                     = ???
+    override def faultToleranceThreshold                                          = 0f
   }
 }

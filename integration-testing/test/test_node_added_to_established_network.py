@@ -1,4 +1,4 @@
-from test.cl_node.casperlabsnode import HELLO_NAME
+from test.cl_node.common import HELLO_NAME
 from test.cl_node.wait import (
     get_new_blocks_requests_total,
     wait_for_block_hashes_propagated_to_all_nodes,
@@ -14,11 +14,13 @@ def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
     network = two_node_network
 
     def propose(node):
-        block_hash = node.deploy_and_propose(session_contract=HELLO_NAME,
-                                             payment_contract=HELLO_NAME,
-                                             from_address=node.genesis_account.public_key_hex,
-                                             public_key=node.genesis_account.public_key_path,
-                                             private_key=node.genesis_account.private_key_path)
+        block_hash = node.deploy_and_propose(
+            session_contract=HELLO_NAME,
+            payment_contract=HELLO_NAME,
+            from_address=node.genesis_account.public_key_hex,
+            public_key=node.genesis_account.public_key_path,
+            private_key=node.genesis_account.private_key_path,
+        )
 
         return block_hash
 

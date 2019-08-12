@@ -69,6 +69,12 @@ private[configuration] trait ParserImplicits {
         w <- refineV[GreaterEqual[W.`1.0`.T]](d)
       } yield w
 
+  implicit val gte0DoubleParser: Parser[Refined[Double, GreaterEqual[W.`0.0`.T]]] =
+    s =>
+      for {
+        d <- Try(s.toDouble).toEither.leftMap(_.getMessage)
+        w <- refineV[GreaterEqual[W.`0.0`.T]](d)
+      } yield w
 }
 
 private[configuration] object Parser {

@@ -4,7 +4,7 @@ import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper
 import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
@@ -26,9 +26,9 @@ object ExecutionEngineServiceStub {
   implicit def functorRaiseInvalidBlock[F[_]: Sync] =
     casper.validation.raiseValidateErrorThroughApplicativeError[F]
 
-  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStorage: ExecutionEngineService](
       b: Block,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[Either[Throwable, StateHash]] = {
     implicit val time = new Time[F] {
       override def currentMillis: F[Long]                   = 0L.pure[F]

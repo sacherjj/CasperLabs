@@ -24,8 +24,8 @@ relay-saturation = 1
 approval-relay-factor = 1
 approval-poll-interval = "1second"
 sync-max-possible-depth = 1
-sync-min-block-count-to-check-branching-factor = 1
-sync-max-branching-factor = 1.0
+sync-min-block-count-to-check-width = 1
+sync-max-bonding-rate = 1.0
 sync-max-depth-ancestors-request = 1
 init-sync-max-nodes = 1
 init-sync-min-successful = 1
@@ -42,7 +42,7 @@ relay-block-chunk-consumer-timeout = "1second"
 clean-block-storage = false
 
 [lmdb]
-block-store-size = 1
+block-storage-size = 1
 max-dbs = 1
 max-readers = 1
 use-tls = false
