@@ -8,9 +8,6 @@ use cl_std::value::account::{ActionType, Weight};
 
 #[no_mangle]
 pub extern "C" fn call() {
-    // Note: Thresholds are passed via ABI as two U8s.
-    // Can we pass a weight in ABI just as U8?
-    // Looks like weight in state.rs is u32
     let km_weight: u32 = get_arg(0);
     let key_management_threshold = Weight::new(km_weight as u8);
     let dep_weight: u32 = get_arg(1);
