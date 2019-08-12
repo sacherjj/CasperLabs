@@ -201,7 +201,7 @@ object Genesis {
     conf.chainId,
     conf.deployTimestamp,
     conf.genesisAccountPublicKeyPath,
-    conf.initialTokens,
+    conf.initialMotes,
     conf.mintCodePath,
     conf.posCodePath
   )

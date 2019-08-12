@@ -97,7 +97,7 @@ object BlockApproverProtocol {
         conf.maximumBond,
         conf.requiredSigs,
         conf.genesisAccountPublicKeyPath,
-        conf.initialTokens,
+        conf.initialMotes,
         Some(conf.bondsFile),
         conf.mintCodePath,
         conf.posCodePath
