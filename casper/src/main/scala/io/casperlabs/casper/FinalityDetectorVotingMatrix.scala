@@ -56,16 +56,17 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] extends Final
             case Some(branch) =>
               val blockMetadata = BlockMetadata.fromBlock(block)
               VotingMatrix[F].updateVoterPerspective(dag, blockMetadata, branch)
-            // if block don't vote any main child of latestFinalizedBlock,
-            // then we don't update voting matrix
+            // If block don't vote any main child of latestFinalizedBlock,
+            // then don't update voting matrix
             case None =>
               Log[F].info(
-                s"the block ${PrettyPrinter.buildString(block)} don't vote any main child of latestFinalizedBlock"
+                s"The block ${PrettyPrinter.buildString(block)} don't vote any main child of latestFinalizedBlock"
               )
           }
     } yield ()
 
-  // when we finalized a new block, then we need rebuild the whole voting matrix
+  // When a new block get finalized, rebuild the whole voting
+  // matrix basing the new finalized block
   override def rebuildFromLatestFinalizedBlock(
       dag: DagRepresentation[F],
       newFinalizedBlock: BlockHash

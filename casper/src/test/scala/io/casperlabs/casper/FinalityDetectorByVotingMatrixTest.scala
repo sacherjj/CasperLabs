@@ -28,20 +28,20 @@ class FinalityDetectorByVotingMatrixTest
     implicit blockStore =>
       implicit blockDagStorage =>
         /* The DAG looks like:
-				 *
-				 *   b8
-				 *   |  \
-				 *   |   \
-				 *   b6   b7
-				 *   |  x |
-				 *   b4   b5
-				 *   |  \ |
-				 *   b2  b3
-				 *    \ /
-				 *    b1
-				 *      \
-				 *       genesis
-				 */
+         *
+         *   b8
+         *   |  \
+         *   |   \
+         *   b6   b7
+         *   |  x |
+         *   b4   b5
+         *   |  \ |
+         *   b2  b3
+         *    \ /
+         *    b1
+         *      \
+         *      genesis
+         */
         val v1     = generateValidator("V1")
         val v2     = generateValidator("V2")
         val v1Bond = Bond(v1, 2)

@@ -127,22 +127,22 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
       val bonds = validators.map(v => Bond(v, 1))
 
       /* The DAG looks like (|| means main parent)
-			 *
-			 *        v0  v1    v2  v3
-			 *
-			 *                  b7
-			 *                  ||
-			 *                  b6
-			 *                //   \
-			 *             //       b5
-			 *          //   /----/ ||
-			 *        b4  b3        ||
-			 *        || //         ||
-			 *        b1            b2
-			 *         \\         //
-			 *            genesis
-			 *
-			 */
+       *
+       *        v0  v1    v2  v3
+       *
+       *                  b7
+       *                  ||
+       *                  b6
+       *                //   \
+       *             //       b5
+       *          //   /----/ ||
+       *        b4  b3        ||
+       *        || //         ||
+       *        b1            b2
+       *         \\         //
+       *            genesis
+       *
+       */
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
         b1 <- createBlock[Task](
@@ -189,7 +189,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
                Map(v2 -> b6.blockHash)
              )
         dag <- blockDagStorage.getRepresentation
-        v4  = generateValidator("V4")
+        // An extra new validator who haven't proposed blocks
+        v4 = generateValidator("V4")
         panorama <- FinalityDetectorUtil.panoramaOfBlockByValidators(
                      dag,
                      BlockMetadata.fromBlock(b7),

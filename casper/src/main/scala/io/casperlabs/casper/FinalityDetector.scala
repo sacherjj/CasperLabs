@@ -202,8 +202,8 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
           )
           val updatedBlockLevelTags = blockLevelTags.updated(b.blockHash, updatedBlockScore)
           for {
-            // after update current block's tag information,
-            // we need update its children seen blocks's level information as well
+            // After updating current block's tag information,
+            // update its children seen blocks's level information as well
             blockWithSpecifiedJustification <- dag.justificationToBlocks(b.blockHash)
             updatedBlockLevelTags <- blockWithSpecifiedJustification.toList
                                       .foldLeftM(updatedBlockLevelTags) {
@@ -300,7 +300,7 @@ object BlockScoreAccumulator {
   def empty(block: BlockMetadata): BlockScoreAccumulator =
     BlockScoreAccumulator(block, Map.empty, 0, 0)
 
-  // children will inherit seen blocks from the parent
+  // Children will inherit seen blocks from the parent
   def inheritFromParent(
       self: BlockScoreAccumulator,
       parent: BlockScoreAccumulator
@@ -352,7 +352,7 @@ object BlockScoreAccumulator {
       .getOrElse(self)
 
   // Though we only want to find best level 1 committee,
-  // this algorithm can calculate level k in one pass
+  // this algorithm can calculate level k in one pass.
   // Support of level K is smaller or equal to support of level 1 to level K-1
   @scala.annotation.tailrec
   private def calculateLevelAndQ(

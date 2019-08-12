@@ -88,8 +88,8 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       // then
       graph.show shouldBe (
         """digraph "G" {
-	  |  "Hello" [shape=box]
-	  |  "World" [shape=doublecircle]
+          |  "Hello" [shape=box]
+          |  "World" [shape=doublecircle]
           |  "Hello" -> "World"
           |}""".stripMargin
       )

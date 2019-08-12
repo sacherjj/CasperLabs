@@ -32,7 +32,7 @@ import scala.annotation.tailrec
 }
 
 object VotingMatrix {
-  // (consensus value, dagLevel of the block)
+  // (Consensus value, DagLevel of the block)
   type Vote = (BlockHash, Long)
   def of[F[_]: Concurrent]: F[VotingMatrix[F]] =
     for {
@@ -51,7 +51,8 @@ object VotingMatrix {
             validatorToIndex <- validatorToIndexRef.get
             voter            = blockMetadata.validatorPublicKey
             _ <- if (!validatorToIndex.contains(voter)) {
-                  // the creator of block is a new validator after creating the latestFinalizedBlock
+                  // The creator of block isn't from the validatorsSet
+                  // e.g. It is bonded after creating the latestFinalizedBlock
                   ().pure[F]
                 } else {
                   for {
@@ -99,7 +100,7 @@ object VotingMatrix {
                                           blockMetadata,
                                           validators
                                         )
-            // in cases where latest message of V(i) is not well defined concept, put 0 (zero) in the corresponding cell
+            // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
             panoramaM = fromMapToArray(
               validatorToIndex,
               latestBlockDagLevelsAsMap.getOrElse(_, 0L)
@@ -170,7 +171,7 @@ object VotingMatrix {
             }
           if (prunedValidator) {
             if (maxTotalWeight < q)
-              // terminate finality detection, finality is not reached yet.
+              // Terminate finality detection, finality is not reached yet.
               None
             else
               pruneLoop(matrix, firstLevelZeroVotes, candidateBlockHash, newMask, q, weight)
@@ -185,14 +186,14 @@ object VotingMatrix {
         ): F[Unit] =
           for {
             // todo(abner)  use a lock to atomically update these state
-            // start a new game, get weightMap and validatorSet from new finalized block's main parent
+            // Start a new round, get weightMap and validatorSet from the new finalized block's main parent
             weights    <- ProtoUtil.mainParentWeightMap(dag, newFinalizedBlock)
             _          <- weightMapRef.set(weights)
             validators = weights.keySet
             n          = validators.size
             _          <- matrixRef.set(List.fill(n, n)(0))
             _          <- firstLevelZeroVotesRef.set(List.fill(n)(None))
-            // assigns numeric identifiers 0, ..., N-1 to all validators
+            // Assigns numeric identifiers 0, ..., N-1 to all validators
             validatorsToIndex      = validators.zipWithIndex.toMap
             _                      <- validatorToIndexRef.set(validatorsToIndex)
             latestMessages         <- dag.latestMessages
@@ -213,8 +214,9 @@ object VotingMatrix {
                                                    }
                                              }
                                              .map(_.flatten)
-            // Traverse down the swimlane of V(i) to find the earliest block voting for the same Fm's child
-            // as V(i) latest does. This way we can initialize first-zero-level-messages(i).
+            // Traverse down the swim lane of V(i) to find the earliest block voting
+            // for the same Fm's child as V(i) latest does.
+            // This way we can initialize first-zero-level-messages(i).
             firstLevelZeroMessagesAsList <- latestVoteValueOfVotesAsList
                                              .traverse {
                                                case (v, voteValue) =>
@@ -234,14 +236,14 @@ object VotingMatrix {
             latestMessagesToUpdated = latestMessagesOfVoters.filterKeys(
               firstLevelZeroVotesAsMap.contains
             )
-            // Apply the incremental update step from previous chapter (but only steps 1...3) taking M := V(i)latest
+            // Apply the incremental update step to update voting matrix by taking M := V(i)latest
             _ <- latestMessagesToUpdated.values.toList.traverse { b =>
                   updateVotingMatrixOnNewBlock(dag, b)
                 }
           } yield ()
 
-        // return an Array, whose size equals to the size of validatorsToIndex and
-        // for v in validatorsToIndex.key
+        // Return an Array, whose size equals the size of validatorsToIndex and
+        // For v in validatorsToIndex.key
         //   Arr[validatorsToIndex[v]] = mapFunction[v]
         private def fromMapToArray[A](
             validatorsToIndex: Map[Validator, Int],

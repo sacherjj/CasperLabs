@@ -56,20 +56,22 @@ object FinalityDetectorUtil {
     } yield result
 
   /**
-		* Finds latest block per each validator as seen in the j-past-cone of a given block.
-		* The search is however restricted to given subset of validators.
-		*
-		* Caution 1: For some validators there may be no blocks visible in j-past-cone(block). Hence the resulting map will not contain such validators.
-		* Caution 2: the j-past-cone(b) includes block b, therefore if validators contains b.creator
-		* then the resulting map will include the entry b.creator ---> b
-		*
-		* TODO optimize it: when bonding new validator, it need search back to genesis
-		*
-		* @param blockDag
-		* @param block
-		* @param validators
-		* @return
-		*/
+    * Finds latest block per each validator as seen in the j-past-cone of a given block.
+    * The search is however restricted to given subset of validators.
+    *
+    * Caution 1: For some validators there may be no blocks visible in j-past-cone(block).
+    *            Hence the resulting map will not contain such validators.
+    * Caution 2: the j-past-cone(b) includes block b, therefore if validators
+    *            contains b.creator then the resulting map will include
+    *            the entry b.creator ---> b
+    *
+    * TODO optimize it: when bonding new validator, it need search back to genesis
+    *
+    * @param blockDag
+    * @param block
+    * @param validators
+    * @return
+    */
   private[casper] def panoramaOfBlockByValidators[F[_]: Monad](
       blockDag: DagRepresentation[F],
       block: BlockMetadata,
@@ -142,9 +144,9 @@ object FinalityDetectorUtil {
     }
 
   /*
-	 * Traverses back the j-DAG of `block` (one step at a time), following `validator`'s blocks
-	 * and collecting them as long as they are descendants of the `candidateBlockHash`.
-	 */
+   * Traverses back the j-DAG of `block` (one step at a time), following `validator`'s blocks
+   * and collecting them as long as they are descendants of the `candidateBlockHash`.
+   */
   private def previousAgreedBlockFromTheSameValidator[F[_]: Monad](
       dag: DagRepresentation[F],
       block: BlockMetadata,
