@@ -4,7 +4,7 @@ import pytest
 from pytest import raises
 from test.cl_node.casperlabs_accounts import Account
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
-from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
+from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import wait_for_genesis_block
@@ -252,7 +252,7 @@ def block_hash(node):
 block_hash_queries = [
     (
         {
-            "block_hash": "9d",
+            "block_hash": "9d000000",
             "key": "a91208047c",
             "path": "file.xxx",
             "key_type": "hash",
@@ -479,39 +479,41 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(
     assert deploy_hash4 in deploy_hashes(node, block_hash)
 
 
-#################################### Python CLI ##################################################
+# Python CLI #
 
 import subprocess
 import pytest
-from pytest import raises
 import os
-import logging
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
-import logging
 
-CLI = 'casper_client'
+
+CLI = "casperlabs_client"
+
 
 class CLIErrorExit(Exception):
     def __init__(self, cp):
         self.cp = cp
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def cli(one_node_network):
 
     node = one_node_network.docker_nodes[0]
-    host = os.environ.get('TAG_NAME', None) and node.container_name or 'localhost'
+    host = os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
     port = node.grpc_external_docker_port
 
     def invoker(*args):
         command_line = [CLI, "--host", f"{host}", "--port", f"{port}"] + list(args)
         logging.info(f"EXECUTING: {' '.join(command_line)}")
-        cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cp = subprocess.run(
+            command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         if cp.returncode != 0:
             raise CLIErrorExit(cp)
-        return cp.stdout.decode('utf-8')
+        return cp.stdout.decode("utf-8")
+
     return invoker
- 
+
 
 def test_cli_no_parameters(cli):
     with raises(CLIErrorExit) as ex_info:
@@ -520,59 +522,79 @@ def test_cli_no_parameters(cli):
 
 
 def test_cli_help(cli):
-    out = cli('--help')
+    out = cli("--help")
     # deploy,propose,show-block,show-blocks,show-deploy,show-deploys,vdag,query-state
-    assert 'Casper' in out
+    assert "Casper" in out
 
-    
+
 def test_cli_show_blocks_and_show_block(cli):
-    blocks = parse_show_blocks(cli('show-blocks', '--depth', '1'))
+    blocks = parse_show_blocks(cli("show-blocks", "--depth", "1"))
     assert len(blocks) > 0
 
     for block in blocks:
         block_hash = block.summary.block_hash
         assert len(block_hash) == 32 * 2  # hex
 
-        b = parse(cli('show-block', block_hash))
+        b = parse(cli("show-block", block_hash))
         assert block_hash == b.summary.block_hash
 
 
 def test_cli_show_block_not_found(cli):
-    block_hash = '00' * 32
+    block_hash = "00" * 32
     with raises(CLIErrorExit) as ex_info:
-        parse(cli('show-block', block_hash))
+        parse(cli("show-block", block_hash))
     # StatusCode.NOT_FOUND: Cannot find block matching hash 0000000000000000000000000000000000000000000000000000000000000000
     assert "NOT_FOUND" in str(ex_info.value)
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
-def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli, one_node_network):
+def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
+    cli, one_node_network
+):
     account = one_node_network.docker_nodes[0].test_account
-    deploy_response = cli('deploy',
-                          '--from', account.public_key_hex,
-                          '--nonce', '1',
-                          '--payment', 'resources/test_helloname.wasm',
-                          '--session', 'resources/test_helloname.wasm',
-                          '--private-key', str(account.private_key_path),
-                          '--public-key', str(account.public_key_path))
+    deploy_response = cli(
+        "deploy",
+        "--from",
+        account.public_key_hex,
+        "--nonce",
+        "1",
+        "--payment",
+        "resources/test_helloname.wasm",
+        "--session",
+        "resources/test_helloname.wasm",
+        "--private-key",
+        str(account.private_key_path),
+        "--public-key",
+        str(account.public_key_path),
+    )
     # 'Success! Deploy hash: xxxxxxxxx...'
     deploy_hash = deploy_response.split()[3]
 
     # 'Success! Block hash: xxxxxxxxx...'
-    block_hash = cli('propose').split()[3]
-    deploys = parse_show_deploys(cli('show-deploys', block_hash))
+    block_hash = cli("propose").split()[3]
+    deploys = parse_show_deploys(cli("show-deploys", block_hash))
     deploy_hashes = [d.deploy.deploy_hash for d in deploys]
     assert deploy_hash in deploy_hashes
-    
-    deploy_info = parse(cli('show-deploy', deploy_hash))
+
+    deploy_info = parse(cli("show-deploy", deploy_hash))
     assert deploy_info.deploy.deploy_hash == deploy_hash
 
-    result = parse(cli('query-state',
-                       '--block-hash', block_hash,
-                       '--type', 'address',
-                       '--key', account.public_key_hex,
-                       '--path', ""))
-    assert 'hello_name' in [u.name for u in result.account.known_urefs]
+    result = parse(
+        cli(
+            "query-state",
+            "--block-hash",
+            block_hash,
+            "--type",
+            "address",
+            "--key",
+            account.public_key_hex,
+            "--path",
+            "",
+        )
+    )
+    assert "hello_name" in [u.name for u in result.account.known_urefs]
 
-    balance = int(cli('balance', '--address', account.public_key_hex, '--block-hash', block_hash))
+    balance = int(
+        cli("balance", "--address", account.public_key_hex, "--block-hash", block_hash)
+    )
     assert balance == 1000000

@@ -57,7 +57,9 @@ pub struct TerminalLogger;
 
 impl log::Log for TerminalLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.target().starts_with("engine_shared::logging")
+        metadata
+            .target()
+            .starts_with("casperlabs_engine_shared::logging")
             && metadata.level() <= log::Level::Trace
     }
 

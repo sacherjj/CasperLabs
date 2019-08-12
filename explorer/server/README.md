@@ -31,6 +31,14 @@ ln -s ../../grpc/generated grpc
 
 Run unit tests, for example to check the contract ABI serialization format.
 
+## Environment variables
+
+You can start the server in once console and the UI in another, the UI will proxy the requests to the backend, and also get the configuration from the `config.js` file served by the backend.
+
+There are some environment variables that can come handy:
+* `UI_GRPC_URL`: By default this is empty, or pointing at the local docker setup, but you can set it to any environment to test the UI locally agains the remote `grpcwebproxy` insteance.
+* `AUTH_MOCK_ENABLED`: By setting it to `true` you can work offline and be automatically logged in with a test user to create accounts and use the faucet.
+
 ## Useful links:
 * https://facebook.github.io/create-react-app/docs/deployment
 * https://www.fullstackreact.com/articles/using-create-react-app-with-a-server/

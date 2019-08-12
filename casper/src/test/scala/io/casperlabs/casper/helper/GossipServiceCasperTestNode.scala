@@ -374,8 +374,8 @@ object GossipServiceCasperTestNodeFactory {
                              isInDag(blockHash).map(!_)
                          },
                          maxPossibleDepth = Int.MaxValue,
-                         minBlockCountToCheckBranchingFactor = Int.MaxValue,
-                         maxBranchingFactor = 2.0,
+                         minBlockCountToCheckWidth = Int.MaxValue,
+                         maxBondingRate = 1.0,
                          maxDepthAncestorsRequest = 1, // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
                          maxInitialBlockCount = Int.MaxValue,
                          isInitialRef = Ref.unsafe[F, Boolean](false)

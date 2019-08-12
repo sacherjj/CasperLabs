@@ -18,8 +18,8 @@ from distutils.spawn import find_executable
 
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 PROTOBUF_DIR = f"{THIS_DIRECTORY}/../../../protobuf"
-PROTO_DIR = f"{THIS_DIRECTORY}/casper_client/proto"
-PACKAGE_DIR = f"{THIS_DIRECTORY}/casper_client"
+PROTO_DIR = f"{THIS_DIRECTORY}/casperlabs_client/proto"
+PACKAGE_DIR = f"{THIS_DIRECTORY}/casperlabs_client"
 NAME = "casperlabs_client"
 
 
@@ -168,21 +168,22 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version='0.3.13',
-    packages=find_packages(exclude=['tests']),
-    setup_requires=['protobuf==3.9.0',
-                    'grpcio-tools>=1.20',
-                    'in-place==0.4.0',
-                    'grpcio>=1.20'],
-    install_requires=['protobuf==3.9.0',
-                      'grpcio>=1.20',
-                      'pyblake2==1.1.2',
-                      'ed25519==1.4'],
-    cmdclass={
-        'install': CInstall,
-        'develop': CDevelop,
-    },
-    description='Python Client for interacting with a CasperLabs Node',
+    version="0.3.13",
+    packages=find_packages(exclude=["tests"]),
+    setup_requires=[
+        "protobuf==3.9.1",
+        "grpcio-tools>=1.20",
+        "in-place==0.4.0",
+        "grpcio>=1.20",
+    ],
+    install_requires=[
+        "protobuf==3.9.1",
+        "grpcio>=1.20",
+        "pyblake2==1.1.2",
+        "ed25519==1.4",
+    ],
+    cmdclass={"install": CInstall, "develop": CDevelop},
+    description="Python Client for interacting with a CasperLabs Node",
     long_description=long_description,
     long_description_content_type="text/markdown",
     include_package_data=True,
@@ -201,10 +202,12 @@ setup(
     ],
     python_requires=">=3.6.0",
     project_urls={
-        "Source": "https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperClient",
-        "Readme": "https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperClient/README.md",
+        "Source": "https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperLabsClient",
+        "Readme": "https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperLabsClient/README.md",
     },
-    entry_points = {
-        "console_scripts": ['casper_client = casper_client.casper_client:main']
+    entry_points={
+        "console_scripts": [
+            "casperlabs_client = casperlabs_client.casperlabs_client:main"
+        ]
     },
 )

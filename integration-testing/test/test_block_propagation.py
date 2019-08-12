@@ -4,7 +4,7 @@ from typing import List
 import pytest
 import logging
 from .cl_node.casperlabs_network import ThreeNodeNetwork, CustomConnectionNetwork
-from .cl_node.casperlabsnode import extract_block_hash_from_propose_output
+from .cl_node.common import extract_block_hash_from_propose_output
 from .cl_node.wait import (
     wait_for_genesis_block,
     wait_for_block_hash_propagated_to_all_nodes,
