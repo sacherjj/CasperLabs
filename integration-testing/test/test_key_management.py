@@ -3,6 +3,7 @@ import pytest
 
 from test.cl_node.casperlabs_accounts import Account
 from casper_client import ABI
+from test.cl_node.nonce_registry import NonceRegistry
 
 """
 Accounts have two threshold values:
@@ -112,6 +113,7 @@ def test_key_management(one_node_network):
     node.transfer_to_account(1, 1000000)
     deploy_key = Account(2)  # 4e74
     key_mgmt_key = Account(3)  # 58f7
+    high_weight_key = Account(4)  #
 
     # Create deploy_acct key with weight of 10
     block_hash = create_associated_key(
@@ -123,7 +125,7 @@ def test_key_management(one_node_network):
     )
     assert_deploy_is_not_error(node, block_hash)
 
-    # Create deploy_acct key with weight of 10
+    # Create key_mgmt key with weight of 20
     block_hash = create_associated_key(
         node,
         identity_key=identity_key.public_key_hex,
@@ -133,22 +135,60 @@ def test_key_management(one_node_network):
     )
     assert_deploy_is_not_error(node, block_hash)
 
-    # Update identity key to 30, using other key
-    block_hash = update_associated_key(
+    # Create high weight key for updating once we exceed weights of others
+    block_hash = create_associated_key(
         node,
         identity_key=identity_key.public_key_hex,
         weight_key=key_mgmt_key,
-        key=identity_key.public_key_hex,
-        weight=30,
+        key=high_weight_key.public_key_hex,
+        weight=255,
     )
     assert_deploy_is_not_error(node, block_hash)
 
+    # Removing identity key from associated keys
+    block_hash = remove_associated_key(
+        node,
+        identity_key=identity_key.public_key_hex,
+        weight_key=key_mgmt_key,
+        key=identity_key.public_key_hex
+    )
+
+    # Start thresholds under key weights
     set_key_thresholds(
         node,
         identity_key=identity_key.public_key_hex,
-        weight_key=identity_key,
+        weight_key=key_mgmt_key,
         deploy_weight=9,
         key_management_weight=19,
+    )
+    assert_deploy_is_not_error(node, block_hash)
+
+    # Remove deploy key
+    block_hash = remove_associated_key(
+        node,
+        key=deploy_key.public_key_hex,
+        identity_key=identity_key.public_key_hex,
+        weight_key=key_mgmt_key,
+    )
+    assert_deploy_is_not_error(node, block_hash)
+
+    # Deploy with removed key
+    block_hash = node.deploy_and_propose(
+        from_address=identity_key.public_key_hex,
+        payment_contract=HELLO_NAME_CONTRACT,
+        session_contract=HELLO_NAME_CONTRACT,
+        public_key=deploy_key.public_key_path,
+        private_key=deploy_key.private_key_path,
+    )
+    assert_deploy_is_error(node, block_hash)
+
+    # Add deploy_key back
+    block_hash = create_associated_key(
+        node,
+        identity_key=identity_key.public_key_hex,
+        weight_key=high_weight_key,
+        key=deploy_key.public_key_hex,
+        weight=10,
     )
     assert_deploy_is_not_error(node, block_hash)
 
@@ -202,13 +242,14 @@ def test_key_management(one_node_network):
     )
     assert_deploy_is_error(node, block_hash, "DeploymentAuthorizationFailure")
 
+    NonceRegistry.revert(identity_key.public_key_hex)
+
     # Key management weight under threshold
-    with pytest.raises(Exception):
-        block_hash = set_key_thresholds(
-            node,
-            identity_key=identity_key.public_key_hex,
-            weight_key=key_mgmt_key,
-            deploy_weight=12,
-            key_management_weight=22,
-        )
-        assert_deploy_is_error(node, block_hash)
+    block_hash = set_key_thresholds(
+        node,
+        identity_key=identity_key.public_key_hex,
+        weight_key=key_mgmt_key,
+        deploy_weight=10,
+        key_management_weight=21,
+    )
+    assert_deploy_is_error(node, block_hash)
