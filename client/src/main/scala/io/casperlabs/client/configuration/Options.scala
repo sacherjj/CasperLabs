@@ -291,13 +291,14 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         default = false.some
       )
 
-    val out = opt[String](
+    val out = opt[File](
       descr =
         s"output image filename, outputs to stdout if not specified, must ends with one of the ${Format
           .values()
           .map(_.name().toLowerCase())
           .mkString(", ")}",
-      validate = s => Format.values().map(_.name().toLowerCase).exists(s.endsWith)
+      validate = file =>
+        fileCheck(file) && Format.values().map(_.name().toLowerCase).exists(file.getName.endsWith)
     )
 
     val stream =
@@ -365,6 +366,113 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
   }
   addSubcommand(balance)
+
+  val key = new Subcommand("key") {
+    descr("Account keys management")
+
+    val nonce = opt[Long](
+      descr = "This allows you to overwrite your own pending transactions that use the same nonce",
+      validate = _ > 0,
+      required = true
+    )
+
+    val privateKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account private key (Ed25519) used to sign deploy",
+        validate = fileCheck
+      )
+
+    val thresholds = new Subcommand("threshold") {
+      descr("Updates account required thresholds from keys weights to perform various operations")
+
+      val key = opt[Int](
+        name = "key",
+        descr = "Threshold to perform key management operations",
+        required = true
+      )
+
+      val deploy = opt[Int](
+        name = "deploy",
+        descr = "Threshold to perform deploys",
+        required = true
+      )
+
+      val session =
+        opt[File](
+          descr = "Path to the file with updating account key thresholds contract.",
+          validate = fileCheck
+        )
+    }
+
+    val add = new Subcommand("add") {
+      descr("Adds new key to account with weight")
+
+      val publicKey =
+        opt[File](
+          descr = "Path to the file with account public key (Ed25519)",
+          validate = fileCheck,
+          required = true
+        )
+
+      val weight = opt[Int](
+        descr = "Weight of new key",
+        required = true
+      )
+
+      val session =
+        opt[File](
+          descr = "Path to the file with add key contract.",
+          validate = fileCheck
+        )
+    }
+
+    val remove = new Subcommand("remove") {
+      descr("Removes key from account")
+
+      val publicKey =
+        opt[File](
+          descr = "Path to the file with account public key (Ed25519)",
+          validate = fileCheck,
+          required = true
+        )
+
+      val session =
+        opt[File](
+          descr = "Path to the file with remove key contract.",
+          validate = fileCheck
+        )
+    }
+
+    val update = new Subcommand("update") {
+      descr("Update weight of key")
+
+      val publicKey =
+        opt[File](
+          descr = "Path to the file with account public key (Ed25519)",
+          validate = fileCheck,
+          required = true
+        )
+
+      val weight = opt[Int](
+        descr = "New weight",
+        required = true
+      )
+
+      val session =
+        opt[File](
+          descr = "Path to the file with update key weight contract.",
+          validate = fileCheck
+        )
+    }
+
+    addSubcommand(thresholds)
+    addSubcommand(add)
+    addSubcommand(remove)
+    addSubcommand(update)
+  }
+
+  addSubcommand(key)
 
   verify()
 }

@@ -52,12 +52,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       validate = fileCheck
     )
 
-    val initialFundsPublicKey = opt[File](
-      name = "initial-funds-public-key",
-      required = true,
-      descr = "Public key of account to send funds to initialize other accounts",
-      validate = fileCheck
-    )
+    val session =
+      opt[File](
+        descr = "Path to the file with transfer contract.",
+        validate = fileCheck
+      )
   }
   addSubcommand(benchmark)
 
@@ -70,10 +69,10 @@ object Options {
     final case class Benchmark(
         outputStats: File,
         initialFundsPrivateKey: File,
-        initialFundsPublicKey: File
+        maybeTransferContract: Option[File]
     ) extends Configuration
 
-    def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
+    def parse(args: List[String]): Option[(ConnectOptions, Configuration)] = {
       val options = Options(args)
       val connect = ConnectOptions(
         options.host(),
@@ -86,7 +85,7 @@ object Options {
           Benchmark(
             options.benchmark.outputStats(),
             options.benchmark.initialFundsPrivateKey(),
-            options.benchmark.initialFundsPublicKey()
+            options.benchmark.session.toOption
           )
       }
       conf map (connect -> _)
