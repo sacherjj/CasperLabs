@@ -468,9 +468,9 @@ class ValidationTest
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       val validators = Vector(
-        generateValidator("Validator 1"),
-        generateValidator("Validator 2"),
-        generateValidator("Validator 3")
+        generateValidator("V1"),
+        generateValidator("V2"),
+        generateValidator("V3")
       )
       val bonds = validators.zipWithIndex.map {
         case (v, i) => Bond(v, 2L * i.toLong + 1L)

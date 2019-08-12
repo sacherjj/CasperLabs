@@ -26,9 +26,9 @@ class BlocksResponseAPITest
     with BlockGenerator
     with DagStorageFixture {
 
-  val v1     = generateValidator("Validator One")
-  val v2     = generateValidator("Validator Two")
-  val v3     = generateValidator("Validator Three")
+  val v1     = generateValidator("V1")
+  val v2     = generateValidator("V2")
+  val v3     = generateValidator("V3")
   val v1Bond = Bond(v1, 25)
   val v2Bond = Bond(v2, 20)
   val v3Bond = Bond(v3, 15)

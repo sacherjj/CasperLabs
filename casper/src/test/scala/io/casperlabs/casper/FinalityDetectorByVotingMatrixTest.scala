@@ -42,8 +42,8 @@ class FinalityDetectorByVotingMatrixTest
 				 *      \
 				 *       genesis
 				 */
-        val v1     = generateValidator("Validator One")
-        val v2     = generateValidator("Validator Two")
+        val v1     = generateValidator("V1")
+        val v2     = generateValidator("V2")
         val v1Bond = Bond(v1, 2)
         val v2Bond = Bond(v2, 1)
         val bonds  = Seq(v1Bond, v2Bond)

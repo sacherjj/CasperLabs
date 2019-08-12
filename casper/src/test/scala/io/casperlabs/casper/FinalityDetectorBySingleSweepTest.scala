@@ -43,8 +43,8 @@ class FinalityDetectorBySingleSweepTest
          *      \
          *       genesis
          */
-        val v1     = generateValidator("Validator One")
-        val v2     = generateValidator("Validator Two")
+        val v1     = generateValidator("V1")
+        val v2     = generateValidator("V2")
         val v1Bond = Bond(v1, 1)
         val v2Bond = Bond(v2, 1)
         val bonds  = Seq(v1Bond, v2Bond)
@@ -161,11 +161,11 @@ class FinalityDetectorBySingleSweepTest
 
   it should "take into account indirect justifications by non-level-zero direct justification" in withStorage {
     implicit blockStorage => implicit dagStorage =>
-      val v0 = generateValidator("Validator 0")
-      val v1 = generateValidator("Validator 1")
+      val v0 = generateValidator("V0")
+      val v1 = generateValidator("V1")
 
-      val v2         = generateValidator("Validator 2")
-      val v3         = generateValidator("Validator 3")
+      val v2         = generateValidator("V2")
+      val v3         = generateValidator("V3")
       val validators = List(v0, v1, v2, v3)
 
       val bonds                           = validators.map(v => Bond(v, 1))
@@ -267,9 +267,9 @@ class FinalityDetectorBySingleSweepTest
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   it should "detect possible disagreements appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage =>
-      val v1     = generateValidator("Validator One")
-      val v2     = generateValidator("Validator Two")
-      val v3     = generateValidator("Validator Three")
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
       val v1Bond = Bond(v1, 25)
       val v2Bond = Bond(v2, 20)
       val v3Bond = Bond(v3, 15)

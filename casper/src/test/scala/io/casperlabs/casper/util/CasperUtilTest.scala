@@ -80,8 +80,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "isInMainChain and votedBranch" should "classify complicated chains appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage =>
-      val v1 = generateValidator("Validator One")
-      val v2 = generateValidator("Validator Two")
+      val v1 = generateValidator("V1")
+      val v2 = generateValidator("V2")
 
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
@@ -117,11 +117,11 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
   "panoramaDagLevelsOfBlock" should "properly return the panorama of message B" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v0 = generateValidator("Validator 0")
-      val v1 = generateValidator("Validator 1")
+      val v0 = generateValidator("V0")
+      val v1 = generateValidator("V1")
 
-      val v2         = generateValidator("Validator 2")
-      val v3         = generateValidator("Validator 3")
+      val v2         = generateValidator("V2")
+      val v3         = generateValidator("V3")
       val validators = List(v0, v1, v2, v3)
 
       val bonds = validators.map(v => Bond(v, 1))
@@ -189,7 +189,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
                Map(v2 -> b6.blockHash)
              )
         dag <- blockDagStorage.getRepresentation
-        v4  = generateValidator("Validator 4")
+        v4  = generateValidator("V4")
         panorama <- FinalityDetectorUtil.panoramaOfBlockByValidators(
                      dag,
                      BlockMetadata.fromBlock(b7),
