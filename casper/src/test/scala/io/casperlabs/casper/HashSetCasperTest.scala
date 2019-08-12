@@ -1457,7 +1457,7 @@ object HashSetCasperTest {
     (for {
       blessed <- Genesis.defaultBlessedTerms[Task](
                   accountPublicKeyPath = None,
-                  initialTokens = BigInt(0),
+                  initialMotes = BigInt(0),
                   ProofOfStakeParams(minimumBond, maximumBond, validators),
                   wallets,
                   mintCodePath = None,

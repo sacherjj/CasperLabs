@@ -169,7 +169,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
                                      chainId = casperlabsChainId,
                                      deployTimestamp = System.currentTimeMillis.some,
                                      accountPublicKeyPath = keyFile.some,
-                                     initialTokens = BigInt(123),
+                                     initialMotes = BigInt(123),
                                      mintCodePath = mintFile.some,
                                      posCodePath = posFile.some
                                    )
@@ -252,7 +252,7 @@ object GenesisTest {
                   chainId = casperlabsChainId,
                   deployTimestamp = System.currentTimeMillis.some,
                   accountPublicKeyPath = none[Path],
-                  initialTokens = BigInt(0),
+                  initialMotes = BigInt(0),
                   mintCodePath = none[Path],
                   posCodePath = none[Path]
                 )
