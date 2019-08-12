@@ -4,6 +4,30 @@ import logging
 
 
 class GraphQL:
+    """
+    Simple wrapper for calling into Node with GraphQL queries
+    """
+
+    DEFAULT_BLOCK_SUB_SELECT = """blockHash
+                            parentHashes
+                            deployCount
+                            deployErrorCount
+                            blockSizeBytes"""
+    DEFAULT_DEPLOY_SUB_SELECT = """deploy {
+                                deployHash
+                                accountId
+                                timestamp
+                                gasPrice
+                            }
+                            processingResults {
+                                block {
+                                    blockHash
+                                }
+                                cost
+                                isError
+                                errorMessage
+                            }"""
+
     def __init__(self, node):
         self.node = node
 
@@ -19,6 +43,8 @@ class GraphQL:
 
     def query_block(self, block_hash_prefix_hex: str, sub_select: str = None) -> dict:
         """
+        Wrapper for querying a block.
+
         Available subselect fields
 
             deploys
@@ -38,15 +64,11 @@ class GraphQL:
             deployErrorCount
 
         :param block_hash_prefix_hex: Base 16 block hash
-        :param sub_select: sub select fields, see description
+        :param sub_select: sub select fields, using DEFAULT_BLOCK_SUB_SELECT is omitted
         :return: dict of response
         """
         if sub_select is None:
-            sub_select = """blockHash
-                            parentHashes
-                            deployCount
-                            deployErrorCount
-                            blockSizeBytes"""
+            sub_select = self.DEFAULT_BLOCK_SUB_SELECT
         q_json = {
             "query": f"""{{
                         block(blockHashBase16Prefix: "{block_hash_prefix_hex}")
@@ -56,21 +78,17 @@ class GraphQL:
         return self.query(q_json)
 
     def query_deploy(self, deploy_hash_hex: str, sub_select: str = None) -> dict:
+        """
+        Wrapper for querying deploy
+
+        sub select can be complex, see graphql scheme.
+
+        :param deploy_hash_hex: Base 16 block hash
+        :param sub_select: sub select fields, using DEFAULT_DEPLOY_SUB_SELECT if omitted
+        :return: dict of response
+        """
         if sub_select is None:
-            sub_select = """deploy {
-                                deployHash
-                                accountId
-                                timestamp
-                                gasPrice
-                            }
-                            processingResults {
-                                block {
-                                    blockHash
-                                }
-                                cost
-                                isError
-                                errorMessage
-                            }"""
+            sub_select = self.DEFAULT_DEPLOY_SUB_SELECT
         q_json = {
             "query": f"""{{ deploy(deployHashBase16: "{deploy_hash_hex}")
                         {{ {sub_select} }}
@@ -78,12 +96,4 @@ class GraphQL:
         }
         return self.query(q_json)
 
-    # TODO: Figure out proper ValueUnion! type to use for sub query
-    # def query_global_state(self, block_hash_hex: str, sub_select: str = None) -> dict:
-    #     if sub_select is None:
-    #         sub_select = 'value'
-    #     q_json = {'query':
-    #                   f'''{{ globalState(blockHashBase16Prefix: "{block_hash_hex}")
-    #                       {{ {sub_select} }} }}'''
-    #               }
-    #     return self.query(q_json)
+    # TODO: Figure out proper ValueUnion! type to use for sub query to make query_global_state
