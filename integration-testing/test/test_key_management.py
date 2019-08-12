@@ -1,7 +1,7 @@
 import json
 
 from test.cl_node.casperlabs_accounts import Account
-from casper_client import ABI
+from casperlabs_client import ABI
 
 # from test.cl_node.nonce_registry import NonceRegistry
 
