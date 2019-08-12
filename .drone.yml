@@ -150,6 +150,8 @@ steps:
     - staging
     - trying
 
+# Note: Added the dependency on the sbt step to be finished first because in testing,
+# Drone was getting random sbt build failures when too many steps were running simultaneously.
 - name: run-cargo-fmt-bors
   commands:
   - "cd execution-engine"
