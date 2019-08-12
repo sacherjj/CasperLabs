@@ -12,7 +12,6 @@ import simulacrum.typeclass
 import scala.annotation.tailrec
 
 @typeclass trait VotingMatrix[F[_]] {
-
   def updateVoterPerspective(
       dag: DagRepresentation[F],
       blockMetadata: BlockMetadata,
@@ -62,17 +61,28 @@ object VotingMatrix {
 
                     indexOfVoter = validatorToIndex(voter)
                     rowOpt       = firstLevelZeroVotes(indexOfVoter)
-                    _ = rowOpt match {
-                      case Some((finalVoteValue, _)) =>
-                        if (finalVoteValue != currentVoteValue)
-                          firstLevelZeroVotesRef.update(
-                            l => l.updated(indexOfVoter, (currentVoteValue, currentDagLevel).some)
-                          )
-                      case None =>
-                        firstLevelZeroVotesRef.update(
-                          l => l.updated(indexOfVoter, (currentVoteValue, currentDagLevel).some)
-                        )
-                    }
+                    _ <- rowOpt match {
+                          case Some((finalVoteValue, _)) =>
+                            if (finalVoteValue != currentVoteValue)
+                              firstLevelZeroVotesRef.update(
+                                l =>
+                                  l.updated(
+                                    indexOfVoter,
+                                    (currentVoteValue, currentDagLevel).some
+                                  )
+                              )
+                            else {
+                              ().pure[F]
+                            }
+                          case None =>
+                            firstLevelZeroVotesRef.update(
+                              l =>
+                                l.updated(
+                                  indexOfVoter,
+                                  (currentVoteValue, currentDagLevel).some
+                                )
+                            )
+                        }
                   } yield ()
                 }
           } yield ()

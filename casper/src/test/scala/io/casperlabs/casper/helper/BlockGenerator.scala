@@ -6,12 +6,14 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
+import io.casperlabs.casper.consensus._
+import Block.ProcessedDeploy
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.DeploysCheckpoint
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -136,4 +138,22 @@ trait BlockGenerator {
       _ <- BlockStorage[F]
             .put(serializedBlockHash, modifiedBlock, Seq.empty)
     } yield modifiedBlock
+
+  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: FinalityDetector](
+      parentsHashList: Seq[BlockHash],
+      lastFinalizedBlockHash: BlockHash,
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash]
+  ): F[Block] =
+    for {
+      block <- createBlock[F](
+                parentsHashList,
+                creator,
+                bonds,
+                justifications
+              )
+      dag <- IndexedDagStorage[F].getRepresentation
+      _   <- FinalityDetector[F].onNewBlockAddedToTheBlockDag(dag, block, lastFinalizedBlockHash)
+    } yield block
 }
