@@ -168,6 +168,10 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
     val lowestLevelZeroMsgs = committeeApproximation
       .flatMap(v => levelZeroMsgs(v).lastOption)
       .toList
+
+    implicit val blockTopoOrdering: Ordering[BlockMetadata] =
+      DagOperations.blockTopoOrderingAsc
+
     val stream = DagOperations.bfToposortTraverseF(lowestLevelZeroMsgs)(
       b =>
         for {

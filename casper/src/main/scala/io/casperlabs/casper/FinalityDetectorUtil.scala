@@ -75,7 +75,10 @@ object FinalityDetectorUtil {
       block: BlockMetadata,
       validators: Set[Validator]
   ): F[Map[Validator, BlockMetadata]] = {
-    val stream = DagOperations.bfToposortTraverseF(List(block), ascending = false) { b =>
+    implicit val blockTopoOrdering: Ordering[BlockMetadata] =
+      DagOperations.blockTopoOrderingDesc
+
+    val stream = DagOperations.bfToposortTraverseF(List(block)) { b =>
       b.justifications
         .traverse(justification => {
           blockDag.lookup(justification.latestBlockHash)
