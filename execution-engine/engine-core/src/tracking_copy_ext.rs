@@ -113,15 +113,7 @@ impl<R: StateReader<Key, Value>> TrackingCopyExt<R> for TrackingCopy<R> {
         }
 
         let validated_key: Validated<Key> =
-            match Validated::new::<!, _>(Key::Account(account.pub_key()), Validated::valid) {
-                Ok(key) => key,
-                Err(_) => {
-                    return Err(execution::Error::TypeMismatch(TypeMismatch::new(
-                        "Validated<u8,KEY_SIZE>".to_string(),
-                        "<u8,KEY_SIZE>".to_string(),
-                    )))
-                }
-            };
+            Validated::new::<!, _>(Key::Account(account.pub_key()), Validated::valid).unwrap();
 
         // Store updated account with new nonce
         self.write(

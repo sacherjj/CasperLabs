@@ -48,7 +48,7 @@ pub struct EngineState<H> {
 impl<H> EngineState<H>
 where
     H: History,
-    H::Error: Into<execution::Error> + std::fmt::Debug,
+    H::Error: Into<execution::Error>,
 {
     pub fn new(state: H, config: EngineConfig) -> EngineState<H> {
         let state = Arc::new(Mutex::new(state));
@@ -212,7 +212,8 @@ where
         } else {
             // PAYMENT PRECONDITIONS
 
-            // Get mint system contract URef from account (an account on a different network may have a mint contract other than the CLMint)
+            // Get mint system contract URef from account (an account on a different
+            //  network may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
             let mint_public_uref: Key = match account.urefs_lookup().get(MINT_NAME) {
                 Some(uref) => uref.normalize(),
@@ -235,7 +236,8 @@ where
                 }
             };
 
-            // Get proof of stake system contract URef from account (an account on a different network may have have a pos contract other than the CLPoS)
+            // Get proof of stake system contract URef from account (an account on a different
+            //  network may have a pos contract other than the CLPoS)
             // payment_code_spec_6: system contract validity
             let proof_of_stake_public_uref: Key = match account.urefs_lookup().get(POS_NAME) {
                 Some(uref) => uref.normalize(),
@@ -283,6 +285,20 @@ where
             };
 
             // Get account main purse balance mapping key
+            // payment_code_spec_6: system contract validity
+            let rewards_purse_balance_mapping_key =
+                match tracking_copy.borrow_mut().query_purse_balance_key(
+                    correlation_id,
+                    mint_info.inner_uref,
+                    rewards_purse_uref_key,
+                ) {
+                    Ok(key) => key,
+                    Err(error) => {
+                        return Ok(ExecutionResult::precondition_failure(error.into()));
+                    }
+                };
+
+            // Get account main purse balance mapping key
             // validation_spec_5: account main purse minimum balance
             let account_main_purse_balance_mapping_key =
                 match tracking_copy.borrow_mut().query_purse_balance_key(
@@ -296,7 +312,7 @@ where
                     }
                 };
 
-            // Get account main purse balance to enforce precondition, and in case of forced transfer
+            // Get account main purse balance to enforce precondition and in case of forced transfer
             // validation_spec_5: account main purse minimum balance
             let account_main_purse_balance: U512 = match tracking_copy
                 .borrow_mut()
@@ -394,11 +410,7 @@ where
 
             // payment_code_spec_4: insufficient payment
             if insufficient_balance_to_continue || !execution_result_builder.is_payment_valid {
-                let new_balance = if account_main_purse_balance < max_payment_cost {
-                    0.into()
-                } else {
-                    account_main_purse_balance - max_payment_cost
-                };
+                let new_balance = account_main_purse_balance - max_payment_cost;
 
                 let mut insufficient_payment_ops = HashMap::new();
                 let mut insufficient_payment_transforms = HashMap::new();
@@ -410,9 +422,9 @@ where
                     Transform::Write(Value::UInt512(new_balance)),
                 );
 
-                insufficient_payment_ops.insert(rewards_purse_uref_key, op::Op::Add);
+                insufficient_payment_ops.insert(rewards_purse_balance_mapping_key, op::Op::Add);
                 insufficient_payment_transforms.insert(
-                    rewards_purse_uref_key,
+                    rewards_purse_balance_mapping_key,
                     Transform::AddUInt512(max_payment_cost),
                 );
 
