@@ -304,7 +304,7 @@ object DagOperations {
     } else {
       Ordering[A].compare(a, b) match {
         case -1 =>
-          // Block B2 is "higher" in the chain
+          // Block `b` is "higher" in the chain
           next(b).flatMap(latestCommonAncestorF(a, _)(next))
         case 0 =>
           // Both blocks have the same rank but they're different blocks.
