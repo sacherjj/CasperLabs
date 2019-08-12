@@ -1,9 +1,10 @@
 package io.casperlabs.casper.util
 
 import cats.implicits._
-import cats.{Eval, Monad}
+import cats.{Eq, Eval, Monad, Show}
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.StreamT
@@ -54,9 +55,16 @@ object DagOperations {
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[k.K])))
   }
 
+  val blockTopoOrderingAsc: Ordering[BlockMetadata] =
+    Ordering.by[BlockMetadata, Long](_.rank).reverse
+
+  val blockTopoOrderingDesc: Ordering[BlockMetadata] = Ordering.by(_.rank)
+
   def bfToposortTraverseF[F[_]: Monad](
       start: List[BlockMetadata]
-  )(neighbours: BlockMetadata => F[List[BlockMetadata]]): StreamT[F, BlockMetadata] = {
+  )(
+      neighbours: BlockMetadata => F[List[BlockMetadata]]
+  )(implicit ord: Ordering[BlockMetadata]): StreamT[F, BlockMetadata] = {
     def build(
         q: mutable.PriorityQueue[BlockMetadata],
         prevVisited: HashSet[BlockHash]
@@ -72,9 +80,6 @@ object DagOperations {
             newQ    = q ++ ns.filterNot(b => visited(b.blockHash))
           } yield StreamT.cons(curr, Eval.always(build(newQ, visited)))
       }
-
-    implicit val blockTopoOrdering: Ordering[BlockMetadata] =
-      Ordering.by[BlockMetadata, Long](_.rank).reverse
 
     StreamT.delay(
       Eval.now(build(mutable.PriorityQueue.empty[BlockMetadata] ++ start, HashSet.empty[BlockHash]))
@@ -284,4 +289,67 @@ object DagOperations {
               )
       } yield gca.get
     }
+
+  private def missingDependencyError[A: Show](a: A): Throwable =
+    new IllegalStateException(s"Missing ${Show[A].show(a)} dependency.")
+
+  /** Computes Latest Common Ancestor of two elements.
+    */
+  def latestCommonAncestorF[F[_]: MonadThrowable, A: Eq: Ordering](
+      a: A,
+      b: A
+  )(next: A => F[A]): F[A] =
+    if (Eq[A].eqv(a, b)) {
+      a.pure[F]
+    } else {
+      Ordering[A].compare(a, b) match {
+        case -1 =>
+          // Block `b` is "higher" in the chain
+          next(b).flatMap(latestCommonAncestorF(a, _)(next))
+        case 0 =>
+          // Both blocks have the same rank but they're different blocks.
+          for {
+            aa  <- next(a)
+            bb  <- next(b)
+            lca <- latestCommonAncestorF(aa, bb)(next)
+          } yield lca
+        case 1 =>
+          next(a).flatMap(latestCommonAncestorF(b, _)(next))
+      }
+    }
+
+  /** Computes Latest Common Ancestor of the set of elements.
+    */
+  def latestCommonAncestorF[F[_]: MonadThrowable, A: Eq: Ordering](
+      starters: List[A]
+  )(next: A => F[A]): F[A] =
+    starters.foldLeftM(starters.head)(latestCommonAncestorF(_, _)(next))
+
+  /** Computes Latest Common Ancestor of a set of blocks by following main-parent
+    * vertices.
+    *
+    * @param dag Representation of a DAG.
+    * @param starters Starting blocks.
+    * @tparam F Effect type.
+    * @return Latest Common Ancestor of starting blocks.
+    */
+  def latestCommonAncestorsMainParent[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      starters: List[BlockHash]
+  ): F[BlockHash] = {
+    implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
+    import io.casperlabs.casper.util.implicits.{eqBlockMetadata, showBlockHash}
+    def lookup[A](f: A => BlockHash): A => F[BlockMetadata] =
+      el =>
+        dag
+          .lookup(f(el))
+          .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(f(el))))
+
+    starters
+      .traverse(lookup(identity))
+      .flatMap(
+        latestCommonAncestorF[F, BlockMetadata](_)(lookup[BlockMetadata](_.parents.head)(_))
+      )
+      .map(_.blockHash)
+  }
 }
