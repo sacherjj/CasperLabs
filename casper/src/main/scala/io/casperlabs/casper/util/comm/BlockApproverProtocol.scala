@@ -85,7 +85,7 @@ object BlockApproverProtocol {
       maximumBond: Long,
       requiredSigs: Int,
       genesisAccountPublicKeyPath: Option[Path],
-      initialTokens: BigInt,
+      initialMotes: BigInt,
       bondsPath: Option[Path],
       mintCodePath: Option[Path],
       posCodePath: Option[Path]
@@ -148,7 +148,7 @@ object BlockApproverProtocol {
                                     Genesis
                                       .defaultBlessedTerms[F](
                                         conf.genesisAccountPublicKeyPath,
-                                        conf.initialTokens,
+                                        conf.initialMotes,
                                         posParams,
                                         wallets,
                                         conf.bondsPath,
