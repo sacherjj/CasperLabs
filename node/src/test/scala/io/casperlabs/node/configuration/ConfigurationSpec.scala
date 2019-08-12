@@ -106,7 +106,7 @@ class ConfigurationSpec
       maximumBond = 1L,
       requiredSigs = 1,
       genesisAccountPublicKeyPath = Paths.get("/tmp/test").some,
-      initialTokens = BigInt(1),
+      initialMotes = BigInt(1),
       mintCodePath = Paths.get("/tmp/test").some,
       posCodePath = Paths.get("/tmp/test").some,
       shardId = "test",
