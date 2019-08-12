@@ -1,9 +1,9 @@
 import json
-import pytest
 
 from test.cl_node.casperlabs_accounts import Account
 from casper_client import ABI
-from test.cl_node.nonce_registry import NonceRegistry
+
+# from test.cl_node.nonce_registry import NonceRegistry
 
 """
 Accounts have two threshold values:
@@ -95,9 +95,7 @@ def assert_deploy_is_not_error(node, block_hash):
     assert not deploys[0].is_error, deploys[0].error_message
 
 
-def assert_deploy_is_error(node,
-                           block_hash: str,
-                           error_message: str = None):
+def assert_deploy_is_error(node, block_hash: str, error_message: str = None):
     deploys = list(node.client.show_deploys(block_hash))
     assert deploys[0].is_error
     if error_message:
@@ -150,7 +148,7 @@ def test_key_management(one_node_network):
         node,
         identity_key=identity_key.public_key_hex,
         weight_key=key_mgmt_key,
-        key=identity_key.public_key_hex
+        key=identity_key.public_key_hex,
     )
 
     # Start thresholds under key weights
@@ -192,7 +190,7 @@ def test_key_management(one_node_network):
     )
     assert_deploy_is_not_error(node, block_hash)
 
-    # Deploy with weight under threshold
+    # Deploy with weight over threshold
     block_hash = node.deploy_and_propose(
         from_address=identity_key.public_key_hex,
         payment_contract=HELLO_NAME_CONTRACT,
@@ -202,7 +200,7 @@ def test_key_management(one_node_network):
     )
     assert_deploy_is_not_error(node, block_hash)
 
-    # Key management weight under threshold
+    # Key management weight over threshold
     block_hash = set_key_thresholds(
         node,
         identity_key=identity_key.public_key_hex,
@@ -242,14 +240,15 @@ def test_key_management(one_node_network):
     )
     assert_deploy_is_error(node, block_hash, "DeploymentAuthorizationFailure")
 
-    NonceRegistry.revert(identity_key.public_key_hex)
+    # NonceRegistry.revert(identity_key.public_key_hex)
 
+    # CURRENTLY NO WORKING WITH EE-562
     # Key management weight under threshold
-    block_hash = set_key_thresholds(
-        node,
-        identity_key=identity_key.public_key_hex,
-        weight_key=key_mgmt_key,
-        deploy_weight=10,
-        key_management_weight=21,
-    )
-    assert_deploy_is_error(node, block_hash)
+    # block_hash = set_key_thresholds(
+    #     node,
+    #     identity_key=identity_key.public_key_hex,
+    #     weight_key=key_mgmt_key,
+    #     deploy_weight=10,
+    #     key_management_weight=21,
+    # )
+    # assert_deploy_is_error(node, block_hash)

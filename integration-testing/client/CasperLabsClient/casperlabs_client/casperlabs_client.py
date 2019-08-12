@@ -3,6 +3,20 @@
 CasperLabs Client API library and command line tool.
 """
 
+import time
+import argparse
+import grpc
+from grpc._channel import _Rendezvous
+import functools
+from pyblake2 import blake2b
+import ed25519
+import base64
+import struct
+import json
+from operator import add
+from functools import reduce
+import google.protobuf.text_format
+
 # Hack to fix the relative imports problems #
 import sys
 from pathlib import Path
@@ -19,23 +33,8 @@ except ValueError:  # Already removed
 
 # end of hack #
 
-import time
-import argparse
-import grpc
-from grpc._channel import _Rendezvous
-import functools
-from pyblake2 import blake2b
-import ed25519
-import base64
-import struct
-import json
-from operator import add
-from functools import reduce
-
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
-import google.protobuf.text_format
-
 CEscape = google.protobuf.text_format.text_encoding.CEscape
 
 
