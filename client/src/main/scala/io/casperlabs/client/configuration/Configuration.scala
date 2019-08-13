@@ -98,7 +98,7 @@ final case class RemoveKey(
 ) extends KeyManagement
 
 object Configuration {
-  def parse(args: List[String]): Option[(ConnectOptions, Configuration)] = {
+  def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
     val options = Options(args)
     val connect = ConnectOptions(
       options.host(),
@@ -106,8 +106,8 @@ object Configuration {
       options.portInternal(),
       options.nodeId.toOption
     )
-    val conf = options.subcommand.flatMap {
-      case options.deploy =>
+    val conf = options.subcommands match {
+      case options.deploy :: Nil =>
         Deploy(
           options.deploy.from.toOption,
           options.deploy.nonce(),
@@ -117,31 +117,31 @@ object Configuration {
           options.deploy.privateKey.toOption,
           options.deploy.gasPrice()
         ).some
-      case options.propose =>
+      case options.propose :: Nil =>
         Propose.some
-      case options.showBlock =>
+      case options.showBlock :: Nil =>
         ShowBlock(options.showBlock.hash()).some
-      case options.showDeploys =>
+      case options.showDeploys :: Nil =>
         ShowDeploys(options.showDeploys.hash()).some
-      case options.showDeploy =>
+      case options.showDeploy :: Nil =>
         ShowDeploy(options.showDeploy.hash()).some
-      case options.showBlocks =>
+      case options.showBlocks :: Nil =>
         ShowBlocks(options.showBlocks.depth()).some
-      case options.unbond =>
+      case options.unbond :: Nil =>
         Unbond(
           options.unbond.amount.toOption,
           options.unbond.nonce(),
           options.unbond.session.toOption,
           options.unbond.privateKey()
         ).some
-      case options.bond =>
+      case options.bond :: Nil =>
         Bond(
           options.bond.amount(),
           options.bond.nonce(),
           options.bond.session.toOption,
           options.bond.privateKey()
         ).some
-      case options.transfer =>
+      case options.transfer :: Nil =>
         Transfer(
           options.transfer.amount(),
           options.transfer.targetAccount(),
@@ -149,59 +149,57 @@ object Configuration {
           options.transfer.session.toOption,
           options.transfer.privateKey()
         ).some
-      case options.visualizeBlocks =>
+      case options.visualizeBlocks :: Nil =>
         VisualizeDag(
           options.visualizeBlocks.depth(),
           options.visualizeBlocks.showJustificationLines(),
           options.visualizeBlocks.out.toOption,
           options.visualizeBlocks.stream.toOption
         ).some
-      case options.query =>
+      case options.query :: Nil =>
         Query(
           options.query.blockHash(),
           options.query.keyType(),
           options.query.key(),
           options.query.path()
         ).some
-      case options.balance =>
+      case options.balance :: Nil =>
         Balance(
           options.balance.address(),
           options.balance.blockHash()
         ).some
-      case options.`key` =>
-        options.key.subcommand.map {
-          case options.key.`thresholds` =>
-            SetThresholds(
-              options.key.thresholds.key(),
-              options.key.thresholds.deploy(),
-              options.key.nonce(),
-              options.key.privateKey(),
-              options.key.thresholds.session.toOption
-            )
-          case options.key.add =>
-            AddKey(
-              options.key.add.publicKey(),
-              options.key.add.weight(),
-              options.key.nonce(),
-              options.key.privateKey(),
-              options.key.add.session.toOption
-            )
-          case options.key.remove =>
-            RemoveKey(
-              options.key.add.publicKey(),
-              options.key.nonce(),
-              options.key.privateKey(),
-              options.key.remove.session.toOption
-            )
-          case options.key.update =>
-            UpdateKey(
-              options.key.update.publicKey(),
-              options.key.update.weight(),
-              options.key.nonce(),
-              options.key.privateKey(),
-              options.key.update.session.toOption
-            )
-        }
+      case options.key :: options.key.thresholds :: Nil =>
+        SetThresholds(
+          options.key.thresholds.keyManagement(),
+          options.key.thresholds.deploys(),
+          options.key.nonce(),
+          options.key.privateKey(),
+          options.key.thresholds.session.toOption
+        ).some
+      case options.key :: options.key.add :: Nil =>
+        AddKey(
+          options.key.add.publicKey(),
+          options.key.add.weight(),
+          options.key.nonce(),
+          options.key.privateKey(),
+          options.key.add.session.toOption
+        ).some
+      case options.key :: options.key.remove :: Nil =>
+        RemoveKey(
+          options.key.add.publicKey(),
+          options.key.nonce(),
+          options.key.privateKey(),
+          options.key.remove.session.toOption
+        ).some
+      case options.key :: options.key.update :: Nil =>
+        UpdateKey(
+          options.key.update.publicKey(),
+          options.key.update.weight(),
+          options.key.nonce(),
+          options.key.privateKey(),
+          options.key.update.session.toOption
+        ).some
+      case _ => none[Configuration]
     }
     conf map (connect -> _)
   }
