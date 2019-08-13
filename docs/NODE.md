@@ -112,7 +112,7 @@ casperlabs-node run \
     --tls-certificate ./keys/node.certificate.pem \
     --casper-validator-private-key-path ./keys/validator-private.pem \
     --casper-validator-public-key-path ./keys/validator-public.pem \
-    --casper-initial-tokens 1234567890 \
+    --casper-initial-motes 1234567890 \
     --casper-mint-code-path ./mint_token.wasm \
     --casper-pos-code-path ./pos.wasm
 ```
