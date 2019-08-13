@@ -203,11 +203,11 @@ impl Default for ActionThresholds {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd)]
 pub struct BlockTime(pub u64);
 
 /// Holds information about last usage time of specific action.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AccountActivity {
     // Last time `KeyManagementAction` was used.
     key_management_last_used: BlockTime,
@@ -461,7 +461,7 @@ impl TryFrom<i32> for UpdateKeyFailure {
     }
 }
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
+#[derive(Default, PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
 pub struct AssociatedKeys(BTreeMap<PublicKey, Weight>);
 
 impl AssociatedKeys {

@@ -8,7 +8,8 @@ use parking_lot::Mutex;
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::key::Key;
-use contract_ffi::value::account::{BlockTime, PublicKey};
+use contract_ffi::uref::AccessRights;
+use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
@@ -24,7 +25,8 @@ pub use self::engine_config::EngineConfig;
 use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;
 use self::genesis::{create_genesis_effects, GenesisResult};
-use engine_state::genesis::{GENESIS_ACCOUNT, POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
+use contract_ffi::uref::URef;
+use engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
 
 pub mod engine_config;
 pub mod error;
@@ -37,6 +39,8 @@ pub mod utils;
 // TODO?: MAX_PAYMENT_COST && CONV_RATE values are currently arbitrary w/ real values TBD
 pub const MAX_PAYMENT_COST: u64 = 10_000_000;
 pub const CONV_RATE: u64 = 10;
+
+pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 
 #[derive(Debug)]
 pub struct EngineState<H> {
@@ -337,32 +341,15 @@ where
 
         // Finalization is executed by system account (currently genesis account)
         // payment_code_spec_5: system executes finalization
-        let genesis_account = {
-            // get genesis account
-            let genesis_account_key = account
-                .urefs_lookup()
-                .get(GENESIS_ACCOUNT)
-                .expect("genesis account must exist");
-
-            let genesis_account_addr = match genesis_account_key.as_account() {
-                Some(addr) => addr,
-                None => {
-                    return Ok(ExecutionResult::precondition_failure(
-                        error::Error::ExecError(execution::Error::KeyNotFound(
-                            *genesis_account_key,
-                        )),
-                    ))
-                }
-            };
-
-            match tracking_copy
-                .borrow_mut()
-                .get_account(correlation_id, genesis_account_addr)
-            {
-                Ok(account) => account,
-                Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
-            }
-        };
+        let system_account = Account::new(
+            SYSTEM_ACCOUNT_ADDR,
+            Default::default(),
+            Default::default(),
+            PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE)),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        );
 
         // `[ExecutionResultBuilder]` handles merging of multiple execution results
         let mut execution_result_builder = execution_result::ExecutionResultBuilder::new();
@@ -494,7 +481,7 @@ where
                 &proof_of_stake_args,
                 &mut proof_of_stake_keys,
                 proof_of_stake_info.inner_key(),
-                &genesis_account,
+                &system_account,
                 authorized_keys.clone(),
                 blocktime,
                 std::u64::MAX, // <-- this execution should be unlimited but approximating

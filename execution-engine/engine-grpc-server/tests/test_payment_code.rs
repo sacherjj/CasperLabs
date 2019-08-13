@@ -18,7 +18,7 @@ use test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder};
 #[allow(dead_code)]
 mod test_support;
 
-const GENESIS_ADDR: [u8; 32] = [0; 32];
+const GENESIS_ADDR: [u8; 32] = [12; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 
 #[ignore]
