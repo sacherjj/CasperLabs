@@ -10,18 +10,18 @@ use execution;
 use tracking_copy::{QueryResult, TrackingCopy};
 
 pub struct SystemContractInfo {
-    public_key: Key,
-    inner_uref_key: Key,
+    outer_key: Key,
+    inner_key: Key,
     contract: Contract,
 }
 
 impl SystemContractInfo {
-    pub fn public_key(&self) -> Key {
-        self.public_key
+    pub fn outer_key(&self) -> Key {
+        self.outer_key
     }
 
-    pub fn inner_uref_key(&self) -> Key {
-        self.inner_uref_key
+    pub fn inner_key(&self) -> Key {
+        self.inner_key
     }
 
     pub fn contract(&self) -> &Contract {
@@ -34,10 +34,10 @@ impl SystemContractInfo {
 }
 
 impl SystemContractInfo {
-    fn new(public_key: Key, inner_uref_key: Key, contract: Contract) -> SystemContractInfo {
+    fn new(outer_key: Key, inner_key: Key, contract: Contract) -> SystemContractInfo {
         SystemContractInfo {
-            public_key,
-            inner_uref_key,
+            outer_key,
+            inner_key,
             contract,
         }
     }
@@ -53,6 +53,7 @@ pub trait TrackingCopyExt<R> {
         account_address: [u8; 32],
     ) -> Result<Account, Self::Error>;
 
+    /// Gets the purse balance key for a given purse id
     fn get_purse_balance_key(
         &mut self,
         correlation_id: CorrelationId,
@@ -60,16 +61,18 @@ pub trait TrackingCopyExt<R> {
         purse: Key,
     ) -> Result<Key, Self::Error>;
 
+    /// Gets the balance at a given balance key
     fn get_purse_balance(
         &mut self,
         correlation_id: CorrelationId,
         balance_key: Key,
     ) -> Result<U512, Self::Error>;
 
+    /// Gets the system contract, packaged with its outer uref key and inner uref key
     fn get_system_contract_info(
         &mut self,
         correlation_id: CorrelationId,
-        pos_public_uref: Key,
+        outer_key: Key,
     ) -> Result<SystemContractInfo, Self::Error>;
 
     fn handle_nonce(&mut self, account: &mut Account, nonce: u64) -> Result<(), Self::Error>;
@@ -106,11 +109,8 @@ where
         let uref = outer_key
             .as_uref()
             .ok_or_else(|| execution::Error::URefNotFound("public purse balance".to_string()))?;
-
         let local_key_bytes = uref.addr().to_bytes()?;
-
         let balance_mapping_key = Key::local(mint_contract_uref.addr(), &local_key_bytes);
-
         match self
             .query(correlation_id, balance_mapping_key, &[])
             .map_err(Into::into)?
@@ -147,9 +147,9 @@ where
     fn get_system_contract_info(
         &mut self,
         correlation_id: CorrelationId,
-        public_key: Key,
+        outer_key: Key,
     ) -> Result<SystemContractInfo, Self::Error> {
-        let inner_uref_key = match self.get(correlation_id, &public_key).map_err(Into::into)? {
+        let inner_uref_key = match self.get(correlation_id, &outer_key).map_err(Into::into)? {
             Some(Value::Key(key @ Key::URef(_))) => key.normalize(),
             // This match needs to be improved
             Some(other) => {
@@ -158,9 +158,8 @@ where
                     other.type_string(),
                 )))
             }
-            None => return Err(execution::Error::KeyNotFound(public_key)),
+            None => return Err(execution::Error::KeyNotFound(outer_key)),
         };
-
         let contract = match self
             .get(correlation_id, &inner_uref_key)
             .map_err(Into::into)?
@@ -174,12 +173,7 @@ where
             }
             None => return Err(execution::Error::KeyNotFound(inner_uref_key)),
         };
-
-        Ok(SystemContractInfo::new(
-            public_key,
-            inner_uref_key,
-            contract,
-        ))
+        Ok(SystemContractInfo::new(outer_key, inner_uref_key, contract))
     }
 
     fn handle_nonce(&mut self, account: &mut Account, nonce: u64) -> Result<(), Self::Error> {
@@ -191,16 +185,13 @@ where
         } else {
             account.increment_nonce();
         }
-
+        // Safe to unwrap in the following cases as the error type is `!`.
         let validated_key: Validated<Key> =
             Validated::new::<!, _>(Key::Account(account.pub_key()), Validated::valid).unwrap();
-
+        let validated_account: Validated<Value> =
+            Validated::new(account.clone().into(), Validated::valid).unwrap();
         // Store updated account with new nonce
-        self.write(
-            validated_key,
-            Validated::new(account.clone().into(), Validated::valid).unwrap(),
-        );
-
+        self.write(validated_key, validated_account);
         Ok(())
     }
 }

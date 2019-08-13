@@ -244,7 +244,7 @@ where
 
             // Safe to unwrap here, as `get_system_contract_info` checks that the key is
             // the proper variant.
-            *mint_info.inner_uref_key().as_uref().unwrap()
+            *mint_info.inner_key().as_uref().unwrap()
         };
 
         // Get proof of stake system contract details
@@ -493,7 +493,7 @@ where
                 proof_of_stake_module,
                 &proof_of_stake_args,
                 &mut proof_of_stake_keys,
-                proof_of_stake_info.inner_uref_key(),
+                proof_of_stake_info.inner_key(),
                 &genesis_account,
                 authorized_keys.clone(),
                 blocktime,
