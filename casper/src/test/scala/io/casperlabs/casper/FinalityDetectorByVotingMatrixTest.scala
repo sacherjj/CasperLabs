@@ -49,7 +49,7 @@ class FinalityDetectorByVotingMatrixTest
         val bonds  = Seq(v1Bond, v2Bond)
 
         implicit val votingMatrix: VotingMatrix[Task] =
-          VotingMatrix.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+          VotingMatrixImpl.empty[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
         implicit val finalityDetectorEffect = new FinalityDetectorVotingMatrix[Task]
 
