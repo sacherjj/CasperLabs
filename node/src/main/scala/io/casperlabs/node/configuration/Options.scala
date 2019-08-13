@@ -290,8 +290,10 @@ private[configuration] final case class Options private (
       gen[Path]("Path to the PEM encoded public key to use for the system account.")
 
     @scallop
-    val casperInitialTokens =
-      gen[BigInt]("Initial amount of tokens to pass to the Mint contract.")
+    val casperInitialMotes =
+      gen[BigInt](
+        "Initial number of motes to pass to the Mint contract. Note: a mote is the smallest, indivisible unit of a token."
+      )
 
     @scallop
     val casperMintCodePath =

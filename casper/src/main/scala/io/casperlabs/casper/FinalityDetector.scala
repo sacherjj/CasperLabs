@@ -197,6 +197,9 @@ class FinalityDetectorInstancesImpl[F[_]: Monad: Log] extends FinalityDetector[F
                }
     } yield result
 
+  implicit val blockTopoOrdering: Ordering[BlockMetadata] =
+    DagOperations.blockTopoOrderingAsc
+
   // Tag level information for each block in one-pass
   def sweep(
       dag: DagRepresentation[F],
