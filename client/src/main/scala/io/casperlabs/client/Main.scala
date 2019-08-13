@@ -4,37 +4,41 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
-import cats.effect.ExitCode
-import cats.syntax.either._
+import cats.implicits._
 import guru.nidi.graphviz.engine.{Format, Graphviz, GraphvizJdkEngine}
 import io.casperlabs.client.configuration._
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
-import io.casperlabs.shared.{FilesAPI, Log}
-import monix.eval.{Task, TaskApp}
+import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
+import monix.eval.Task
+import monix.execution.Scheduler
 
-object Main extends TaskApp {
+object Main {
 
   implicit val log: Log[Task] = Log.log
 
-  def run(args: List[String]): Task[ExitCode] = {
+  def main(args: Array[String]): Unit = {
+    implicit val scheduler: Scheduler = Scheduler.io(
+      "node-runner",
+      reporter = UncaughtExceptionHandler
+    )
+
     val exec =
       for {
         maybeConf <- Task(Configuration.parse(args))
         _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) {
               case (conn, conf) =>
-                implicit val deployService: GrpcDeployService = new GrpcDeployService(conn)
-                implicit val filesAPI: FilesAPI[Task]         = FilesAPI.create[Task]
+                implicit val deployService: GrpcDeployService =
+                  new GrpcDeployService(conn, scheduler)
+                implicit val filesAPI: FilesAPI[Task] = FilesAPI.create[Task]
                 val graphvizWriteToFile = (file: File, format: Format, data: String) =>
                   Task(Graphviz.fromString(data).render(format).toFile(file))
                 val deployRuntime = new DeployRuntime[Task](graphvizWriteToFile)
-                Task(Graphviz.useEngine(new GraphvizJdkEngine)).flatMap(
-                  _ =>
-                    program[Task](deployRuntime, conf).doOnFinish(_ => Task(deployService.close()))
-                )
+                Task(Graphviz.useEngine(new GraphvizJdkEngine)) >>
+                  program[Task](deployRuntime, conf).doOnFinish(_ => Task(deployService.close()))
             }
-      } yield ExitCode.Success
+      } yield ()
 
-    exec.attempt.map(_.toOption.getOrElse(ExitCode.Error))
+    exec.runSyncUnsafe()
   }
 
   def program[F[_]](
