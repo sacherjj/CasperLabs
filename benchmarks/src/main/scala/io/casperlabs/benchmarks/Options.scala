@@ -35,7 +35,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val benchmark = new Subcommand("benchmark") {
     descr(
-      "Runs benchmarking by sending many token transfer deploys from many different account to single recipient"
+      "Runs benchmarking by sending many mote transfer deploys from many different account to single recipient"
     )
 
     val outputStats = opt[File](

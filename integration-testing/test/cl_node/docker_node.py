@@ -285,7 +285,7 @@ class DockerNode(LoggingDockerBase):
         Performs a transfer using the from account if given (or genesis if not)
 
         :param to_account_id: 1-20 index of test account for transfer into
-        :param amount: amount of tokens to transfer
+        :param amount: amount of motes to transfer (mote = smallest unit of token)
         :param from_account_id: default 'genesis' account, but previously funded account_id is also valid.
         :returns block_hash in hex str
         """

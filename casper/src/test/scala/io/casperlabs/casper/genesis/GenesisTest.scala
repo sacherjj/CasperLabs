@@ -169,7 +169,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
                                      chainId = casperlabsChainId,
                                      deployTimestamp = System.currentTimeMillis.some,
                                      accountPublicKeyPath = keyFile.some,
-                                     initialTokens = BigInt(123),
+                                     initialMotes = BigInt(123),
                                      mintCodePath = mintFile.some,
                                      posCodePath = posFile.some
                                    )
@@ -179,7 +179,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
               genesis.getBody.deploys.head.getDeploy.getBody.getSession.code.toByteArray
             )
           } yield {
-            request.initialTokens.get shouldBe state.BigInt("123", 512)
+            request.initialMotes.get shouldBe state.BigInt("123", 512)
             request.mintCode.get.code.toByteArray shouldBe ("mint code".getBytes)
             request.proofOfStakeCode.get.code.toByteArray shouldBe ("proof of stake code".getBytes)
             request.protocolVersion.get.value shouldBe 1L
@@ -252,7 +252,7 @@ object GenesisTest {
                   chainId = casperlabsChainId,
                   deployTimestamp = System.currentTimeMillis.some,
                   accountPublicKeyPath = none[Path],
-                  initialTokens = BigInt(0),
+                  initialMotes = BigInt(0),
                   mintCodePath = none[Path],
                   posCodePath = none[Path]
                 )

@@ -42,7 +42,7 @@ pub fn get_protocol_version() -> ProtocolVersion {
 pub fn get_mock_deploy() -> Deploy {
     let mut deploy = Deploy::new();
     deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
-    deploy.set_tokens_transferred_in_payment(1000);
+    deploy.set_motes_transferred_in_payment(1000);
     deploy.set_gas_price(1);
     deploy.set_nonce(1);
     let mut deploy_code = DeployCode::new();
@@ -129,7 +129,7 @@ pub fn create_genesis_request(
 
     let mut ret = GenesisRequest::new();
     ret.set_address(genesis_account_addr.to_vec());
-    ret.set_initial_tokens(initial_tokens);
+    ret.set_initial_motes(initial_tokens);
     ret.set_mint_code(mint_code);
     ret.set_proof_of_stake_code(proof_of_stake_code);
     ret.set_protocol_version(protocol_version);
@@ -169,7 +169,7 @@ pub fn create_exec_request(
 
     let mut deploy = Deploy::new();
     deploy.set_address(address.to_vec());
-    deploy.set_tokens_transferred_in_payment(1_000_000_000);
+    deploy.set_motes_transferred_in_payment(1_000_000_000);
     deploy.set_gas_price(1);
     deploy.set_nonce(nonce);
     deploy.set_authorization_keys(

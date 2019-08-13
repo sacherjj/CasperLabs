@@ -113,7 +113,7 @@ class DockerConfig:
             options[
                 "--casper-genesis-account-public-key-path"
             ] = f"/root/.casperlabs/accounts/{gen_acct_key_file}"
-            options["--casper-initial-tokens"] = 100000000000
+            options["--casper-initial-motes"] = 100000000000
         if self.node_public_key:
             options["--casper-validator-public-key"] = self.node_public_key
         if self.use_new_gossiping:
