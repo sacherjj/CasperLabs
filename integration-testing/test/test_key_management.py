@@ -1,7 +1,9 @@
 import json
+import pytest
 
 from test.cl_node.casperlabs_accounts import Account
 from casperlabs_client import ABI
+from test.cl_node.nonce_registry import NonceRegistry
 
 # from test.cl_node.nonce_registry import NonceRegistry
 
@@ -171,14 +173,16 @@ def test_key_management(one_node_network):
     assert_deploy_is_not_error(node, block_hash)
 
     # Deploy with removed key
-    block_hash = node.deploy_and_propose(
-        from_address=identity_key.public_key_hex,
-        payment_contract=HELLO_NAME_CONTRACT,
-        session_contract=HELLO_NAME_CONTRACT,
-        public_key=deploy_key.public_key_path,
-        private_key=deploy_key.private_key_path,
-    )
-    assert_deploy_is_error(node, block_hash)
+    with pytest.raises(Exception):
+        block_hash = node.deploy_and_propose(
+            from_address=identity_key.public_key_hex,
+            payment_contract=HELLO_NAME_CONTRACT,
+            session_contract=HELLO_NAME_CONTRACT,
+            public_key=deploy_key.public_key_path,
+            private_key=deploy_key.private_key_path,
+        )
+
+    NonceRegistry.revert(identity_key.public_key_hex)
 
     # Add deploy_key back
     block_hash = create_associated_key(
@@ -239,6 +243,18 @@ def test_key_management(one_node_network):
         private_key=deploy_key.private_key_path,
     )
     assert_deploy_is_error(node, block_hash, "DeploymentAuthorizationFailure")
+
+    NonceRegistry.revert(identity_key.public_key_hex)
+
+    # Testing deploy after failure for Nonce issue.
+    block_hash = node.deploy_and_propose(
+        from_address=identity_key.public_key_hex,
+        payment_contract=HELLO_NAME_CONTRACT,
+        session_contract=HELLO_NAME_CONTRACT,
+        public_key=high_weight_key.public_key_path,
+        private_key=high_weight_key.private_key_path,
+    )
+    assert_deploy_is_not_error(node, block_hash)
 
     # NonceRegistry.revert(identity_key.public_key_hex)
 
