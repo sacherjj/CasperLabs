@@ -10,7 +10,7 @@ final case class ConnectOptions(
     nodeId: Option[String]
 )
 
-sealed trait Configuration
+sealed trait Configuration extends Product with Serializable
 
 final case class Deploy(
     from: Option[String],
@@ -167,37 +167,6 @@ object Configuration {
         Balance(
           options.balance.address(),
           options.balance.blockHash()
-        ).some
-      case options.key :: options.key.thresholds :: Nil =>
-        SetThresholds(
-          options.key.thresholds.keyManagement(),
-          options.key.thresholds.deploys(),
-          options.key.nonce(),
-          options.key.privateKey(),
-          options.key.thresholds.session.toOption
-        ).some
-      case options.key :: options.key.add :: Nil =>
-        AddKey(
-          options.key.add.publicKey(),
-          options.key.add.weight(),
-          options.key.nonce(),
-          options.key.privateKey(),
-          options.key.add.session.toOption
-        ).some
-      case options.key :: options.key.remove :: Nil =>
-        RemoveKey(
-          options.key.add.publicKey(),
-          options.key.nonce(),
-          options.key.privateKey(),
-          options.key.remove.session.toOption
-        ).some
-      case options.key :: options.key.update :: Nil =>
-        UpdateKey(
-          options.key.update.publicKey(),
-          options.key.update.weight(),
-          options.key.nonce(),
-          options.key.privateKey(),
-          options.key.update.session.toOption
         ).some
       case _ => none[Configuration]
     }

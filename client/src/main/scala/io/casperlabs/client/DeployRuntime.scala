@@ -4,7 +4,6 @@ import java.nio.ByteOrder
 
 import cats.effect._
 import cats.implicits._
-import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine.Format
 import io.casperlabs.casper.consensus
@@ -20,6 +19,10 @@ import io.casperlabs.shared.{FilesAPI, Log}
 import scala.concurrent.duration._
 import scala.language.higherKinds
 
+// TODO: There is something wrong with the key management operations
+// If use Scala client to reproduce the integration-test/test/test_key_management.py,
+// then it fails with inability to add the 'high_weight_key' key using 'key_mgmt_key',
+// because deploy gets discarded with 'AuthorizationError`.
 class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
     graphvizWriteToFile: (File, Format, String) => F[Unit]
 ) {
