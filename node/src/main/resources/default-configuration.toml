@@ -224,8 +224,9 @@ required-sigs = 0
 # Path to the PEM encoded public key to use for the system account.
 # genesis-account-public-key-path =
 
-# Initial amount of tokens to pass to the Mint contract.
-initial-tokens = 0
+# Initial amount of motes to pass to the Mint contract.
+# Note: a "mote" is the smallest, indivisible unit of a token.
+initial-motes = 0
 
 # Path to the Wasm file which contains the Mint contract.
 # mint-code-path =
