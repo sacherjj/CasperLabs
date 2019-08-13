@@ -235,14 +235,14 @@ def test_key_management(one_node_network):
     assert_deploy_is_not_error(node, block_hash)
 
     # Deploy with weight under threshold
-    block_hash = node.deploy_and_propose(
-        from_address=identity_key.public_key_hex,
-        payment_contract=HELLO_NAME_CONTRACT,
-        session_contract=HELLO_NAME_CONTRACT,
-        public_key=deploy_key.public_key_path,
-        private_key=deploy_key.private_key_path,
-    )
-    assert_deploy_is_error(node, block_hash, "DeploymentAuthorizationFailure")
+    with pytest.raises(Exception):
+        block_hash = node.deploy_and_propose(
+            from_address=identity_key.public_key_hex,
+            payment_contract=HELLO_NAME_CONTRACT,
+            session_contract=HELLO_NAME_CONTRACT,
+            public_key=deploy_key.public_key_path,
+            private_key=deploy_key.private_key_path,
+        )
 
     NonceRegistry.revert(identity_key.public_key_hex)
 

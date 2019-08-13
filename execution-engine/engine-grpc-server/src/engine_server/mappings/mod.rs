@@ -339,7 +339,7 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
                 Weight::new(action_thresholds_ipc.get_deployment_threshold() as u8),
                 Weight::new(action_thresholds_ipc.get_key_management_threshold() as u8),
             )
-            .map_err(ParsingError::custom)?
+                .map_err(ParsingError::custom)?
         };
         let account_activity: AccountActivity = {
             if !value.has_account_activity() {
@@ -414,8 +414,8 @@ impl From<transform::Transform> for super::ipc::Transform {
                 t.set_add_keys(add);
             }
             transform::Transform::Failure(transform::Error::TypeMismatch(
-                transform::TypeMismatch { expected, found },
-            )) => {
+                                              transform::TypeMismatch { expected, found },
+                                          )) => {
                 let mut fail = super::ipc::TransformFailure::new();
                 let mut typemismatch_err = super::ipc::TypeMismatch::new();
                 typemismatch_err.set_expected(expected.to_owned());
@@ -710,6 +710,9 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     error @ EngineError::WasmSerializationError(_) => {
                         precondition_failure(error.to_string())
                     }
+                    error @ EngineError::ExecError(
+                        ExecutionError::DeploymentAuthorizationFailure,
+                    ) => precondition_failure(error.to_string()),
                     EngineError::StorageError(storage_err) => {
                         execution_error(storage_err.to_string(), cost, effect)
                     }
@@ -810,9 +813,9 @@ pub fn grpc_response_from_commit_result<H>(
     prestate_hash: Blake2bHash,
     input: Result<CommitResult, H::Error>,
 ) -> ipc::CommitResponse
-where
-    H: History,
-    H::Error: Into<EngineError> + std::fmt::Debug,
+    where
+        H: History,
+        H::Error: Into<EngineError> + std::fmt::Debug,
 {
     match input {
         Ok(CommitResult::RootNotFound) => {
