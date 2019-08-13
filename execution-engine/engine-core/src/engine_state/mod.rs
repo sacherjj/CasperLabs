@@ -137,11 +137,11 @@ where
         // Get addr bytes from `address` (which is actually a Key)
         // validation_spec_3: account validity
         let account_addr = match address.as_account() {
-            Some(addr) => addr,
+            Some(account_addr) => account_addr,
             None => {
                 return Ok(ExecutionResult::precondition_failure(
                     error::Error::AuthorizationError,
-                ));
+                ))
             }
         };
 
@@ -189,6 +189,8 @@ where
             Ok(module) => module,
         };
 
+        // --- REMOVE BELOW --- //
+
         // If payment logic is turned off, execute only session code
         if !(self.config.use_payment_code()) {
             // DEPLOY WITH NO PAYMENT
@@ -210,111 +212,116 @@ where
             return Ok(session_result);
         }
 
-        // PAYMENT PRECONDITIONS
+        // --- REMOVE ABOVE --- //
 
-        // Get mint system contract URef from account (an account on a different
-        //  network may have a mint contract other than the CLMint)
-        // payment_code_spec_6: system contract validity
-        let mint_public_uref: Key = match account.urefs_lookup().get(MINT_NAME) {
-            Some(uref) => uref.normalize(),
-            None => {
-                return Ok(ExecutionResult::precondition_failure(
-                    Error::MissingSystemContractError(MINT_NAME.to_string()),
-                ));
-            }
-        };
+        let max_payment_cost: U512 = MAX_PAYMENT_COST.into();
 
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
-        let mint_info = match tracking_copy
-            .borrow_mut()
-            .get_system_contract_info(correlation_id, mint_public_uref)
-        {
-            Ok(contract_info) => contract_info,
-            Err(error) => {
-                return Ok(ExecutionResult::precondition_failure(error.into()));
-            }
-        };
+        let mint_inner_uref = {
+            // Get mint system contract URef from account (an account on a different network may
+            // have a mint contract other than the CLMint)
+            // payment_code_spec_6: system contract validity
+            let mint_public_uref: Key = match account.urefs_lookup().get(MINT_NAME) {
+                Some(uref) => uref.normalize(),
+                None => {
+                    return Ok(ExecutionResult::precondition_failure(
+                        Error::MissingSystemContractError(MINT_NAME.to_string()),
+                    ));
+                }
+            };
 
-        // Get proof of stake system contract URef from account (an account on a different
-        //  network may have a pos contract other than the CLPoS)
-        // payment_code_spec_6: system contract validity
-        let proof_of_stake_public_uref: Key = match account.urefs_lookup().get(POS_NAME) {
-            Some(uref) => uref.normalize(),
-            None => {
-                return Ok(ExecutionResult::precondition_failure(
-                    Error::MissingSystemContractError(POS_NAME.to_string()),
-                ));
-            }
-        };
-
-        // Get proof of stake system contract details
-        // payment_code_spec_6: system contract validity
-        let proof_of_stake_info = match tracking_copy
-            .borrow_mut()
-            .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
-        {
-            Ok(contract_info) => contract_info,
-            Err(error) => {
-                return Ok(ExecutionResult::precondition_failure(error.into()));
-            }
-        };
-
-        // Get payment purse Key from proof of stake contract
-        // payment_code_spec_6: system contract validity
-        let payment_purse_uref_key: Key = match proof_of_stake_info
-            .contract
-            .urefs_lookup()
-            .get(POS_PAYMENT_PURSE)
-        {
-            Some(key) => key.to_owned(),
-            None => return Ok(ExecutionResult::precondition_failure(Error::DeployError)),
-        };
-
-        // Get reward purse Key from proof of stake contract
-        // payment_code_spec_6: system contract validity
-        let rewards_purse_uref_key: Key = match proof_of_stake_info
-            .contract
-            .urefs_lookup()
-            .get(POS_REWARDS_PURSE)
-        {
-            Some(key) => key.to_owned(),
-            None => {
-                return Ok(ExecutionResult::precondition_failure(Error::DeployError));
-            }
-        };
-
-        // Get account main purse balance mapping key
-        // payment_code_spec_6: system contract validity
-        let rewards_purse_balance_mapping_key = match tracking_copy
-            .borrow_mut()
-            .query_purse_balance_key(correlation_id, mint_info.inner_uref, rewards_purse_uref_key)
-        {
-            Ok(key) => key,
-            Err(error) => {
-                return Ok(ExecutionResult::precondition_failure(error.into()));
-            }
-        };
-
-        // Get account main purse balance mapping key
-        // validation_spec_5: account main purse minimum balance
-        let account_main_purse_balance_mapping_key =
-            match tracking_copy.borrow_mut().query_purse_balance_key(
-                correlation_id,
-                mint_info.inner_uref,
-                Key::URef(account.purse_id().value()),
-            ) {
-                Ok(key) => key,
+            // FIXME: This is inefficient; we don't need to get the entire contract.
+            let mint_info = match tracking_copy
+                .borrow_mut()
+                .get_system_contract_info(correlation_id, mint_public_uref)
+            {
+                Ok(contract_info) => contract_info,
                 Err(error) => {
                     return Ok(ExecutionResult::precondition_failure(error.into()));
                 }
             };
 
+            // Safe to unwrap here, as `get_system_contract_info` checks that the key is
+            // the proper variant.
+            *mint_info.inner_uref_key().as_uref().unwrap()
+        };
+
+        // Get proof of stake system contract details
+        // payment_code_spec_6: system contract validity
+        let proof_of_stake_info = {
+            // Get proof of stake system contract URef from account (an account on a different
+            // network may have a pos contract other than the CLPoS)
+            // payment_code_spec_6: system contract validity
+            let proof_of_stake_public_uref: Key = match account.urefs_lookup().get(POS_NAME) {
+                Some(uref) => uref.normalize(),
+                None => {
+                    return Ok(ExecutionResult::precondition_failure(
+                        Error::MissingSystemContractError(POS_NAME.to_string()),
+                    ));
+                }
+            };
+
+            match tracking_copy
+                .borrow_mut()
+                .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
+            {
+                Ok(contract_info) => contract_info,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error.into()));
+                }
+            }
+        };
+
+        // Get rewards purse balance key
+        // payment_code_spec_6: system contract validity
+        let rewards_purse_balance_key: Key = {
+            // Get reward purse Key from proof of stake contract
+            // payment_code_spec_6: system contract validity
+            let rewards_purse_key: Key = match proof_of_stake_info
+                .contract()
+                .urefs_lookup()
+                .get(POS_REWARDS_PURSE)
+            {
+                Some(key) => *key,
+                None => {
+                    return Ok(ExecutionResult::precondition_failure(Error::DeployError));
+                }
+            };
+
+            match tracking_copy.borrow_mut().get_purse_balance_key(
+                correlation_id,
+                mint_inner_uref,
+                rewards_purse_key,
+            ) {
+                Ok(key) => key,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error.into()));
+                }
+            }
+        };
+
+        // Get account main purse balance key
+        // validation_spec_5: account main purse minimum balance
+        let account_main_purse_balance_key: Key = {
+            let account_key = Key::URef(account.purse_id().value());
+            match tracking_copy.borrow_mut().get_purse_balance_key(
+                correlation_id,
+                mint_inner_uref,
+                account_key,
+            ) {
+                Ok(key) => key,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error.into()));
+                }
+            }
+        };
+
         // Get account main purse balance to enforce precondition and in case of forced transfer
         // validation_spec_5: account main purse minimum balance
         let account_main_purse_balance: U512 = match tracking_copy
             .borrow_mut()
-            .query_balance_inner(correlation_id, account_main_purse_balance_mapping_key)
+            .get_purse_balance(correlation_id, account_main_purse_balance_key)
         {
             Ok(balance) => balance,
             Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
@@ -322,7 +329,6 @@ where
 
         // Enforce minimum main purse balance validation
         // validation_spec_5: account main purse minimum balance
-        let max_payment_cost: U512 = MAX_PAYMENT_COST.into();
         if account_main_purse_balance < max_payment_cost {
             return Ok(ExecutionResult::precondition_failure(
                 Error::InsufficientPaymentError,
@@ -391,14 +397,37 @@ where
         let payment_result_cost = payment_result.cost();
 
         // payment_code_spec_3: fork based upon payment purse balance and cost of payment code execution
-        let payment_purse_balance: U512 = match tracking_copy.borrow_mut().query_balance(
-            correlation_id,
-            mint_info.inner_uref,
-            payment_purse_uref_key,
-        ) {
-            Ok(balance) => balance,
-            Err(error) => {
-                return Ok(ExecutionResult::precondition_failure(error.into()));
+        let payment_purse_balance: U512 = {
+            // Get payment purse Key from proof of stake contract
+            // payment_code_spec_6: system contract validity
+            let payment_purse: Key = match proof_of_stake_info
+                .contract()
+                .urefs_lookup()
+                .get(POS_PAYMENT_PURSE)
+            {
+                Some(key) => *key,
+                None => return Ok(ExecutionResult::precondition_failure(Error::DeployError)),
+            };
+
+            let purse_balance_key = match tracking_copy.borrow_mut().get_purse_balance_key(
+                correlation_id,
+                mint_inner_uref,
+                payment_purse,
+            ) {
+                Ok(key) => key,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error.into()));
+                }
+            };
+
+            match tracking_copy
+                .borrow_mut()
+                .get_purse_balance(correlation_id, purse_balance_key)
+            {
+                Ok(balance) => balance,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error.into()));
+                }
             }
         };
 
@@ -408,8 +437,8 @@ where
                 max_payment_cost,
                 account_main_purse_balance,
                 payment_purse_balance,
-                account_main_purse_balance_mapping_key,
-                rewards_purse_balance_mapping_key,
+                account_main_purse_balance_key,
+                rewards_purse_balance_key,
             )
         {
             return Ok(failure);
@@ -444,7 +473,7 @@ where
         let finalize_result = {
             // validation_spec_1: valid wasm bytes
             let proof_of_stake_module =
-                match preprocessor.deserialize(&proof_of_stake_info.module_bytes) {
+                match preprocessor.deserialize(&proof_of_stake_info.module_bytes()) {
                     Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
                     Ok(module) => module,
                 };
@@ -458,13 +487,13 @@ where
                     .expect("args should parse")
             };
 
-            let mut proof_of_stake_keys = proof_of_stake_info.contract.urefs_lookup().clone();
+            let mut proof_of_stake_keys = proof_of_stake_info.contract().urefs_lookup().clone();
 
             executor.exec_direct(
                 proof_of_stake_module,
                 &proof_of_stake_args,
                 &mut proof_of_stake_keys,
-                proof_of_stake_info.inner_uref_key,
+                proof_of_stake_info.inner_uref_key(),
                 &genesis_account,
                 authorized_keys.clone(),
                 blocktime,
