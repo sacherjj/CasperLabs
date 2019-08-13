@@ -1,13 +1,18 @@
-use super::error::Error;
-use super::execution_effect::ExecutionEffect;
-use engine_state::{error, CONV_RATE};
 use std::collections::HashMap;
+
+use contract_ffi::key::Key;
+use contract_ffi::value::{Value, U512};
+use engine_shared::transform::Transform;
+
+use super::execution_effect::ExecutionEffect;
+use super::op::Op;
+use super::{error, CONV_RATE};
 
 #[derive(Debug)]
 pub enum ExecutionResult {
     /// An error condition that happened during execution
     Failure {
-        error: Error,
+        error: error::Error,
         effect: ExecutionEffect,
         cost: u64,
     },
@@ -19,41 +24,77 @@ impl ExecutionResult {
     /// Constructs [ExecutionResult::Failure] that has 0 cost and no effects.
     /// This is the case for failures that we can't (or don't want to) charge for,
     /// like `PreprocessingError` or `InvalidNonce`.
-    pub fn precondition_failure(error: Error) -> ExecutionResult {
+    pub fn precondition_failure(error: error::Error) -> ExecutionResult {
         ExecutionResult::Failure {
             error,
             effect: Default::default(),
             cost: 0,
         }
     }
+
+    pub fn is_success(&self) -> bool {
+        match self {
+            ExecutionResult::Failure { .. } => false,
+            ExecutionResult::Success { .. } => true,
+        }
+    }
+
+    pub fn is_failure(&self) -> bool {
+        match self {
+            ExecutionResult::Failure { .. } => true,
+            ExecutionResult::Success { .. } => false,
+        }
+    }
+
+    pub fn cost(&self) -> u64 {
+        match self {
+            ExecutionResult::Failure { cost, .. } => *cost,
+            ExecutionResult::Success { cost, .. } => *cost,
+        }
+    }
+
+    pub fn effect(&self) -> &ExecutionEffect {
+        match self {
+            ExecutionResult::Failure { effect, .. } => effect,
+            ExecutionResult::Success { effect, .. } => effect,
+        }
+    }
+
+    pub fn with_cost(self, cost: u64) -> Self {
+        match self {
+            ExecutionResult::Failure { error, effect, .. } => ExecutionResult::Failure {
+                error,
+                effect,
+                cost,
+            },
+            ExecutionResult::Success { effect, .. } => ExecutionResult::Success { effect, cost },
+        }
+    }
+
+    pub fn with_effect(self, effect: ExecutionEffect) -> Self {
+        match self {
+            ExecutionResult::Failure { error, cost, .. } => ExecutionResult::Failure {
+                error,
+                effect,
+                cost,
+            },
+            ExecutionResult::Success { cost, .. } => ExecutionResult::Success { effect, cost },
+        }
+    }
 }
 
 pub struct ExecutionResultBuilder {
     payment_execution_result: Option<ExecutionResult>,
-    pub is_payment_valid: bool,
-    pub payment_cost: u64,
-    insufficient_payment_execution_result: Option<ExecutionResult>,
-    pub is_insufficient_payment_valid: bool,
     session_execution_result: Option<ExecutionResult>,
-    pub is_session_valid: bool,
-    pub session_cost: u64,
     finalize_execution_result: Option<ExecutionResult>,
-    pub is_finalize_valid: bool,
 }
 
 impl Default for ExecutionResultBuilder {
     fn default() -> Self {
         ExecutionResultBuilder {
             payment_execution_result: None,
-            is_payment_valid: false,
-            payment_cost: 0,
-            insufficient_payment_execution_result: None,
-            is_insufficient_payment_valid: false,
             session_execution_result: None,
-            session_cost: 0,
-            is_session_valid: false,
             finalize_execution_result: None,
-            is_finalize_valid: false,
         }
     }
 }
@@ -63,28 +104,8 @@ impl ExecutionResultBuilder {
         ExecutionResultBuilder::default()
     }
 
-    pub fn set_payment_execution_result(
-        &mut self,
-        payment_execution_result: ExecutionResult,
-    ) -> &mut ExecutionResultBuilder {
-        let (cost, success) = match payment_execution_result {
-            ExecutionResult::Success { cost, .. } => (cost, true),
-            ExecutionResult::Failure { cost, .. } => (cost, false),
-        };
-        self.is_payment_valid = success;
-        self.payment_cost = cost;
-        self.payment_execution_result = Some(payment_execution_result);
-        self
-    }
-
-    pub fn set_insufficient_payment_execution_result(
-        &mut self,
-        insufficient_payment_execution_result: ExecutionResult,
-    ) -> &mut ExecutionResultBuilder {
-        if let ExecutionResult::Success { .. } = insufficient_payment_execution_result {
-            self.is_insufficient_payment_valid = true;
-        }
-        self.insufficient_payment_execution_result = Some(insufficient_payment_execution_result);
+    pub fn set_payment_execution_result(&mut self, payment_result: ExecutionResult) -> &mut Self {
+        self.payment_execution_result = Some(payment_result);
         self
     }
 
@@ -92,12 +113,6 @@ impl ExecutionResultBuilder {
         &mut self,
         session_execution_result: ExecutionResult,
     ) -> &mut ExecutionResultBuilder {
-        let (cost, success) = match session_execution_result {
-            ExecutionResult::Success { cost, .. } => (cost, true),
-            ExecutionResult::Failure { cost, .. } => (cost, false),
-        };
-        self.is_session_valid = success;
-        self.session_cost = cost;
         self.session_execution_result = Some(session_execution_result);
         self
     }
@@ -106,130 +121,128 @@ impl ExecutionResultBuilder {
         &mut self,
         finalize_execution_result: ExecutionResult,
     ) -> &mut ExecutionResultBuilder {
-        if let ExecutionResult::Success { .. } = finalize_execution_result {
-            self.is_finalize_valid = true;
-        }
         self.finalize_execution_result = Some(finalize_execution_result);
         self
     }
 
     pub fn total_cost(&self) -> u64 {
+        let payment_cost = self
+            .payment_execution_result
+            .as_ref()
+            .map(ExecutionResult::cost)
+            .unwrap_or_default();
+        let session_cost = self
+            .session_execution_result
+            .as_ref()
+            .map(ExecutionResult::cost)
+            .unwrap_or_default();
         //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
-        (self.payment_cost + self.session_cost) * CONV_RATE
+        (payment_cost + session_cost) * CONV_RATE
+    }
+
+    pub fn check_forced_transfer(
+        &mut self,
+        max_payment_cost: U512,
+        account_main_purse_balance: U512,
+        payment_purse_balance: U512,
+        account_main_purse_balance_mapping_key: Key,
+        rewards_purse_uref_key: Key,
+    ) -> Option<ExecutionResult> {
+        let payment_result = match self.payment_execution_result.as_ref() {
+            Some(result) => result,
+            None => return None,
+        };
+        let payment_result_cost = payment_result.cost();
+        let payment_result_is_failure = payment_result.is_failure();
+
+        // payment_code_spec_3_b_ii: if (balance of PoS pay purse) < (gas spent during payment code execution) * conv_rate, no session
+        let insufficient_balance_to_continue =
+            payment_purse_balance < (payment_result_cost * CONV_RATE).into();
+
+        // payment_code_spec_4: insufficient payment
+        if !(insufficient_balance_to_continue || payment_result_is_failure) {
+            return None;
+        }
+
+        let mut ops = HashMap::new();
+        let mut transforms = HashMap::new();
+
+        let new_balance = account_main_purse_balance - max_payment_cost;
+
+        ops.insert(account_main_purse_balance_mapping_key, Op::Write);
+        transforms.insert(
+            account_main_purse_balance_mapping_key,
+            Transform::Write(Value::UInt512(new_balance)),
+        );
+
+        ops.insert(rewards_purse_uref_key, Op::Add);
+        transforms.insert(
+            rewards_purse_uref_key,
+            Transform::AddUInt512(max_payment_cost),
+        );
+
+        let error = error::Error::InsufficientPaymentError;
+        let effect = ExecutionEffect::new(ops, transforms);
+        let cost = 0;
+
+        Some(ExecutionResult::Failure {
+            error,
+            effect,
+            cost,
+        })
     }
 
     pub fn build(self) -> ExecutionResult {
-        if self.is_insufficient_payment_valid {
-            let (insufficient_payment_effect, insufficient_payment_cost) =
-                match self.insufficient_payment_execution_result.unwrap() {
-                    ExecutionResult::Success { effect, cost } => (effect, cost),
-                    ExecutionResult::Failure { effect, cost, .. } => (effect, cost),
-                };
+        let cost = self.total_cost();
+        let mut ops = HashMap::new();
+        let mut transforms = HashMap::new();
 
-            return ExecutionResult::Failure {
-                effect: insufficient_payment_effect.clone(),
-                cost: insufficient_payment_cost,
-                error: error::Error::InsufficientPaymentError,
-            };
-        }
-
-        if !self.is_payment_valid {
-            return ExecutionResult::precondition_failure(error::Error::InsufficientPaymentError);
-        }
-
-        // payment_code_spec_5_a: FinalizationError should only ever be raised here
-        if !self.is_finalize_valid {
-            return ExecutionResult::precondition_failure(error::Error::FinalizationError);
-        }
-
-        let total_cost = self.total_cost();
-
-        let payment_result_effect = match self.payment_execution_result {
-            Some(payment_result) => match payment_result {
-                ExecutionResult::Success { effect, .. } => effect,
-                ExecutionResult::Failure { effect, .. } => effect,
-            },
-            None => ExecutionEffect::new(HashMap::new(), HashMap::new()),
+        let mut ret: ExecutionResult = ExecutionResult::Success {
+            effect: Default::default(),
+            cost,
         };
 
-        let mut total_ops = HashMap::new();
-        let mut total_transforms = HashMap::new();
-
-        total_ops.extend(
-            payment_result_effect
-                .ops
-                .iter()
-                .map(|(k, v)| (*k, v.clone())),
-        );
-
-        total_transforms.extend(
-            payment_result_effect
-                .transforms
-                .iter()
-                .map(|(k, v)| (*k, v.clone())),
-        );
-
-        let (session_result_effect, session_result_maybe_error) =
-            match self.session_execution_result {
-                Some(session_result) => match session_result {
-                    ExecutionResult::Success { effect, .. } => (effect, None),
-                    ExecutionResult::Failure { effect, error, .. } => (effect, Some(error)),
-                },
-                None => (
-                    ExecutionEffect::new(HashMap::new(), HashMap::new()),
-                    Some(Error::DeployError),
-                ),
-            };
+        match self.payment_execution_result {
+            Some(result) => {
+                if result.is_failure() {
+                    return result;
+                } else {
+                    let effect = result.effect().to_owned();
+                    ops.extend(effect.ops.into_iter());
+                    transforms.extend(effect.transforms.into_iter());
+                }
+            }
+            None => panic!("this should not happen"),
+        };
 
         // session_code_spec_3: only include session exec effects if there is no session exec error
-        if session_result_maybe_error.is_none() {
-            total_ops.extend(
-                session_result_effect
-                    .ops
-                    .iter()
-                    .map(|(k, v)| (*k, v.clone())),
-            );
-            total_transforms.extend(
-                session_result_effect
-                    .transforms
-                    .iter()
-                    .map(|(k, v)| (*k, v.clone())),
-            );
-        }
-
-        let finalize_result = self.finalize_execution_result.unwrap();
-        let finalize_result_effect = match finalize_result {
-            ExecutionResult::Success { ref effect, .. } => effect,
-            ExecutionResult::Failure { ref effect, .. } => effect,
+        match self.session_execution_result {
+            Some(result) => {
+                if result.is_failure() {
+                    ret = result;
+                } else {
+                    let effect = result.effect().to_owned();
+                    ops.extend(effect.ops.into_iter());
+                    transforms.extend(effect.transforms.into_iter());
+                }
+            }
+            None => panic!("this should not happen"),
         };
 
-        total_ops.extend(
-            finalize_result_effect
-                .ops
-                .iter()
-                .map(|(k, v)| (*k, v.clone())),
-        );
-
-        total_transforms.extend(
-            finalize_result_effect
-                .transforms
-                .iter()
-                .map(|(k, v)| (*k, v.clone())),
-        );
-
-        let total_effect: ExecutionEffect = ExecutionEffect::new(total_ops, total_transforms);
-
-        if session_result_maybe_error.is_some() {
-            return ExecutionResult::Failure {
-                error: session_result_maybe_error.unwrap(),
-                effect: total_effect,
-                cost: 0,
-            };
+        match self.finalize_execution_result {
+            Some(result) => {
+                if result.is_failure() {
+                    // payment_code_spec_5_a: FinalizationError should only ever be raised here
+                    return ExecutionResult::precondition_failure(error::Error::FinalizationError);
+                } else {
+                    let effect = result.effect().to_owned();
+                    ops.extend(effect.ops.into_iter());
+                    transforms.extend(effect.transforms.into_iter());
+                }
+            }
+            None => panic!("this should not happen"),
         }
 
-        ExecutionResult::Success {
-            effect: total_effect,
-            cost: total_cost,
-        }
+        ret.with_effect(ExecutionEffect::new(ops, transforms))
     }
 }
