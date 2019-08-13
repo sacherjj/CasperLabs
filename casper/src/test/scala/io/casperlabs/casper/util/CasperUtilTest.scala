@@ -37,52 +37,93 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
 
   "isInMainChain and votedBranch" should "classify appropriately" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      for {
-        genesis <- createBlock[Task](Seq())
-        b2      <- createBlock[Task](Seq(genesis.blockHash))
-        b3      <- createBlock[Task](Seq(b2.blockHash))
+    implicit blockStorage =>
+      implicit dagStorage =>
+        /**
+          * The DAG looks like:
+          *
+          *     b3
+          *     |
+          *     b2
+          *     |
+          *     b1
+          *
+          */
+        for {
+          genesis <- createBlock[Task](Seq())
+          b2      <- createBlock[Task](Seq(genesis.blockHash))
+          b3      <- createBlock[Task](Seq(b2.blockHash))
 
-        dag <- dagStorage.getRepresentation
+          dag <- dagStorage.getRepresentation
 
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b3.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b2.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), genesis.blockHash) shouldBeF false
-        result <- votedBranch(dag, genesis.blockHash, b3.blockHash) shouldBeF Some(b2.blockHash)
-      } yield result
+          _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
+          _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b3.blockHash) shouldBeF true
+          _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b2.blockHash) shouldBeF false
+          _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), genesis.blockHash) shouldBeF false
+          _      <- votedBranch(dag, genesis.blockHash, b2.blockHash) shouldBeF Some(b2.blockHash)
+          _      <- votedBranch(dag, b2.blockHash, b3.blockHash) shouldBeF Some(b3.blockHash)
+          _      <- votedBranch(dag, b2.blockHash, b2.blockHash) shouldBeF None
+          _      <- votedBranch(dag, b3.blockHash, b2.blockHash) shouldBeF None
+          result <- votedBranch(dag, genesis.blockHash, b3.blockHash) shouldBeF Some(b2.blockHash)
+        } yield result
   }
 
   "isInMainChain and votedBranch" should "classify diamond DAGs appropriately" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      for {
-        genesis <- createBlock[Task](Seq())
-        b2      <- createBlock[Task](Seq(genesis.blockHash))
-        b3      <- createBlock[Task](Seq(genesis.blockHash))
-        b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash))
+    implicit blockStorage =>
+      implicit dagStorage =>
+        /**
+          * The dag looks like:
+          *
+          *            b4
+          *           // \
+          *          b2  b3
+          *           \  /
+          *          genesis
+          */
+        for {
+          genesis <- createBlock[Task](Seq())
+          b2      <- createBlock[Task](Seq(genesis.blockHash))
+          b3      <- createBlock[Task](Seq(genesis.blockHash))
+          b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash))
 
-        dag <- dagStorage.getRepresentation
+          dag <- dagStorage.getRepresentation
 
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b2.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b4.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b4.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b4.blockHash) shouldBeF false
-        _      <- votedBranch(dag, genesis.blockHash, b2.blockHash) shouldBeF Some(b2.blockHash)
-        _      <- votedBranch(dag, genesis.blockHash, b3.blockHash) shouldBeF Some(b3.blockHash)
-        _      <- votedBranch(dag, genesis.blockHash, b4.blockHash) shouldBeF Some(b2.blockHash)
-        _      <- votedBranch(dag, b2.blockHash, b4.blockHash) shouldBeF Some(b4.blockHash)
-        _      <- votedBranch(dag, b3.blockHash, b4.blockHash) shouldBeF None
-        result <- votedBranch(dag, b2.blockHash, b3.blockHash) shouldBeF None
-      } yield result
+          _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b2.blockHash) shouldBeF true
+          _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
+          _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b4.blockHash) shouldBeF true
+          _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b4.blockHash) shouldBeF true
+          _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b4.blockHash) shouldBeF false
+          _      <- votedBranch(dag, genesis.blockHash, b2.blockHash) shouldBeF Some(b2.blockHash)
+          _      <- votedBranch(dag, genesis.blockHash, b3.blockHash) shouldBeF Some(b3.blockHash)
+          _      <- votedBranch(dag, genesis.blockHash, b4.blockHash) shouldBeF Some(b2.blockHash)
+          _      <- votedBranch(dag, b2.blockHash, b4.blockHash) shouldBeF Some(b4.blockHash)
+          _      <- votedBranch(dag, b3.blockHash, b4.blockHash) shouldBeF None
+          result <- votedBranch(dag, b2.blockHash, b3.blockHash) shouldBeF None
+        } yield result
   }
 
-  // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "isInMainChain and votedBranch" should "classify complicated chains appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       val v1 = generateValidator("V1")
       val v2 = generateValidator("V2")
 
+      /**
+        * The dag looks like:
+        *
+        *           b8
+        *           |
+        *           b7   b6
+        *             \  |
+        *               \|
+        *           b5   b4
+        *             \  |
+        *              \ |
+        *           b3   b2
+        *             \  /
+        *            genesis
+        *
+        *
+        */
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
         b2      <- createBlock[Task](Seq(genesis.blockHash), v2)
@@ -111,6 +152,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
         _      <- votedBranch(dag, genesis.blockHash, b5.blockHash) shouldBeF Some(b2.blockHash)
         _      <- votedBranch(dag, genesis.blockHash, b8.blockHash) shouldBeF Some(b2.blockHash)
         _      <- votedBranch(dag, b4.blockHash, b8.blockHash) shouldBeF Some(b7.blockHash)
+        _      <- votedBranch(dag, b5.blockHash, b6.blockHash) shouldBeF None
         result <- votedBranch(dag, b5.blockHash, b8.blockHash) shouldBeF None
       } yield result
   }
