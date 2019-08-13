@@ -506,7 +506,10 @@ where
 
         execution_result_builder.set_finalize_execution_result(finalize_result);
 
-        let ret = execution_result_builder.build();
+        // We panic here to indicate that the builder was not used properly.
+        let ret = execution_result_builder
+            .build()
+            .expect("ExecutionResultBuilder not initialized properly");
 
         // NOTE: payment_code_spec_5_a is enforced in execution_result_builder.build()
         // payment_code_spec_6: return properly combined set of transforms and appropriate error

@@ -83,6 +83,13 @@ impl ExecutionResult {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ExecutionResultBuilderError {
+    MissingPaymentExecutionResult,
+    MissingSessionExecutionResult,
+    MissingFinalizeExecutionResult,
+}
+
 pub struct ExecutionResultBuilder {
     payment_execution_result: Option<ExecutionResult>,
     session_execution_result: Option<ExecutionResult>,
@@ -145,8 +152,8 @@ impl ExecutionResultBuilder {
         max_payment_cost: U512,
         account_main_purse_balance: U512,
         payment_purse_balance: U512,
-        account_main_purse_balance_mapping_key: Key,
-        rewards_purse_uref_key: Key,
+        account_main_purse: Key,
+        rewards_purse: Key,
     ) -> Option<ExecutionResult> {
         let payment_result = match self.payment_execution_result.as_ref() {
             Some(result) => result,
@@ -169,17 +176,14 @@ impl ExecutionResultBuilder {
 
         let new_balance = account_main_purse_balance - max_payment_cost;
 
-        ops.insert(account_main_purse_balance_mapping_key, Op::Write);
+        ops.insert(account_main_purse, Op::Write);
         transforms.insert(
-            account_main_purse_balance_mapping_key,
+            account_main_purse,
             Transform::Write(Value::UInt512(new_balance)),
         );
 
-        ops.insert(rewards_purse_uref_key, Op::Add);
-        transforms.insert(
-            rewards_purse_uref_key,
-            Transform::AddUInt512(max_payment_cost),
-        );
+        ops.insert(rewards_purse, Op::Add);
+        transforms.insert(rewards_purse, Transform::AddUInt512(max_payment_cost));
 
         let error = error::Error::InsufficientPaymentError;
         let effect = ExecutionEffect::new(ops, transforms);
@@ -192,7 +196,7 @@ impl ExecutionResultBuilder {
         })
     }
 
-    pub fn build(self) -> ExecutionResult {
+    pub fn build(self) -> Result<ExecutionResult, ExecutionResultBuilderError> {
         let cost = self.total_cost();
         let mut ops = HashMap::new();
         let mut transforms = HashMap::new();
@@ -205,14 +209,14 @@ impl ExecutionResultBuilder {
         match self.payment_execution_result {
             Some(result) => {
                 if result.is_failure() {
-                    return result;
+                    return Ok(result);
                 } else {
                     let effect = result.effect().to_owned();
                     ops.extend(effect.ops.into_iter());
                     transforms.extend(effect.transforms.into_iter());
                 }
             }
-            None => panic!("this should not happen"),
+            None => return Err(ExecutionResultBuilderError::MissingPaymentExecutionResult),
         };
 
         // session_code_spec_3: only include session exec effects if there is no session exec error
@@ -226,23 +230,25 @@ impl ExecutionResultBuilder {
                     transforms.extend(effect.transforms.into_iter());
                 }
             }
-            None => panic!("this should not happen"),
+            None => return Err(ExecutionResultBuilderError::MissingSessionExecutionResult),
         };
 
         match self.finalize_execution_result {
             Some(result) => {
                 if result.is_failure() {
                     // payment_code_spec_5_a: FinalizationError should only ever be raised here
-                    return ExecutionResult::precondition_failure(error::Error::FinalizationError);
+                    return Ok(ExecutionResult::precondition_failure(
+                        error::Error::FinalizationError,
+                    ));
                 } else {
                     let effect = result.effect().to_owned();
                     ops.extend(effect.ops.into_iter());
                     transforms.extend(effect.transforms.into_iter());
                 }
             }
-            None => panic!("this should not happen"),
+            None => return Err(ExecutionResultBuilderError::MissingFinalizeExecutionResult),
         }
 
-        ret.with_effect(ExecutionEffect::new(ops, transforms))
+        Ok(ret.with_effect(ExecutionEffect::new(ops, transforms)))
     }
 }
