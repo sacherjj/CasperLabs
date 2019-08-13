@@ -5,6 +5,7 @@ use cl_std::contract_api;
 #[derive(Debug, PartialEq)]
 // TODO: Split this up into user errors vs. system errors.
 pub enum Error {
+    UnknownMethod,
     NotBonded,
     TooManyEventsInQueue,
     CannotUnbondLastValidator,
@@ -44,15 +45,16 @@ pub type Result<T> = result::Result<T, Error>;
 impl Into<u32> for Error {
     fn into(self) -> u32 {
         match self {
-            Error::NotBonded => 0,
-            Error::TooManyEventsInQueue => 1,
-            Error::CannotUnbondLastValidator => 2,
-            Error::SpreadTooHigh => 3,
-            Error::MultipleRequests => 4,
-            Error::BondTooLarge => 5,
-            Error::UnbondTooLarge => 6,
-            Error::BondTransferFailed => 7,
-            Error::UnbondTransferFailed => 8,
+            Error::UnknownMethod => 1,
+            Error::NotBonded => 2,
+            Error::TooManyEventsInQueue => 3,
+            Error::CannotUnbondLastValidator => 4,
+            Error::SpreadTooHigh => 5,
+            Error::MultipleRequests => 6,
+            Error::BondTooLarge => 7,
+            Error::UnbondTooLarge => 8,
+            Error::BondTransferFailed => 9,
+            Error::UnbondTransferFailed => 10,
             // System errors
             Error::TimeWentBackwards => 256, // 0x100
             Error::StakesNotFound => 257,
