@@ -229,18 +229,6 @@ class ValidationTest
     Validation[Task].deploySignature(deploy) shouldBeF true
   }
 
-  it should "return false if its public key doesn't contained in approvals" in withoutStorage {
-    val genDeploy = for {
-      d            <- arbitrary[consensus.Deploy]
-      approvalKeys <- genAccountKeys
-      signature    = approvalKeys.sign(d.deployHash)
-    } yield d.withApprovals(
-      List(Approval().withApproverPublicKey(approvalKeys.publicKey).withSignature(signature))
-    )
-    val deploy = sample(genDeploy)
-    Validation[Task].deploySignature(deploy) shouldBeF false
-  }
-
   it should "return false if a key in an approval is empty" in withoutStorage {
     val genDeploy = for {
       d <- arbitrary[consensus.Deploy]

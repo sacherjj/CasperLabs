@@ -389,18 +389,22 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
         .toSet
         .diff(block.getHeader.justifications.map(_.validatorPublicKey).toSet)
       validator = block.getHeader.validatorPublicKey
-      toUpdateValidators <- if (validator.isEmpty) {
-                             // Ignore empty sender for special cases such as genesis block
-                             Log[F].warn(
-                               s"Block ${Base16.encode(block.blockHash.toByteArray)} validator is empty"
-                             ) *> newValidators.pure[F]
-                           } else if (validator.size == 32) {
-                             List(validator).pure[F]
-                           } else {
-                             Sync[F].raiseError[Set[ByteString]](
-                               BlockValidatorIsMalformed(block)
-                             )
-                           }
+      _ <- Log[F]
+            .warn(
+              s"Block ${Base16.encode(block.blockHash.toByteArray)} validator is empty"
+            )
+            .whenA(validator.isEmpty)
+      _ <- Sync[F]
+            .raiseError[Set[ByteString]](BlockValidatorIsMalformed(block))
+            .whenA(!validator.isEmpty && validator.size != 32)
+      toUpdateValidators = if (validator.isEmpty) {
+        // For Genesis, all validators are "new".
+        newValidators
+      } else {
+        // For any other block, only validator that produced it
+        // needs to have its "latest message" updated.
+        List(validator)
+      }
       _ <- (state >> 'latestMessages).modify {
             toUpdateValidators.foldLeft(_) {
               //Update new validators with block in which

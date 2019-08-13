@@ -2,11 +2,11 @@ package io.casperlabs.casper
 
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.util.DagOperations
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -69,7 +69,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       Map.empty[Validator, BlockHash]
+                       Map.empty[Estimator.Validator, Estimator.BlockHash]
                      )
       } yield forkchoice.head should be(genesis.blockHash)
   }
@@ -235,7 +235,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           f            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          scores       <- Estimator.lmdScoring(dag, latestBlocks)
+          lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
+          scores       <- Estimator.lmdScoring(dag, lca, latestBlocks)
           _ = scores shouldEqual Map(
             genesis.blockHash -> (3 + 5 + 7),
             a.blockHash       -> (3 + 7),
@@ -284,7 +285,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          scores       <- Estimator.lmdScoring(dag, latestBlocks)
+          lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
+          scores       <- Estimator.lmdScoring(dag, lca, latestBlocks)
           _ = scores shouldEqual Map(
             genesis.blockHash -> (3 + 5 + 7),
             a.blockHash       -> (3 + 7),
@@ -296,6 +298,72 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
             i.blockHash       -> 3
           )
         } yield ()
+  }
+
+  it should "stop traversing DAG when reaches the stop hash" in withStorage {
+    implicit blockStore =>
+      implicit blockDagStorage =>
+        /* The DAG looks like:
+         *
+         *          m
+         *        / | \
+         *       j  k  l
+         *      / \/   |
+         *     g  h   i
+         *      \ |  /
+         *        f
+         *      / |
+         *     d  e
+         *    |   | \
+         *    a   b  c
+         *     \  | /
+         *     genesis
+         *
+         */
+
+        val v1     = generateValidator("One")
+        val v2     = generateValidator("Two")
+        val v3     = generateValidator("Three")
+        val v1Bond = Bond(v1, 7)
+        val v2Bond = Bond(v2, 5)
+        val v3Bond = Bond(v3, 3)
+        val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+
+        for {
+          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          a       <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b       <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
+          e       <- createBlock[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
+          f       <- createBlock[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
+          g       <- createBlock[Task](Seq(f.blockHash), v1, bonds)
+          h       <- createBlock[Task](Seq(f.blockHash), v2, bonds)
+          i       <- createBlock[Task](Seq(f.blockHash), v3, bonds)
+          j       <- createBlock[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
+          k       <- createBlock[Task](Seq(h.blockHash), v2, bonds)
+          l <- createBlock[Task](
+                Seq(i.blockHash),
+                v3,
+                bonds,
+                justifications = Map(v3 -> i.blockHash)
+              )
+          m            <- createBlock[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
+          dag          <- blockDagStorage.getRepresentation
+          latestBlocks <- dag.latestMessageHashes
+          lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
+          scores <- Estimator
+                     .lmdScoring(dag, lca, latestBlocks)
+          _ = scores shouldEqual Map(
+            f.blockHash -> (7 + 5 + 3),
+            g.blockHash -> (7 + 5),
+            i.blockHash -> 3,
+            j.blockHash -> (7 + 5),
+            l.blockHash -> 3,
+            m.blockHash -> 5
+          )
+        } yield ()
+
   }
 
   "lmdMainchainGhost" should "pick the correct fork choice tip" in withStorage {

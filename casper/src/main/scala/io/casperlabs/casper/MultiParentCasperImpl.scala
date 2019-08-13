@@ -339,10 +339,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
 
   /** Return the list of tips. */
   def estimator(dag: DagRepresentation[F]): F[IndexedSeq[BlockHash]] =
-    for {
-      lastFinalizedBlock <- LastFinalizedBlockHashContainer[F].get
-      rankedEstimates    <- Estimator.tips[F](dag, lastFinalizedBlock)
-    } yield rankedEstimates
+    Estimator.tips[F](dag, genesis.blockHash)
 
   /*
    * Logic:
@@ -731,7 +728,7 @@ object MultiParentCasperImpl {
                      .pure[F]
                  ) { ctx =>
                    Validation[F]
-                     .parents(block, ctx.lastFinalizedBlockHash, dag)
+                     .parents(block, ctx.genesis.blockHash, dag)
                  }
         _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
         preStateHash <- ExecEngineUtil.computePrestate[F](merged)

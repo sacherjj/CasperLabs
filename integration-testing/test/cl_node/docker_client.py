@@ -5,8 +5,8 @@ import os
 
 
 from test.cl_node import LoggingMixin
-from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
-from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
+from test.cl_node.common import extract_block_count_from_show_blocks
+from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
