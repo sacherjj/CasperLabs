@@ -11,7 +11,7 @@ import cats.effect.Bracket
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage}
+import io.casperlabs.storage.{BlockMetadata, BlockStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._

@@ -7,7 +7,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Timer}
 import cats.implicits._
 import cats.temp.par.Par
-import io.casperlabs.blockstorage._
+import io.casperlabs.storage._
 import io.casperlabs.casper
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._

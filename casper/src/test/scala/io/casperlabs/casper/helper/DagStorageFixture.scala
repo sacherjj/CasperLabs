@@ -7,8 +7,8 @@ import java.util.zip.CRC32
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.functor._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.DagRepresentation.Validator
-import io.casperlabs.blockstorage._
+import io.casperlabs.storage.DagRepresentation.Validator
+import io.casperlabs.storage._
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.metrics.Metrics

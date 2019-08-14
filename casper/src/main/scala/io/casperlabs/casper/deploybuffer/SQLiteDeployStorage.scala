@@ -7,7 +7,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
-import io.casperlabs.blockstorage.DeployStorageMetricsSource
+import io.casperlabs.storage.DeployStorageMetricsSource
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.metrics.Metrics

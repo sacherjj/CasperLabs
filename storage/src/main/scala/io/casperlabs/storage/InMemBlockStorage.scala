@@ -1,15 +1,14 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
 import cats.effect.Sync
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.{Apply, Monad}
-import io.casperlabs.blockstorage.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
 
 import scala.language.higherKinds
 

@@ -1,4 +1,4 @@
-package io.casperlabs.blockstorage.benchmarks
+package io.casperlabs.storage.benchmarks
 
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Paths
@@ -6,11 +6,19 @@ import java.util.{Properties, UUID}
 
 import cats.Monad
 import cats.effect.Concurrent
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Ref
 import cats.implicits.none
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStorage.BlockHash
-import io.casperlabs.blockstorage.{
+import io.casperlabs.casper.consensus.state.Key
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
+import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.ipc.Transform.TransformInstance
+import io.casperlabs.ipc.{DeployCode => _, _}
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.shared.Log
+import io.casperlabs.storage.BlockStorage.BlockHash
+import io.casperlabs.storage.{
+  BlockMsgWithTransform,
   BlockStorage,
   DagStorage,
   FileDagStorage,
@@ -19,14 +27,6 @@ import io.casperlabs.blockstorage.{
   IndexedDagStorage,
   LMDBBlockStorage
 }
-import io.casperlabs.casper.protocol.ApprovedBlock
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.casper.consensus.state.Key
-import io.casperlabs.ipc.Transform.TransformInstance
-import io.casperlabs.ipc.{DeployCode => _, _}
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.Log
-import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.{metrics, shared}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

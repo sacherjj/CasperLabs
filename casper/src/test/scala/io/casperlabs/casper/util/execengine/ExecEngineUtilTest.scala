@@ -3,7 +3,7 @@ package io.casperlabs.casper.util.execengine
 import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
+import io.casperlabs.storage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy

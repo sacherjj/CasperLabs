@@ -2,9 +2,8 @@ package io.casperlabs
 
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.BlockMsgWithTransform
 
-package object blockstorage {
+package object storage {
   val BlockStorageMetricsSource: Metrics.Source =
     Metrics.Source(Metrics.BaseSource, "block-storage")
 

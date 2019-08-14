@@ -5,7 +5,7 @@ import cats.implicits._
 import cats.kernel.Monoid
 import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
+import io.casperlabs.storage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber

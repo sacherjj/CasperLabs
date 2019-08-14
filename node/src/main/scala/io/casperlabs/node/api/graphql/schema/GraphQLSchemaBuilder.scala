@@ -1,7 +1,7 @@
 package io.casperlabs.node.api.graphql.schema
 
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStorage
+import io.casperlabs.storage.BlockStorage
 import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI

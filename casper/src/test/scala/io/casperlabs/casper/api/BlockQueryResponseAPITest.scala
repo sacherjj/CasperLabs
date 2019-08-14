@@ -6,7 +6,7 @@ import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
+import io.casperlabs.storage.{BlockStorage, DagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper._
 import io.casperlabs.casper.helper.{DagStorageFixture, NoOpsCasperEffect}

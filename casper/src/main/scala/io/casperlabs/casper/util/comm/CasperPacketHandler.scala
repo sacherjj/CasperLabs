@@ -7,7 +7,7 @@ import cats.implicits._
 import cats.{Applicative, Monad}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
+import io.casperlabs.storage.{BlockStorage, DagStorage}
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef

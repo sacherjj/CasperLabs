@@ -1,11 +1,11 @@
-package io.casperlabs.blockstorage.util
+package io.casperlabs.storage.util
 import java.io.IOException
 import java.nio.file._
 import java.util.stream.Collectors
 
 import cats.implicits._
 import cats.effect.Sync
-import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
+import io.casperlabs.storage.util.fileIO.IOError.RaiseIOError
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal

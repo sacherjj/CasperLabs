@@ -12,6 +12,7 @@ import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Log
+import io.casperlabs.storage.{BlockStorage, IndexedDagStorage}
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}

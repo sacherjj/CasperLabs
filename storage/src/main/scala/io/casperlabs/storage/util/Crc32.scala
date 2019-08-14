@@ -1,4 +1,4 @@
-package io.casperlabs.blockstorage.util
+package io.casperlabs.storage.util
 
 import java.nio.ByteBuffer
 import java.util.zip.CRC32

@@ -1,4 +1,4 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
 import java.nio.file.{Path, Paths, StandardCopyOption}
 import java.nio.{BufferUnderflowException, ByteBuffer}
@@ -9,15 +9,15 @@ import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.FileDagStorage.{Checkpoint, CheckpointedDagInfo}
-import io.casperlabs.blockstorage.DagRepresentation.Validator
-import io.casperlabs.blockstorage.DagStorage.MeteredDagStorage
-import io.casperlabs.blockstorage.BlockStorage.BlockHash
-import io.casperlabs.blockstorage.util.byteOps._
-import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.util.fileIO._
-import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.blockstorage.util.{fileIO, Crc32, TopologicalSortUtil}
+import io.casperlabs.storage.FileDagStorage.{Checkpoint, CheckpointedDagInfo}
+import io.casperlabs.storage.DagRepresentation.Validator
+import io.casperlabs.storage.DagStorage.MeteredDagStorage
+import io.casperlabs.storage.BlockStorage.BlockHash
+import io.casperlabs.storage.util.byteOps._
+import io.casperlabs.storage.util.fileIO.IOError.RaiseIOError
+import io.casperlabs.storage.util.fileIO._
+import io.casperlabs.storage.util.fileIO.IOError
+import io.casperlabs.storage.util.{fileIO, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.catscontrib.MonadStateOps._
@@ -487,7 +487,7 @@ object FileDagStorage {
   def assertCond[F[_]: MonadError[?[_], Throwable]](errMsg: String, b: => Boolean): F[Unit] =
     MonadError[F, Throwable].raiseError(new IllegalArgumentException(errMsg)).whenA(!b)
 
-  private[blockstorage] final case class CheckpointedDagInfo(
+  private[storage] final case class CheckpointedDagInfo(
       childMap: Map[BlockHash, Set[BlockHash]],
       justificationMap: Map[BlockHash, Set[BlockHash]],
       dataLookup: Map[BlockHash, BlockMetadata],
@@ -495,7 +495,7 @@ object FileDagStorage {
       sortOffset: Long
   )
 
-  private[blockstorage] final case class Checkpoint(
+  private[storage] final case class Checkpoint(
       start: Long,
       end: Long,
       path: Path,

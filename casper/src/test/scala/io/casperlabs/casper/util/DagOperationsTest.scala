@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.{Id, Monad}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockMetadata
+import io.casperlabs.storage.BlockMetadata
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}

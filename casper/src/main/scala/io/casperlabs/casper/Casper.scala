@@ -3,7 +3,7 @@ package io.casperlabs.casper
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, DagStorage}
+import io.casperlabs.storage.{BlockStorage, DagRepresentation, DagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.DeployStorage

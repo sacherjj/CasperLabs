@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.{Applicative, ApplicativeError, Functor}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
+import io.casperlabs.storage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}

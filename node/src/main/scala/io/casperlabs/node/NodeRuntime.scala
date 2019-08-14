@@ -15,9 +15,9 @@ import cats.syntax.show._
 import cats.temp.par.Par
 import com.olegpy.meow.effects._
 import doobie.util.transactor.Transactor
-import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.{
+import io.casperlabs.storage.util.fileIO.IOError
+import io.casperlabs.storage.util.fileIO.IOError.RaiseIOError
+import io.casperlabs.storage.{
   BlockStorage,
   CachingBlockStorage,
   DagStorage,

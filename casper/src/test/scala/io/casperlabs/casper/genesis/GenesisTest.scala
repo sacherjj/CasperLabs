@@ -6,7 +6,7 @@ import java.util.Base64
 
 import cats.effect.Sync
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStorage
+import io.casperlabs.storage.BlockStorage
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.helper.{DagStorageFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.util.ProtoUtil

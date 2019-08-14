@@ -1,4 +1,4 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
 import cats.Apply
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -6,10 +6,10 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.DagRepresentation.Validator
-import io.casperlabs.blockstorage.DagStorage.MeteredDagStorage
-import io.casperlabs.blockstorage.BlockStorage.{BlockHash, MeteredBlockStorage}
-import io.casperlabs.blockstorage.util.TopologicalSortUtil
+import io.casperlabs.storage.DagRepresentation.Validator
+import io.casperlabs.storage.DagStorage.MeteredDagStorage
+import io.casperlabs.storage.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.util.TopologicalSortUtil
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics

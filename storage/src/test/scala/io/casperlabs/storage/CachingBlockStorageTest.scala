@@ -1,16 +1,14 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
-import cats._
-import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.metrics.Metrics
 import monix.eval.Task
 import monix.execution.Scheduler
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.BlockMsgWithTransform
 import org.scalatest._
+
 import scala.concurrent.duration._
 
 class CachingBlockStorageTest extends WordSpecLike with Matchers {
@@ -130,7 +128,6 @@ class CachingBlockStorageTest extends WordSpecLike with Matchers {
 }
 
 object CachingBlockStorageTest {
-  import BlockStorage.BlockHash
   import Scheduler.Implicits.global
 
   // Using the metrics added by MeteredBlockStorage

@@ -9,7 +9,7 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.foldable._
 import cats.syntax.functor._
-import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
+import io.casperlabs.storage.{BlockStorage, DagStorage}
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._

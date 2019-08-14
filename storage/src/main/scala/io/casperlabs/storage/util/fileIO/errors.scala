@@ -1,4 +1,4 @@
-package io.casperlabs.blockstorage.util.fileIO
+package io.casperlabs.storage.util.fileIO
 
 import java.io.{EOFException, FileNotFoundException, IOException}
 import java.nio.file._

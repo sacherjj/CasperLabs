@@ -8,7 +8,7 @@ import cats.effect.concurrent._
 import cats.implicits._
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
+import io.casperlabs.storage.{BlockStorage, DagStorage}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.DeployStorage

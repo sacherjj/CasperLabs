@@ -2,7 +2,7 @@ package io.casperlabs.casper
 
 import cats.Monad
 import cats.implicits._
-import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
+import io.casperlabs.storage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.FinalityDetector.Committee
 import io.casperlabs.casper.util.DagOperations.Key.blockMetadataKey

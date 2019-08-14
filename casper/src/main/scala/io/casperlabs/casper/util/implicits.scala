@@ -1,5 +1,5 @@
 package io.casperlabs.casper.util
-import io.casperlabs.blockstorage.BlockMetadata
+import io.casperlabs.storage.BlockMetadata
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.protocol.BlockMessage

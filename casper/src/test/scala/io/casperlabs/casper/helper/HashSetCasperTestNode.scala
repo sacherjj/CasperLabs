@@ -9,7 +9,7 @@ import cats.mtl.FunctorRaise
 import cats.temp.par.Par
 import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage._
+import io.casperlabs.storage._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}

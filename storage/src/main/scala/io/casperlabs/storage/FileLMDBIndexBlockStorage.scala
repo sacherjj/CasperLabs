@@ -1,34 +1,33 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
 import java.io._
 import java.nio.ByteBuffer
 import java.nio.file._
 
-import cats.{Applicative, Apply, Monad}
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, ExitCase, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
+import cats.{Applicative, Apply, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStorage.{BlockHash, MeteredBlockStorage}
-import io.casperlabs.shared.Resources.withResource
-import io.casperlabs.blockstorage.FileLMDBIndexBlockStorage.Checkpoint
-import io.casperlabs.blockstorage.StorageError.StorageErr
-import io.casperlabs.blockstorage.util.byteOps._
-import io.casperlabs.blockstorage.util.fileIO
-import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.util.fileIO.{IOError, _}
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.catscontrib.MonadStateOps._
-import io.casperlabs.metrics.Metrics, Metrics.Source
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
-import io.casperlabs.storage.BlockMsgWithTransform
-import monix.eval.Task
+import io.casperlabs.shared.PathOps._
+import io.casperlabs.shared.Resources.withResource
+import io.casperlabs.storage.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.FileLMDBIndexBlockStorage.Checkpoint
+import io.casperlabs.storage.StorageError.StorageErr
+import io.casperlabs.storage.util.byteOps._
+import io.casperlabs.storage.util.fileIO
+import io.casperlabs.storage.util.fileIO.IOError.RaiseIOError
+import io.casperlabs.storage.util.fileIO.{IOError, _}
 import org.lmdbjava.DbiFlags.{MDB_CREATE, MDB_DUPSORT}
 import org.lmdbjava._
-import io.casperlabs.shared.PathOps._
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
@@ -295,12 +294,12 @@ object FileLMDBIndexBlockStorage {
       noTls: Boolean = true
   )
 
-  private[blockstorage] final case class CheckpointIndex(
+  private[storage] final case class CheckpointIndex(
       env: Env[ByteBuffer],
       index: Dbi[ByteBuffer]
   )
 
-  private[blockstorage] final case class Checkpoint(
+  private[storage] final case class Checkpoint(
       index: Int,
       storagePath: Path
   )

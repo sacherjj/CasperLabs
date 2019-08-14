@@ -3,7 +3,7 @@ package io.casperlabs.casper
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, IndexedDagStorage}
+import io.casperlabs.storage.{BlockStorage, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._

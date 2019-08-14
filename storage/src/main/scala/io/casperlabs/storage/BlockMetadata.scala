@@ -1,8 +1,8 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, Bond}, Block.Justification
-import io.casperlabs.storage.BlockMetadataInternal
+import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.{Block, Bond}
 import scalapb.TypeMapper
 
 final case class BlockMetadata(

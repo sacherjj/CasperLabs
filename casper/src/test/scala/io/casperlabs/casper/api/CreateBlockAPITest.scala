@@ -6,7 +6,7 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.DagRepresentation
+import io.casperlabs.storage.DagRepresentation
 import io.casperlabs.casper
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef

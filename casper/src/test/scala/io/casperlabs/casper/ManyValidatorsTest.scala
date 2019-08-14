@@ -4,7 +4,7 @@ import cats.Monad
 import cats.effect.Sync
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.IndexedDagStorage
+import io.casperlabs.storage.IndexedDagStorage
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Bond

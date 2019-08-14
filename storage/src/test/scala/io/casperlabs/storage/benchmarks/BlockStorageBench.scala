@@ -1,8 +1,8 @@
-package io.casperlabs.blockstorage.benchmarks
+package io.casperlabs.storage.benchmarks
 
-import StorageBenchSuite._
-import io.casperlabs.blockstorage.BlockStorage.BlockHash
-import io.casperlabs.blockstorage._
+import io.casperlabs.storage.BlockStorage.BlockHash
+import io.casperlabs.storage._
+import io.casperlabs.storage.benchmarks.StorageBenchSuite._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations._

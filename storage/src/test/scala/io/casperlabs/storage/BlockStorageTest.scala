@@ -1,24 +1,21 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
 import cats._
 import cats.effect.Sync
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStorage.{BlockHash, DeployHash}
-import io.casperlabs.blockstorage.InMemBlockStorage.emptyMapRef
-import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.ipc._
-import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.BlockStorage.BlockHash
+import io.casperlabs.storage.InMemBlockStorage.emptyMapRef
+import io.casperlabs.storage.blockImplicits.{blockBatchesGen, blockElementsGen}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global

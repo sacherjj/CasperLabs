@@ -4,7 +4,7 @@ import cats.Id
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Effect => _, _}
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStorage
+import io.casperlabs.storage.BlockStorage
 import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}

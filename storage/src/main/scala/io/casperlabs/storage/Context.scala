@@ -1,4 +1,4 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 import java.nio.ByteBuffer
 import java.nio.file.Path
 

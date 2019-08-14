@@ -10,7 +10,7 @@ import cats.mtl.DefaultApplicativeAsk
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.blockstorage._
+import io.casperlabs.storage._
 import io.casperlabs.casper
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{consensus, _}

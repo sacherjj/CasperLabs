@@ -6,7 +6,7 @@ import cats.data.OptionT
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
+import io.casperlabs.storage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.PrettyPrinter

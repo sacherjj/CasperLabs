@@ -1,6 +1,6 @@
 package io.casperlabs.casper.validation
 
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
+import io.casperlabs.storage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock

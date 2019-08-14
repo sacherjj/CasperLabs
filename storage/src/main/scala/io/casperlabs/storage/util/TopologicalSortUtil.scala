@@ -1,7 +1,7 @@
-package io.casperlabs.blockstorage.util
+package io.casperlabs.storage.util
 
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStorage.BlockHash
+import io.casperlabs.storage.BlockStorage.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.crypto.codec.Base16
 

@@ -1,15 +1,15 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
 import cats._
 import cats.effect._
 import cats.implicits._
-import com.google.protobuf.ByteString
 import com.google.common.cache.{Cache, CacheBuilder, Weigher}
-import io.casperlabs.blockstorage.BlockStorage.{BlockHash, MeteredBlockStorage}
-import io.casperlabs.casper.protocol.ApprovedBlock
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.metrics.{Metered, Metrics}
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.storage.BlockStorage.{BlockHash, MeteredBlockStorage}
+
 import scala.collection.JavaConverters._
 
 /** Caches recently created blocks so queries that need the full body

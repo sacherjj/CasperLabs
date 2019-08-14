@@ -1,11 +1,10 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.ipc._
-import io.casperlabs.casper.consensus.state.Key
-import io.casperlabs.storage.BlockMsgWithTransform
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen.listOfN
 import org.scalacheck.{Arbitrary, Gen}

@@ -1,11 +1,11 @@
-package io.casperlabs.blockstorage.util.fileIO
+package io.casperlabs.storage.util.fileIO
 
 import java.io.{FileNotFoundException, FileOutputStream}
 import java.nio.file.Path
 
 import cats.effect.Sync
 import cats.implicits._
-import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
+import io.casperlabs.storage.util.fileIO.IOError.RaiseIOError
 
 final case class FileOutputStreamIO[F[_]: Sync: RaiseIOError] private (
     private val stream: FileOutputStream

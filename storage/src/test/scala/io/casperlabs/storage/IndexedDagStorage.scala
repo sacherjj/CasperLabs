@@ -1,12 +1,10 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
-import cats.effect.Concurrent
 import cats.Monad
-import cats.implicits._
+import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
-import com.google.protobuf.ByteString
+import cats.implicits._
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.crypto.hash.Blake2b256
 
 final class IndexedDagStorage[F[_]: Monad](
     lock: Semaphore[F],

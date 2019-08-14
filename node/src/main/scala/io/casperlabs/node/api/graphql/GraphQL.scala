@@ -6,7 +6,7 @@ import cats.effect.implicits._
 import cats.implicits._
 import fs2.concurrent.Queue
 import fs2.{Pipe, Stream}
-import io.casperlabs.blockstorage.BlockStorage
+import io.casperlabs.storage.BlockStorage
 import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}

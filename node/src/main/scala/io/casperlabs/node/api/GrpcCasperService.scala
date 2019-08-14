@@ -4,7 +4,7 @@ import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
-import io.casperlabs.blockstorage.BlockStorage
+import io.casperlabs.storage.BlockStorage
 import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI

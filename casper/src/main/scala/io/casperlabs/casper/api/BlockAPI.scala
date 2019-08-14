@@ -6,7 +6,7 @@ import cats.effect.{Bracket, Concurrent, Resource}
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, StorageError}
+import io.casperlabs.storage.{BlockStorage, DagRepresentation, StorageError}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._

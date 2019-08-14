@@ -4,7 +4,7 @@ import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, IndexedDagStorage}
+import io.casperlabs.storage.{BlockStorage, DagRepresentation, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
 import io.casperlabs.casper.util.ProtoUtil

@@ -4,8 +4,8 @@ import cats.effect.concurrent.Ref
 import cats.syntax.show._
 import cats.{Applicative, ApplicativeError}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStorage.{BlockHash, DeployHash}
-import io.casperlabs.blockstorage.{DagRepresentation, InMemBlockStorage, InMemDagStorage}
+import io.casperlabs.storage.BlockStorage.{BlockHash, DeployHash}
+import io.casperlabs.storage.{DagRepresentation, InMemBlockStorage, InMemDagStorage}
 import io.casperlabs.casper
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._

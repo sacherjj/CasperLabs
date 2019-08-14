@@ -1,14 +1,12 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
+import cats.Applicative
 import cats.implicits._
-import cats.{Applicative, Apply}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
-import io.casperlabs.metrics.implicits._
-import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.language.higherKinds
 

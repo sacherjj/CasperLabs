@@ -1,10 +1,10 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
 import cats.implicits._
 import cats.Monad
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.DagRepresentation.Validator
-import io.casperlabs.blockstorage.BlockStorage.BlockHash
+import io.casperlabs.storage.DagRepresentation.Validator
+import io.casperlabs.storage.BlockStorage.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.metrics.Metered
 

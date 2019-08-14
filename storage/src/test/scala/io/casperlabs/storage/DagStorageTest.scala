@@ -1,4 +1,4 @@
-package io.casperlabs.blockstorage
+package io.casperlabs.storage
 
 import java.nio.file.StandardOpenOption
 
@@ -6,17 +6,16 @@ import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.DagRepresentation.Validator
-import io.casperlabs.blockstorage.BlockStorage.BlockHash
-import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import io.casperlabs.blockstorage.blockImplicits._
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.BlockStorage.BlockHash
+import io.casperlabs.storage.DagRepresentation.Validator
+import io.casperlabs.storage.blockImplicits._
+import io.casperlabs.storage.util.byteOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
