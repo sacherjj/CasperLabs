@@ -550,23 +550,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
       // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
       // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
-      invalidNonceDeploysMsg = invalidNonceDeploys
-        .map(
-          in =>
-            Base16
-              .encode(in.deploy.deployHash.toByteArray)
-              .take(6) + s": expected:${in.expectedNonce}, got:${in.deployNonce}"
-        )
-        .mkString(", ")
-      _ <- Log[F]
-            .warn(s"Invalid nonce deploys: $invalidNonceDeploysMsg")
-            .whenA(invalidNonceDeploys.nonEmpty)
-      deploysToDiscardMsg = deploysToDiscard
-        .map(pf => Base16.encode(pf.deploy.deployHash.toByteArray) + ": " + pf.errorMessage)
-        .mkString(", ")
-      _ <- Log[F]
-            .warn(s"Discarded deploys: $deploysToDiscardMsg")
-            .whenA(deploysToDiscard.nonEmpty)
+
       _ <- DeployBuffer[F].markAsDiscarded(deploysToDiscard.toList.map(_.deploy)) whenA deploysToDiscard.nonEmpty
     } yield status)
       .handleErrorWith {

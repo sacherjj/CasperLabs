@@ -69,8 +69,7 @@ object ExecEngineUtil {
       (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
       commitResult                  <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       //TODO: Remove this logging at some point
-      flattenedTransforms = transforms.flatten
-      msgBody = flattenedTransforms
+      msgBody = transforms.flatten
         .map(t => {
           val k    = PrettyPrinter.buildString(t.key.get)
           val tStr = PrettyPrinter.buildString(t.transform.get)
@@ -79,7 +78,6 @@ object ExecEngineUtil {
         .mkString("\n")
       _ <- Log[F]
             .info(s"Block created with effects:\n$msgBody")
-            .whenA(flattenedTransforms.nonEmpty)
     } yield DeploysCheckpoint(
       preStateHash,
       commitResult.postStateHash,
