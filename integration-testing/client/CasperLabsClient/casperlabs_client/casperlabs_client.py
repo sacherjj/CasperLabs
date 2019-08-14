@@ -25,6 +25,7 @@ import struct
 import json
 from operator import add
 from functools import reduce
+from itertools import dropwhile
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -69,6 +70,11 @@ class ABI:
     @staticmethod
     def u64(n: int):
         return struct.pack("<Q", n)
+
+    @staticmethod
+    def u512(n: int):
+        bs = list(dropwhile(lambda b: b == 0, reversed(n.to_bytes(64, byteorder='little', signed=False))))
+        return len(bs).to_bytes(1, byteorder='little', signed=False) + bytes(reversed(bs))
 
     @staticmethod
     def byte_array(a: bytes):
@@ -232,6 +238,7 @@ class CasperLabsClient:
         public_key: str = None,
         private_key: str = None,
         args: bytes = None,
+        payment_args: bytes = None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -290,7 +297,7 @@ class CasperLabsClient:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
         body = consensus.Deploy.Body(
             session=read_code(session, args),
-            payment=read_code(payment, payment == session and args or None),
+            payment=read_code(payment, payment == session and args or payment_args),
         )
 
         account_public_key = public_key and read_pem_key(public_key)
@@ -554,6 +561,7 @@ def deploy_command(casperlabs_client, args):
         public_key=args.public_key or None,
         private_key=args.private_key or None,
         args=args.args and ABI.args_from_json(args.args) or None,
+        payment_args=args.payment_args and ABI.args_from_json(args.payment_args) or None,
     )
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy hash: {deploy_hash.hex()}")
@@ -677,6 +685,7 @@ def main():
                        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
                        [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
                        [('--args',), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
+                       [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment code's args, e.g.: [{"u64":10000}]""")],
                        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
                        [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 
