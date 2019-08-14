@@ -16,8 +16,7 @@ const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    // let amount = contract_api::get_arg(0);
-    let amount: U512 = 10_000_000.into();
+    let amount: U512 = contract_api::get_arg(0);
 
     let main_purse = contract_api::main_purse();
 
@@ -36,6 +35,5 @@ pub extern "C" fn call() {
         contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
     {
         contract_api::revert(99);
-
     }
 }
