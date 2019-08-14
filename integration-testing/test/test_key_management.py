@@ -43,7 +43,7 @@ def account_weight_abi(key: str, weight: int):
     return ABI.args_from_json(args_json)
 
 
-def create_associated_key(node, identity_key: str, weight_key, key: str, weight: int):
+def add_associated_key(node, identity_key: str, weight_key, key: str, weight: int):
     return node.deploy_and_propose(
         from_address=identity_key,
         payment_contract=ADD_KEY_CONTRACT,
@@ -117,7 +117,7 @@ def test_key_management(one_node_network):
     high_weight_key = Account(4)  #
 
     # Create deploy_acct key with weight of 10
-    block_hash = create_associated_key(
+    block_hash = add_associated_key(
         node,
         identity_key=identity_key.public_key_hex,
         weight_key=identity_key,
@@ -127,7 +127,7 @@ def test_key_management(one_node_network):
     assert_deploy_is_not_error(node, block_hash)
 
     # Create key_mgmt key with weight of 20
-    block_hash = create_associated_key(
+    block_hash = add_associated_key(
         node,
         identity_key=identity_key.public_key_hex,
         weight_key=identity_key,
@@ -137,7 +137,7 @@ def test_key_management(one_node_network):
     assert_deploy_is_not_error(node, block_hash)
 
     # Create high weight key for updating once we exceed weights of others
-    block_hash = create_associated_key(
+    block_hash = add_associated_key(
         node,
         identity_key=identity_key.public_key_hex,
         weight_key=key_mgmt_key,
@@ -186,7 +186,7 @@ def test_key_management(one_node_network):
     NonceRegistry.revert(identity_key.public_key_hex)
 
     # Add deploy_key back
-    block_hash = create_associated_key(
+    block_hash = add_associated_key(
         node,
         identity_key=identity_key.public_key_hex,
         weight_key=high_weight_key,
@@ -259,15 +259,46 @@ def test_key_management(one_node_network):
     )
     assert_deploy_is_not_error(node, block_hash)
 
-    # NonceRegistry.revert(identity_key.public_key_hex)
-
     # CURRENTLY NO WORKING WITH EE-562
     # Key management weight under threshold
-    # block_hash = set_key_thresholds(
-    #     node,
-    #     identity_key=identity_key.public_key_hex,
-    #     weight_key=key_mgmt_key,
-    #     deploy_weight=10,
-    #     key_management_weight=21,
-    # )
-    # assert_deploy_is_error(node, block_hash)
+    block_hash = set_key_thresholds(
+        node,
+        identity_key=identity_key.public_key_hex,
+        weight_key=key_mgmt_key,
+        deploy_weight=10,
+        key_management_weight=21,
+    )
+    # First process of contract fails with a revert(100)
+    assert_deploy_is_error(node, block_hash, "Exit code: 100")
+
+    # Key management weight under threshold
+    block_hash = remove_associated_key(
+        node,
+        key=deploy_key.public_key_hex,
+        identity_key=identity_key.public_key_hex,
+        weight_key=key_mgmt_key,
+    )
+    # Contract fails with revert(1)
+    assert_deploy_is_error(node, block_hash, "Exit code: 1")
+
+    # Key management weight under threshold
+    block_hash = add_associated_key(
+        node,
+        identity_key=identity_key.public_key_hex,
+        weight_key=key_mgmt_key,
+        key=identity_key.public_key_hex,
+        weight=10,
+    )
+    # Contract fails with revert(100)
+    assert_deploy_is_error(node, block_hash, "Exit code: 100")
+
+    # Key management weight under threshold
+    block_hash = update_associated_key(
+        node,
+        identity_key=identity_key.public_key_hex,
+        weight_key=key_mgmt_key,
+        key=identity_key.public_key_hex,
+        weight=10,
+    )
+    # Contract fails with revert(100)
+    assert_deploy_is_error(node, block_hash, "Exit code: 100")
