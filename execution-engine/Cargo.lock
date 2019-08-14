@@ -131,13 +131,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blessed-urefs-access-rights"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.10.0",
-]
-
-[[package]]
 name = "bonding"
 version = "0.1.0"
 dependencies = [
@@ -300,6 +293,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "cfg-if"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "check-system-contract-urefs-access-rights"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.10.0",
+]
 
 [[package]]
 name = "chrono"

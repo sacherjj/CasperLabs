@@ -17,7 +17,7 @@ const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 
 #[ignore]
 #[test]
-fn should_run_blessed_urefs_access_rights_contract() {
+fn should_have_read_only_access_to_system_contract_urefs() {
     let mut builder = WasmTestBuilder::default();
 
     builder
@@ -32,7 +32,7 @@ fn should_run_blessed_urefs_access_rights_contract() {
         .commit()
         .exec(
             ACCOUNT_1_ADDR,
-            "blessed_urefs_access_rights.wasm",
+            "check_system_contract_urefs_access_rights.wasm",
             DEFAULT_BLOCK_TIME,
             1,
         )
