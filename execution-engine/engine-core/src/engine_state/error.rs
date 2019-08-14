@@ -18,6 +18,14 @@ pub enum Error {
     StorageError(engine_storage::error::Error),
     #[fail(display = "Authorization failure: not authorized.")]
     AuthorizationError,
+    #[fail(display = "Insufficient payment")]
+    InsufficientPaymentError,
+    #[fail(display = "Deploy error")]
+    DeployError,
+    #[fail(display = "Payment finalization error")]
+    FinalizationError,
+    #[fail(display = "Missing system contract association: {}", _0)]
+    MissingSystemContractError(String),
 }
 
 impl From<engine_wasm_prep::PreprocessingError> for Error {
