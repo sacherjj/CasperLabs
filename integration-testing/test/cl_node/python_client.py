@@ -43,7 +43,8 @@ class PythonClient(CasperLabsClient, LoggingMixin):
         payment_contract: Optional[str] = None,
         private_key: Optional[str] = None,
         public_key: Optional[str] = None,
-        args: list = None,
+        session_args: list = None,
+        payment_args: list = None,
     ) -> str:
 
         assert session_contract is not None
@@ -77,7 +78,8 @@ class PythonClient(CasperLabsClient, LoggingMixin):
                 deploy_nonce,
                 public_key,
                 private_key,
-                args,
+                session_args,
+                payment_args,
             )
             return r
         except Exception:
