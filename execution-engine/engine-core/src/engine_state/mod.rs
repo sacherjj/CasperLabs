@@ -452,9 +452,8 @@ where
             )
         };
 
-        execution_result_builder.set_session_execution_result(session_result);
-
         // NOTE: session_code_spec_3: (do not include session execution effects in results) is enforced in execution_result_builder.build()
+        execution_result_builder.set_session_execution_result(session_result);
 
         // payment_code_spec_5: run finalize process
         let finalize_result = {

@@ -15,8 +15,9 @@ use grpc::RequestOptions;
 
 use casperlabs_engine_grpc_server::engine_server::ipc;
 use casperlabs_engine_grpc_server::engine_server::ipc::{
-    CommitRequest, Deploy, DeployCode, DeployResult, ExecRequest, ExecResponse, GenesisRequest,
-    GenesisResponse, QueryRequest, TransformEntry,
+    CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
+    DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisRequest, GenesisResponse,
+    QueryRequest, TransformEntry,
 };
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use casperlabs_engine_grpc_server::engine_server::mappings::{
@@ -32,6 +33,7 @@ use engine_storage::global_state::in_memory::InMemoryGlobalState;
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
+pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
 
 pub struct DeployBuilder {
     deploy: Deploy,
@@ -425,6 +427,38 @@ pub fn get_account(
             None
         }
     })
+}
+
+pub fn get_success_result(response: &ExecResponse) -> DeployResult_ExecutionResult {
+    let result = response.get_success();
+
+    result
+        .get_deploy_results()
+        .first()
+        .expect("should have a deploy result")
+        .get_execution_result()
+        .to_owned()
+}
+
+pub fn get_precondition_failure(response: &ExecResponse) -> DeployResult_PreconditionFailure {
+    let result = response.get_success();
+
+    result
+        .get_deploy_results()
+        .first()
+        .expect("should have a deploy result")
+        .get_precondition_failure()
+        .to_owned()
+}
+
+pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> String {
+    let error = execution_result.get_error();
+
+    if error.has_gas_error() {
+        "Gas limit".to_string()
+    } else {
+        error.get_exec_error().get_message().to_string()
+    }
 }
 
 /// Builder for simple WASM test

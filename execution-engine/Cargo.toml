@@ -22,6 +22,7 @@ members = [
     "contracts/test/ee-539-regression",
     "contracts/test/ee-536-regression",
     "contracts/test/ee-532-regression",
+    "contracts/test/endless-loop",
     "contracts/test/get-blocktime",
     "contracts/test/get-caller",
     "contracts/test/get-caller-subcall",

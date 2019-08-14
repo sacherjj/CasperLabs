@@ -223,7 +223,7 @@ impl ExecutionResultBuilder {
         match self.session_execution_result {
             Some(result) => {
                 if result.is_failure() {
-                    ret = result;
+                    ret = result.with_cost(cost);
                 } else {
                     let effect = result.effect().to_owned();
                     ops.extend(effect.ops.into_iter());
