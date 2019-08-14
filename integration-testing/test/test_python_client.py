@@ -58,7 +58,10 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     client = node.p_client.client
 
     nonce = 1
-    for wasm, encode in [(resource("test_args_u32.wasm"), ABI.u32), (resource("test_args_u512.wasm"), ABI.u512)]:
+    for wasm, encode in [
+        (resource("test_args_u32.wasm"), ABI.u32),
+        (resource("test_args_u512.wasm"), ABI.u512),
+    ]:
         for number in [1, 12, 256, 1024]:
             response, deploy_hash = client.deploy(
                 payment=wasm,
@@ -69,7 +72,9 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
                 nonce=nonce,
             )
             nonce += 1
-            logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
+            logging.info(
+                f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}"
+            )
 
             response = client.propose()
             # Need to convert to hex string from bytes
@@ -95,8 +100,9 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
         session=wasm,
         public_key=resource("accounts/account-public-genesis.pem"),
         private_key=resource("accounts/account-private-genesis.pem"),
-
-        session_args=ABI.args([ABI.account(bytes.fromhex(account_hex)), ABI.u32(number)]),
+        session_args=ABI.args(
+            [ABI.account(bytes.fromhex(account_hex)), ABI.u32(number)]
+        ),
         nonce=nonce,
     )
     logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
@@ -114,4 +120,3 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
 
     for blockInfo in client.showBlocks(10):
         assert blockInfo.status.stats.block_size_bytes > 0
-
