@@ -73,8 +73,15 @@ class ABI:
 
     @staticmethod
     def u512(n: int):
-        bs = list(dropwhile(lambda b: b == 0, reversed(n.to_bytes(64, byteorder='little', signed=False))))
-        return len(bs).to_bytes(1, byteorder='little', signed=False) + bytes(reversed(bs))
+        bs = list(
+            dropwhile(
+                lambda b: b == 0,
+                reversed(n.to_bytes(64, byteorder="little", signed=False)),
+            )
+        )
+        return len(bs).to_bytes(1, byteorder="little", signed=False) + bytes(
+            reversed(bs)
+        )
 
     @staticmethod
     def byte_array(a: bytes):
@@ -113,7 +120,9 @@ class ABI:
                 return int(value)
             elif typ == "account":
                 return bytearray.fromhex(value)
-            raise ValueError(f"Unknown type {typ}, expected ('u32', 'u64', 'u512', 'account')")
+            raise ValueError(
+                f"Unknown type {typ}, expected ('u32', 'u64', 'u512', 'account')"
+            )
 
         def encode(typ: str, value: str) -> bytes:
             v = python_value(typ, value)
@@ -298,7 +307,9 @@ class CasperLabsClient:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
         body = consensus.Deploy.Body(
             session=read_code(session, session_args),
-            payment=read_code(payment, payment == session and session_args or payment_args),
+            payment=read_code(
+                payment, payment == session and session_args or payment_args
+            ),
         )
 
         account_public_key = public_key and read_pem_key(public_key)
@@ -561,8 +572,12 @@ def deploy_command(casperlabs_client, args):
         nonce=args.nonce,
         public_key=args.public_key or None,
         private_key=args.private_key or None,
-        session_args=args.session_args and ABI.args_from_json(args.session_args) or None,
-        payment_args=args.payment_args and ABI.args_from_json(args.payment_args) or None,
+        session_args=args.session_args
+        and ABI.args_from_json(args.session_args)
+        or None,
+        payment_args=args.payment_args
+        and ABI.args_from_json(args.payment_args)
+        or None,
     )
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy hash: {deploy_hash.hex()}")
