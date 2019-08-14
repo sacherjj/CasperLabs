@@ -494,7 +494,7 @@ where
     E: Executor<A>,
     P: Preprocessor<A>,
     EngineError: From<H::Error>,
-    H::Error: Into<engine_core::execution::Error> + std::fmt::Debug,
+    H::Error: Into<engine_core::execution::Error>,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
     // the execution of ALL deploys within the block. This is because all of them share

@@ -31,7 +31,6 @@ use contract_ffi::value::{Account, Value, U512};
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::TypeMismatch;
 use engine_state::execution_result::ExecutionResult;
-use engine_state::genesis::GENESIS_ACCOUNT;
 use engine_storage::global_state::StateReader;
 use execution::Error::{KeyNotFound, URefNotFound};
 use function_index::FunctionIndex;
@@ -633,14 +632,6 @@ where
     }
 
     /// looks up the public mint contract key in the caller's [uref_lookup] map.
-    fn get_genesis_account_key(&mut self) -> Result<Key, Error> {
-        match self.context.get_uref(GENESIS_ACCOUNT) {
-            Some(key @ Key::Account(_)) => Ok(*key),
-            _ => Err(URefNotFound(String::from(GENESIS_ACCOUNT))),
-        }
-    }
-
-    /// looks up the public mint contract key in the caller's [uref_lookup] map.
     fn get_mint_contract_public_uref_key(&mut self) -> Result<Key, Error> {
         match self.context.get_uref(MINT_NAME) {
             Some(key @ Key::URef(_)) => Ok(*key),
@@ -758,10 +749,6 @@ where
                     ),
                     (pos_contract_uref.as_string(), pos_contract_key),
                     (mint_contract_uref.as_string(), mint_contract_key),
-                    (
-                        String::from(GENESIS_ACCOUNT),
-                        self.get_genesis_account_key()?,
-                    ),
                 ]
                 .into_iter()
                 .map(|(name, key)| {

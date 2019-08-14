@@ -26,7 +26,6 @@ pub const POS_PUBLIC_ADDRESS: &str = "pos_public_address";
 pub const POS_PRIVATE_ADDRESS: &str = "pos_private_address";
 pub const MINT_PUBLIC_ADDRESS: &str = "mint_public_address";
 pub const MINT_PRIVATE_ADDRESS: &str = "mint_private_address";
-pub const GENESIS_ACCOUNT: &str = "genesis_account";
 pub const GENESIS_ACCOUNT_PURSE: &str = "genesis_account_purse";
 pub const MINT_GENESIS_ACCOUNT_BALANCE_UREF: &str = "mint_genesis_account_balance_uref";
 pub const MINT_POS_BONDING_BALANCE_UREF: &str = "mint_pos_bonding_balance_uref";
@@ -118,7 +117,6 @@ fn create_mint_effects(
         Value::Key(Key::URef(mint_contract_uref)),
     );
 
-    let genesis_account_key = Key::Account(genesis_account_addr);
     let purse_id_uref = rng.get_uref(GENESIS_ACCOUNT_PURSE);
     let pos_public_uref = rng.get_uref(POS_PUBLIC_ADDRESS);
     let pos_private_uref = rng.get_uref(POS_PRIVATE_ADDRESS);
@@ -137,7 +135,6 @@ fn create_mint_effects(
                 mint_contract_uref.as_string(),
                 Key::URef(mint_contract_uref),
             ),
-            (GENESIS_ACCOUNT.to_string(), genesis_account_key),
         ]
         .into_iter()
         .collect();
