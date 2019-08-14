@@ -9,7 +9,6 @@ import cats.mtl.FunctorRaise
 import cats.temp.par.Par
 import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import com.google.protobuf.ByteString
-import io.casperlabs.storage._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
@@ -34,6 +33,9 @@ import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage._
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler

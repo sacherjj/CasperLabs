@@ -9,11 +9,10 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.foldable._
 import cats.syntax.functor._
-import io.casperlabs.storage.{BlockStorage, DagStorage}
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.casper.deploybuffer.DeployStorage
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Catscontrib._
@@ -32,6 +31,8 @@ import io.casperlabs.p2p.effects._
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
 import monix.eval.Task
 import monix.execution.Scheduler
 

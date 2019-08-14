@@ -2,7 +2,8 @@ package io.casperlabs.casper.genesis.contracts
 
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import scala.util.{Failure, Success, Try}
+
+import scala.util.Try
 
 case class PreWallet(publicKey: Keys.PublicKey, initBalance: BigInt)
 

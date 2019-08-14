@@ -6,7 +6,6 @@ import java.util.Base64
 
 import cats.effect.Sync
 import cats.implicits._
-import io.casperlabs.storage.BlockStorage
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.helper.{DagStorageFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.util.ProtoUtil
@@ -18,6 +17,7 @@ import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{FilesAPI, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 

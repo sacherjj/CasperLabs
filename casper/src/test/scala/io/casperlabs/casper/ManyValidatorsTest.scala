@@ -4,7 +4,6 @@ import cats.Monad
 import cats.effect.Sync
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.IndexedDagStorage
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Bond
@@ -15,6 +14,7 @@ import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.dag._
 import monix.eval.Task
 import monix.execution.schedulers.CanBlock
 import org.scalatest.{FlatSpec, Matchers}

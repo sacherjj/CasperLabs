@@ -1,15 +1,14 @@
 package io.casperlabs.casper
 
 import cats.Monad
-import io.casperlabs.catscontrib.MonadThrowable
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockMetadata, DagRepresentation}
-import io.casperlabs.casper.util.{implicits, DagOperations}
-import implicits.{eqBlockHash, showBlockHash}
+import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.storage.dag.DagRepresentation
 
-import scala.collection.immutable.{Map, Set}
+import scala.collection.immutable.Map
 
 object Estimator {
   type BlockHash = ByteString

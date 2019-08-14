@@ -1,7 +1,6 @@
 package io.casperlabs.node.api.graphql.schema
 
 import cats.implicits._
-import io.casperlabs.storage.BlockStorage
 import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
@@ -14,6 +13,7 @@ import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
 import sangria.schema._
 
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorageReader] {

@@ -15,15 +15,6 @@ import cats.syntax.show._
 import cats.temp.par.Par
 import com.olegpy.meow.effects._
 import doobie.util.transactor.Transactor
-import io.casperlabs.storage.util.fileIO.IOError
-import io.casperlabs.storage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.storage.{
-  BlockStorage,
-  CachingBlockStorage,
-  DagStorage,
-  FileDagStorage,
-  FileLMDBIndexBlockStorage
-}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageWriter, SQLiteDeployStorage}
@@ -44,6 +35,10 @@ import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
+import io.casperlabs.storage.util.fileIO.IOError._
+import io.casperlabs.storage.util.fileIO._
 import io.netty.handler.ssl.ClientAuth
 import monix.eval.Task
 import monix.execution.Scheduler

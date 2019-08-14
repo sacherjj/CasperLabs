@@ -6,20 +6,19 @@ import java.util.concurrent.TimeUnit
 import cats.data.Validated.Valid
 import cats.syntax.option._
 import cats.syntax.show._
-import eu.timepit.refined._
 import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
-import io.casperlabs.storage.{FileDagStorage, LMDBBlockStorage}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.ignore
 import io.casperlabs.node.configuration.Utils._
+import io.casperlabs.storage.block._
 import org.scalacheck.ScalacheckShapeless._
+import org.scalacheck.Shrink
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalacheck.{Gen, Shrink}
+
 import scala.concurrent.duration._
 import scala.io.Source
 

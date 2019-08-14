@@ -10,7 +10,6 @@ import cats.mtl.DefaultApplicativeAsk
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.storage._
 import io.casperlabs.casper
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{consensus, _}
@@ -22,6 +21,8 @@ import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, Time}
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue

@@ -1,21 +1,23 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.dag
 
 import cats.Apply
+import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.DagRepresentation.Validator
-import io.casperlabs.storage.DagStorage.MeteredDagStorage
-import io.casperlabs.storage.BlockStorage.{BlockHash, MeteredBlockStorage}
-import io.casperlabs.storage.util.TopologicalSortUtil
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Log
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.dag.DagRepresentation.Validator
+import io.casperlabs.storage.dag.DagStorage.MeteredDagStorage
+import io.casperlabs.storage.util.TopologicalSortUtil
+import io.casperlabs.storage.{BlockMetadata, BlockValidatorIsMalformed, DagStorageMetricsSource}
 
 import scala.collection.immutable.HashSet
 

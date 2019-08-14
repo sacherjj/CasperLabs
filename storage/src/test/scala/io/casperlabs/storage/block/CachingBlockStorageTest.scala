@@ -1,10 +1,11 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.block
 
 import cats.effect.concurrent._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.storage.blockImplicits
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._

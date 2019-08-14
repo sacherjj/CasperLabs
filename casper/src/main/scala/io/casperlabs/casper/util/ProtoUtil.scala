@@ -6,7 +6,6 @@ import cats.data.OptionT
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.PrettyPrinter
@@ -20,6 +19,9 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.shared.Time
+import io.casperlabs.storage.BlockMetadata
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.immutable
 

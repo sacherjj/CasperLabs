@@ -8,7 +8,6 @@ import cats.effect.concurrent._
 import cats.implicits._
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockStorage, DagStorage}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.DeployStorage
@@ -29,6 +28,8 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared.{Cell, FilesAPI, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
 import io.grpc.ManagedChannel
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}

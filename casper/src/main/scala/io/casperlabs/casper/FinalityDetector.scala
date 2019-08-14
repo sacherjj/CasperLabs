@@ -2,12 +2,13 @@ package io.casperlabs.casper
 
 import cats.Monad
 import cats.implicits._
-import io.casperlabs.storage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.FinalityDetector.Committee
 import io.casperlabs.casper.util.DagOperations.Key.blockMetadataKey
 import io.casperlabs.casper.util._
 import io.casperlabs.shared.Log
+import io.casperlabs.storage.BlockMetadata
+import io.casperlabs.storage.dag.DagRepresentation
 
 /*
  * Implementation inspired by The Inspector algorithm

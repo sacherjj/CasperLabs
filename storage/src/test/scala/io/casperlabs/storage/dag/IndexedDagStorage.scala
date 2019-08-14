@@ -1,4 +1,4 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.dag
 
 import cats.Monad
 import cats.effect.Concurrent

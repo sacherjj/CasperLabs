@@ -1,23 +1,22 @@
 package io.casperlabs.casper.util.execengine
 
-import cats.effect.Sync
 import cats.implicits._
 import cats.kernel.Monoid
 import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.{Block, Deploy}
-import io.casperlabs.casper.util.ProtoUtil.blockNumber
+import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
-import io.casperlabs.casper.consensus.state
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.BlockMetadata
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,

@@ -1,23 +1,22 @@
 package io.casperlabs.casper
 
-import cats.{Applicative, Monad}
 import cats.implicits._
 import cats.mtl.FunctorRaise
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.casper.consensus.{Block, Bond}, Block.Justification
-import io.casperlabs.casper.util.{DoublyLinkedDag, ProtoUtil}
+import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.util.ProtoUtil.{
   bonds,
   findCreatorJustificationAncestorWithSeqNum,
   toLatestMessageHashes
 }
+import io.casperlabs.casper.util.{DoublyLinkedDag, ProtoUtil}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.{Cell, Log, LogSource}
-
-import scala.collection.mutable
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
 
 /**
   * A summary of the neglected equivocation algorithm is as follows.

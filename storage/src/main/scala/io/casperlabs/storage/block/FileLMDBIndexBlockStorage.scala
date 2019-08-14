@@ -1,4 +1,4 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.block
 
 import java.io._
 import java.nio.ByteBuffer
@@ -19,13 +19,21 @@ import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared.Resources.withResource
-import io.casperlabs.storage.BlockStorage.{BlockHash, MeteredBlockStorage}
-import io.casperlabs.storage.FileLMDBIndexBlockStorage.Checkpoint
 import io.casperlabs.storage.StorageError.StorageErr
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.FileLMDBIndexBlockStorage.Checkpoint
 import io.casperlabs.storage.util.byteOps._
 import io.casperlabs.storage.util.fileIO
 import io.casperlabs.storage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.storage.util.fileIO.{IOError, _}
+import io.casperlabs.storage.{
+  BlockMsgWithTransform,
+  BlockStorageMetricsSource,
+  CheckpointsAreNotConsecutive,
+  CheckpointsDoNotStartFromZero,
+  Context,
+  StorageError
+}
 import org.lmdbjava.DbiFlags.{MDB_CREATE, MDB_DUPSORT}
 import org.lmdbjava._
 
@@ -198,7 +206,7 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
         case bytes if bytes.isEmpty =>
           None
         case bytes =>
-          Some(ApprovedBlock.parseFrom(bytes))
+          Option(ApprovedBlock.parseFrom(bytes))
       }
     )
 

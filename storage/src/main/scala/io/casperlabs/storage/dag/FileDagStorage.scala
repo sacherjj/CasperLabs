@@ -1,31 +1,32 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.dag
 
 import java.nio.file.{Path, Paths, StandardCopyOption}
 import java.nio.{BufferUnderflowException, ByteBuffer}
 
-import cats.{Apply, Monad, MonadError}
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
+import cats.{Apply, Monad, MonadError}
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.FileDagStorage.{Checkpoint, CheckpointedDagInfo}
-import io.casperlabs.storage.DagRepresentation.Validator
-import io.casperlabs.storage.DagStorage.MeteredDagStorage
-import io.casperlabs.storage.BlockStorage.BlockHash
-import io.casperlabs.storage.util.byteOps._
-import io.casperlabs.storage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.storage.util.fileIO._
-import io.casperlabs.storage.util.fileIO.IOError
-import io.casperlabs.storage.util.{fileIO, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.catscontrib.ski._
+import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.{Log, LogSource}
+import io.casperlabs.storage._
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.dag.DagRepresentation.Validator
+import io.casperlabs.storage.dag.DagStorage.MeteredDagStorage
+import io.casperlabs.storage.dag.FileDagStorage.Checkpoint
+import io.casperlabs.storage.util.byteOps._
+import io.casperlabs.storage.util.fileIO.IOError.RaiseIOError
+import io.casperlabs.storage.util.fileIO.{IOError, _}
+import io.casperlabs.storage.util.{fileIO, Crc32, TopologicalSortUtil}
 
 import scala.ref.WeakReference
 import scala.util.matching.Regex

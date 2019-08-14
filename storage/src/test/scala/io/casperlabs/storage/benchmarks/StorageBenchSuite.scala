@@ -16,17 +16,15 @@ import io.casperlabs.ipc.Transform.TransformInstance
 import io.casperlabs.ipc.{DeployCode => _, _}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
-import io.casperlabs.storage.BlockStorage.BlockHash
-import io.casperlabs.storage.{
-  BlockMsgWithTransform,
+import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.{
   BlockStorage,
-  DagStorage,
-  FileDagStorage,
   FileLMDBIndexBlockStorage,
   InMemBlockStorage,
-  IndexedDagStorage,
   LMDBBlockStorage
 }
+import io.casperlabs.storage.dag.{DagStorage, FileDagStorage, IndexedDagStorage}
 import io.casperlabs.{metrics, shared}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

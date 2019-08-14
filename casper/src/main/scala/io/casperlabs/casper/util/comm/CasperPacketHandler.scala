@@ -7,7 +7,6 @@ import cats.implicits._
 import cats.{Applicative, Monad}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockStorage, DagStorage}
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -34,6 +33,8 @@ import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.{FilesAPI, Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 

@@ -6,9 +6,8 @@ import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
-import io.casperlabs.storage.BlockStorage
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.FinalityDetector
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.protocol._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -18,6 +17,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.Utils.toKey
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 import monix.reactive.Observable

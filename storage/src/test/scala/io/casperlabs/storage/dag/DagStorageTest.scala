@@ -1,4 +1,4 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.dag
 
 import java.nio.file.StandardOpenOption
 
@@ -12,10 +12,12 @@ import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
-import io.casperlabs.storage.BlockStorage.BlockHash
-import io.casperlabs.storage.DagRepresentation.Validator
+import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.{BlockStorage, FileLMDBIndexBlockStorage}
 import io.casperlabs.storage.blockImplicits._
+import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.util.byteOps._
+import io.casperlabs.storage.{BlockMetadata, BlockMsgWithTransform, Context}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._

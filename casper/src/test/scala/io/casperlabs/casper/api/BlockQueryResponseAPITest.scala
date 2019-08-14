@@ -1,23 +1,23 @@
 package io.casperlabs.casper.api
 
-import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.storage.{BlockStorage, DagStorage}
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.{DagStorageFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.helper.{DagStorageFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagStorage
 import monix.eval.Task
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 

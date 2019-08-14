@@ -1,33 +1,16 @@
 package io.casperlabs.casper.util
 
-import ProtoUtil._
 import com.google.protobuf.ByteString
-import org.scalatest.{FlatSpec, Matchers}
-import io.casperlabs.catscontrib._
-import cats.implicits._
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
-import cats.data._
-import cats.effect.Bracket
-import cats.implicits._
-import cats.mtl.MonadState
-import cats.mtl.implicits._
-import io.casperlabs.storage.{BlockMetadata, BlockStorage}
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
-import monix.eval.Task
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
-import io.casperlabs.shared.Time
-import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage._
 import monix.eval.Task
-
-import scala.concurrent.duration._
-import monix.execution.Scheduler.Implicits.global
-
-import scala.collection.immutable.{HashMap, HashSet}
+import org.scalatest.{FlatSpec, Matchers}
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
 

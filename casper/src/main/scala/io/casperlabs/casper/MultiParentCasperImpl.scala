@@ -7,7 +7,6 @@ import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockStorage, DagRepresentation, DagStorage}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
@@ -32,6 +31,8 @@ import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 
 import scala.util.control.NonFatal
 
@@ -413,7 +414,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       candidatesHashes = orphanedDeploys ++ pendingDeploys
 
       // Only send the next nonce per account.
-      remaining <- DeployBuffer[F]
+      remaining <- DeployStorageReader[F]
                     .getByHashes(candidatesHashes)
                     .map {
                       _.groupBy(_.getHeader.accountPublicKey).map {

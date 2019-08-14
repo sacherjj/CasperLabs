@@ -3,7 +3,6 @@ package io.casperlabs.casper
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockStorage, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
@@ -29,6 +28,8 @@ import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary

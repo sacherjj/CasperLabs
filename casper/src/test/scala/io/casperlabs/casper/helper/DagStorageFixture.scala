@@ -7,14 +7,16 @@ import java.util.zip.CRC32
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.functor._
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.DagRepresentation.Validator
-import io.casperlabs.storage._
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps.RichPath
+import io.casperlabs.storage._
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag.DagRepresentation.Validator
+import io.casperlabs.storage.dag._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.lmdbjava.{Env, EnvFlags}

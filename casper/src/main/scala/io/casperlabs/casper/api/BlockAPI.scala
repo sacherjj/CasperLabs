@@ -6,7 +6,6 @@ import cats.effect.{Bracket, Concurrent, Resource}
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockStorage, DagRepresentation, StorageError}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
@@ -28,6 +27,9 @@ import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
+import io.casperlabs.storage.StorageError
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
 
 object BlockAPI {
 

@@ -1,4 +1,4 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.block
 
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path, Paths}
@@ -7,13 +7,14 @@ import cats._
 import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.BlockStorage.{BlockHash, MeteredBlockStorage}
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Resources.withResource
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 import org.lmdbjava.DbiFlags.{MDB_CREATE, MDB_DUPSORT}
 import org.lmdbjava.Txn.NotReadyException
 import org.lmdbjava._

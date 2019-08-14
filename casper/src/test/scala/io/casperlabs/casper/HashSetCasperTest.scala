@@ -5,7 +5,6 @@ import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.BlockStorage
 import io.casperlabs.casper.consensus.Block.{Justification, ProcessedDeploy}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.Genesis
@@ -23,6 +22,7 @@ import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{FilesAPI, Log}
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global

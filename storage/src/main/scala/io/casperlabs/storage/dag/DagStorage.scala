@@ -1,12 +1,13 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.dag
 
-import cats.implicits._
 import cats.Monad
+import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.DagRepresentation.Validator
-import io.casperlabs.storage.BlockStorage.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.metrics.Metered
+import io.casperlabs.storage.BlockMetadata
+import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.dag.DagRepresentation.Validator
 
 trait DagStorage[F[_]] {
   def getRepresentation: F[DagRepresentation[F]]

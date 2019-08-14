@@ -6,13 +6,12 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.DagRepresentation
 import io.casperlabs.casper
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.{HashSetCasperTestNode, TransportLayerCasperTestNodeFactory}
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.helper.{HashSetCasperTestNode, TransportLayerCasperTestNodeFactory}
 import io.casperlabs.casper.protocol.DeployServiceResponse
 import io.casperlabs.casper.util._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -21,6 +20,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}

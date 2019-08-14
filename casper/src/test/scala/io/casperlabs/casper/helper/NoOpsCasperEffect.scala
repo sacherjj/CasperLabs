@@ -3,12 +3,13 @@ package io.casperlabs.casper.helper
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
-import io.casperlabs.storage.{BlockStorage, DagRepresentation, DagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
 import io.casperlabs.ipc.TransformEntry
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage._
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
 
 import scala.collection.mutable.{Map => MutableMap}
 

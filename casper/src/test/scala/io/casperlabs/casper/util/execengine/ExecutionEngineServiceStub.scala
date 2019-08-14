@@ -4,7 +4,6 @@ import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper
 import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
@@ -16,6 +15,8 @@ import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Either

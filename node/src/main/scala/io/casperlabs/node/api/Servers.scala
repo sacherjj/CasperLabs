@@ -4,7 +4,6 @@ import cats.Id
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Effect => _, _}
 import cats.implicits._
-import io.casperlabs.storage.BlockStorage
 import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
@@ -23,6 +22,7 @@ import io.casperlabs.node.diagnostics.effects.diagnosticsService
 import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
 import io.netty.handler.ssl.SslContext
 import kamon.Kamon
 import monix.eval.{Task, TaskLike}

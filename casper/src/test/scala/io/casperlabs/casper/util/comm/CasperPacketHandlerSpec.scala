@@ -4,8 +4,6 @@ import cats.effect.concurrent.Ref
 import cats.syntax.show._
 import cats.{Applicative, ApplicativeError}
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.BlockStorage.{BlockHash, DeployHash}
-import io.casperlabs.storage.{DagRepresentation, InMemBlockStorage, InMemDagStorage}
 import io.casperlabs.casper
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
@@ -46,6 +44,9 @@ import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, FilesAPI}
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
 import monix.catnap.Semaphore
 import monix.eval.Task
 import monix.execution.Scheduler

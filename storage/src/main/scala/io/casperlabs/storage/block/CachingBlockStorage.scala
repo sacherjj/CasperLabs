@@ -1,4 +1,4 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.block
 
 import cats._
 import cats.effect._
@@ -8,7 +8,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
 import scala.collection.JavaConverters._
 

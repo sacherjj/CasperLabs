@@ -1,11 +1,11 @@
 package io.casperlabs.casper.validation
 
+import cats.Applicative
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{Applicative, ApplicativeError, Functor}
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
@@ -13,7 +13,6 @@ import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
-import io.casperlabs.casper._
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
@@ -23,6 +22,8 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}

@@ -9,12 +9,12 @@ import com.github.ghik.silencer.silent
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric._
-import io.casperlabs.storage.LMDBBlockStorage
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.{relativeToDataDir, SubConfig}
 import io.casperlabs.node.configuration.Utils._
+import io.casperlabs.storage.block._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.io.Source

@@ -7,7 +7,6 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Timer}
 import cats.implicits._
 import cats.temp.par.Par
-import io.casperlabs.storage._
 import io.casperlabs.casper
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
@@ -31,6 +30,8 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.{Cell, Log, Time}
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
 
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}

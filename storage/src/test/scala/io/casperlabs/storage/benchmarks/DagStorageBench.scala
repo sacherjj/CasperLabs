@@ -1,8 +1,8 @@
 package io.casperlabs.storage.benchmarks
 
-import io.casperlabs.storage.DagStorage
 import io.casperlabs.storage.benchmarks.Init._
 import io.casperlabs.storage.benchmarks.StorageBenchSuite._
+import io.casperlabs.storage.dag.DagStorage
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations._

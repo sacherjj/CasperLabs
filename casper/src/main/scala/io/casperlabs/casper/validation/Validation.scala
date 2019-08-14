@@ -1,6 +1,5 @@
 package io.casperlabs.casper.validation
 
-import io.casperlabs.storage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
@@ -10,6 +9,8 @@ import io.casperlabs.casper.{consensus, protocol}
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.ipc
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.concurrent.duration.FiniteDuration
 

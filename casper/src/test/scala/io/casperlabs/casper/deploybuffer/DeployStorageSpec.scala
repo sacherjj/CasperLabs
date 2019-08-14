@@ -102,14 +102,14 @@ trait DeployStorageSpec
 
     "addAsPending + addAsProcessed + getByHashes" should {
       "return the same list of deploys" in forAll(deploysGen()) { deploys =>
-        testFixture { db =>
+        testFixture { (reader, writer) =>
           val idx                  = scala.util.Random.nextInt(deploys.size)
           val (pending, processed) = deploys.splitAt(idx)
           val deployHashes         = deploys.map(_.deployHash)
           for {
-            _   <- db.addAsPending(pending)
-            _   <- db.addAsProcessed(processed)
-            all <- db.getByHashes(deployHashes)
+            _   <- writer.addAsPending(pending)
+            _   <- writer.addAsProcessed(processed)
+            all <- reader.getByHashes(deployHashes)
             _   = assert(deploys.sortedByHash == all.sortedByHash)
           } yield ()
 

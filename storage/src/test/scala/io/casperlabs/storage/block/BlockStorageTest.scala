@@ -1,4 +1,4 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.block
 
 import cats._
 import cats.effect.Sync
@@ -13,9 +13,10 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
-import io.casperlabs.storage.BlockStorage.BlockHash
-import io.casperlabs.storage.InMemBlockStorage.emptyMapRef
+import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.InMemBlockStorage.emptyMapRef
 import io.casperlabs.storage.blockImplicits.{blockBatchesGen, blockElementsGen}
+import io.casperlabs.storage.{BlockMsgWithTransform, Context}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global

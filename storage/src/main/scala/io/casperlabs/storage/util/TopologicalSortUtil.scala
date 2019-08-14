@@ -1,9 +1,9 @@
 package io.casperlabs.storage.util
 
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.BlockStorage.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.storage.block.BlockStorage.BlockHash
 
 object TopologicalSortUtil {
   type BlockSort = Vector[Vector[BlockHash]]

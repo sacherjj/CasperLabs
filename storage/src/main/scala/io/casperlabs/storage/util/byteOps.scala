@@ -2,8 +2,8 @@ package io.casperlabs.storage.util
 import java.nio.ByteBuffer
 
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.DagRepresentation.Validator
-import io.casperlabs.storage.BlockStorage.BlockHash
+import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.dag.DagRepresentation.Validator
 
 object byteOps {
   implicit class ByteBufferRich(val byteBuffer: ByteBuffer) extends AnyVal {

@@ -1,4 +1,4 @@
-package io.casperlabs.storage
+package io.casperlabs.storage.block
 
 import cats.Applicative
 import cats.implicits._
@@ -7,6 +7,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.language.higherKinds
 
