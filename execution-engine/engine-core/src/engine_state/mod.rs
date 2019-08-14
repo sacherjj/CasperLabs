@@ -36,8 +36,9 @@ pub mod genesis;
 pub mod op;
 pub mod utils;
 
-// TODO?: MAX_PAYMENT_COST && CONV_RATE values are currently arbitrary w/ real values TBD
-pub const MAX_PAYMENT_COST: u64 = 10_000_000;
+// TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values TBD
+// gas * CONV_RATE = motes
+pub const MAX_PAYMENT: u64 = 10_000_000;
 pub const CONV_RATE: u64 = 10;
 
 pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
@@ -218,7 +219,7 @@ where
 
         // --- REMOVE ABOVE --- //
 
-        let max_payment_cost: U512 = MAX_PAYMENT_COST.into();
+        let max_payment_cost: U512 = MAX_PAYMENT.into();
 
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
@@ -357,7 +358,7 @@ where
         // Execute provided payment code
         let payment_result = {
             // payment_code_spec_1: init pay environment w/ gas limit == (max_payment_cost / conv_rate)
-            let pay_gas_limit = MAX_PAYMENT_COST / CONV_RATE;
+            let pay_gas_limit = MAX_PAYMENT / CONV_RATE;
 
             // Create payment code module from bytes
             // validation_spec_1: valid wasm bytes
@@ -466,8 +467,9 @@ where
 
             let proof_of_stake_args = {
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
-                let finalize_cost = U512::from(execution_result_builder.total_cost());
-                let args = ("finalize_payment", finalize_cost, account_addr);
+                let finalize_cost_motes =
+                    U512::from(execution_result_builder.total_cost() * CONV_RATE);
+                let args = ("finalize_payment", finalize_cost_motes, account_addr);
                 ArgsParser::parse(&args)
                     .and_then(|args| args.to_bytes())
                     .expect("args should parse")

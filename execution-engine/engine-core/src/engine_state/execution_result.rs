@@ -143,8 +143,7 @@ impl ExecutionResultBuilder {
             .as_ref()
             .map(ExecutionResult::cost)
             .unwrap_or_default();
-        //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
-        (payment_cost + session_cost) * CONV_RATE
+        payment_cost + session_cost
     }
 
     pub fn check_forced_transfer(

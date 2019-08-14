@@ -14,7 +14,7 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 
-use engine_core::engine_state::{EngineConfig, MAX_PAYMENT_COST};
+use engine_core::engine_state::{EngineConfig, CONV_RATE, MAX_PAYMENT};
 use engine_shared::transform::Transform;
 use test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder, GENESIS_INITIAL_BALANCE};
 
@@ -109,7 +109,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
     );
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
-    let expected_reward_balance: U512 = U512::from(MAX_PAYMENT_COST);
+    let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
     let mut modified_balance: Option<U512> = None;
     let mut reward_balance: Option<U512> = None;
 
@@ -164,7 +164,6 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
     let genesis_addr = GENESIS_ADDR;
     let genesis_public_key = PublicKey::new(genesis_addr);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    //    let payment_purse_amount = 2907770;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -287,9 +286,9 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         .expect("there should be a response")
         .clone();
 
-    let cost = test_support::get_success_result(&response).cost;
+    let motes = test_support::get_success_result(&response).cost * CONV_RATE;
 
-    let tally = U512::from(cost) + modified_balance;
+    let tally = U512::from(motes) + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
@@ -389,9 +388,9 @@ fn should_correctly_charge_when_session_code_fails() {
         .expect("there should be a response")
         .clone();
 
-    let cost = test_support::get_success_result(&response).cost;
+    let motes = test_support::get_success_result(&response).cost * CONV_RATE;
 
-    let tally = U512::from(cost) + modified_balance;
+    let tally = U512::from(motes) + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
@@ -488,9 +487,9 @@ fn should_correctly_charge_when_session_code_succeeds() {
         .expect("there should be a response")
         .clone();
 
-    let cost = test_support::get_success_result(&response).cost;
+    let motes = test_support::get_success_result(&response).cost * CONV_RATE;
 
-    let tally = U512::from(cost + transferred_amount) + modified_balance;
+    let tally = U512::from(motes + transferred_amount) + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
