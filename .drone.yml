@@ -544,7 +544,7 @@ trigger:
 
 ---
 kind: pipeline
-name: cleanup-notify
+name: cleanup
 
 clone:
   disable: true
@@ -561,22 +561,6 @@ steps:
   - name: docker_sock	
     path: "/var/run/docker.sock"
 
-- name: notify
-  image: plugins/slack
-  settings:
-    webhook:
-      from_secret: slack_webhook
-    channel: alerts
-    template: 
-    - |
-      *{{ uppercasefirst build.status }}*
-      Author: {{ build.author }}
-      Drone Build: <{{ build.link }}|#{{ build.number }}>
-      Commit Link: <https://github.com/{{repo.owner}}/{{repo.name}}/commit/{{build.commit}}|{{ truncate build.commit 10 }}>
-  when:
-    status:
-    - failure
-
 volumes:
 - name: docker_sock
   host:
@@ -586,6 +570,41 @@ trigger:
   status:
   - failure
   - success
+  branch:
+  - dev
+  - master
+  - "release-*"
+  - "testing*"
+  - trying
+  - staging
+
+depends_on:
+- build-bors-merge
+
+---
+kind: pipeline
+name: failed-build-alert
+
+clone:
+  disable: true
+
+steps:
+- name: notify
+  image: plugins/slack
+  settings:
+    webhook:
+      from_secret: slack_webhook
+    channel: alerts
+    template:
+    - |
+      *{{ uppercasefirst build.status }}*
+      Author: {{ build.author }}
+      Drone Build: <{{ build.link }}|#{{ build.number }}>
+      Commit Link: <https://github.com/{{repo.owner}}/{{repo.name}}/commit/{{build.commit}}|{{ truncate build.commit 10 }}>
+
+trigger:
+  status:
+  - failure
   branch:
   - dev
   - master
