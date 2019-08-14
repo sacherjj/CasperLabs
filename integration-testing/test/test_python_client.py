@@ -59,7 +59,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
                 session=wasm,
                 public_key=resource("accounts/account-public-genesis.pem"),
                 private_key=resource("accounts/account-private-genesis.pem"),
-                args=ABI.args([encode(number)]),
+                session_args=ABI.args([encode(number)]),
                 nonce=nonce,
             )
             nonce += 1
@@ -90,7 +90,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
         public_key=resource("accounts/account-public-genesis.pem"),
         private_key=resource("accounts/account-private-genesis.pem"),
 
-        args=ABI.args([ABI.account(bytes.fromhex(account_hex)), ABI.u32(number)]),
+        session_args=ABI.args([ABI.account(bytes.fromhex(account_hex)), ABI.u32(number)]),
         nonce=nonce,
     )
     logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
