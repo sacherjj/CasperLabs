@@ -47,6 +47,12 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
         revert(sum(address_bytes[u8; 32]) + u32); for multiple argument test.
 
     Tests args get correctly encoded and decoded in the contract.
+
+    Test expects the test contracts test_args_u32.wasm and test_args_u512.wasm
+    to deserialize correctly their arguments and then call revert with value
+    of the argument (converted to a Rust native int, as expected by revert).
+    If the test contracts don't fail or if their exit code is different
+    than expected, the test will fail.
     """
     node = one_node_network.docker_nodes[0]
     client = node.p_client.client
