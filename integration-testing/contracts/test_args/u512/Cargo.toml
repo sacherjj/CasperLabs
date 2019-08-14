@@ -1,0 +1,16 @@
+[package]
+name = "test_args_u512"
+version = "0.1.0"
+authors = ["Piotr Kuchta <piotr@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+name = "test_args_u512"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["cl_std/std" ]
+
+[dependencies]
+cl_std = { path = "../../../../execution-engine/contract-ffi", package = "casperlabs-contract-ffi" }

@@ -310,7 +310,7 @@ class DockerNode(LoggingDockerBase):
                 payment_contract="transfer_to_account.wasm",
                 public_key=public_key_path,
                 private_key=private_key_path,
-                args=self.p_client.abi.args_from_json(args_json),
+                session_args=self.p_client.abi.args_from_json(args_json),
             )
 
         deploy_hash_hex = deploy_hash_bytes.hex()
@@ -365,7 +365,7 @@ class DockerNode(LoggingDockerBase):
             payment_contract=payment_contract,
             public_key=from_account.public_key_path,
             private_key=from_account.private_key_path,
-            args=self.p_client.abi.args_from_json(json_args),
+            session_args=self.p_client.abi.args_from_json(json_args),
         )
 
         deploy_hash_hex = deploy_hash_bytes.hex()

@@ -15,7 +15,7 @@ import struct
 import json
 from operator import add
 from functools import reduce
-import google.protobuf.text_format
+from itertools import dropwhile
 
 # Hack to fix the relative imports problems #
 import sys
@@ -24,17 +24,12 @@ from pathlib import Path
 file = Path(__file__).resolve()
 parent, root = file.parent, file.parents[1]
 sys.path.append(str(root))
-
-# Additionally remove the current file's directory from sys.path
-try:
-    sys.path.remove(str(parent))
-except ValueError:  # Already removed
-    pass
-
 # end of hack #
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
+import google.protobuf.text_format
+
 CEscape = google.protobuf.text_format.text_encoding.CEscape
 
 
@@ -77,6 +72,18 @@ class ABI:
         return struct.pack("<Q", n)
 
     @staticmethod
+    def u512(n: int):
+        bs = list(
+            dropwhile(
+                lambda b: b == 0,
+                reversed(n.to_bytes(64, byteorder="little", signed=False)),
+            )
+        )
+        return len(bs).to_bytes(1, byteorder="little", signed=False) + bytes(
+            reversed(bs)
+        )
+
+    @staticmethod
     def byte_array(a: bytes):
         return ABI.u32(len(a)) + a
 
@@ -109,11 +116,13 @@ class ABI:
                 )
 
         def python_value(typ, value: str):
-            if typ in ("u32", "u64"):
+            if typ in ("u32", "u64", "u512"):
                 return int(value)
             elif typ == "account":
                 return bytearray.fromhex(value)
-            raise ValueError(f"Unknown type {typ}, expected ('u32', 'u64', 'account')")
+            raise ValueError(
+                f"Unknown type {typ}, expected ('u32', 'u64', 'u512', 'account')"
+            )
 
         def encode(typ: str, value: str) -> bytes:
             v = python_value(typ, value)
@@ -247,7 +256,8 @@ class CasperLabsClient:
         nonce: int = 0,
         public_key: str = None,
         private_key: str = None,
-        args: bytes = None,
+        session_args: bytes = None,
+        payment_args: bytes = None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -265,7 +275,8 @@ class CasperLabsClient:
                               transactions that use the same nonce.
         :param public_key:    Path to a file with public key (Ed25519)
         :param private_key:   Path to a file with private key (Ed25519)
-        :param args:          List of ABI encoded arguments
+        :param session_args:  List of ABI encoded arguments of session contract
+        :param payment_args:  List of ABI encoded arguments of payment contract
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
@@ -309,9 +320,11 @@ class CasperLabsClient:
 
         # args must go to payment as well for now cause otherwise we'll get GASLIMIT error:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
-        payment_args = args if payment == session else None
+        if payment == session:
+            payment_args = session_args
         body = consensus.Deploy.Body(
-            session=read_code(session, args), payment=read_code(payment, payment_args)
+            session=read_code(session, session_args),
+            payment=read_code(payment, payment_args),
         )
 
         approval_public_key = None
@@ -563,7 +576,12 @@ def deploy_command(casperlabs_client, args):
         nonce=args.nonce,
         public_key=args.public_key or None,
         private_key=args.private_key or None,
-        args=args.args and ABI.args_from_json(args.args) or None,
+        session_args=args.session_args
+        and ABI.args_from_json(args.session_args)
+        or None,
+        payment_args=args.payment_args
+        and ABI.args_from_json(args.payment_args)
+        or None,
     )
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy hash: {deploy_hash.hex()}")
@@ -686,7 +704,8 @@ def main():
                        [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
                        [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
-                       [('--args',), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
+                       [('--session-args',), dict(required=False, type=str, help='JSON encoded list of session args, e.g.: [{"u32":1024},{"u64":12}]')],
+                       [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: [{"u512":100000}]""")],
                        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
                        [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 
