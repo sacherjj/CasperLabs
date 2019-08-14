@@ -499,7 +499,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "endless-loop"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.11.0",
 ]
 
 [[package]]
@@ -1534,7 +1534,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "standard-payment"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.11.0",
 ]
 
 [[package]]
