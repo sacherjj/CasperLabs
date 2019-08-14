@@ -12,7 +12,7 @@ members = [
     "contracts/system/test-mint-token",
     "contracts/test/add-update-associated-key",
     "contracts/test/authorized-keys",
-    "contracts/test/blessed-urefs-access-rights",
+    "contracts/test/check-system-contract-urefs-access-rights",
     "contracts/test/create-purse-01",
     "contracts/test/deserialize-error",
     "contracts/test/ee-221-regression",
