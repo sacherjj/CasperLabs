@@ -1,7 +1,6 @@
 package io.casperlabs.shared
 
-import java.io.{ByteArrayOutputStream, File}
-import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.charset.Charset
 import java.nio.file.{Files, OpenOption, Path}
 
 import cats.Monad
@@ -24,13 +23,9 @@ import simulacrum.typeclass
   def writeString(
       path: Path,
       data: String,
-      charset: Charset = StandardCharsets.UTF_8,
+      charset: Charset = Charset.defaultCharset(),
       options: List[OpenOption] = Nil
   ): F[Unit]
-
-  def readBytesFromResources(name: String): F[Array[Byte]]
-
-  def readStringFromResources(name: String, charset: Charset = StandardCharsets.UTF_8): F[String]
 }
 
 object FilesAPI {
@@ -46,7 +41,7 @@ object FilesAPI {
 
       override def readString(
           path: Path,
-          charset: Charset = StandardCharsets.UTF_8
+          charset: Charset = Charset.defaultCharset()
       ): F[String] =
         readBytes(path).map(array => new String(array, charset))
 
@@ -71,25 +66,9 @@ object FilesAPI {
       override def writeString(
           path: Path,
           data: String,
-          charset: Charset = StandardCharsets.UTF_8,
+          charset: Charset = Charset.defaultCharset(),
           options: List[OpenOption] = Nil
       ): F[Unit] = writeBytes(path, data.getBytes(charset), options)
-
-      override def readBytesFromResources(name: String): F[Array[Byte]] = Sync[F].delay {
-        val is         = getClass.getClassLoader.getResourceAsStream(name)
-        val data       = Array.ofDim[Byte](1024)
-        var nRead: Int = is.read(data)
-        val buffer     = new ByteArrayOutputStream()
-        while (nRead != -1) {
-          buffer.write(data, 0, nRead)
-          nRead = is.read(data)
-        }
-        buffer.flush()
-        buffer.toByteArray
-      }
-
-      override def readStringFromResources(name: String, charset: Charset): F[String] =
-        readBytesFromResources(name).map(array => new String(array, charset))
     }
 
   implicit def eitherTFilesApi[E, F[_]: Monad: FilesAPI]: FilesAPI[EitherT[F, E, ?]] =
@@ -99,7 +78,7 @@ object FilesAPI {
 
       override def readString(
           path: Path,
-          charset: Charset
+          charset: Charset = Charset.defaultCharset()
       ): EitherT[F, E, String] =
         FilesAPI[F]
           .readString(
@@ -111,25 +90,16 @@ object FilesAPI {
       override def writeBytes(
           path: Path,
           data: Array[Byte],
-          options: List[OpenOption]
+          options: List[OpenOption] = Nil
       ): EitherT[F, E, Unit] =
         FilesAPI[F].writeBytes(path, data, options).liftM[EitherT[?[_], E, ?]]
 
       override def writeString(
           path: Path,
           data: String,
-          charset: Charset,
-          options: List[OpenOption]
+          charset: Charset = Charset.defaultCharset(),
+          options: List[OpenOption] = Nil
       ): EitherT[F, E, Unit] =
         FilesAPI[F].writeString(path, data, charset, options).liftM[EitherT[?[_], E, ?]]
-
-      override def readBytesFromResources(name: String): EitherT[F, E, Array[Byte]] =
-        FilesAPI[F].readBytesFromResources(name).liftM[EitherT[?[_], E, ?]]
-
-      override def readStringFromResources(
-          name: String,
-          charset: Charset
-      ): EitherT[F, E, String] =
-        FilesAPI[F].readStringFromResources(name, charset).liftM[EitherT[?[_], E, ?]]
     }
 }

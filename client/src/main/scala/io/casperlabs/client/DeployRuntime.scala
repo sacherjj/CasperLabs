@@ -1,113 +1,127 @@
 package io.casperlabs.client
 import java.io._
 import java.nio.ByteOrder
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 
-import cats.effect._
+import cats.effect.{Sync, Timer}
 import cats.implicits._
-import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import guru.nidi.graphviz.engine.Format
+import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.consensus
-import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.client.configuration.Streaming
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import io.casperlabs.shared.{FilesAPI, Log}
+import io.casperlabs.shared.FilesAPI
+import org.apache.commons.io._
 
 import scala.concurrent.duration._
 import scala.language.higherKinds
 
-//TODO: Remove @silent annotation after resolving warning
-@silent(".*")
-class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
-    graphvizWriteToFile: (File, Format, String) => F[Unit]
-) {
+object DeployRuntime {
 
-  val BONDING_WASM_FILE                    = "bonding.wasm"
-  val UNBONDING_WASM_FILE                  = "unbonding.wasm"
-  val TRANSFER_WASM_FILE                   = "transfer_to_account.wasm"
-  val SET_ACCOUNT_KEY_THRESHOLDS_WASM_FILE = "set_key_thresholds.wasm"
-  val ADD_KEY_WASM_FILE                    = "add_associated_key.wasm"
-  val REMOVE_KEY_WASM_FILE                 = "remove_associated_key.wasm"
-  val UPDATE_KEY_WASM_FILE                 = "update_associated_key.wasm"
+  val BONDING_WASM_FILE   = "bonding.wasm"
+  val UNBONDING_WASM_FILE = "unbonding.wasm"
+  val TRANSFER_WASM_FILE  = "transfer_to_account.wasm"
 
-  val DefaultGasPrice = 10L
-
-  def propose(
+  def propose[F[_]: Sync: DeployService](
+      exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
-    logResult(DeployService[F].propose(), ignoreOutput)
+    gracefulExit(DeployService[F].propose().map(_.map(r => s"Response: $r")), exit, ignoreOutput)
 
-  def showBlock(hash: String): F[Unit] =
-    logResult(DeployService[F].showBlock(hash))
+  def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
+    gracefulExit(DeployService[F].showBlock(hash))
 
-  def showDeploys(hash: String): F[Unit] =
-    logResult(DeployService[F].showDeploys(hash))
+  def showDeploys[F[_]: Sync: DeployService](hash: String): F[Unit] =
+    gracefulExit(DeployService[F].showDeploys(hash))
 
-  def showDeploy(hash: String): F[Unit] =
-    logResult(DeployService[F].showDeploy(hash))
+  def showDeploy[F[_]: Sync: DeployService](hash: String): F[Unit] =
+    gracefulExit(DeployService[F].showDeploy(hash))
 
-  def showBlocks(depth: Int): F[Unit] =
-    logResult(DeployService[F].showBlocks(depth))
+  def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
+    gracefulExit(DeployService[F].showBlocks(depth))
 
-  def unbond(
+  def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
       nonce: Long,
-      maybeSessionCode: Option[File],
+      sessionCode: Option[File],
       privateKeyFile: File
-  ): F[Unit] =
-    deploy(
-      nonce = nonce,
-      privateKeyFile = privateKeyFile,
-      maybeSessionCode = maybeSessionCode,
-      defaultSessionCodeResourceName = UNBONDING_WASM_FILE,
-      args = serializeArgs(
-        Array(
-          serializeOption(maybeAmount, serializeLong)
-        )
-      )
+  ): F[Unit] = {
+    val args: Array[Array[Byte]] = Array(
+      serializeOption(maybeAmount, serializeLong)
     )
+    val argsSer = serializeArgs(args)
 
-  def bond(
+    for {
+      sessionCode <- readFileOrDefault[F](sessionCode, UNBONDING_WASM_FILE)
+      // currently, sessionCode == paymentCode in order to get some gas limit for the execution
+      paymentCode   = sessionCode.toList.toArray
+      rawPrivateKey <- readFileAsString[F](privateKeyFile)
+      _ <- deployFileProgram[F](
+            from = None,
+            nonce = nonce,
+            sessionCode = sessionCode,
+            paymentCode = paymentCode,
+            maybeEitherPublicKey = None,
+            maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
+            gasPrice = 10L, // gas price is fixed at the moment for 10:1
+            sessionArgs = ByteString.copyFrom(argsSer)
+          )
+    } yield ()
+  }
+
+  def bond[F[_]: Sync: DeployService](
       amount: Long,
       nonce: Long,
-      maybeSessionCode: Option[File],
+      sessionCode: Option[File],
       privateKeyFile: File
-  ): F[Unit] =
-    deploy(
-      nonce = nonce,
-      privateKeyFile = privateKeyFile,
-      maybeSessionCode = maybeSessionCode,
-      defaultSessionCodeResourceName = BONDING_WASM_FILE,
-      args = serializeArgs(
-        Array(serializeLong(amount))
-      )
-    )
+  ): F[Unit] = {
+    val args: Array[Array[Byte]] = Array(serializeLong(amount))
+    val argsSer: Array[Byte]     = serializeArgs(args)
 
-  def queryState(
+    for {
+      sessionCode <- readFileOrDefault[F](sessionCode, BONDING_WASM_FILE)
+      // currently, sessionCode == paymentCode in order to get some gas limit for the execution
+      paymentCode   = sessionCode.toList.toArray
+      rawPrivateKey <- readFileAsString[F](privateKeyFile)
+      _ <- deployFileProgram[F](
+            from = None,
+            nonce = nonce,
+            sessionCode = sessionCode,
+            paymentCode = paymentCode,
+            maybeEitherPublicKey = None,
+            maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
+            gasPrice = 10L, // gas price is fixed at the moment for 10:1
+            sessionArgs = ByteString.copyFrom(argsSer)
+          )
+    } yield ()
+  }
+
+  def queryState[F[_]: Sync: DeployService](
       blockHash: String,
       keyVariant: String,
       keyValue: String,
       path: String
   ): F[Unit] =
-    logResult(
+    gracefulExit(
       DeployService[F]
         .queryState(blockHash, keyVariant, keyValue, path)
         .map(_.map(Printer.printToUnicodeString(_)))
     )
 
-  def balance(address: String, blockHash: String): F[Unit] =
-    logResult {
+  def balance[F[_]: Sync: DeployService](address: String, blockHash: String): F[Unit] =
+    gracefulExit {
       (for {
         value <- DeployService[F].queryState(blockHash, "address", address, "").rethrow
-        _ <- MonadThrowable[F]
+        _ <- Sync[F]
               .raiseError(new IllegalStateException(s"Expected Account type value under $address."))
               .whenA(!value.value.isAccount)
         account = value.getAccount
-        mintPublic <- MonadThrowable[F].fromOption(
+        mintPublic <- Sync[F].fromOption(
                        account.knownUrefs.find(_.name == "mint").flatMap(_.key),
                        new IllegalStateException(
                          "Account's known_urefs map did not contain Mint contract address."
@@ -142,22 +156,32 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
       } yield s"Balance:\n$address : ${balance.getBigInt.value}").attempt
     }
 
-  def visualizeDag(
+  def visualizeDag[F[_]: Sync: DeployService: Timer](
       depth: Int,
       showJustificationLines: Boolean,
-      maybeOut: Option[File],
+      maybeOut: Option[String],
       maybeStreaming: Option[Streaming]
   ): F[Unit] =
-    logResult({
+    gracefulExit({
       def askDag =
         DeployService[F]
           .visualizeDag(depth, showJustificationLines)
           .rethrow
 
+      val useJdkRenderer = Sync[F].delay(Graphviz.useEngine(new GraphvizJdkEngine))
+
+      def writeToFile(out: String, format: Format, dag: String) =
+        Sync[F].delay(
+          Graphviz
+            .fromString(dag)
+            .render(format)
+            .toFile(new File(s"$out"))
+        ) >> Sync[F].delay(println(s"Wrote $out"))
+
       val sleep = Timer[F].sleep(5.seconds)
 
       def subscribe(
-          out: File,
+          out: String,
           streaming: Streaming,
           format: Format,
           index: Int = 0,
@@ -169,69 +193,73 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
               sleep >>
                 subscribe(out, streaming, format, index, prevDag)
             } else {
-              val newFile = streaming match {
+              val filename = streaming match {
                 case Streaming.Single => out
                 case Streaming.Multiple =>
-                  val absoluteName = out.getAbsolutePath
-
-                  val extension = "." + absoluteName.split('.').last
-                  new File(absoluteName.stripSuffix(extension) + s"_$index" + extension)
+                  val extension = "." + out.split('.').last
+                  out.stripSuffix(extension) + s"_$index" + extension
               }
-              graphvizWriteToFile(newFile, format, dag) >>
+              writeToFile(filename, format, dag) >>
                 sleep >>
                 subscribe(out, streaming, format, index + 1, dag.some)
             }
         }
 
-      // Total because it's validated in 'Options'
-      def parseFormat(out: String) = Format.valueOf(out.split('.').last.toUpperCase)
+      def parseFormat(out: String) = Sync[F].delay(Format.valueOf(out.split('.').last.toUpperCase))
 
       val eff = (maybeOut, maybeStreaming) match {
         case (None, None) =>
           askDag
         case (Some(out), None) =>
-          askDag >>= { dag =>
-            graphvizWriteToFile(out, parseFormat(out.getName), dag).map(_ => "Success")
+          useJdkRenderer >>
+            askDag >>= { dag =>
+            parseFormat(out) >>=
+              (format => writeToFile(out, format, dag).map(_ => "Success"))
           }
         case (Some(out), Some(streaming)) =>
-          subscribe(out, streaming, parseFormat(out.getName)).map(_ => "Success")
+          useJdkRenderer >>
+            parseFormat(out) >>=
+            (subscribe(out, streaming, _).map(_ => "Success"))
         case (None, Some(_)) =>
-          MonadThrowable[F].raiseError[String](new Throwable("--out must be specified if --stream"))
+          Sync[F].raiseError[String](new Throwable("--out must be specified if --stream"))
       }
 
       eff.attempt
     })
 
-  def transferCLI(
+  def transferCLI[F[_]: Sync: DeployService: FilesAPI](
       nonce: Long,
-      maybeSessionCode: Option[File],
+      sessionCode: Option[File],
       privateKeyFile: File,
       recipientPublicKeyBase64: String,
       amount: Long
   ): F[Unit] =
     for {
-      account <- MonadThrowable[F].fromOption(
-                  Base64.tryDecode(recipientPublicKeyBase64),
-                  new IllegalArgumentException(
-                    s"Failed to parse base64 encoded account: $recipientPublicKeyBase64"
+      rawPrivateKey <- readFileAsString[F](privateKeyFile)
+      privateKey <- MonadThrowable[F].fromOption(
+                     Ed25519.tryParsePrivateKey(rawPrivateKey),
+                     new IllegalArgumentException(
+                       s"Failed to parse private key file ${privateKeyFile.getPath()}"
+                     )
+                   )
+      publicKey <- MonadThrowable[F].fromOption(
+                    Ed25519.tryToPublic(privateKey),
+                    new RuntimeException(
+                      "Failed to compute Ed25519 public key from given private key."
+                    )
                   )
-                )
-      _ <- deploy(
-            nonce = nonce,
-            privateKeyFile = privateKeyFile,
-            maybeSessionCode = maybeSessionCode,
-            defaultSessionCodeResourceName = TRANSFER_WASM_FILE,
-            args = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
-          )
+      _ <- transfer[F](nonce, sessionCode, publicKey, privateKey, recipientPublicKeyBase64, amount)
     } yield ()
 
-  def transferBench(
+  def transfer[F[_]: Sync: DeployService: FilesAPI](
       nonce: Long,
-      maybeSessionCode: Option[File],
-      privateKey: PrivateKey,
-      publicKey: PublicKey,
+      sessionCode: Option[File],
+      senderPublicKey: PublicKey,
+      senderPrivateKey: PrivateKey,
       recipientPublicKeyBase64: String,
-      amount: Long
+      amount: Long,
+      exit: Boolean = true,
+      ignoreOutput: Boolean = false
   ): F[Unit] =
     for {
       account <- MonadThrowable[F].fromOption(
@@ -240,81 +268,25 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
                     s"Failed to parse base64 encoded account: $recipientPublicKeyBase64"
                   )
                 )
-      sessionCode <- readFileOrDefault(maybeSessionCode, TRANSFER_WASM_FILE)
+      sessionCode <- readFileOrDefault[F](sessionCode, TRANSFER_WASM_FILE)
+      // currently, sessionCode == paymentCode in order to get some gas limit for the execution
+      paymentCode = sessionCode.toList.toArray
       args        = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
-      _ <- deploy(
+      _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
             sessionCode = sessionCode,
-            paymentCode = sessionCode.toList.toArray,
-            maybeEitherPublicKey = publicKey.asRight[String].some,
-            maybeEitherPrivateKey = privateKey.asRight[String].some,
-            gasPrice = DefaultGasPrice,
-            sessionArgs = args,
-            ignoreOutput = true
+            paymentCode = paymentCode,
+            maybeEitherPublicKey = senderPublicKey.asRight[String].some,
+            maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
+            gasPrice = 10L,
+            ByteString.copyFrom(args),
+            exit,
+            ignoreOutput
           )
     } yield ()
 
-  def setAccountKeyThresholds(
-      keysManagement: Int,
-      deploys: Int,
-      nonce: Long,
-      privateKeyFile: File,
-      maybeSessionCode: Option[File]
-  ): F[Unit] =
-    deploy(
-      nonce = nonce,
-      privateKeyFile = privateKeyFile,
-      maybeSessionCode = maybeSessionCode,
-      defaultSessionCodeResourceName = SET_ACCOUNT_KEY_THRESHOLDS_WASM_FILE,
-      args = serializeArgs(???)
-    )
-
-  def addKey(
-      publicKey: File,
-      weight: Int,
-      nonce: Long,
-      privateKeyFile: File,
-      maybeSessionCode: Option[File]
-  ): F[Unit] =
-    deploy(
-      nonce = nonce,
-      privateKeyFile = privateKeyFile,
-      maybeSessionCode = maybeSessionCode,
-      defaultSessionCodeResourceName = ADD_KEY_WASM_FILE,
-      args = serializeArgs(???)
-    )
-
-  def removeKey(
-      publicKey: File,
-      nonce: Long,
-      privateKeyFile: File,
-      maybeSessionCode: Option[File]
-  ): F[Unit] =
-    deploy(
-      nonce = nonce,
-      privateKeyFile = privateKeyFile,
-      maybeSessionCode = maybeSessionCode,
-      defaultSessionCodeResourceName = REMOVE_KEY_WASM_FILE,
-      args = serializeArgs(???)
-    )
-
-  def updateKey(
-      publicKey: File,
-      newWeight: Int,
-      nonce: Long,
-      privateKeyFile: File,
-      maybeSessionCode: Option[File]
-  ): F[Unit] =
-    deploy(
-      nonce = nonce,
-      privateKeyFile = privateKeyFile,
-      maybeSessionCode = maybeSessionCode,
-      defaultSessionCodeResourceName = UPDATE_KEY_WASM_FILE,
-      args = serializeArgs(???)
-    )
-
-  def deploy(
+  def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[String],
       nonce: Long,
       sessionCode: Array[Byte],
@@ -323,6 +295,7 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
       gasPrice: Long,
       sessionArgs: ByteString = ByteString.EMPTY,
+      exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] = {
     val maybePrivateKey = maybeEitherPrivateKey.fold(none[PrivateKey]) { either =>
@@ -339,7 +312,7 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
     val payment = ByteString.copyFrom(paymentCode)
 
     val deploy = for {
-      accountPublicKey <- MonadThrowable[F].fromOption(
+      accountPublicKey <- Sync[F].fromOption(
                            from
                              .map(account => ByteString.copyFrom(Base16.decode(account)))
                              .orElse(maybePublicKey.map(ByteString.copyFrom)),
@@ -367,75 +340,68 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
       (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
     }
 
-    logResult(
+    gracefulExit(
       deploy
         .flatMap(DeployService[F].deploy)
         .handleError(
           ex => Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex))
         ),
+      exit,
       ignoreOutput
     )
   }
 
-  private def deploy(
-      nonce: Long,
-      privateKeyFile: File,
-      maybeSessionCode: Option[File],
-      defaultSessionCodeResourceName: String,
-      args: ByteString
-  ): F[Unit] =
-    for {
-      rawPrivateKey <- FilesAPI[F].readString(privateKeyFile.toPath)
-      privateKey <- MonadThrowable[F].fromOption(
-                     Ed25519.tryParsePrivateKey(rawPrivateKey),
-                     new IllegalArgumentException(
-                       s"Failed to parse private key file ${privateKeyFile.getPath}"
-                     )
-                   )
-      publicKey <- MonadThrowable[F].fromOption(
-                    Ed25519.tryToPublic(privateKey),
-                    new RuntimeException(
-                      "Failed to compute Ed25519 public key from given private key."
-                    )
-                  )
-      sessionCode <- readFileOrDefault(maybeSessionCode, defaultSessionCodeResourceName)
-      _ <- deploy(
-            from = None,
-            nonce = nonce,
-            sessionCode = sessionCode,
-            paymentCode = sessionCode.toList.toArray,
-            maybeEitherPublicKey = publicKey.asRight[String].some,
-            maybeEitherPrivateKey = privateKey.asRight[String].some,
-            gasPrice = DefaultGasPrice,
-            sessionArgs = args
-          )
-    } yield ()
-
-  private[client] def logResult(
+  private[client] def gracefulExit[F[_]: Sync](
       program: F[Either[Throwable, String]],
+      exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
     for {
-      result <- MonadThrowable[F].attempt(program)
+      result <- Sync[F].attempt(program)
       _ <- result.joinRight match {
-            case Left(ex) => Log[F].error("Command failed", ex)
+            case Left(ex) =>
+              Sync[F].delay {
+                System.err.println(processError(ex).getMessage)
+                System.exit(1)
+              }
             case Right(msg) =>
-              Log[F].info(msg).whenA(!ignoreOutput)
+              Sync[F].delay {
+                if (!ignoreOutput) {
+                  println(msg)
+                }
+                if (exit) {
+                  System.exit(0)
+                }
+              }
           }
     } yield ()
+
+  private def processError(t: Throwable): Throwable =
+    Option(t.getCause).getOrElse(t)
 
   private def hash[T <: scalapb.GeneratedMessage](data: T): ByteString =
     ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
 
-  // When not provided, fallbacks to the contract version packaged with the client.
-  private def readFileOrDefault(
-      maybeFile: Option[File],
+  // When not provided fallbacks to the contract version packaged with the client.
+  private def readFileOrDefault[F[_]: Sync](
+      file: Option[File],
       defaultName: String
   ): F[Array[Byte]] = {
-    val readFromResources = FilesAPI[F].readBytesFromResources(defaultName)
-    maybeFile
-      .map(file => FilesAPI[F].readBytes(file.toPath).attempt.map(_.toOption))
-      .fold(readFromResources)(effect => effect.flatMap(_.fold(readFromResources)(_.pure[F])))
+    def consumeInputStream(is: InputStream): Array[Byte] = {
+      val baos = new ByteArrayOutputStream()
+      IOUtils.copy(is, baos)
+      baos.toByteArray
+    }
+    Sync[F].delay {
+      file
+        .map(f => Files.readAllBytes(f.toPath))
+        .getOrElse(consumeInputStream(getClass.getClassLoader.getResourceAsStream(defaultName)))
+
+    }
+  }
+
+  private def readFileAsString[F[_]: Sync](file: File): F[String] = Sync[F].delay {
+    new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8)
   }
 
   private def serializeLong(l: Long): Array[Byte] =
@@ -466,19 +432,19 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
     serLen ++ ba
   }
 
-  private def serializeArgs(args: Array[Array[Byte]]): ByteString = {
+  private def serializeArgs(args: Array[Array[Byte]]): Array[Byte] = {
     val argsBytes    = args.flatMap(serializeArray)
     val argsBytesLen = serializeInt(args.length)
-    ByteString.copyFrom(argsBytesLen ++ argsBytes)
+    argsBytesLen ++ argsBytes
   }
 
   implicit class DeployOps(d: consensus.Deploy) {
-    def withHashes: Deploy = {
+    def withHashes = {
       val h = d.getHeader.withBodyHash(hash(d.getBody))
       d.withHeader(h).withDeployHash(hash(h))
     }
 
-    def sign(privateKey: PrivateKey, publicKey: PublicKey): Deploy = {
+    def sign(privateKey: PrivateKey, publicKey: PublicKey) = {
       val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
       d.withApprovals(
         List(

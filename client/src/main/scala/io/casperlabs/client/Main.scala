@@ -1,22 +1,28 @@
 package io.casperlabs.client
 
-import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
-import cats.effect.ExitCode
+import cats.effect.{Sync, Timer}
 import cats.syntax.either._
-import guru.nidi.graphviz.engine.{Format, Graphviz, GraphvizJdkEngine}
+import cats.temp.par._
 import io.casperlabs.client.configuration._
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
-import io.casperlabs.shared.{FilesAPI, Log}
-import monix.eval.{Task, TaskApp}
+import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
+import monix.eval.Task
+import monix.execution.Scheduler
 
-object Main extends TaskApp {
+object Main {
 
   implicit val log: Log[Task] = Log.log
 
-  def run(args: List[String]): Task[ExitCode] = {
+  def main(args: Array[String]): Unit = {
+    implicit val scheduler: Scheduler = Scheduler.computation(
+      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
+      "node-runner",
+      reporter = UncaughtExceptionHandler
+    )
+
     val exec =
       for {
         maybeConf <- Task(Configuration.parse(args))
@@ -24,35 +30,28 @@ object Main extends TaskApp {
               case (conn, conf) =>
                 implicit val deployService: GrpcDeployService = new GrpcDeployService(conn)
                 implicit val filesAPI: FilesAPI[Task]         = FilesAPI.create[Task]
-                val graphvizWriteToFile = (file: File, format: Format, data: String) =>
-                  Task(Graphviz.fromString(data).render(format).toFile(file))
-                val deployRuntime = new DeployRuntime[Task](graphvizWriteToFile)
-                Task(Graphviz.useEngine(new GraphvizJdkEngine)).flatMap(
-                  _ =>
-                    program[Task](deployRuntime, conf).doOnFinish(_ => Task(deployService.close()))
-                )
+                program[Task](conf).doOnFinish(_ => Task(deployService.close()))
             }
-      } yield ExitCode.Success
+      } yield ()
 
-    exec.attempt.map(_.toOption.getOrElse(ExitCode.Error))
+    exec.runSyncUnsafe()
   }
 
-  def program[F[_]](
-      deployRuntime: DeployRuntime[F],
+  def program[F[_]: Sync: DeployService: Timer: FilesAPI: Log: Par](
       configuration: Configuration
   ): F[Unit] =
     configuration match {
-      case ShowBlock(hash)   => deployRuntime.showBlock(hash)
-      case ShowDeploy(hash)  => deployRuntime.showDeploy(hash)
-      case ShowDeploys(hash) => deployRuntime.showDeploys(hash)
-      case ShowBlocks(depth) => deployRuntime.showBlocks(depth)
+      case ShowBlock(hash)   => DeployRuntime.showBlock(hash)
+      case ShowDeploy(hash)  => DeployRuntime.showDeploy(hash)
+      case ShowDeploys(hash) => DeployRuntime.showDeploys(hash)
+      case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
       case Unbond(
           amount,
           nonce,
           contractCode,
           privateKey
           ) =>
-        deployRuntime.unbond(
+        DeployRuntime.unbond(
           amount,
           nonce,
           contractCode,
@@ -64,7 +63,7 @@ object Main extends TaskApp {
           contractCode,
           privateKey
           ) =>
-        deployRuntime.bond(
+        DeployRuntime.bond(
           amount,
           nonce,
           contractCode,
@@ -77,7 +76,7 @@ object Main extends TaskApp {
           contractCode,
           privateKey
           ) =>
-        deployRuntime.transferCLI(
+        DeployRuntime.transferCLI(
           nonce,
           contractCode,
           privateKey,
@@ -93,7 +92,7 @@ object Main extends TaskApp {
           maybePrivateKey,
           gasPrice
           ) =>
-        deployRuntime.deploy(
+        DeployRuntime.deployFileProgram(
           from,
           nonce,
           Files.readAllBytes(sessionCode.toPath),
@@ -110,30 +109,15 @@ object Main extends TaskApp {
         )
 
       case Propose =>
-        deployRuntime.propose()
+        DeployRuntime.propose()
 
       case VisualizeDag(depth, showJustificationLines, out, streaming) =>
-        deployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
+        DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
 
       case Query(hash, keyType, keyValue, path) =>
-        deployRuntime.queryState(hash, keyType, keyValue, path)
+        DeployRuntime.queryState(hash, keyType, keyValue, path)
 
       case Balance(address, blockHash) =>
-        deployRuntime.balance(address, blockHash)
-
-      case SetThresholds(keysManagement, deploys, nonce, privateKey, maybeSessionCode) =>
-        deployRuntime.setAccountKeyThresholds(
-          keysManagement,
-          deploys,
-          nonce,
-          privateKey,
-          maybeSessionCode
-        )
-      case AddKey(publicKey, weight, nonce, privateKey, maybeSessionCode) =>
-        deployRuntime.addKey(publicKey, weight, nonce, privateKey, maybeSessionCode)
-      case RemoveKey(publicKey, nonce, privateKey, maybeSessionCode) =>
-        deployRuntime.removeKey(publicKey, nonce, privateKey, maybeSessionCode)
-      case UpdateKey(publicKey, newWeight, nonce, privateKey, maybeSessionCode) =>
-        deployRuntime.updateKey(publicKey, newWeight, nonce, privateKey, maybeSessionCode)
+        DeployRuntime.balance(address, blockHash)
     }
 }

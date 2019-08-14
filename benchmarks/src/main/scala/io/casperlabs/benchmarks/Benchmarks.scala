@@ -5,10 +5,9 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.StandardOpenOption
 
 import cats._
-import cats.effect.Timer
+import cats.effect.{Sync, Timer}
 import cats.implicits._
 import cats.temp.par._
-import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.client.{DeployRuntime, DeployService}
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -20,12 +19,13 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 object Benchmarks {
 
-  /* Each round is many token transfer deploys from different accounts to single recipient */
-  def run[F[_]: Log: DeployService: Par: Timer: FilesAPI: MonadThrowable](
-      deployRuntime: DeployRuntime[F],
+  /** Each round is many token transfer deploys from different accounts to single recipient
+    * TODO: Remove Sync
+    *  */
+  def run[F[_]: Log: DeployService: Par: Timer: FilesAPI: Monad: Sync](
       outputStats: File,
       initialFundsPrivateKeyFile: File,
-      maybeTransferContract: Option[File],
+      initialFundsPublicKeyFile: File,
       accountsNum: Int = 250,
       roundsNum: Int = 100,
       approximateTransferCost: Long = 100000
@@ -37,6 +37,12 @@ object Benchmarks {
       FilesAPI[F].readString(initialFundsPrivateKeyFile.toPath, StandardCharsets.UTF_8).map {
         rawKey =>
           SignatureAlgorithm.Ed25519.tryParsePrivateKey(rawKey).get
+      }
+
+    def readPublicKey =
+      FilesAPI[F].readString(initialFundsPublicKeyFile.toPath, StandardCharsets.UTF_8).map {
+        rawKey =>
+          SignatureAlgorithm.Ed25519.tryParsePublicKey(rawKey).get
       }
 
     def writeStatsFileHeader: F[Unit] =
@@ -54,13 +60,15 @@ object Benchmarks {
         senderPrivateKey: PrivateKey,
         senderPublicKey: PublicKey,
         amount: Long
-    ): F[Unit] = deployRuntime.transferBench(
+    ): F[Unit] = DeployRuntime.transfer[F](
       nonce = nonce,
-      maybeSessionCode = maybeTransferContract,
-      publicKey = senderPublicKey,
-      privateKey = senderPrivateKey,
+      sessionCode = None,
+      senderPublicKey = senderPublicKey,
+      senderPrivateKey = senderPrivateKey,
       recipientPublicKeyBase64 = recipientPublicKeyBase64,
-      amount = amount
+      amount = amount,
+      exit = false,
+      ignoreOutput = true
     )
 
     def createAccountKeyPair(): (Keys.PrivateKey, Keys.PublicKey) =
@@ -109,7 +117,10 @@ object Benchmarks {
     def propose: F[Unit] =
       for {
         _ <- Log[F].info("Proposing...")
-        _ <- deployRuntime.propose(ignoreOutput = true)
+        _ <- DeployRuntime.propose[F](
+              exit = false,
+              ignoreOutput = true
+            )
       } yield ()
 
     def measure(task: F[Unit]): F[FiniteDuration] =
@@ -158,14 +169,11 @@ object Benchmarks {
         _          <- Log[F].info("Running...")
         _          <- writeStatsFileHeader
         privateKey <- readPrivateKey
-        publicKey <- MonadThrowable[F].fromOption(
-                      SignatureAlgorithm.Ed25519.tryToPublic(privateKey),
-                      new IllegalArgumentException("Failed to derive public key")
-                    )
-        _ <- initializeAccounts(privateKey, publicKey)
-        _ <- propose
-        _ <- loop(1)
-        _ <- Log[F].info("Done")
+        publicKey  <- readPublicKey
+        _          <- initializeAccounts(privateKey, publicKey)
+        _          <- propose
+        _          <- loop(1)
+        _          <- Log[F].info("Done")
       } yield ()
     }
 
