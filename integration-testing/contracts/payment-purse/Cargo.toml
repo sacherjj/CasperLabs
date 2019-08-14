@@ -1,0 +1,17 @@
+[package]
+name = "payment-purse"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>",
+           "Srinivas Reddy Thatiparthy <srini@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+name = "test_payment_purse"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["cl_std/std" ]
+
+[dependencies]
+cl_std = { package = "casperlabs-contract-ffi", path = "../../../execution-engine/contract-ffi" }
