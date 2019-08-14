@@ -597,6 +597,72 @@ trigger:
 depends_on:
 - build-bors-merge
 
+---
+kind: pipeline
+name: on-tag
+
+# Run only on tagged release version
+steps:
+- name: package-sbt-artifacts-tag
+  commands:
+  - "make build-client-contracts"
+  - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
+  - "mkdir -p artifacts/${DRONE_BRANCH}"
+  - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
+  - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
+  - "cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
+  - "cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm artifacts/${DRONE_BRANCH}"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  when:
+    ref:
+    - refs/tags/v*
+
+- name: package-ee-tag
+  commands:
+  - "mkdir -p artifacts/${DRONE_BRANCH}"
+  - "make cargo-package-all"
+  - "cp execution-engine/target/system-contracts.tar.gz artifacts/${DRONE_BRANCH}"
+  - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
+  - "cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm artifacts/${DRONE_BRANCH}"
+  - "WORKING_DIR=$(pwd) ; cd execution-engine/target/release/rpmbuild/SOURCES ; OS=$(uname -s | tr '[:upper:]' '[:lower:]') ; ARCH=$(uname -p) ; SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed \"s/.tar.gz//\") ; TARGET=$(ls $SOURCE*.tar.gz | sed \"s/.tar.gz/_\"$OS\"_\"$ARCH\".tar.gz/\") ; tar -xzf $SOURCE.tar.gz ; tar -czf $TARGET -C $SOURCE/usr/bin/ . && cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}"
+  image: "casperlabs/buildenv:latest"
+  when:
+    ref:
+    - refs/tags/v*
+
+- name: github_publish_release_artifacts
+  settings:
+    api_key:
+      from_secret: github_token
+    checksum:
+    - sha256
+    - md5
+    files:
+    - "artifacts/${DRONE_BRANCH}/*"
+    prerelease:
+    - true
+  image: plugins/github-release
+  when:
+    ref:
+    - refs/tags/v*
+  depends_on:
+  - package-sbt-artifacts-tag
+  - package-ee-tag
+
+volumes:
+- name: docker_sock
+  host:
+    path: "/var/run/docker.sock"
+
+trigger:
+  ref:
+  - refs/tags/v*
+
 # Signature for Drone
 ---
 kind: signature
