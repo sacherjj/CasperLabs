@@ -1,5 +1,6 @@
 import json
 import pytest
+from time import sleep
 
 from test.cl_node.casperlabs_accounts import Account
 from casperlabs_client import ABI
@@ -245,6 +246,8 @@ def test_key_management(one_node_network):
         )
 
     NonceRegistry.revert(identity_key.public_key_hex)
+
+    sleep(1)
 
     # Testing deploy after failure for Nonce issue.
     block_hash = node.deploy_and_propose(
