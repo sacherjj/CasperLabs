@@ -20,6 +20,8 @@ import io.casperlabs.shared.{FilesAPI, Log}
 import scala.concurrent.duration._
 import scala.language.higherKinds
 
+//TODO: Remove @silent annotation after resolving warning
+@silent(".*")
 class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
     graphvizWriteToFile: (File, Format, String) => F[Unit]
 ) {
@@ -94,13 +96,13 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
     logResult(
       DeployService[F]
         .queryState(blockHash, keyVariant, keyValue, path)
-        .map(Printer.printToUnicodeString)
+        .map(_.map(Printer.printToUnicodeString(_)))
     )
 
   def balance(address: String, blockHash: String): F[Unit] =
     logResult {
-      for {
-        value <- DeployService[F].queryState(blockHash, "address", address, "")
+      (for {
+        value <- DeployService[F].queryState(blockHash, "address", address, "").rethrow
         _ <- MonadThrowable[F]
               .raiseError(new IllegalStateException(s"Expected Account type value under $address."))
               .whenA(!value.value.isAccount)
@@ -118,6 +120,7 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
                           Base16.encode(mintPublic.getUref.uref.toByteArray), // I am assuming that "mint" points to URef type key.
                           ""
                         )
+                        .rethrow
         localKeyValue = {
           val mintPrivateHex = Base16.encode(mintPrivate.getKey.getUref.uref.toByteArray) // Assuming that `mint_private` is of `URef` type.
           val purseAddrHex = {
@@ -127,7 +130,7 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
           }
           s"$mintPrivateHex:$purseAddrHex"
         }
-        balanceURef <- DeployService[F].queryState(blockHash, "local", localKeyValue, "")
+        balanceURef <- DeployService[F].queryState(blockHash, "local", localKeyValue, "").rethrow
         balance <- DeployService[F]
                     .queryState(
                       blockHash,
@@ -135,7 +138,8 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
                       Base16.encode(balanceURef.getKey.getUref.uref.toByteArray),
                       ""
                     )
-      } yield s"Balance:\n$address : ${balance.getBigInt.value}"
+                    .rethrow
+      } yield s"Balance:\n$address : ${balance.getBigInt.value}").attempt
     }
 
   def visualizeDag(
@@ -145,7 +149,10 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
       maybeStreaming: Option[Streaming]
   ): F[Unit] =
     logResult({
-      def askDag = DeployService[F].visualizeDag(depth, showJustificationLines)
+      def askDag =
+        DeployService[F]
+          .visualizeDag(depth, showJustificationLines)
+          .rethrow
 
       val sleep = Timer[F].sleep(5.seconds)
 
@@ -179,7 +186,7 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
       // Total because it's validated in 'Options'
       def parseFormat(out: String) = Format.valueOf(out.split('.').last.toUpperCase)
 
-      (maybeOut, maybeStreaming) match {
+      val eff = (maybeOut, maybeStreaming) match {
         case (None, None) =>
           askDag
         case (Some(out), None) =>
@@ -191,6 +198,8 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
         case (None, Some(_)) =>
           MonadThrowable[F].raiseError[String](new Throwable("--out must be specified if --stream"))
       }
+
+      eff.attempt
     })
 
   def transferCLI(
@@ -258,7 +267,7 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
       privateKeyFile = privateKeyFile,
       maybeSessionCode = maybeSessionCode,
       defaultSessionCodeResourceName = SET_ACCOUNT_KEY_THRESHOLDS_WASM_FILE,
-      args = serializeArgs(Array(serializeInt(keysManagement), serializeInt(deploys)))
+      args = serializeArgs(???)
     )
 
   def addKey(
@@ -268,16 +277,13 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
       privateKeyFile: File,
       maybeSessionCode: Option[File]
   ): F[Unit] =
-    for {
-      publicKey <- readPublicKey(publicKey)
-      _ <- deploy(
-            nonce = nonce,
-            privateKeyFile = privateKeyFile,
-            maybeSessionCode = maybeSessionCode,
-            defaultSessionCodeResourceName = ADD_KEY_WASM_FILE,
-            args = serializeArgs(Array(serializeArray(publicKey), serializeInt(weight)))
-          )
-    } yield ()
+    deploy(
+      nonce = nonce,
+      privateKeyFile = privateKeyFile,
+      maybeSessionCode = maybeSessionCode,
+      defaultSessionCodeResourceName = ADD_KEY_WASM_FILE,
+      args = serializeArgs(???)
+    )
 
   def removeKey(
       publicKey: File,
@@ -285,16 +291,13 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
       privateKeyFile: File,
       maybeSessionCode: Option[File]
   ): F[Unit] =
-    for {
-      publicKey <- readPublicKey(publicKey)
-      _ <- deploy(
-            nonce = nonce,
-            privateKeyFile = privateKeyFile,
-            maybeSessionCode = maybeSessionCode,
-            defaultSessionCodeResourceName = REMOVE_KEY_WASM_FILE,
-            args = serializeArgs(Array(serializeArray(publicKey)))
-          )
-    } yield ()
+    deploy(
+      nonce = nonce,
+      privateKeyFile = privateKeyFile,
+      maybeSessionCode = maybeSessionCode,
+      defaultSessionCodeResourceName = REMOVE_KEY_WASM_FILE,
+      args = serializeArgs(???)
+    )
 
   def updateKey(
       publicKey: File,
@@ -303,16 +306,13 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
       privateKeyFile: File,
       maybeSessionCode: Option[File]
   ): F[Unit] =
-    for {
-      publicKey <- readPublicKey(publicKey)
-      _ <- deploy(
-            nonce = nonce,
-            privateKeyFile = privateKeyFile,
-            maybeSessionCode = maybeSessionCode,
-            defaultSessionCodeResourceName = UPDATE_KEY_WASM_FILE,
-            args = serializeArgs(Array(serializeArray(publicKey), serializeInt(newWeight)))
-          )
-    } yield ()
+    deploy(
+      nonce = nonce,
+      privateKeyFile = privateKeyFile,
+      maybeSessionCode = maybeSessionCode,
+      defaultSessionCodeResourceName = UPDATE_KEY_WASM_FILE,
+      args = serializeArgs(???)
+    )
 
   def deploy(
       from: Option[String],
@@ -367,7 +367,14 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
       (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
     }
 
-    logResult(deploy >>= DeployService[F].deploy, ignoreOutput)
+    logResult(
+      deploy
+        .flatMap(DeployService[F].deploy)
+        .handleError(
+          ex => Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex))
+        ),
+      ignoreOutput
+    )
   }
 
   private def deploy(
@@ -405,23 +412,20 @@ class DeployRuntime[F[_]: MonadThrowable: FilesAPI: DeployService: Log: Timer](
     } yield ()
 
   private[client] def logResult(
-      program: F[String],
+      program: F[Either[Throwable, String]],
       ignoreOutput: Boolean = false
-  ): F[Unit] = program >>= (output => Log[F].info(output).whenA(!ignoreOutput))
+  ): F[Unit] =
+    for {
+      result <- MonadThrowable[F].attempt(program)
+      _ <- result.joinRight match {
+            case Left(ex) => Log[F].error("Command failed", ex)
+            case Right(msg) =>
+              Log[F].info(msg).whenA(!ignoreOutput)
+          }
+    } yield ()
 
   private def hash[T <: scalapb.GeneratedMessage](data: T): ByteString =
     ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
-
-  private def readPublicKey(file: File): F[PublicKey] =
-    FilesAPI[F]
-      .readString(file.toPath)
-      .flatMap(
-        rawKey =>
-          MonadThrowable[F].fromOption(
-            Ed25519.tryParsePublicKey(rawKey),
-            new IllegalArgumentException(s"Failed to parse public key, ${file.getAbsolutePath}")
-          )
-      )
 
   // When not provided, fallbacks to the contract version packaged with the client.
   private def readFileOrDefault(

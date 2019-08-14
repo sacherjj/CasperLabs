@@ -72,7 +72,7 @@ object Options {
         maybeTransferContract: Option[File]
     ) extends Configuration
 
-    def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
+    def parse(args: List[String]): Option[(ConnectOptions, Configuration)] = {
       val options = Options(args)
       val connect = ConnectOptions(
         options.host(),

@@ -384,15 +384,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         validate = fileCheck
       )
 
-    val thresholds = new Subcommand("thresholds") {
+    val thresholds = new Subcommand("threshold") {
       descr("Updates account required thresholds from keys weights to perform various operations")
 
-      val keyManagement = opt[Int](
+      val key = opt[Int](
+        name = "key",
         descr = "Threshold to perform key management operations",
         required = true
       )
 
-      val deploys = opt[Int](
+      val deploy = opt[Int](
+        name = "deploy",
         descr = "Threshold to perform deploys",
         required = true
       )
