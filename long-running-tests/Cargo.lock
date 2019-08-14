@@ -223,7 +223,7 @@ name = "shared"
 version = "0.1.0"
 dependencies = [
  "binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.11.0",
 ]
 
 [[package]]
