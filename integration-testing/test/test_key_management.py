@@ -49,7 +49,7 @@ def create_associated_key(node, identity_key: str, weight_key, key: str, weight:
         session_contract=ADD_KEY_CONTRACT,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
-        args=account_weight_abi(key, weight),
+        session_args=account_weight_abi(key, weight),
     )
 
 
@@ -60,7 +60,7 @@ def update_associated_key(node, identity_key: str, weight_key, key: str, weight:
         session_contract=UPDATE_KEY_CONTRACT,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
-        args=account_weight_abi(key, weight),
+        session_args=account_weight_abi(key, weight),
     )
 
 
@@ -73,7 +73,7 @@ def remove_associated_key(node, identity_key: str, weight_key, key: str):
         session_contract=REMOVE_KEY_CONTRACT,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
-        args=args,
+        session_args=args,
     )
 
 
@@ -88,7 +88,7 @@ def set_key_thresholds(
         session_contract=SET_THRESHOLDS_CONTRACT,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
-        args=args,
+        session_args=args,
     )
 
 
