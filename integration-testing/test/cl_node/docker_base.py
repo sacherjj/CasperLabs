@@ -80,8 +80,7 @@ class DockerConfig:
     use_new_gossiping: bool = True
     genesis_public_key_path: str = None
     is_payment_code_enabled: bool = False
-    initial_motes: int = 100*(10**9)  # 100 billion
-
+    initial_motes: int = 100 * (10 ** 9)  # 100 billion
 
     def __post_init__(self):
         if self.rand_str is None:
