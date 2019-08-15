@@ -1,5 +1,5 @@
 [package]
-name = "transfer_to_account"
+name = "transfer-to-account"
 version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>"]
 
