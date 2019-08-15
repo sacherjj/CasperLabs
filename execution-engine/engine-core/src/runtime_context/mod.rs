@@ -492,18 +492,24 @@ where
             }
         }
 
-        if let Some(new_rights) = uref.access_rights() {
-            self.known_urefs
-                .get(&uref.addr()) // Check if the `key` is known
-                .map(|known_rights| {
-                    known_rights
-                        .iter()
-                        .any(|right| *right & new_rights == new_rights)
-                }) // are we allowed to use it this way?
-                .map(|_| ()) // at this point we know it's valid to use `key`
-                .ok_or_else(|| Error::ForgedReference(*uref)) // otherwise `key` is forged
+        // Check if the `key` is known
+        if let Some(known_rights) = self.known_urefs.get(&uref.addr()) {
+            if let Some(new_rights) = uref.access_rights() {
+                // check if we have sufficient access rights
+                if known_rights
+                    .iter()
+                    .any(|right| *right & new_rights == new_rights)
+                {
+                    Ok(())
+                } else {
+                    Err(Error::ForgedReference(*uref))
+                }
+            } else {
+                Ok(()) // uref is known and no additional rights are needed
+            }
         } else {
-            Ok(())
+            // uref is not known
+            Err(Error::ForgedReference(*uref))
         }
     }
 
