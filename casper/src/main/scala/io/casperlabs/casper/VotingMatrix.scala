@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.Monad

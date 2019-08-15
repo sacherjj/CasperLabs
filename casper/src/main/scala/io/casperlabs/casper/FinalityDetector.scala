@@ -1,14 +1,8 @@
 package io.casperlabs.casper
 
-import cats.Monad
-import cats.implicits._
-import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
+import io.casperlabs.blockstorage.DagRepresentation
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.FinalityDetector.Committee
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.util._
-import io.casperlabs.casper.util.DagOperations.Key.blockMetadataKey
-import io.casperlabs.shared.Log
 
 trait FinalityDetector[F[_]] {
   def onNewBlockAddedToTheBlockDag(
