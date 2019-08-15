@@ -1,4 +1,4 @@
-use crate::alloc::prelude::String;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::num::ParseIntError;
 use core::str;
