@@ -288,6 +288,3 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         error_msg
     }
 }
-
-#[cfg(test)]
-pub mod tracking_copy_cache {}
