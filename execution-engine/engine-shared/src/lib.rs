@@ -11,7 +11,6 @@ extern crate log;
 extern crate num;
 extern crate parity_wasm;
 
-pub mod init;
 #[macro_use]
 pub mod logging;
 pub mod newtypes;
