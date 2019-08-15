@@ -29,11 +29,9 @@ class FinalityDetectorByVotingMatrixTest
       implicit blockDagStorage =>
         /* The DAG looks like:
          *
-         *   b8
-         *   |  \
-         *   |   \
-         *   b6   b7
-         *   |  x |
+         *
+         *        b6
+         *      / |
          *   b4   b5
          *   |  \ |
          *   b2  b3
@@ -91,26 +89,13 @@ class FinalityDetectorByVotingMatrixTest
                  HashMap(v2 -> b3.blockHash)
                )
           b6 <- createBlockAndUpdateFinalityDetector[Task](
-                 Seq(b4.blockHash),
-                 genesis.blockHash,
-                 v1,
-                 bonds,
-                 HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
-               )
-          b7 <- createBlockAndUpdateFinalityDetector[Task](
                  Seq(b5.blockHash),
                  genesis.blockHash,
                  v2,
                  bonds,
                  HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
                )
-          b8 <- createBlockAndUpdateFinalityDetector[Task](
-                 Seq(b6.blockHash),
-                 genesis.blockHash,
-                 v1,
-                 bonds,
-                 HashMap(v1 -> b6.blockHash, v2 -> b7.blockHash)
-               )
+
           finalDag <- blockDagStorage.getRepresentation
           b1NFT    <- FinalityDetector[Task].normalizedFaultTolerance(finalDag, b1.blockHash)
           result   = b1NFT shouldBe (0.5f) // so b1 get finalized
