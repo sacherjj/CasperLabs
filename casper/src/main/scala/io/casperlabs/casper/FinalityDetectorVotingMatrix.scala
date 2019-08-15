@@ -37,8 +37,7 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] extends Final
                    VotingMatrix[F].checkForCommittee(
                      candidateBlockHash,
                      committeeApproximation.toSet,
-                     (weights.values.sum + 1) / 2,
-                     weights
+                     weights.values.sum / 2 + 1
                    )
                  case None =>
                    none[Committee].pure[F]

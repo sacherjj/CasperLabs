@@ -23,8 +23,7 @@ import scala.annotation.tailrec
   def checkForCommittee(
       candidateBlockHash: BlockHash,
       committeeApproximation: Set[Validator],
-      q: Long,
-      weight: Map[Validator, Long]
+      q: Long
   ): F[Option[Committee]]
 
   def rebuildFromLatestFinalizedBlock(
@@ -100,8 +99,7 @@ class VotingMatrixImpl[F[_]] private (
   override def checkForCommittee(
       candidateBlockHash: BlockHash,
       committeeApproximation: Set[Validator],
-      q: Long,
-      weight: Map[Validator, Long]
+      q: Long
   ): F[Option[Committee]] =
     for {
       matrix              <- matrixRef.get
