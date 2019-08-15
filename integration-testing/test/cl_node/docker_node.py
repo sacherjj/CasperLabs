@@ -305,10 +305,20 @@ class DockerNode(LoggingDockerBase):
 
         from_account = Account(from_account_id)
         to_account = Account(to_account_id)
-        args_json = json.dumps(
-            [{"account": to_account.public_key_hex}, {"u32": amount}]
-        )
+
         ABI = self.p_client.abi
+
+        session_args = ABI.args(
+            [ABI.account(to_account.public_key_binary), ABI.u32(amount)]
+        )
+        if session_contract == payment_contract:
+            # Compatibility mode with the way things worked before execution cost era
+            payment_args = None
+        else:
+            # NOTE: this shouldn't necesserily be amount
+            # but this is temporary, anyway, eventually we want all tests
+            # running with execution cost on.
+            payment_args = ABI.args([ABI.u512(amount)])
 
         response, deploy_hash_bytes = self.p_client.deploy(
             from_address=from_account.public_key_hex,
@@ -318,8 +328,8 @@ class DockerNode(LoggingDockerBase):
             private_key=from_account.private_key_path,
             gas_price=gas_price,
             gas_limit=gas_limit,
-            session_args=ABI.args_from_json(args_json),
-            payment_args=ABI.args([ABI.u512(amount)]),
+            session_args=session_args,
+            payment_args=payment_args,
         )
 
         deploy_hash_hex = deploy_hash_bytes.hex()
@@ -367,8 +377,8 @@ class DockerNode(LoggingDockerBase):
         payment_contract: str,
         from_account: Account,
         json_args: str,
-        gas_limit: int,
-        gas_price: int,
+        gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
+        gas_price: int = 1,
     ) -> str:
 
         # TODO: pass payment_args as well
@@ -410,7 +420,13 @@ class DockerNode(LoggingDockerBase):
             to_addr_id, amount = avl[:2]
             from_addr_id = "genesis" if len(avl) == 2 else avl[2]
             block_hashes.append(
-                self.transfer_to_account(to_addr_id, amount, from_addr_id)
+                # TODO: don't pass payment_contract when execution cost on
+                self.transfer_to_account(
+                    to_addr_id,
+                    amount,
+                    from_addr_id,
+                    payment_contract="transfer_to_account.wasm",
+                )
             )
         return block_hashes
 

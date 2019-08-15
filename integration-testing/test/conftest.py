@@ -25,7 +25,7 @@ def docker_client_fixture() -> Generator[DockerClient, None, None]:
         docker_client.networks.prune()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def one_node_network(docker_client_fixture):
     with OneNodeNetwork(docker_client_fixture) as onn:
         onn.create_cl_network()
