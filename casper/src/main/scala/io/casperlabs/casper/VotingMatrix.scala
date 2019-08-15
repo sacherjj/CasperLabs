@@ -92,11 +92,10 @@ class VotingMatrixImpl[F[_]] private (
   ): F[Unit] =
     for {
       validatorToIndex <- validatorToIndexRef.get
-      validators       = validatorToIndex.keySet
       latestBlockDagLevelsAsMap <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                                     dag,
                                     blockMetadata,
-                                    validators
+                                    validatorToIndex.keySet
                                   )
       // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
       panoramaM = fromMapToArray(

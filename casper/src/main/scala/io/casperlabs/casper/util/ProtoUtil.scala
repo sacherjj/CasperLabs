@@ -72,28 +72,28 @@ object ProtoUtil {
       newBlockHash: BlockHash
   ): F[Option[BlockHash]] =
     for {
-      newBlock            <- dag.lookup(newBlockHash)
-      latestFinalizeBlock <- dag.lookup(latestFinalizeBlockHash)
-      r                   <- votedBranch(dag, latestFinalizeBlock.get, newBlock.get)
+      newBlock             <- dag.lookup(newBlockHash)
+      latestFinalizedBlock <- dag.lookup(latestFinalizeBlockHash)
+      r                    <- votedBranch(dag, latestFinalizedBlock.get, newBlock.get)
     } yield r
 
   def votedBranch[F[_]: Monad](
       dag: DagRepresentation[F],
-      latestFinalizeBlock: BlockMetadata,
+      latestFinalizedBlock: BlockMetadata,
       newBlock: BlockMetadata
   ): F[Option[BlockHash]] =
-    if (newBlock.rank <= latestFinalizeBlock.rank) {
+    if (newBlock.rank <= latestFinalizedBlock.rank) {
       none[BlockHash].pure[F]
     } else {
       for {
         result <- newBlock.parents.headOption match {
                    case Some(mainParentHash) =>
-                     if (mainParentHash == latestFinalizeBlock.blockHash) {
+                     if (mainParentHash == latestFinalizedBlock.blockHash) {
                        newBlock.blockHash.some.pure[F]
                      } else {
                        dag
                          .lookup(mainParentHash)
-                         .flatMap(b => votedBranch(dag, latestFinalizeBlock, b.get))
+                         .flatMap(b => votedBranch(dag, latestFinalizedBlock, b.get))
                      }
                    case None => none[BlockHash].pure[F]
                  }

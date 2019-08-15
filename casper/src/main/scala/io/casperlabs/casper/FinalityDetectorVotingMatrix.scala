@@ -16,12 +16,12 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] extends Final
   ): F[Float] =
     for {
       weights      <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
-      committeeOpt <- findCommit(dag, candidateBlockHash, weights)
+      committeeOpt <- findCommittee(dag, candidateBlockHash, weights)
     } yield committeeOpt
       .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
       .getOrElse(0f)
 
-  private def findCommit(
+  private def findCommittee(
       dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
       weights: Map[Validator, Long]
