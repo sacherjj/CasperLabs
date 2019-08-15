@@ -37,9 +37,9 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
             .with_address(GENESIS_ADDR)
             .with_session_code(
                 "transfer_purse_to_account.wasm",
-                (account_1_public_key, U512::from(100)),
+                (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
             )
-            .with_payment_code("standard_payment.wasm", U512::from(100))
+            .with_payment_code("standard_payment.wasm", U512::from(MAX_PAYMENT))
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(1)
             .build();
@@ -47,17 +47,135 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let response = WasmTestBuilder::new(engine_config)
+    let mut builder = WasmTestBuilder::new(engine_config);
+
+    let _response = builder
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_exec_request(exec_request)
+        .expect_success()
+        .commit()
         .get_exec_response(0)
         .expect("there should be a response")
         .to_owned();
 
+    let account_1_request = {
+        let deploy = DeployBuilder::new()
+            .with_address(ACCOUNT_1_ADDR)
+            .with_session_code("revert.wasm", ())
+            .with_payment_code("standard_payment.wasm", U512::from(MAX_PAYMENT - 1))
+            .with_authorization_keys(&[account_1_public_key])
+            .with_nonce(1)
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    let account_1_response = builder
+        .exec_with_exec_request(account_1_request)
+        .commit()
+        .get_exec_response(1)
+        .expect("there should be a response")
+        .to_owned();
+
     let error_message = {
-        let execution_result = test_support::get_success_result(&response);
+        let execution_result = test_support::get_success_result(&account_1_response);
         test_support::get_error_message(execution_result)
     };
+
+    assert_eq!(
+        error_message, "Insufficient payment",
+        "expected insufficient payment"
+    );
+
+    let expected_transfers_count = 0;
+    let transforms = builder.get_transforms();
+    let transform = &transforms[1];
+
+    assert_eq!(
+        transform.len(),
+        expected_transfers_count,
+        "there should be no transforms if the account main purse has less than max payment"
+    );
+}
+
+#[ignore]
+#[test]
+fn should_raise_insufficient_payment_when_payment_code_exceeds_gas_limit() {
+    let genesis_public_key = PublicKey::new(GENESIS_ADDR);
+    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
+
+    let exec_request = {
+        let deploy = DeployBuilder::new()
+            .with_address(GENESIS_ADDR)
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (account_1_public_key, U512::from(1)),
+            )
+            .with_payment_code("standard_payment.wasm", U512::from(1))
+            .with_authorization_keys(&[genesis_public_key])
+            .with_nonce(1)
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    let mut builder = WasmTestBuilder::new(engine_config);
+
+    let _response = builder
+        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .exec_with_exec_request(exec_request)
+        .commit()
+        .get_exec_response(0)
+        .expect("there should be a response")
+        .to_owned();
+
+    let mut modified_balance: Option<U512> = None;
+    let mut reward_balance: Option<U512> = None;
+
+    let transforms = builder.get_transforms();
+    let transform = &transforms[0];
+
+    for t in transform.values() {
+        if let Transform::Write(Value::UInt512(v)) = t {
+            modified_balance = Some(*v);
+        }
+        if let Transform::AddUInt512(v) = t {
+            reward_balance = Some(*v);
+        }
+    }
+
+    let modified_balance = modified_balance.expect("modified balance should be present");
+    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
+
+    assert_eq!(
+        modified_balance,
+        initial_balance - expected_reward_balance,
+        "modified balance is incorrect"
+    );
+
+    let reward_balance = reward_balance.expect("reward balance should be present");
+
+    assert_eq!(
+        reward_balance, expected_reward_balance,
+        "reward balance is incorrect"
+    );
+
+    assert_eq!(
+        initial_balance,
+        (modified_balance + reward_balance),
+        "no net resources should be gained or lost post-distribution"
+    );
+
+    let response = builder
+        .get_exec_response(0)
+        .expect("there should be a response")
+        .clone();
+
+    let execution_result = test_support::get_success_result(&response);
+    let error_message = test_support::get_error_message(execution_result);
 
     assert_eq!(
         error_message, "Insufficient payment",
@@ -92,11 +210,10 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = WasmTestBuilder::new(engine_config);
-
-    let transfer_result = builder
+    let transfer_result = WasmTestBuilder::new(engine_config)
         .run_genesis(genesis_addr, HashMap::default())
         .exec_with_exec_request(exec_request)
+        .commit()
         .finish();
 
     let transforms = transfer_result.builder().get_transforms();
