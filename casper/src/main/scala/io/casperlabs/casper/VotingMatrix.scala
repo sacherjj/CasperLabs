@@ -54,34 +54,8 @@ class VotingMatrixImpl[F[_]] private (
             ().pure[F]
           } else {
             for {
-              _                   <- updateVotingMatrixOnNewBlock(dag, blockMetadata)
-              currentDagLevel     = blockMetadata.rank
-              firstLevelZeroVotes <- firstLevelZeroVotesRef.get
-
-              indexOfVoter = validatorToIndex(voter)
-              rowOpt       = firstLevelZeroVotes(indexOfVoter)
-              _ <- rowOpt match {
-                    case Some((finalVoteValue, _)) =>
-                      if (finalVoteValue != currentVoteValue)
-                        firstLevelZeroVotesRef.update(
-                          l =>
-                            l.updated(
-                              indexOfVoter,
-                              (currentVoteValue, currentDagLevel).some
-                            )
-                        )
-                      else {
-                        ().pure[F]
-                      }
-                    case None =>
-                      firstLevelZeroVotesRef.update(
-                        l =>
-                          l.updated(
-                            indexOfVoter,
-                            (currentVoteValue, currentDagLevel).some
-                          )
-                      )
-                  }
+              _ <- updateVotingMatrixOnNewBlock(dag, blockMetadata)
+              _ <- updateFirstZeroLevelVote(voter, currentVoteValue, blockMetadata.rank)
             } yield ()
           }
     } yield ()
@@ -92,16 +66,7 @@ class VotingMatrixImpl[F[_]] private (
   ): F[Unit] =
     for {
       validatorToIndex <- validatorToIndexRef.get
-      latestBlockDagLevelsAsMap <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
-                                    dag,
-                                    blockMetadata,
-                                    validatorToIndex.keySet
-                                  )
-      // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
-      panoramaM = fromMapToArray(
-        validatorToIndex,
-        latestBlockDagLevelsAsMap.getOrElse(_, 0L)
-      )
+      panoramaM        <- panoramaM(dag, validatorToIndex, blockMetadata)
       // Replace row i in voting-matrix by panoramaM
       _ <- matrixRef.update(
             matrix =>
@@ -110,6 +75,26 @@ class VotingMatrixImpl[F[_]] private (
                 panoramaM
               )
           )
+    } yield ()
+
+  private def updateFirstZeroLevelVote(
+      validator: Validator,
+      newVote: BlockHash,
+      dagLevel: Long
+  ): F[Unit] =
+    for {
+      firstLevelZeroMsgs <- firstLevelZeroVotesRef.get
+      validatorToIndex   <- validatorToIndexRef.get
+      voterIdx           = validatorToIndex(validator)
+      firstLevelZeroVote = firstLevelZeroMsgs(voterIdx)
+      _ <- firstLevelZeroVote match {
+            case None =>
+              firstLevelZeroVotesRef.update(_.updated(voterIdx, Some((newVote, dagLevel))))
+            case Some((prevVote, _)) if prevVote != newVote =>
+              firstLevelZeroVotesRef.update(_.updated(voterIdx, Some((newVote, dagLevel))))
+            case Some((prevVote, _)) if prevVote == newVote =>
+              ().pure[F]
+          }
     } yield ()
 
   override def checkForCommittee(
@@ -214,24 +199,24 @@ class VotingMatrixImpl[F[_]] private (
       // Traverse down the swim lane of V(i) to find the earliest block voting
       // for the same Fm's child as V(i) latest does.
       // This way we can initialize first-zero-level-messages(i).
-      firstLevelZeroMessagesAsList <- latestVoteValueOfVotesAsList
-                                       .traverse {
-                                         case (v, voteValue) =>
-                                           FinalityDetectorUtil
-                                             .levelZeroMsgsOfValidator(dag, v, voteValue)
-                                             .map(
-                                               _.lastOption
-                                                 .map(b => (v, (b.blockHash, b.rank)))
-                                             )
-                                       }
-      firstLevelZeroVotesAsMap = firstLevelZeroMessagesAsList.flatten.toMap
-      firstLevelZeroVotes = fromMapToArray(
+      firstLevelZeroVotes <- latestVoteValueOfVotesAsList
+                              .traverse {
+                                case (v, voteValue) =>
+                                  FinalityDetectorUtil
+                                    .levelZeroMsgsOfValidator(dag, v, voteValue)
+                                    .map(
+                                      _.lastOption
+                                        .map(b => (v, (b.blockHash, b.rank)))
+                                    )
+                              }
+                              .map(_.flatten.toMap)
+      firstLevelZeroVotesArray = fromMapToArray(
         validatorsToIndex,
-        firstLevelZeroVotesAsMap.get
+        firstLevelZeroVotes.get
       )
-      _ <- firstLevelZeroVotesRef.set(firstLevelZeroVotes)
+      _ <- firstLevelZeroVotesRef.set(firstLevelZeroVotesArray)
       latestMessagesToUpdated = latestMessagesOfVoters.filterKeys(
-        firstLevelZeroVotesAsMap.contains
+        firstLevelZeroVotes.contains
       )
       // Apply the incremental update step to update voting matrix by taking M := V(i)latest
       _ <- latestMessagesToUpdated.values.toList.traverse { b =>
@@ -254,6 +239,26 @@ class VotingMatrixImpl[F[_]] private (
       .toList
       .sortBy(_._1)
       .map(_._2)
+
+  private def panoramaM(
+      dag: DagRepresentation[F],
+      validatorsToIndex: Map[Validator, Int],
+      blockMetadata: BlockMetadata
+  ): F[List[Long]] =
+    FinalityDetectorUtil
+      .panoramaDagLevelsOfBlock(
+        dag,
+        blockMetadata,
+        validatorsToIndex.keySet
+      )
+      .map(
+        latestBlockDagLevelsAsMap =>
+          // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
+          fromMapToArray(
+            validatorsToIndex,
+            latestBlockDagLevelsAsMap.getOrElse(_, 0L)
+          )
+      )
 }
 
 object VotingMatrixImpl {
