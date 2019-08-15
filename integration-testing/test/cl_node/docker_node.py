@@ -283,7 +283,7 @@ class DockerNode(LoggingDockerBase):
         Performs a transfer using the from account if given (or genesis if not)
 
         :param to_account_id: 1-20 index of test account for transfer into
-        :param amount: amount of tokens to transfer
+        :param amount: amount of motes to transfer (mote = smallest unit of token)
         :param from_account_id: default 'genesis' account, but previously funded account_id is also valid.
         :returns block_hash in hex str
         """
@@ -308,7 +308,7 @@ class DockerNode(LoggingDockerBase):
                 payment_contract="transfer_to_account.wasm",
                 public_key=public_key_path,
                 private_key=private_key_path,
-                args=self.p_client.abi.args_from_json(args_json),
+                session_args=self.p_client.abi.args_from_json(args_json),
             )
 
         deploy_hash_hex = deploy_hash_bytes.hex()
@@ -363,7 +363,7 @@ class DockerNode(LoggingDockerBase):
             payment_contract=payment_contract,
             public_key=from_account.public_key_path,
             private_key=from_account.private_key_path,
-            args=self.p_client.abi.args_from_json(json_args),
+            session_args=self.p_client.abi.args_from_json(json_args),
         )
 
         deploy_hash_hex = deploy_hash_bytes.hex()

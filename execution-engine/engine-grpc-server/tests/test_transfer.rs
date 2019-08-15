@@ -23,7 +23,7 @@ use test_support::DEFAULT_BLOCK_TIME;
 #[allow(unused)]
 mod test_support;
 
-const INITIAL_GENESIS_AMOUNT: u32 = 1_000_000;
+const INITIAL_GENESIS_AMOUNT: u64 = 100_000_000_000;
 
 const TRANSFER_1_AMOUNT: u32 = 1000;
 const TRANSFER_2_AMOUNT: u32 = 750;

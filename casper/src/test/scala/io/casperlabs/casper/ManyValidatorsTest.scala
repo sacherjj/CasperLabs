@@ -70,7 +70,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
                       )
       newIndexedDagStorage <- IndexedDagStorage.create(newDagStorage)
       dag                  <- newIndexedDagStorage.getRepresentation
-      tips                 <- Estimator.tips[Task](dag, genesis.blockHash)(Monad[Task])
+      tips                 <- Estimator.tips[Task](dag, genesis.blockHash)(MonadThrowable[Task])
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips.toIndexedSeq

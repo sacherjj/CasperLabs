@@ -364,7 +364,7 @@ where
             ret
         };
 
-        let initial_tokens: U512 = match genesis_request.get_initial_tokens().try_into() {
+        let initial_tokens: U512 = match genesis_request.get_initial_motes().try_into() {
             Ok(initial_tokens) => initial_tokens,
             Err(err) => {
                 let err_msg = format!("{:?}", err);
@@ -504,9 +504,14 @@ where
     deploys
         .iter()
         .map(|deploy| {
-            let session_contract = deploy.get_session();
-            let module_bytes = &session_contract.code;
-            let args = &session_contract.args;
+            let session = deploy.get_session();
+            let session_module_bytes = &session.code;
+            let session_args = &session.args;
+
+            let payment = deploy.get_payment();
+            let payment_module_bytes = &payment.code;
+            let payment_args = &payment.args;
+
             let address = {
                 let address_len = deploy.address.len();
                 if address_len != EXPECTED_PUBLIC_KEY_LENGTH {
@@ -548,12 +553,14 @@ where
             let nonce = deploy.nonce;
             // TODO: is the rounding in this division ok?
             let gas_limit =
-                (deploy.tokens_transferred_in_payment as u64) / (deploy.gas_price as u64);
+                (deploy.motes_transferred_in_payment as u64) / (deploy.gas_price as u64);
             let protocol_version = protocol_version.value;
             engine_state
                 .run_deploy(
-                    module_bytes,
-                    args,
+                    session_module_bytes,
+                    session_args,
+                    payment_module_bytes,
+                    payment_args,
                     address,
                     authorized_keys,
                     blocktime,

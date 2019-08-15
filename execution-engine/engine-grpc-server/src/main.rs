@@ -241,7 +241,7 @@ fn get_map_size(matches: &ArgMatches) -> usize {
 /// Parses `use-payment-code` argument and returns an [`EngineConfig`].
 fn get_engine_config(matches: &ArgMatches) -> EngineConfig {
     let use_payment_code = matches.is_present(ARG_USE_PAYMENT_CODE);
-    EngineConfig::new().use_payment_code(use_payment_code)
+    EngineConfig::new().set_use_payment_code(use_payment_code)
 }
 
 /// Builds and returns a gRPC server.

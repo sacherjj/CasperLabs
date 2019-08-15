@@ -78,7 +78,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
         maximumBond = Long.MaxValue,
         requiredSigs = requiredSigs,
         genesisAccountPublicKeyPath = None,
-        initialTokens = 0L,
+        initialMotes = 0L,
         mintCodePath = None,
         posCodePath = None,
         bondsPath = None

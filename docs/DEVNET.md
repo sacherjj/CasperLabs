@@ -10,6 +10,7 @@
   - Provide a name for your account and click [Save]; multiple key files will be written to disk
   - You will need these key files to interact with the network; give some consideration to where you save them
 * Navigate to [Faucet](https://explorer.casperlabs.io/#/faucet), select your new account, and click [Request Tokens]
+  - Note that a "token" obtained on devnet has no monetary value whatsoever
 * The request will appear in the "Recent Faucet Requests" table; wait for the green check mark to appear in the "Status" column
 
 #### Checking the balance of an account
@@ -68,4 +69,3 @@ casperlabs-client \
 ## Notes
 
 * This quick start gives the simplest set of instructions for getting started on the CasperLabs devnet. More advanced users may wish to take other approaches to some of the steps listed above.
-* Throughout this quick start the word "token" is used for convenience, however the units they correspond to have no monetary value whatsoever and do not necessarily correspond to the conception you may have of what a "token" is; for the purposes of the present devnet, "token" simply means "an indivisible unit which may be used for bonding onto the network".

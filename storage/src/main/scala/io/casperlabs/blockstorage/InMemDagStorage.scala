@@ -117,18 +117,22 @@ class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStorage](
         .toSet
         .diff(block.getHeader.justifications.map(_.validatorPublicKey).toSet)
       validator = block.getHeader.validatorPublicKey
-      toUpdateValidators <- if (validator.isEmpty) {
-                             // Ignore empty sender for special cases such as genesis block
-                             Log[F].warn(
-                               s"Block ${Base16.encode(block.blockHash.toByteArray)} validator is empty"
-                             ) *> newValidators.pure[F]
-                           } else if (validator.size == 32) {
-                             List(validator).pure[F]
-                           } else {
-                             MonadThrowable[F].raiseError[Set[ByteString]](
-                               BlockValidatorIsMalformed(block)
-                             )
-                           }
+      _ <- Log[F]
+            .warn(
+              s"Block ${Base16.encode(block.blockHash.toByteArray)} validator is empty"
+            )
+            .whenA(validator.isEmpty)
+      _ <- MonadThrowable[F]
+            .raiseError[Set[ByteString]](BlockValidatorIsMalformed(block))
+            .whenA(!validator.isEmpty && validator.size != 32)
+      toUpdateValidators = if (validator.isEmpty) {
+        // For Genesis, all validators are "new".
+        newValidators
+      } else {
+        // For any other block, only validator that produced it
+        // needs to have its "latest message" updated.
+        List(validator)
+      }
       _ <- latestMessagesRef.update { latestMessages =>
             toUpdateValidators.foldLeft(latestMessages) {
               case (acc, v) => acc.updated(v, block.blockHash)

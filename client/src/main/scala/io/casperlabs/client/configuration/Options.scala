@@ -180,7 +180,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       name = "amount",
       validate = _ > 0,
       descr =
-        "Amount of tokens to unbond. If not provided then a request to unbond with all staked tokens is made."
+        "Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made."
     )
 
     val session =
@@ -212,7 +212,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val amount = opt[Long](
       name = "amount",
       validate = _ > 0,
-      descr = "amount of tokens to bond",
+      descr = "amount of motes to bond",
       required = true
     )
 
@@ -244,7 +244,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val amount = opt[Long](
       name = "amount",
       validate = _ > 0,
-      descr = "amount of tokens to transfer",
+      descr =
+        "Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.",
       required = true
     )
 

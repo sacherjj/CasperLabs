@@ -1,11 +1,10 @@
 [package]
-name = "blessed-urefs-access-rights"
+name = "check-system-contract-urefs-access-rights"
 version = "0.1.0"
 authors = ["Mateusz Górski <mateusz@casperlabs.io"]
 edition = "2018"
 
 [lib]
-name = "blessed_urefs_access_rights"
 crate-type = ["cdylib"]
 
 [features]

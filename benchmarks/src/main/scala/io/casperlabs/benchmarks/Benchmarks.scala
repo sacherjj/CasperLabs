@@ -19,7 +19,7 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 object Benchmarks {
 
-  /** Each round is many token transfer deploys from different accounts to single recipient
+  /** Each round is many mote transfer deploys from different accounts to single recipient
     * TODO: Remove Sync
     *  */
   def run[F[_]: Log: DeployService: Par: Timer: FilesAPI: Monad: Sync](
