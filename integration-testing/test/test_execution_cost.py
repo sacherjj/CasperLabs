@@ -208,7 +208,7 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
 # The session code can result in an error.
 # The deploy will fail
 # and the caller will receive a partial refund for the unspent gas.
-def test_refund_after_session_code_error(payment_node_network):
+def disable_test_refund_after_session_code_error(payment_node_network):
     network = payment_node_network
     node0: DockerNode = network.docker_nodes[0]
 
