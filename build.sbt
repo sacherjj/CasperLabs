@@ -126,12 +126,8 @@ lazy val casper = (project in file("casper"))
     )
   )
   .dependsOn(
-    storage        % "compile->compile;test->test",
-    comm           % "compile->compile;test->test",
-    shared         % "compile->compile;test->test",
-    smartContracts % "compile->compile;test->test",
-    crypto,
-    models
+    storage % "compile->compile;test->test",
+    comm    % "compile->compile;test->test"
   )
 
 lazy val comm = (project in file("comm"))
@@ -166,7 +162,7 @@ lazy val comm = (project in file("comm"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared % "compile->compile;test->test", crypto, models)
+  .dependsOn(models % "compile->compile;test->test")
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
@@ -184,7 +180,7 @@ lazy val crypto = (project in file("crypto"))
     ),
     fork := true
   )
-  .dependsOn(shared)
+  .dependsOn(shared % "compile->compile;test->test")
 
 lazy val models = (project in file("models"))
   .settings(commonSettings: _*)
@@ -215,7 +211,7 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto, shared % "compile->compile;test->test")
+  .dependsOn(crypto % "compile->compile;test->test")
 
 val nodeAndClientVersion = "0.6.0"
 
@@ -352,7 +348,7 @@ lazy val node = (project in file("node"))
     rpmAutoreq := "no",
     Test / fork := true // Config tests errors would quit SBT itself due to Scallops.
   )
-  .dependsOn(casper, comm, crypto)
+  .dependsOn(casper)
 
 lazy val storage = (project in file("storage"))
   .enablePlugins(JmhPlugin)
@@ -383,7 +379,7 @@ lazy val storage = (project in file("storage"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared, smartContracts, models % "compile->compile;test->test")
+  .dependsOn(smartContracts % "compile->compile;test->test")
 
 // Smart contract execution.
 lazy val smartContracts = (project in file("smart-contracts"))
@@ -409,7 +405,7 @@ lazy val smartContracts = (project in file("smart-contracts"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared, models)
+  .dependsOn(models % "compile->compile;test->test")
 
 lazy val client = (project in file("client"))
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
@@ -519,7 +515,7 @@ lazy val client = (project in file("client"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
     )
   )
-  .dependsOn(crypto, shared, models, graphz)
+  .dependsOn(models, graphz)
 
 lazy val benchmarks = (project in file("benchmarks"))
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
@@ -583,7 +579,7 @@ lazy val gatling = (project in file("gatling"))
       PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf"
     )
   )
-  .dependsOn(shared)
+  .dependsOn(comm)
 
 lazy val casperlabs = (project in file("."))
   .settings(commonSettings: _*)
@@ -598,5 +594,6 @@ lazy val casperlabs = (project in file("."))
     shared,
     smartContracts,
     client,
-    benchmarks
+    benchmarks,
+    gatling
   )

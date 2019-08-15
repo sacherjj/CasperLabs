@@ -1,14 +1,14 @@
 package io.casperlabs
 
 import com.google.protobuf.ByteString
-import io.casperlabs.comm.discovery.{Node, Ping}
+import io.casperlabs.comm.discovery.Node
 import io.gatling.commons.validation
 import io.gatling.core.session.Expression
 
 import scala.util.Random
 
 package object gatling {
-  def getRandomHexString(numchars: Int) = {
+  def getRandomHexString(numchars: Int): String = {
     val sb = new StringBuffer
     while (sb.length < numchars) sb.append(Integer.toHexString(Random.nextInt))
 
@@ -16,7 +16,7 @@ package object gatling {
   }
 
   implicit class StringOps1(str: String) {
-    def toByteStr = ByteString.copyFromUtf8(str)
+    def toByteStr: ByteString = ByteString.copyFromUtf8(str)
   }
 
   def randomNode: Node =
