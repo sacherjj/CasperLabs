@@ -38,7 +38,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "casperlabs-contract-ffi"
-version = "0.10.0"
+version = "0.12.0"
 dependencies = [
  "binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -67,7 +67,7 @@ dependencies = [
 name = "combined-contracts-define"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
@@ -128,14 +128,14 @@ dependencies = [
 name = "get-caller-call"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "get-caller-define"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
@@ -156,14 +156,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "list-known-urefs-call"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "list-known-urefs-define"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
@@ -418,105 +418,105 @@ dependencies = [
 name = "test-bonding-call"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-call-hello-name"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-counter-call"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-counter-define"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-direct-revert-call"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-direct-revert-define"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-mailing-list-call"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-mailing-list-define"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-store-hello-name"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-subcall-revert-call"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-subcall-revert-define"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test-unbonding-call"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test_args_multi"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test_args_u32"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
 name = "test_args_u512"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
@@ -527,7 +527,7 @@ version = "0.1.0"
 name = "transfer_to_account"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.10.0",
+ "casperlabs-contract-ffi 0.12.0",
 ]
 
 [[package]]
