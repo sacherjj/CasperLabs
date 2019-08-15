@@ -109,18 +109,16 @@ object FinalityDetectorUtil {
       block: BlockMetadata,
       validators: Set[Validator]
   ): F[Map[Validator, Long]] =
-    for {
-      panorama <- panoramaOfBlockByValidators(blockDag, block, validators)
-      result = validators
-        .map(
-          v =>
-            if (v == block.validatorPublicKey)
-              v -> block.rank
-            else
-              v -> panorama.get(v).fold(0L)(_.rank)
-        )
-        .toMap
-    } yield result
+    panoramaOfBlockByValidators(blockDag, block, validators)
+      .map(panorama => {
+        validators
+          .map(
+            v =>
+              if (v == block.validatorPublicKey) v -> block.rank
+              else v                               -> panorama.get(v).fold(0L)(_.rank)
+          )
+          .toMap
+      })
 
   // Get level zero messages of the specified validator and specified candidateBlock
   def levelZeroMsgsOfValidator[F[_]: Monad](
