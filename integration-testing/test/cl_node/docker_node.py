@@ -7,7 +7,11 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
-from test.cl_node.common import extract_block_hash_from_propose_output
+from test.cl_node.common import (
+    extract_block_hash_from_propose_output,
+    MAX_PAYMENT_COST,
+    CONV_RATE,
+)
 from test.cl_node.docker_base import LoggingDockerBase
 from test.cl_node.docker_client import DockerClient
 from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
@@ -200,8 +204,9 @@ class DockerNode(LoggingDockerBase):
         return self.cl_network.genesis_account
 
     @property
-    def test_account(self) -> str:
-        return self.cl_network.test_account(self)
+    def test_account(self):
+        amount = 10**6
+        return self.cl_network.test_account(self, amount)
 
     @property
     def from_address(self) -> str:

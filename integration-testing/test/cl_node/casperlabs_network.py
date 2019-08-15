@@ -2,7 +2,7 @@ import logging
 import os
 import threading
 from test.cl_node.casperlabs_node import CasperLabsNode
-from test.cl_node.common import random_string
+from test.cl_node.common import random_string, MAX_PAYMENT_COST
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.docker_execution_engine import DockerExecutionEngine
 from test.cl_node.docker_node import DockerNode
@@ -72,7 +72,7 @@ class CasperLabsNetwork:
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
 
-    def test_account(self, node) -> str:
+    def test_account(self, node, amount=1000000) -> str:
         name = test_name()
         if not name:
             # This happens when a thread tries to deploy.
@@ -86,7 +86,7 @@ class CasperLabsNetwork:
                 logging.info(
                     f"=== Creating test account #{self.next_key} {self.test_accounts[name].public_key_hex} for {name} "
                 )
-                block_hash = node.transfer_to_account(self.next_key, 1000000)
+                block_hash = node.transfer_to_account(self.next_key, amount)
                 # Waiting for the block with transaction that created new account to propagate to all nodes.
                 # Expensive, but some tests may rely on it.
                 wait_for_block_hash_propagated_to_all_nodes(
@@ -225,6 +225,9 @@ class CasperLabsNetwork:
 class OneNodeNetwork(CasperLabsNetwork):
     """ A single node network with just a bootstrap """
 
+    is_payment_code_enabled = False
+    initial_motes = MAX_PAYMENT_COST * 100  # 10 millions * 100 = 1 billion motes
+
     def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(
@@ -232,8 +235,31 @@ class OneNodeNetwork(CasperLabsNetwork):
             node_private_key=kp.private_key,
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
+            is_payment_code_enabled=self.is_payment_code_enabled,
+            initial_motes=self.initial_motes,
         )
         self.add_bootstrap(config)
+
+
+class PaymentNodeNetwork(OneNodeNetwork):
+    """ A single node network with payment code enabled"""
+
+    is_payment_code_enabled = True
+
+
+class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
+    """ A single node network with payment code enabled"""
+
+    is_payment_code_enabled = True
+    initial_motes = 10 ** 3
+
+
+class PaymentNodForOnlyPaymentContract(OneNodeNetwork):
+    """ A single node network with payment code enabled"""
+
+    is_payment_code_enabled = True
+    # enough to run payment, but not enough to run session
+    initial_motes = 3093878
 
 
 class TwoNodeNetwork(CasperLabsNetwork):
