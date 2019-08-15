@@ -2,8 +2,8 @@ package io.casperlabs.comm.gossiping
 
 import java.util.concurrent.TimeoutException
 
-import cats.syntax.either._
 import cats.effect.concurrent.Semaphore
+import cats.syntax.either._
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
@@ -14,8 +14,9 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.SynchronizationError
 import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.shared.Log.NOPLog
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.{Atomic, AtomicInt}
@@ -30,7 +31,7 @@ class InitialSynchronizationSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
-    with ArbitraryConsensus
+    with ArbitraryConsensusAndComm
     with GeneratorDrivenPropertyChecks {
   private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 

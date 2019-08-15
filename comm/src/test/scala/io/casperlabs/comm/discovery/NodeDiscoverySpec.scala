@@ -76,7 +76,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
 
   /** A generators .sample.get can sometimes return None, but these examples have no reason to not generate a result,
     * so defend against that and retry if it does happen.
-    * Borrowed from [[io.casperlabs.comm.gossiping.ArbitraryConsensus]] */
+    * Borrowed from [[io.casperlabs.models.ArbitraryConsensus]] */
   def sample[T](g: Gen[T]): T = {
     def loop(i: Int): T = {
       assert(i > 0, "Should be able to generate a sample.")

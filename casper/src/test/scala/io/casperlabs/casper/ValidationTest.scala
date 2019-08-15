@@ -20,10 +20,10 @@ import io.casperlabs.casper.util.execengine.{
 }
 import io.casperlabs.casper.validation.Errors.{DropErrorWrapper, ValidateErrorWrapper}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
-import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService

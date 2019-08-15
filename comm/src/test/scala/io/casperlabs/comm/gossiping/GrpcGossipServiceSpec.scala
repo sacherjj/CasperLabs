@@ -1,32 +1,32 @@
 package io.casperlabs.comm.gossiping
 
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
 import cats.Id
-import cats.implicits._
 import cats.effect._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
+import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated, Unavailable}
+import io.casperlabs.comm.{ServiceError, TestRuntime}
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
-import io.casperlabs.comm.ServiceError
-import ServiceError.{NotFound, Unauthenticated, Unavailable}
-import io.casperlabs.comm.TestRuntime
-import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
-import io.netty.handler.ssl.{ClientAuth, SslContext}
-import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+import io.netty.handler.ssl.ClientAuth
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
 import monix.reactive.Observable
 import monix.tail.Iterant
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
 import org.scalatest.concurrent._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
-import org.scalacheck.{Arbitrary, Gen}
-import Arbitrary.arbitrary
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 
 import scala.concurrent.duration._
 
@@ -36,7 +36,7 @@ class GrpcGossipServiceSpec
     with Matchers
     with BeforeAndAfterAll
     with SequentialNestedSuiteExecution
-    with ArbitraryConsensus {
+    with ArbitraryConsensusAndComm {
 
   import GrpcGossipServiceSpec._
   import Scheduler.Implicits.global

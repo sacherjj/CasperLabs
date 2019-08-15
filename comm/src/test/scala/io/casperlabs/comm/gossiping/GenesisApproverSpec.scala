@@ -1,22 +1,23 @@
 package io.casperlabs.comm.gossiping
 
-import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
+import io.casperlabs.comm.ServiceError
+import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
-import io.casperlabs.comm.ServiceError, ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.tail.Iterant
-import org.scalatest._
-import scala.concurrent.duration._
-import scala.concurrent.TimeoutException
-import org.scalacheck.Gen
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
+import org.scalatest._
 
-class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConsensus {
+import scala.concurrent.TimeoutException
+import scala.concurrent.duration._
+
+class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConsensusAndComm {
   import GenesisApproverSpec._
   import Scheduler.Implicits.global
 
@@ -454,7 +455,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
   }
 }
 
-object GenesisApproverSpec extends ArbitraryConsensus {
+object GenesisApproverSpec extends ArbitraryConsensusAndComm {
   implicit val noLog           = new Log.NOPLog[Task]
   implicit val consensusConfig = ConsensusConfig()
 

@@ -17,7 +17,6 @@ import com.olegpy.meow.effects._
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageWriter, SQLiteDeployStorage}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -37,6 +36,7 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
+import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageWriter, SQLiteDeployStorage}
 import io.casperlabs.storage.util.fileIO.IOError._
 import io.casperlabs.storage.util.fileIO._
 import io.netty.handler.ssl.ClientAuth

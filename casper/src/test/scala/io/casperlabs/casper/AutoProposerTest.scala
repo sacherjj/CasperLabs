@@ -6,15 +6,15 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.casper.deploybuffer.{
   DeployStorage,
   DeployStorageReader,
   DeployStorageWriter,
   MockDeployStorage
 }
-import io.casperlabs.comm.gossiping.ArbitraryConsensus
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary

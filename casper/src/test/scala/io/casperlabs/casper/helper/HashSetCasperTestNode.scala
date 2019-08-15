@@ -12,7 +12,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
-import io.casperlabs.casper.deploybuffer.{DeployStorage, MockDeployStorage}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.TaskContrib._
@@ -36,6 +35,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage._
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
+import io.casperlabs.casper.deploybuffer.{DeployStorage, MockDeployStorage}
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler

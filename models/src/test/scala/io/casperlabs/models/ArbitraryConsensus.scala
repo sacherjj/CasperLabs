@@ -1,18 +1,15 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.models
 
 import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
-import io.casperlabs.comm.discovery.Node
-import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.Keys.PrivateKey
+import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 import scala.collection.JavaConverters._
-
-object ArbitraryConsensus extends ArbitraryConsensus
 
 trait ArbitraryConsensus {
   import Arbitrary.arbitrary
@@ -83,15 +80,6 @@ trait ArbitraryConsensus {
 
   protected lazy val randomAccounts   = sample(Gen.listOfN(numAccounts, genAccountKeys))
   protected lazy val randomValidators = sample(Gen.listOfN(numValidators, genKey))
-
-  implicit val arbNode: Arbitrary[Node] = Arbitrary {
-    for {
-      id   <- genHash
-      host <- Gen.listOfN(4, Gen.choose(0, 255)).map(xs => xs.mkString("."))
-    } yield {
-      Node(id, host, 40400, 40404)
-    }
-  }
 
   implicit val arbSignature: Arbitrary[Signature] = Arbitrary {
     for {

@@ -1,7 +1,7 @@
 package io.casperlabs.comm.gossiping
 
-import cats.implicits._
 import cats.effect.concurrent.Ref
+import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
@@ -19,10 +19,11 @@ import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
 import monix.execution.schedulers.CanBlock.permit
 import monix.tail.Iterant
-import org.scalacheck.Gen
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
+
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 
@@ -30,7 +31,7 @@ class SynchronizerSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
-    with ArbitraryConsensus
+    with ArbitraryConsensusAndComm
     with GeneratorDrivenPropertyChecks {
   import SynchronizerSpec._
 

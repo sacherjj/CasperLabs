@@ -5,7 +5,6 @@ import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.deploybuffer.DeployStorageReader
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils
@@ -14,6 +13,7 @@ import io.casperlabs.node.api.graphql._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
+import io.casperlabs.casper.deploybuffer.DeployStorageReader
 import sangria.schema._
 
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorageReader] {

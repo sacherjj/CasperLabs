@@ -10,7 +10,6 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageReader}
 import io.casperlabs.casper.protocol.{
   BlockInfoWithoutTuplespace,
   BlockQuery,
@@ -30,6 +29,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageReader}
 
 object BlockAPI {
 

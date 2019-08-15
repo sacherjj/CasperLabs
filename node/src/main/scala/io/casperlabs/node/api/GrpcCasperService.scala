@@ -9,7 +9,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.{state, Block}
-import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.InvalidArgument
@@ -19,6 +18,7 @@ import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
+import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 

@@ -8,7 +8,6 @@ import io.casperlabs.casper
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.deploybuffer.{DeployStorage, MockDeployStorage}
 import io.casperlabs.casper.helper.{
   DagStorageTestFixture,
   HashSetCasperTestNode,
@@ -47,6 +46,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
+import io.casperlabs.casper.deploybuffer.{DeployStorage, MockDeployStorage}
 import monix.catnap.Semaphore
 import monix.eval.Task
 import monix.execution.Scheduler

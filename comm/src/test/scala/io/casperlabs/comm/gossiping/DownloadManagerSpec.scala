@@ -1,29 +1,25 @@
 package io.casperlabs.comm.gossiping
 
-import cats.implicits._
-import cats.effect.concurrent.Semaphore
-import com.google.protobuf.ByteString
-import eu.timepit.refined._
-import eu.timepit.refined.auto._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.numeric._
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
-import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.GossipError
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.Log
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import java.util.concurrent.atomic.AtomicInteger
 
-import monix.eval.Task
-import monix.execution.{ExecutionModel, Scheduler}
-import monix.tail.Iterant
-import org.scalatest._
-import org.scalatest.concurrent._
-import org.scalacheck.{Arbitrary, Gen}
-import Arbitrary.arbitrary
+import cats.effect.concurrent.Semaphore
+import cats.implicits._
+import com.google.protobuf.ByteString
+import eu.timepit.refined.auto._
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
+import io.casperlabs.comm.GossipError
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
-import monix.execution.schedulers.TestScheduler
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.Log
+import monix.eval.Task
+import monix.execution.Scheduler
+import monix.tail.Iterant
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.{Arbitrary, Gen}
+import org.scalatest._
+
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
@@ -31,7 +27,7 @@ class DownloadManagerSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
-    with ArbitraryConsensus {
+    with ArbitraryConsensusAndComm {
 
   import DownloadManagerSpec._
   import Scheduler.Implicits.global
