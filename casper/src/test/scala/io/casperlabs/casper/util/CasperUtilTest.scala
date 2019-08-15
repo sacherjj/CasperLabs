@@ -2,7 +2,7 @@ package io.casperlabs.casper.util
 
 import ProtoUtil._
 import com.google.protobuf.ByteString
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 import io.casperlabs.catscontrib._
 import cats.implicits._
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
@@ -11,9 +11,9 @@ import cats.effect.Bracket
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage}
+import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
@@ -36,7 +36,31 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   implicit val logEff                  = new LogStub[Task]()
   implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
 
-  "isInMainChain and votedBranch" should "classify appropriately" in withStorage {
+  /**
+    * when a==b, this method doesn't work,
+    * because `isInMainChain` return `true`, but votedBranch return `None`
+    */
+  def testVoteBranchAndIsInMainChain(
+      a: Block,
+      b: Block,
+      result: Option[Block]
+  )(implicit dag: DagRepresentation[Task]): Task[Assertion] = {
+    require(a.blockHash != b.blockHash)
+    (isInMainChain(dag, a.blockHash, b.blockHash) shouldBeF result.isDefined) *>
+      (votedBranch(dag, a.blockHash, b.blockHash) shouldBeF result.map(_.blockHash))
+  }
+
+  "isInMainChain and votedBranch" should "classify appropriately when using the same block" in withStorage {
+    implicit blockStorage => implicit dagStorage =>
+      for {
+        b      <- createBlock[Task](Seq())
+        dag    <- dagStorage.getRepresentation
+        _      <- isInMainChain(dag, b.blockHash, b.blockHash) shouldBeF true
+        result <- votedBranch(dag, b.blockHash, b.blockHash) shouldBeF None
+      } yield result
+  }
+
+  it should "classify appropriately" in withStorage {
     implicit blockStorage =>
       implicit dagStorage =>
         /**
@@ -54,21 +78,18 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
           b2      <- createBlock[Task](Seq(genesis.blockHash))
           b3      <- createBlock[Task](Seq(b2.blockHash))
 
-          dag <- dagStorage.getRepresentation
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
 
-          _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
-          _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b3.blockHash) shouldBeF true
-          _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b2.blockHash) shouldBeF false
-          _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), genesis.blockHash) shouldBeF false
-          _      <- votedBranch(dag, genesis.blockHash, b2.blockHash) shouldBeF Some(b2.blockHash)
-          _      <- votedBranch(dag, b2.blockHash, b3.blockHash) shouldBeF Some(b3.blockHash)
-          _      <- votedBranch(dag, b2.blockHash, b2.blockHash) shouldBeF None
-          _      <- votedBranch(dag, b3.blockHash, b2.blockHash) shouldBeF None
-          result <- votedBranch(dag, genesis.blockHash, b3.blockHash) shouldBeF Some(b2.blockHash)
+          _      <- testVoteBranchAndIsInMainChain(genesis, b2, Some(b2))
+          _      <- testVoteBranchAndIsInMainChain(b2, genesis, None)
+          _      <- testVoteBranchAndIsInMainChain(genesis, b3, Some(b2))
+          _      <- testVoteBranchAndIsInMainChain(b3, genesis, None)
+          _      <- testVoteBranchAndIsInMainChain(b2, b3, Some(b3))
+          result <- testVoteBranchAndIsInMainChain(b3, b2, None)
         } yield result
   }
 
-  "isInMainChain and votedBranch" should "classify diamond DAGs appropriately" in withStorage {
+  it should "classify diamond DAGs appropriately" in withStorage {
     implicit blockStorage =>
       implicit dagStorage =>
         /**
@@ -86,23 +107,17 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
           b3      <- createBlock[Task](Seq(genesis.blockHash))
           b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash))
 
-          dag <- dagStorage.getRepresentation
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
 
-          _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b2.blockHash) shouldBeF true
-          _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
-          _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b4.blockHash) shouldBeF true
-          _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b4.blockHash) shouldBeF true
-          _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b4.blockHash) shouldBeF false
-          _      <- votedBranch(dag, genesis.blockHash, b2.blockHash) shouldBeF Some(b2.blockHash)
-          _      <- votedBranch(dag, genesis.blockHash, b3.blockHash) shouldBeF Some(b3.blockHash)
-          _      <- votedBranch(dag, genesis.blockHash, b4.blockHash) shouldBeF Some(b2.blockHash)
-          _      <- votedBranch(dag, b2.blockHash, b4.blockHash) shouldBeF Some(b4.blockHash)
-          _      <- votedBranch(dag, b3.blockHash, b4.blockHash) shouldBeF None
-          result <- votedBranch(dag, b2.blockHash, b3.blockHash) shouldBeF None
+          _      <- testVoteBranchAndIsInMainChain(genesis, b2, Some(b2))
+          _      <- testVoteBranchAndIsInMainChain(genesis, b3, Some(b3))
+          _      <- testVoteBranchAndIsInMainChain(genesis, b4, Some(b2))
+          _      <- testVoteBranchAndIsInMainChain(b2, b4, Some(b4))
+          result <- testVoteBranchAndIsInMainChain(b3, b4, None)
         } yield result
   }
 
-  "isInMainChain and votedBranch" should "classify complicated chains appropriately" in withStorage {
+  it should "classify complicated chains appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       val v1 = generateValidator("V1")
       val v2 = generateValidator("V2")
@@ -134,26 +149,24 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
         b7      <- createBlock[Task](Seq(b4.blockHash), v1)
         b8      <- createBlock[Task](Seq(b7.blockHash), v1)
 
-        dag <- dagStorage.getRepresentation
+        implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
 
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b2.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b3.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b3), b4.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b4), b5.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b5), b6.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b6), b7.blockHash) shouldBeF false
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b7), b8.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b6.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b8.blockHash) shouldBeF true
-        _      <- isInMainChain(dag, BlockMetadata.fromBlock(b4), b2.blockHash) shouldBeF false
-        _      <- votedBranch(dag, genesis.blockHash, b2.blockHash) shouldBeF Some(b2.blockHash)
-        _      <- votedBranch(dag, genesis.blockHash, b3.blockHash) shouldBeF Some(b3.blockHash)
-        _      <- votedBranch(dag, genesis.blockHash, b4.blockHash) shouldBeF Some(b2.blockHash)
-        _      <- votedBranch(dag, genesis.blockHash, b5.blockHash) shouldBeF Some(b2.blockHash)
-        _      <- votedBranch(dag, genesis.blockHash, b8.blockHash) shouldBeF Some(b2.blockHash)
-        _      <- votedBranch(dag, b4.blockHash, b8.blockHash) shouldBeF Some(b7.blockHash)
-        _      <- votedBranch(dag, b5.blockHash, b6.blockHash) shouldBeF None
-        result <- votedBranch(dag, b5.blockHash, b8.blockHash) shouldBeF None
+        _      <- testVoteBranchAndIsInMainChain(genesis, b2, Some(b2))
+        _      <- testVoteBranchAndIsInMainChain(genesis, b3, Some(b3))
+        _      <- testVoteBranchAndIsInMainChain(genesis, b4, Some(b2))
+        _      <- testVoteBranchAndIsInMainChain(genesis, b5, Some(b2))
+        _      <- testVoteBranchAndIsInMainChain(genesis, b8, Some(b2))
+        _      <- testVoteBranchAndIsInMainChain(b2, b3, None)
+        _      <- testVoteBranchAndIsInMainChain(b3, b4, None)
+        _      <- testVoteBranchAndIsInMainChain(b4, b5, None)
+        _      <- testVoteBranchAndIsInMainChain(b5, b6, None)
+        _      <- testVoteBranchAndIsInMainChain(b6, b7, None)
+        _      <- testVoteBranchAndIsInMainChain(b7, b8, Some(b8))
+        _      <- testVoteBranchAndIsInMainChain(b2, b6, Some(b4))
+        _      <- testVoteBranchAndIsInMainChain(b2, b8, Some(b4))
+        _      <- testVoteBranchAndIsInMainChain(b4, b8, Some(b7))
+        _      <- testVoteBranchAndIsInMainChain(b5, b8, None)
+        result <- testVoteBranchAndIsInMainChain(b4, b2, None)
       } yield result
   }
 
