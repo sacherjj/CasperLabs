@@ -11,6 +11,7 @@ from .cl_node.casperlabs_network import (
     PaymentNodeNetwork,
     PaymentNodeNetworkWithNoMinBalance,
     PaymentNodForOnlyPaymentContract,
+    TrillionPaymentNodeNetwork,
 )
 from docker.client import DockerClient
 
@@ -42,6 +43,13 @@ def one_node_network_fn(docker_client_fixture):
 @pytest.fixture(scope="function")
 def payment_node_network(docker_client_fixture):
     with PaymentNodeNetwork(docker_client_fixture) as onn:
+        onn.create_cl_network()
+        yield onn
+
+
+@pytest.fixture(scope="function")
+def trillion_payment_node_network(docker_client_fixture):
+    with TrillionPaymentNodeNetwork(docker_client_fixture) as onn:
         onn.create_cl_network()
         yield onn
 

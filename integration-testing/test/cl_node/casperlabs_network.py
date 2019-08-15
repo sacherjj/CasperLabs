@@ -247,6 +247,15 @@ class PaymentNodeNetwork(OneNodeNetwork):
     is_payment_code_enabled = True
 
 
+class TrillionPaymentNodeNetwork(OneNodeNetwork):
+    """ A single node network with payment code enabled"""
+
+    is_payment_code_enabled = True
+    initial_motes = (
+        MAX_PAYMENT_COST * 100 * 1000
+    )  # 10 millions * 100 * 1000 =  billion motes * 1000 = trillion
+
+
 class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
