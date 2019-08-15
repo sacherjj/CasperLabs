@@ -32,7 +32,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
-import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 
 import scala.util.control.NonFatal
 

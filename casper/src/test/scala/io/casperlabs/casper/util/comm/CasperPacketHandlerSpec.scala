@@ -46,7 +46,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.casper.deploybuffer.{DeployStorage, MockDeployStorage}
+import io.casperlabs.storage.deploy.{DeployStorage, MockDeployStorage}
 import monix.catnap.Semaphore
 import monix.eval.Task
 import monix.execution.Scheduler

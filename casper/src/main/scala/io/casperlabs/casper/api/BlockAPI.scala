@@ -29,7 +29,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
-import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageReader}
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 
 object BlockAPI {
 

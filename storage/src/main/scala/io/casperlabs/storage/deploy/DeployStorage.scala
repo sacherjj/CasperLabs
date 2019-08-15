@@ -1,7 +1,7 @@
-package io.casperlabs.casper.deploybuffer
+package io.casperlabs.storage.deploy
 
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import simulacrum.typeclass

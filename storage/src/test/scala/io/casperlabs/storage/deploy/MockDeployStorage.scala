@@ -1,13 +1,13 @@
-package io.casperlabs.casper.deploybuffer
+package io.casperlabs.storage.deploy
 
 import cats.Monad
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.casper.consensus.{Block, Deploy}
-import io.casperlabs.casper.deploybuffer.MockDeployStorage.Metadata
+import io.casperlabs.storage.deploy.MockDeployStorage.Metadata
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.Log
 

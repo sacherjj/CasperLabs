@@ -9,7 +9,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.shared.{Log, Time}
-import io.casperlabs.casper.deploybuffer.{
+import io.casperlabs.storage.deploy.{
   DeployStorage,
   DeployStorageReader,
   DeployStorageWriter,

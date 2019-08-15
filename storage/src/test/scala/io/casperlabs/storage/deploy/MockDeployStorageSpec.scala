@@ -1,4 +1,4 @@
-package io.casperlabs.casper.deploybuffer
+package io.casperlabs.storage.deploy
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.Log.NOPLog
 import monix.eval.Task

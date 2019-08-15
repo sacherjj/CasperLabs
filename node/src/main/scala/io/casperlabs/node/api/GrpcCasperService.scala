@@ -18,7 +18,7 @@ import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 

@@ -29,7 +29,7 @@ import io.casperlabs.shared.{Cell, FilesAPI, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.casper.deploybuffer.DeployStorage
+import io.casperlabs.storage.deploy.DeployStorage
 import io.grpc.ManagedChannel
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}

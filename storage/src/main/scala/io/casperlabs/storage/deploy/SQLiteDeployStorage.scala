@@ -1,4 +1,4 @@
-package io.casperlabs.casper.deploybuffer
+package io.casperlabs.storage.deploy
 
 import cats._
 import cats.data.NonEmptyList

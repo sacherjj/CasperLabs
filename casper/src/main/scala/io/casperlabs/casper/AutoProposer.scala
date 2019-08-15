@@ -6,7 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.deploybuffer.DeployStorageReader
+import io.casperlabs.storage.deploy.DeployStorageReader
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Log, Time}
 

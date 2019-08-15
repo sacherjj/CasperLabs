@@ -19,7 +19,7 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
-import io.casperlabs.casper.deploybuffer.DeployStorage
+import io.casperlabs.storage.deploy.DeployStorage
 
 trait Casper[F[_], A] {
   def addBlock(block: Block): F[BlockStatus]

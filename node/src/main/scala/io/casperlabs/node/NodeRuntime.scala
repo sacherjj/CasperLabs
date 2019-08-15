@@ -36,7 +36,7 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.casper.deploybuffer.{DeployStorage, DeployStorageWriter, SQLiteDeployStorage}
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter, SQLiteDeployStorage}
 import io.casperlabs.storage.util.fileIO.IOError._
 import io.casperlabs.storage.util.fileIO._
 import io.netty.handler.ssl.ClientAuth

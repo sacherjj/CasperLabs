@@ -13,7 +13,7 @@ import io.casperlabs.node.api.graphql._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.casper.deploybuffer.DeployStorageReader
+import io.casperlabs.storage.deploy.DeployStorageReader
 import sangria.schema._
 
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorageReader] {

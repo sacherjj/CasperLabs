@@ -22,7 +22,7 @@ import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMe
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.casper.deploybuffer.{DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
 import io.netty.handler.ssl.SslContext
 import kamon.Kamon
 import monix.eval.{Task, TaskLike}

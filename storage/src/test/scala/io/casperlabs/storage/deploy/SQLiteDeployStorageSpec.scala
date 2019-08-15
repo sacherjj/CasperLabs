@@ -1,4 +1,4 @@
-package io.casperlabs.casper.deploybuffer
+package io.casperlabs.storage.deploy
 
 import java.nio.file.{Files, Paths}
 

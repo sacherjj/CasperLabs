@@ -1,9 +1,10 @@
-package io.casperlabs.casper.deploybuffer
+package io.casperlabs.storage.deploy
 
 import cats.data.NonEmptyList
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.ArbitraryConsensus
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen, Shrink}
@@ -365,7 +366,8 @@ trait DeployStorageSpec
   }
 
   private implicit class DeploysOps(ds: List[Deploy]) {
-    import io.casperlabs.casper.util.Sorting._
-    def sortedByHash: List[Deploy] = ds.sortBy(_.deployHash)
+    implicit val deployOrdering: Ordering[Deploy] =
+      Ordering.by(d => Base16.encode(d.deployHash.toByteArray))
+    def sortedByHash: List[Deploy] = ds.sorted
   }
 }

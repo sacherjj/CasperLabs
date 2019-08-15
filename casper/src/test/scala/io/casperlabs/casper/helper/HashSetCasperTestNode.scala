@@ -35,7 +35,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage._
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.casper.deploybuffer.{DeployStorage, MockDeployStorage}
+import io.casperlabs.storage.deploy.{DeployStorage, MockDeployStorage}
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler
