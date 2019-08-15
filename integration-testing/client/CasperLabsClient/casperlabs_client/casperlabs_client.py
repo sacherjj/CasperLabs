@@ -318,7 +318,8 @@ class CasperLabsClient:
         def serialize(o) -> bytes:
             return o.SerializeToString()
 
-        # args must go to payment as well for now cause otherwise we'll get GASLIMIT error:
+        # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,
+        # if payment is same as session:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
         if payment == session:
             payment_args = session_args
