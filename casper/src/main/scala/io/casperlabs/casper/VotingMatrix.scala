@@ -166,8 +166,8 @@ class VotingMatrixImpl[F[_]] private (
   ): F[Unit] =
     for {
       // todo(abner)  use a lock to atomically update these state
-      // Start a new round, get weightMap and validatorSet from the new finalized block's main parent
-      weights    <- ProtoUtil.mainParentWeightMap(dag, newFinalizedBlock)
+      // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
+      weights    <- dag.lookup(newFinalizedBlock).map(_.get.weightMap)
       _          <- weightMapRef.set(weights)
       validators = weights.keySet
       n          = validators.size
