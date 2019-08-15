@@ -1887,6 +1887,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "transfer-to-account"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.11.0",
+]
+
+[[package]]
 name = "transfer-to-account-01"
 version = "0.1.0"
 dependencies = [
@@ -1895,13 +1902,6 @@ dependencies = [
 
 [[package]]
 name = "transfer-to-account-02"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.11.0",
-]
-
-[[package]]
-name = "transfer_to_account"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.11.0",
