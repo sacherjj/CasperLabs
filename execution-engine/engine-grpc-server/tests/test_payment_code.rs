@@ -100,7 +100,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
 
 #[ignore]
 #[test]
-fn should_raise_insufficient_payment_when_payment_code_exceeds_gas_limit() {
+fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
     let genesis_public_key = PublicKey::new(GENESIS_ADDR);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
 
