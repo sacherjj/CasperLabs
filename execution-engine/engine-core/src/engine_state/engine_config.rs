@@ -11,9 +11,13 @@ impl EngineConfig {
     }
 
     /// Sets the `use_payment_code` field to the given arg.
-    pub fn use_payment_code(mut self, arg: bool) -> EngineConfig {
+    pub fn set_use_payment_code(mut self, arg: bool) -> EngineConfig {
         self.use_payment_code = arg;
         self
+    }
+
+    pub fn use_payment_code(&self) -> bool {
+        self.use_payment_code
     }
 }
 

@@ -81,7 +81,7 @@ fn should_run_purse_to_account_transfer() {
             final_balance
         );
     };
-    assert_eq!(final_balance, &U512::from(999_958));
+    assert_eq!(final_balance, &U512::from(99_999_999_958i64));
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
@@ -198,7 +198,7 @@ fn should_run_purse_to_account_transfer() {
         .iter()
         .find_map(|(k, t)| match (k, t) {
             (uref @ Key::URef(_), Transform::Write(Value::UInt512(x)))
-                if *x == U512::from(1_000_000) =>
+                if *x == U512::from(100_000_000_000i64) =>
             // 1_000_000 is the initial balance of genesis
             {
                 Some(*uref)
@@ -256,7 +256,11 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
         );
     };
     // When trying to send too much coins the balance is left unchanged
-    assert_eq!(final_balance, &U512::from(1_000_000));
+    assert_eq!(
+        final_balance,
+        &U512::from(100_000_000_000i64),
+        "final balance incorrect"
+    );
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
@@ -269,5 +273,8 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
         };
 
     // Main assertion for the result of `transfer_from_purse_to_purse`
-    assert_eq!(transfer_result_string, "TransferError");
+    assert_eq!(
+        transfer_result_string, "TransferError",
+        "TransferError incorrect"
+    );
 }
