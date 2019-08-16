@@ -196,15 +196,18 @@ class VotingMatrixImpl[F[_]] private (
       .filter { case (_, rowIndex) => mask(rowIndex) }
       .foldLeft((mask, false, 0L)) {
         case ((newMask, prunedValidator, maxTotalWeight), (row, rowIndex)) =>
-          val voteSum = row.zipWithIndex.map {
-            case (latestDagLevelSeen, columnIndex) =>
-              firstLevelZeroVotes(columnIndex).fold(0L) {
-                case (consensusValue, dagLevelOf1stLevel0) =>
-                  if (consensusValue == candidateBlockHash && dagLevelOf1stLevel0 <= latestDagLevelSeen)
-                    weight(columnIndex)
-                  else 0L
-              }
-          }.sum
+          val voteSum = row.zipWithIndex
+            .filter { case (_, columnIndex) => mask(columnIndex) }
+            .map {
+              case (latestDagLevelSeen, columnIndex) =>
+                firstLevelZeroVotes(columnIndex).fold(0L) {
+                  case (consensusValue, dagLevelOf1stLevel0) =>
+                    if (consensusValue == candidateBlockHash && dagLevelOf1stLevel0 <= latestDagLevelSeen)
+                      weight(columnIndex)
+                    else 0L
+                }
+            }
+            .sum
           if (voteSum >= q) {
             (newMask, prunedValidator, maxTotalWeight + weight(rowIndex))
           } else {
