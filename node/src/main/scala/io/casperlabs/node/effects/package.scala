@@ -113,13 +113,13 @@ package object effects {
         xa => {
           // Foreign keys support must be enabled explicitly in SQLite
           // https://www.sqlite.org/foreignkeys.html#fk_enable
-          Transactor.before
+          val mxa = Transactor.before
             .set(xa, sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa))
           // `autoCommit=true` is a default for Hikari; doobie sets `autoCommit=false`.
           // From doobie's docs:
           // * - Auto-commit will be set to `false`;
           // * - the transaction will `commit` on success and `rollback` on failure;
-          Transactor.before.modify(xa, _ >> connection.setAutoCommit(false))
+          Transactor.before.modify(mxa, _ >> connection.setAutoCommit(false))
         }
       )
 }
