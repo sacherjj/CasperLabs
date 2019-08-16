@@ -94,15 +94,15 @@ def set_key_thresholds(
 
 
 def assert_deploy_is_not_error(node, block_hash):
-    deploys = list(node.client.show_deploys(block_hash))
-    assert not deploys[0].is_error, deploys[0].error_message
+    for deploy in node.client.show_deploys(block_hash):
+        assert not deploy.is_error, deploy.error_message
 
 
 def assert_deploy_is_error(node, block_hash: str, error_message: str = None):
-    deploys = list(node.client.show_deploys(block_hash))
-    assert deploys[0].is_error
-    if error_message:
-        assert deploys[0].error_message == error_message
+    for deploy in node.client.show_deploys(block_hash):
+        assert deploy.is_error
+        if error_message:
+            assert deploy.error_message == error_message
 
 
 def test_key_management(one_node_network):
@@ -245,7 +245,6 @@ def test_key_management(one_node_network):
             public_key=deploy_key.public_key_path,
             private_key=deploy_key.private_key_path,
         )
-    # assert_deploy_is_error(node, block_hash, "DeploymentAuthorizationFailure")
 
     NonceRegistry.revert(identity_key.public_key_hex)
 
