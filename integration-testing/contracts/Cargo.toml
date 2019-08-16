@@ -30,5 +30,6 @@ members = [
     "err-standard-payment",
     "transfer_to_account",
     "err-transfer-to-account",
+	"main-purse",
     "endless-loop",
 ]
