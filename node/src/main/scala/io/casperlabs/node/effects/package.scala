@@ -6,6 +6,7 @@ import cats._
 import cats.effect._
 import cats.implicits._
 import cats.mtl._
+import doobie.free.connection
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
@@ -109,10 +110,16 @@ package object effects {
         transactEC = transactionEC
       )
       .map(
-        xa =>
+        xa => {
           // Foreign keys support must be enabled explicitly in SQLite
           // https://www.sqlite.org/foreignkeys.html#fk_enable
           Transactor.before
             .set(xa, sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa))
+          // `autoCommit=true` is a default for Hikari; doobie sets `autoCommit=false`.
+          // From doobie's docs:
+          // * - Auto-commit will be set to `false`;
+          // * - the transaction will `commit` on success and `rollback` on failure;
+          Transactor.before.modify(xa, _ >> connection.setAutoCommit(false))
+        }
       )
 }
