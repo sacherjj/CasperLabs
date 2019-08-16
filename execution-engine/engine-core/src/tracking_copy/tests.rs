@@ -19,9 +19,9 @@ use engine_state::op::Op;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 use engine_storage::global_state::StateReader;
 
+use super::meter::count_meter::Count;
 use super::{AddResult, QueryResult, Validated};
 use super::{TrackingCopy, TrackingCopyCache};
-use meter::count_meter::Count;
 
 struct CountingDb {
     count: Rc<Cell<i32>>,
