@@ -145,10 +145,8 @@ def test_error_in_session_contract(payment_node_network):
             0
         ].summary.block_hash,
     )
-    assert (
-        genesis_balance
-        == genesis_balance_after_transfer + cost_of_execution * CONV_RATE
-    )
+    expected_sum = genesis_balance_after_transfer + cost_of_execution * CONV_RATE
+    assert genesis_balance == expected_sum
 
 
 # The caller has not transferred enough funds to the payment purse
@@ -173,21 +171,16 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
     assert account1_starting_balance == 10 ** 8
 
     ABI = node0.p_client.abi
-    args_json = json.dumps([{"account": account1.public_key_hex}, {"u32": 10 ** 7}])
-    response, deploy_hash_bytes = node0.p_client.deploy(
+    _, _ = node0.p_client.deploy(
         from_address=account1.public_key_hex,
         payment_contract="standard_payment.wasm",
-        session_contract="transfer_to_account.wasm",
+        session_contract="endless_loop.wasm",
         public_key=account1.public_key_path,
         private_key=account1.private_key_path,
         gas_price=1,
-        gas_limit=MAX_PAYMENT_COST / CONV_RATE,
-        session_args=ABI.args_from_json(args_json),
-        payment_args=ABI.args(
-            [
-                ABI.u512(272741)
-            ]  # 272749  is a little more than payment code contract costs - 272741.
-        ),
+        gas_limit=MAX_PAYMENT_COST,
+        session_args=None,
+        payment_args=ABI.args([ABI.u512(MAX_PAYMENT_COST)]),
     )
     try:
         node0.p_client.propose()
@@ -197,12 +190,15 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
     latest_blocks = parse_show_blocks(node0.d_client.show_blocks(1000))
     deploy_hash = latest_blocks[0].summary.block_hash
     deploy = node0.client.show_deploys(deploy_hash)[0]
-    assert deploy.cost > 0
+    assert deploy.cost == MAX_PAYMENT_COST / CONV_RATE
     account1_balance_after_computation = node0.client.get_balance(
         account_address=account1.public_key_hex,
         block_hash=latest_blocks[0].summary.block_hash,
     )
-    assert account1_balance_after_computation == account1_starting_balance
+    assert (
+        account1_balance_after_computation
+        == account1_starting_balance - MAX_PAYMENT_COST
+    )
 
 
 # The session code can result in an error.
