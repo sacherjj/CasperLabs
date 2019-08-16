@@ -56,7 +56,7 @@ object FinalityDetectorUtil {
       // To have a committee of half the total weight,
       // you need at least twice the weight of the maxWeightApproximation to be greater than the total weight.
       // If that is false, we don't need to compute best committee
-      // as we know the value is going to be below 0 and thus useless for finalization.
+      // as fault tolerance t = `(2q/w - 1)(1 - 2^-k)`, so t is going below 0 and thus useless for finalization.
       result = if (2 * maxWeightApproximation > totalWeight) {
         Some((committee, maxWeightApproximation))
       } else {
@@ -65,14 +65,14 @@ object FinalityDetectorUtil {
     } yield result
 
   /**
-    * Finds j-dag level of latest block per each validator as seen in the j-past-cone of a given block.
+    * Finds latest block per each validator as seen in the j-past-cone of a given block.
     * The search is however restricted to given subset of validators.
     *
     * Caution 1: For some validators there may be no blocks visible in j-past-cone(block).
     *            Hence the resulting map will not contain such validators.
     * Caution 2: the j-past-cone(b) includes block b, therefore if validators
     *            contains b.creator then the resulting map will include
-    *            the entry b.creator ---> b.rank
+    *            the entry b.creator ---> b
     *
     * TODO optimize it: when bonding new validator, it need search back to genesis
     *
@@ -81,11 +81,11 @@ object FinalityDetectorUtil {
     * @param validators
     * @return
     */
-  def panoramaDagLevelsOfBlock[F[_]: Monad](
+  private[casper] def panoramaOfBlockByValidators[F[_]: Monad](
       dag: DagRepresentation[F],
       block: BlockMetadata,
       validators: Set[Validator]
-  ): F[Map[Validator, Long]] = {
+  ): F[Map[Validator, BlockMetadata]] = {
     implicit val blockTopoOrdering: Ordering[BlockMetadata] =
       DagOperations.blockTopoOrderingDesc
 
@@ -98,14 +98,14 @@ object FinalityDetectorUtil {
     }
 
     stream
-      .foldWhileLeft((validators, Map.empty[Validator, Long])) {
+      .foldWhileLeft((validators, Map.empty[Validator, BlockMetadata])) {
         case ((remainingValidators, acc), b) =>
           if (remainingValidators.isEmpty) {
             // Stop traversal if all validators find its latest block
             Right((remainingValidators, acc))
           } else if (remainingValidators.contains(b.validatorPublicKey)) {
             Left(
-              (remainingValidators - b.validatorPublicKey, acc + (b.validatorPublicKey -> b.rank))
+              (remainingValidators - b.validatorPublicKey, acc + (b.validatorPublicKey -> b))
             )
           } else {
             Left((remainingValidators, acc))
@@ -114,7 +114,17 @@ object FinalityDetectorUtil {
       .map(_._2)
   }
 
-  // Get level zero messages of the specified validator and specified candidateBlock
+  def panoramaDagLevelsOfBlock[F[_]: Monad](
+      blockDag: DagRepresentation[F],
+      block: BlockMetadata,
+      validators: Set[Validator]
+  ): F[Map[Validator, Long]] =
+    panoramaOfBlockByValidators(blockDag, block, validators)
+      .map(_.mapValues(_.rank))
+
+  /**
+    * Get level zero messages of the specified validator and specified candidateBlock
+    */
   def levelZeroMsgsOfValidator[F[_]: Monad](
       dag: DagRepresentation[F],
       validator: Validator,
