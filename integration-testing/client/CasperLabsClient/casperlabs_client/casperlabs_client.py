@@ -3,6 +3,16 @@
 CasperLabs Client API library and command line tool.
 """
 
+# Hack to fix the relative imports problems #
+import sys
+from pathlib import Path
+
+file = Path(__file__).resolve()
+parent, root = file.parent, file.parents[1]
+sys.path.append(str(root))
+
+# end of hack #
+
 import time
 import argparse
 import grpc
@@ -17,15 +27,6 @@ from operator import add
 from functools import reduce
 from itertools import dropwhile
 
-# Hack to fix the relative imports problems #
-import sys
-from pathlib import Path
-
-file = Path(__file__).resolve()
-parent, root = file.parent, file.parents[1]
-sys.path.append(str(root))
-# end of hack #
-
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
 import google.protobuf.text_format
@@ -38,7 +39,6 @@ def _hex(text, as_utf8):
 
 
 google.protobuf.text_format.text_encoding.CEscape = _hex
-
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
 from .control_pb2_grpc import ControlServiceStub
@@ -154,13 +154,6 @@ class InternalError(Exception):
         return f"{self.status}: {self.details}"
 
 
-def _get_view(full_view: bool):
-    if full_view:
-        return info.BlockInfo.View.FULL
-    else:
-        return info.BlockInfo.View.BASIC
-
-
 def api(function):
     """
     Decorator of API functions that protects user code from
@@ -237,10 +230,7 @@ class CasperLabsClient:
                             self.serviceStub(channel), name[: -len("_stream")]
                         )(*args)
 
-                if name.endswith("_stream"):
-                    return g
-                else:
-                    return f
+                return name.endswith("_stream") and g or f
 
         self.casperService = GRPCService(self.port, CasperServiceStub)
         self.controlService = GRPCService(self.internal_port, ControlServiceStub)
@@ -280,8 +270,7 @@ class CasperLabsClient:
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
-        if not payment:
-            payment = session
+        payment = payment or session
 
         def hash(data: bytes) -> bytes:
             h = blake2b(digest_size=32)
@@ -298,10 +287,7 @@ class CasperLabsClient:
                     0
                 ].strip()
                 r = base64.b64decode(s)
-                if len(r) % 32 == 0:
-                    return r[:32]
-                else:
-                    return r[-32:]
+                return len(r) % 32 == 0 and r[:32] or r[-32:]
 
         def read_code(file_name: str, abi_encoded_args: bytes = None):
             return consensus.Deploy.Code(
@@ -309,11 +295,10 @@ class CasperLabsClient:
             )
 
         def sign(data: bytes):
-            if private_key:
-                return consensus.Signature(
-                    sig_algorithm="ed25519",
-                    sig=ed25519.SigningKey(read_pem_key(private_key)).sign(data),
-                )
+            return private_key and consensus.Signature(
+                sig_algorithm="ed25519",
+                sig=ed25519.SigningKey(read_pem_key(private_key)).sign(data),
+            )
 
         def serialize(o) -> bytes:
             return o.SerializeToString()
@@ -321,11 +306,11 @@ class CasperLabsClient:
         # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,
         # if payment is same as session:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
-        if payment == session:
-            payment_args = session_args
         body = consensus.Deploy.Body(
             session=read_code(session, session_args),
-            payment=read_code(payment, payment_args),
+            payment=read_code(
+                payment, payment == session and session_args or payment_args
+            ),
         )
 
         approval_public_key = None
@@ -346,15 +331,17 @@ class CasperLabsClient:
         )
 
         deploy_hash = hash(serialize(header))
-        approvals = []
-        if approval_public_key:
-            approvals.append(
+        d = consensus.Deploy(
+            deploy_hash=deploy_hash,
+            approvals=[
                 consensus.Approval(
                     approver_public_key=approval_public_key, signature=sign(deploy_hash)
                 )
-            )
-        d = consensus.Deploy(
-            deploy_hash=deploy_hash, approvals=approvals, header=header, body=body
+            ]
+            if account_public_key
+            else [],
+            header=header,
+            body=body,
         )
 
         # TODO: Deploy returns Empty, error handing via exceptions, apparently,
@@ -374,7 +361,11 @@ class CasperLabsClient:
         """
         yield from self.casperService.StreamBlockInfos_stream(
             casper.StreamBlockInfosRequest(
-                depth=depth, max_rank=max_rank, view=_get_view(full_view)
+                depth=depth,
+                max_rank=max_rank,
+                view=(
+                    full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC
+                ),
             )
         )
 
@@ -389,7 +380,10 @@ class CasperLabsClient:
         """
         return self.casperService.GetBlockInfo(
             casper.GetBlockInfoRequest(
-                block_hash_base16=block_hash_base16, view=_get_view(full_view)
+                block_hash_base16=block_hash_base16,
+                view=(
+                    full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC
+                ),
             )
         )
 
@@ -495,7 +489,12 @@ class CasperLabsClient:
         """
         return self.casperService.GetDeployInfo(
             casper.GetDeployInfoRequest(
-                deploy_hash_base16=deploy_hash_base16, view=_get_view(full_view)
+                deploy_hash_base16=deploy_hash_base16,
+                view=(
+                    full_view
+                    and info.DeployInfo.View.FULL
+                    or info.DeployInfo.View.BASIC
+                ),
             )
         )
 
@@ -506,7 +505,12 @@ class CasperLabsClient:
         """
         yield from self.casperService.StreamBlockDeploys_stream(
             casper.StreamBlockDeploysRequest(
-                block_hash_base16=block_hash_base16, view=_get_view(full_view)
+                block_hash_base16=block_hash_base16,
+                view=(
+                    full_view
+                    and info.DeployInfo.View.FULL
+                    or info.DeployInfo.View.BASIC
+                ),
             )
         )
 
