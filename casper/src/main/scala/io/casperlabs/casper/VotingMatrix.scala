@@ -1,18 +1,20 @@
 package io.casperlabs.casper
 
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
-import cats.implicits._
 import cats.Monad
+import cats.effect.Concurrent
+import cats.effect.concurrent.{Ref, Semaphore}
+import cats.implicits._
+import cats.mtl.{DefaultMonadState, MonadState}
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.FinalityDetector.CommitteeWithConsensusValue
+import io.casperlabs.casper.VotingMatrixImpl.{_votingMatrix, Vote, VotingMatrixState}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.VotingMatrixImpl.Vote
+import io.casperlabs.catscontrib.MonadStateOps._
 import simulacrum.typeclass
-import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 import scala.annotation.tailrec
+import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 @typeclass trait VotingMatrix[F[_]] {
 
@@ -59,21 +61,20 @@ import scala.annotation.tailrec
   def findCommitteeApproximation(dag: DagRepresentation[F]): F[Option[CommitteeWithConsensusValue]]
 }
 
-class VotingMatrixImpl[F[_]] private (
-    implicit monad: Monad[F],
-    matrixRef: Ref[F, MutableSeq[MutableSeq[Long]]],
-    firstLevelZeroVotesRef: Ref[F, MutableSeq[Option[Vote]]],
-    validatorToIndexRef: Ref[F, Map[Validator, Int]],
-    weightMapRef: Ref[F, Map[Validator, Long]],
-    validatorsRef: Ref[F, MutableSeq[Validator]]
-) extends VotingMatrix[F] {
+class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
+
+  // VotingMatrixS is a MonadState but it "has" `Monad` (not "is").
+  implicit val monad                          = VotingMatrixImpl._votingMatrix[F].monad
+  val state: MonadState[F, VotingMatrixState] = VotingMatrixImpl._votingMatrix[F]
+  val lock: Semaphore[F]                      = VotingMatrixImpl._votingMatrix[F]
+
   override def updateVoterPerspective(
       dag: DagRepresentation[F],
       blockMetadata: BlockMetadata,
       currentVoteValue: BlockHash
   ): F[Unit] =
-    for {
-      validatorToIndex <- validatorToIndexRef.get
+    lock.withPermit(for {
+      validatorToIndex <- (state >> 'validatorToIdx).get
       voter            = blockMetadata.validatorPublicKey
       _ <- if (!validatorToIndex.contains(voter)) {
             // The creator of block isn't from the validatorsSet
@@ -85,20 +86,18 @@ class VotingMatrixImpl[F[_]] private (
               _ <- updateFirstZeroLevelVote(voter, currentVoteValue, blockMetadata.rank)
             } yield ()
           }
-    } yield ()
+    } yield ())
 
   private def updateVotingMatrixOnNewBlock(
       dag: DagRepresentation[F],
       blockMetadata: BlockMetadata
   ): F[Unit] =
     for {
-      validatorToIndex <- validatorToIndexRef.get
+      validatorToIndex <- (state >> 'validatorToIdx).get
       panoramaM        <- panoramaM(dag, validatorToIndex, blockMetadata)
       // Replace row i in voting-matrix by panoramaM
-      _ <- matrixRef.update(
-            matrix => {
-              matrix.updated(validatorToIndex(blockMetadata.validatorPublicKey), panoramaM)
-            }
+      _ <- (state >> 'votingMatrix).modify(
+            _.updated(validatorToIndex(blockMetadata.validatorPublicKey), panoramaM)
           )
     } yield ()
 
@@ -108,15 +107,15 @@ class VotingMatrixImpl[F[_]] private (
       dagLevel: Long
   ): F[Unit] =
     for {
-      firstLevelZeroMsgs <- firstLevelZeroVotesRef.get
-      validatorToIndex   <- validatorToIndexRef.get
+      firstLevelZeroMsgs <- (state >> 'firstLevelZeroVotes).get
+      validatorToIndex   <- (state >> 'validatorToIdx).get
       voterIdx           = validatorToIndex(validator)
       firstLevelZeroVote = firstLevelZeroMsgs(voterIdx)
       _ <- firstLevelZeroVote match {
             case None =>
-              firstLevelZeroVotesRef.update(_.updated(voterIdx, Some((newVote, dagLevel))))
+              (state >> 'firstLevelZeroVotes).modify(_.updated(voterIdx, Some((newVote, dagLevel))))
             case Some((prevVote, _)) if prevVote != newVote =>
-              firstLevelZeroVotesRef.update(_.updated(voterIdx, Some((newVote, dagLevel))))
+              (state >> 'firstLevelZeroVotes).modify(_.updated(voterIdx, Some((newVote, dagLevel))))
             case Some((prevVote, _)) if prevVote == newVote =>
               ().pure[F]
           }
@@ -126,11 +125,11 @@ class VotingMatrixImpl[F[_]] private (
       candidateBlockHash: BlockHash,
       committeeApproximation: Set[Validator]
   ): F[Option[CommitteeWithConsensusValue]] =
-    for {
-      matrix              <- matrixRef.get
-      firstLevelZeroVotes <- firstLevelZeroVotesRef.get
-      validatorToIndex    <- validatorToIndexRef.get
-      weightMap           <- weightMapRef.get
+    lock.withPermit(for {
+      matrix              <- (state >> 'votingMatrix).get
+      firstLevelZeroVotes <- (state >> 'firstLevelZeroVotes).get
+      validatorToIndex    <- (state >> 'validatorToIdx).get
+      weightMap           <- (state >> 'weightMap).get
       mask                = fromMapToArray(validatorToIndex, committeeApproximation.contains)
       weight              = fromMapToArray(validatorToIndex, weightMap.getOrElse(_, 0L))
       committeeOpt = pruneLoop(
@@ -146,36 +145,38 @@ class VotingMatrixImpl[F[_]] private (
           val committee = validatorToIndex.filter { case (_, i) => mask(i) }.keySet
           CommitteeWithConsensusValue(committee, totalWeight, candidateBlockHash)
       }
-    } yield committee
+    } yield committee)
 
   override def findCommitteeApproximation(
       dag: DagRepresentation[F]
   ): F[Option[CommitteeWithConsensusValue]] =
-    for {
-      weightMap           <- weightMapRef.get
-      validators          <- validatorsRef.get
-      firstLevelZeroVotes <- firstLevelZeroVotesRef.get
-      // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
-      consensusValueToValidators = firstLevelZeroVotes.zipWithIndex
-        .collect { case (Some((blockHash, _)), idx) => (blockHash, validators(idx)) }
-        .groupBy(_._1)
-        .mapValues(_.map(_._2))
-      // Get most support voteBranch and its support weight
-      mostSupport = consensusValueToValidators
-        .mapValues(_.map(weightMap.getOrElse(_, 0L)).sum)
-        .maxBy(_._2)
-      (voteValue, supportingWeight) = mostSupport
-      // Get the voteBranch's supporters
-      supporters  = consensusValueToValidators(voteValue)
-      totalWeight = weightMap.values.sum
-    } yield
-      if (supportingWeight * 2 > totalWeight) {
-        Some(
-          CommitteeWithConsensusValue(supporters.toSet, supportingWeight, voteValue)
-        )
-      } else {
-        None
-      }
+    lock.withPermit(
+      for {
+        weightMap           <- (state >> 'weightMap).get
+        validators          <- (state >> 'validators).get
+        firstLevelZeroVotes <- (state >> 'firstLevelZeroVotes).get
+        // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
+        consensusValueToValidators = firstLevelZeroVotes.zipWithIndex
+          .collect { case (Some((blockHash, _)), idx) => (blockHash, validators(idx)) }
+          .groupBy(_._1)
+          .mapValues(_.map(_._2))
+        // Get most support voteBranch and its support weight
+        mostSupport = consensusValueToValidators
+          .mapValues(_.map(weightMap.getOrElse(_, 0L)).sum)
+          .maxBy(_._2)
+        (voteValue, supportingWeight) = mostSupport
+        // Get the voteBranch's supporters
+        supporters  = consensusValueToValidators(voteValue)
+        totalWeight = weightMap.values.sum
+      } yield
+        if (supportingWeight * 2 > totalWeight) {
+          Some(
+            CommitteeWithConsensusValue(supporters.toSet, supportingWeight, voteValue)
+          )
+        } else {
+          None
+        }
+    )
 
   @tailrec
   private def pruneLoop(
@@ -223,19 +224,19 @@ class VotingMatrixImpl[F[_]] private (
       dag: DagRepresentation[F],
       newFinalizedBlock: BlockHash
   ): F[Unit] =
-    for {
+    lock.withPermit(for {
       // todo(abner)  use a lock to atomically update these state
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
       weights    <- dag.lookup(newFinalizedBlock).map(_.get.weightMap)
-      _          <- weightMapRef.set(weights)
+      _          <- (state >> 'weightMap).set(weights)
       validators = weights.keySet.toArray
-      _          <- validatorsRef.set(validators)
+      _          <- (state >> 'validators).set(validators)
       n          = validators.size
-      _          <- matrixRef.set(MutableSeq.fill(n, n)(0))
-      _          <- firstLevelZeroVotesRef.set(MutableSeq.fill(n)(None))
+      _          <- (state >> 'votingMatrix).set(MutableSeq.fill(n, n)(0))
+      _          <- (state >> 'firstLevelZeroVotes).set(MutableSeq.fill(n)(None))
       // Assigns numeric identifiers 0, ..., N-1 to all validators
       validatorsToIndex      = validators.zipWithIndex.toMap
-      _                      <- validatorToIndexRef.set(validatorsToIndex)
+      _                      <- (state >> 'validatorToIdx).set(validatorsToIndex)
       latestMessages         <- dag.latestMessages
       latestMessagesOfVoters = latestMessages.filterKeys(validatorsToIndex.contains)
       latestVoteValueOfVotesAsList <- latestMessagesOfVoters.toList
@@ -272,7 +273,7 @@ class VotingMatrixImpl[F[_]] private (
         validatorsToIndex,
         firstLevelZeroVotes.get
       )
-      _ <- firstLevelZeroVotesRef.set(firstLevelZeroVotesArray)
+      _ <- (state >> 'firstLevelZeroVotes).set(firstLevelZeroVotesArray)
       latestMessagesToUpdated = latestMessagesOfVoters.filterKeys(
         firstLevelZeroVotes.contains
       )
@@ -280,7 +281,7 @@ class VotingMatrixImpl[F[_]] private (
       _ <- latestMessagesToUpdated.values.toList.traverse { b =>
             updateVotingMatrixOnNewBlock(dag, b)
           }
-    } yield ()
+    } yield ())
 
   // Return an MutableSeq, whose size equals the size of validatorsToIndex and
   // For v in validatorsToIndex.key
@@ -321,22 +322,39 @@ class VotingMatrixImpl[F[_]] private (
 
 object VotingMatrixImpl {
   // (Consensus value, DagLevel of the block)
-  type Vote = (BlockHash, Long)
+  type Vote                = (BlockHash, Long)
+  type _votingMatrix[F[_]] = MonadState[F, VotingMatrixState] with Semaphore[F]
+  def _votingMatrix[F[_]](implicit ev: _votingMatrix[F]): _votingMatrix[F] = ev
 
-  def empty[F[_]: Sync]: F[VotingMatrix[F]] =
+  def emptyState[F[_]: Concurrent](n: Long): F[_votingMatrix[F]] =
     for {
-      matrixRef              <- Ref.of[F, MutableSeq[MutableSeq[Long]]](MutableSeq.empty)
-      firstLevelZeroVotesRef <- Ref.of[F, MutableSeq[Option[Vote]]](MutableSeq.empty)
-      validatorToIndexRef    <- Ref.of[F, Map[Validator, Int]](Map.empty)
-      weightMapRef           <- Ref.of[F, Map[Validator, Long]](Map.empty)
-      validatorsRef          <- Ref.of[F, MutableSeq[Validator]](MutableSeq.empty)
-      votingMatrix = new VotingMatrixImpl[F]()(
-        Sync[F],
-        matrixRef,
-        firstLevelZeroVotesRef,
-        validatorToIndexRef,
-        weightMapRef,
-        validatorsRef
-      )
-    } yield votingMatrix
+      lock  <- Semaphore[F](n)
+      state <- Ref[F].of(emptyVotingMatrixState)
+    } yield new Semaphore[F] with DefaultMonadState[F, VotingMatrixState] {
+      val monad: cats.Monad[F]               = implicitly[Monad[F]]
+      def get: F[VotingMatrixState]          = state.get
+      def set(s: VotingMatrixState): F[Unit] = state.set(s)
+
+      override def available: F[Long]               = lock.available
+      override def count: F[Long]                   = lock.count
+      override def acquireN(n: Long): F[Unit]       = lock.acquireN(n)
+      override def tryAcquireN(n: Long): F[Boolean] = lock.tryAcquireN(n)
+      override def releaseN(n: Long): F[Unit]       = lock.releaseN(n)
+      override def withPermit[A](t: F[A]): F[A]     = lock.withPermit(t)
+    }
+
+  case class VotingMatrixState(
+      votingMatrix: MutableSeq[MutableSeq[Long]],
+      firstLevelZeroVotes: MutableSeq[Option[Vote]],
+      validatorToIdx: Map[Validator, Int],
+      weightMap: Map[Validator, Long],
+      validators: MutableSeq[Validator]
+  )
+
+  def emptyVotingMatrixState: VotingMatrixState =
+    VotingMatrixState(MutableSeq.empty, MutableSeq.empty, Map.empty, Map.empty, MutableSeq.empty)
+
+  def empty[F[_]: Concurrent]: F[VotingMatrix[F]] =
+    emptyState[F](1).map(state => new VotingMatrixImpl()(state))
+
 }
