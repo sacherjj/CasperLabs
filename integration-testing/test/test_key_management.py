@@ -114,7 +114,7 @@ def test_key_management(one_node_network):
     node.transfer_to_account(1, 1000000)
     deploy_key = Account(2)  # 4e74
     key_mgmt_key = Account(3)  # 58f7
-    high_weight_key = Account(4)  #
+    high_weight_key = Account(4)  # 1ca8
 
     # Create deploy_acct key with weight of 10
     block_hash = add_associated_key(
@@ -142,7 +142,7 @@ def test_key_management(one_node_network):
         identity_key=identity_key.public_key_hex,
         weight_key=key_mgmt_key,
         key=high_weight_key.public_key_hex,
-        weight=255,
+        weight=200,
     )
     assert_deploy_is_not_error(node, block_hash)
 
@@ -153,6 +153,7 @@ def test_key_management(one_node_network):
         weight_key=key_mgmt_key,
         key=identity_key.public_key_hex,
     )
+    assert_deploy_is_not_error(node, block_hash)
 
     # Start thresholds under key weights
     set_key_thresholds(
@@ -244,6 +245,7 @@ def test_key_management(one_node_network):
             public_key=deploy_key.public_key_path,
             private_key=deploy_key.private_key_path,
         )
+    # assert_deploy_is_error(node, block_hash, "DeploymentAuthorizationFailure")
 
     NonceRegistry.revert(identity_key.public_key_hex)
 
@@ -259,7 +261,6 @@ def test_key_management(one_node_network):
     )
     assert_deploy_is_not_error(node, block_hash)
 
-    # CURRENTLY NO WORKING WITH EE-562
     # Key management weight under threshold
     block_hash = set_key_thresholds(
         node,

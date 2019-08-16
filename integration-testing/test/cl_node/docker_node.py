@@ -322,6 +322,10 @@ class DockerNode(LoggingDockerBase):
         session_args = ABI.args(
             [ABI.account(to_account.public_key_binary), ABI.u32(amount)]
         )
+        # Until payment is on for all, we have to fix the default payment args
+        if not self.config.is_payment_code_enabled:
+            payment_contract = session_contract
+
         if session_contract == payment_contract:
             # Compatibility mode with the way things worked before execution cost era
             payment_args = None
