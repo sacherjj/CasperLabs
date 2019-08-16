@@ -248,6 +248,8 @@ def test_key_management(one_node_network):
 
     NonceRegistry.revert(identity_key.public_key_hex)
 
+    # TODO: Figure out race condition and put proper check here rather than sleep.
+    # We sometimes get an issue if we don't pause after the above exception.  Need to track down.
     sleep(1)
 
     # Testing deploy after failure for Nonce issue.
