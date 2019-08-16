@@ -79,6 +79,8 @@ class DockerConfig:
     bootstrap_address: Optional[str] = None
     use_new_gossiping: bool = True
     genesis_public_key_path: str = None
+    is_payment_code_enabled: bool = False
+    initial_motes: int = 100 * (10 ** 9)  # 100 billion
 
     def __post_init__(self):
         if self.rand_str is None:
@@ -113,7 +115,7 @@ class DockerConfig:
             options[
                 "--casper-genesis-account-public-key-path"
             ] = f"/root/.casperlabs/accounts/{gen_acct_key_file}"
-            options["--casper-initial-motes"] = 100000000000
+            options["--casper-initial-motes"] = self.initial_motes
         if self.node_public_key:
             options["--casper-validator-public-key"] = self.node_public_key
         if self.use_new_gossiping:
