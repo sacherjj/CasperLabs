@@ -26,7 +26,7 @@ members = [
     "set_key_thresholds",
     "key_management/add_associated_key",
     "key_management/update_associated_key",
-    "key_management/remove_associated_key"
+    "key_management/remove_associated_key",
     "payment-purse",
     "finalize-payment",
     "refund-purse",
