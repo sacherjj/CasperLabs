@@ -242,7 +242,6 @@ def test_refund_after_session_code_error(payment_node_network):
         account_address=GENESIS_ACCOUNT.public_key_hex, block_hash=deploy_hash
     )
 
-    # This assert is failing; And could not get lesser balance than original balance.
     expected_sum = later_balance + motes
     assert genesis_init_balance == expected_sum
 
