@@ -14,7 +14,7 @@ use common::key::Key;
 use common::uref::URef;
 
 fn get_list_key(name: &str) -> UPointer<Vec<String>> {
-    get_uref(name).to_u_ptr().unwrap()
+    get_uref(name).unwrap().to_u_ptr().unwrap()
 }
 
 fn update_list(name: String) {

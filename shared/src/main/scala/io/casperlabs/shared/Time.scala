@@ -1,9 +1,12 @@
 package io.casperlabs.shared
 
-import cats._, cats.data._, cats.implicits._
-import io.casperlabs.catscontrib._, Catscontrib._
+import cats._
+import cats.data._
+import io.casperlabs.catscontrib._
+import Catscontrib._
+import cats.effect.Timer
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, NANOSECONDS}
 
 trait Time[F[_]] {
   def currentMillis: F[Long]
@@ -23,9 +26,13 @@ object Time extends TimeInstances {
 }
 
 sealed abstract class TimeInstances {
-  implicit def eitherTTime[E, F[_]: Monad: Time[?[_]]]: Time[EitherT[F, E, ?]] =
-    Time.forTrans[F, EitherT[?[_], E, ?]]
-
   implicit def stateTTime[S, F[_]: Monad: Time[?[_]]]: Time[StateT[F, S, ?]] =
     Time.forTrans[F, StateT[?[_], S, ?]]
+
+  implicit def mkTime[F[_]](implicit timer: Timer[F]): Time[F] =
+    new Time[F] {
+      def currentMillis: F[Long]                   = timer.clock.realTime(MILLISECONDS)
+      def nanoTime: F[Long]                        = timer.clock.monotonic(NANOSECONDS)
+      def sleep(duration: FiniteDuration): F[Unit] = timer.sleep(duration)
+    }
 }

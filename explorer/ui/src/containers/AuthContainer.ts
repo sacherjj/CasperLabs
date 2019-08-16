@@ -2,43 +2,45 @@ import { observable } from 'mobx';
 import * as nacl from 'tweetnacl-ts';
 import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
-import FormData from './FormData';
-import Auth0Service from '../services/Auth0Service';
-import { encodeBase64 } from '../lib/Conversions';
+import { CleanableFormData } from './FormData';
+import AuthService from '../services/AuthService';
+import CasperService from '../services/CasperService';
+import { encodeBase64, decodeBase64 } from '../lib/Conversions';
+import ObservableValueMap from '../lib/ObservableValueMap';
+import BalanceService from '../services/BalanceService';
 
-// https://github.com/auth0/auth0-spa-js/issues/41
-// https://auth0.com/docs/quickstart/spa/vanillajs
-// https://auth0.com/docs/quickstart/spa/react
-// https://auth0.com/docs/api/management/v2/get-access-tokens-for-spas
-// https://auth0.com/docs/api/management/v2#!/Users/patch_users_by_id
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
+
+type AccountB64 = string;
 
 export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: UserAccount[] | null = null;
 
   // An account we are creating, while we're configuring it.
-  @observable newAccount: NewAccountFormData | null = null;
+  @observable newAccountForm: NewAccountFormData | null = null;
 
   @observable selectedAccount: UserAccount | null = null;
 
+  // Balance for each public key.
+  @observable balances = new ObservableValueMap<AccountB64, AccountBalance>();
+
+  // How often to query balances. Lots of state queries to get one.
+  balanceTtl = 5 * 60 * 1000;
+
   constructor(
     private errors: ErrorContainer,
-    private auth0Service: Auth0Service
+    private authService: AuthService,
+    private casperService: CasperService,
+    private balanceService: BalanceService
   ) {
     this.init();
   }
 
-  private getAuth0() {
-    return this.auth0Service.getAuth0();
-  }
-
   private async init() {
-    const auth0 = await this.getAuth0();
-
     if (window.location.search.includes('code=')) {
-      const { appState } = await auth0.handleRedirectCallback();
+      const { appState } = await this.authService.handleRedirectCallback();
       const url =
         appState && appState.targetUrl
           ? appState.targetUrl
@@ -50,47 +52,75 @@ export class AuthContainer {
   }
 
   async login() {
-    const auth0 = await this.getAuth0();
-    const isAuthenticated = await auth0.isAuthenticated();
+    const isAuthenticated = await this.authService.isAuthenticated();
     if (!isAuthenticated) {
-      await auth0.loginWithPopup({
-        response_type: 'token id_token'
-      } as PopupLoginOptions);
+      await this.authService.login();
     }
     this.fetchUser();
   }
 
   async logout() {
-    const auth0 = await this.getAuth0();
     this.user = null;
     this.accounts = null;
+    this.balances.clear();
     sessionStorage.clear();
-    auth0.logout({ returnTo: window.location.origin });
+    this.authService.logout();
   }
 
   private async fetchUser() {
-    const auth0 = await this.getAuth0();
-    const isAuthenticated = await auth0.isAuthenticated();
-    this.user = isAuthenticated ? await auth0.getUser() : null;
+    const isAuthenticated = await this.authService.isAuthenticated();
+    this.user = isAuthenticated ? await this.authService.getUser() : null;
     this.refreshAccounts();
   }
 
   async refreshAccounts() {
     if (this.user != null) {
-      const meta: UserMetadata = await this.auth0Service.getUserMetadata(
+      const meta: UserMetadata = await this.authService.getUserMetadata(
         this.user.sub
       );
       this.accounts = meta.accounts || [];
     }
   }
 
+  async refreshBalances(force?: boolean) {
+    const now = new Date();
+    let latestBlockHash: BlockHash | null = null;
+
+    for (let account of this.accounts || []) {
+      const balance = this.balances.get(account.publicKeyBase64);
+
+      const needsUpdate =
+        force ||
+        balance.value == null ||
+        now.getTime() - balance.value.checkedAt.getTime() > this.balanceTtl;
+
+      if (needsUpdate) {
+        if (latestBlockHash == null) {
+          const latestBlock = await this.casperService.getLatestBlockInfo();
+          latestBlockHash = latestBlock.getSummary()!.getBlockHash_asU8();
+        }
+
+        const latestAccountBalance = await this.balanceService.getAccountBalance(
+          latestBlockHash,
+          decodeBase64(account.publicKeyBase64)
+        );
+
+        this.balances.set(account.publicKeyBase64, {
+          checkedAt: now,
+          blockHash: latestBlockHash,
+          balance: latestAccountBalance
+        });
+      }
+    }
+  }
+
   // Open a new account creation form.
   configureNewAccount() {
-    this.newAccount = new NewAccountFormData(this.accounts!);
+    this.newAccountForm = new NewAccountFormData(this.accounts!);
   }
 
   async createAccount(): Promise<boolean> {
-    let form = this.newAccount!;
+    let form = this.newAccountForm!;
     if (form.clean()) {
       // Save the private and public keys to disk.
       saveToFile(form.privateKeyBase64, `${form.name}.private.key`);
@@ -119,7 +149,7 @@ export class AuthContainer {
   }
 
   private async saveAccounts() {
-    await this.auth0Service.updateUserMetadata(this.user!.sub, {
+    await this.authService.updateUserMetadata(this.user!.sub, {
       accounts: this.accounts || undefined
     });
   }
@@ -134,7 +164,7 @@ function saveToFile(content: string, filename: string) {
   saveAs(blob, filename);
 }
 
-class NewAccountFormData extends FormData {
+class NewAccountFormData extends CleanableFormData {
   constructor(private accounts: UserAccount[]) {
     super();
     // Generate key pair and assign to public and private keys.

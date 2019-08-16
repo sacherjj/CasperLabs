@@ -2,7 +2,6 @@ package io.casperlabs.crypto.encryption
 
 import org.abstractj.kalium.crypto._
 import org.abstractj.kalium.keys._
-import org.abstractj.kalium.NaCl.Sodium.{CRYPTO_BOX_CURVE25519XSALSA20POLY1305_NONCEBYTES}
 
 /**
   * Curve25519 elliptic curve cryptography

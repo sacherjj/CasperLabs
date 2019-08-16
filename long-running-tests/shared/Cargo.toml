@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 binascii = "0.1.2"
-common = { package = "casperlabs-contract-ffi", path = "../../execution-engine/common" }
+common = { package = "casperlabs-contract-ffi", path = "../../execution-engine/contract-ffi" }

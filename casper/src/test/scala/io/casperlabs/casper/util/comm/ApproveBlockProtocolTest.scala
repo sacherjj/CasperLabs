@@ -2,13 +2,13 @@ package io.casperlabs.casper.util.comm
 
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
+import io.casperlabs.casper
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.helper.TransportLayerCasperTestNodeFactory
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.LegacyConversions
+import io.casperlabs.casper.{HashSetCasperTest, LastApprovedBlock, LegacyConversions}
 import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.util.comm.ApproveBlockProtocolTest.TestFixture
-import io.casperlabs.casper.{HashSetCasperTest, LastApprovedBlock}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.rp.Connect.Connections
@@ -338,6 +338,8 @@ object ApproveBlockProtocolTest extends TransportLayerCasperTestNodeFactory {
     implicit val ctx             = monix.execution.Scheduler.Implicits.global
     implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
+    implicit val raise           = casper.validation.raiseValidateErrorThroughApplicativeError[Task]
+    import io.casperlabs.casper.DeriveValidation._
 
     val (_, pk)                                          = Ed25519.newKeyPair
     val bonds                                            = HashSetCasperTest.createBonds(Seq(pk))

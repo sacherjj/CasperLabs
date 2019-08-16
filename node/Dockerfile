@@ -1,6 +1,6 @@
 FROM openjdk:11-jre-slim
 
-RUN apt-get update && apt-get install -yq openssl
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* && apt-get update && apt-get install -yq openssl
 LABEL MAINTAINER="CasperLabs, LLC. <info@casperlabs.io>"
 
 USER root

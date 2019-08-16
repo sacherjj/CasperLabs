@@ -48,6 +48,9 @@ class StashingSynchronizer[F[_]: Concurrent: Par](
       res     <- attempt.rethrow
     } yield res
 
+  override def downloaded(blockHash: ByteString) =
+    underlying.downloaded(blockHash)
+
   private def run: F[Unit] =
     for {
       _               <- semaphore.withPermit(transitionedRef.set(true))

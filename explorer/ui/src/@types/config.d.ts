@@ -6,6 +6,11 @@ interface Window {
 
 interface Config {
   auth0: Auth0Config;
+  auth: {
+    mock: {
+      enabled: boolean;
+    };
+  };
   grpc: {
     url: string | undefined;
   };

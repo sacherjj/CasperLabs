@@ -135,6 +135,13 @@ $ ./run_tests.sh --mypy -m mypy
 ```
 
 # Writing your own tests
+
+## Installing pre-commit hooks
+
+Please run `pipenv sync`. This command will install all the dependencies including `pre-commit` in your virtual environment.
+You should enable pre-commit hooks in your repository with the command `pre-commit install`. For more information please
+check pre-commit hooks [website](https://pre-commit.com).
+
 ## Pytest basics
 Bellow is a basic introduction while [here](https://docs.pytest.org/en/latest/) you can see the full pytest documentation.
 
@@ -268,4 +275,3 @@ importanize tests
 
 git diff dev..<your branch name>  --name-only | grep py | xargs importanize
 ```
-

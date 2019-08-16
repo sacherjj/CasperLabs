@@ -204,6 +204,45 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
             }
           }
         }
+      "not call peers that failed to respond again in the same round" in
+        forAll(genFullyConnectedPeers) { peers: Map[Node, List[Node]] =>
+          //we need strong ordering
+          val asList = peers.toList
+          val target = chooseRandom(asList.init.map(_._1))
+          //connect to all of them in the first round
+          val alpha = peers.size
+          //try to have as many successful requests as there are nodes
+          val k = totalN(peers)
+          //at least 1 peer returns all others
+          val failuresN = Random.nextInt(asList.size - 1) + 1
+          val withFailures = (0 until failuresN)
+            .foldLeft(asList) {
+              case (acc, i) => acc.updated(i, (acc(i)._1, List.empty))
+            }
+            .map {
+              case (k, vs) if vs.isEmpty => (k, None)
+              case (k, vs)               => (k, Some(vs))
+            }
+            .toMap
+          TextFixture.customInitialWithFailures(
+            connections = withFailures,
+            // Contact everyone in the 1st round, and since it always does a 2nd round
+            // if it contacts any failed nodes again we'll know.
+            tableInitial = peers.keySet - target,
+            k = k,
+            alpha = alpha,
+            alivePeersCacheSize = totalN(peers)
+          ) { (mock, nd, _) =>
+            for {
+              _ <- nd.updateRecentlyAlivePeers
+              _ <- nd.lookup(NodeIdentifier(target.id))
+            } yield {
+              Inspectors.forAll(peers.keySet) { peer =>
+                mock.lookupsBy(peer) should be <= 1
+              }
+            }
+          }
+        }
       "skip itself" in forAll(genSetPeerNodes) { peers: Set[Node] =>
         val target              = peers.head
         val itself              = Node(NodeDiscoverySpec.id, "localhost", 40400, 40404)

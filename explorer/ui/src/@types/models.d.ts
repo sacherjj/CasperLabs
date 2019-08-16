@@ -18,3 +18,11 @@ interface User {
 
 type ByteArray = Uint8Array;
 type DeployHash = ByteArray;
+type BlockHash = ByteArray;
+
+interface AccountBalance {
+  checkedAt: Date;
+  blockHash: BlockHash;
+  // undefine means the account didn't exist.
+  balance: number | undefined;
+}

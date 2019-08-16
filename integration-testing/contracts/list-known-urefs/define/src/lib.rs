@@ -7,14 +7,14 @@ extern crate common;
 use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
-use common::contract_api::{add_uref, get_uref, list_known_urefs, new_uref, store_function};
+use common::contract_api::{add_uref, get_uref, list_known_urefs, new_uref, store_function, revert};
 use common::key::Key;
 use common::value::Value;
 use core::iter;
 
 #[no_mangle]
 pub extern "C" fn list_known_urefs_ext() {
-    let passed_in_uref = get_uref("Foo");
+    let passed_in_uref = get_uref("Foo").unwrap_or_else(|| revert(100));
     let uref = new_uref(Value::String("Test".to_owned()));
     add_uref("Bar", &uref.clone().into());
     let contracts_known_urefs = list_known_urefs();

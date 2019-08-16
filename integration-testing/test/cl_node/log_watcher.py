@@ -3,6 +3,7 @@ import logging
 import threading
 import time
 from typing import Any
+from docker.models.containers import Container
 
 
 class LogWatcherThread(threading.Thread):
@@ -12,7 +13,7 @@ class LogWatcherThread(threading.Thread):
     Replaces full log parsing and searching with wait methods.
     """
 
-    def __init__(self, container: "Container") -> None:
+    def __init__(self, container: Container) -> None:
         super().__init__()
         self.located_event = threading.Event()
         self.stop_event = threading.Event()
@@ -20,7 +21,7 @@ class LogWatcherThread(threading.Thread):
         self.data = None
 
     def __repr__(self):
-        return f'<{self.__class__.__name__}({self.container.name})>'
+        return f"<{self.__class__.__name__}({self.container.name})>"
 
     def run(self) -> None:
         end_line = self.container.logs(tail=1)
@@ -29,10 +30,12 @@ class LogWatcherThread(threading.Thread):
         lines_count = 0
         while end_line != next(containers_log_lines_generator):
             lines_count += 1
-        logging.info(f'Fast Forward Complete with {lines_count} lines skipped.  End Line: {end_line}')
+        logging.info(
+            f"Fast Forward Complete with {lines_count} lines skipped.  End Line: {end_line}"
+        )
         try:
             while not self.stop_event.is_set() and not self.located_event.is_set():
-                line = next(containers_log_lines_generator).decode('utf-8').rstrip()
+                line = next(containers_log_lines_generator).decode("utf-8").rstrip()
                 if self.condition_met(line):
                     self.located_event.set()
         except StopIteration:
@@ -52,7 +55,7 @@ class LogWatcherThread(threading.Thread):
 class TextInLogLine(LogWatcherThread):
     search_text = None
 
-    def __init__(self, container: "Container") -> None:
+    def __init__(self, container: Container) -> None:
         super().__init__(container)
 
     def condition_met(self, line: str) -> bool:
@@ -63,15 +66,17 @@ class TextInLogLine(LogWatcherThread):
 
 
 class GoodbyeInLogLine(TextInLogLine):
-    search_text = 'Goodbye.'
+    search_text = "Goodbye."
 
 
 class RequestedForkTipFromPeersInLogLine(TextInLogLine):
-    search_text = 'Requested fork tip from peers'
+    search_text = "Requested fork tip from peers"
 
 
 @contextlib.contextmanager
-def wait_for_log_watcher(log_watcher: "LogWatcherThread", timeout_secs: float = 180) -> Any:
+def wait_for_log_watcher(
+    log_watcher: "LogWatcherThread", timeout_secs: float = 180
+) -> Any:
     """
     Log watcher does not parse the entire log, so a context manager starts up detection prior to
     the command that will cause it.  This can allow detection to be complete prior to coming back from
@@ -96,7 +101,7 @@ def wait_for_log_watcher(log_watcher: "LogWatcherThread", timeout_secs: float = 
     located_event = log_watcher.located_event
     stop_event = log_watcher.stop_event
     stop_time = time.time() + timeout_secs
-    logging.info(f'AWAITING {log_watcher.__repr__()} for {timeout_secs} sec(s)')
+    logging.info(f"AWAITING {log_watcher.__repr__()} for {timeout_secs} sec(s)")
     log_watcher.start()
 
     yield
@@ -104,24 +109,28 @@ def wait_for_log_watcher(log_watcher: "LogWatcherThread", timeout_secs: float = 
     while True:
         if located_event.is_set():
             log_watcher.join()
-            logging.info(f'SATISFIED {log_watcher.__repr__()} with data: {log_watcher.data}')
+            logging.info(
+                f"SATISFIED {log_watcher.__repr__()} with data: {log_watcher.data}"
+            )
             return
         if time.time() > stop_time:
 
             # While debugging issues with Log Watcher, doing final check
-            logging.info(f'LOG_WATCHER_ERROR_STATE_RECHECK')
-            c_logs = log_watcher.container.logs(tail=10).decode('utf-8').split('\n')
+            logging.info(f"LOG_WATCHER_ERROR_STATE_RECHECK")
+            c_logs = log_watcher.container.logs(tail=10).decode("utf-8").split("\n")
             search_text = log_watcher.__class__.search_text
             for line in c_logs:
                 if search_text in line:
-                    logging.info(f'RETRY OF {log_watcher.__class__.__name__} Successful.')
+                    logging.info(
+                        f"RETRY OF {log_watcher.__class__.__name__} Successful."
+                    )
                     stop_event.set()
                     return
 
             # Setting stop event will tear down thread after next log line received or container shutdown
             stop_event.set()
-            raise Exception(f'{log_watcher.container.name} did not satisfy {log_watcher.__repr__()} '
-                            f'after {timeout_secs} sec(s).')
+            raise Exception(
+                f"{log_watcher.container.name} did not satisfy {log_watcher.__repr__()} "
+                f"after {timeout_secs} sec(s)."
+            )
         time.sleep(0.1)
-
-

@@ -14,16 +14,33 @@ export class Ed25519 {
     };
   }
 
+  public static parseKeyPair(publicKey: ByteArray, privateKey: ByteArray): nacl.SignKeyPair {
+    const publ = Ed25519.parsePublicKey(publicKey);
+    const priv = Ed25519.parsePrivateKey(privateKey);
+    // nacl expects that the private key will contain both.
+    return {
+      publicKey: publ,
+      secretKey: Buffer.concat([priv, publ])
+    };
+  }
+
   public static parsePrivateKeyFile(path: string): ByteArray {
-    return Ed25519.parseKeyFile(path, 0, 32);
+    return Ed25519.parsePrivateKey(readBase64File(path));
   }
 
   public static parsePublicKeyFile(path: string): ByteArray {
-    return Ed25519.parseKeyFile(path, 32, 64);
+    return Ed25519.parsePublicKey(readBase64File(path));
   }
 
-  private static parseKeyFile(path: string, from: number, to: number) {
-    const bytes = readBase64File(path);
+  public static parsePrivateKey(bytes: ByteArray) {
+    return Ed25519.parseKey(bytes, 0, 32);
+  }
+
+  public static parsePublicKey(bytes: ByteArray) {
+    return Ed25519.parseKey(bytes, 32, 64);
+  }
+
+  private static parseKey(bytes: ByteArray, from: number, to: number) {
     const len = bytes.length;
     const key =
       (len === 32) ? bytes :
@@ -31,7 +48,7 @@ export class Ed25519 {
           (len > 32 && len < 64) ? Buffer.from(bytes).slice(len % 32) :
             null;
     if (key == null || key.length !== 32) {
-      throw Error(`Unexpected key length ${len} in ${path}`);
+      throw Error(`Unexpected key length: ${len}`);
     }
     return key;
   }

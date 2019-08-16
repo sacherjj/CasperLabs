@@ -1,0 +1,17 @@
+[package]
+name = "update_associated_key"
+version = "0.1.0"
+authors = ["Joe Sacher <joes@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+name = "update_associated_key"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["cl_std/std" ]
+
+[dependencies]
+cl_std = { package = "casperlabs-contract-ffi", path = "../../../../execution-engine/contract-ffi" }
+

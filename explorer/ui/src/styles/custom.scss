@@ -34,3 +34,32 @@ body.sidenav-toggled {
 .icon-button {
   cursor: pointer;
 }
+
+button.link {
+  background: none;
+  border: none;
+  padding: 0 !important;
+  font: inherit;
+  cursor: pointer;
+  font-family: arial, sans-serif;
+  color: #007bff;
+}
+button.link:hover {
+  text-decoration: underline;
+}
+button.icon-button {
+  color: inherit;
+}
+
+div.svg-container {
+  position: relative;
+}
+div.svg-hint {
+  position: absolute;
+  bottom: 0;
+  display: none;
+  opacity: 0.75;
+  background-color: #666666;
+  color: white;
+  padding: 5px;
+}

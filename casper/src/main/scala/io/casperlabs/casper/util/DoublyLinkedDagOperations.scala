@@ -4,43 +4,16 @@ import io.casperlabs.casper.Estimator.BlockHash
 
 import scala.collection.immutable.{HashMap, HashSet}
 
-trait DoublyLinkedDag[A] {
-  val parentToChildAdjacencyList: Map[A, Set[A]]
-  val childToParentAdjacencyList: Map[A, Set[A]]
-  val dependencyFree: Set[A]
-}
-final case class BlockDependencyDag(
-    parentToChildAdjacencyList: Map[BlockHash, Set[BlockHash]],
-    childToParentAdjacencyList: Map[BlockHash, Set[BlockHash]],
-    dependencyFree: Set[BlockHash]
-) extends DoublyLinkedDag[BlockHash]
-
-object BlockDependencyDag {
-  def empty: BlockDependencyDag =
-    new BlockDependencyDag(
-      HashMap.empty[BlockHash, Set[BlockHash]],
-      HashMap.empty[BlockHash, Set[BlockHash]],
-      HashSet.empty[BlockHash]
-    )
-}
-
-object MapHelper {
-  def updatedWith[A, B](map: Map[A, B], key: A)(default: B)(f: B => B): Map[A, B] = {
-    val newValue = map.get(key).fold(default)(f)
-    map.updated(key, newValue)
-  }
-}
-
-object DoublyLinkedDagOperations {
-  def add[A](dag: DoublyLinkedDag[A], parent: A, child: A): DoublyLinkedDag[A] = {
-    val parentToChildAdjacencyList: Map[A, Set[A]] = dag.parentToChildAdjacencyList
-    val childToParentAdjacencyList: Map[A, Set[A]] = dag.childToParentAdjacencyList
-    val dependencyFree: Set[A]                     = dag.dependencyFree
-
+final class DoublyLinkedDag[A](
+    val parentToChildAdjacencyList: Map[A, Set[A]],
+    val childToParentAdjacencyList: Map[A, Set[A]],
+    val dependencyFree: Set[A]
+) {
+  def add(parent: A, child: A): DoublyLinkedDag[A] = {
     val updatedParentToChildAdjacencyList =
-      MapHelper.updatedWith(parentToChildAdjacencyList, parent)(Set(child))(_ + child)
+      MapHelper.updatedWith[A, Set[A]](parentToChildAdjacencyList, parent)(Set(child))(_ + child)
     val updatedChildToParentAdjacencyList =
-      MapHelper.updatedWith(childToParentAdjacencyList, child)(Set(parent))(_ + parent)
+      MapHelper.updatedWith[A, Set[A]](childToParentAdjacencyList, child)(Set(parent))(_ + parent)
 
     val postParentDependencyFree =
       if (updatedChildToParentAdjacencyList.get(parent).exists(_.nonEmpty)) {
@@ -51,17 +24,15 @@ object DoublyLinkedDagOperations {
 
     val postChildDependencyFree = postParentDependencyFree - child
 
-    new DoublyLinkedDag[A] {
-      override val parentToChildAdjacencyList: Map[A, Set[A]] = updatedParentToChildAdjacencyList
-      override val childToParentAdjacencyList: Map[A, Set[A]] = updatedChildToParentAdjacencyList
-      override val dependencyFree: Set[A]                     = postChildDependencyFree
-    }
+    new DoublyLinkedDag[A](
+      updatedParentToChildAdjacencyList,
+      updatedChildToParentAdjacencyList,
+      postChildDependencyFree
+    )
   }
 
   // If the element doesn't exist in the dag, the dag is returned as is
-  def remove[A](dag: DoublyLinkedDag[A], element: A): DoublyLinkedDag[A] = {
-    val parentToChildAdjacencyList: Map[A, Set[A]] = dag.parentToChildAdjacencyList
-    val childToParentAdjacencyList: Map[A, Set[A]] = dag.childToParentAdjacencyList
+  def remove(element: A): DoublyLinkedDag[A] = {
     assert(!childToParentAdjacencyList.contains(element))
     assert(!parentToChildAdjacencyList.values.toSet.contains(element))
     val maybeChildren = parentToChildAdjacencyList.get(element)
@@ -85,11 +56,28 @@ object DoublyLinkedDagOperations {
         }
       case None => initAcc
     }
-    new DoublyLinkedDag[A] {
-      override val parentToChildAdjacencyList
-          : Map[A, Set[A]]                                    = dag.parentToChildAdjacencyList - element
-      override val childToParentAdjacencyList: Map[A, Set[A]] = updatedChildToParentAdjacencyList
-      override val dependencyFree: Set[A]                     = dag.dependencyFree ++ newDependencyFree - element
-    }
+    new DoublyLinkedDag[A](
+      this.parentToChildAdjacencyList - element,
+      updatedChildToParentAdjacencyList,
+      this.dependencyFree ++ newDependencyFree - element
+    )
+  }
+}
+
+object BlockDependencyDag {
+  type BlockDependencyDag = DoublyLinkedDag[BlockHash]
+
+  def empty: BlockDependencyDag =
+    new BlockDependencyDag(
+      HashMap.empty[BlockHash, Set[BlockHash]],
+      HashMap.empty[BlockHash, Set[BlockHash]],
+      HashSet.empty[BlockHash]
+    )
+}
+
+object MapHelper {
+  def updatedWith[A, B](map: Map[A, B], key: A)(default: B)(f: B => B): Map[A, B] = {
+    val newValue = map.get(key).fold(default)(f)
+    map.updated(key, newValue)
   }
 }

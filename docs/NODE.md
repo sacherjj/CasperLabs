@@ -1,4 +1,9 @@
 # Running the CasperLabs Node
+---
+## Known Issues
+
+Currently there is a known issue with building and running the execution-engine binaries on a Mac. We recommend using docker for now until a fix is made.
+---
 
 The CasperLabs node consists of two components:
 * `casperlabs-engine-grpc-server`, which executes smart contracts and persists the effects of these executions.
@@ -8,7 +13,7 @@ The CasperLabs node consists of two components:
 
 #### Using binaries (recommended):
 * [Install](INSTALL.md) the `casperlabs` package, which contains `casperlabs-node` and `casperlabs-engine-grpc-server`.
-* Download and unzip the [Mint and Proof-of-Stake Contracts](http://repo.casperlabs.io/casperlabs/repo/dev/blessed-contracts.tar.gz).
+* Download and unzip the [Mint and Proof-of-Stake Contracts](http://repo.casperlabs.io/casperlabs/repo/dev/system-contracts.tar.gz).
 * Create [keys](KEYS.md#generating-node-keys-and-validator-keys).
 
 #### Building from source:
@@ -61,7 +66,7 @@ casperlabs-node run \
     --tls-key ./keys/node.key.pem \
     --tls-certificate ./keys/node.certificate.pem \
     --casper-validator-private-key-path ./keys/validator-private.pem \
-    --casper-genesis-account-public-key-path ./keys/validator-public.pem \
+    --casper-validator-public-key-path ./keys/validator-public.pem \
     --server-bootstrap "casperlabs://a605c8ddc4ed3dc9b881bfe006cc8175fb31e125@100.24.117.48?protocol=40400&discovery=40404"
 ```
 
@@ -93,7 +98,7 @@ You can run a single Node in standalone mode for testing purposes.
 
 ```
 mkdir -p ~/.casperlabs/genesis
-(cat keys/validator-id; echo " 100") >> ~/.casperlabs/genesis/bonds.txt
+(cat keys/validator-id; echo "100") >> ~/.casperlabs/genesis/bonds.txt
 ```
 
 ##### Step 2: Start the Execution Engine
@@ -111,8 +116,8 @@ casperlabs-node run \
     --tls-key ./keys/node.key.pem \
     --tls-certificate ./keys/node.certificate.pem \
     --casper-validator-private-key-path ./keys/validator-private.pem \
-    --casper-genesis-account-public-key-path ./keys/validator-public.pem \
-    --casper-initial-tokens 1234567890 \
+    --casper-validator-public-key-path ./keys/validator-public.pem \
+    --casper-initial-motes 1234567890 \
     --casper-mint-code-path ./mint_token.wasm \
     --casper-pos-code-path ./pos.wasm
 ```

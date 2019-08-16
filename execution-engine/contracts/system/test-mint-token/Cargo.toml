@@ -1,0 +1,15 @@
+[package]
+name = "test-mint-token"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>"]
+
+[lib]
+name = "mint_token_test"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["cl_std/std"]
+
+[dependencies]
+cl_std = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

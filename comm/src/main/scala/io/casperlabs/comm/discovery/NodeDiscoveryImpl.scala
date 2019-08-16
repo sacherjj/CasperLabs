@@ -195,13 +195,16 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
                         } yield (callee, maybeNodes)
                       }
           newAlreadyQueried = alreadyQueried ++ responses.collect {
-            case (callee, Some(_)) => NodeIdentifier(callee.id)
+            case (callee, _) => NodeIdentifier(callee.id)
           }.toSet
           returnedPeers = responses.flatMap(_._2.toList.flatten).distinct
+          newShortList = rest ::: returnedPeers.filterNot(
+            p => newAlreadyQueried(NodeIdentifier(p.id))
+          )
           recursion = loop(
             successQueriesN + responses.count(_._2.nonEmpty),
             newAlreadyQueried,
-            rest ::: returnedPeers.filterNot(p => newAlreadyQueried(NodeIdentifier(p.id)))
+            newShortList
           ) _
           maybeNewClosestPeerNode = if (returnedPeers.nonEmpty)
             returnedPeers.minBy(p => PeerTable.xorDistance(toLookup.asByteString, p.id)).some
@@ -212,7 +215,8 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
                       if PeerTable.xorDistance(toLookup.asByteString, newClosestPeerNode.id) <
                         PeerTable.xorDistance(toLookup.asByteString, closestPeerNode.id) =>
                     recursion(x)
-                  case _ => maybeClosestPeerNode.pure[F]
+                  case _ =>
+                    maybeClosestPeerNode.pure[F]
                 }
         } yield res
       }

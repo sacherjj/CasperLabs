@@ -6,9 +6,9 @@ import java.util.Base64
 
 import cats.effect.Sync
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.{DagStorageFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
@@ -21,7 +21,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
-class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
+class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
   import GenesisTest._
 
   it should "throw exception when bonds file does not exist" in withGenResources {
@@ -100,7 +100,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   }
 
   it should "create a valid genesis block" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       Task.delay(
         withGenResources {
           (
@@ -118,9 +118,9 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
                                        log
                                      )
               BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
-              _ <- BlockStore[Task]
+              _ <- BlockStorage[Task]
                     .put(genesis.blockHash, genesis, transforms)
-              dag <- blockDagStorage.getRepresentation
+              dag <- dagStorage.getRepresentation
               maybePostGenesisStateHash <- ExecutionEngineServiceStub
                                             .validateBlockCheckpoint[Task](
                                               genesis,
@@ -169,7 +169,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
                                      chainId = casperlabsChainId,
                                      deployTimestamp = System.currentTimeMillis.some,
                                      accountPublicKeyPath = keyFile.some,
-                                     initialTokens = BigInt(123),
+                                     initialMotes = BigInt(123),
                                      mintCodePath = mintFile.some,
                                      posCodePath = posFile.some
                                    )
@@ -179,7 +179,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
               genesis.getBody.deploys.head.getDeploy.getBody.getSession.code.toByteArray
             )
           } yield {
-            request.initialTokens.get shouldBe state.BigInt("123", 512)
+            request.initialMotes.get shouldBe state.BigInt("123", 512)
             request.mintCode.get.code.toByteArray shouldBe ("mint code".getBytes)
             request.proofOfStakeCode.get.code.toByteArray shouldBe ("proof of stake code".getBytes)
             request.protocolVersion.get.value shouldBe 1L
@@ -252,7 +252,7 @@ object GenesisTest {
                   chainId = casperlabsChainId,
                   deployTimestamp = System.currentTimeMillis.some,
                   accountPublicKeyPath = none[Path],
-                  initialTokens = BigInt(0),
+                  initialMotes = BigInt(0),
                   mintCodePath = none[Path],
                   posCodePath = none[Path]
                 )

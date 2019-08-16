@@ -1,11 +1,13 @@
 package io.casperlabs.casper.util
 
+import cats.implicits._
 import cats.{Id, Monad}
 import com.github.ghik.silencer.silent
-import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockMetadata
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
+import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -14,11 +16,7 @@ import scala.collection.immutable.BitSet
 
 @silent("deprecated")
 @silent("is never used")
-class DagOperationsTest
-    extends FlatSpec
-    with Matchers
-    with BlockGenerator
-    with BlockDagStorageFixture {
+class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
 
   "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
     implicit val intKey = DagOperations.Key.identity[Int]
@@ -27,8 +25,8 @@ class DagOperationsTest
   }
 
   "bfToposortTraverseF" should "lazily breadth-first and order by rank when traverse a DAG with effectful neighbours" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStorage =>
+      implicit dagStorage =>
         /*
          * DAG Looks like this:
          *
@@ -52,23 +50,21 @@ class DagOperationsTest
           b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
           b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
 
-          dag <- blockDagStorage.getRepresentation
+          implicit0(dagTopoOrderingAsc: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingAsc
+          dag                                                    <- dagStorage.getRepresentation
           stream = DagOperations.bfToposortTraverseF[Task](List(BlockMetadata.fromBlock(genesis))) {
             b =>
               dag
                 .children(b.blockHash)
-                .flatMap {
-                  case Some(bs) => bs.toList.traverse(l => dag.lookup(l).map(_.get))
-                  case None     => List.empty[BlockMetadata].pure[Task]
-                }
+                .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
           }
           result <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 3, 4, 5, 6, 7))
         } yield result
   }
 
   "Greatest common ancestor" should "be computed properly" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStorage =>
+      implicit dagStorage =>
         /*
          * DAG Looks like this:
          *
@@ -92,7 +88,7 @@ class DagOperationsTest
           b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
           b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
 
-          dag <- blockDagStorage.getRepresentation
+          dag <- dagStorage.getRepresentation
 
           _      <- DagOperations.greatestCommonAncestorF[Task](b1, b5, genesis, dag) shouldBeF b1
           _      <- DagOperations.greatestCommonAncestorF[Task](b3, b2, genesis, dag) shouldBeF b1
@@ -102,9 +98,165 @@ class DagOperationsTest
         } yield result
   }
 
+  "Latest Common Ancestor" should "be computed properly for various j-DAGs" in withStorage {
+    implicit blockStorage => implicit dagStorage =>
+      val v1 = generateValidator("One")
+      val v2 = generateValidator("Two")
+      val v3 = generateValidator("Three")
+
+      /* 1) DAG looks like this:
+       *
+       * b1  b2  b3
+       *  \  |  /
+       *  genesis
+       *
+       */
+      for {
+        genesis        <- createBlock[Task](Seq.empty)
+        b1             <- createBlock[Task](Seq(genesis.blockHash), v1)
+        b2             <- createBlock[Task](Seq(genesis.blockHash), v2)
+        b3             <- createBlock[Task](Seq(genesis.blockHash), v3)
+        dag            <- dagStorage.getRepresentation
+        latestMessages <- dag.latestMessageHashes
+        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
+      } yield assert(lca == genesis.blockHash)
+
+      /* 2) DAG looks like this:
+       *         b2
+       *      /  |
+       *     b1  |
+       *     |  /
+       *  genesis
+       *
+       */
+      for {
+        genesis        <- createBlock[Task](Seq.empty)
+        b1             <- createBlock[Task](Seq(genesis.blockHash), v1)
+        b2             <- createBlock[Task](Seq(genesis.blockHash), v2)
+        dag            <- dagStorage.getRepresentation
+        latestMessages <- dag.latestMessageHashes
+        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
+      } yield assert(lca == genesis.blockHash)
+
+      /* 3) DAG looks like this:
+       * v1  v2  v3
+       *
+       *         b6
+       *         |
+       *     b4  b5
+       *       \ |
+       * b1  b2  b3
+       *  \  |  /
+       *  genesis
+       *
+       */
+
+      for {
+        genesis        <- createBlock[Task](Seq.empty)
+        b1             <- createBlock[Task](Seq(genesis.blockHash), v1)
+        b2             <- createBlock[Task](Seq(genesis.blockHash), v2)
+        b3             <- createBlock[Task](Seq(genesis.blockHash), v3)
+        b4             <- createBlock[Task](Seq(b3.blockHash), v2)
+        b5             <- createBlock[Task](Seq(b3.blockHash), v3)
+        b6             <- createBlock[Task](Seq(b5.blockHash), v3)
+        dag            <- dagStorage.getRepresentation
+        latestMessages <- dag.latestMessageHashes
+        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
+      } yield assert(lca == genesis.blockHash)
+
+      /* 4) DAG looks like this:
+       * v1  v2  v3
+       *
+       *         b6
+       *         |
+       *     b4  b5
+       *   /     |
+       * b1  b2  b3
+       *  \  |  /
+       *  genesis
+       *
+       */
+
+      for {
+        genesis        <- createBlock[Task](Seq.empty)
+        b1             <- createBlock[Task](Seq(genesis.blockHash), v1)
+        b2             <- createBlock[Task](Seq(genesis.blockHash), v2)
+        b3             <- createBlock[Task](Seq(genesis.blockHash), v3)
+        b4             <- createBlock[Task](Seq(b1.blockHash), v2)
+        b5             <- createBlock[Task](Seq(b3.blockHash), v3)
+        b6             <- createBlock[Task](Seq(b5.blockHash), v3)
+        dag            <- dagStorage.getRepresentation
+        latestMessages <- dag.latestMessageHashes
+        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
+      } yield assert(lca == genesis.blockHash)
+
+      /* 5) DAG looks like this:
+       *  b6     b7
+       *    \  /
+       *     b4  b5
+       *    |    |
+       * b1  b2  b3
+       *  \  |  /
+       *  genesis
+       *
+       */
+
+      for {
+        genesis        <- createBlock[Task](Seq.empty)
+        b1             <- createBlock[Task](Seq(genesis.blockHash), v1)
+        b2             <- createBlock[Task](Seq(genesis.blockHash), v2)
+        b3             <- createBlock[Task](Seq(genesis.blockHash), v3)
+        b4             <- createBlock[Task](Seq(b2.blockHash), v2)
+        b5             <- createBlock[Task](Seq(b3.blockHash), v3)
+        b6             <- createBlock[Task](Seq(b4.blockHash), v1)
+        b7             <- createBlock[Task](Seq(b4.blockHash), v3)
+        dag            <- dagStorage.getRepresentation
+        latestMessages <- dag.latestMessageHashes
+        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
+      } yield assert(lca == b4.blockHash)
+
+      /* 6) DAG looks like:
+       *
+       *          m
+       *            \
+       *       j  k  l
+       *      /  /   |
+       *     g  h   i
+       *      \ |  /
+       *        f
+       *      /
+       *     d  e
+       *    |    \
+       *    a   b  c
+       *     \  | /
+       *     genesis
+       *
+       */
+
+      for {
+        genesis      <- createBlock[Task](Seq(), ByteString.EMPTY)
+        a            <- createBlock[Task](Seq(genesis.blockHash), v1)
+        b            <- createBlock[Task](Seq(genesis.blockHash), v2)
+        c            <- createBlock[Task](Seq(genesis.blockHash), v3)
+        d            <- createBlock[Task](Seq(a.blockHash), v1)
+        e            <- createBlock[Task](Seq(c.blockHash), v2)
+        f            <- createBlock[Task](Seq(d.blockHash), v2)
+        g            <- createBlock[Task](Seq(f.blockHash), v1)
+        h            <- createBlock[Task](Seq(f.blockHash), v2)
+        i            <- createBlock[Task](Seq(f.blockHash), v3)
+        j            <- createBlock[Task](Seq(g.blockHash), v1)
+        k            <- createBlock[Task](Seq(h.blockHash), v2)
+        l            <- createBlock[Task](Seq(i.blockHash), v3)
+        m            <- createBlock[Task](Seq(l.blockHash), v2)
+        dag          <- dagStorage.getRepresentation
+        latestBlocks <- dag.latestMessageHashes
+        lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
+      } yield assert(lca == f.blockHash)
+  }
+
   "uncommon ancestors" should "be computed properly" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStorage =>
+      implicit dagStorage =>
         /*
          *  DAG Looks like this:
          *
@@ -129,7 +281,7 @@ class DagOperationsTest
           b6      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
           b7      <- createBlock[Task](Seq(b2.blockHash, b5.blockHash))
 
-          dag <- blockDagStorage.getRepresentation
+          dag <- dagStorage.getRepresentation
 
           ordering <- dag.deriveOrdering(0L)
           _ <- DagOperations.uncommonAncestors(Vector(b6, b7), dag)(Monad[Task], ordering) shouldBeF Map(

@@ -49,6 +49,10 @@ object Keys {
     case object EmptyPrivateKey extends ParseError {
       override def errorMessage: String = "Private key must be specified."
     }
+    case object KeyParseError extends ParseError {
+      override def errorMessage: String =
+        "An error occurred during parsing, there might be something wrong with the keys."
+    }
     case object EmptyPublicKey extends ParseError {
       override def errorMessage: String =
         "Public must be specified or private key is invalid, failed to infer public key from private key."
@@ -80,29 +84,32 @@ object Keys {
     val maybeGivenPublicKey    = maybePublicKeyRaw.flatMap(signatureAlgorithm.tryParsePublicKey)
     val maybeInferredPublicKey = maybePrivateKey.flatMap(signatureAlgorithm.tryToPublic)
 
-    maybePrivateKey.fold(ParseError.EmptyPrivateKey.asParseError.asLeft[ParseResult]) {
-      privateKey =>
-        (maybeGivenPublicKey, maybeInferredPublicKey) match {
+    if (privateKeyRaw.isEmpty)
+      ParseError.EmptyPrivateKey.asLeft[ParseResult]
+    else
+      maybePrivateKey.fold(ParseError.KeyParseError.asParseError.asLeft[ParseResult]) {
+        privateKey =>
+          (maybeGivenPublicKey, maybeInferredPublicKey) match {
 
-          case (Some(pub1), Some(pub2)) if pub1 sameElements pub2 =>
-            (privateKey, pub1, signatureAlgorithm).asRight[ParseError]
+            case (Some(pub1), Some(pub2)) if pub1 sameElements pub2 =>
+              (privateKey, pub1, signatureAlgorithm).asRight[ParseError]
 
-          case (Some(_), Some(_)) =>
-            ParseError.PublicKeysDoNotMatch.asParseError.asLeft[ParseResult]
+            case (Some(_), Some(_)) =>
+              ParseError.PublicKeysDoNotMatch.asParseError.asLeft[ParseResult]
 
-          case (Some(publicKey), None)
-              if signatureAlgorithm.areMatchTogether(publicKey, privateKey) =>
-            (privateKey, publicKey, signatureAlgorithm).asRight[ParseError]
+            case (Some(publicKey), None)
+                if signatureAlgorithm.areMatchTogether(publicKey, privateKey) =>
+              (privateKey, publicKey, signatureAlgorithm).asRight[ParseError]
 
-          case (Some(_), None) =>
-            ParseError.KeysDoNotMatch.asParseError.asLeft[ParseResult]
+            case (Some(_), None) =>
+              ParseError.KeysDoNotMatch.asParseError.asLeft[ParseResult]
 
-          case (None, Some(publicKey)) =>
-            (privateKey, publicKey, signatureAlgorithm).asRight[ParseError]
+            case (None, Some(publicKey)) =>
+              (privateKey, publicKey, signatureAlgorithm).asRight[ParseError]
 
-          case (None, None) =>
-            ParseError.EmptyPublicKey.asParseError.asLeft[ParseResult]
-        }
-    }
+            case (None, None) =>
+              ParseError.EmptyPublicKey.asParseError.asLeft[ParseResult]
+          }
+      }
   }
 }

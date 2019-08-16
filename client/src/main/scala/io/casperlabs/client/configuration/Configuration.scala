@@ -1,5 +1,6 @@
 package io.casperlabs.client.configuration
 import java.io.File
+import java.nio.file.Path
 
 final case class ConnectOptions(
     host: String,
@@ -28,6 +29,13 @@ final case class ShowDeploy(deployHash: String) extends Configuration
 final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
+    nonce: Long,
+    sessionCode: Option[File],
+    privateKey: File
+) extends Configuration
+final case class Transfer(
+    amount: Long,
+    recipientPublicKeyBase64: String,
     nonce: Long,
     sessionCode: Option[File],
     privateKey: File
@@ -98,10 +106,18 @@ object Configuration {
         )
       case options.bond =>
         Bond(
-          options.unbond.amount(),
-          options.unbond.nonce(),
-          options.unbond.session.toOption,
-          options.unbond.privateKey()
+          options.bond.amount(),
+          options.bond.nonce(),
+          options.bond.session.toOption,
+          options.bond.privateKey()
+        )
+      case options.transfer =>
+        Transfer(
+          options.transfer.amount(),
+          options.transfer.targetAccount(),
+          options.transfer.nonce(),
+          options.transfer.session.toOption,
+          options.transfer.privateKey()
         )
       case options.visualizeBlocks =>
         VisualizeDag(

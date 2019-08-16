@@ -6,7 +6,8 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockDagRepresentation
+import io.casperlabs.blockstorage.DagRepresentation
+import io.casperlabs.casper
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
@@ -33,6 +34,11 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
   implicit val metrics              = new Metrics.MetricsNOP[Task]
+  implicit val raiseValidateErr =
+    casper.validation.raiseValidateErrorThroughApplicativeError[Effect]
+  implicit val logEff = new LogStub[Effect]
+
+  implicit val validation = HashSetCasperTestNode.makeValidation[Effect]
 
   private val (validatorKeys, validators)                      = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                            = createBonds(validators)
@@ -62,17 +68,17 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
     }
 
     implicit val logEff       = new LogStub[Effect]
-    implicit val blockStore   = node.blockStore
+    implicit val blockStorage = node.blockStorage
     implicit val safetyOracle = node.safetyOracleEff
 
     def testProgram(blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
     ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
       for {
-        t1 <- (BlockAPI.deploy[Effect](deploys.head, ignoreDeploySignature = true) *> BlockAPI
+        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI
                .createBlock[Effect](blockApiLock)).value.start
         _ <- Time[Task].sleep(2.second)
-        t2 <- (BlockAPI.deploy[Effect](deploys.last, ignoreDeploySignature = true) *> BlockAPI
+        t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
                .createBlock[Effect](blockApiLock)).value.start //should fail because other not done
         r1 <- t1.join
         r2 <- t2.join
@@ -96,19 +102,12 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
   }
 
   "deploy" should "reject replayed deploys" in {
-    implicit val time = new Time[Task] {
-      private val timer                               = Task.timer
-      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
-      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
-      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
-    }
-
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
 
     implicit val logEff       = new LogStub[Effect]
-    implicit val blockStore   = node.blockStore
+    implicit val blockStorage = node.blockStorage
     implicit val safetyOracle = node.safetyOracleEff
 
     def testProgram(blockApiLock: Semaphore[Effect])(
@@ -116,9 +115,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
     ): Effect[Unit] =
       for {
         d <- ProtoUtil.basicDeploy[Effect](1L)
-        _ <- BlockAPI.deploy[Effect](d, ignoreDeploySignature = true)
+        _ <- BlockAPI.deploy[Effect](d)
         _ <- BlockAPI.createBlock[Effect](blockApiLock)
-        _ <- BlockAPI.deploy[Effect](d, ignoreDeploySignature = true)
+        _ <- BlockAPI.deploy[Effect](d)
       } yield ()
 
     try {
@@ -142,14 +141,13 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def addBlock(b: Block): F[BlockStatus]            = underlying.addBlock(b)
   def contains(b: Block): F[Boolean]                = underlying.contains(b)
   def deploy(d: Deploy): F[Either[Throwable, Unit]] = underlying.deploy(d)
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
+  def estimator(dag: DagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
-  def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
+  def dag: F[DagRepresentation[F]] = underlying.dag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
   def fetchDependencies: F[Unit]   = underlying.fetchDependencies
-  def bufferedDeploys              = underlying.bufferedDeploys
   def faultToleranceThreshold      = underlying.faultToleranceThreshold
 
   override def createBlock: F[CreateBlockStatus] =

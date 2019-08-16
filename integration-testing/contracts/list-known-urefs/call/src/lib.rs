@@ -11,7 +11,8 @@ use common::key::Key;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pointer = if let Key::Hash(hash) = get_uref("list_known_urefs") {
+    let list_known_urefs_uref = get_uref("list_known_urefs").unwrap_or_else(|| revert(100));
+    let pointer = if let Key::Hash(hash) = list_known_urefs_uref {
         ContractPointer::Hash(hash)
     } else {
         revert(66); // exit code is currently arbitrary

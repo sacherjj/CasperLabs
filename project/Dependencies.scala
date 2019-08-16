@@ -9,6 +9,7 @@ object Dependencies {
   val kamonVersion   = "1.1.3"
   val catsVersion    = "1.6.0"
   val catsMtlVersion = "0.5.0"
+  val doobieVersion  = "0.7.0"
 
   val julToSlf4j          = "org.slf4j"           % "jul-to-slf4j"          % "1.7.25"
   val bitcoinjCore        = "org.bitcoinj"        % "bitcoinj-core"         % "0.14.6"
@@ -86,7 +87,11 @@ object Dependencies {
   val secp256k1Java = "com.github.rchain" % "secp256k1-java" % "0.1"
   val tomlScala     = "tech.sparse"       %% "toml-scala"    % "0.1.1"
   val refinement    = "eu.timepit"        %% "refined"       % "0.9.5"
-  val apacheCommons = "commons-io" % "commons-io" % "2.6"
+  val apacheCommons = "commons-io"        % "commons-io"     % "2.6"
+  val sqlLite       = "org.xerial"        % "sqlite-jdbc"    % "3.28.0"
+  val doobieCore    = "org.tpolecat"      %% "doobie-core"   % doobieVersion
+  val doobieHikari  = "org.tpolecat"      %% "doobie-hikari" % doobieVersion
+  val flyway        = "org.flywaydb"      % "flyway-core"    % "5.2.4"
 
   val overrides = Seq(
     catsCore,

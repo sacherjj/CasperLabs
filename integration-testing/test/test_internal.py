@@ -1,13 +1,13 @@
 """Tests for the testing code itself."""
 
-from .cl_node.casperlabsnode import (
+from .cl_node.common import (
     extract_block_hash_from_propose_output,
     extract_block_count_from_show_blocks,
 )
 
 
 def test_blocks_count_from_show_blocks() -> None:
-    show_blocks_output = '''
+    show_blocks_output = """
 ------------- block 0 ---------------
 blockHash: "630c5372c67cc5400a9eb11459bb240226273a693bbb018df829a3119b26bbf0"
 blockSize: "99746"
@@ -25,7 +25,7 @@ sender: ""
 
 count: 123
 
-'''
+"""
 
     assert extract_block_count_from_show_blocks(show_blocks_output) == 123
 

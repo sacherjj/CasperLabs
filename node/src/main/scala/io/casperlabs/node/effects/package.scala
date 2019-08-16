@@ -2,10 +2,13 @@ package io.casperlabs.node
 
 import java.nio.file.Path
 
-import cats.{Applicative, Monad}
-import cats.data.EitherT
-import cats.effect.{Resource, Timer}
+import cats._
+import cats.effect._
+import cats.implicits._
 import cats.mtl._
+import doobie.hikari.HikariTransactor
+import doobie.implicits._
+import doobie.util.transactor.Transactor
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
@@ -16,8 +19,8 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval._
 import monix.execution._
-import monix.eval.instances._
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.io.Source
 
@@ -89,4 +92,27 @@ package object effects {
       val applicative: Applicative[Task] = Applicative[Task]
       def ask: Task[Node]                = state.get.map(_.local)
     }
+
+  def doobieTransactor(
+      connectionEC: ExecutionContext,
+      transactionEC: ExecutionContext,
+      serverDataDir: Path
+  ): Resource[Effect, Transactor[Effect]] =
+    HikariTransactor
+      .newHikariTransactor[Effect](
+        driverClassName = "org.sqlite.JDBC",
+        url = s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}",
+        //TODO: Shouldn't we protect data by user/pass?
+        user = "",
+        pass = "",
+        connectEC = connectionEC,
+        transactEC = transactionEC
+      )
+      .map(
+        xa =>
+          // Foreign keys support must be enabled explicitly in SQLite
+          // https://www.sqlite.org/foreignkeys.html#fk_enable
+          Transactor.before
+            .set(xa, sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa))
+      )
 }

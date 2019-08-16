@@ -2,6 +2,7 @@ package io.casperlabs.comm.gossiping
 
 import java.util.concurrent.TimeoutException
 
+import cats.syntax.either._
 import cats.effect.concurrent.Semaphore
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
@@ -12,6 +13,7 @@ import io.casperlabs.casper.consensus.{Approval, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.SynchronizationError
 import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.metrics.Metrics
 import monix.eval.Task
@@ -216,6 +218,7 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
 
   object MockSynchronizer extends Synchronizer[Task] {
     def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
+    def downloaded(blockHash: ByteString): Task[Unit]             = ???
   }
 
   object MockDownloadManager extends DownloadManager[Task] {
@@ -251,9 +254,10 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
     override def newBlocksSynchronous(
         request: NewBlocksRequest,
         skipRelaying: Boolean
-    ): Task[NewBlocksResponse] = {
+    ): Task[Either[SyncError, NewBlocksResponse]] = {
       asked.transform(_ :+ request.getSender)
-      sync(request.getSender, request.blockHashes).map(b => NewBlocksResponse(isNew = b))
+      sync(request.getSender, request.blockHashes)
+        .map(b => NewBlocksResponse(isNew = b).asRight[SyncError])
     }
   }
 

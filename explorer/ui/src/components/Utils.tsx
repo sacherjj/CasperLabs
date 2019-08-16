@@ -2,6 +2,7 @@ import React from 'react';
 import { Route, RouteProps } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import AuthContainer from '../containers/AuthContainer';
+import { encodeBase16 } from '../lib/Conversions';
 
 export const Spinner = (msg: String) => (
   <div className="text-center">
@@ -12,6 +13,7 @@ export const Spinner = (msg: String) => (
 
 export const Loading = () => Spinner('Loading');
 
+// https://fontawesome.com/icons?d=gallery&q=ground&m=free
 export const Icon = (props: { name: string; color?: string }) => {
   const styles = {
     color: props.color
@@ -24,9 +26,13 @@ export const IconButton = (props: {
   title: string;
   icon: string;
 }) => (
-  <a onClick={_ => props.onClick()} title={props.title} className="icon-button">
+  <button
+    onClick={_ => props.onClick()}
+    title={props.title}
+    className="link icon-button"
+  >
     <Icon name={props.icon} />
-  </a>
+  </button>
 );
 
 export const RefreshButton = (props: { refresh: () => void }) => (
@@ -48,10 +54,16 @@ export const Button = (props: {
   </button>
 );
 
+export const LinkButton = (props: { onClick: () => void; title: string }) => (
+  <button className="link" onClick={() => props.onClick()}>
+    {props.title}
+  </button>
+);
+
 export const ListInline = (props: { children: any }) => {
   const children = [].concat(props.children);
   return (
-    <ul className="list-inline">
+    <ul className="list-inline mb-0">
       {children.map((child: any, idx: number) => (
         <li key={idx} className="list-inline-item">
           {child}
@@ -132,3 +144,24 @@ export class PrivateRoute extends React.Component<PrivateRouteProps, {}> {
     return <Route {...this.props} />;
   }
 }
+
+export const shortHash = (hash: string | ByteArray) => {
+  const h = typeof hash === 'string' ? hash : encodeBase16(hash);
+  return h.length > 10 ? h.substr(0, 10) + '...' : h;
+};
+
+export const Card = (props: {
+  title: string;
+  children: any;
+  footerMessage?: any;
+}) => (
+  <div className="card mb-3">
+    <div className="card-header">
+      <span>{props.title}</span>
+    </div>
+    <div className="card-body">{props.children}</div>
+    {props.footerMessage && (
+      <div className="card-footer small text-muted">{props.footerMessage}</div>
+    )}
+  </div>
+);

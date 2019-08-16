@@ -5,7 +5,7 @@ import cats.implicits._
 import cats.kernel.Monoid
 import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
+import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
@@ -37,7 +37,7 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: MonadThrowable: BlockStore: Log: ExecutionEngineService](
+  def computeDeploysCheckpoint[F[_]: MonadThrowable: BlockStorage: Log: ExecutionEngineService](
       merged: MergeResult[TransformMap, Block],
       deploys: Seq[Deploy],
       blocktime: Long,
@@ -88,7 +88,7 @@ object ExecEngineUtil {
       protocolVersion
     )
 
-  private def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
+  private def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStorage: ExecutionEngineService](
       prestate: StateHash,
       blocktime: Long,
       deploys: Seq[Deploy],
@@ -98,7 +98,7 @@ object ExecEngineUtil {
       .exec(prestate, blocktime, deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
       .rethrow
 
-  private def processGenesisDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
+  private def processGenesisDeploys[F[_]: MonadError[?[_], Throwable]: BlockStorage: ExecutionEngineService](
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
   ): F[GenesisResult] =
@@ -175,7 +175,7 @@ object ExecEngineUtil {
     * @param prestate prestate hash of the GlobalState on top of which to run deploys.
     * @return Effects of running deploys from the block
     */
-  def effectsForBlock[F[_]: MonadThrowable: BlockStore: ExecutionEngineService](
+  def effectsForBlock[F[_]: MonadThrowable: BlockStorage: ExecutionEngineService](
       block: Block,
       prestate: StateHash
   ): F[Seq[TransformEntry]] = {
@@ -266,7 +266,7 @@ object ExecEngineUtil {
     * @tparam K type for keys specifying what a transform is applied to (equal to state.Key in production)
     * @param candidates "blocks" to attempt to merge
     * @param parents    function for computing the parents of a "block" (equal to _.parents in production)
-    * @param effect     function for computing the transforms of a block (looks up the transaforms from the blockstore in production)
+    * @param effect     function for computing the transforms of a block (looks up the transaforms from the blockstorage in production)
     * @param toOps      function for converting transforms into the OpMap, which is then used for commutativity checking
     * @return an instance of the MergeResult class. It is either an `EmptyMerge` (which only happens when `candidates` is empty)
     *         or a `Result` which contains the "first parent" (the who's post-state will be used to apply the effects to obtain
@@ -356,16 +356,16 @@ object ExecEngineUtil {
       } yield MergeResult.result[T, A](blocks.head, nonFirstEffect, blocks.tail)
   }
 
-  def merge[F[_]: MonadThrowable: BlockStore](
+  def merge[F[_]: MonadThrowable: BlockStorage](
       candidateParentBlocks: Seq[Block],
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation[F]
   ): F[MergeResult[TransformMap, Block]] = {
 
     def parents(b: BlockMetadata): F[List[BlockMetadata]] =
       b.parents.traverse(b => dag.lookup(b).map(_.get))
 
     def effect(block: BlockMetadata): F[Option[TransformMap]] =
-      BlockStore[F].getTransforms(block.blockHash)
+      BlockStorage[F].getTransforms(block.blockHash)
 
     def toOps(t: TransformMap): OpMap[state.Key] = Op.fromTransforms(t)
 

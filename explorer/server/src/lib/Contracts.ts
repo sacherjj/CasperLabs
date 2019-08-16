@@ -50,7 +50,7 @@ export class Contract {
 
     const signature = new Signature();
     signature.setSigAlgorithm("ed25519");
-    signature.setSig(nacl.sign(deploy.getDeployHash_asU8(), signingKeyPair.secretKey));
+    signature.setSig(nacl.sign_detached(deploy.getDeployHash_asU8(), signingKeyPair.secretKey));
 
     const approval = new Approval();
     approval.setApproverPublicKey(signingKeyPair.publicKey);

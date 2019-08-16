@@ -7,6 +7,7 @@ import cats.temp.par._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.SynchronizationError
@@ -51,13 +52,17 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
         service <- connector(node)
         _       <- Log[F].debug(s"Syncing with a node: ${node.show}")
         tips    <- service.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL
-        _ <- selfGossipService.newBlocksSynchronous(
-              NewBlocksRequest(
-                sender = node.some,
-                blockHashes = tips.map(_.blockHash)
-              ),
-              skipRelaying = true
-            )
+        _ <- MonadThrowable[F].rethrow {
+              selfGossipService
+                .newBlocksSynchronous(
+                  NewBlocksRequest(
+                    sender = node.some,
+                    blockHashes = tips.map(_.blockHash)
+                  ),
+                  skipRelaying = true
+                )
+                .map(_.leftWiden[Throwable])
+            }
       } yield ()
 
     def loop(nodes: List[Node], failed: Set[Node]): F[Unit] =

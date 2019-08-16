@@ -13,7 +13,7 @@
     "strictNullChecks": true,
     "noImplicitReturns": true,
     "noImplicitThis": true,
-    "noUnusedParameters": true,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "allowJs": true,
     "skipLibCheck": true,
@@ -34,7 +34,9 @@
     ]
   },
   "include": [
-    "src",
-    "../grpc/generated/**/*"
+    "./src/**/*"
+  ],
+  "exclude": [
+    "./src/**/*.test.ts"
   ]
 }

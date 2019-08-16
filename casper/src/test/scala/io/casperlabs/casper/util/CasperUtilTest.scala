@@ -5,13 +5,13 @@ import com.google.protobuf.ByteString
 import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.catscontrib._
 import cats.implicits._
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import cats.data._
 import cats.effect.Bracket
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
+import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -29,23 +29,19 @@ import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.{HashMap, HashSet}
 
-class CasperUtilTest
-    extends FlatSpec
-    with Matchers
-    with BlockGenerator
-    with BlockDagStorageFixture {
+class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
 
   implicit val logEff                  = new LogStub[Task]()
   implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
 
   "isInMainChain" should "classify appropriately" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       for {
         genesis <- createBlock[Task](Seq())
         b2      <- createBlock[Task](Seq(genesis.blockHash))
         b3      <- createBlock[Task](Seq(b2.blockHash))
 
-        dag <- blockDagStorage.getRepresentation
+        dag <- dagStorage.getRepresentation
 
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b3.blockHash) shouldBeF true
@@ -55,14 +51,14 @@ class CasperUtilTest
   }
 
   "isInMainChain" should "classify diamond DAGs appropriately" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       for {
         genesis <- createBlock[Task](Seq())
         b2      <- createBlock[Task](Seq(genesis.blockHash))
         b3      <- createBlock[Task](Seq(genesis.blockHash))
         b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash))
 
-        dag <- blockDagStorage.getRepresentation
+        dag <- dagStorage.getRepresentation
 
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b2.blockHash) shouldBeF true
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b3.blockHash) shouldBeF true
@@ -74,7 +70,7 @@ class CasperUtilTest
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "isInMainChain" should "classify complicated chains appropriately" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStorage => implicit dagStorage =>
       val v1 = generateValidator("Validator One")
       val v2 = generateValidator("Validator Two")
 
@@ -88,7 +84,7 @@ class CasperUtilTest
         b7      <- createBlock[Task](Seq(b4.blockHash), v1)
         b8      <- createBlock[Task](Seq(b7.blockHash), v1)
 
-        dag <- blockDagStorage.getRepresentation
+        dag <- dagStorage.getRepresentation
 
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(genesis), b2.blockHash) shouldBeF true
         _      <- isInMainChain(dag, BlockMetadata.fromBlock(b2), b3.blockHash) shouldBeF false
