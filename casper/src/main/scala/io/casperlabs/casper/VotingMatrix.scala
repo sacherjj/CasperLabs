@@ -6,10 +6,11 @@ import cats.implicits._
 import cats.Monad
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.FinalityDetector.{CommitteeWithConsensusValue}
+import io.casperlabs.casper.FinalityDetector.CommitteeWithConsensusValue
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.VotingMatrixImpl.Vote
 import simulacrum.typeclass
+import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 import scala.annotation.tailrec
 
@@ -60,11 +61,11 @@ import scala.annotation.tailrec
 
 class VotingMatrixImpl[F[_]] private (
     implicit monad: Monad[F],
-    matrixRef: Ref[F, List[List[Long]]],
-    firstLevelZeroVotesRef: Ref[F, List[Option[Vote]]],
+    matrixRef: Ref[F, MutableSeq[MutableSeq[Long]]],
+    firstLevelZeroVotesRef: Ref[F, MutableSeq[Option[Vote]]],
     validatorToIndexRef: Ref[F, Map[Validator, Int]],
     weightMapRef: Ref[F, Map[Validator, Long]],
-    validatorsRef: Ref[F, List[Validator]]
+    validatorsRef: Ref[F, MutableSeq[Validator]]
 ) extends VotingMatrix[F] {
   override def updateVoterPerspective(
       dag: DagRepresentation[F],
@@ -95,11 +96,9 @@ class VotingMatrixImpl[F[_]] private (
       panoramaM        <- panoramaM(dag, validatorToIndex, blockMetadata)
       // Replace row i in voting-matrix by panoramaM
       _ <- matrixRef.update(
-            matrix =>
-              matrix.updated(
-                validatorToIndex(blockMetadata.validatorPublicKey),
-                panoramaM
-              )
+            matrix => {
+              matrix.updated(validatorToIndex(blockMetadata.validatorPublicKey), panoramaM)
+            }
           )
     } yield ()
 
@@ -167,7 +166,7 @@ class VotingMatrixImpl[F[_]] private (
         .maxBy(_._2)
       (voteValue, supportingWeight) = mostSupport
       // Get the voteBranch's supporters
-      supporters = consensusValueToValidators(voteValue)
+      supporters  = consensusValueToValidators(voteValue)
       totalWeight = weightMap.values.sum
     } yield
       if (supportingWeight * 2 > totalWeight) {
@@ -180,13 +179,13 @@ class VotingMatrixImpl[F[_]] private (
 
   @tailrec
   private def pruneLoop(
-      matrix: List[List[Long]],
-      firstLevelZeroVotes: List[Option[Vote]],
+      matrix: MutableSeq[MutableSeq[Long]],
+      firstLevelZeroVotes: MutableSeq[Option[Vote]],
       candidateBlockHash: BlockHash,
-      mask: List[Boolean],
+      mask: MutableSeq[Boolean],
       q: Long,
-      weight: List[Long]
-  ): Option[(List[Boolean], Long)] = {
+      weight: MutableSeq[Long]
+  ): Option[(MutableSeq[Boolean], Long)] = {
     val (newMask, prunedValidator, maxTotalWeight) = matrix.zipWithIndex
       .filter { case (_, rowIndex) => mask(rowIndex) }
       .foldLeft((mask, false, 0L)) {
@@ -229,11 +228,11 @@ class VotingMatrixImpl[F[_]] private (
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
       weights    <- dag.lookup(newFinalizedBlock).map(_.get.weightMap)
       _          <- weightMapRef.set(weights)
-      validators = weights.keySet.toList
+      validators = weights.keySet.toArray
       _          <- validatorsRef.set(validators)
       n          = validators.size
-      _          <- matrixRef.set(List.fill(n, n)(0))
-      _          <- firstLevelZeroVotesRef.set(List.fill(n)(None))
+      _          <- matrixRef.set(MutableSeq.fill(n, n)(0))
+      _          <- firstLevelZeroVotesRef.set(MutableSeq.fill(n)(None))
       // Assigns numeric identifiers 0, ..., N-1 to all validators
       validatorsToIndex      = validators.zipWithIndex.toMap
       _                      <- validatorToIndexRef.set(validatorsToIndex)
@@ -283,19 +282,19 @@ class VotingMatrixImpl[F[_]] private (
           }
     } yield ()
 
-  // Return an Array, whose size equals the size of validatorsToIndex and
+  // Return an MutableSeq, whose size equals the size of validatorsToIndex and
   // For v in validatorsToIndex.key
   //   Arr[validatorsToIndex[v]] = mapFunction[v]
   private def fromMapToArray[A](
       validatorsToIndex: Map[Validator, Int],
       mapFunction: Validator => A
-  ): List[A] =
+  ): MutableSeq[A] =
     validatorsToIndex
       .map {
         case (v, i) =>
           (i, mapFunction(v))
       }
-      .toList
+      .toArray[(Int, A)]
       .sortBy(_._1)
       .map(_._2)
 
@@ -303,7 +302,7 @@ class VotingMatrixImpl[F[_]] private (
       dag: DagRepresentation[F],
       validatorsToIndex: Map[Validator, Int],
       blockMetadata: BlockMetadata
-  ): F[List[Long]] =
+  ): F[MutableSeq[Long]] =
     FinalityDetectorUtil
       .panoramaDagLevelsOfBlock(
         dag,
@@ -326,11 +325,11 @@ object VotingMatrixImpl {
 
   def empty[F[_]: Sync]: F[VotingMatrix[F]] =
     for {
-      matrixRef              <- Ref.of[F, List[List[Long]]](List.empty)
-      firstLevelZeroVotesRef <- Ref.of[F, List[Option[Vote]]](List.empty)
+      matrixRef              <- Ref.of[F, MutableSeq[MutableSeq[Long]]](MutableSeq.empty)
+      firstLevelZeroVotesRef <- Ref.of[F, MutableSeq[Option[Vote]]](MutableSeq.empty)
       validatorToIndexRef    <- Ref.of[F, Map[Validator, Int]](Map.empty)
       weightMapRef           <- Ref.of[F, Map[Validator, Long]](Map.empty)
-      validatorsRef          <- Ref.of[F, List[Validator]](List.empty)
+      validatorsRef          <- Ref.of[F, MutableSeq[Validator]](MutableSeq.empty)
       votingMatrix = new VotingMatrixImpl[F]()(
         Sync[F],
         matrixRef,
