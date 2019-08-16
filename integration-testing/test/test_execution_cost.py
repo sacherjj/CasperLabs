@@ -204,46 +204,47 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
 # The session code can result in an error.
 # The deploy will fail
 # and the caller will receive a partial refund for the unspent gas.
-def disable_test_refund_after_session_code_error(payment_node_network):
+def test_refund_after_session_code_error(payment_node_network):
     network = payment_node_network
     node0: DockerNode = network.docker_nodes[0]
-
-    # This will transfer some initial funds from genesis account
-    # to the test account created for specifically this test:
-    test_account = node0.test_account
-    block = parse_show_blocks(node0.d_client.show_blocks(1000))[0]
-    block_hash = block.summary.block_hash
-
-    initial_balance = node0.client.get_balance(
-        account_address=test_account.public_key_hex, block_hash=block_hash
+    blocks = parse_show_blocks(node0.d_client.show_blocks(1000))
+    genesis_init_balance = node0.client.get_balance(
+        account_address=GENESIS_ACCOUNT.public_key_hex,
+        block_hash=blocks[0].summary.block_hash,
     )
-    assert initial_balance == 10 ** 6
-    args_json = json.dumps([{"account": test_account.public_key_hex}, {"u32": 10 ** 7}])
+
+    args_json = json.dumps([{"u32": 10 ** 6}])
     ABI = node0.p_client.abi
     _, deploy_hash = node0.p_client.deploy(
-        from_address=test_account.public_key_hex,
-        session_contract="test_args_u32.wasm",
+        from_address=GENESIS_ACCOUNT.public_key_hex,
+        session_contract="test_args_u512.wasm",
         payment_contract="standard_payment.wasm",
-        public_key=test_account.public_key_path,
-        private_key=test_account.private_key_path,
+        public_key=GENESIS_ACCOUNT.public_key_path,
+        private_key=GENESIS_ACCOUNT.private_key_path,
         gas_price=1,
         gas_limit=MAX_PAYMENT_COST / CONV_RATE,
-        session_args=ABI.args_from_json(args_json),
-        payment_args=ABI.args([ABI.u512(10 ** 6)]),
+        session_args=ABI.args([ABI.u512(100)]),
+        payment_args=ABI.args_from_json(args_json)
+        # 100 is a revert code.
     )
     try:
         node0.p_client.propose()
     except Exception as ex:
         print(ex)
+
     latest_blocks = parse_show_blocks(node0.d_client.show_blocks(1000))
     deploy_hash = latest_blocks[0].summary.block_hash
     deploy = node0.client.show_deploys(deploy_hash)[0]
-    assert deploy.cost > 0
+    assert deploy.cost == MAX_PAYMENT_COST / CONV_RATE
+    motes = deploy.cost * CONV_RATE
+
     later_balance = node0.client.get_balance(
-        account_address=test_account.public_key_hex, block_hash=block_hash
+        account_address=GENESIS_ACCOUNT.public_key_hex, block_hash=deploy_hash
     )
+
     # This assert is failing; And could not get lesser balance than original balance.
-    assert later_balance + deploy.cost * CONV_RATE == initial_balance
+    expected_sum = later_balance + motes
+    assert genesis_init_balance == expected_sum
 
 
 # The caller has not transferred enough funds to the payment purse
