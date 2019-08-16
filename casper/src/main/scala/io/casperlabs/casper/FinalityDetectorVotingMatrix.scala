@@ -4,47 +4,44 @@ import cats.Monad
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.FinalityDetector.Committee
+import io.casperlabs.casper.FinalityDetector.{Committee, CommitteeWithConsensusValue}
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.shared.Log
 
-class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] extends FinalityDetector[F] {
-  override def normalizedFaultTolerance(
-      dag: DagRepresentation[F],
-      candidateBlockHash: BlockHash
-  ): F[Float] =
-    for {
-      weights      <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
-      committeeOpt <- findCommittee(dag, candidateBlockHash, weights)
-    } yield committeeOpt
-      .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
-      .getOrElse(0f)
+class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] {
 
-  private def findCommittee(
-      dag: DagRepresentation[F],
-      candidateBlockHash: BlockHash,
-      weights: Map[Validator, Long]
-  ): F[Option[Committee]] =
+  /**
+    * Find the next to be finalized block from main children of latestFinalizedBlock
+    * @param dag block dag
+    * @return
+    */
+  def findCommittee(
+      dag: DagRepresentation[F]
+  ): F[Option[CommitteeWithConsensusValue]] =
     for {
-      committeeApproximationOpt <- FinalityDetectorUtil.committeeApproximation(
-                                    dag,
-                                    candidateBlockHash,
-                                    weights
-                                  )
+      committeeApproximationOpt <- VotingMatrix[F].findCommitteeApproximation(dag)
       result <- committeeApproximationOpt match {
-                 case Some((committeeApproximation, _)) =>
+                 case Some(
+                     CommitteeWithConsensusValue(committeeApproximation, _, concensusValue)
+                     ) =>
                    VotingMatrix[F].checkForCommittee(
-                     candidateBlockHash,
-                     committeeApproximation.toSet,
-                     weights.values.sum / 2 + 1
+                     concensusValue,
+                     committeeApproximation
                    )
                  case None =>
-                   none[Committee].pure[F]
+                   none[CommitteeWithConsensusValue].pure[F]
                }
     } yield result
 
-  override def onNewBlockAddedToTheBlockDag(
+  /**
+    * Incremental update voting matrix when a new block added to the dag
+    * @param dag block dag
+    * @param block the new added block
+    * @param latestFinalizedBlock latest finalized block
+    * @return
+    */
+  def onNewBlockAddedToTheBlockDag(
       dag: DagRepresentation[F],
       block: Block,
       latestFinalizedBlock: BlockHash
@@ -64,9 +61,15 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] extends Final
           }
     } yield ()
 
-  // When a new block get finalized, rebuild the whole voting
-  // matrix basing the new finalized block
-  override def rebuildFromLatestFinalizedBlock(
+  /**
+    * When a new block get finalized, rebuild the whole voting
+    * matrix basing the new finalized block
+    *
+    * @param dag
+    * @param newFinalizedBlock
+    * @return
+    */
+  def rebuildFromLatestFinalizedBlock(
       dag: DagRepresentation[F],
       newFinalizedBlock: BlockHash
   ): F[Unit] =

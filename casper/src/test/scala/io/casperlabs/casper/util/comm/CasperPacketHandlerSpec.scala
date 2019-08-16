@@ -122,17 +122,6 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           dag: DagRepresentation[Task],
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
-
-      override def onNewBlockAddedToTheBlockDag(
-          blockDag: DagRepresentation[Task],
-          block: Block,
-          latestFinalizedBlock: BlockHash
-      ): Task[Unit] = Task.pure(())
-
-      override def rebuildFromLatestFinalizedBlock(
-          blockDag: DagRepresentation[Task],
-          newFinalizedBlock: BlockHash
-      ): Task[Unit] = Task.pure(())
     }
     implicit val raiseInvalidBlock =
       casper.validation.raiseValidateErrorThroughApplicativeError[Task]

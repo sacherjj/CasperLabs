@@ -197,13 +197,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
         newFinalizedBlock <- if (finalizedChildren.isEmpty) {
                               acc.pure[F]
                             } else {
-                              // we have find exact one new finalized block, rebuild voting matrix
-                              val newFinalizedBlock = finalizedChildren.head
-                              for {
-                                _ <- FinalityDetector[F]
-                                      .rebuildFromLatestFinalizedBlock(dag, newFinalizedBlock)
-                                f <- loop(newFinalizedBlock)
-                              } yield f
+                              finalizedChildren.traverse(loop).map(_.head)
                             }
       } yield newFinalizedBlock
 
@@ -896,14 +890,8 @@ object MultiParentCasperImpl {
         effects: Seq[ipc.TransformEntry]
     ): F[DagRepresentation[F]] =
       for {
-        _                        <- BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
-        updatedDag               <- DagStorage[F].insert(block)
-        latestFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
-        _ <- FinalityDetector[F].onNewBlockAddedToTheBlockDag(
-              updatedDag,
-              block,
-              latestFinalizedBlockHash
-            )
+        _          <- BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
+        updatedDag <- DagStorage[F].insert(block)
       } yield updatedDag
 
     /** Check if the block has dependencies that we don't have in store.

@@ -228,7 +228,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
                Map(v2 -> b6.blockHash)
              )
         dag <- blockDagStorage.getRepresentation
-        // An extra new validator who haven't proposed blocks
+        // An extra new validator who hasn't proposed any block
         v4 = generateValidator("V4")
         panorama <- FinalityDetectorUtil.panoramaOfBlockByValidators(
                      dag,

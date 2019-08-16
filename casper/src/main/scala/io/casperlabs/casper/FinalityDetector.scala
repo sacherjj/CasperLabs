@@ -5,11 +5,6 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block
 
 trait FinalityDetector[F[_]] {
-  def onNewBlockAddedToTheBlockDag(
-      blockDag: DagRepresentation[F],
-      block: Block,
-      latestFinalizedBlock: BlockHash
-  ): F[Unit]
 
   /**
     * The normalizedFaultTolerance must be greater than
@@ -25,17 +20,18 @@ trait FinalityDetector[F[_]] {
       dag: DagRepresentation[F],
       candidateBlockHash: BlockHash
   ): F[Float]
-
-  def rebuildFromLatestFinalizedBlock(
-      blockDag: DagRepresentation[F],
-      newFinalizedBlock: BlockHash
-  ): F[Unit]
 }
 
 object FinalityDetector {
   def apply[F[_]](implicit ev: FinalityDetector[F]): FinalityDetector[F] = ev
 
   case class Committee(validators: Set[Validator], quorum: Long)
+
+  case class CommitteeWithConsensusValue(
+      validator: Set[Validator],
+      quorum: Long,
+      consensusValue: BlockHash
+  )
 
   // Calculate threshold value as described in the specification.
   // Note that validator weights (`q` and `n`) are normalized to 1.

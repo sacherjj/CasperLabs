@@ -230,17 +230,6 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
                    none[Committee].pure[F]
                }
     } yield result
-
-  override def onNewBlockAddedToTheBlockDag(
-      dag: DagRepresentation[F],
-      block: Block,
-      latestFinalizedBlock: BlockHash
-  ): F[Unit] = ().pure[F]
-
-  override def rebuildFromLatestFinalizedBlock(
-      dag: DagRepresentation[F],
-      newFinalizedBlock: BlockHash
-  ): F[Unit] = ().pure[F]
 }
 
 /**

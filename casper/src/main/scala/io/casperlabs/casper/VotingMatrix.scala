@@ -6,7 +6,7 @@ import cats.implicits._
 import cats.Monad
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.FinalityDetector.Committee
+import io.casperlabs.casper.FinalityDetector.{CommitteeWithConsensusValue}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.VotingMatrixImpl.Vote
 import simulacrum.typeclass
@@ -14,22 +14,48 @@ import simulacrum.typeclass
 import scala.annotation.tailrec
 
 @typeclass trait VotingMatrix[F[_]] {
+
+  /**
+    * Update voting matrix when a new block added to dag
+    * @param dag
+    * @param blockMetadata the new block
+    * @param currentVoteValue which branch the new block vote for
+    * @return
+    */
   def updateVoterPerspective(
       dag: DagRepresentation[F],
       blockMetadata: BlockMetadata,
       currentVoteValue: BlockHash
   ): F[Unit]
 
+  /**
+    * Check whether provide branch should be finalized
+    * @param candidateBlockHash the provide branch to be checked whether finalized
+    * @param committeeApproximation the pruned validator set that vote for the candidateBlockHash
+    * @return
+    */
   def checkForCommittee(
       candidateBlockHash: BlockHash,
-      committeeApproximation: Set[Validator],
-      q: Long
-  ): F[Option[Committee]]
+      committeeApproximation: Set[Validator]
+  ): F[Option[CommitteeWithConsensusValue]]
 
+  /**
+    * Start a new game when finalized a block, rebuild voting matrix
+    * @param dag
+    * @param newFinalizedBlock
+    * @return
+    */
   def rebuildFromLatestFinalizedBlock(
       dag: DagRepresentation[F],
       newFinalizedBlock: BlockHash
   ): F[Unit]
+
+  /**
+    * Phase 1 - finding most supported consensus value
+    * @param dag block dag
+    * @return
+    */
+  def findCommitteeApproximation(dag: DagRepresentation[F]): F[Option[CommitteeWithConsensusValue]]
 }
 
 class VotingMatrixImpl[F[_]] private (
@@ -37,7 +63,8 @@ class VotingMatrixImpl[F[_]] private (
     matrixRef: Ref[F, List[List[Long]]],
     firstLevelZeroVotesRef: Ref[F, List[Option[Vote]]],
     validatorToIndexRef: Ref[F, Map[Validator, Int]],
-    weightMapRef: Ref[F, Map[Validator, Long]]
+    weightMapRef: Ref[F, Map[Validator, Long]],
+    validatorsRef: Ref[F, List[Validator]]
 ) extends VotingMatrix[F] {
   override def updateVoterPerspective(
       dag: DagRepresentation[F],
@@ -98,9 +125,8 @@ class VotingMatrixImpl[F[_]] private (
 
   override def checkForCommittee(
       candidateBlockHash: BlockHash,
-      committeeApproximation: Set[Validator],
-      q: Long
-  ): F[Option[Committee]] =
+      committeeApproximation: Set[Validator]
+  ): F[Option[CommitteeWithConsensusValue]] =
     for {
       matrix              <- matrixRef.get
       firstLevelZeroVotes <- firstLevelZeroVotesRef.get
@@ -113,15 +139,49 @@ class VotingMatrixImpl[F[_]] private (
         firstLevelZeroVotes,
         candidateBlockHash,
         mask,
-        q,
+        weight.sum / 2 + 1,
         weight
       )
       committee = committeeOpt.map {
         case (mask, totalWeight) =>
           val committee = validatorToIndex.filter { case (_, i) => mask(i) }.keySet
-          Committee(committee, totalWeight)
+          CommitteeWithConsensusValue(committee, totalWeight, candidateBlockHash)
       }
     } yield committee
+
+  override def findCommitteeApproximation(
+      dag: DagRepresentation[F]
+  ): F[Option[CommitteeWithConsensusValue]] =
+    for {
+      weightMap           <- weightMapRef.get
+      validators          <- validatorsRef.get
+      firstLevelZeroVotes <- firstLevelZeroVotesRef.get
+      // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
+      voteBranchToValidators = firstLevelZeroVotes.zipWithIndex
+        .flatMap {
+          case (vote, idx) =>
+            vote.map {
+              case (voteValue, _) => (voteValue, validators(idx))
+            }
+        }
+        .groupBy(_._1)
+        .mapValues(_.map(_._2))
+      totalWeight = weightMap.values.sum
+      // Get most support voteBranch and its support weight
+      mostSupport = voteBranchToValidators
+        .mapValues(_.map(weightMap.getOrElse(_, 0L)).sum)
+        .maxBy(_._2)
+      (voteValue, supportingWeight) = mostSupport
+      // Get the voteBranch's supporters
+      supporters = voteBranchToValidators(voteValue)
+    } yield
+      if (supportingWeight * 2 > totalWeight) {
+        Some(
+          CommitteeWithConsensusValue(supporters.toSet, supportingWeight, voteValue)
+        )
+      } else {
+        None
+      }
 
   @tailrec
   private def pruneLoop(
@@ -171,7 +231,8 @@ class VotingMatrixImpl[F[_]] private (
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
       weights    <- dag.lookup(newFinalizedBlock).map(_.get.weightMap)
       _          <- weightMapRef.set(weights)
-      validators = weights.keySet
+      validators = weights.keySet.toList
+      _          <- validatorsRef.set(validators)
       n          = validators.size
       _          <- matrixRef.set(List.fill(n, n)(0))
       _          <- firstLevelZeroVotesRef.set(List.fill(n)(None))
@@ -179,7 +240,7 @@ class VotingMatrixImpl[F[_]] private (
       validatorsToIndex      = validators.zipWithIndex.toMap
       _                      <- validatorToIndexRef.set(validatorsToIndex)
       latestMessages         <- dag.latestMessages
-      latestMessagesOfVoters = latestMessages.filterKeys(validators)
+      latestMessagesOfVoters = latestMessages.filterKeys(validatorsToIndex.contains)
       latestVoteValueOfVotesAsList <- latestMessagesOfVoters.toList
                                        .traverse {
                                          case (v, b) =>
@@ -271,12 +332,14 @@ object VotingMatrixImpl {
       firstLevelZeroVotesRef <- Ref.of[F, List[Option[Vote]]](List.empty)
       validatorToIndexRef    <- Ref.of[F, Map[Validator, Int]](Map.empty)
       weightMapRef           <- Ref.of[F, Map[Validator, Long]](Map.empty)
+      validatorsRef          <- Ref.of[F, List[Validator]](List.empty)
       votingMatrix = new VotingMatrixImpl[F]()(
         Sync[F],
         matrixRef,
         firstLevelZeroVotesRef,
         validatorToIndexRef,
-        weightMapRef
+        weightMapRef,
+        validatorsRef
       )
     } yield votingMatrix
 }

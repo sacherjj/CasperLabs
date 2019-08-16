@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.execengine.DeploysCheckpoint
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.FinalityDetector
+import io.casperlabs.casper.FinalityDetectorVotingMatrix
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -139,7 +139,8 @@ trait BlockGenerator {
             .put(serializedBlockHash, modifiedBlock, Seq.empty)
     } yield modifiedBlock
 
-  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: FinalityDetector](
+  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+      finalityDetectorVotingMatrix: FinalityDetectorVotingMatrix[F],
       parentsHashList: Seq[BlockHash],
       lastFinalizedBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
@@ -154,6 +155,10 @@ trait BlockGenerator {
                 justifications
               )
       dag <- IndexedDagStorage[F].getRepresentation
-      _   <- FinalityDetector[F].onNewBlockAddedToTheBlockDag(dag, block, lastFinalizedBlockHash)
+      _ <- finalityDetectorVotingMatrix.onNewBlockAddedToTheBlockDag(
+            dag,
+            block,
+            lastFinalizedBlockHash
+          )
     } yield block
 }

@@ -6,6 +6,7 @@ import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.FinalityDetector.CommitteeWithConsensusValue
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
@@ -49,13 +50,14 @@ class FinalityDetectorByVotingMatrixTest
         implicit val votingMatrix: VotingMatrix[Task] =
           VotingMatrixImpl.empty[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
-        implicit val finalityDetectorEffect = new FinalityDetectorVotingMatrix[Task]
+        implicit val finalitydetectorVotingMatrix = new FinalityDetectorVotingMatrix[Task]
 
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
-          _       <- finalityDetectorEffect.rebuildFromLatestFinalizedBlock(dag, genesis.blockHash)
+          _       <- finalitydetectorVotingMatrix.rebuildFromLatestFinalizedBlock(dag, genesis.blockHash)
           b1 <- createBlockAndUpdateFinalityDetector[Task](
+                 finalitydetectorVotingMatrix,
                  Seq(genesis.blockHash),
                  genesis.blockHash,
                  v1,
@@ -63,18 +65,21 @@ class FinalityDetectorByVotingMatrixTest
                  HashMap(v1 -> genesis.blockHash)
                )
           b2 <- createBlockAndUpdateFinalityDetector[Task](
+                 finalitydetectorVotingMatrix,
                  Seq(b1.blockHash),
                  genesis.blockHash,
                  v1,
                  bonds
                )
           b3 <- createBlockAndUpdateFinalityDetector[Task](
+                 finalitydetectorVotingMatrix,
                  Seq(b1.blockHash),
                  genesis.blockHash,
                  v2,
                  bonds
                )
           b4 <- createBlockAndUpdateFinalityDetector[Task](
+                 finalitydetectorVotingMatrix,
                  Seq(b2.blockHash),
                  genesis.blockHash,
                  v1,
@@ -82,6 +87,7 @@ class FinalityDetectorByVotingMatrixTest
                  HashMap(v1 -> b2.blockHash, v2 -> b3.blockHash)
                )
           b5 <- createBlockAndUpdateFinalityDetector[Task](
+                 finalitydetectorVotingMatrix,
                  Seq(b3.blockHash),
                  genesis.blockHash,
                  v2,
@@ -89,6 +95,7 @@ class FinalityDetectorByVotingMatrixTest
                  HashMap(v2 -> b3.blockHash)
                )
           b6 <- createBlockAndUpdateFinalityDetector[Task](
+                 finalitydetectorVotingMatrix,
                  Seq(b5.blockHash),
                  genesis.blockHash,
                  v2,
@@ -96,14 +103,11 @@ class FinalityDetectorByVotingMatrixTest
                  HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
                )
 
-          finalDag <- blockDagStorage.getRepresentation
-          b1NFT    <- FinalityDetector[Task].normalizedFaultTolerance(finalDag, b1.blockHash)
-          result   = b1NFT shouldBe (0.5f) // so b1 get finalized
-          _        <- FinalityDetector[Task].rebuildFromLatestFinalizedBlock(finalDag, b1.blockHash)
-          b2NFT    <- FinalityDetector[Task].normalizedFaultTolerance(finalDag, b2.blockHash)
-          b3NFT    <- FinalityDetector[Task].normalizedFaultTolerance(finalDag, b3.blockHash)
-          _        = b2NFT shouldBe 1f / 6 +- 0.001f
-          _        = b3NFT shouldBe 0
+          finalDag  <- blockDagStorage.getRepresentation
+          committee <- finalitydetectorVotingMatrix.findCommittee(finalDag)
+          result = committee shouldBe Some(
+            CommitteeWithConsensusValue(Set(v1, v2), 3, b1.blockHash)
+          )
         } yield result
   }
 }
