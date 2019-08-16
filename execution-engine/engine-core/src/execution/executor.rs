@@ -13,8 +13,8 @@ use engine_shared::newtypes::CorrelationId;
 use engine_state::execution_result::ExecutionResult;
 use engine_storage::global_state::StateReader;
 
-pub use super::Error;
-pub use super::{create_rng, extract_access_rights_from_keys, instance_and_memory, Runtime};
+use super::Error;
+use super::{create_rng, extract_access_rights_from_keys, instance_and_memory, Runtime};
 use runtime_context::RuntimeContext;
 use tracking_copy::TrackingCopy;
 use URefAddr;
