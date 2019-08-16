@@ -126,8 +126,9 @@ lazy val casper = (project in file("casper"))
     )
   )
   .dependsOn(
-    storage % "compile->compile;test->test",
-    comm    % "compile->compile;test->test"
+    storage        % "compile->compile;test->test",
+    comm           % "compile->compile;test->test",
+    smartContracts % "compile->compile;test->test"
   )
 
 lazy val comm = (project in file("comm"))
@@ -370,7 +371,8 @@ lazy val storage = (project in file("storage"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
-        "io/casperlabs/storage"
+        "io/casperlabs/storage",
+        "io/casperlabs/ipc"
       )
     ),
     PB.targets in Compile := Seq(
@@ -379,7 +381,7 @@ lazy val storage = (project in file("storage"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(smartContracts % "compile->compile;test->test")
+  .dependsOn(models % "compile->compile;test->test")
 
 // Smart contract execution.
 lazy val smartContracts = (project in file("smart-contracts"))
