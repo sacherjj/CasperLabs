@@ -94,25 +94,19 @@ trait DeployBufferSpec
     }
 
     "addAsPending + addAsProcessed + getByHashes" should {
-      "return the same list of deploys" in forAll(
-        Gen
-          .posNum[Int]
-          .flatMap(
-            s => Gen.zip(Gen.choose(1, s), Gen.listOfN(s, arbDeploy(consensusConfig).arbitrary))
-          )
-      ) {
-        case (idx, deploys) =>
-          testFixture { db =>
-            val (pending, processed) = deploys.splitAt(idx)
-            val deployHashes         = deploys.map(_.deployHash)
-            for {
-              _   <- db.addAsPending(pending)
-              _   <- db.addAsProcessed(processed)
-              all <- db.getByHashes(NonEmptyList.fromListUnsafe(deployHashes))
-              _   = assert(deployHashes.toSet == all.map(_.deployHash).toSet)
-            } yield ()
+      "return the same list of deploys" in forAll(deploysGen()) { deploys =>
+        testFixture { db =>
+          val idx                  = scala.util.Random.nextInt(deploys.size)
+          val (pending, processed) = deploys.splitAt(idx)
+          val deployHashes         = deploys.map(_.deployHash)
+          for {
+            _   <- db.addAsPending(pending)
+            _   <- db.addAsProcessed(processed)
+            all <- db.getByHashes(NonEmptyList.fromListUnsafe(deployHashes))
+            _   = assert(deploys.sortedByHash == all.sortedByHash)
+          } yield ()
 
-          }
+        }
       }
     }
 
