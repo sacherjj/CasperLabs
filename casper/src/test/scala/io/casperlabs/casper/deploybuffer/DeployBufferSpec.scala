@@ -1,5 +1,6 @@
 package io.casperlabs.casper.deploybuffer
 
+import cats.data.NonEmptyList
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
@@ -90,6 +91,29 @@ trait DeployBufferSpec
             } yield ()
           }
       )
+    }
+
+    "addAsPending + addAsProcessed + getByHashes" should {
+      "return the same list of deploys" in forAll(
+        Gen
+          .posNum[Int]
+          .flatMap(
+            s => Gen.zip(Gen.choose(1, s), Gen.listOfN(s, arbDeploy(consensusConfig).arbitrary))
+          )
+      ) {
+        case (idx, deploys) =>
+          testFixture { db =>
+            val (pending, processed) = deploys.splitAt(idx)
+            val deployHashes         = deploys.map(_.deployHash)
+            for {
+              _   <- db.addAsPending(pending)
+              _   <- db.addAsProcessed(processed)
+              all <- db.getByHashes(NonEmptyList.fromListUnsafe(deployHashes))
+              _   = assert(deployHashes.toSet == all.map(_.deployHash).toSet)
+            } yield ()
+
+          }
+      }
     }
 
     "readProcessedByAccount" should {
