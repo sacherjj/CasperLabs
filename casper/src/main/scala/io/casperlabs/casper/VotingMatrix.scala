@@ -157,23 +157,18 @@ class VotingMatrixImpl[F[_]] private (
       validators          <- validatorsRef.get
       firstLevelZeroVotes <- firstLevelZeroVotesRef.get
       // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
-      voteBranchToValidators = firstLevelZeroVotes.zipWithIndex
-        .flatMap {
-          case (vote, idx) =>
-            vote.map {
-              case (voteValue, _) => (voteValue, validators(idx))
-            }
-        }
+      consensusValueToValidators = firstLevelZeroVotes.zipWithIndex
+        .collect { case (Some((blockHash, _)), idx) => (blockHash, validators(idx)) }
         .groupBy(_._1)
         .mapValues(_.map(_._2))
-      totalWeight = weightMap.values.sum
       // Get most support voteBranch and its support weight
-      mostSupport = voteBranchToValidators
+      mostSupport = consensusValueToValidators
         .mapValues(_.map(weightMap.getOrElse(_, 0L)).sum)
         .maxBy(_._2)
       (voteValue, supportingWeight) = mostSupport
       // Get the voteBranch's supporters
-      supporters = voteBranchToValidators(voteValue)
+      supporters = consensusValueToValidators(voteValue)
+      totalWeight = weightMap.values.sum
     } yield
       if (supportingWeight * 2 > totalWeight) {
         Some(
