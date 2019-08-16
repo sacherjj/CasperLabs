@@ -11,7 +11,7 @@ from .cl_node.wait import (
     wait_for_block_hashes_propagated_to_all_nodes,
     wait_for_peers_count_exactly,
 )
-from test.cl_node.casperlabs_accounts import Account
+from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
 
 
 class DeployThread(threading.Thread):
@@ -96,7 +96,12 @@ def test_block_propagation(
 
 def deploy_and_propose(node, contract, nonce=None):
     deploy_output = node.client.deploy(
-        session_contract=contract, payment_contract=contract, nonce=nonce
+        from_address=GENESIS_ACCOUNT.public_key_hex,
+        public_key=GENESIS_ACCOUNT.public_key_path,
+        private_key=GENESIS_ACCOUNT.private_key_path,
+        session_contract=contract,
+        payment_contract=contract,
+        nonce=nonce,
     )
     if type(deploy_output) == str:
         assert "Success" in deploy_output

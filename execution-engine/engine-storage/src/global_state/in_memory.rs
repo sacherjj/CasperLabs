@@ -163,7 +163,7 @@ impl History for InMemoryGlobalState {
 
 #[cfg(test)]
 mod tests {
-    use engine_shared::init::mocked_account;
+    use engine_shared::test_utils;
 
     use super::*;
 
@@ -312,7 +312,7 @@ mod tests {
             202u8, 169, 195, 180, 73, 241, 1, 207, 158, 155, 105, 130, 222, 149, 113, 83, 244, 33,
             11, 132, 57, 102, 129, 52, 188, 253, 43, 243, 67, 176, 41, 151,
         ];
-        let init_state = mocked_account([48u8; 32]);
+        let init_state = test_utils::mocked_account([48u8; 32]);
         let global_state = InMemoryGlobalState::from_pairs(correlation_id, &init_state).unwrap();
         assert_eq!(expected_bytes, global_state.root_hash.to_vec())
     }

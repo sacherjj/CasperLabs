@@ -8,6 +8,7 @@ from test.cl_node.wait import (
     wait_for_streamed_packet,
     wait_for_block_hashes_propagated_to_all_nodes,
 )
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 
 
 # TODO: Fix finalized hash portion
@@ -53,7 +54,11 @@ def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_networ
     node0, node1 = tnn.docker_nodes
     block_hashes = [
         node.deploy_and_propose(
-            session_contract=HELLO_NAME, payment_contract=HELLO_NAME
+            from_address=GENESIS_ACCOUNT.public_key_hex,
+            public_key=GENESIS_ACCOUNT.public_key_path,
+            private_key=GENESIS_ACCOUNT.private_key_path,
+            session_contract=HELLO_NAME,
+            payment_contract=HELLO_NAME,
         )
         for node in (node0, node1)
     ]

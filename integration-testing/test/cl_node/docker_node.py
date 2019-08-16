@@ -7,7 +7,11 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
-from test.cl_node.common import extract_block_hash_from_propose_output
+from test.cl_node.common import (
+    extract_block_hash_from_propose_output,
+    MAX_PAYMENT_COST,
+    CONV_RATE,
+)
 from test.cl_node.docker_base import LoggingDockerBase
 from test.cl_node.docker_client import DockerClient
 from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
@@ -200,8 +204,9 @@ class DockerNode(LoggingDockerBase):
         return self.cl_network.genesis_account
 
     @property
-    def test_account(self) -> str:
-        return self.cl_network.test_account(self)
+    def test_account(self):
+        amount = 10 ** 6
+        return self.cl_network.test_account(self, amount)
 
     @property
     def from_address(self) -> str:
@@ -280,6 +285,11 @@ class DockerNode(LoggingDockerBase):
         to_account_id: int,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
+        session_contract: str = "transfer_to_account.wasm",
+        payment_contract: str = "standard_payment.wasm",
+        gas_price: int = 1,
+        gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
+        is_deploy_error_check: bool = True,
     ) -> str:
         """
         Performs a transfer using the from account if given (or genesis if not)
@@ -287,6 +297,12 @@ class DockerNode(LoggingDockerBase):
         :param to_account_id: 1-20 index of test account for transfer into
         :param amount: amount of motes to transfer (mote = smallest unit of token)
         :param from_account_id: default 'genesis' account, but previously funded account_id is also valid.
+        :param session_contract: session contract to execute.
+        :param payment_contract: Payment contract to execute.
+        :param gas_price: Gas price
+        :param gas_limit: Max gas price that can be expended.
+        :param is_deploy_error_check: Check that amount transfer is success.
+
         :returns block_hash in hex str
         """
         logging.info(f"=== Transfering {amount} to {to_account_id}")
@@ -300,18 +316,32 @@ class DockerNode(LoggingDockerBase):
 
         from_account = Account(from_account_id)
         to_account = Account(to_account_id)
-        args_json = json.dumps(
-            [{"account": to_account.public_key_hex}, {"u32": amount}]
+
+        ABI = self.p_client.abi
+
+        session_args = ABI.args(
+            [ABI.account(to_account.public_key_binary), ABI.u32(amount)]
         )
-        with from_account.public_key_path as public_key_path, from_account.private_key_path as private_key_path:
-            response, deploy_hash_bytes = self.p_client.deploy(
-                from_address=from_account.public_key_hex,
-                session_contract="transfer_to_account.wasm",
-                payment_contract="transfer_to_account.wasm",
-                public_key=public_key_path,
-                private_key=private_key_path,
-                session_args=self.p_client.abi.args_from_json(args_json),
-            )
+        if session_contract == payment_contract:
+            # Compatibility mode with the way things worked before execution cost era
+            payment_args = None
+        else:
+            # NOTE: this shouldn't necesserily be amount
+            # but this is temporary, anyway, eventually we want all tests
+            # running with execution cost on.
+            payment_args = ABI.args([ABI.u512(amount)])
+
+        response, deploy_hash_bytes = self.p_client.deploy(
+            from_address=from_account.public_key_hex,
+            session_contract=session_contract,
+            payment_contract=payment_contract,
+            public_key=from_account.public_key_path,
+            private_key=from_account.private_key_path,
+            gas_price=gas_price,
+            gas_limit=gas_limit,
+            session_args=session_args,
+            payment_args=payment_args,
+        )
 
         deploy_hash_hex = deploy_hash_bytes.hex()
         assert len(deploy_hash_hex) == 64
@@ -321,8 +351,9 @@ class DockerNode(LoggingDockerBase):
         block_hash = response.block_hash.hex()
         assert len(deploy_hash_hex) == 64
 
-        for deploy_info in self.p_client.show_deploys(block_hash):
-            assert deploy_info.is_error is False
+        if is_deploy_error_check:
+            for deploy_info in self.p_client.show_deploys(block_hash):
+                assert deploy_info.is_error is False
 
         return block_hash
 
@@ -357,12 +388,17 @@ class DockerNode(LoggingDockerBase):
         payment_contract: str,
         from_account: Account,
         json_args: str,
+        gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
+        gas_price: int = 1,
     ) -> str:
 
+        # TODO: pass payment_args as well
         response, deploy_hash_bytes = self.p_client.deploy(
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
             payment_contract=payment_contract,
+            gas_limit=gas_limit,
+            gas_price=gas_price,
             public_key=from_account.public_key_path,
             private_key=from_account.private_key_path,
             session_args=self.p_client.abi.args_from_json(json_args),
@@ -395,7 +431,13 @@ class DockerNode(LoggingDockerBase):
             to_addr_id, amount = avl[:2]
             from_addr_id = "genesis" if len(avl) == 2 else avl[2]
             block_hashes.append(
-                self.transfer_to_account(to_addr_id, amount, from_addr_id)
+                # TODO: don't pass payment_contract when execution cost on
+                self.transfer_to_account(
+                    to_addr_id,
+                    amount,
+                    from_addr_id,
+                    payment_contract="transfer_to_account.wasm",
+                )
             )
         return block_hashes
 

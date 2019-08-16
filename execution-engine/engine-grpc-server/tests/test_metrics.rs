@@ -14,7 +14,6 @@ mod test_support;
 use grpc::RequestOptions;
 
 use engine_core::engine_state::EngineState;
-use engine_shared::init::mocked_account;
 use engine_shared::logging::log_level::LogLevel;
 use engine_shared::logging::log_settings::{self, LogLevelFilter, LogSettings};
 use engine_shared::logging::logger::{self, LogBufferProvider, BUFFERED_LOGGER};
@@ -48,7 +47,7 @@ lazy_static! {
 fn should_query_with_metrics() {
     setup();
     let correlation_id = CorrelationId::new();
-    let mocked_account = mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
+    let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = global_state.root_hash.to_vec();
     let engine_state = EngineState::new(global_state, Default::default());
@@ -100,7 +99,7 @@ fn should_query_with_metrics() {
 fn should_exec_with_metrics() {
     setup();
     let correlation_id = CorrelationId::new();
-    let mocked_account = mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
+    let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = global_state.root_hash.to_vec();
     let engine_state = EngineState::new(global_state, Default::default());
@@ -150,7 +149,7 @@ fn should_exec_with_metrics() {
 fn should_commit_with_metrics() {
     setup();
     let correlation_id = CorrelationId::new();
-    let mocked_account = mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
+    let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = global_state.root_hash.to_vec();
     let engine_state = EngineState::new(global_state, Default::default());
@@ -197,7 +196,7 @@ fn should_commit_with_metrics() {
 fn should_validate_with_metrics() {
     setup();
     let correlation_id = CorrelationId::new();
-    let mocked_account = mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
+    let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let engine_state = EngineState::new(global_state, Default::default());
 

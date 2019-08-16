@@ -22,6 +22,9 @@ BONDING_CONTRACT = "test_bondingcall.wasm"
 UNBONDING_CONTRACT = "test_unbondingcall.wasm"
 INVALID_BONDING_CONTRACT = "test_invalid_bondingcall.wasm"
 INVALID_UNBONDING_CONTRACT = "test_invalid_unbondingcall.wasm"
+PAYMENT_PURSE_CONTRACT = "test_payment_purse.wasm"
+MAX_PAYMENT_COST = 10000000  # ten million
+CONV_RATE = 10
 
 
 @dataclasses.dataclass(eq=True, frozen=True)

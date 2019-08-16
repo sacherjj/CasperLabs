@@ -175,18 +175,24 @@ impl ExecutionResultBuilder {
 
         let new_balance = account_main_purse_balance - max_payment_cost;
 
-        ops.insert(account_main_purse, Op::Write);
+        let account_main_purse_normalize = account_main_purse.normalize();
+        let rewards_purse_normalize = rewards_purse.normalize();
+
+        ops.insert(account_main_purse_normalize, Op::Write);
         transforms.insert(
-            account_main_purse,
+            account_main_purse_normalize,
             Transform::Write(Value::UInt512(new_balance)),
         );
 
-        ops.insert(rewards_purse, Op::Add);
-        transforms.insert(rewards_purse, Transform::AddUInt512(max_payment_cost));
+        ops.insert(rewards_purse_normalize, Op::Add);
+        transforms.insert(
+            rewards_purse_normalize,
+            Transform::AddUInt512(max_payment_cost),
+        );
 
         let error = error::Error::InsufficientPaymentError;
         let effect = ExecutionEffect::new(ops, transforms);
-        let cost = 0;
+        let cost = (max_payment_cost / CONV_RATE).as_u64();
 
         Some(ExecutionResult::Failure {
             error,
