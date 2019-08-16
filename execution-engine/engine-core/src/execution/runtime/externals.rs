@@ -6,11 +6,11 @@ use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
 use engine_storage::global_state::StateReader;
 
+use super::args::Args;
 use super::{Error, Runtime};
-use args::Args;
 use contract_ffi::bytesrepr::{self, ToBytes};
 use contract_ffi::value::account::{PublicKey, PurseId};
-use function_index::FunctionIndex;
+use resolvers::v1_function_index::FunctionIndex;
 
 impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
 where

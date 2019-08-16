@@ -18,8 +18,7 @@ use engine_storage::global_state::{CommitResult, History, StateReader};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::Preprocessor;
 use execution::{self, Executor, MINT_NAME, POS_NAME};
-use tracking_copy::TrackingCopy;
-use tracking_copy_ext::TrackingCopyExt;
+use tracking_copy::{TrackingCopy, TrackingCopyExt};
 
 pub use self::engine_config::EngineConfig;
 use self::error::{Error, RootNotFound};
