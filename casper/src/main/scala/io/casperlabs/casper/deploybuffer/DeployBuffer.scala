@@ -1,6 +1,7 @@
 package io.casperlabs.casper.deploybuffer
 
 import cats._
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -76,6 +77,8 @@ import scala.concurrent.duration.FiniteDuration
   def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]]
 
   def sizePendingOrProcessed(): F[Long]
+
+  def getByHashes(l: NonEmptyList[ByteString]): F[List[Deploy]]
 }
 
 class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
@@ -253,6 +256,11 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       .query[Deploy]
       .option
       .transact(xa)
+
+  override def getByHashes(l: NonEmptyList[ByteString]): F[List[Deploy]] = {
+    val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", l) // "hash IN (…)"
+    q.query.to[List].transact(xa)
+  }
 }
 
 object DeployBufferImpl {
