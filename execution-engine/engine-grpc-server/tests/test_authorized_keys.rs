@@ -11,7 +11,7 @@ mod test_support;
 use std::collections::HashMap;
 
 use contract_ffi::value::account::{PublicKey, Weight};
-use engine_core::engine_state::error;
+use engine_core::engine_state;
 use engine_core::execution;
 use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
@@ -67,7 +67,10 @@ fn should_raise_auth_failure_with_invalid_key() {
     assert!(deploy_result.has_precondition_failure());
     let message = deploy_result.get_precondition_failure().get_message();
 
-    assert_eq!(message, format!("{}", error::Error::AuthorizationError))
+    assert_eq!(
+        message,
+        format!("{}", engine_state::error::Error::AuthorizationError)
+    )
 }
 
 #[ignore]
@@ -110,7 +113,10 @@ fn should_raise_auth_failure_with_invalid_keys() {
     assert!(deploy_result.has_precondition_failure());
     let message = deploy_result.get_precondition_failure().get_message();
 
-    assert_eq!(message, format!("{}", error::Error::AuthorizationError))
+    assert_eq!(
+        message,
+        format!("{}", engine_state::error::Error::AuthorizationError)
+    )
 }
 
 #[ignore]
@@ -198,16 +204,12 @@ fn should_raise_deploy_authorization_failure() {
             .get(0)
             .expect("should have at least one deploy result");
 
-        assert!(deploy_result.has_execution_result());
-        let execution_result = deploy_result.get_execution_result();
-        assert!(execution_result.has_error());
-        let error = execution_result.get_error();
-        assert!(error.has_exec_error());
-        let exec_error = error.get_exec_error();
-        assert_eq!(
-            exec_error.get_message(),
-            format!("{}", execution::Error::DeploymentAuthorizationFailure)
-        );
+        assert!(deploy_result.has_precondition_failure());
+        let message = deploy_result.get_precondition_failure().get_message();
+        assert!(message.contains(&format!(
+            "{}",
+            execution::Error::DeploymentAuthorizationFailure
+        )))
     }
 
     // identity key (w: 1) and key_1 (w: 2) passes threshold of 3
@@ -254,16 +256,12 @@ fn should_raise_deploy_authorization_failure() {
             .get(0)
             .expect("should have at least one deploy result");
 
-        assert!(deploy_result.has_execution_result(), "{:?}", deploy_result);
-        let execution_result = deploy_result.get_execution_result();
-        assert!(execution_result.has_error());
-        let error = execution_result.get_error();
-        assert!(error.has_exec_error());
-        let exec_error = error.get_exec_error();
-        assert_eq!(
-            exec_error.get_message(),
-            format!("{}", execution::Error::DeploymentAuthorizationFailure)
-        );
+        assert!(deploy_result.has_precondition_failure());
+        let message = deploy_result.get_precondition_failure().get_message();
+        assert!(message.contains(&format!(
+            "{}",
+            execution::Error::DeploymentAuthorizationFailure
+        )))
     }
 
     // success: identity key weight + key_1 weight + key_2 weight >= deployment threshold
@@ -400,14 +398,14 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         .get(0)
         .expect("should have at least one deploy result");
 
-    assert!(deploy_result.has_execution_result(), "{:?}", deploy_result);
-    let execution_result = deploy_result.get_execution_result();
-    assert!(execution_result.has_error());
-    let error = execution_result.get_error();
-    assert!(error.has_exec_error());
-    let exec_error = error.get_exec_error();
-    assert_eq!(
-        exec_error.get_message(),
-        format!("{}", execution::Error::DeploymentAuthorizationFailure)
+    assert!(
+        deploy_result.has_precondition_failure(),
+        "{:?}",
+        deploy_result
     );
+    let message = deploy_result.get_precondition_failure().get_message();
+    assert!(message.contains(&format!(
+        "{}",
+        execution::Error::DeploymentAuthorizationFailure
+    )))
 }

@@ -504,7 +504,7 @@ import subprocess
 import pytest
 import os
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
-
+from test.cl_node.common import testing_root_path
 
 CLI = "casperlabs_client"
 
@@ -567,11 +567,14 @@ def test_cli_show_block_not_found(cli):
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
+@pytest.mark.skip
 def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
     cli, one_node_network
 ):
-    # account = one_node_network.docker_nodes[0].test_account
+    resources_path = testing_root_path() / "resources"
+
     account = GENESIS_ACCOUNT
+
     deploy_response = cli(
         "deploy",
         "--from",
@@ -579,9 +582,9 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
         "--nonce",
         "1",
         "--payment",
-        "resources/test_helloname.wasm",
+        str(resources_path / "test_helloname.wasm"),
         "--session",
-        "resources/test_helloname.wasm",
+        str(resources_path / "test_helloname.wasm"),
         "--private-key",
         str(account.private_key_path),
         "--public-key",
@@ -591,7 +594,8 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
     deploy_hash = deploy_response.split()[3]
 
     # 'Success! Block hash: xxxxxxxxx...'
-    block_hash = cli("propose").split()[3]
+    propose_response = cli("propose")
+    block_hash = propose_response.split()[3]
     deploys = parse_show_deploys(cli("show-deploys", block_hash))
     deploy_hashes = [d.deploy.deploy_hash for d in deploys]
     assert deploy_hash in deploy_hashes

@@ -5,6 +5,7 @@ import random
 import string
 import tempfile
 import typing
+from pathlib import Path
 
 from docker.client import DockerClient
 from .errors import (
@@ -30,6 +31,13 @@ CONV_RATE = 10
 class KeyPair:
     private_key: str
     public_key: str
+
+
+def testing_root_path() -> Path:
+    cur_path = Path(os.path.realpath(__file__)).parent
+    while cur_path.name != "integration-testing":
+        cur_path = cur_path.parent
+    return cur_path
 
 
 @dataclasses.dataclass

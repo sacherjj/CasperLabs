@@ -70,7 +70,7 @@ class PythonClient(CasperLabsClient, LoggingMixin):
 
         try:
             r = self.client.deploy(
-                address.encode("UTF-8"),
+                bytes.fromhex(address),
                 gas_limit,
                 gas_price,
                 payment_contract_path,
