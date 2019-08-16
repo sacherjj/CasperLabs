@@ -230,28 +230,66 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
         dag <- blockDagStorage.getRepresentation
         // An extra new validator who hasn't proposed any block
         v4 = generateValidator("V4")
-        panorama <- FinalityDetectorUtil.panoramaOfBlockByValidators(
-                     dag,
-                     BlockMetadata.fromBlock(b7),
-                     validators.toSet + v4
-                   )
-        _ = panorama shouldEqual Map(
-          v0 -> BlockMetadata.fromBlock(b4),
-          v1 -> BlockMetadata.fromBlock(b3),
-          v2 -> BlockMetadata.fromBlock(b7),
-          v3 -> BlockMetadata.fromBlock(b5)
-        )
+
         panoramaDagLevel <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                              dag,
-                             BlockMetadata.fromBlock(b7),
+                             BlockMetadata.fromBlock(genesis),
                              validators.toSet + v4
                            )
-        _ = panoramaDagLevel shouldEqual Map(
+        _ = panoramaDagLevel shouldEqual Map()
+
+        panoramaDagLevel1 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
+                              dag,
+                              BlockMetadata.fromBlock(b1),
+                              validators.toSet + v4
+                            )
+        _ = panoramaDagLevel1 shouldEqual Map(
+          v0 -> b1.getHeader.rank
+        )
+
+        panoramaDagLevel2 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
+                              dag,
+                              BlockMetadata.fromBlock(b3),
+                              validators.toSet + v4
+                            )
+        _ = panoramaDagLevel2 shouldEqual Map(
+          v0 -> b1.getHeader.rank,
+          v1 -> b3.getHeader.rank
+        )
+
+        panoramaDagLevel3 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
+                              dag,
+                              BlockMetadata.fromBlock(b5),
+                              validators.toSet + v4
+                            )
+        _ = panoramaDagLevel3 shouldEqual Map(
+          v0 -> b1.getHeader.rank,
+          v1 -> b3.getHeader.rank,
+          v3 -> b5.getHeader.rank
+        )
+
+        panoramaDagLevel4 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
+                              dag,
+                              BlockMetadata.fromBlock(b6),
+                              validators.toSet + v4
+                            )
+        _ = panoramaDagLevel4 shouldEqual Map(
+          v0 -> b4.getHeader.rank,
+          v1 -> b3.getHeader.rank,
+          v2 -> b6.getHeader.rank,
+          v3 -> b5.getHeader.rank
+        )
+
+        panoramaDagLevel5 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
+                              dag,
+                              BlockMetadata.fromBlock(b7),
+                              validators.toSet + v4
+                            )
+        _ = panoramaDagLevel5 shouldEqual Map(
           v0 -> b4.getHeader.rank,
           v1 -> b3.getHeader.rank,
           v2 -> b7.getHeader.rank,
-          v3 -> b5.getHeader.rank,
-          v4 -> 0
+          v3 -> b5.getHeader.rank
         )
       } yield ()
   }
