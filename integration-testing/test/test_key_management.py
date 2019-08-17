@@ -2,8 +2,9 @@ import pytest
 
 from casperlabs_client import ABI
 from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.casperlabs_network import OneNodeNetwork
+from test.cl_node.casperlabs_network import PaymentNodeNetwork
 from test.cl_node.nonce_registry import NonceRegistry
+from test.cl_node.common import MAX_PAYMENT_ABI, PAYMENT_CONTRACT, HELLO_NAME_CONTRACT
 
 """
 Accounts have two threshold values:
@@ -17,7 +18,6 @@ ADD_KEY_CONTRACT = "add_associated_key.wasm"  # ABI: Account - Weight
 REMOVE_KEY_CONTRACT = "remove_associated_key.wasm"  # ABI: Account
 UPDATE_KEY_CONTRACT = "update_associated_key.wasm"  # ABI: Account - Weight
 SET_THRESHOLDS_CONTRACT = "set_key_thresholds.wasm"  # ABI: KeyWeight - DeployWeight
-HELLO_NAME_CONTRACT = "test_helloname.wasm"
 
 IDENTITY_KEY = Account(1)  # 9d39
 DEPLOY_KEY = Account(2)  # 4e74
@@ -26,21 +26,24 @@ KEY_MGMT_KEY = Account(3)  # 58f7
 KEY_MGMT_KEY_WEIGHT = 20
 HIGH_WEIGHT_KEY = Account(4)  # 1ca8
 HIGH_WEIGHT_KEY_WEIGHT = 200
-INITIAL_ACCOUNT_VALUE = 10000000
+INITIAL_ACCOUNT_VALUE = 1000000000
 
 
 def _add_update_associate_key(
     node, weight_key: Account, key: Account, weight: int, contract: str
 ):
     """ Handles both add and update calls due to commonality """
-    args = ABI.args([ABI.account(bytes.fromhex(key.public_key_hex)), ABI.u32(weight)])
+    session_args = ABI.args(
+        [ABI.account(bytes.fromhex(key.public_key_hex)), ABI.u32(weight)]
+    )
     return node.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=contract,
+        payment_contract=PAYMENT_CONTRACT,
         session_contract=contract,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
-        session_args=args,
+        session_args=session_args,
+        payment_args=MAX_PAYMENT_ABI,
     )
 
 
@@ -59,11 +62,12 @@ def remove_associated_key(node, weight_key: Account, key: Account):
     args = ABI.args([ABI.account(bytes.fromhex(key.public_key_hex))])
     return node.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=REMOVE_KEY_CONTRACT,
+        payment_contract=PAYMENT_CONTRACT,
         session_contract=REMOVE_KEY_CONTRACT,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=args,
+        payment_args=MAX_PAYMENT_ABI,
     )
 
 
@@ -72,11 +76,12 @@ def set_key_thresholds(node, weight_key, key_mgmt_weight: int, deploy_weight: in
     args = ABI.args([ABI.u32(key_mgmt_weight), ABI.u32(deploy_weight)])
     return node.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=SET_THRESHOLDS_CONTRACT,
+        payment_contract=PAYMENT_CONTRACT,
         session_contract=SET_THRESHOLDS_CONTRACT,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=args,
+        payment_args=MAX_PAYMENT_ABI,
     )
 
 
@@ -84,10 +89,12 @@ def hello_name_deploy(node, weight_key: Account) -> str:
     """ Simple deploy to test deploy permissions """
     return node.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=HELLO_NAME_CONTRACT,
+        payment_contract=PAYMENT_CONTRACT,
         session_contract=HELLO_NAME_CONTRACT,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
+        session_args=None,
+        payment_args=MAX_PAYMENT_ABI,
     )
 
 
@@ -109,7 +116,7 @@ def assert_deploy_is_error(node, block_hash: str, error_message: str = None):
 #
 @pytest.fixture(scope="module")
 def account_setup(docker_client_fixture):
-    with OneNodeNetwork(docker_client_fixture) as onn:
+    with PaymentNodeNetwork(docker_client_fixture) as onn:
         onn.create_cl_network()
         node = onn.docker_nodes[0]
         node.use_python_client()
