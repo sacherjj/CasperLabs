@@ -2,7 +2,7 @@ import pytest
 
 from casperlabs_client import ABI
 from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.casperlabs_network import PaymentNodeNetwork
+from test.cl_node.casperlabs_network import TrillionPaymentNodeNetwork
 from test.cl_node.nonce_registry import NonceRegistry
 from test.cl_node.common import MAX_PAYMENT_ABI, PAYMENT_CONTRACT, HELLO_NAME_CONTRACT
 
@@ -116,7 +116,7 @@ def assert_deploy_is_error(node, block_hash: str, error_message: str = None):
 #
 @pytest.fixture(scope="module")
 def account_setup(docker_client_fixture):
-    with PaymentNodeNetwork(docker_client_fixture) as onn:
+    with TrillionPaymentNodeNetwork(docker_client_fixture) as onn:
         onn.create_cl_network()
         node = onn.docker_nodes[0]
         node.use_python_client()
