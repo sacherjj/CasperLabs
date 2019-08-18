@@ -1,4 +1,4 @@
-from test.cl_node.common import HELLO_NAME
+from test.cl_node.common import HELLO_NAME_CONTRACT
 from test.cl_node.wait import (
     wait_for_connected_to_node,
     wait_for_finalised_hash,
@@ -8,6 +8,7 @@ from test.cl_node.wait import (
     wait_for_streamed_packet,
     wait_for_block_hashes_propagated_to_all_nodes,
 )
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 
 
 # TODO: Fix finalized hash portion
@@ -19,7 +20,7 @@ def ignore_test_persistent_dag_storage(two_node_network):
     node0, node1 = two_node_network.docker_nodes
     for node in two_node_network.docker_nodes:
         node.deploy_and_propose(
-            session_contract=HELLO_NAME, payment_contract=HELLO_NAME
+            session_contract=HELLO_NAME_CONTRACT, payment_contract=HELLO_NAME_CONTRACT
         )
 
     two_node_network.stop_cl_node(1)
@@ -30,7 +31,7 @@ def ignore_test_persistent_dag_storage(two_node_network):
     wait_for_connected_to_node(node0, node1.name, timeout, 2)
 
     hash_string = node0.deploy_and_propose(
-        session_contract=HELLO_NAME, payment_contract=HELLO_NAME
+        session_contract=HELLO_NAME_CONTRACT, payment_contract=HELLO_NAME_CONTRACT
     )
 
     wait_for_sending_approved_block_request(node0, node1.name, timeout)
@@ -53,7 +54,11 @@ def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_networ
     node0, node1 = tnn.docker_nodes
     block_hashes = [
         node.deploy_and_propose(
-            session_contract=HELLO_NAME, payment_contract=HELLO_NAME
+            from_address=GENESIS_ACCOUNT.public_key_hex,
+            public_key=GENESIS_ACCOUNT.public_key_path,
+            private_key=GENESIS_ACCOUNT.private_key_path,
+            session_contract=HELLO_NAME_CONTRACT,
+            payment_contract=HELLO_NAME_CONTRACT,
         )
         for node in (node0, node1)
     ]

@@ -336,7 +336,7 @@ package-system-contracts: \
 
 # Compile a validator contract;
 .make/contracts/client/%: $(RUST_SRC) .make/rustup-update
-	$(eval CONTRACT=$*)
+	$(eval CONTRACT=$(subst _,-,$*))
 	cd execution-engine/contracts/client/$(CONTRACT) && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@

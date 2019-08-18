@@ -303,7 +303,8 @@ class CasperLabsClient:
         def serialize(o) -> bytes:
             return o.SerializeToString()
 
-        # args must go to payment as well for now cause otherwise we'll get GASLIMIT error:
+        # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,
+        # if payment is same as session:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
         body = consensus.Deploy.Body(
             session=read_code(session, session_args),
@@ -312,7 +313,15 @@ class CasperLabsClient:
             ),
         )
 
-        account_public_key = public_key and read_pem_key(public_key)
+        approval_public_key = None
+        if public_key:
+            approval_public_key = read_pem_key(public_key)
+
+        if from_addr is None:
+            account_public_key = approval_public_key
+        else:
+            account_public_key = from_addr
+
         header = consensus.Deploy.Header(
             account_public_key=account_public_key,
             nonce=nonce,
@@ -326,7 +335,7 @@ class CasperLabsClient:
             deploy_hash=deploy_hash,
             approvals=[
                 consensus.Approval(
-                    approver_public_key=account_public_key, signature=sign(deploy_hash)
+                    approver_public_key=approval_public_key, signature=sign(deploy_hash)
                 )
             ]
             if account_public_key

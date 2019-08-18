@@ -5,7 +5,7 @@ members = [
     "contracts/client/bonding",
     "contracts/client/standard-payment",
     "contracts/client/revert",
-    "contracts/client/transfer_to_account",
+    "contracts/client/transfer-to-account",
     "contracts/client/unbonding",
     "contracts/system/mint-token",
     "contracts/system/pos",

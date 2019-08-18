@@ -41,52 +41,59 @@ account {
 """
 
 
+def deploy_and_propose_from_genesis(node, contract):
+    return node.deploy_and_propose(
+        session_contract=contract,
+        payment_contract=contract,
+        from_address=GENESIS_ACCOUNT.public_key_hex,
+        public_key=GENESIS_ACCOUNT.public_key_path,
+        private_key=GENESIS_ACCOUNT.private_key_path,
+    )
+
+
+def account_state(node, block_hash, account=GENESIS_ACCOUNT):
+    return node.d_client.query_state(
+        block_hash=block_hash, key_type="address", key=account.public_key_hex, path=""
+    )
+
+
 def test_account_state(one_node_network):
     node = one_node_network.docker_nodes[0]
 
-    def account_state(block_hash):
-        return node.d_client.query_state(
-            block_hash=block_hash, key_type="address", key=node.from_address, path=""
-        )
-
-    block_hash = node.deploy_and_propose(
-        session_contract="test_counterdefine.wasm",
-        payment_contract="test_counterdefine.wasm",
-    )
+    block_hash = deploy_and_propose_from_genesis(node, "test_counterdefine.wasm")
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error
 
-    response = account_state(block_hash)
+    response = account_state(node, block_hash)
     assert response.account.nonce == 1, str(response)
 
-    block_hash = node.deploy_and_propose(
-        session_contract="test_countercall.wasm",
-        payment_contract="test_countercall.wasm",
-    )
-    response = account_state(block_hash)
+    block_hash = deploy_and_propose_from_genesis(node, "test_countercall.wasm")
+    response = account_state(node, block_hash)
     assert response.account.nonce == 2, str(response)
 
 
 def test_transfer_with_overdraft(one_node_network):
-    def account_state(block_hash, account):
-        return node.d_client.query_state(
-            block_hash=block_hash, key_type="address", key=account, path=""
-        )
 
     acct1 = Account(1)
     acct2 = Account(2)
 
     node: DockerNode = one_node_network.docker_nodes[0]
     # Transfer 1000000 from genesis... to acct1...
+
+    # For compatibility with EE with no execution cost
+    # payment_contract="transfer_to_account.wasm"
     block_hash = node.transfer_to_account(
-        to_account_id=1, amount=1000000, from_account_id="genesis"
+        to_account_id=1,
+        amount=1000000,
+        from_account_id="genesis",
+        payment_contract="transfer_to_account.wasm",
     )
 
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error, f"error_message: {deploys[0].error_message}"
 
     # Response not used, but assures account exist
-    _ = account_state(block_hash, acct1.public_key_hex)
+    _ = account_state(node, block_hash, acct1)
 
     # Should error as account doesn't exist.
     with raises(Exception):
@@ -95,20 +102,26 @@ def test_transfer_with_overdraft(one_node_network):
     # No API currently exists for getting balance to check transfer.
     # Transfer 750000 from acct1... to acct2...
     block_hash = node.transfer_to_account(
-        to_account_id=2, amount=750000, from_account_id=1
+        to_account_id=2,
+        amount=750000,
+        from_account_id=1,
+        payment_contract="transfer_to_account.wasm",
     )
 
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error, f"error_message: {deploys[0].error_message}"
 
     # Response not used, but assures account exist
-    _ = account_state(block_hash, acct2.public_key_hex)
+    _ = account_state(node, block_hash, acct2)
 
     # Transfer 750000000000 from acct1... to acct2...
     # Should fail with acct1 overdrawn.   Requires assert in contract to generate is_error.
     with raises(Exception):
         _ = node.transfer_to_account(
-            to_account_id=2, amount=750000000000, from_account_id=1
+            to_account_id=2,
+            amount=750000000000,
+            from_account_id=1,
+            payment_contract="transfer_to_account.wasm",
         )
 
 
@@ -119,9 +132,17 @@ def test_transfer_to_accounts(one_node_network):
     with raises(Exception):
         # Acct 1 has not enough funds so it should fail
         node.transfer_to_account(
-            to_account_id=4, amount=100000000000, from_account_id=1
+            to_account_id=4,
+            amount=100000000000,
+            from_account_id=1,
+            payment_contract="transfer_to_account.wasm",
         )
-    node.transfer_to_account(to_account_id=4, amount=100, from_account_id=2)
+    node.transfer_to_account(
+        to_account_id=4,
+        amount=100,
+        from_account_id=2,
+        payment_contract="transfer_to_account.wasm",
+    )
     # TODO: Improve checks once balance is easy to read.
 
 
@@ -202,8 +223,7 @@ def test_multiple_propose(one_node_network, wasm):
     OP-182: First propose should be success, and subsequent propose calls should throw an error/exception.
     """
     node = one_node_network.docker_nodes[0]
-    assert "Success" in node.client.deploy(session_contract=wasm, payment_contract=wasm)
-    assert "Success" in node.client.propose()
+    deploy_and_propose_from_genesis(node, wasm)
     number_of_blocks = node.client.get_blocks_count(100)
 
     try:
@@ -232,17 +252,17 @@ def test_multiple_propose(one_node_network, wasm):
 # INVALID_ARGUMENT: Value not found: " Hash([48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48])"
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()  # scope="module")
 def node(one_node_network):
     return one_node_network.docker_nodes[0]
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()  # (scope="module")
 def client(node):
     return node.d_client
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()  # (scope="module")
 def block_hash(node):
     return node.deploy_and_propose(
         session_contract="test_helloname.wasm", payment_contract="test_helloname.wasm"
@@ -273,7 +293,7 @@ def test_query_state_error(node, client, block_hash, query, expected):
         query["block_hash"] = block_hash
 
     if "key" not in query:
-        query["key"] = node.from_address
+        query["key"] = GENESIS_ACCOUNT.public_key_hex
 
     with pytest.raises(NonZeroExitCodeError) as excinfo:
         _ = client.query_state(**query)
@@ -282,9 +302,8 @@ def test_query_state_error(node, client, block_hash, query, expected):
 
 def test_revert_subcall(client, node):
     # This contract calls another contract that calls revert(2)
-    block_hash = node.deploy_and_propose(
-        session_contract="test_subcall_revert_define.wasm",
-        payment_contract="test_subcall_revert_define.wasm",
+    block_hash = deploy_and_propose_from_genesis(
+        node, "test_subcall_revert_define.wasm"
     )
 
     r = client.show_deploys(block_hash)[0]
@@ -301,10 +320,7 @@ def test_revert_subcall(client, node):
     h = contract_hash(GENESIS_ACCOUNT.public_key_hex, 0, 0)
     logging.info("The expected contract hash is %s (%s)" % (list(h), h.hex()))
 
-    block_hash = node.deploy_and_propose(
-        session_contract="test_subcall_revert_call.wasm",
-        payment_contract="test_subcall_revert_call.wasm",
-    )
+    block_hash = deploy_and_propose_from_genesis(node, "test_subcall_revert_call.wasm")
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
     assert r.error_message == "Exit code: 2"
@@ -312,10 +328,7 @@ def test_revert_subcall(client, node):
 
 def test_revert_direct(client, node):
     # This contract calls revert(1) directly
-    block_hash = node.deploy_and_propose(
-        session_contract="test_direct_revert_call.wasm",
-        payment_contract="test_direct_revert_call.wasm",
-    )
+    block_hash = deploy_and_propose_from_genesis(node, "test_direct_revert_call.wasm")
 
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
@@ -328,13 +341,8 @@ def test_deploy_with_valid_signature(one_node_network):
     Scenario: Deploy with valid signature
     """
     node0 = one_node_network.docker_nodes[0]
-    client = node0.client
-    client.deploy(
-        session_contract="test_helloname.wasm", payment_contract="test_helloname.wasm"
-    )
-
-    block_hash = extract_block_hash_from_propose_output(client.propose())
-    deploys = client.show_deploys(block_hash)
+    block_hash = deploy_and_propose_from_genesis(node0, "test_helloname.wasm")
+    deploys = node0.client.show_deploys(block_hash)
     assert deploys[0].is_error is False
 
 
@@ -348,6 +356,7 @@ def test_deploy_with_invalid_signature(one_node_network):
 
     with pytest.raises(NonZeroExitCodeError):
         node0.client.deploy(
+            from_address=GENESIS_ACCOUNT.public_key_hex,
             session_contract="test_helloname.wasm",
             payment_contract="test_helloname.wasm",
             private_key="validator-0-private-invalid.pem",
@@ -362,14 +371,24 @@ Feature file: ~/CasperLabs/integration-testing/features/deploy.feature
 
 def deploy_and_propose(node, contract, nonce=None):
     node.client.deploy(
-        session_contract=contract, payment_contract=contract, nonce=nonce
+        session_contract=contract,
+        payment_contract=contract,
+        nonce=nonce,
+        from_address=GENESIS_ACCOUNT.public_key_hex,
+        public_key=GENESIS_ACCOUNT.public_key_path,
+        private_key=GENESIS_ACCOUNT.private_key_path,
     )
     return extract_block_hash_from_propose_output(node.client.propose())
 
 
 def deploy(node, contract, nonce):
     message = node.client.deploy(
-        session_contract=contract, payment_contract=contract, nonce=nonce
+        from_address=GENESIS_ACCOUNT.public_key_hex,
+        public_key=GENESIS_ACCOUNT.public_key_path,
+        private_key=GENESIS_ACCOUNT.private_key_path,
+        session_contract=contract,
+        payment_contract=contract,
+        nonce=nonce,
     )
     assert "Success!" in message
     return message.split()[2]
@@ -485,7 +504,7 @@ import subprocess
 import pytest
 import os
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
-
+from test.cl_node.common import testing_root_path
 
 CLI = "casperlabs_client"
 
@@ -495,7 +514,7 @@ class CLIErrorExit(Exception):
         self.cp = cp
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()  # scope="module")
 def cli(one_node_network):
 
     node = one_node_network.docker_nodes[0]
@@ -548,10 +567,14 @@ def test_cli_show_block_not_found(cli):
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
+@pytest.mark.skip
 def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
     cli, one_node_network
 ):
-    account = one_node_network.docker_nodes[0].test_account
+    resources_path = testing_root_path() / "resources"
+
+    account = GENESIS_ACCOUNT
+
     deploy_response = cli(
         "deploy",
         "--from",
@@ -559,9 +582,9 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
         "--nonce",
         "1",
         "--payment",
-        "resources/test_helloname.wasm",
+        str(resources_path / "test_helloname.wasm"),
         "--session",
-        "resources/test_helloname.wasm",
+        str(resources_path / "test_helloname.wasm"),
         "--private-key",
         str(account.private_key_path),
         "--public-key",
@@ -571,7 +594,8 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
     deploy_hash = deploy_response.split()[3]
 
     # 'Success! Block hash: xxxxxxxxx...'
-    block_hash = cli("propose").split()[3]
+    propose_response = cli("propose")
+    block_hash = propose_response.split()[3]
     deploys = parse_show_deploys(cli("show-deploys", block_hash))
     deploy_hashes = [d.deploy.deploy_hash for d in deploys]
     assert deploy_hash in deploy_hashes
@@ -597,4 +621,5 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
     balance = int(
         cli("balance", "--address", account.public_key_hex, "--block-hash", block_hash)
     )
-    assert balance == 1000000
+    # assert balance == 1000000 # regular test account
+    assert balance == 1000000000  # genesis
