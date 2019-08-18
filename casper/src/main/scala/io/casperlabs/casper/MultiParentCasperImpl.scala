@@ -414,15 +414,13 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       candidatesHashes = orphanedDeploys ++ pendingDeploys
 
       // Only send the next nonce per account.
-      remaining <- if (candidatesHashes.isEmpty) List.empty[Deploy].pure[F]
-                  else
-                    DeployBuffer[F]
-                      .getByHashes(NonEmptyList.fromListUnsafe(candidatesHashes))
-                      .map {
-                        _.groupBy(_.getHeader.accountPublicKey).map {
-                          case (_, deploys) => deploys.minBy(_.getHeader.nonce)
-                        }.toSeq
-                      }
+      remaining <- DeployBuffer[F]
+                    .getByHashes(candidatesHashes)
+                    .map {
+                      _.groupBy(_.getHeader.accountPublicKey).map {
+                        case (_, deploys) => deploys.minBy(_.getHeader.nonce)
+                      }.toSeq
+                    }
     } yield remaining
 
   /** If another node proposed a block which orphaned something proposed by this node,

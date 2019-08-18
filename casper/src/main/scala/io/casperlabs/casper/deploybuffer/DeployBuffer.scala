@@ -78,7 +78,7 @@ import scala.concurrent.duration.FiniteDuration
 
   def sizePendingOrProcessed(): F[Long]
 
-  def getByHashes(l: NonEmptyList[ByteString]): F[List[Deploy]]
+  def getByHashes(l: List[ByteString]): F[List[Deploy]]
 }
 
 class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
@@ -257,10 +257,13 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       .option
       .transact(xa)
 
-  override def getByHashes(l: NonEmptyList[ByteString]): F[List[Deploy]] = {
-    val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", l) // "hash IN (…)"
-    q.query.to[List].transact(xa)
-  }
+  override def getByHashes(l: List[ByteString]): F[List[Deploy]] =
+    NonEmptyList
+      .fromList[ByteString](l)
+      .fold(List.empty[Deploy].pure[F])(nel => {
+        val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
+        q.query.to[List].transact(xa)
+      })
 }
 
 object DeployBufferImpl {

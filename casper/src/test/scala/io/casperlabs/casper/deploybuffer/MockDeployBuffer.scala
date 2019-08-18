@@ -1,7 +1,6 @@
 package io.casperlabs.casper.deploybuffer
 
 import cats.Monad
-import cats.data.NonEmptyList
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
@@ -115,8 +114,8 @@ class MockDeployBuffer[F[_]: Monad: Log](
 
   override def readPendingHashes: F[List[ByteString]] = readPending.map(_.map(_.deployHash))
 
-  override def getByHashes(l: NonEmptyList[ByteString]): F[List[Deploy]] = {
-    val hashesSet = l.toList.toSet
+  override def getByHashes(l: List[ByteString]): F[List[Deploy]] = {
+    val hashesSet = l.toSet
     (readPending, readProcessed).mapN(_ ++ _).map(_.filter(d => hashesSet.contains(d.deployHash)))
   }
 
