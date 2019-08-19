@@ -10,17 +10,15 @@ import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValu
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.shared.Log
 
-class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] {
+class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix](rFTT: Double) {
 
   /**
     * Find the next to be finalized block from main children of latestFinalizedBlock
     * @param dag block dag
-    * @param rFTT relative fault tolerance threshold
     * @return
     */
   def findCommittee(
       dag: DagRepresentation[F],
-      rFTT: Double
   ): F[Option[CommitteeWithConsensusValue]] =
     VotingMatrix[F].checkForCommittee(dag, rFTT)
 

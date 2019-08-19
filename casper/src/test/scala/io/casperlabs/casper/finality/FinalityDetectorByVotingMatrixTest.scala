@@ -50,7 +50,7 @@ class FinalityDetectorByVotingMatrixTest
         implicit val votingMatrix: VotingMatrix[Task] =
           VotingMatrixImpl.empty[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
-        val finalityDetectorVotingMatrix = new FinalityDetectorVotingMatrix[Task]
+        val finalityDetectorVotingMatrix = new FinalityDetectorVotingMatrix[Task](rFTT = 0)
 
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
@@ -104,7 +104,7 @@ class FinalityDetectorByVotingMatrixTest
                )
 
           finalDag  <- blockDagStorage.getRepresentation
-          committee <- finalityDetectorVotingMatrix.findCommittee(finalDag, 0)
+          committee <- finalityDetectorVotingMatrix.findCommittee(finalDag)
           result = committee shouldBe Some(
             CommitteeWithConsensusValue(Set(v1, v2), 3, b1.blockHash)
           )
