@@ -27,6 +27,7 @@ members = [
     "contracts/test/get-caller",
     "contracts/test/get-caller-subcall",
     "contracts/test/get-phase",
+    "contracts/test/get-phase-payment",
     "contracts/test/known-urefs",
     "contracts/test/local-state",
     "contracts/test/main-purse",
