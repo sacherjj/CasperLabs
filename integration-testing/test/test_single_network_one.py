@@ -522,7 +522,9 @@ def cli(one_node_network):
     port = node.grpc_external_docker_port
 
     def invoker(*args):
-        command_line = [CLI, "--host", f"{host}", "--port", f"{port}"] + list(args)
+        command_line = [CLI, "--host", f"{host}", "--port", f"{port}"] + [
+            str(a) for a in args
+        ]
         logging.info(f"EXECUTING: {' '.join(command_line)}")
         cp = subprocess.run(
             command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -567,20 +569,29 @@ def test_cli_show_block_not_found(cli):
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
-@pytest.mark.skip
-def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
-    cli, one_node_network
-):
+def account_nonce(account_public_key_base16, node):
+    client = node.p_client
+    nonces = [
+        d.deploy.header.nonce
+        for b in client.show_blocks(1000000)
+        for d in client.show_deploys(b.summary.block_hash.hex())
+        if d.deploy.header.account_public_key.hex() == account_public_key_base16
+    ]
+    return max(nonces, default=0) + 1
+
+
+def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli):
     resources_path = testing_root_path() / "resources"
 
     account = GENESIS_ACCOUNT
+    nonce = 1
 
     deploy_response = cli(
         "deploy",
         "--from",
         account.public_key_hex,
         "--nonce",
-        "1",
+        nonce,
         "--payment",
         str(resources_path / "test_helloname.wasm"),
         "--session",
