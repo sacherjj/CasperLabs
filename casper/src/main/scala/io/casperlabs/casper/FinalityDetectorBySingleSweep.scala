@@ -3,7 +3,6 @@ package io.casperlabs.casper
 import cats.Monad
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.FinalityDetector.Committee
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
@@ -205,7 +204,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
       weights: Map[Validator, Long]
   ): F[Option[Committee]] =
     for {
-      committeeApproximationOpt <- FinalityDetectorUtil.committeeApproximation[F](
+      committeeApproximationOpt <- committeeApproximation(
                                     dag,
                                     candidateBlockHash,
                                     weights
@@ -230,6 +229,62 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
                    none[Committee].pure[F]
                }
     } yield result
+
+  /**
+    * Finding validators who voting on the `candidateBlockHash`,
+    * if twice the sum of weight of them are bigger than the
+    * total weight, then return these validators and their sum of weight.
+    * @param dag blockDag
+    * @param candidateBlockHash blockHash of block to be estimate whether finalized
+    * @param weights weight map
+    * @return
+    */
+  private def committeeApproximation(
+      dag: DagRepresentation[F],
+      candidateBlockHash: BlockHash,
+      weights: Map[Validator, Long]
+  ): F[Option[(List[Validator], Long)]] =
+    for {
+      committee              <- getAgreeingValidators(dag, candidateBlockHash, weights)
+      totalWeight            = weights.values.sum
+      maxWeightApproximation = committee.map(weights).sum
+      // To have a committee of half the total weight,
+      // you need at least twice the weight of the maxWeightApproximation to be greater than the total weight.
+      // If that is false, we don't need to compute best committee
+      // as fault tolerance t = `(2q/w - 1)(1 - 2^-k)`, so t is going below 0 and thus useless for finalization.
+      result = if (2 * maxWeightApproximation > totalWeight) {
+        Some((committee, maxWeightApproximation))
+      } else {
+        None
+      }
+    } yield result
+
+  /*
+   * Returns a list of validators whose latest messages are votes for `candidateBlockHash`.
+   * i.e. checks whether latest blocks from these validators are in the main chain of `candidateBlockHash`.
+   */
+  private def getAgreeingValidators(
+      dag: DagRepresentation[F],
+      candidateBlockHash: BlockHash,
+      weights: Map[Validator, Long]
+  ): F[List[Validator]] =
+    weights.keys.toList.filterA { validator =>
+      for {
+        latestMessageHash <- dag
+                              .latestMessageHash(
+                                validator
+                              )
+        result <- latestMessageHash match {
+                   case Some(b) =>
+                     ProtoUtil.isInMainChain[F](
+                       dag,
+                       candidateBlockHash,
+                       b
+                     )
+                   case _ => false.pure[F]
+                 }
+      } yield result
+    }
 }
 
 /**

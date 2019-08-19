@@ -8,62 +8,6 @@ import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 
 object FinalityDetectorUtil {
 
-  /*
-   * Returns a list of validators whose latest messages are votes for `candidateBlockHash`.
-   * i.e. checks whether latest blocks from these validators are in the main chain of `candidateBlockHash`.
-   */
-  private def getAgreeingValidators[F[_]: Monad](
-      dag: DagRepresentation[F],
-      candidateBlockHash: BlockHash,
-      weights: Map[Validator, Long]
-  ): F[List[Validator]] =
-    weights.keys.toList.filterA { validator =>
-      for {
-        latestMessageHash <- dag
-                              .latestMessageHash(
-                                validator
-                              )
-        result <- latestMessageHash match {
-                   case Some(b) =>
-                     ProtoUtil.isInMainChain[F](
-                       dag,
-                       candidateBlockHash,
-                       b
-                     )
-                   case _ => false.pure[F]
-                 }
-      } yield result
-    }
-
-  /**
-    * Finding validators who voting on the `candidateBlockHash`,
-    * if twice the sum of weight of them are bigger than the
-    * total weight, then return these validators and their sum of weight.
-    * @param dag blockDag
-    * @param candidateBlockHash blockHash of block to be estimate whether finalized
-    * @param weights weight map
-    * @return
-    */
-  def committeeApproximation[F[_]: Monad](
-      dag: DagRepresentation[F],
-      candidateBlockHash: BlockHash,
-      weights: Map[Validator, Long]
-  ): F[Option[(List[Validator], Long)]] =
-    for {
-      committee              <- getAgreeingValidators(dag, candidateBlockHash, weights)
-      totalWeight            = weights.values.sum
-      maxWeightApproximation = committee.map(weights).sum
-      // To have a committee of half the total weight,
-      // you need at least twice the weight of the maxWeightApproximation to be greater than the total weight.
-      // If that is false, we don't need to compute best committee
-      // as fault tolerance t = `(2q/w - 1)(1 - 2^-k)`, so t is going below 0 and thus useless for finalization.
-      result = if (2 * maxWeightApproximation > totalWeight) {
-        Some((committee, maxWeightApproximation))
-      } else {
-        None
-      }
-    } yield result
-
   /**
     * Finds latest block per each validator as seen in the j-past-cone of a given block.
     * The search is however restricted to given subset of validators.
