@@ -170,6 +170,7 @@ where
             current_runtime.context.rng(),
             protocol_version,
             current_runtime.context.correlation_id(),
+            current_runtime.context.phase(),
         ),
     };
 

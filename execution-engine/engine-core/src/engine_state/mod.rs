@@ -7,6 +7,7 @@ use parking_lot::Mutex;
 
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
+use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
@@ -211,6 +212,7 @@ where
                 protocol_version,
                 correlation_id,
                 tracking_copy,
+                Phase::Session,
             );
 
             return Ok(session_result);
@@ -378,6 +380,7 @@ where
                 protocol_version,
                 correlation_id,
                 Rc::clone(&tracking_copy),
+                Phase::Payment,
             )
         };
 
@@ -449,6 +452,7 @@ where
                 protocol_version,
                 correlation_id,
                 Rc::clone(&tracking_copy),
+                Phase::Session,
             )
         };
 
@@ -488,6 +492,7 @@ where
                 protocol_version,
                 correlation_id,
                 Rc::clone(&tracking_copy),
+                Phase::FinalizePayment,
             )
         };
 
