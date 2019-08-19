@@ -34,11 +34,13 @@ import scala.collection.mutable.{IndexedSeq => MutableSeq}
   /**
     * Check whether provide branch should be finalized
     * @param candidateBlockHash the provide branch to be checked whether finalized
+    * @param rFTT the relative fault tolerance threshold
     * @param committeeApproximation the pruned validator set that vote for the candidateBlockHash
     * @return
     */
   def checkForCommittee(
       candidateBlockHash: BlockHash,
+      rFTT: Double,
       committeeApproximation: Set[Validator]
   ): F[Option[CommitteeWithConsensusValue]]
 
@@ -56,9 +58,13 @@ import scala.collection.mutable.{IndexedSeq => MutableSeq}
   /**
     * Phase 1 - finding most supported consensus value
     * @param dag block dag
+    * @param rFTT the normalized fault tolerance threshold
     * @return
     */
-  def findCommitteeApproximation(dag: DagRepresentation[F]): F[Option[CommitteeWithConsensusValue]]
+  def findCommitteeApproximation(
+      dag: DagRepresentation[F],
+      rFTT: Double
+  ): F[Option[CommitteeWithConsensusValue]]
 }
 
 class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
@@ -123,6 +129,7 @@ class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
 
   override def checkForCommittee(
       candidateBlockHash: BlockHash,
+      rFTT: Double,
       committeeApproximation: Set[Validator]
   ): F[Option[CommitteeWithConsensusValue]] =
     lock.withPermit(for {
@@ -137,7 +144,7 @@ class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
         firstLevelZeroVotes,
         candidateBlockHash,
         mask,
-        weight.sum / 2 + 1,
+        math.ceil(weight.sum * (0.5 + rFTT)).toLong,
         weight
       )
       committee = committeeOpt.map {
@@ -148,7 +155,8 @@ class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
     } yield committee)
 
   override def findCommitteeApproximation(
-      dag: DagRepresentation[F]
+      dag: DagRepresentation[F],
+      rFTT: Double
   ): F[Option[CommitteeWithConsensusValue]] =
     lock.withPermit(
       for {
@@ -168,11 +176,10 @@ class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
         // Get the voteBranch's supporters
         supporters  = consensusValueToValidators(voteValue)
         totalWeight = weightMap.values.sum
+        quorum      = math.ceil(totalWeight * (rFTT + 0.5)).toLong
       } yield
-        if (supportingWeight * 2 > totalWeight) {
-          Some(
-            CommitteeWithConsensusValue(supporters.toSet, supportingWeight, voteValue)
-          )
+        if (supportingWeight > quorum) {
+          Some(CommitteeWithConsensusValue(supporters.toSet, supportingWeight, voteValue))
         } else {
           None
         }
@@ -203,10 +210,10 @@ class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
                 }
             }
             .sum
-          if (voteSum >= q) {
-            (newMask, prunedValidator, maxTotalWeight + weight(rowIndex))
-          } else {
+          if (voteSum < q) {
             (newMask.updated(rowIndex, false), true, maxTotalWeight)
+          } else {
+            (newMask, prunedValidator, maxTotalWeight + weight(rowIndex))
           }
       }
     if (prunedValidator) {
@@ -225,7 +232,6 @@ class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
       newFinalizedBlock: BlockHash
   ): F[Unit] =
     lock.withPermit(for {
-      // todo(abner)  use a lock to atomically update these state
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
       weights    <- dag.lookup(newFinalizedBlock).map(_.get.weightMap)
       _          <- (state >> 'weightMap).set(weights)

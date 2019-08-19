@@ -14,21 +14,20 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] {
   /**
     * Find the next to be finalized block from main children of latestFinalizedBlock
     * @param dag block dag
+    * @param rFTT relative fault tolerance threshold
     * @return
     */
   def findCommittee(
-      dag: DagRepresentation[F]
+      dag: DagRepresentation[F],
+      rFTT: Double
   ): F[Option[CommitteeWithConsensusValue]] =
     for {
-      committeeApproximationOpt <- VotingMatrix[F].findCommitteeApproximation(dag)
+      committeeApproximationOpt <- VotingMatrix[F].findCommitteeApproximation(dag, rFTT)
       result <- committeeApproximationOpt match {
                  case Some(
-                     CommitteeWithConsensusValue(committeeApproximation, _, concensusValue)
+                     CommitteeWithConsensusValue(committeeApproximation, _, consensusValue)
                      ) =>
-                   VotingMatrix[F].checkForCommittee(
-                     concensusValue,
-                     committeeApproximation
-                   )
+                   VotingMatrix[F].checkForCommittee(consensusValue, rFTT, committeeApproximation)
                  case None =>
                    none[CommitteeWithConsensusValue].pure[F]
                }

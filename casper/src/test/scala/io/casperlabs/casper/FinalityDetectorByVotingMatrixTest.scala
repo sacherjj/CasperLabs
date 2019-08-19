@@ -104,7 +104,7 @@ class FinalityDetectorByVotingMatrixTest
                )
 
           finalDag  <- blockDagStorage.getRepresentation
-          committee <- finalityDetectorVotingMatrix.findCommittee(finalDag)
+          committee <- finalityDetectorVotingMatrix.findCommittee(finalDag, 0)
           result = committee shouldBe Some(
             CommitteeWithConsensusValue(Set(v1, v2), 3, b1.blockHash)
           )
