@@ -1,11 +1,11 @@
 #![no_std]
 #![feature(alloc, cell_update)]
 
+#[macro_use]
 extern crate alloc;
 extern crate cl_std;
 
 use alloc::string::{String, ToString};
-use alloc::vec::Vec;
 use core::clone::Clone;
 use core::convert::Into;
 
@@ -27,11 +27,7 @@ pub extern "C" fn create() {
         ret.into()
     };
 
-    let extra_urefs = {
-        let mut ret = Vec::new();
-        ret.push(read_only_reference);
-        ret
-    };
+    let extra_urefs = vec![read_only_reference];
 
     contract_api::ret(&read_only_reference, &extra_urefs)
 }
