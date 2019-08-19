@@ -70,7 +70,7 @@ fn should_run_ee_572_regression() {
     let contract: Key = {
         let account = match builder.query(None, Key::Account(ACCOUNT_1_ADDR), &[]) {
             Some(Value::Account(account)) => account,
-            _ => panic!(format!("Could not find account at: {:?}", ACCOUNT_1_ADDR)),
+            _ => panic!("Could not find account at: {:?}", ACCOUNT_1_ADDR),
         };
         *account
             .urefs_lookup()
