@@ -7,10 +7,11 @@ extern crate cl_std;
 
 use alloc::vec::Vec;
 
-use cl_std::contract_api;
 use cl_std::contract_api::pointers::{ContractPointer, UPointer};
+use cl_std::contract_api::{self, PurseTransferResult};
 use cl_std::key::Key;
 use cl_std::value::account::PurseId;
+use cl_std::value::U512;
 
 fn purse_to_key(p: &PurseId) -> Key {
     Key::URef(p.value())
@@ -26,6 +27,20 @@ fn set_refund_purse(pos: &ContractPointer, p: &PurseId) {
 
 fn get_refund_purse(pos: &ContractPointer) -> Option<PurseId> {
     contract_api::call_contract(pos.clone(), &"get_refund_purse", &Vec::new())
+}
+
+fn get_payment_purse(pos: &ContractPointer) -> PurseId {
+    contract_api::call_contract(pos.clone(), &"get_payment_purse", &Vec::new())
+}
+
+fn submit_payment(pos: &ContractPointer, amount: U512) {
+    let payment_purse = get_payment_purse(pos);
+    let main_purse = contract_api::main_purse();
+    if let PurseTransferResult::TransferError =
+        contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
+    {
+        contract_api::revert(99);
+    }
 }
 
 #[no_mangle]
@@ -63,4 +78,7 @@ pub extern "C" fn call() {
         Some(x) if x.value().addr() == p2.value().addr() => (),
         Some(_) => contract_api::revert(6),
     }
+
+    let payment_amount: U512 = contract_api::get_arg(0);
+    submit_payment(&pos_pointer, payment_amount);
 }

@@ -443,6 +443,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "do-nothing"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
 name = "ee-221-regression"
 version = "0.1.0"
 dependencies = [
@@ -486,6 +493,13 @@ dependencies = [
 
 [[package]]
 name = "ee-539-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
+name = "ee-549-regression"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.12.0",
