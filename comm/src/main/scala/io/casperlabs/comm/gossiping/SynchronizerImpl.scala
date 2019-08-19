@@ -315,7 +315,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     */
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
     // Dependencies can be scattered across many different ranks and still be at the same
-    // distance when measaured in hops along the j-DAG, so to use the "bonding per rank"
+    // distance when measured in hops along the j-DAG, so to use the "bonding per rank"
     // limit we need to have a different estimate for the number of depth as in ranks.
     // The max-min rank distance could be faked, but we can perhaps get an estimate by just
     // seeing how many different values we observed so far.
