@@ -1,9 +1,8 @@
 package io.casperlabs.client.configuration
 import java.io.File
-import java.nio.file.Path
-import java.util
 
 import cats.implicits._
+import org.rogach.scallop.ScallopOption
 
 final case class ConnectOptions(
     host: String,
@@ -90,6 +89,14 @@ final case class Query(
 ) extends Configuration
 
 object Configuration {
+  private def readFileOrString(
+      file: ScallopOption[File],
+      str: ScallopOption[String]
+  ): Either[Array[Byte], File] =
+    file.toOption
+      .map(_.asRight[Array[Byte]])
+      .getOrElse(str().getBytes.asLeft[File])
+
   def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
     val options = Options(args)
     val connect = ConnectOptions(
@@ -110,15 +117,11 @@ object Configuration {
         )
       case options.deploy =>
         Deploy(
-          options.deploy.deployFile.toOption
-            .map(_.asRight[Array[Byte]])
-            .getOrElse(options.deploy.deployStdin().getBytes.asLeft[File])
+          readFileOrString(options.deploy.deployFile, options.deploy.deployStdin)
         )
       case options.sign =>
         Sign(
-          options.sign.deployFile.toOption
-            .map(_.asRight[Array[Byte]])
-            .getOrElse(options.sign.deployStdin().getBytes().asLeft[File]),
+          readFileOrString(options.sign.deployFile, options.sign.deployStdin),
           options.sign.signedDeployPath.toOption,
           options.sign.publicKey(),
           options.sign.privateKey()

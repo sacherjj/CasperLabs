@@ -72,7 +72,7 @@ object DeployRuntime {
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
-            sessionArgs = ByteString.copyFrom(argsSer)
+            sessionArgs = argsSer
           )
     } yield ()
   }
@@ -99,7 +99,7 @@ object DeployRuntime {
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
-            sessionArgs = ByteString.copyFrom(argsSer)
+            sessionArgs = argsSer
           )
     } yield ()
   }
@@ -283,7 +283,7 @@ object DeployRuntime {
             maybeEitherPublicKey = senderPublicKey.asRight[String].some,
             maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
             gasPrice = 10L,
-            ByteString.copyFrom(args),
+            args,
             exit,
             ignoreOutput
           )
@@ -328,7 +328,7 @@ object DeployRuntime {
   /** Constructs a [[Deploy]] from the provided arguments and writes it to a file (or STDOUT).
     */
   def makeDeploy[F[_]: Sync](
-      from: String,
+      from: ByteString,
       nonce: Long,
       gasPrice: Long,
       sessionCode: Array[Byte],
@@ -345,7 +345,7 @@ object DeployRuntime {
         consensus.Deploy
           .Header()
           .withTimestamp(System.currentTimeMillis)
-          .withAccountPublicKey(ByteString.copyFrom(Base16.decode(from)))
+          .withAccountPublicKey(from)
           .withNonce(nonce)
           .withGasPrice(gasPrice)
       )
@@ -384,7 +384,7 @@ object DeployRuntime {
       maybeEitherPublicKey: Option[Either[String, PublicKey]],
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
       gasPrice: Long,
-      sessionArgs: ByteString = ByteString.EMPTY,
+      sessionArgs: Array[Byte] = Array.emptyByteArray,
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] = {
@@ -398,9 +398,6 @@ object DeployRuntime {
       either.fold(Ed25519.tryParsePublicKey, _.some)
     } orElse maybePrivateKey.flatMap(Ed25519.tryToPublic)
 
-    val session = ByteString.copyFrom(sessionCode)
-    val payment = ByteString.copyFrom(paymentCode)
-
     val deploy = for {
       accountPublicKey <- Sync[F].fromOption(
                            from
@@ -409,24 +406,8 @@ object DeployRuntime {
                            new IllegalArgumentException("--from or --public-key must be presented")
                          )
     } yield {
-      val deploy = consensus
-        .Deploy()
-        .withHeader(
-          consensus.Deploy
-            .Header()
-            .withTimestamp(System.currentTimeMillis)
-            .withAccountPublicKey(accountPublicKey)
-            .withNonce(nonce)
-            .withGasPrice(gasPrice)
-        )
-        .withBody(
-          consensus.Deploy
-            .Body()
-            .withSession(consensus.Deploy.Code().withCode(session).withArgs(sessionArgs))
-            .withPayment(consensus.Deploy.Code().withCode(payment))
-        )
-        .withHashes
-
+      val deploy =
+        makeDeploy(accountPublicKey, nonce, gasPrice, sessionCode, sessionArgs, paymentCode)
       (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
     }
 

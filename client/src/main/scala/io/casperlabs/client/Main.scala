@@ -1,13 +1,12 @@
 package io.casperlabs.client
 
-import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import cats.effect.{Sync, Timer}
-import cats.syntax.either._
 import cats.temp.par._
+import com.google.protobuf.ByteString
 import io.casperlabs.client.configuration._
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -92,7 +91,7 @@ object Main {
           deployPath
           ) => {
         val deploy = DeployRuntime.makeDeploy(
-          from,
+          ByteString.copyFrom(Base16.decode(from)),
           nonce,
           gasPrice,
           Files.readAllBytes(sessionCode.toPath),
