@@ -1,5 +1,9 @@
+mod byte_size;
+mod ext;
+pub(self) mod meter;
 #[cfg(test)]
 mod tests;
+pub mod utils;
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -12,11 +16,11 @@ use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_shared::transform::{self, Transform, TypeMismatch};
 use engine_storage::global_state::StateReader;
 
+pub use self::ext::TrackingCopyExt;
+use self::meter::heap_meter::HeapSize;
+use self::meter::Meter;
 use engine_state::execution_effect::ExecutionEffect;
 use engine_state::op::Op;
-use meter::heap_meter::HeapSize;
-use meter::Meter;
-use utils::add;
 
 #[derive(Debug)]
 pub enum QueryResult {
@@ -131,8 +135,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     ) -> Result<Option<Value>, R::Error> {
         let k = k.normalize();
         if let Some(value) = self.get(correlation_id, &k)? {
-            add(&mut self.ops, k, Op::Read);
-            add(&mut self.fns, k, Transform::Identity);
+            utils::add(&mut self.ops, k, Op::Read);
+            utils::add(&mut self.fns, k, Transform::Identity);
             Ok(Some(value))
         } else {
             Ok(None)
@@ -143,8 +147,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         let v_local = v.into_raw();
         let k = k.normalize();
         self.cache.insert_write(k, v_local.clone());
-        add(&mut self.ops, k, Op::Write);
-        add(&mut self.fns, k, Transform::Write(v_local));
+        utils::add(&mut self.ops, k, Op::Write);
+        utils::add(&mut self.fns, k, Transform::Write(v_local));
     }
 
     /// Ok(None) represents missing key to which we want to "add" some value.
@@ -180,8 +184,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 match t.clone().apply(curr) {
                     Ok(new_value) => {
                         self.cache.insert_write(k, new_value);
-                        add(&mut self.ops, k, Op::Add);
-                        add(&mut self.fns, k, t);
+                        utils::add(&mut self.ops, k, Op::Add);
+                        utils::add(&mut self.fns, k, t);
                         Ok(AddResult::Success)
                     }
                     Err(transform::Error::TypeMismatch(type_mismatch)) => {

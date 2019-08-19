@@ -8,7 +8,7 @@ use wasmi::{FuncInstance, MemoryRef, ModuleImportResolver};
 
 use super::error::ResolverError;
 use super::memory_resolver::MemoryResolver;
-use function_index::FunctionIndex;
+use super::v1_function_index::FunctionIndex;
 
 pub struct RuntimeModuleImportResolver {
     memory: RefCell<Option<MemoryRef>>,
