@@ -83,6 +83,25 @@ object Main {
           recipientPublicKeyBase64,
           amount
         )
+      case MakeDeploy(
+          from,
+          nonce,
+          sessionCode,
+          paymentCode,
+          gasPrice,
+          deployPath
+          ) => {
+        val deploy = DeployRuntime.makeDeploy(
+          from,
+          nonce,
+          gasPrice,
+          Files.readAllBytes(sessionCode.toPath),
+          Array.emptyByteArray,
+          Files.readAllBytes(paymentCode.toPath)
+        )
+        DeployRuntime.saveDeploy(deploy, deployPath)
+      }
+
       case Deploy(
           from,
           nonce,

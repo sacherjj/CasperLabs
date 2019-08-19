@@ -327,6 +327,50 @@ object DeployRuntime {
     gracefulExit(program.attempt)
   }
 
+  /** Constructs a [[Deploy]] from the provided arguments and writes it to a file (or STDOUT).
+    */
+  def makeDeploy[F[_]: Sync](
+      from: String,
+      nonce: Long,
+      gasPrice: Long,
+      sessionCode: Array[Byte],
+      sessionArguments: Array[Byte],
+      paymentCode: Array[Byte]
+  ): Deploy = {
+    val session     = ByteString.copyFrom(sessionCode)
+    val payment     = ByteString.copyFrom(paymentCode)
+    val sessionArgs = ByteString.copyFrom(sessionArguments)
+
+    consensus
+      .Deploy()
+      .withHeader(
+        consensus.Deploy
+          .Header()
+          .withTimestamp(System.currentTimeMillis)
+          .withAccountPublicKey(ByteString.copyFrom(Base16.decode(from)))
+          .withNonce(nonce)
+          .withGasPrice(gasPrice)
+      )
+      .withBody(
+        consensus.Deploy
+          .Body()
+          .withSession(consensus.Deploy.Code().withCode(session).withArgs(sessionArgs))
+          .withPayment(consensus.Deploy.Code().withCode(payment))
+      )
+      .withHashes
+  }
+
+  def saveDeploy[F[_]: Sync](deploy: Deploy, deployPath: Option[File]): F[Unit] =
+    gracefulExit {
+      deployPath.fold {
+        Sync[F].delay(new String(deploy.toByteArray))
+      } { file =>
+        Sync[F]
+          .delay(Files.write(file.toPath, deploy.toByteArray))
+          .as(s"Deploy written to $file.")
+      }.attempt
+    }
+
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[String],
       nonce: Long,

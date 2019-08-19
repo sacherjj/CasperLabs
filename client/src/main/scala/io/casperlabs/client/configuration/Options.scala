@@ -51,6 +51,48 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
 
+  val makeDeploy = new Subcommand("make-deploy") {
+    descr("Constructs a deploy that can be signed and sent to a node.")
+
+    val from = opt[String](
+      descr =
+        "The public key of the account which is the context of this deployment, base16 encoded.",
+      required = true
+    )
+
+    val gasPrice = opt[Long](
+      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
+      validate = _ > 0,
+      required = false,
+      default = 10L.some
+    )
+
+    val nonce = opt[Long](
+      descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val session =
+      opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
+
+    val payment =
+      opt[File](
+        required = false,
+        descr = "Path to the file with payment code, by default fallbacks to the --session code",
+        validate = fileCheck
+      )
+
+    val deployPath =
+      opt[File](
+        required = false,
+        descr = "Path to the file where deploy will be saved. " +
+          "Optional, if not provided the deploy will be printed to STDOUT.",
+        short = 'o'
+      )
+  }
+  addSubcommand(makeDeploy)
+
   val deploy = new Subcommand("deploy") {
     descr(
       "Deploy a smart contract source file to Casper on an existing running node. " +

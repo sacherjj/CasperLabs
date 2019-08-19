@@ -14,6 +14,15 @@ final case class ConnectOptions(
 
 sealed trait Configuration
 
+final case class MakeDeploy(
+    from: String,
+    nonce: Long,
+    sessionCode: File,
+    paymentCode: File,
+    gasPrice: Long,
+    deployPath: Option[File]
+) extends Configuration
+
 final case class Deploy(
     from: Option[String],
     nonce: Long,
@@ -96,6 +105,15 @@ object Configuration {
       options.nodeId.toOption
     )
     val conf = options.subcommand.map {
+      case options.makeDeploy =>
+        MakeDeploy(
+          options.makeDeploy.from(),
+          options.makeDeploy.nonce(),
+          options.makeDeploy.session(),
+          options.makeDeploy.payment(),
+          options.makeDeploy.gasPrice(),
+          options.makeDeploy.deployPath.toOption
+        )
       case options.deploy =>
         Deploy(
           options.deploy.from.toOption,
