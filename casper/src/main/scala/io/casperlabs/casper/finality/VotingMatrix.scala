@@ -1,14 +1,14 @@
 package io.casperlabs.casper.finality
 
 import cats.Monad
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.mtl.{DefaultMonadState, MonadState}
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.VotingMatrixImpl.{_votingMatrix, Vote}
+import io.casperlabs.casper.finality.VotingMatrixImpl.{Vote, VotingMatrix}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadStateOps._
 
@@ -28,7 +28,7 @@ object VotingMatrix {
       dag: DagRepresentation[F],
       blockMetadata: BlockMetadata,
       currentVoteValue: BlockHash
-  )(implicit matrix: _votingMatrix[F]): F[Unit] =
+  )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
       voter            = blockMetadata.validatorPublicKey
@@ -47,7 +47,7 @@ object VotingMatrix {
   def updateVotingMatrixOnNewBlock[F[_]: Monad](
       dag: DagRepresentation[F],
       blockMetadata: BlockMetadata
-  )(implicit matrix: _votingMatrix[F]): F[Unit] =
+  )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
       panoramaM        <- panoramaM[F](dag, validatorToIndex, blockMetadata)
@@ -61,7 +61,7 @@ object VotingMatrix {
       validator: Validator,
       newVote: BlockHash,
       dagLevel: Long
-  )(implicit matrix: _votingMatrix[F]): F[Unit] =
+  )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       firstLevelZeroMsgs <- (matrix >> 'firstLevelZeroVotes).get
       validatorToIndex   <- (matrix >> 'validatorToIdx).get
@@ -103,13 +103,12 @@ object VotingMatrix {
 
   /**
     * Check whether provide branch should be finalized
-    * @param dag the block dag
     * @param rFTT the relative fault tolerance threshold
     * @return
     */
   def checkForCommittee[F[_]: Monad](
       rFTT: Double
-  )(implicit matrix: _votingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
+  )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
       weightMap                 <- (matrix >> 'weightMap).get
       totalWeight               = weightMap.values.sum
@@ -156,7 +155,7 @@ object VotingMatrix {
     */
   private def findCommitteeApproximation[F[_]: Monad](
       quorum: Long
-  )(implicit matrix: _votingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
+  )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
       weightMap           <- (matrix >> 'weightMap).get
       validators          <- (matrix >> 'validators).get
@@ -226,28 +225,22 @@ object VotingMatrix {
 
 object VotingMatrixImpl {
   // (Consensus value, DagLevel of the block)
-  type Vote                = (BlockHash, Long)
-  type _votingMatrix[F[_]] = MonadState[F, VotingMatrixState] with Semaphore[F]
-  def _votingMatrix[F[_]](implicit ev: _votingMatrix[F]): _votingMatrix[F] = ev
+  type Vote               = (BlockHash, Long)
+  type VotingMatrix[F[_]] = MonadState[F, VotingMatrixState]
 
-  def of[F[_]: Concurrent](
+  def of[F[_]: Sync](
       votingMatrixState: VotingMatrixState
-  ): F[_votingMatrix[F]] =
-    for {
-      lock  <- Semaphore[F](1)
-      state <- Ref[F].of(votingMatrixState)
-    } yield new Semaphore[F] with DefaultMonadState[F, VotingMatrixState] {
-      val monad: cats.Monad[F]               = implicitly[Monad[F]]
-      def get: F[VotingMatrixState]          = state.get
-      def set(s: VotingMatrixState): F[Unit] = state.set(s)
-
-      override def available: F[Long]               = lock.available
-      override def count: F[Long]                   = lock.count
-      override def acquireN(n: Long): F[Unit]       = lock.acquireN(n)
-      override def tryAcquireN(n: Long): F[Boolean] = lock.tryAcquireN(n)
-      override def releaseN(n: Long): F[Unit]       = lock.releaseN(n)
-      override def withPermit[A](t: F[A]): F[A]     = lock.withPermit(t)
-    }
+  ): F[VotingMatrix[F]] =
+    Ref[F]
+      .of(votingMatrixState)
+      .map(
+        state =>
+          new DefaultMonadState[F, VotingMatrixState] {
+            val monad: cats.Monad[F]               = implicitly[Monad[F]]
+            def get: F[VotingMatrixState]          = state.get
+            def set(s: VotingMatrixState): F[Unit] = state.set(s)
+          }
+      )
 
   case class VotingMatrixState(
       votingMatrix: MutableSeq[MutableSeq[Long]],
@@ -257,7 +250,7 @@ object VotingMatrixImpl {
       validators: MutableSeq[Validator]
   )
 
-  def empty[F[_]: Concurrent]: F[_votingMatrix[F]] =
+  def empty[F[_]: Concurrent]: F[VotingMatrix[F]] =
     of[F](
       VotingMatrixState(MutableSeq.empty, MutableSeq.empty, Map.empty, Map.empty, MutableSeq.empty)
     )
@@ -284,7 +277,7 @@ object VotingMatrixImpl {
   def create[F[_]: Concurrent](
       dag: DagRepresentation[F],
       newFinalizedBlock: BlockHash
-  ): F[_votingMatrix[F]] =
+  ): F[VotingMatrixState] =
     for {
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
       weights    <- dag.lookup(newFinalizedBlock).map(_.get.weightMap)
@@ -338,10 +331,11 @@ object VotingMatrixImpl {
         weights,
         validators
       )
-      implicit0(stateWithSemaphore: _votingMatrix[F]) <- of[F](state)
+      implicit0(votingMatrix: VotingMatrix[F]) <- of[F](state)
       // Apply the incremental update step to update voting matrix by taking M := V(i)latest
       _ <- latestMessagesToUpdated.values.toList.traverse { b =>
             VotingMatrix.updateVotingMatrixOnNewBlock[F](dag, b)
           }
-    } yield stateWithSemaphore
+      updatedState <- votingMatrix.get
+    } yield updatedState
 }

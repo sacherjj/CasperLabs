@@ -4,7 +4,7 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.VotingMatrixImpl._votingMatrix
+import io.casperlabs.casper.finality.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
@@ -50,10 +50,8 @@ class FinalityDetectorByVotingMatrixTest
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
-          implicit0(votingMatrixState: _votingMatrix[Task]) <- VotingMatrixImpl.create(
-                                                                dag,
-                                                                genesis.blockHash
-                                                              )
+          implicit0(votingMatrixS: _votingMatrixS[Task]) <- FinalityDetectorVotingMatrix
+                                                             .of[Task](dag, genesis.blockHash)
           finalityDetectorVotingMatrix = new FinalityDetectorVotingMatrix[Task](rFTT = 0)
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        finalityDetectorVotingMatrix,
