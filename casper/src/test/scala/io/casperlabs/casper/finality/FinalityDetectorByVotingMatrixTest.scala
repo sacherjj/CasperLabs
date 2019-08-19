@@ -4,10 +4,10 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValue
+import io.casperlabs.casper.finality.VotingMatrixImpl._votingMatrix
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
-import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -47,64 +47,66 @@ class FinalityDetectorByVotingMatrixTest
         val v2Bond = Bond(v2, 1)
         val bonds  = Seq(v1Bond, v2Bond)
 
-        implicit val votingMatrix: VotingMatrix[Task] =
-          VotingMatrixImpl.empty[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-
-        val finalityDetectorVotingMatrix = new FinalityDetectorVotingMatrix[Task](rFTT = 0)
-
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
-          _       <- finalityDetectorVotingMatrix.rebuildFromLatestFinalizedBlock(dag, genesis.blockHash)
-          b1 <- createBlockAndUpdateFinalityDetector[Task](
-                 finalityDetectorVotingMatrix,
-                 Seq(genesis.blockHash),
-                 genesis.blockHash,
-                 v1,
-                 bonds,
-                 HashMap(v1 -> genesis.blockHash)
-               )
-          b2 <- createBlockAndUpdateFinalityDetector[Task](
-                 finalityDetectorVotingMatrix,
-                 Seq(b1.blockHash),
-                 genesis.blockHash,
-                 v1,
-                 bonds
-               )
-          b3 <- createBlockAndUpdateFinalityDetector[Task](
-                 finalityDetectorVotingMatrix,
-                 Seq(b1.blockHash),
-                 genesis.blockHash,
-                 v2,
-                 bonds
-               )
-          b4 <- createBlockAndUpdateFinalityDetector[Task](
-                 finalityDetectorVotingMatrix,
-                 Seq(b2.blockHash),
-                 genesis.blockHash,
-                 v1,
-                 bonds,
-                 HashMap(v1 -> b2.blockHash, v2 -> b3.blockHash)
-               )
-          b5 <- createBlockAndUpdateFinalityDetector[Task](
-                 finalityDetectorVotingMatrix,
-                 Seq(b3.blockHash),
-                 genesis.blockHash,
-                 v2,
-                 bonds,
-                 HashMap(v2 -> b3.blockHash)
-               )
-          b6 <- createBlockAndUpdateFinalityDetector[Task](
-                 finalityDetectorVotingMatrix,
-                 Seq(b5.blockHash),
-                 genesis.blockHash,
-                 v2,
-                 bonds,
-                 HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
-               )
+          implicit0(votingMatrixState: _votingMatrix[Task]) <- VotingMatrixImpl.create(
+                                                                dag,
+                                                                genesis.blockHash
+                                                              )
+          finalityDetectorVotingMatrix = new FinalityDetectorVotingMatrix[Task](rFTT = 0)
+          (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                       finalityDetectorVotingMatrix,
+                       Seq(genesis.blockHash),
+                       genesis.blockHash,
+                       v1,
+                       bonds,
+                       HashMap(v1 -> genesis.blockHash)
+                     )
+          _ = println(s"C1: $c1")
+          (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                       finalityDetectorVotingMatrix,
+                       Seq(b1.blockHash),
+                       genesis.blockHash,
+                       v1,
+                       bonds
+                     )
+          _ = println(s"C2: $c2")
+          (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                       finalityDetectorVotingMatrix,
+                       Seq(b1.blockHash),
+                       genesis.blockHash,
+                       v2,
+                       bonds
+                     )
+          _ = println(s"C3: $c3")
+          (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
+                       finalityDetectorVotingMatrix,
+                       Seq(b2.blockHash),
+                       genesis.blockHash,
+                       v1,
+                       bonds,
+                       HashMap(v1 -> b2.blockHash, v2 -> b3.blockHash)
+                     )
+          _ = println(s"C4: $c4")
+          (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
+                       finalityDetectorVotingMatrix,
+                       Seq(b3.blockHash),
+                       genesis.blockHash,
+                       v2,
+                       bonds,
+                       HashMap(v2 -> b3.blockHash)
+                     )
+          _ = println(s"C5: $c5")
+          (b6, committee) <- createBlockAndUpdateFinalityDetector[Task](
+                              finalityDetectorVotingMatrix,
+                              Seq(b5.blockHash),
+                              genesis.blockHash,
+                              v2,
+                              bonds,
+                              HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
+                            )
 
-          finalDag  <- blockDagStorage.getRepresentation
-          committee <- finalityDetectorVotingMatrix.findCommittee(finalDag)
           result = committee shouldBe Some(
             CommitteeWithConsensusValue(Set(v1, v2), 3, b1.blockHash)
           )
