@@ -1,7 +1,9 @@
 package io.casperlabs.client.configuration
 
 import java.io.File
+import java.nio.file.{Files, Paths}
 
+import scala.collection.convert.ImplicitConversionsToScala
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
 import io.casperlabs.client.BuildInfo
@@ -108,6 +110,56 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
   }
   addSubcommand(deploy)
+
+  val sign = new Subcommand("sign") {
+    descr("Cryptographically signs a deploy.")
+
+    val publicKey =
+      opt[File](
+        required = true,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck,
+        noshort = true
+      )
+
+    val privateKey =
+      opt[File](
+        required = true,
+        descr = "Path to the file with account private key (Ed25519)",
+        validate = fileCheck,
+        noshort = true
+      )
+
+    val signedDeployPath =
+      opt[File](
+        required = false,
+        descr = "Path to the file where signed deploy will be saved." +
+          "If not provided, signed deploy will be printed to the stdout.",
+        short = 'o'
+      )
+
+    val deployFile =
+      opt[File](
+        required = false,
+        descr = "Path to the deploy file. Optional since deploy can also be read from the stdin.",
+        validate = fileCheck
+      )
+
+    val deployStdin =
+      trailArg[String](
+        name = "deploy",
+        default = deployFile.toOption.map(f => new String(Files.readAllBytes(f.toPath))),
+        required = false
+      )
+
+    addValidation {
+      if (deployFile.toOption.isDefined && deployStdin.isSupplied)
+        Left("Deploy can be passed as either a file or through STDIN. Providing both is invalid.")
+      else Right(())
+    }
+  }
+
+  addSubcommand(sign)
 
   val propose = new Subcommand("propose") {
     descr(

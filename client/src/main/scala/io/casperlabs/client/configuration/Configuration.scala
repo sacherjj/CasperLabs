@@ -1,6 +1,9 @@
 package io.casperlabs.client.configuration
 import java.io.File
 import java.nio.file.Path
+import java.util
+
+import cats.implicits._
 
 final case class ConnectOptions(
     host: String,
@@ -19,6 +22,22 @@ final case class Deploy(
     publicKey: Option[File],
     privateKey: Option[File],
     gasPrice: Long
+) extends Configuration
+
+/** Client command to sign a deploy.
+  *
+  * @param deploy Either an array of bytes (deploy read from the STDIN),
+  *               or a file (deploy read from the file).
+  * @param signedDeployPath Path where signed deploy will be written.
+  *                         If `None` then it's written to STDOUT.
+  * @param publicKey Public key corresponding to the private one.
+  * @param privateKey Key signing the deploy.
+  */
+final case class Sign(
+    deploy: Either[Array[Byte], File],
+    signedDeployPath: Option[File],
+    publicKey: File,
+    privateKey: File
 ) extends Configuration
 
 final case object Propose extends Configuration
@@ -86,6 +105,15 @@ object Configuration {
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption,
           options.deploy.gasPrice()
+        )
+      case options.sign =>
+        Sign(
+          options.sign.deployFile.toOption
+            .map(_.asRight[Array[Byte]])
+            .getOrElse(options.sign.deployStdin().getBytes().asLeft[File]),
+          options.sign.signedDeployPath.toOption,
+          options.sign.publicKey(),
+          options.sign.privateKey()
         )
       case options.propose =>
         Propose

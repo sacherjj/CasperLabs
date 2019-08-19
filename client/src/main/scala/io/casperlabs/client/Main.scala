@@ -107,6 +107,8 @@ object Main {
           ),
           gasPrice
         )
+      case Sign(deploy, signedDeployOut, publicKey, privateKey) =>
+        DeployRuntime.sign(deploy, signedDeployOut, publicKey, privateKey)
 
       case Propose =>
         DeployRuntime.propose()

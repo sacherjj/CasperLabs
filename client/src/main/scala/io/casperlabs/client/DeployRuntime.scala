@@ -4,11 +4,13 @@ import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
+import cats.Show
 import cats.effect.{Sync, Timer}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.client.configuration.Streaming
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -286,6 +288,45 @@ object DeployRuntime {
           )
     } yield ()
 
+  private def readKey[F[_]: Sync, A](keyFile: File, keyType: String, f: String => Option[A]): F[A] =
+    readFileAsString[F](keyFile) >>= { key =>
+      Sync[F].fromOption[A](
+        f(key),
+        new IllegalArgumentException(s"$keyFile was not valid Ed25519 $keyType key.")
+      )
+    }
+
+  /** Signs a deploy with provided private key and writes it to the file (if provided),
+    * or prints to STDOUT.
+    *
+    * @param deploy
+    * @param output
+    * @param publicKeyFile
+    * @param privateKeyFile
+    * @tparam F
+    * @return
+    */
+  def sign[F[_]: Sync](
+      deploy: Either[Array[Byte], File],
+      output: Option[File],
+      publicKeyFile: File,
+      privateKeyFile: File
+  ): F[Unit] = {
+
+    val program = for {
+      publicKey     <- readKey[F, PublicKey](publicKeyFile, "public", Ed25519.tryParsePublicKey _)
+      privateKey    <- readKey[F, PrivateKey](privateKeyFile, "private", Ed25519.tryParsePrivateKey _)
+      d             = Deploy.parseFrom(deploy.fold(identity, file => Files.readAllBytes(file.toPath)))
+      signedDeploy  = d.sign(privateKey, publicKey).toByteArray
+      printToStdout = Sync[F].delay(new String(signedDeploy))
+      printToFile = (file: File) =>
+        Sync[F].delay(Files.write(file.toPath, signedDeploy)).as(s"Signed deploy written to $file.")
+      msg <- output.fold(printToStdout)(printToFile)
+    } yield msg
+
+    gracefulExit(program.attempt)
+  }
+
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[String],
       nonce: Long,
@@ -351,8 +392,8 @@ object DeployRuntime {
     )
   }
 
-  private[client] def gracefulExit[F[_]: Sync](
-      program: F[Either[Throwable, String]],
+  private[client] def gracefulExit[F[_]: Sync, A: Show](
+      program: F[Either[Throwable, A]],
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
@@ -367,7 +408,7 @@ object DeployRuntime {
             case Right(msg) =>
               Sync[F].delay {
                 if (!ignoreOutput) {
-                  println(msg)
+                  println(Show[A].show(msg))
                 }
                 if (exit) {
                   System.exit(0)
