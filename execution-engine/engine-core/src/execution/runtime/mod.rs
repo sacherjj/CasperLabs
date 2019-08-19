@@ -368,6 +368,15 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
+    /// Writes runtime context's phase to [dest_ptr] in the Wasm memory.
+    fn get_phase(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        let phase = self.context.phase();
+        let bytes = phase.to_bytes().map_err(Error::BytesRepr)?;
+        self.memory
+            .set(dest_ptr, &bytes)
+            .map_err(|e| Error::Interpreter(e).into())
+    }
+
     /// Writes current blocktime to [dest_ptr] in Wasm memory.
     fn get_blocktime(&self, dest_ptr: u32) -> Result<(), Trap> {
         let blocktime = self

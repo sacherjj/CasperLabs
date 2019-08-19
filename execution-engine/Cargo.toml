@@ -26,6 +26,7 @@ members = [
     "contracts/test/get-blocktime",
     "contracts/test/get-caller",
     "contracts/test/get-caller-subcall",
+    "contracts/test/get-phase",
     "contracts/test/known-urefs",
     "contracts/test/local-state",
     "contracts/test/main-purse",

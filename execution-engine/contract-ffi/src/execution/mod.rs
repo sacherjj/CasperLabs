@@ -2,6 +2,8 @@ use crate::bytesrepr::{Error, FromBytes, ToBytes};
 use alloc::vec::Vec;
 use num_traits::{FromPrimitive, ToPrimitive};
 
+pub const PHASE_SIZE: usize = 1;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, ToPrimitive)]
 #[repr(u8)]
 pub enum Phase {
