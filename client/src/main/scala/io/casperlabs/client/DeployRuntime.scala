@@ -299,16 +299,9 @@ object DeployRuntime {
 
   /** Signs a deploy with provided private key and writes it to the file (if provided),
     * or prints to STDOUT.
-    *
-    * @param deploy
-    * @param output
-    * @param publicKeyFile
-    * @param privateKeyFile
-    * @tparam F
-    * @return
     */
   def sign[F[_]: Sync](
-      deploy: Either[Array[Byte], File],
+      deployBA: Array[Byte],
       output: Option[File],
       publicKeyFile: File,
       privateKeyFile: File
@@ -317,9 +310,9 @@ object DeployRuntime {
     val program = for {
       publicKey    <- readKey[F, PublicKey](publicKeyFile, "public", Ed25519.tryParsePublicKey _)
       privateKey   <- readKey[F, PrivateKey](privateKeyFile, "private", Ed25519.tryParsePrivateKey _)
-      d            = Deploy.parseFrom(deploy.fold(identity, file => Files.readAllBytes(file.toPath)))
-      signedDeploy = d.sign(privateKey, publicKey)
-      _            <- saveDeploy(signedDeploy, output)
+      deploy       <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
+      signedDeploy = deploy.sign(privateKey, publicKey)
+      _            <- writeDeploy(signedDeploy, output)
     } yield ()
 
     gracefulExit(program.attempt)
@@ -358,7 +351,9 @@ object DeployRuntime {
       .withHashes
   }
 
-  def saveDeploy[F[_]: Sync](deploy: Deploy, deployPath: Option[File]): F[Unit] =
+  /** Writes deploy to either a file (if `deployPath` is defined) or STDOUT.
+    */
+  def writeDeploy[F[_]: Sync](deploy: Deploy, deployPath: Option[File]): F[Unit] =
     gracefulExit(
       deployPath.fold {
         Sync[F].delay(deploy.writeTo(System.out)).attempt
@@ -368,12 +363,12 @@ object DeployRuntime {
       ignoreOutput = true
     )
 
-  def deploy[F[_]: Sync: DeployService](deploy: Either[Array[Byte], File]): F[Unit] =
+  def deploy[F[_]: Sync: DeployService](deployBA: Array[Byte]): F[Unit] =
     gracefulExit {
-      val deployBA = deploy.fold[Array[Byte]](identity, file => Files.readAllBytes(file.toPath))
-      Sync[F]
-        .fromTry(Try(Deploy.parseFrom(deployBA)))
-        .flatMap(DeployService[F].deploy(_))
+      for {
+        deploy <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
+        result <- DeployService[F].deploy(deploy)
+      } yield result
     }
 
   def deployFileProgram[F[_]: Sync: DeployService](

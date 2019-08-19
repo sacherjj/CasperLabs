@@ -23,20 +23,13 @@ final case class MakeDeploy(
 ) extends Configuration
 
 final case class Deploy(
-    deploy: Either[Array[Byte], File]
+    deploy: Array[Byte]
 ) extends Configuration
 
 /** Client command to sign a deploy.
-  *
-  * @param deploy Either an array of bytes (deploy read from the STDIN),
-  *               or a file (deploy read from the file).
-  * @param signedDeployPath Path where signed deploy will be written.
-  *                         If `None` then it's written to STDOUT.
-  * @param publicKey Public key corresponding to the private one.
-  * @param privateKey Key signing the deploy.
   */
 final case class Sign(
-    deploy: Either[Array[Byte], File],
+    deploy: Array[Byte],
     signedDeployPath: Option[File],
     publicKey: File,
     privateKey: File
@@ -89,14 +82,6 @@ final case class Query(
 ) extends Configuration
 
 object Configuration {
-  private def readFileOrString(
-      file: ScallopOption[File],
-      str: ScallopOption[String]
-  ): Either[Array[Byte], File] =
-    file.toOption
-      .map(_.asRight[Array[Byte]])
-      .getOrElse(str().getBytes.asLeft[File])
-
   def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
     val options = Options(args)
     val connect = ConnectOptions(
@@ -116,12 +101,10 @@ object Configuration {
           options.makeDeploy.deployPath.toOption
         )
       case options.deploy =>
-        Deploy(
-          readFileOrString(options.deploy.deployFile, options.deploy.deployStdin)
-        )
+        Deploy(options.deploy.deployFile())
       case options.sign =>
         Sign(
-          readFileOrString(options.sign.deployFile, options.sign.deployStdin),
+          options.sign.deployFile(),
           options.sign.signedDeployPath.toOption,
           options.sign.publicKey(),
           options.sign.privateKey()

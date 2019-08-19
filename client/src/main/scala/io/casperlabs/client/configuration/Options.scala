@@ -1,12 +1,13 @@
 package io.casperlabs.client.configuration
 
-import java.io.File
+import java.io.{ByteArrayInputStream, File}
 import java.nio.file.{Files, Paths}
 
 import scala.collection.convert.ImplicitConversionsToScala
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
 import io.casperlabs.client.BuildInfo
+import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
 
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -104,20 +105,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = false,
       descr = "Path to the file with signed Deploy.",
       validate = fileCheck,
-      short = 'f'
-    )
+      short = 'i'
+    ).map(file => Files.readAllBytes(file.toPath))
+      .orElse(Some(IOUtils.toByteArray(System.in)))
 
-    val deployStdin = trailArg[String](
-      name = "Deploy",
-      required = false,
-      default = deployFile.toOption.map(f => new String(Files.readAllBytes(f.toPath)))
-    )
-
-    addValidation {
-      if (deployFile.toOption.isDefined && deployStdin.isSupplied)
-        Left("Deploy can be passed as either a file or through STDIN. Providing both is invalid.")
-      else Right(())
-    }
   }
   addSubcommand(deploy)
 
@@ -151,22 +142,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val deployFile =
       opt[File](
         required = false,
-        descr = "Path to the deploy file. Optional since deploy can also be read from the stdin.",
-        validate = fileCheck
-      )
-
-    val deployStdin =
-      trailArg[String](
-        name = "deploy",
-        default = deployFile.toOption.map(f => new String(Files.readAllBytes(f.toPath))),
-        required = false
-      )
-
-    addValidation {
-      if (deployFile.toOption.isDefined && deployStdin.isSupplied)
-        Left("Deploy can be passed as either a file or through STDIN. Providing both is invalid.")
-      else Right(())
-    }
+        descr = "Path to the deploy file.",
+        validate = fileCheck,
+        short = 'i'
+      ).map(file => Files.readAllBytes(file.toPath))
+        .orElse(Some(IOUtils.toByteArray(System.in)))
   }
 
   addSubcommand(sign)

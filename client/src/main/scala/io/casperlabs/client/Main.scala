@@ -98,7 +98,7 @@ object Main {
           Array.emptyByteArray,
           Files.readAllBytes(paymentCode.toPath)
         )
-        DeployRuntime.saveDeploy(deploy, deployPath)
+        DeployRuntime.writeDeploy(deploy, deployPath)
       }
 
       case Deploy(deploy) =>
