@@ -21,17 +21,7 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] {
       dag: DagRepresentation[F],
       rFTT: Double
   ): F[Option[CommitteeWithConsensusValue]] =
-    for {
-      committeeApproximationOpt <- VotingMatrix[F].findCommitteeApproximation(dag, rFTT)
-      result <- committeeApproximationOpt match {
-                 case Some(
-                     CommitteeWithConsensusValue(committeeApproximation, _, consensusValue)
-                     ) =>
-                   VotingMatrix[F].checkForCommittee(consensusValue, rFTT, committeeApproximation)
-                 case None =>
-                   none[CommitteeWithConsensusValue].pure[F]
-               }
-    } yield result
+    VotingMatrix[F].checkForCommittee(dag, rFTT)
 
   /**
     * Incremental update voting matrix when a new block added to the dag

@@ -33,15 +33,13 @@ import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
   /**
     * Check whether provide branch should be finalized
-    * @param candidateBlockHash the provide branch to be checked whether finalized
+    * @param dag the block dag
     * @param rFTT the relative fault tolerance threshold
-    * @param committeeApproximation the pruned validator set that vote for the candidateBlockHash
     * @return
     */
   def checkForCommittee(
-      candidateBlockHash: BlockHash,
-      rFTT: Double,
-      committeeApproximation: Set[Validator]
+      dag: DagRepresentation[F],
+      rFTT: Double
   ): F[Option[CommitteeWithConsensusValue]]
 
   /**
@@ -54,17 +52,6 @@ import scala.collection.mutable.{IndexedSeq => MutableSeq}
       dag: DagRepresentation[F],
       newFinalizedBlock: BlockHash
   ): F[Unit]
-
-  /**
-    * Phase 1 - finding most supported consensus value
-    * @param dag block dag
-    * @param rFTT the normalized fault tolerance threshold
-    * @return
-    */
-  def findCommitteeApproximation(
-      dag: DagRepresentation[F],
-      rFTT: Double
-  ): F[Option[CommitteeWithConsensusValue]]
 }
 
 class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
@@ -128,62 +115,76 @@ class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
     } yield ()
 
   override def checkForCommittee(
-      candidateBlockHash: BlockHash,
-      rFTT: Double,
-      committeeApproximation: Set[Validator]
-  ): F[Option[CommitteeWithConsensusValue]] =
-    lock.withPermit(for {
-      matrix              <- (state >> 'votingMatrix).get
-      firstLevelZeroVotes <- (state >> 'firstLevelZeroVotes).get
-      validatorToIndex    <- (state >> 'validatorToIdx).get
-      weightMap           <- (state >> 'weightMap).get
-      mask                = fromMapToArray(validatorToIndex, committeeApproximation.contains)
-      weight              = fromMapToArray(validatorToIndex, weightMap.getOrElse(_, 0L))
-      committeeOpt = pruneLoop(
-        matrix,
-        firstLevelZeroVotes,
-        candidateBlockHash,
-        mask,
-        math.ceil(weight.sum * (0.5 + rFTT)).toLong,
-        weight
-      )
-      committee = committeeOpt.map {
-        case (mask, totalWeight) =>
-          val committee = validatorToIndex.filter { case (_, i) => mask(i) }.keySet
-          CommitteeWithConsensusValue(committee, totalWeight, candidateBlockHash)
-      }
-    } yield committee)
-
-  override def findCommitteeApproximation(
       dag: DagRepresentation[F],
       rFTT: Double
   ): F[Option[CommitteeWithConsensusValue]] =
-    lock.withPermit(
-      for {
-        weightMap           <- (state >> 'weightMap).get
-        validators          <- (state >> 'validators).get
-        firstLevelZeroVotes <- (state >> 'firstLevelZeroVotes).get
-        // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
-        consensusValueToValidators = firstLevelZeroVotes.zipWithIndex
-          .collect { case (Some((blockHash, _)), idx) => (blockHash, validators(idx)) }
-          .groupBy(_._1)
-          .mapValues(_.map(_._2))
-        // Get most support voteBranch and its support weight
-        mostSupport = consensusValueToValidators
-          .mapValues(_.map(weightMap.getOrElse(_, 0L)).sum)
-          .maxBy(_._2)
-        (voteValue, supportingWeight) = mostSupport
-        // Get the voteBranch's supporters
-        supporters  = consensusValueToValidators(voteValue)
-        totalWeight = weightMap.values.sum
-        quorum      = math.ceil(totalWeight * (rFTT + 0.5)).toLong
-      } yield
-        if (supportingWeight > quorum) {
-          Some(CommitteeWithConsensusValue(supporters.toSet, supportingWeight, voteValue))
-        } else {
-          None
-        }
-    )
+    lock.withPermit(for {
+      weightMap                 <- (state >> 'weightMap).get
+      totalWeight               = weightMap.values.sum
+      quorum                    = math.ceil(totalWeight * (rFTT + 0.5)).toLong
+      committeeApproximationOpt <- findCommitteeApproximation(quorum)
+      result <- committeeApproximationOpt match {
+                 case Some(
+                     CommitteeWithConsensusValue(committeeApproximation, _, consensusValue)
+                     ) =>
+                   for {
+                     matrix              <- (state >> 'votingMatrix).get
+                     firstLevelZeroVotes <- (state >> 'firstLevelZeroVotes).get
+                     validatorToIndex    <- (state >> 'validatorToIdx).get
+                     weightMap           <- (state >> 'weightMap).get
+                     mask                = fromMapToArray(validatorToIndex, committeeApproximation.contains)
+                     weight              = fromMapToArray(validatorToIndex, weightMap.getOrElse(_, 0L))
+                     committeeOpt = pruneLoop(
+                       matrix,
+                       firstLevelZeroVotes,
+                       consensusValue,
+                       mask,
+                       quorum,
+                       weight
+                     )
+                     committee = committeeOpt.map {
+                       case (mask, totalWeight) =>
+                         val committee = validatorToIndex.filter { case (_, i) => mask(i) }.keySet
+                         CommitteeWithConsensusValue(committee, totalWeight, consensusValue)
+                     }
+                   } yield committee
+                 case None =>
+                   none[CommitteeWithConsensusValue].pure[F]
+               }
+    } yield result)
+
+  /**
+    * Phase 1 - finding most supported consensus value,
+    * if its supporting vote larger than quorum, return it and its supporter
+		* else return None
+    * @param quorum
+    * @return
+    */
+  private def findCommitteeApproximation(
+      quorum: Long
+  ): F[Option[CommitteeWithConsensusValue]] =
+    for {
+      weightMap           <- (state >> 'weightMap).get
+      validators          <- (state >> 'validators).get
+      firstLevelZeroVotes <- (state >> 'firstLevelZeroVotes).get
+      // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
+      consensusValueToValidators = firstLevelZeroVotes.zipWithIndex
+        .collect { case (Some((blockHash, _)), idx) => (blockHash, validators(idx)) }
+        .groupBy(_._1)
+        .mapValues(_.map(_._2))
+      // Get most support voteBranch and its support weight
+      mostSupport = consensusValueToValidators
+        .mapValues(_.map(weightMap.getOrElse(_, 0L)).sum)
+        .maxBy(_._2)
+      (voteValue, supportingWeight) = mostSupport
+      // Get the voteBranch's supporters
+      supporters = consensusValueToValidators(voteValue)
+    } yield
+      if (supportingWeight > quorum) {
+        Some(CommitteeWithConsensusValue(supporters.toSet, supportingWeight, voteValue))
+      } else {
+        None
+      }
 
   @tailrec
   private def pruneLoop(
