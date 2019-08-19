@@ -314,7 +314,12 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     * at any given depth.
     */
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
-    val depth = syncState.distanceFromOriginalTarget.values.toList.maximumOption.getOrElse(0)
+    // Dependencies can be scattered across many different ranks and still be at the same
+    // distance when measaured in hops along the j-DAG, so to use the "bonding per rank"
+    // limit we need to have a different estimate for the number of depth as in ranks.
+    // The max-min rank distance could be faked, but we can perhaps get an estimate by just
+    // seeing how many different values we observed so far.
+    val depth = syncState.ranks.size
     val maxValidatorCountAtTargets = syncState.originalTargets.map { t =>
       syncState.summaries.get(t).fold(1)(s => s.getHeader.getState.bonds.size)
     }.max
@@ -323,8 +328,9 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     val maxValidators = maxValidatorCountAtTargets + Math.ceil(depth * maxBondingRate).toInt
     // Use the most conservative estimate by allowing 33% of the validators all equivocating
     // at every rank, and using the average maximum validator count as a higher bound.
-    val maxTotal = Math.ceil((maxValidators + maxValidatorCountAtTargets) / 2 * depth * 1.33).toInt
-    val total    = syncState.summaries.size
+    val maxTotal =
+      Math.ceil((maxValidators + maxValidatorCountAtTargets) / 2.0 * depth * 1.33).toInt
+    val total = syncState.summaries.size
     if (total > minBlockCountToCheckWidth &&
         total > syncState.originalTargets.size &&
         total > maxTotal) {
@@ -443,7 +449,8 @@ object SynchronizerImpl {
       summaries: Map[ByteString, BlockSummary],
       parentToChildren: Map[ByteString, Set[ByteString]],
       childToParents: Map[ByteString, Set[ByteString]],
-      distanceFromOriginalTarget: Map[ByteString, Int]
+      distanceFromOriginalTarget: Map[ByteString, Int],
+      ranks: Set[Long]
   ) {
     def append(summary: BlockSummary, distance: Int): SyncState = {
       val deps = dependencies(summary)
@@ -459,7 +466,8 @@ object SynchronizerImpl {
           case (acc, dependency) =>
             acc + (summary.blockHash -> (acc(summary.blockHash) + dependency))
         },
-        distanceFromOriginalTarget.updated(summary.blockHash, distance)
+        distanceFromOriginalTarget.updated(summary.blockHash, distance),
+        ranks = ranks + summary.getHeader.rank
       )
     }
   }
@@ -475,7 +483,8 @@ object SynchronizerImpl {
         summaries = Map.empty,
         parentToChildren = Map.empty.withDefaultValue(Set.empty),
         childToParents = Map.empty.withDefaultValue(Set.empty),
-        distanceFromOriginalTarget = Map.empty
+        distanceFromOriginalTarget = Map.empty,
+        ranks = Set.empty
       )
   }
 }
