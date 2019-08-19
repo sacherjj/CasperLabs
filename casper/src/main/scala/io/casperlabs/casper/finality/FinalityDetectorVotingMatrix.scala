@@ -38,7 +38,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log](rFTT: Double)(
                      result <- VotingMatrix.checkForCommittee[F](rFTT)
                      _ <- result match {
                            case Some(newLFB) =>
-                             Sync[F].delay(println(s"New LFB: $newLFB")).void
+                             Sync[F].delay(println(s"New LFB: $newLFB")).void >>
                                VotingMatrixImpl
                                  .create[F](dag, newLFB.consensusValue)
                                  .flatMap(

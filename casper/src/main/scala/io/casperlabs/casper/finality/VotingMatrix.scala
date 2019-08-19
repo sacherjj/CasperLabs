@@ -8,10 +8,9 @@ import cats.mtl.{DefaultMonadState, MonadState}
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.VotingMatrixImpl.{_votingMatrix, Vote, VotingMatrixState}
+import io.casperlabs.casper.finality.VotingMatrixImpl.{_votingMatrix, Vote}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadStateOps._
-import simulacrum.typeclass
 
 import scala.annotation.tailrec
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
