@@ -49,18 +49,4 @@ class FinalityDetectorVotingMatrix[F[_]: Monad: Log: VotingMatrix] {
               )
           }
     } yield ()
-
-  /**
-    * When a new block get finalized, rebuild the whole voting
-    * matrix basing the new finalized block
-    *
-    * @param dag
-    * @param newFinalizedBlock
-    * @return
-    */
-  def rebuildFromLatestFinalizedBlock(
-      dag: DagRepresentation[F],
-      newFinalizedBlock: BlockHash
-  ): F[Unit] =
-    VotingMatrix[F].rebuildFromLatestFinalizedBlock(dag, newFinalizedBlock)
 }

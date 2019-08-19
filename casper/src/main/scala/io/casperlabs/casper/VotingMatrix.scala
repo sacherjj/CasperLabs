@@ -41,17 +41,6 @@ import scala.collection.mutable.{IndexedSeq => MutableSeq}
       dag: DagRepresentation[F],
       rFTT: Double
   ): F[Option[CommitteeWithConsensusValue]]
-
-  /**
-    * Start a new game when finalized a block, rebuild voting matrix
-    * @param dag
-    * @param newFinalizedBlock
-    * @return
-    */
-  def rebuildFromLatestFinalizedBlock(
-      dag: DagRepresentation[F],
-      newFinalizedBlock: BlockHash
-  ): F[Unit]
 }
 
 class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
@@ -132,8 +121,10 @@ class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
                      firstLevelZeroVotes <- (state >> 'firstLevelZeroVotes).get
                      validatorToIndex    <- (state >> 'validatorToIdx).get
                      weightMap           <- (state >> 'weightMap).get
-                     mask                = fromMapToArray(validatorToIndex, committeeApproximation.contains)
-                     weight              = fromMapToArray(validatorToIndex, weightMap.getOrElse(_, 0L))
+                     mask = VotingMatrixImpl
+                       .fromMapToArray(validatorToIndex, committeeApproximation.contains)
+                     weight = VotingMatrixImpl
+                       .fromMapToArray(validatorToIndex, weightMap.getOrElse(_, 0L))
                      committeeOpt = pruneLoop(
                        matrix,
                        firstLevelZeroVotes,
@@ -228,22 +219,97 @@ class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
     }
   }
 
-  override def rebuildFromLatestFinalizedBlock(
+  private def panoramaM(
+      dag: DagRepresentation[F],
+      validatorsToIndex: Map[Validator, Int],
+      blockMetadata: BlockMetadata
+  ): F[MutableSeq[Long]] =
+    FinalityDetectorUtil
+      .panoramaDagLevelsOfBlock(
+        dag,
+        blockMetadata,
+        validatorsToIndex.keySet
+      )
+      .map(
+        latestBlockDagLevelsAsMap =>
+          // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
+          VotingMatrixImpl.fromMapToArray(
+            validatorsToIndex,
+            latestBlockDagLevelsAsMap.getOrElse(_, 0L)
+          )
+      )
+}
+
+object VotingMatrixImpl {
+  // (Consensus value, DagLevel of the block)
+  type Vote                = (BlockHash, Long)
+  type _votingMatrix[F[_]] = MonadState[F, VotingMatrixState] with Semaphore[F]
+  def _votingMatrix[F[_]](implicit ev: _votingMatrix[F]): _votingMatrix[F] = ev
+
+  def ofState[F[_]: Concurrent](
+      n: Long,
+      votingMatrixState: VotingMatrixState
+  ): F[_votingMatrix[F]] =
+    for {
+      lock  <- Semaphore[F](n)
+      state <- Ref[F].of(votingMatrixState)
+    } yield new Semaphore[F] with DefaultMonadState[F, VotingMatrixState] {
+      val monad: cats.Monad[F]               = implicitly[Monad[F]]
+      def get: F[VotingMatrixState]          = state.get
+      def set(s: VotingMatrixState): F[Unit] = state.set(s)
+
+      override def available: F[Long]               = lock.available
+      override def count: F[Long]                   = lock.count
+      override def acquireN(n: Long): F[Unit]       = lock.acquireN(n)
+      override def tryAcquireN(n: Long): F[Boolean] = lock.tryAcquireN(n)
+      override def releaseN(n: Long): F[Unit]       = lock.releaseN(n)
+      override def withPermit[A](t: F[A]): F[A]     = lock.withPermit(t)
+    }
+
+  case class VotingMatrixState(
+      votingMatrix: MutableSeq[MutableSeq[Long]],
+      firstLevelZeroVotes: MutableSeq[Option[Vote]],
+      validatorToIdx: Map[Validator, Int],
+      weightMap: Map[Validator, Long],
+      validators: MutableSeq[Validator]
+  )
+
+  def emptyVotingMatrixState: VotingMatrixState =
+    VotingMatrixState(MutableSeq.empty, MutableSeq.empty, Map.empty, Map.empty, MutableSeq.empty)
+
+  def empty[F[_]: Concurrent]: F[VotingMatrix[F]] =
+    ofState[F](1, emptyVotingMatrixState).map(state => new VotingMatrixImpl()(state))
+
+  // Return an MutableSeq, whose size equals the size of validatorsToIndex and
+  // For v in validatorsToIndex.key
+  //   Arr[validatorsToIndex[v]] = mapFunction[v]
+  private def fromMapToArray[A](
+      validatorsToIndex: Map[Validator, Int],
+      mapFunction: Validator => A
+  ): MutableSeq[A] =
+    validatorsToIndex
+      .map {
+        case (v, i) =>
+          (i, mapFunction(v))
+      }
+      .toArray[(Int, A)]
+      .sortBy(_._1)
+      .map(_._2)
+
+  /**
+    * create a new voting matrix basing new finalized block
+    */
+  def create[F[_]: Concurrent](
       dag: DagRepresentation[F],
       newFinalizedBlock: BlockHash
-  ): F[Unit] =
-    lock.withPermit(for {
+  ): F[VotingMatrix[F]] =
+    for {
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
       weights    <- dag.lookup(newFinalizedBlock).map(_.get.weightMap)
-      _          <- (state >> 'weightMap).set(weights)
       validators = weights.keySet.toArray
-      _          <- (state >> 'validators).set(validators)
       n          = validators.size
-      _          <- (state >> 'votingMatrix).set(MutableSeq.fill(n, n)(0))
-      _          <- (state >> 'firstLevelZeroVotes).set(MutableSeq.fill(n)(None))
       // Assigns numeric identifiers 0, ..., N-1 to all validators
       validatorsToIndex      = validators.zipWithIndex.toMap
-      _                      <- (state >> 'validatorToIdx).set(validatorsToIndex)
       latestMessages         <- dag.latestMessages
       latestMessagesOfVoters = latestMessages.filterKeys(validatorsToIndex.contains)
       latestVoteValueOfVotesAsList <- latestMessagesOfVoters.toList
@@ -280,88 +346,21 @@ class VotingMatrixImpl[F[_]: _votingMatrix] extends VotingMatrix[F] {
         validatorsToIndex,
         firstLevelZeroVotes.get
       )
-      _ <- (state >> 'firstLevelZeroVotes).set(firstLevelZeroVotesArray)
       latestMessagesToUpdated = latestMessagesOfVoters.filterKeys(
         firstLevelZeroVotes.contains
       )
+      state = VotingMatrixState(
+        MutableSeq.fill(n, n)(0),
+        firstLevelZeroVotesArray,
+        validatorsToIndex,
+        weights,
+        validators
+      )
+      stateWithSemophore <- ofState[F](1, state)
+      votingMatrix       = new VotingMatrixImpl()(stateWithSemophore)
       // Apply the incremental update step to update voting matrix by taking M := V(i)latest
       _ <- latestMessagesToUpdated.values.toList.traverse { b =>
-            updateVotingMatrixOnNewBlock(dag, b)
+            votingMatrix.updateVotingMatrixOnNewBlock(dag, b)
           }
-    } yield ())
-
-  // Return an MutableSeq, whose size equals the size of validatorsToIndex and
-  // For v in validatorsToIndex.key
-  //   Arr[validatorsToIndex[v]] = mapFunction[v]
-  private def fromMapToArray[A](
-      validatorsToIndex: Map[Validator, Int],
-      mapFunction: Validator => A
-  ): MutableSeq[A] =
-    validatorsToIndex
-      .map {
-        case (v, i) =>
-          (i, mapFunction(v))
-      }
-      .toArray[(Int, A)]
-      .sortBy(_._1)
-      .map(_._2)
-
-  private def panoramaM(
-      dag: DagRepresentation[F],
-      validatorsToIndex: Map[Validator, Int],
-      blockMetadata: BlockMetadata
-  ): F[MutableSeq[Long]] =
-    FinalityDetectorUtil
-      .panoramaDagLevelsOfBlock(
-        dag,
-        blockMetadata,
-        validatorsToIndex.keySet
-      )
-      .map(
-        latestBlockDagLevelsAsMap =>
-          // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
-          fromMapToArray(
-            validatorsToIndex,
-            latestBlockDagLevelsAsMap.getOrElse(_, 0L)
-          )
-      )
-}
-
-object VotingMatrixImpl {
-  // (Consensus value, DagLevel of the block)
-  type Vote                = (BlockHash, Long)
-  type _votingMatrix[F[_]] = MonadState[F, VotingMatrixState] with Semaphore[F]
-  def _votingMatrix[F[_]](implicit ev: _votingMatrix[F]): _votingMatrix[F] = ev
-
-  def emptyState[F[_]: Concurrent](n: Long): F[_votingMatrix[F]] =
-    for {
-      lock  <- Semaphore[F](n)
-      state <- Ref[F].of(emptyVotingMatrixState)
-    } yield new Semaphore[F] with DefaultMonadState[F, VotingMatrixState] {
-      val monad: cats.Monad[F]               = implicitly[Monad[F]]
-      def get: F[VotingMatrixState]          = state.get
-      def set(s: VotingMatrixState): F[Unit] = state.set(s)
-
-      override def available: F[Long]               = lock.available
-      override def count: F[Long]                   = lock.count
-      override def acquireN(n: Long): F[Unit]       = lock.acquireN(n)
-      override def tryAcquireN(n: Long): F[Boolean] = lock.tryAcquireN(n)
-      override def releaseN(n: Long): F[Unit]       = lock.releaseN(n)
-      override def withPermit[A](t: F[A]): F[A]     = lock.withPermit(t)
-    }
-
-  case class VotingMatrixState(
-      votingMatrix: MutableSeq[MutableSeq[Long]],
-      firstLevelZeroVotes: MutableSeq[Option[Vote]],
-      validatorToIdx: Map[Validator, Int],
-      weightMap: Map[Validator, Long],
-      validators: MutableSeq[Validator]
-  )
-
-  def emptyVotingMatrixState: VotingMatrixState =
-    VotingMatrixState(MutableSeq.empty, MutableSeq.empty, Map.empty, Map.empty, MutableSeq.empty)
-
-  def empty[F[_]: Concurrent]: F[VotingMatrix[F]] =
-    emptyState[F](1).map(state => new VotingMatrixImpl()(state))
-
+    } yield votingMatrix
 }
