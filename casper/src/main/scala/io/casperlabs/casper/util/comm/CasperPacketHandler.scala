@@ -13,6 +13,7 @@ import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.finality.FinalityDetector
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil

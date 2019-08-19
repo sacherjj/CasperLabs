@@ -1,4 +1,4 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.finality
 
 import cats.Monad
 import cats.implicits._

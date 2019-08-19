@@ -13,6 +13,7 @@ import eu.timepit.refined.auto._
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
+import io.casperlabs.casper.finality.{FinalityDetector, FinalityDetectorBySingleSweepImpl}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.CommError.ErrorHandler

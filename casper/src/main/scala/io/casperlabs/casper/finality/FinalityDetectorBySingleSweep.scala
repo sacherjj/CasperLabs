@@ -1,11 +1,11 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.finality
 
 import cats.Monad
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
-import io.casperlabs.casper.FinalityDetector.Committee
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.finality.FinalityDetector.Committee
+import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.shared.Log
 
 /*

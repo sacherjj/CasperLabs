@@ -27,6 +27,7 @@ import io.casperlabs.blockstorage.{
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, DeployBufferImpl}
+import io.casperlabs.casper.finality.{FinalityDetector, FinalityDetectorBySingleSweepImpl}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._

@@ -1,11 +1,12 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.finality
 
 import cats.Monad
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.FinalityDetector.{Committee, CommitteeWithConsensusValue}
+import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValue
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.shared.Log
 

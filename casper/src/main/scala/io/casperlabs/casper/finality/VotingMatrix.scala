@@ -1,4 +1,4 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.finality
 
 import cats.Monad
 import cats.effect.Concurrent
@@ -7,8 +7,8 @@ import cats.implicits._
 import cats.mtl.{DefaultMonadState, MonadState}
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.FinalityDetector.CommitteeWithConsensusValue
-import io.casperlabs.casper.VotingMatrixImpl.{_votingMatrix, Vote, VotingMatrixState}
+import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValue
+import io.casperlabs.casper.finality.VotingMatrixImpl.{_votingMatrix, Vote, VotingMatrixState}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadStateOps._
 import simulacrum.typeclass

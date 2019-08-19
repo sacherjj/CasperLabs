@@ -1,8 +1,7 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.finality
 
 import io.casperlabs.blockstorage.DagRepresentation
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.Block
 
 trait FinalityDetector[F[_]] {
 

@@ -4,13 +4,13 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
-import io.casperlabs.casper.FinalityDetectorUtil
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}

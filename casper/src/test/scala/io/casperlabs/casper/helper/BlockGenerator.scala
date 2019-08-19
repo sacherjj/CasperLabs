@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.execengine.DeploysCheckpoint
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.FinalityDetectorVotingMatrix
+import io.casperlabs.casper.finality.FinalityDetectorVotingMatrix
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
