@@ -21,6 +21,8 @@ extern crate failure;
 extern crate wee_alloc;
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate num_derive;
 
 #[cfg(any(test, feature = "gens"))]
 extern crate proptest;

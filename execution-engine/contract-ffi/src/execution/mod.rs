@@ -1,24 +1,18 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes};
 use alloc::vec::Vec;
+use num_traits::{FromPrimitive, ToPrimitive};
 
-const PAYMENT_ID: u8 = 0;
-const SESSION_ID: u8 = 1;
-const FINALIZE_PAYMENT_ID: u8 = 2;
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, ToPrimitive)]
+#[repr(u8)]
 pub enum Phase {
-    Payment,
-    Session,
-    FinalizePayment,
+    Payment = 0,
+    Session = 1,
+    FinalizePayment = 2,
 }
 
 impl ToBytes for Phase {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let id = match self {
-            Phase::Payment => PAYMENT_ID,
-            Phase::Session => SESSION_ID,
-            Phase::FinalizePayment => FINALIZE_PAYMENT_ID,
-        };
+        let id = self.to_u8().expect("Phase is represented as a u8");
 
         Ok(vec![id])
     }
@@ -27,12 +21,7 @@ impl ToBytes for Phase {
 impl FromBytes for Phase {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
-
-        match id {
-            PAYMENT_ID => Ok((Phase::Payment, rest)),
-            SESSION_ID => Ok((Phase::Session, rest)),
-            FINALIZE_PAYMENT_ID => Ok((Phase::FinalizePayment, rest)),
-            _ => Err(Error::FormattingError),
-        }
+        let phase = FromPrimitive::from_u8(id).ok_or(Error::FormattingError)?;
+        Ok((phase, rest))
     }
 }
