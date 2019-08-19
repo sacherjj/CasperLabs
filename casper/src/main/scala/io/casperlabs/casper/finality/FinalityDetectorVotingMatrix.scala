@@ -28,7 +28,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log](rFTT: Double)(
       block: Block,
       latestFinalizedBlock: BlockHash
   ): F[Option[CommitteeWithConsensusValue]] =
-    for {
+    matrix.withPermit(for {
       votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)
       result <- votedBranch match {
                  case Some(branch) =>
@@ -38,13 +38,13 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log](rFTT: Double)(
                      result <- VotingMatrix.checkForCommittee[F](rFTT)
                      _ <- result match {
                            case Some(newLFB) =>
-                             Sync[F].delay(println(s"New LFB: $newLFB")).void >>
-                             VotingMatrixImpl
-                               .create[F](dag, newLFB.consensusValue)
-                               .flatMap(
-                                 newVotingMatrix =>
-                                   newVotingMatrix.get.flatMap(state => matrix.set(state))
-                               )
+                             Sync[F].delay(println(s"New LFB: $newLFB")).void
+                               VotingMatrixImpl
+                                 .create[F](dag, newLFB.consensusValue)
+                                 .flatMap(
+                                   newVotingMatrix =>
+                                     newVotingMatrix.get.flatMap(state => matrix.set(state))
+                                 )
                            case None =>
                              ().pure[F]
                          }
@@ -59,5 +59,5 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log](rFTT: Double)(
                      )
                      .as(none[CommitteeWithConsensusValue])
                }
-    } yield result
+    } yield result)
 }

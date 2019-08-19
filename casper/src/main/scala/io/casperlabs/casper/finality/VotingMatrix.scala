@@ -30,7 +30,7 @@ object VotingMatrix {
       blockMetadata: BlockMetadata,
       currentVoteValue: BlockHash
   )(implicit matrix: _votingMatrix[F]): F[Unit] =
-    matrix.withPermit(for {
+    for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
       voter            = blockMetadata.validatorPublicKey
       _ <- if (!validatorToIndex.contains(voter)) {
@@ -43,7 +43,7 @@ object VotingMatrix {
               _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, blockMetadata.rank)
             } yield ()
           }
-    } yield ())
+    } yield ()
 
   def updateVotingMatrixOnNewBlock[F[_]: Monad](
       dag: DagRepresentation[F],
@@ -111,7 +111,7 @@ object VotingMatrix {
   def checkForCommittee[F[_]: Monad](
       rFTT: Double
   )(implicit matrix: _votingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
-    matrix.withPermit(for {
+    for {
       weightMap                 <- (matrix >> 'weightMap).get
       totalWeight               = weightMap.values.sum
       quorum                    = math.ceil(totalWeight * (rFTT + 0.5)).toLong
@@ -146,7 +146,7 @@ object VotingMatrix {
                  case None =>
                    none[CommitteeWithConsensusValue].pure[F]
                }
-    } yield result)
+    } yield result
 
   /**
     * Phase 1 - finding most supported consensus value,
