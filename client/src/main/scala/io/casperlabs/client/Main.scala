@@ -102,30 +102,9 @@ object Main {
         DeployRuntime.saveDeploy(deploy, deployPath)
       }
 
-      case Deploy(
-          from,
-          nonce,
-          sessionCode,
-          paymentCode,
-          maybePublicKey,
-          maybePrivateKey,
-          gasPrice
-          ) =>
-        DeployRuntime.deployFileProgram(
-          from,
-          nonce,
-          Files.readAllBytes(sessionCode.toPath),
-          Files.readAllBytes(paymentCode.toPath),
-          maybePublicKey.map(
-            file =>
-              new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PublicKey]
-          ),
-          maybePrivateKey.map(
-            file =>
-              new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
-          ),
-          gasPrice
-        )
+      case Deploy(deploy) =>
+        DeployRuntime.deploy(deploy)
+
       case Sign(deploy, signedDeployOut, publicKey, privateKey) =>
         DeployRuntime.sign(deploy, signedDeployOut, publicKey, privateKey)
 

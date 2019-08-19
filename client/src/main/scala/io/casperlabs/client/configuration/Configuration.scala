@@ -24,13 +24,7 @@ final case class MakeDeploy(
 ) extends Configuration
 
 final case class Deploy(
-    from: Option[String],
-    nonce: Long,
-    sessionCode: File,
-    paymentCode: File,
-    publicKey: Option[File],
-    privateKey: Option[File],
-    gasPrice: Long
+    deploy: Either[Array[Byte], File]
 ) extends Configuration
 
 /** Client command to sign a deploy.
@@ -116,13 +110,9 @@ object Configuration {
         )
       case options.deploy =>
         Deploy(
-          options.deploy.from.toOption,
-          options.deploy.nonce(),
-          options.deploy.session(),
-          options.deploy.payment.toOption.getOrElse(options.deploy.session()),
-          options.deploy.publicKey.toOption,
-          options.deploy.privateKey.toOption,
-          options.deploy.gasPrice()
+          options.deploy.deployFile.toOption
+            .map(_.asRight[Array[Byte]])
+            .getOrElse(options.deploy.deployStdin().getBytes.asLeft[File])
         )
       case options.sign =>
         Sign(

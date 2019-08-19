@@ -100,56 +100,24 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "on the configuration of the Casper instance."
     )
 
-    val from = opt[String](
-      descr =
-        "The public key of the account which is the context of this deployment, base16 encoded.",
-      required = false
-    )
-
-    val gasLimit =
-      opt[Long](
-        descr =
-          "[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
-        validate = _ > 0,
-        required = false // Leaving it here for now so old examples don't complain about its presence.
-      )
-
-    val gasPrice = opt[Long](
-      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
-      validate = _ > 0,
+    val deployFile = opt[File](
       required = false,
-      default = 10L.some
+      descr = "Path to the file with signed Deploy.",
+      validate = fileCheck,
+      short = 'f'
     )
 
-    val nonce = opt[Long](
-      descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
-      validate = _ > 0,
-      required = true
+    val deployStdin = trailArg[String](
+      name = "Deploy",
+      required = false,
+      default = deployFile.toOption.map(f => new String(Files.readAllBytes(f.toPath)))
     )
 
-    val session =
-      opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
-
-    val payment =
-      opt[File](
-        required = false,
-        descr = "Path to the file with payment code, by default fallbacks to the --session code",
-        validate = fileCheck
-      )
-
-    val publicKey =
-      opt[File](
-        required = false,
-        descr = "Path to the file with account public key (Ed25519)",
-        validate = fileCheck
-      )
-
-    val privateKey =
-      opt[File](
-        required = false,
-        descr = "Path to the file with account private key (Ed25519)",
-        validate = fileCheck
-      )
+    addValidation {
+      if (deployFile.toOption.isDefined && deployStdin.isSupplied)
+        Left("Deploy can be passed as either a file or through STDIN. Providing both is invalid.")
+      else Right(())
+    }
   }
   addSubcommand(deploy)
 

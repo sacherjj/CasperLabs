@@ -22,6 +22,7 @@ import org.apache.commons.io._
 
 import scala.concurrent.duration._
 import scala.language.higherKinds
+import scala.util.Try
 
 object DeployRuntime {
 
@@ -314,15 +315,12 @@ object DeployRuntime {
   ): F[Unit] = {
 
     val program = for {
-      publicKey     <- readKey[F, PublicKey](publicKeyFile, "public", Ed25519.tryParsePublicKey _)
-      privateKey    <- readKey[F, PrivateKey](privateKeyFile, "private", Ed25519.tryParsePrivateKey _)
-      d             = Deploy.parseFrom(deploy.fold(identity, file => Files.readAllBytes(file.toPath)))
-      signedDeploy  = d.sign(privateKey, publicKey).toByteArray
-      printToStdout = Sync[F].delay(new String(signedDeploy))
-      printToFile = (file: File) =>
-        Sync[F].delay(Files.write(file.toPath, signedDeploy)).as(s"Signed deploy written to $file.")
-      msg <- output.fold(printToStdout)(printToFile)
-    } yield msg
+      publicKey    <- readKey[F, PublicKey](publicKeyFile, "public", Ed25519.tryParsePublicKey _)
+      privateKey   <- readKey[F, PrivateKey](privateKeyFile, "private", Ed25519.tryParsePrivateKey _)
+      d            = Deploy.parseFrom(deploy.fold(identity, file => Files.readAllBytes(file.toPath)))
+      signedDeploy = d.sign(privateKey, publicKey)
+      _            <- saveDeploy(signedDeploy, output)
+    } yield ()
 
     gracefulExit(program.attempt)
   }
@@ -361,14 +359,21 @@ object DeployRuntime {
   }
 
   def saveDeploy[F[_]: Sync](deploy: Deploy, deployPath: Option[File]): F[Unit] =
-    gracefulExit {
+    gracefulExit(
       deployPath.fold {
-        Sync[F].delay(new String(deploy.toByteArray))
+        Sync[F].delay(deploy.writeTo(System.out)).attempt
       } { file =>
-        Sync[F]
-          .delay(Files.write(file.toPath, deploy.toByteArray))
-          .as(s"Deploy written to $file.")
-      }.attempt
+        Sync[F].delay(Files.write(file.toPath, deploy.toByteArray)).void.attempt
+      },
+      ignoreOutput = true
+    )
+
+  def deploy[F[_]: Sync: DeployService](deploy: Either[Array[Byte], File]): F[Unit] =
+    gracefulExit {
+      val deployBA = deploy.fold[Array[Byte]](identity, file => Files.readAllBytes(file.toPath))
+      Sync[F]
+        .fromTry(Try(Deploy.parseFrom(deployBA)))
+        .flatMap(DeployService[F].deploy(_))
     }
 
   def deployFileProgram[F[_]: Sync: DeployService](
