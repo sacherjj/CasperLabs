@@ -1,9 +1,6 @@
 package io.casperlabs.client.configuration
 import java.io.File
 
-import cats.implicits._
-import org.rogach.scallop.ScallopOption
-
 final case class ConnectOptions(
     host: String,
     portExternal: Int,
@@ -22,8 +19,18 @@ final case class MakeDeploy(
     deployPath: Option[File]
 ) extends Configuration
 
-final case class Deploy(
+final case class SendDeploy(
     deploy: Array[Byte]
+) extends Configuration
+
+final case class Deploy(
+    from: Option[String],
+    nonce: Long,
+    sessionCode: File,
+    paymentCode: File,
+    publicKey: Option[File],
+    privateKey: Option[File],
+    gasPrice: Long
 ) extends Configuration
 
 /** Client command to sign a deploy.
@@ -91,6 +98,16 @@ object Configuration {
       options.nodeId.toOption
     )
     val conf = options.subcommand.map {
+      case options.deploy =>
+        Deploy(
+          options.deploy.from.toOption,
+          options.deploy.nonce(),
+          options.deploy.session(),
+          options.deploy.payment.toOption.getOrElse(options.deploy.session()),
+          options.deploy.publicKey.toOption,
+          options.deploy.privateKey.toOption,
+          options.deploy.gasPrice()
+        )
       case options.makeDeploy =>
         MakeDeploy(
           options.makeDeploy.from(),
@@ -100,8 +117,8 @@ object Configuration {
           options.makeDeploy.gasPrice(),
           options.makeDeploy.deployPath.toOption
         )
-      case options.deploy =>
-        Deploy(options.deploy.deployFile())
+      case options.`sendDeploy` =>
+        SendDeploy(options.sendDeploy.deployFile())
       case options.sign =>
         Sign(
           options.sign.deployFile(),

@@ -1,11 +1,14 @@
 package io.casperlabs.client
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
+import cats.implicits._
 import cats.effect.{Sync, Timer}
 import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.client.configuration._
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
@@ -82,6 +85,30 @@ object Main {
           recipientPublicKeyBase64,
           amount
         )
+      case Deploy(
+          from,
+          nonce,
+          sessionCode,
+          paymentCode,
+          maybePublicKey,
+          maybePrivateKey,
+          gasPrice
+          ) =>
+        DeployRuntime.deployFileProgram(
+          from,
+          nonce,
+          Files.readAllBytes(sessionCode.toPath),
+          Files.readAllBytes(paymentCode.toPath),
+          maybePublicKey.map(
+            file =>
+              new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PublicKey]
+          ),
+          maybePrivateKey.map(
+            file =>
+              new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
+          ),
+          gasPrice
+        )
       case MakeDeploy(
           from,
           nonce,
@@ -101,8 +128,8 @@ object Main {
         DeployRuntime.writeDeploy(deploy, deployPath)
       }
 
-      case Deploy(deploy) =>
-        DeployRuntime.deploy(deploy)
+      case SendDeploy(deploy) =>
+        DeployRuntime.sendDeploy(deploy)
 
       case Sign(deploy, signedDeployOut, publicKey, privateKey) =>
         DeployRuntime.sign(deploy, signedDeployOut, publicKey, privateKey)

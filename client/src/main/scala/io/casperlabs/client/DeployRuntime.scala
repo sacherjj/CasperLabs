@@ -363,7 +363,7 @@ object DeployRuntime {
       ignoreOutput = true
     )
 
-  def deploy[F[_]: Sync: DeployService](deployBA: Array[Byte]): F[Unit] =
+  def sendDeploy[F[_]: Sync: DeployService](deployBA: Array[Byte]): F[Unit] =
     gracefulExit {
       for {
         deploy <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))

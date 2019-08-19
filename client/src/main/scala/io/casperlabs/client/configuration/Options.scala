@@ -94,7 +94,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(makeDeploy)
 
-  val deploy = new Subcommand("deploy") {
+  val sendDeploy = new Subcommand("send-deploy") {
     descr(
       "Deploy a smart contract source file to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
@@ -109,6 +109,66 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     ).map(file => Files.readAllBytes(file.toPath))
       .orElse(Some(IOUtils.toByteArray(System.in)))
 
+  }
+  addSubcommand(sendDeploy)
+
+  val deploy = new Subcommand("deploy") {
+    descr(
+      "Constructs a Deploy and sends it to Casper on an existing running node. " +
+        "The deploy will be packaged and sent as a block to the network depending " +
+        "on the configuration of the Casper instance."
+    )
+
+    val from = opt[String](
+      descr =
+        "The public key of the account which is the context of this deployment, base16 encoded.",
+      required = false
+    )
+
+    val gasLimit =
+      opt[Long](
+        descr =
+          "[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
+        validate = _ > 0,
+        required = false // Leaving it here for now so old examples don't complain about its presence.
+      )
+
+    val gasPrice = opt[Long](
+      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
+      validate = _ > 0,
+      required = false,
+      default = 10L.some
+    )
+
+    val nonce = opt[Long](
+      descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val session =
+      opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
+
+    val payment =
+      opt[File](
+        required = false,
+        descr = "Path to the file with payment code, by default fallbacks to the --session code",
+        validate = fileCheck
+      )
+
+    val publicKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck
+      )
+
+    val privateKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account private key (Ed25519)",
+        validate = fileCheck
+      )
   }
   addSubcommand(deploy)
 
