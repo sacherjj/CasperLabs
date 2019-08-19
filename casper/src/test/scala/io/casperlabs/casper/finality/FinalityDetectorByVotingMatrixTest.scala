@@ -63,7 +63,8 @@ class FinalityDetectorByVotingMatrixTest
                        bonds,
                        HashMap(v1 -> genesis.blockHash)
                      )
-          _ = println(s"C1: $c1")
+          _ <- Task.delay(println(s"B1: ${b1.blockHash}"))
+          _ <- Task.delay(println(s"C1: $c1"))
           (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
                        finalityDetectorVotingMatrix,
                        Seq(b1.blockHash),
@@ -71,7 +72,8 @@ class FinalityDetectorByVotingMatrixTest
                        v1,
                        bonds
                      )
-          _ = println(s"C2: $c2")
+          _ <- Task.delay(println(s"B2: ${b2.blockHash}"))
+          _ <- Task.delay(println(s"C2: $c2"))
           (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
                        finalityDetectorVotingMatrix,
                        Seq(b1.blockHash),
@@ -79,7 +81,8 @@ class FinalityDetectorByVotingMatrixTest
                        v2,
                        bonds
                      )
-          _ = println(s"C3: $c3")
+          _ <- Task.delay(println(s"B3: ${b3.blockHash}"))
+          _ <- Task.delay(println(s"C3: $c3"))
           (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
                        finalityDetectorVotingMatrix,
                        Seq(b2.blockHash),
@@ -88,7 +91,7 @@ class FinalityDetectorByVotingMatrixTest
                        bonds,
                        HashMap(v1 -> b2.blockHash, v2 -> b3.blockHash)
                      )
-          _ = println(s"C4: $c4")
+          _ <- Task.delay(println(s"C4: $c4"))
           (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
                        finalityDetectorVotingMatrix,
                        Seq(b3.blockHash),
@@ -97,7 +100,7 @@ class FinalityDetectorByVotingMatrixTest
                        bonds,
                        HashMap(v2 -> b3.blockHash)
                      )
-          _ = println(s"C5: $c5")
+          _ <- Task.delay(println(s"C5: $c5"))
           (b6, committee) <- createBlockAndUpdateFinalityDetector[Task](
                               finalityDetectorVotingMatrix,
                               Seq(b5.blockHash),
