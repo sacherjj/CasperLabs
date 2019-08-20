@@ -42,8 +42,7 @@ pub const CONV_RATE: u64 = 10;
 
 pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 
-const DEFAULT_MOTES_TRANSFERRED_IN_PAYMENT: u64 = 1_000_000_000;
-const DEFAULT_GAS_PRICE: u64 = 10;
+const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
 
 #[derive(Debug)]
 pub struct EngineState<H> {
@@ -201,7 +200,7 @@ where
         if !(self.config.use_payment_code()) {
             // DEPLOY WITH NO PAYMENT
 
-            let gas_limit = DEFAULT_MOTES_TRANSFERRED_IN_PAYMENT / DEFAULT_GAS_PRICE;
+            let gas_limit = DEFAULT_SESSION_MOTES / CONV_RATE;
 
             // Session code execution
             let session_result = executor.exec(
