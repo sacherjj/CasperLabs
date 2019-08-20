@@ -586,10 +586,6 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
                 assert deploy_info.is_error is True
                 assert deploy_info.error_message == f"Exit code: {number}"
 
-                # Test show_deploy
-                d = client.showDeploy(deploy_info.deploy.deploy_hash.hex())
-                assert deploy_info.deploy.deploy_hash == d.deploy.deploy_hash
-
             logging.info(f"NONCE ===================== {nonce}")
 
     wasm = resource("test_args_multi.wasm")
@@ -615,10 +611,6 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     for deploy_info in client.showDeploys(block_hash):
         assert deploy_info.is_error is True
         assert deploy_info.error_message == f"Exit code: {total_sum}"
-
-        # Test show_deploy
-        d = client.showDeploy(deploy_info.deploy.deploy_hash.hex())
-        assert deploy_info.deploy.deploy_hash == d.deploy.deploy_hash
 
     for blockInfo in client.showBlocks(10):
         assert blockInfo.status.stats.block_size_bytes > 0
@@ -769,11 +761,11 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli
 # CLI ABI
 
 
-abi_test_data = [
+abi_unsigned_test_data = [
     ("u32", 'test_args_u32.wasm'),
     ("u512", 'test_args_u512.wasm'),
 ]
-@pytest.mark.parametrize("unsigned_type, test_contract", abi_test_data)
+@pytest.mark.parametrize("unsigned_type, test_contract", abi_unsigned_test_data)
 def test_cli_abi_unsigned(cli, unsigned_type, test_contract):
     account = GENESIS_ACCOUNT
     client = cli.node.p_client
@@ -787,13 +779,33 @@ def test_cli_abi_unsigned(cli, unsigned_type, test_contract):
                           '--session', resource(test_contract),
                           '--session-args', f"{args}",
                           '--payment', resource(test_contract),
-                          "--private-key", account.private_key_path,
-                          "--public-key", account.public_key_path,)
-        deploy_hash = deploy_hash
+                          '--private-key', account.private_key_path,
+                          '--public-key', account.public_key_path,)
 
-        block_hash = cli('propose')
-        logging.info(f'PROPOSE => {block_hash}')
+        cli('propose')
+        deploy_info = client.showDeploy(deploy_hash)
+        assert deploy_info.processing_results[0].is_error is True
+        assert deploy_info.processing_results[0].error_message == f"Exit code: {number}"
 
-        for deploy_info in client.showDeploys(block_hash):
-            assert deploy_info.is_error is True
-            assert deploy_info.error_message == f"Exit code: {number}"
+
+def test_cli_abi_multiple(cli):
+    account = GENESIS_ACCOUNT
+    client = cli.node.p_client
+    test_contract = resource("test_args_multi.wasm")
+    account_hex = "0101010102020202030303030404040405050505060606060707070708080808"
+    number = 1000
+    total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
+
+    args = json.dumps([{'account': account_hex}, {'u32': number}])
+    deploy_hash = cli('deploy',
+                      '--from', account.public_key_hex,
+                      '--nonce', 1,
+                      '--session', resource(test_contract),
+                      '--session-args', f"{args}",
+                      '--payment', resource(test_contract),
+                      '--private-key', account.private_key_path,
+                      '--public-key', account.public_key_path,)
+    cli('propose')
+    deploy_info = client.showDeploy(deploy_hash)
+    assert deploy_info.processing_results[0].is_error is True
+    assert deploy_info.processing_results[0].error_message == f"Exit code: {total_sum}"
