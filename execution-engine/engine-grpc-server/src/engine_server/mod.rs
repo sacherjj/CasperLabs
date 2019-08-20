@@ -551,9 +551,6 @@ where
             };
 
             let nonce = deploy.nonce;
-            // TODO: is the rounding in this division ok?
-            let gas_limit =
-                (deploy.motes_transferred_in_payment as u64) / (deploy.gas_price as u64);
             let protocol_version = protocol_version.value;
             engine_state
                 .run_deploy(
@@ -566,7 +563,6 @@ where
                     blocktime,
                     nonce,
                     prestate_hash,
-                    gas_limit,
                     protocol_version,
                     correlation_id,
                     executor,
