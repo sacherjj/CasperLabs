@@ -11,7 +11,8 @@ final case class ConnectOptions(
 sealed trait Configuration
 
 final case class MakeDeploy(
-    from: String,
+    from: Option[String],
+    publicKey: Option[File],
     nonce: Long,
     sessionCode: File,
     paymentCode: File,
@@ -110,7 +111,8 @@ object Configuration {
         )
       case options.makeDeploy =>
         MakeDeploy(
-          options.makeDeploy.from(),
+          options.makeDeploy.from.toOption,
+          options.makeDeploy.publicKey.toOption,
           options.makeDeploy.nonce(),
           options.makeDeploy.session(),
           options.makeDeploy.payment(),

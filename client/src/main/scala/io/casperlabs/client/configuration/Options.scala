@@ -1,9 +1,8 @@
 package io.casperlabs.client.configuration
 
-import java.io.{ByteArrayInputStream, File}
-import java.nio.file.{Files, Paths}
+import java.io.File
+import java.nio.file.Files
 
-import scala.collection.convert.ImplicitConversionsToScala
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
 import io.casperlabs.client.BuildInfo
@@ -58,8 +57,15 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val from = opt[String](
       descr =
         "The public key of the account which is the context of this deployment, base16 encoded.",
-      required = true
+      required = false
     )
+
+    val publicKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck
+      )
 
     val gasPrice = opt[Long](
       descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
@@ -91,6 +97,14 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
           "Optional, if not provided the deploy will be printed to STDOUT.",
         short = 'o'
       )
+
+    addValidation {
+      if (publicKey.isDefined && from.isDefined)
+        Left("Both --from  and --public-key were provided. Please provide one of them.")
+      else if (publicKey.isEmpty && from.isEmpty)
+        Left("Neither --from nor --public-key were provided. Please provide one of them.")
+      else Right(())
+    }
   }
   addSubcommand(makeDeploy)
 
@@ -173,7 +187,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   addSubcommand(deploy)
 
   val sign = new Subcommand("sign") {
-    descr("Cryptographically signs a deploy.")
+    descr("Cryptographically signs a deploy. The signature is appended to existing approvals.")
 
     val publicKey =
       opt[File](
@@ -195,7 +209,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[File](
         required = false,
         descr = "Path to the file where signed deploy will be saved." +
-          "If not provided, signed deploy will be printed to the stdout.",
+          "If not provided, the signed deploy will be sent to stdout.",
         short = 'o'
       )
 

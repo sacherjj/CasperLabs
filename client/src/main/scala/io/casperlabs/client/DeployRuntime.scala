@@ -466,7 +466,7 @@ object DeployRuntime {
     }
   }
 
-  private def readFileAsString[F[_]: Sync](file: File): F[String] = Sync[F].delay {
+  def readFileAsString[F[_]: Sync](file: File): F[String] = Sync[F].delay {
     new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8)
   }
 
@@ -504,27 +504,25 @@ object DeployRuntime {
     argsBytesLen ++ argsBytes
   }
 
+  implicit val ordering: Ordering[ByteString] =
+    Ordering.by[ByteString, String](bs => Base16.encode(bs.toByteArray))
+
   implicit class DeployOps(d: consensus.Deploy) {
     def withHashes = {
       val h = d.getHeader.withBodyHash(hash(d.getBody))
       d.withHeader(h).withDeployHash(hash(h))
     }
 
-    def sign(privateKey: PrivateKey, publicKey: PublicKey) = {
+    def sign(privateKey: PrivateKey, publicKey: PublicKey): Deploy = {
       val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
-      d.withApprovals(
-        List(
-          consensus
-            .Approval()
-            .withApproverPublicKey(ByteString.copyFrom(publicKey))
-            .withSignature(
-              consensus
-                .Signature()
-                .withSigAlgorithm(Ed25519.name)
-                .withSig(ByteString.copyFrom(sig))
-            )
+      val approval = consensus
+        .Approval()
+        .withApproverPublicKey(ByteString.copyFrom(publicKey))
+        .withSignature(
+          consensus.Signature().withSigAlgorithm(Ed25519.name).withSig(ByteString.copyFrom(sig))
         )
-      )
+      val approvals = d.approvals.toList :+ approval
+      d.withApprovals(approvals.distinct.sortBy(_.approverPublicKey))
     }
   }
 }
