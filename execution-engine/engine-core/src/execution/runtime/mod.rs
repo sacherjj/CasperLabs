@@ -764,7 +764,7 @@ where
 
         // A precondition check that verifies that the transfer can be done
         // as the source purse has enough funds to cover the transfer.
-        if amount >= self.get_balance(source)?.unwrap_or_default() {
+        if amount > self.get_balance(source)?.unwrap_or_default() {
             return Ok(TransferResult::TransferError);
         }
 

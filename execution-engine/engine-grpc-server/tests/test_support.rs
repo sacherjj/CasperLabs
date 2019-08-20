@@ -222,7 +222,7 @@ pub fn create_genesis_request(
     let initial_tokens = {
         let mut ret = BigInt::new();
         ret.set_bit_width(512);
-        ret.set_value("100000000000".to_string());
+        ret.set_value(format!("{}", GENESIS_INITIAL_BALANCE));
         ret
     };
 
