@@ -26,10 +26,12 @@ use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;
 use self::genesis::{create_genesis_effects, GenesisResult};
 use contract_ffi::uref::URef;
+use engine_state::executable_deploy_item::ExecutableDeployItem;
 use engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
 
 pub mod engine_config;
 pub mod error;
+pub mod executable_deploy_item;
 pub mod execution_effect;
 pub mod execution_result;
 pub mod genesis;
@@ -113,14 +115,128 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn run_deploy_item<A, P: Preprocessor<A>, E: Executor<A>>(
+        &self,
+        session: ExecutableDeployItem,
+        payment: ExecutableDeployItem,
+        address: Key,
+        authorization_keys: BTreeSet<PublicKey>,
+        blocktime: BlockTime,
+        nonce: u64,
+        prestate_hash: Blake2bHash,
+        protocol_version: u64,
+        correlation_id: CorrelationId,
+        executor: &E,
+        preprocessor: &P,
+    ) -> Result<ExecutionResult, RootNotFound> {
+        self.deploy(
+            session,
+            payment,
+            address,
+            authorization_keys,
+            blocktime,
+            nonce,
+            prestate_hash,
+            protocol_version,
+            correlation_id,
+            executor,
+            preprocessor,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn run_deploy<A, P: Preprocessor<A>, E: Executor<A>>(
         &self,
         session_module_bytes: &[u8],
         session_args: &[u8],
         payment_module_bytes: &[u8],
         payment_args: &[u8],
-        address: Key,                         // TODO?: rename 'base_key'
-        authorized_keys: BTreeSet<PublicKey>, //TODO?: rename authorization_keys
+        address: Key,
+        authorization_keys: BTreeSet<PublicKey>,
+        blocktime: BlockTime,
+        nonce: u64,
+        prestate_hash: Blake2bHash,
+        protocol_version: u64,
+        correlation_id: CorrelationId,
+        executor: &E,
+        preprocessor: &P,
+    ) -> Result<ExecutionResult, RootNotFound> {
+        let session = ExecutableDeployItem::ModuleBytes {
+            module_bytes: session_module_bytes.into(),
+            args: session_args.into(),
+        };
+        let payment = ExecutableDeployItem::ModuleBytes {
+            module_bytes: payment_module_bytes.into(),
+            args: payment_args.into(),
+        };
+
+        self.deploy(
+            session,
+            payment,
+            address,
+            authorization_keys,
+            blocktime,
+            nonce,
+            prestate_hash,
+            protocol_version,
+            correlation_id,
+            executor,
+            preprocessor,
+        )
+    }
+
+    fn get_module<A, P: Preprocessor<A>>(
+        &self,
+        tracking_copy: Rc<RefCell<TrackingCopy<<H as History>::Reader>>>,
+        deploy_item: &ExecutableDeployItem,
+        account: &Account,
+        correlation_id: CorrelationId,
+        preprocessor: &P,
+    ) -> Result<A, error::Error> {
+        match deploy_item {
+            ExecutableDeployItem::ModuleBytes { module_bytes, .. } => {
+                let module = preprocessor.preprocess(&module_bytes)?;
+                Ok(module)
+            }
+            ExecutableDeployItem::StoredContractByHash { hash, .. } => {
+                let stored_contract_key = contract_ffi::bytesrepr::deserialize(&hash)
+                    .map(Key::Hash)
+                    .map_err(|e| error::Error::ExecError(e.into()))?;
+                let contract = tracking_copy
+                    .borrow_mut()
+                    .get_contract(correlation_id, stored_contract_key)?;
+                let (ret, _, _) = contract.destructure();
+                let module = preprocessor.deserialize(&ret)?;
+                Ok(module)
+            }
+            ExecutableDeployItem::StoredContractByName { name, .. } => {
+                let stored_contract_key = account.urefs_lookup().get(name).ok_or_else(|| {
+                    error::Error::ExecError(execution::Error::URefNotFound(name.to_string()))
+                })?;
+                if let Key::URef(uref) = stored_contract_key {
+                    if !uref.is_readable() {
+                        return Err(error::Error::ExecError(execution::Error::ForgedReference(
+                            *uref,
+                        )));
+                    }
+                }
+                let contract = tracking_copy
+                    .borrow_mut()
+                    .get_contract(correlation_id, stored_contract_key.normalize())?;
+                let (ret, _, _) = contract.destructure();
+                let module = preprocessor.deserialize(&ret)?;
+                Ok(module)
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn deploy<A, P: Preprocessor<A>, E: Executor<A>>(
+        &self,
+        session: ExecutableDeployItem,
+        payment: ExecutableDeployItem,
+        address: Key,
+        authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
         nonce: u64,
         prestate_hash: Blake2bHash,
@@ -130,7 +246,6 @@ where
         preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
         // spec: https://casperlabs.atlassian.net/wiki/spaces/EN/pages/123404576/Payment+code+execution+specification
-        // DEPLOY PRECONDITIONS
 
         // Create tracking copy (which functions as a deploy context)
         // validation_spec_2: prestate_hash check
@@ -167,7 +282,7 @@ where
 
         // Authorize using provided authorization keys
         // validation_spec_3: account validity
-        if authorized_keys.is_empty() || !account.can_authorize(&authorized_keys) {
+        if authorization_keys.is_empty() || !account.can_authorize(&authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
                 ::engine_state::error::Error::AuthorizationError,
             ));
@@ -181,7 +296,7 @@ where
 
         // Check total key weight against deploy threshold
         // validation_spec_4: deploy validity
-        if !account.can_deploy_with(&authorized_keys) {
+        if !account.can_deploy_with(&authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
                 // TODO?:this doesn't happen in execution any longer, should error variant be moved
                 execution::Error::DeploymentAuthorizationFailure.into(),
@@ -190,9 +305,17 @@ where
 
         // Create session code `A` from provided session bytes
         // validation_spec_1: valid wasm bytes
-        let session_module = match preprocessor.preprocess(session_module_bytes) {
-            Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+        let session_module = match self.get_module(
+            Rc::clone(&tracking_copy),
+            &session,
+            &account,
+            correlation_id,
+            preprocessor,
+        ) {
             Ok(module) => module,
+            Err(error) => {
+                return Ok(ExecutionResult::precondition_failure(error));
+            }
         };
 
         // --- REMOVE BELOW --- //
@@ -206,15 +329,15 @@ where
             // Session code execution
             let session_result = executor.exec(
                 session_module,
-                session_args,
+                &session.args(),
                 address,
                 &account,
-                authorized_keys,
+                authorization_keys,
                 blocktime,
                 gas_limit,
                 protocol_version,
                 correlation_id,
-                tracking_copy,
+                Rc::clone(&tracking_copy),
                 Phase::Session,
             );
 
@@ -364,18 +487,26 @@ where
 
             // Create payment code module from bytes
             // validation_spec_1: valid wasm bytes
-            let payment_module = match preprocessor.preprocess(payment_module_bytes) {
-                Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+            let payment_module = match self.get_module(
+                Rc::clone(&tracking_copy),
+                &payment,
+                &account,
+                correlation_id,
+                preprocessor,
+            ) {
                 Ok(module) => module,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error));
+                }
             };
 
             // payment_code_spec_2: execute payment code
             executor.exec(
                 payment_module,
-                payment_args,
+                &payment.args(),
                 address,
                 &account,
-                authorized_keys.clone(),
+                authorization_keys.clone(),
                 blocktime,
                 pay_gas_limit,
                 protocol_version,
@@ -444,10 +575,10 @@ where
 
             executor.exec(
                 session_module,
-                session_args,
+                &session.args(),
                 address,
                 &account,
-                authorized_keys.clone(),
+                authorization_keys.clone(),
                 blocktime,
                 session_gas_limit,
                 protocol_version,
@@ -495,7 +626,7 @@ where
                 &mut proof_of_stake_keys,
                 proof_of_stake_info.inner_key(),
                 &system_account,
-                authorized_keys.clone(),
+                authorization_keys.clone(),
                 blocktime,
                 std::u64::MAX, // <-- this execution should be unlimited but approximating
                 protocol_version,

@@ -1588,6 +1588,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "standard-payment-stored"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
 name = "string"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1924,6 +1931,13 @@ dependencies = [
 
 [[package]]
 name = "transfer-purse-to-account"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
+name = "transfer-purse-to-account-stored"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.12.0",
