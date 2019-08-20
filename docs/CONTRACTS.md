@@ -80,9 +80,9 @@ Success!
 
 ###### Alternative way of creating, signing and deploying contracts
 
-Every account can associate multiple keys with it and give each a weight. Collective weight of signing keys decides whether an action of certain type can be made. In order to collect weight of different associated keys a deploy has to be signed by corresponding private keys. `deploy` command does it all (creates a deploy, signs it an deploys to the node) but doesn't allow for signing with multiple keys. Therefore we split `deploy` into three separate commands:
+Every account can associate multiple keys with it and give each a weight. Collective weight of signing keys decides whether an action of certain type can be made. In order to collect weight of different associated keys a deploy has to be signed by corresponding private keys. `deploy` command does it all (creates a deploy, signs it and deploys to the node) but doesn't allow for signing with multiple keys. Therefore we split `deploy` into three separate commands:
 * `make-deploy` - creates a deploy from input parameters
-* `sign-deploy` - signs a deploy with given private key
+* `sign-deployfuck` - signs a deploy with given private key
 * `send-deploy` - sends a deploy to CasperLabs node
 
 Commands read input deploy from both a file (`-i` flag) and STDIN. They can also write to both file and STDOUT.
@@ -99,7 +99,7 @@ casperlabs-client \
     --nonce 1 \
     --from a1130120d27f6f692545858cc5c284b1ef30fe287caef648b0c405def88f543a
 ``` 
-This will write a deploy in binary format to STDOUT. It's possible to write it to the file, by supplying `-o` argument:
+This will write a deploy in binary format to STDOUT. It's possible to write it to a file, by supplying `-o` argument:
 ```
 casperlabs-client \
     --host localhost \
@@ -127,7 +127,7 @@ casperlabs-client \
     --host localhost \
     send-deploy
 ```
-In the example above there are is no `-i` argument, meaning that signed deploy will be read from STDIN.
+In the example above there is no `-i` argument, meaning that signed deploy will be read from STDIN.
 
 Reading from STDIN and writing to STDOUT allows for piping output from one command to the input of another one (commands are incomplete for better readability):
 ```
