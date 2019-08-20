@@ -4,7 +4,12 @@ import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, IndexedDagStorage}
+import io.casperlabs.blockstorage.{
+  BlockMetadata,
+  BlockStorage,
+  DagRepresentation,
+  IndexedDagStorage
+}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._
 import Block.ProcessedDeploy
@@ -14,7 +19,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.FinalityDetectorVotingMatrix
+import io.casperlabs.casper.finality.{FinalityDetectorVotingMatrix, VotingMatrix, VotingMatrixImpl}
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -161,4 +166,24 @@ trait BlockGenerator {
                             lastFinalizedBlockHash
                           )
     } yield block -> finalizedBlockOpt
+
+  def createAndUpdateVotingMatrix[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+      parentsHashList: Seq[BlockHash],
+      latestFinalizedBlockHash: BlockHash,
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash]
+  )(
+      implicit votingMatrix: VotingMatrixImpl.VotingMatrix[F]
+  ): F[Block] =
+    for {
+      b           <- createBlock[F](parentsHashList, creator, bonds, justifications)
+      dag         <- IndexedDagStorage[F].getRepresentation
+      votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlockHash, b.blockHash)
+      _ <- VotingMatrix.updateVoterPerspective(
+            dag,
+            BlockMetadata.fromBlock(b),
+            votedBranch.get
+          )
+    } yield b
 }
