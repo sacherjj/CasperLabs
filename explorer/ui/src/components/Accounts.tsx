@@ -68,7 +68,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
 
         <ListInline>
           <Button
-            title="Create Account"
+            title="Create Account Key"
             onClick={() => this.props.auth.configureNewAccount()}
           />
         </ListInline>
@@ -76,7 +76,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
         {newAccount && (
           <Modal
             id="new-account"
-            title="Create Account"
+            title="Create Account Key"
             submitLabel="Save"
             onSubmit={() => this.props.auth.createAccount()}
             onClose={() => {

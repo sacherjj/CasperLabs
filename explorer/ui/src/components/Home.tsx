@@ -24,50 +24,46 @@ const Home = observer((props: Props) => {
             <a href="https://t.me/casperlabs">Telegram</a> or{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/issues">Github</a>
           </p>
-          <ul className="list-inline" id="go-to-buttons">
-            <li className="list-inline-item">
-              <a
-                className="btn btn-success btn-lg"
-                href="https://techspec.casperlabs.io/"
-                role="button"
-              >
+
+          <div className="row">
+            <AccountsCard accounts={props.auth.accounts} />
+            {props.auth.accounts &&
+              props.auth.accounts.length > 0 && [
+                <FaucetCard />,
+                <ExploreCard />,
+                <GraphQLCard />
+              ]}
+          </div>
+        </div>
+      </div>
+
+      <div className="card-body">
+        <ul className="list-inline" id="go-to-buttons">
+          <li className="list-inline-item">
+            <h4>
+              <a href="https://techspec.casperlabs.io/" role="button">
                 Read our Tech Spec &raquo;
               </a>
-            </li>
-          </ul>
-        </div>
-      </div>
+            </h4>
+          </li>
+        </ul>
 
-      <div className="row">
-        <AccountsCard accounts={props.auth.accounts} />
-        {props.auth.accounts && props.auth.accounts.length > 0 && (
-          <FaucetCard />
-        )}
-        <ExploreCard />
-        <GraphQLCard />
-      </div>
-
-      <div className="card mt-5">
-        <div className="card-header bg-danger text-white">
-          Looking for help?
-        </div>
-        <div className="card-body">
-          <p>
-            To write contracts have a look at the{' '}
-            <a href="https://github.com/CasperLabs/contract-examples/tree/master">
-              contract examples
-            </a>
-            , the{' '}
-            <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md">
-              main docs
-            </a>{' '}
-            and the{' '}
-            <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker">
-              local docker network setup
-            </a>
-            .
-          </p>
-        </div>
+        <h3>Looking for help?</h3>
+        <p>
+          To write contracts have a look at the{' '}
+          <a href="https://github.com/CasperLabs/contract-examples/tree/master">
+            contract examples
+          </a>
+          , the{' '}
+          <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md">
+            main docs
+          </a>{' '}
+          and the{' '}
+          <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker">
+            local docker network setup
+          </a>
+          .
+        </p>
       </div>
 
       <br />
@@ -90,7 +86,7 @@ const Card = (props: CardProps) => {
   const view = [
     <span className="float-left">View Details</span>,
     <span className="float-right">
-      ,<i className="fa fa-angle-right"></i>,
+      <i className="fa fa-angle-right"></i>
     </span>
   ];
   return (
