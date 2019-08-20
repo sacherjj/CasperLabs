@@ -653,6 +653,19 @@ class CLI:
 
         if 'deploy' in args or 'propose' in args:
             return output.split()[3]
+
+        if 'show-blocks' in args:
+            return parse_show_blocks(output)
+
+        if 'show-deploys' in args:
+            return parse_show_deploys(output)
+
+        if 'show-deploy' in args or 'show-block' in args:
+            return parse(output)
+
+        if 'query-state' in args:
+            return parse(output)
+
         return output
 
 
@@ -677,21 +690,21 @@ def test_cli_help(cli):
 
 
 def test_cli_show_blocks_and_show_block(cli):
-    blocks = parse_show_blocks(cli("show-blocks", "--depth", "1"))
+    blocks = cli("show-blocks", "--depth", "1")
     assert len(blocks) > 0
 
     for block in blocks:
         block_hash = block.summary.block_hash
         assert len(block_hash) == 32 * 2  # hex
 
-        b = parse(cli("show-block", block_hash))
+        b = cli("show-block", block_hash)
         assert block_hash == b.summary.block_hash
 
 
 def test_cli_show_block_not_found(cli):
     block_hash = "00" * 32
     with raises(CLIErrorExit) as ex_info:
-        parse(cli("show-block", block_hash))
+        cli("show-block", block_hash)
     # StatusCode.NOT_FOUND: Cannot find block matching hash 0000000000000000000000000000000000000000000000000000000000000000
     assert "NOT_FOUND" in str(ex_info.value)
     assert "Cannot find block matching hash" in str(ex_info.value)
@@ -730,26 +743,18 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli
         str(account.public_key_path),
     )
     block_hash = cli("propose")
-    deploys = parse_show_deploys(cli("show-deploys", block_hash))
+    deploys = cli("show-deploys", block_hash)
     deploy_hashes = [d.deploy.deploy_hash for d in deploys]
     assert deploy_hash in deploy_hashes
 
-    deploy_info = parse(cli("show-deploy", deploy_hash))
+    deploy_info = cli("show-deploy", deploy_hash)
     assert deploy_info.deploy.deploy_hash == deploy_hash
 
-    result = parse(
-        cli(
-            "query-state",
-            "--block-hash",
-            block_hash,
-            "--type",
-            "address",
-            "--key",
-            account.public_key_hex,
-            "--path",
-            "",
-        )
-    )
+    result = cli("query-state",
+                 "--block-hash", block_hash,
+                 "--type", "address",
+                 "--key", account.public_key_hex,
+                 "--path", "",)
     assert "hello_name" in [u.name for u in result.account.known_urefs]
 
     balance = int(
@@ -768,7 +773,6 @@ abi_unsigned_test_data = [
 @pytest.mark.parametrize("unsigned_type, test_contract", abi_unsigned_test_data)
 def test_cli_abi_unsigned(cli, unsigned_type, test_contract):
     account = GENESIS_ACCOUNT
-    client = cli.node.p_client
     nonce = 0
     for number in [2, 256, 1024]:
         nonce += 1
@@ -783,14 +787,13 @@ def test_cli_abi_unsigned(cli, unsigned_type, test_contract):
                           '--public-key', account.public_key_path,)
 
         cli('propose')
-        deploy_info = client.showDeploy(deploy_hash)
+        deploy_info = cli("show-deploy", deploy_hash)
         assert deploy_info.processing_results[0].is_error is True
         assert deploy_info.processing_results[0].error_message == f"Exit code: {number}"
 
 
 def test_cli_abi_multiple(cli):
     account = GENESIS_ACCOUNT
-    client = cli.node.p_client
     test_contract = resource("test_args_multi.wasm")
     account_hex = "0101010102020202030303030404040405050505060606060707070708080808"
     number = 1000
@@ -806,6 +809,6 @@ def test_cli_abi_multiple(cli):
                       '--private-key', account.private_key_path,
                       '--public-key', account.public_key_path,)
     cli('propose')
-    deploy_info = client.showDeploy(deploy_hash)
+    deploy_info = cli("show-deploy", deploy_hash)
     assert deploy_info.processing_results[0].is_error is True
     assert deploy_info.processing_results[0].error_message == f"Exit code: {total_sum}"
