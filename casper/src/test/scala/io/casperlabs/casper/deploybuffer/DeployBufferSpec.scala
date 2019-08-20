@@ -1,5 +1,6 @@
 package io.casperlabs.casper.deploybuffer
 
+import cats.data.NonEmptyList
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
@@ -90,6 +91,23 @@ trait DeployBufferSpec
             } yield ()
           }
       )
+    }
+
+    "addAsPending + addAsProcessed + getByHashes" should {
+      "return the same list of deploys" in forAll(deploysGen()) { deploys =>
+        testFixture { db =>
+          val idx                  = scala.util.Random.nextInt(deploys.size)
+          val (pending, processed) = deploys.splitAt(idx)
+          val deployHashes         = deploys.map(_.deployHash)
+          for {
+            _   <- db.addAsPending(pending)
+            _   <- db.addAsProcessed(processed)
+            all <- db.getByHashes(deployHashes)
+            _   = assert(deploys.sortedByHash == all.sortedByHash)
+          } yield ()
+
+        }
+      }
     }
 
     "readProcessedByAccount" should {

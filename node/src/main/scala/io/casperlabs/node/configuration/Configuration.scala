@@ -15,7 +15,6 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.{relativeToDataDir, SubConfig}
 import io.casperlabs.node.configuration.Utils._
-import io.casperlabs.shared.StoreType
 
 import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
@@ -62,7 +61,6 @@ object Configuration extends ParserImplicits {
       defaultTimeout: FiniteDuration,
       bootstrap: Option[Node],
       dataDir: Path,
-      storeType: StoreType,
       maxNumOfConnections: Int,
       maxMessageSize: Int,
       chunkSize: Int,

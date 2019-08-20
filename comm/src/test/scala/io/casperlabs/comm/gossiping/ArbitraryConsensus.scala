@@ -82,7 +82,7 @@ trait ArbitraryConsensus {
   def numValidators: Int = 10
 
   protected lazy val randomAccounts   = sample(Gen.listOfN(numAccounts, genAccountKeys))
-  protected lazy val randomValidators = sample(Gen.listOfN(numAccounts, genAccountKeys))
+  protected lazy val randomValidators = sample(Gen.listOfN(numValidators, genKey))
 
   implicit val arbNode: Arbitrary[Node] = Arbitrary {
     for {
@@ -131,7 +131,7 @@ trait ArbitraryConsensus {
       bodyHash           <- genHash
       preStateHash       <- genHash
       postStateHash      <- genHash
-      validatorPublicKey <- genKey
+      validatorPublicKey <- Gen.oneOf(randomValidators)
     } yield {
       Block
         .Header()

@@ -12,8 +12,9 @@ from .errors import (
     UnexpectedProposeOutputFormatError,
     UnexpectedShowBlocksOutputFormatError,
 )
+from casperlabs_client import ABI
 
-HELLO_NAME = "test_helloname.wasm"
+HELLO_NAME_CONTRACT = "test_helloname.wasm"
 HELLO_WORLD = "test_helloworld.wasm"
 COUNTER_CALL = "test_countercall.wasm"
 MAILING_LIST_CALL = "test_mailinglistcall.wasm"
@@ -23,7 +24,9 @@ UNBONDING_CONTRACT = "test_unbondingcall.wasm"
 INVALID_BONDING_CONTRACT = "test_invalid_bondingcall.wasm"
 INVALID_UNBONDING_CONTRACT = "test_invalid_unbondingcall.wasm"
 PAYMENT_PURSE_CONTRACT = "test_payment_purse.wasm"
+PAYMENT_CONTRACT = "standard_payment.wasm"
 MAX_PAYMENT_COST = 10000000  # ten million
+MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
 CONV_RATE = 10
 
 

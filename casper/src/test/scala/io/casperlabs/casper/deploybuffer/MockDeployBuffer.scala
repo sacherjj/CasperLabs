@@ -114,6 +114,11 @@ class MockDeployBuffer[F[_]: Monad: Log](
 
   override def readPendingHashes: F[List[ByteString]] = readPending.map(_.map(_.deployHash))
 
+  override def getByHashes(l: List[ByteString]): F[List[Deploy]] = {
+    val hashesSet = l.toSet
+    (readPending, readProcessed).mapN(_ ++ _).map(_.filter(d => hashesSet.contains(d.deployHash)))
+  }
+
   private def readByStatus(status: Int): F[List[Deploy]] =
     deploysWithMetadataRef.get.map(_.collect {
       case (deploy, Metadata(`status`, _, _)) => deploy
