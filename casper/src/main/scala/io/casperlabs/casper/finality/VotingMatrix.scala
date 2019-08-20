@@ -313,7 +313,7 @@ object VotingMatrixImpl {
                                     .levelZeroMsgsOfValidator(dag, v, voteValue)
                                     .map(
                                       _.lastOption
-                                        .map(b => (v, (b.blockHash, b.rank)))
+                                        .map(b => (v, (voteValue, b.rank)))
                                     )
                               }
                               .map(_.flatten.toMap)
