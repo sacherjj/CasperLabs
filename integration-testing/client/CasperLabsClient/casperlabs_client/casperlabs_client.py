@@ -60,7 +60,36 @@ DEFAULT_INTERNAL_PORT = 40402
 
 
 class ABI:
-    """ Encode deploy args.
+    """
+    Encode (serialize) deploy args.
+
+    Currently supported ABI types:
+    - unsigned integers: u32, u64, u512,
+    - byte_array, an array of bytes of arbitrary length,
+    - account, 32 bytes long byte_array, used for encoding of public keys.
+
+    There are two ways to serialize a list of deploy arguments:
+
+    1. Using method ABI.args, for example:
+
+        ABI.args([ABI.u32(100), ABI.u64(5000)])
+
+      Arguments are encoded with methods appropriate for their types,
+      and passed in a list to method ABI.args.
+
+      This is the recommended way of serializing ABI arguments in Python code.
+
+    2. By encoding arguments in a JSON format and passing them to method
+      ABI.args_from_json, for example:
+
+        ABI.args_from_json('[{"u32": 100}, {"u64": 5000}]')
+
+      The JSON encoded list contains arguments encoded as dictionaries,
+      each with just one (key, value) pair, where key is a name of one
+      of supported ABI type, and value being the argument's value.
+
+      This method has been developed to support passing deploy arguments
+      on command line.
     """
 
     @staticmethod
