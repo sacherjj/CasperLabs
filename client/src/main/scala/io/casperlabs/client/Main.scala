@@ -4,10 +4,13 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import cats.effect.{Sync, Timer}
-import cats.syntax.either._
+import cats.implicits._
 import cats.temp.par._
+import com.google.protobuf.ByteString
 import io.casperlabs.client.configuration._
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -107,6 +110,47 @@ object Main {
           ),
           gasPrice
         )
+      case MakeDeploy(
+          from,
+          publicKey,
+          nonce,
+          sessionCode,
+          paymentCode,
+          gasPrice,
+          deployPath
+          ) =>
+        for {
+          baseAccount <- publicKey match {
+                          case None =>
+                            // This should be safe because we validate that one of --from, --public-key is present.
+                            ByteString.copyFrom(Base16.decode(from.get)).pure[F]
+                          case Some(publicKeyFile) =>
+                            for {
+                              content <- DeployRuntime.readFileAsString[F](publicKeyFile)
+                              publicKey <- Sync[F].fromOption(
+                                            Ed25519.tryParsePublicKey(content),
+                                            new IllegalArgumentException(
+                                              s"Failed to parse public key file ${publicKeyFile.getPath()}"
+                                            )
+                                          )
+                            } yield ByteString.copyFrom(publicKey)
+                        }
+          deploy = DeployRuntime.makeDeploy(
+            baseAccount,
+            nonce,
+            gasPrice,
+            Files.readAllBytes(sessionCode.toPath),
+            Array.emptyByteArray,
+            Files.readAllBytes(paymentCode.toPath)
+          )
+          _ <- DeployRuntime.writeDeploy(deploy, deployPath)
+        } yield ()
+
+      case SendDeploy(deploy) =>
+        DeployRuntime.sendDeploy(deploy)
+
+      case Sign(deploy, signedDeployOut, publicKey, privateKey) =>
+        DeployRuntime.sign(deploy, signedDeployOut, publicKey, privateKey)
 
       case Propose =>
         DeployRuntime.propose()
