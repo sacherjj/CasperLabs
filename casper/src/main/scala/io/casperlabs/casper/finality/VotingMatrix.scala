@@ -122,7 +122,6 @@ object VotingMatrix {
                      votingMatrix        <- (matrix >> 'votingMatrix).get
                      firstLevelZeroVotes <- (matrix >> 'firstLevelZeroVotes).get
                      validatorToIndex    <- (matrix >> 'validatorToIdx).get
-                     weightMap           <- (matrix >> 'weightMap).get
                      mask = VotingMatrixImpl
                        .fromMapToArray(validatorToIndex, committeeApproximation.contains)
                      weight = VotingMatrixImpl
