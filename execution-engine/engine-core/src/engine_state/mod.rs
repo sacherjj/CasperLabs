@@ -42,6 +42,8 @@ pub const CONV_RATE: u64 = 10;
 
 pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 
+const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
+
 #[derive(Debug)]
 pub struct EngineState<H> {
     config: EngineConfig,
@@ -121,7 +123,6 @@ where
         blocktime: BlockTime,
         nonce: u64,
         prestate_hash: Blake2bHash,
-        gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
         executor: &E,
@@ -198,6 +199,8 @@ where
         // If payment logic is turned off, execute only session code
         if !(self.config.use_payment_code()) {
             // DEPLOY WITH NO PAYMENT
+
+            let gas_limit = DEFAULT_SESSION_MOTES / CONV_RATE;
 
             // Session code execution
             let session_result = executor.exec(
