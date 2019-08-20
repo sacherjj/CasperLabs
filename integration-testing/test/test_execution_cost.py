@@ -190,14 +190,14 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
     latest_blocks = parse_show_blocks(node0.d_client.show_blocks(1000))
     deploy_hash = latest_blocks[0].summary.block_hash
     deploy = node0.client.show_deploys(deploy_hash)[0]
-    assert deploy.cost == MAX_PAYMENT_COST / CONV_RATE
+    assert deploy.cost == (MAX_PAYMENT_COST / CONV_RATE) - 1
     account1_balance_after_computation = node0.client.get_balance(
         account_address=account1.public_key_hex,
         block_hash=latest_blocks[0].summary.block_hash,
     )
     assert (
         account1_balance_after_computation
-        == account1_starting_balance - MAX_PAYMENT_COST
+        == (account1_starting_balance - MAX_PAYMENT_COST) + 10
     )
 
 
