@@ -19,6 +19,8 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log](rFTT: Double)(
     implicit matrix: _votingMatrixS[F]
 ) {
 
+  require(rFTT > 0 && rFTT < 0.5)
+
   /**
     * Incremental update voting matrix when a new block added to the dag
     * @param dag block dag
