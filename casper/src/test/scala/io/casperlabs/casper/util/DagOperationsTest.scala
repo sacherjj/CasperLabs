@@ -5,6 +5,7 @@ import cats.{Id, Monad}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockMetadata
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
@@ -13,6 +14,7 @@ import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
+import io.casperlabs.blockstorage.DagRepresentation
 
 @silent("deprecated")
 @silent("is never used")
@@ -308,6 +310,59 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
           result <- DagOperations.uncommonAncestors(Vector(b1), dag)(Monad[Task], ordering) shouldBeF Map
                      .empty[BlockMetadata, BitSet]
         } yield result
+  }
+
+  "anyDescendingPathExists" should
+    "return whether there is a path from any of the possible ancestor blocks to any of the potential descendants" in withStorage {
+    implicit blockStorage => implicit dagStorage =>
+      def anyDescendingPathExists(
+          dag: DagRepresentation[Task],
+          start: Set[Block],
+          targets: Set[Block]
+      ) =
+        DagOperations.anyDescendingPathExists[Task](
+          dag,
+          start.map(_.blockHash),
+          targets.map(_.blockHash)
+        )
+      /*
+       * DAG Looks like this:
+       *
+       *        b6   b7
+       *       |  \ /  \
+       *       |   b4  b5
+       *       |    \ /
+       *       b2    b3
+       *         \  /
+       *          b1
+       *           |
+       *         genesis
+       */
+      for {
+        genesis <- createBlock[Task](Seq.empty)
+        b1      <- createBlock[Task](Seq(genesis.blockHash))
+        b2      <- createBlock[Task](Seq(b1.blockHash))
+        b3      <- createBlock[Task](Seq(b1.blockHash))
+        b4      <- createBlock[Task](Seq(b3.blockHash))
+        b5      <- createBlock[Task](Seq(b3.blockHash))
+        b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
+        b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
+        dag     <- dagStorage.getRepresentation
+        // self
+        _ <- anyDescendingPathExists(dag, Set(genesis), Set(genesis)) shouldBeF true
+        // any descendant
+        _ <- anyDescendingPathExists(dag, Set(b3), Set(b2, b7)) shouldBeF true
+        // any ancestor
+        _ <- anyDescendingPathExists(dag, Set(b2, b3), Set(b5)) shouldBeF true
+        // main parent
+        _ <- anyDescendingPathExists(dag, Set(b4), Set(b7)) shouldBeF true
+        // secondary parent
+        _ <- anyDescendingPathExists(dag, Set(b5), Set(b7)) shouldBeF true
+        // not to ancestor
+        _ <- anyDescendingPathExists(dag, Set(b2, b4), Set(b1)) shouldBeF false
+        // not to sibling
+        _ <- anyDescendingPathExists(dag, Set(b2), Set(b3)) shouldBeF false
+      } yield ()
   }
 
 }

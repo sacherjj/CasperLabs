@@ -352,4 +352,22 @@ object DagOperations {
       )
       .map(_.blockHash)
   }
+
+  /** Check if there's a (possibly empty) path leading from any of the starting points to any of the targets. */
+  def anyPathExists[F[_]: Monad, A](
+      start: Set[A],
+      targets: Set[A]
+  )(neighbours: A => F[List[A]])(
+      implicit k: Key[A]
+  ): F[Boolean] =
+    bfTraverseF[F, A](start.toList)(neighbours).find(targets).map(_.nonEmpty)
+
+  def anyDescendingPathExists[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      ancestors: Set[BlockHash],
+      descendants: Set[BlockHash]
+  ): F[Boolean] =
+    anyPathExists(ancestors, descendants) { blockHash =>
+      dag.children(blockHash).map(_.toList)
+    }
 }
