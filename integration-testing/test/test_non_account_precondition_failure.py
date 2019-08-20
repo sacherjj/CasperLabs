@@ -1,11 +1,11 @@
 import pytest
 
 from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.common import HELLO_NAME_CONTRACT
+from test.cl_node.common import HELLO_NAME_CONTRACT, PAYMENT_CONTRACT, MAX_PAYMENT_ABI
 
 
-def test_non_account_precondition_failure(one_node_network):
-    node = one_node_network.docker_nodes[0]
+def test_non_account_precondition_failure(trillion_payment_node_network):
+    node = trillion_payment_node_network.docker_nodes[0]
 
     # Getting a non-existent account
     non_existent_account = Account(300)
@@ -16,7 +16,8 @@ def test_non_account_precondition_failure(one_node_network):
         public_key=non_existent_account.public_key_path,
         private_key=non_existent_account.private_key_path,
         session_contract=HELLO_NAME_CONTRACT,
-        payment_contract=HELLO_NAME_CONTRACT,
+        payment_contract=PAYMENT_CONTRACT,
+        payment_args=MAX_PAYMENT_ABI,
     )
 
     # Will have InternalError as no deploys to propose
