@@ -115,7 +115,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "on the configuration of the Casper instance."
     )
 
-    val deployFile = opt[File](
+    val deployPath = opt[File](
       required = false,
       descr = "Path to the file with signed Deploy.",
       validate = fileCheck,
@@ -186,7 +186,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(deploy)
 
-  val sign = new Subcommand("sign") {
+  val signDeploy = new Subcommand("sign-deploy") {
     descr("Cryptographically signs a deploy. The signature is appended to existing approvals.")
 
     val publicKey =
@@ -213,7 +213,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         short = 'o'
       )
 
-    val deployFile =
+    val deployPath =
       opt[File](
         required = false,
         descr = "Path to the deploy file.",
@@ -223,7 +223,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         .orElse(Some(IOUtils.toByteArray(System.in)))
   }
 
-  addSubcommand(sign)
+  addSubcommand(signDeploy)
 
   val propose = new Subcommand("propose") {
     descr(

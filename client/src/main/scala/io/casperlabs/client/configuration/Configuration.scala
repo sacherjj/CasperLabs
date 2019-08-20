@@ -119,14 +119,14 @@ object Configuration {
           options.makeDeploy.gasPrice(),
           options.makeDeploy.deployPath.toOption
         )
-      case options.`sendDeploy` =>
-        SendDeploy(options.sendDeploy.deployFile())
-      case options.sign =>
+      case options.sendDeploy =>
+        SendDeploy(options.sendDeploy.deployPath())
+      case options.signDeploy =>
         Sign(
-          options.sign.deployFile(),
-          options.sign.signedDeployPath.toOption,
-          options.sign.publicKey(),
-          options.sign.privateKey()
+          options.signDeploy.deployPath(),
+          options.signDeploy.signedDeployPath.toOption,
+          options.signDeploy.publicKey(),
+          options.signDeploy.privateKey()
         )
       case options.propose =>
         Propose

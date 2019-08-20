@@ -82,7 +82,7 @@ Success!
 
 Every account can associate multiple keys with it and give each a weight. Collective weight of signing keys decides whether an action of certain type can be made. In order to collect weight of different associated keys a deploy has to be signed by corresponding private keys. `deploy` command does it all (creates a deploy, signs it an deploys to the node) but doesn't allow for signing with multiple keys. Therefore we split `deploy` into three separate commands:
 * `make-deploy` - creates a deploy from input parameters
-* `sign` - signs a deploy with given private key
+* `sign-deploy` - signs a deploy with given private key
 * `send-deploy` - sends a deploy to CasperLabs node
 
 Commands read input deploy from both a file (`-i` flag) and STDIN. They can also write to both file and STDOUT.
@@ -115,7 +115,7 @@ casperlabs-client \
 ```
 casperlabs-client \
     --host localhost \
-    sign \
+    sign-deploy \
     --public-key public-key.pem \
     --private-key private-key.pem
 ```
@@ -131,7 +131,9 @@ In the example above there are is no `-i` argument, meaning that signed deploy w
 
 Reading from STDIN and writing to STDOUT allows for piping output from one command to the input of another one (commands are incomplete for better readability):
 ```
-casperlabs-client make-deploy [arguments] | casperlabs-client sign --private-key [private_key] --public-key [public_key] | casperlabs-client send-deploy
+casperlabs-client make-deploy [arguments] | \
+casperlabs-client sign-deploy --private-key [private_key] --public-key [public_key] | \
+casperlabs-client send-deploy
 ```
 
 For more detailed description, use `--help` flag (`casper-client --help`).
