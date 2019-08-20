@@ -54,7 +54,7 @@ class FinalityDetectorByVotingMatrixTest
                                                              .of[Task](dag, genesis.blockHash)
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) = new FinalityDetectorVotingMatrix[
             Task
-          ](rFTT = 0)
+          ](rFTT = 0.1)
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
                        genesis.blockHash,
@@ -87,6 +87,67 @@ class FinalityDetectorByVotingMatrixTest
                        HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
                      )
           result = c4 shouldBe Some(CommitteeWithConsensusValue(Set(v1), 20, b4.blockHash))
+        } yield result
+  }
+
+  it should "finalize blocks properly with only one validator" in withStorage {
+    implicit blockStore =>
+      implicit blockDagStorage =>
+        /* The DAG looks like:
+         *
+         *    b4
+         *    |
+         *    b3
+         *    |
+         *    b2
+         *    |
+         *    b1
+         *      \
+         *      genesis
+         */
+        val v1     = generateValidator("V1")
+        val v1Bond = Bond(v1, 10)
+        val bonds  = Seq(v1Bond)
+        for {
+          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          dag     <- blockDagStorage.getRepresentation
+          implicit0(votingMatrixS: _votingMatrixS[Task]) <- FinalityDetectorVotingMatrix
+                                                             .of[Task](dag, genesis.blockHash)
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) = new FinalityDetectorVotingMatrix[
+            Task
+          ](rFTT = 0.1)
+          (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(genesis.blockHash),
+                       genesis.blockHash,
+                       v1,
+                       bonds
+                     )
+
+          _ = c1 shouldBe Some(CommitteeWithConsensusValue(Set(v1), 10, b1.blockHash))
+          (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(b1.blockHash),
+                       b1.blockHash,
+                       v1,
+                       bonds,
+                       HashMap(v1 -> b1.blockHash)
+                     )
+          _ = c2 shouldBe Some(CommitteeWithConsensusValue(Set(v1), 10, b2.blockHash))
+          (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(b2.blockHash),
+                       b2.blockHash,
+                       v1,
+                       bonds,
+                       HashMap(v1 -> b2.blockHash)
+                     )
+          _ = c3 shouldBe Some(CommitteeWithConsensusValue(Set(v1), 10, b3.blockHash))
+          (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(b3.blockHash),
+                       b3.blockHash,
+                       v1,
+                       bonds,
+                       HashMap(v1 -> b3.blockHash)
+                     )
+          result = c4 shouldBe Some(CommitteeWithConsensusValue(Set(v1), 10, b4.blockHash))
         } yield result
   }
 
