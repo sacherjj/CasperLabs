@@ -22,7 +22,7 @@ enum Arg {
 enum Error {
     GetPosInnerURef = 1,
     GetPosOuterURef = 2,
-    TransferError = 3,
+    Transfer = 3,
 }
 
 #[no_mangle]
@@ -47,6 +47,6 @@ pub extern "C" fn call() {
     if let PurseTransferResult::TransferError =
         contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
     {
-        contract_api::revert(Error::TransferError as u32);
+        contract_api::revert(Error::Transfer as u32);
     }
 }
