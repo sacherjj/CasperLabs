@@ -140,8 +140,7 @@ trait BlockGenerator {
             .put(serializedBlockHash, modifiedBlock, Seq.empty)
     } yield modifiedBlock
 
-  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
-      finalityDetectorVotingMatrix: FinalityDetectorVotingMatrix[F],
+  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix](
       parentsHashList: Seq[BlockHash],
       lastFinalizedBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
@@ -156,7 +155,7 @@ trait BlockGenerator {
                 justifications
               )
       dag <- IndexedDagStorage[F].getRepresentation
-      finalizedBlockOpt <- finalityDetectorVotingMatrix.onNewBlockAddedToTheBlockDag(
+      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewBlockAddedToTheBlockDag(
                             dag,
                             block,
                             lastFinalizedBlockHash

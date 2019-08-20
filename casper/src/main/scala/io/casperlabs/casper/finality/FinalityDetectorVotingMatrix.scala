@@ -63,6 +63,11 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log](rFTT: Double)(
 }
 
 object FinalityDetectorVotingMatrix {
+  def apply[F[_]](
+      implicit detector: FinalityDetectorVotingMatrix[F]
+  ): FinalityDetectorVotingMatrix[F] =
+    detector
+
   type _votingMatrixS[F[_]] = MonadState[F, VotingMatrixState] with Semaphore[F]
 
   def synchronizedVotingMatrix[F[_]: Monad](

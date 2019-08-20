@@ -52,9 +52,10 @@ class FinalityDetectorByVotingMatrixTest
           dag     <- blockDagStorage.getRepresentation
           implicit0(votingMatrixS: _votingMatrixS[Task]) <- FinalityDetectorVotingMatrix
                                                              .of[Task](dag, genesis.blockHash)
-          finalityDetectorVotingMatrix = new FinalityDetectorVotingMatrix[Task](rFTT = 0)
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) = new FinalityDetectorVotingMatrix[
+            Task
+          ](rFTT = 0)
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
-                       finalityDetectorVotingMatrix,
                        Seq(genesis.blockHash),
                        genesis.blockHash,
                        v1,
@@ -63,7 +64,6 @@ class FinalityDetectorByVotingMatrixTest
                      )
           _ = c1 shouldBe Some(CommitteeWithConsensusValue(Set(v1), 20, b1.blockHash))
           (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
-                       finalityDetectorVotingMatrix,
                        Seq(b1.blockHash),
                        b1.blockHash,
                        v2,
@@ -72,7 +72,6 @@ class FinalityDetectorByVotingMatrixTest
                      )
           _ = c2 shouldBe None
           (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
-                       finalityDetectorVotingMatrix,
                        Seq(b1.blockHash),
                        b1.blockHash,
                        v1,
@@ -81,7 +80,6 @@ class FinalityDetectorByVotingMatrixTest
                      )
           _ = c3 shouldBe Some(CommitteeWithConsensusValue(Set(v1), 20, b3.blockHash))
           (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
-                       finalityDetectorVotingMatrix,
                        Seq(b3.blockHash),
                        b3.blockHash,
                        v1,
