@@ -41,11 +41,10 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log](rFTT: Double)(
                      result <- VotingMatrix.checkForCommittee[F](rFTT)
                      _ <- result match {
                            case Some(newLFB) =>
-                             Sync[F].delay(println(s"New LFB: $newLFB")).void >>
-                               // On new LFB we rebuild VotingMatrix and start the new game.
-                               VotingMatrixImpl
-                                 .create[F](dag, newLFB.consensusValue)
-                                 .flatMap(newMatrix => matrix.set(newMatrix))
+                             // On new LFB we rebuild VotingMatrix and start the new game.
+                             VotingMatrixImpl
+                               .create[F](dag, newLFB.consensusValue)
+                               .flatMap(newMatrix => matrix.set(newMatrix))
                            case None =>
                              ().pure[F]
                          }
