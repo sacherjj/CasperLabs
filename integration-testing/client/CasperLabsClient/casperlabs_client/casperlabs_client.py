@@ -60,7 +60,36 @@ DEFAULT_INTERNAL_PORT = 40402
 
 
 class ABI:
-    """ Encode deploy args.
+    """
+    Encode (serialize) deploy args.
+
+    Currently supported ABI types:
+    - unsigned integers: u32, u64, u512,
+    - byte_array, an array of bytes of arbitrary length,
+    - account, 32 bytes long byte_array, used for encoding of public keys.
+
+    There are two ways to serialize a list of deploy arguments:
+
+    1. Using method ABI.args, for example:
+
+        ABI.args([ABI.u32(100), ABI.u64(5000)])
+
+      Arguments are encoded with methods appropriate for their types,
+      and passed in a list to method ABI.args.
+
+      This is the recommended way of serializing ABI arguments in Python code.
+
+    2. By encoding arguments in a JSON format and passing them to method
+      ABI.args_from_json, for example:
+
+        ABI.args_from_json('[{"u32": 100}, {"u64": 5000}]')
+
+      The JSON encoded list contains arguments encoded as dictionaries,
+      each with just one (key, value) pair, where key is a name of one
+      of supported ABI type, and value being the argument's value.
+
+      This method has been developed to support passing deploy arguments
+      on command line.
     """
 
     @staticmethod
@@ -269,6 +298,8 @@ class CasperLabsClient:
         :param payment_args:  List of ABI encoded arguments of payment contract
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
+        if from_addr and len(from_addr) != 32:
+            raise Exception(f"from_addr must be 32 bytes")
 
         payment = payment or session
 
@@ -313,14 +344,8 @@ class CasperLabsClient:
             ),
         )
 
-        approval_public_key = None
-        if public_key:
-            approval_public_key = read_pem_key(public_key)
-
-        if from_addr is None:
-            account_public_key = approval_public_key
-        else:
-            account_public_key = from_addr
+        approval_public_key = public_key and read_pem_key(public_key)
+        account_public_key = from_addr or approval_public_key
 
         header = consensus.Deploy.Header(
             account_public_key=account_public_key,
@@ -572,8 +597,14 @@ def no_command(casperlabs_client, args):
 
 @guarded_command
 def deploy_command(casperlabs_client, args):
+    from_addr = bytes.fromhex(getattr(args, "from"))
+    if len(from_addr) != 32:
+        raise Exception(
+            "--from must be 32 bytes encoded as 64 characters long hexadecimal"
+        )
+
     kwargs = dict(
-        from_addr=getattr(args, "from"),
+        from_addr=from_addr,
         gas_limit=None,
         gas_price=args.gas_price,
         payment=args.payment or args.session,
@@ -704,7 +735,7 @@ def main():
 
     # fmt: off
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
-                      [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
+                      [[('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
                        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
                        [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
