@@ -1,14 +1,19 @@
 package io.casperlabs.casper.finality.votingmatrix
 
+import cats.Monad
+import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.blockstorage.{BlockStorage, IndexedDagStorage}
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.Time
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -245,4 +250,26 @@ class FinalityDetectorByVotingMatrixTest
           result = c7 shouldBe Some(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b4.blockHash))
         } yield result
   }
+
+  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix](
+      parentsHashList: Seq[BlockHash],
+      lastFinalizedBlockHash: BlockHash,
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash]
+  ): F[(Block, Option[CommitteeWithConsensusValue])] =
+    for {
+      block <- createBlock[F](
+                parentsHashList,
+                creator,
+                bonds,
+                justifications
+              )
+      dag <- IndexedDagStorage[F].getRepresentation
+      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewBlockAddedToTheBlockDag(
+                            dag,
+                            block,
+                            lastFinalizedBlockHash
+                          )
+    } yield block -> finalizedBlockOpt
 }

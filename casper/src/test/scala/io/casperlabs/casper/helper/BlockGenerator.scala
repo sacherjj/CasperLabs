@@ -15,11 +15,8 @@ import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.votingmatrix.{
-  FinalityDetectorVotingMatrix,
-  VotingMatrix,
-  VotingMatrixImpl
-}
+import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
+import io.casperlabs.casper.finality.votingmatrix.{FinalityDetectorVotingMatrix, VotingMatrix}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
@@ -147,46 +144,4 @@ trait BlockGenerator {
       _ <- BlockStorage[F]
             .put(serializedBlockHash, modifiedBlock, Seq.empty)
     } yield modifiedBlock
-
-  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix](
-      parentsHashList: Seq[BlockHash],
-      lastFinalizedBlockHash: BlockHash,
-      creator: Validator = ByteString.EMPTY,
-      bonds: Seq[Bond] = Seq.empty[Bond],
-      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash]
-  ): F[(Block, Option[CommitteeWithConsensusValue])] =
-    for {
-      block <- createBlock[F](
-                parentsHashList,
-                creator,
-                bonds,
-                justifications
-              )
-      dag <- IndexedDagStorage[F].getRepresentation
-      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewBlockAddedToTheBlockDag(
-                            dag,
-                            block,
-                            lastFinalizedBlockHash
-                          )
-    } yield block -> finalizedBlockOpt
-
-  def createAndUpdateVotingMatrix[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
-      parentsHashList: Seq[BlockHash],
-      latestFinalizedBlockHash: BlockHash,
-      creator: Validator = ByteString.EMPTY,
-      bonds: Seq[Bond] = Seq.empty[Bond],
-      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash]
-  )(
-      implicit votingMatrix: VotingMatrixImpl.VotingMatrix[F]
-  ): F[Block] =
-    for {
-      b           <- createBlock[F](parentsHashList, creator, bonds, justifications)
-      dag         <- IndexedDagStorage[F].getRepresentation
-      votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlockHash, b.blockHash)
-      _ <- VotingMatrix.updateVoterPerspective(
-            dag,
-            BlockMetadata.fromBlock(b),
-            votedBranch.get
-          )
-    } yield b
 }

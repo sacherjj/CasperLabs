@@ -9,7 +9,6 @@ import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
-import VotingMatrixImpl.VotingMatrixState
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.util.ProtoUtil
@@ -39,12 +38,12 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log](rFTT: Double)(
                  case Some(branch) =>
                    val blockMetadata = BlockMetadata.fromBlock(block)
                    for {
-                     _      <- VotingMatrix.updateVoterPerspective[F](dag, blockMetadata, branch)
-                     result <- VotingMatrix.checkForCommittee[F](rFTT)
+                     _      <- updateVoterPerspective[F](dag, blockMetadata, branch)
+                     result <- checkForCommittee[F](rFTT)
                      _ <- result match {
                            case Some(newLFB) =>
                              // On new LFB we rebuild VotingMatrix and start the new game.
-                             VotingMatrixImpl
+                             VotingMatrix
                                .create[F](dag, newLFB.consensusValue)
                                .flatMap(newMatrix => matrix.set(newMatrix))
                            case None =>
@@ -98,13 +97,13 @@ object FinalityDetectorVotingMatrix {
   ): F[_votingMatrixS[F]] =
     for {
       lock              <- Semaphore[F](1)
-      votingMatrix      <- VotingMatrixImpl.create[F](dag, block)
-      votingMatrixState <- VotingMatrixImpl.of[F](votingMatrix)
+      votingMatrix      <- VotingMatrix.create[F](dag, block)
+      votingMatrixState <- VotingMatrix.of[F](votingMatrix)
     } yield synchronizedVotingMatrix(lock, votingMatrixState)
 
   def empty[F[_]: Concurrent]: F[_votingMatrixS[F]] =
     for {
       lock  <- Semaphore[F](1)
-      empty <- VotingMatrixImpl.empty[F]
+      empty <- VotingMatrix.empty[F]
     } yield synchronizedVotingMatrix(lock, empty)
 }

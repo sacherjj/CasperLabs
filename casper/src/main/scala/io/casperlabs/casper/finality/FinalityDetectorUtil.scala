@@ -4,8 +4,8 @@ import cats.Monad
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.finality.votingmatrix.VotingMatrixImpl
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 object FinalityDetectorUtil {
@@ -138,9 +138,25 @@ object FinalityDetectorUtil {
       .map(
         latestBlockDagLevelsAsMap =>
           // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
-          VotingMatrixImpl.fromMapToArray(
+          fromMapToArray(
             validatorsToIndex,
             latestBlockDagLevelsAsMap.getOrElse(_, 0L)
           )
       )
+
+  // Returns an MutableSeq, whose size equals the size of validatorsToIndex and
+  // For v in validatorsToIndex.key
+  //   Arr[validatorsToIndex[v]] = mapFunction[v]
+  def fromMapToArray[A](
+      validatorsToIndex: Map[Validator, Int],
+      mapFunction: Validator => A
+  ): MutableSeq[A] =
+    validatorsToIndex
+      .map {
+        case (v, i) =>
+          (i, mapFunction(v))
+      }
+      .toArray[(Int, A)]
+      .sortBy(_._1)
+      .map(_._2)
 }
