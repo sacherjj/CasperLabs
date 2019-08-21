@@ -70,7 +70,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
             ) { b =>
               b.parents.traverse(l => dag.lookup(l).map(_.get))
             }(Monad[Task], dagTopoOrderingDesc)
-          _ <- stream2.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 3, 4, 5, 6, 7).reverse)
+          _ <- stream2.toList.map(_.map(_.rank) shouldBe List(4, 4, 3, 3, 2, 2, 1, 0))
         } yield ()
   }
 
