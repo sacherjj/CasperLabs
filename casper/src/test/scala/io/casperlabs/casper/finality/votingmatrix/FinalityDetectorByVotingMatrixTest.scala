@@ -55,11 +55,12 @@ class FinalityDetectorByVotingMatrixTest
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
-          implicit0(votingMatrixS: _votingMatrixS[Task]) <- FinalityDetectorVotingMatrix
-                                                             .of[Task](dag, genesis.blockHash)
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) = new FinalityDetectorVotingMatrix[
-            Task
-          ](rFTT = 0.1)
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
+                                                                      .of[Task](
+                                                                        dag,
+                                                                        genesis.blockHash,
+                                                                        rFTT = 0.1
+                                                                      )
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
                        genesis.blockHash,
@@ -116,11 +117,12 @@ class FinalityDetectorByVotingMatrixTest
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
-          implicit0(votingMatrixS: _votingMatrixS[Task]) <- FinalityDetectorVotingMatrix
-                                                             .of[Task](dag, genesis.blockHash)
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) = new FinalityDetectorVotingMatrix[
-            Task
-          ](rFTT = 0.1)
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
+                                                                      .of[Task](
+                                                                        dag,
+                                                                        genesis.blockHash,
+                                                                        rFTT = 0.1
+                                                                      )
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
                        genesis.blockHash,
@@ -188,11 +190,12 @@ class FinalityDetectorByVotingMatrixTest
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
-          implicit0(votingMatrixS: _votingMatrixS[Task]) <- FinalityDetectorVotingMatrix
-                                                             .of[Task](dag, genesis.blockHash)
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) = new FinalityDetectorVotingMatrix[
-            Task
-          ](rFTT = 0.1)
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
+                                                                      .of[Task](
+                                                                        dag,
+                                                                        genesis.blockHash,
+                                                                        rFTT = 0.1
+                                                                      )
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
                        genesis.blockHash,

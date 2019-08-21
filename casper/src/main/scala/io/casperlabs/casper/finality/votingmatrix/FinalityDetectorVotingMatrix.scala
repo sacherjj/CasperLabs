@@ -12,13 +12,12 @@ import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.Log
 
-class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log](rFTT: Double)(
-    implicit matrix: _votingMatrixS[F]
+class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)(
+    implicit private val matrix: _votingMatrixS[F]
 ) {
-
-  require(rFTT > 0 && rFTT < 0.5)
 
   /**
     * Incremental update voting matrix when a new block added to the dag
@@ -71,7 +70,7 @@ object FinalityDetectorVotingMatrix {
 
   type _votingMatrixS[F[_]] = MonadState[F, VotingMatrixState] with Semaphore[F]
 
-  def synchronizedVotingMatrix[F[_]: Monad](
+  private def synchronizedVotingMatrix[F[_]: Monad](
       lock: Semaphore[F],
       state: MonadState[F, VotingMatrixState]
   ): _votingMatrixS[F] =
@@ -91,12 +90,25 @@ object FinalityDetectorVotingMatrix {
       override def modify(f: VotingMatrixState => VotingMatrixState): F[Unit] = state.modify(f)
     }
 
-  def of[F[_]: Concurrent](
+  /** Constructs an instance of FinalityDetector based on VotingMatrix, starting from `finalizedBlock`.
+    *
+    * NOTE: Raises an error if rFTT parameters is less than 0 or bigger than 0.5.
+    */
+  def of[F[_]: Concurrent: Log](
       dag: DagRepresentation[F],
-      block: BlockHash
-  ): F[_votingMatrixS[F]] =
+      finalizedBlock: BlockHash,
+      rFTT: Double
+  ): F[FinalityDetectorVotingMatrix[F]] =
     for {
-      lock         <- Semaphore[F](1)
-      votingMatrix <- VotingMatrix.create[F](dag, block)
-    } yield synchronizedVotingMatrix(lock, votingMatrix)
+      _ <- MonadThrowable[F]
+            .raiseError(
+              new IllegalArgumentException(
+                s"Relative FTT has to be bigger than 0 and less than 0.5. Got: $rFTT"
+              )
+            )
+            .whenA(rFTT < 0 || rFTT > 0.5)
+      lock                 <- Semaphore[F](1)
+      votingMatrix         <- VotingMatrix.create[F](dag, finalizedBlock)
+      votingMatrixWithLock = synchronizedVotingMatrix(lock, votingMatrix)
+    } yield new FinalityDetectorVotingMatrix[F](rFTT)(Concurrent[F], Log[F], votingMatrixWithLock)
 }
