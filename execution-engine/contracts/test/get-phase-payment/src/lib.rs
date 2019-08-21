@@ -15,16 +15,23 @@ use cl_std::value::U512;
 const POS_CONTRACT_NAME: &str = "pos";
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 
+#[repr(u32)]
+enum Error {
+    GetPosOuterURef = 1,
+    GetPosInnerURef = 2,
+    TransferFromSourceToPayment = 3,
+}
+
 fn standard_payment(amount: U512) {
     let main_purse = contract_api::main_purse();
 
     let pos_public: UPointer<Key> = contract_api::get_uref(POS_CONTRACT_NAME)
         .and_then(Key::to_u_ptr)
-        .unwrap_or_else(|| contract_api::revert(66));
+        .unwrap_or_else(|| contract_api::revert(Error::GetPosOuterURef as u32));
 
     let pos_contract = contract_api::read(pos_public)
         .to_c_ptr()
-        .unwrap_or_else(|| contract_api::revert(67));
+        .unwrap_or_else(|| contract_api::revert(Error::GetPosInnerURef as u32));
 
     let payment_purse: PurseId =
         contract_api::call_contract(pos_contract, &(GET_PAYMENT_PURSE), &vec![]);
@@ -32,7 +39,7 @@ fn standard_payment(amount: U512) {
     if let PurseTransferResult::TransferError =
         contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
     {
-        contract_api::revert(99);
+        contract_api::revert(Error::TransferFromSourceToPayment as u32);
     }
 }
 
