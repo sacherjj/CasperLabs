@@ -362,7 +362,8 @@ object DagOperations {
   ): F[Boolean] =
     bfTraverseF[F, A](start.toList)(neighbours).find(targets).map(_.nonEmpty)
 
-  def anyDescendingPathExists[F[_]: MonadThrowable](
+  /** Check if a path in the p-DAG exists from ancestors to descendants (or self). */
+  def anyDescendantPathExists[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       ancestors: Set[BlockHash],
       descendants: Set[BlockHash]

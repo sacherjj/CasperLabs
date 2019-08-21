@@ -312,15 +312,15 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         } yield result
   }
 
-  "anyDescendingPathExists" should
+  "anyDescendantPathExists" should
     "return whether there is a path from any of the possible ancestor blocks to any of the potential descendants" in withStorage {
     implicit blockStorage => implicit dagStorage =>
-      def anyDescendingPathExists(
+      def anyDescendantPathExists(
           dag: DagRepresentation[Task],
           start: Set[Block],
           targets: Set[Block]
       ) =
-        DagOperations.anyDescendingPathExists[Task](
+        DagOperations.anyDescendantPathExists[Task](
           dag,
           start.map(_.blockHash),
           targets.map(_.blockHash)
@@ -349,19 +349,19 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
         dag     <- dagStorage.getRepresentation
         // self
-        _ <- anyDescendingPathExists(dag, Set(genesis), Set(genesis)) shouldBeF true
+        _ <- anyDescendantPathExists(dag, Set(genesis), Set(genesis)) shouldBeF true
         // any descendant
-        _ <- anyDescendingPathExists(dag, Set(b3), Set(b2, b7)) shouldBeF true
+        _ <- anyDescendantPathExists(dag, Set(b3), Set(b2, b7)) shouldBeF true
         // any ancestor
-        _ <- anyDescendingPathExists(dag, Set(b2, b3), Set(b5)) shouldBeF true
+        _ <- anyDescendantPathExists(dag, Set(b2, b3), Set(b5)) shouldBeF true
         // main parent
-        _ <- anyDescendingPathExists(dag, Set(b4), Set(b7)) shouldBeF true
+        _ <- anyDescendantPathExists(dag, Set(b4), Set(b7)) shouldBeF true
         // secondary parent
-        _ <- anyDescendingPathExists(dag, Set(b5), Set(b7)) shouldBeF true
+        _ <- anyDescendantPathExists(dag, Set(b5), Set(b7)) shouldBeF true
         // not to ancestor
-        _ <- anyDescendingPathExists(dag, Set(b2, b4), Set(b1)) shouldBeF false
+        _ <- anyDescendantPathExists(dag, Set(b2, b4), Set(b1)) shouldBeF false
         // not to sibling
-        _ <- anyDescendingPathExists(dag, Set(b2), Set(b3)) shouldBeF false
+        _ <- anyDescendantPathExists(dag, Set(b2), Set(b3)) shouldBeF false
       } yield ()
   }
 

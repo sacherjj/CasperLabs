@@ -748,7 +748,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           blockHashes = deployToBlocksMap.values.flatten.toList
 
           maybeDuplicateBlockHash <- blockHashes.findM[F] { blockHash =>
-                                      DagOperations.anyDescendingPathExists(
+                                      DagOperations.anyDescendantPathExists(
                                         dag,
                                         Set(blockHash),
                                         Set(block.blockHash)

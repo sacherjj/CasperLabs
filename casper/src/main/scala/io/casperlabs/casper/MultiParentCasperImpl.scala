@@ -473,7 +473,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       orphanedBlockHashes <- blockHashes
                               .filterA { blockHash =>
                                 DagOperations
-                                  .anyDescendingPathExists[F](
+                                  .anyDescendantPathExists[F](
                                     dag,
                                     Set(blockHash),
                                     parentSet
