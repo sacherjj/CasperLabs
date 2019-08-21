@@ -19,7 +19,7 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 object Benchmarks {
 
-  /** Each round is many token transfer deploys from different accounts to single recipient
+  /** Each round consists of many token transfer deploys from different accounts to single recipient
     * TODO: Remove Sync
     *  */
   def run[F[_]: Log: DeployService: Par: Timer: FilesAPI: Monad: Sync](
@@ -95,9 +95,8 @@ object Benchmarks {
                   senderPrivateKey = initialFundsPrivateKey,
                   senderPublicKey = initialFundsPublicKey,
                   amount = initialFundsPerAccount
-                )
+                ) >> propose(print = false)
             }
-        _ <- propose
       } yield ()
 
     def oneRoundTransfer(nonce: Long): F[Unit] =
@@ -115,9 +114,9 @@ object Benchmarks {
             }
       } yield ()
 
-    def propose: F[Unit] =
+    def propose(print: Boolean): F[Unit] =
       for {
-        _ <- Log[F].info("Proposing...")
+        _ <- Log[F].info("Proposing...").whenA(print)
         _ <- DeployRuntime.propose[F](
               exit = false,
               ignoreOutput = true
@@ -139,7 +138,8 @@ object Benchmarks {
     ): F[Unit] = {
       def format(fd: FiniteDuration): String = fd.toCoarsest.toString()
       val message =
-        s"${format(deployTime)}, ${format(proposeTime)}, ${format(total)}, ${accountsNum / proposeTime.toSeconds}"
+        s"${format(deployTime)}, ${format(proposeTime)}, ${format(total)}, ${((accountsNum * 1000.0) / proposeTime.toMillis.toDouble)
+          .formatted("%1.2f")}"
       FilesAPI[F].writeString(
         outputStats.toPath,
         message ++ "\n",
@@ -153,7 +153,7 @@ object Benchmarks {
       for {
         _           <- Log[F].info(s"Starting new round ${nonce - 1}")
         deployTime  <- measure(oneRoundTransfer(nonce))
-        proposeTime <- measure(propose)
+        proposeTime <- measure(propose(print = true))
         totalTime   = deployTime + proposeTime
         _           <- writeResults(deployTime, proposeTime, totalTime, nonce)
       } yield ()
@@ -172,7 +172,6 @@ object Benchmarks {
         privateKey <- readPrivateKey
         publicKey  <- readPublicKey
         _          <- initializeAccounts(privateKey, publicKey)
-        _          <- propose
         _          <- loop(1)
         _          <- Log[F].info("Done")
       } yield ()
