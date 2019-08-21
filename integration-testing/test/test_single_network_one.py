@@ -1,14 +1,20 @@
-from typing import List
+import os
 import logging
 import pytest
-from pytest import raises
-from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+import json
+import subprocess
+from pathlib import Path
+from typing import List
+from pytest import fixture, raises
+from test import contract_hash
+from test.cl_node.common import testing_root_path
+from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
 from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import wait_for_genesis_block
-from test import contract_hash
+from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
+from casperlabs_client import ABI
 
 
 """
@@ -500,13 +506,6 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(
 
 # Python Client (library)
 
-import json
-from pathlib import Path
-from pytest import fixture
-
-from casperlabs_client import ABI
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
-
 # fmt: off
 
 
@@ -617,12 +616,6 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
 
 
 # Python CLI #
-
-import subprocess
-import pytest
-import os
-from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
-from test.cl_node.common import testing_root_path
 
 
 class CLIErrorExit(Exception):
