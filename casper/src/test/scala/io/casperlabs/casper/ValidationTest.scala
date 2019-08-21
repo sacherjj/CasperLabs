@@ -480,22 +480,22 @@ class ValidationTest
                     creator = validators(validator),
                     bonds = bonds,
                     deploys = Seq(deploy),
-                    justifications = latestMessages(justifications),
-                    addParentsToJustifications = false
+                    justifications = latestMessages(justifications)
                   )
         } yield block
 
       for {
-        b0  <- createBlock[Task](Seq.empty, bonds = bonds)
-        b1  <- createValidatorBlock[Task](Seq(b0), Seq(b0), 0)
-        b2  <- createValidatorBlock[Task](Seq(b0), Seq(b0), 1)
-        b3  <- createValidatorBlock[Task](Seq(b0), Seq(b0), 2)
-        b4  <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
-        b5  <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
-        b6  <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
-        b7  <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
-        b8  <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
-        b9  <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0) //empty justification
+        b0 <- createBlock[Task](Seq.empty, bonds = bonds)
+        b1 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 0)
+        b2 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 1)
+        b3 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 2)
+        b4 <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
+        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
+        b6 <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
+        b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
+        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
+        b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0)
+               .map(b => b.withHeader(b.getHeader.withJustifications(Seq.empty))) //empty justification
         b10 <- createValidatorBlock[Task](Seq.empty, Seq.empty, 0) //empty justification
         result <- for {
                    dag              <- dagStorage.getRepresentation
@@ -507,22 +507,25 @@ class ValidationTest
                    _ <- Validation[Task].parents(b3, genesisBlockHash, dag)
                    _ <- Validation[Task].parents(b4, genesisBlockHash, dag)
                    _ <- Validation[Task].parents(b5, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b6, genesisBlockHash, dag)
 
                    // Not valid
                    _ <- Validation[Task].parents(b7, genesisBlockHash, dag).attempt
                    _ <- Validation[Task].parents(b8, genesisBlockHash, dag).attempt
                    _ <- Validation[Task].parents(b9, genesisBlockHash, dag).attempt
-                   _ <- Validation[Task].parents(b10, genesisBlockHash, dag).attempt
 
                    _ = log.warns should have size 3
-                   result = log.warns.forall(
+                   _ = log.warns.forall(
                      _.matches(
                        ".* block parents .* did not match estimate .* based on justification .*"
                      )
                    ) should be(
                      true
                    )
+
+                   result <- Validation[Task]
+                              .parents(b10, genesisBlockHash, dag)
+                              .attempt shouldBeF Left(ValidateErrorWrapper(InvalidParents))
+
                  } yield result
       } yield result
   }

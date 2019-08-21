@@ -100,7 +100,6 @@ trait BlockGenerator {
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
-      addParentsToJustifications: Boolean = true,
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
       chainId: String = "casperlabs",
@@ -115,24 +114,20 @@ trait BlockGenerator {
         .withBonds(bonds)
       body = Block.Body().withDeploys(deploys)
       dag  <- IndexedDagStorage[F].getRepresentation
-      // add parensHashList to justifications so that we can avoid passing parameter justification
-      updatedJustifications <- if (!addParentsToJustifications) {
-                                justifications.pure[F]
-                              } else {
-                                parentsHashList.toList.foldLeftM(justifications) {
-                                  case (acc, b) =>
-                                    dag
-                                      .lookup(b)
-                                      .map(
-                                        _.fold(acc) { block =>
-                                          if (acc.contains(block.validatorPublicKey)) {
-                                            acc
-                                          } else {
-                                            acc + (block.validatorPublicKey -> block.blockHash)
-                                          }
+      // Every parent should also include in the justification,by doing this we can avoid passing parameter justifications when creating block in test
+      updatedJustifications <- parentsHashList.toList.foldLeftM(justifications) {
+                                case (acc, b) =>
+                                  dag
+                                    .lookup(b)
+                                    .map(
+                                      _.fold(acc) { block =>
+                                        if (acc.contains(block.validatorPublicKey)) {
+                                          acc
+                                        } else {
+                                          acc + (block.validatorPublicKey -> block.blockHash)
                                         }
-                                      )
-                                }
+                                      }
+                                    )
                               }
       serializedJustifications = updatedJustifications.toList.map {
         case (creator: Validator, latestBlockHash: BlockHash) =>
