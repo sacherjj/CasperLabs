@@ -1,13 +1,15 @@
 package io.casperlabs.storage.dag
 
-import java.nio.file.StandardOpenOption
+import java.nio.file.{Files, Paths, StandardOpenOption}
 
 import cats.effect.Sync
 import cats.implicits._
-import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
+import doobie.util.ExecutionContexts
+import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared
 import io.casperlabs.shared.Log
@@ -20,12 +22,14 @@ import io.casperlabs.storage.util.byteOps._
 import io.casperlabs.storage.{BlockMetadata, BlockMsgWithTransform, Context}
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.Location
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
-import scala.util.Random
+import scala.concurrent.duration._
+import scala.util.{Random, Try}
 
-@silent("match may not be exhaustive")
 trait DagStorageTest
     extends FlatSpecLike
     with Matchers
@@ -55,6 +59,7 @@ trait DagStorageTest
                                                         b.getHeader.validatorPublicKey
                                                       )
                                     } yield (blockMetadata, latestMessageHash, latestMessage)
+                                  case _ => ???
                                 }
           latestMessageHashes <- dag.latestMessageHashes
           latestMessages      <- dag.latestMessages
@@ -76,7 +81,6 @@ trait DagStorageTest
   }
 }
 
-@silent("match may not be exhaustive")
 class FileDagStorageTest extends DagStorageTest {
 
   import java.nio.file.{Files, Path}
@@ -190,6 +194,7 @@ class FileDagStorageTest extends DagStorageTest {
                    blocksWithSpecifiedJustification,
                    contains
                  )
+               case _ => ???
              }
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
@@ -476,4 +481,55 @@ class FileDagStorageTest extends DagStorageTest {
       }
     }
   }
+}
+
+class SQLiteDagStorageTest extends DagStorageTest with BeforeAndAfterEach {
+  private val db                              = Paths.get("/", "tmp", "dag_storage_test.db")
+  private implicit val metrics: Metrics[Task] = new MetricsNOP[Task]
+
+  private implicit val xa: Transactor[Task] = Transactor
+    .fromDriverManager[Task](
+      "org.sqlite.JDBC",
+      s"jdbc:sqlite:$db",
+      "",
+      "",
+      ExecutionContexts.synchronous
+    )
+
+  private val flyway = {
+    val conf =
+      Flyway
+        .configure()
+        .dataSource(s"jdbc:sqlite:$db", "", "")
+        .locations(new Location("classpath:db/migration"))
+    conf.load()
+  }
+
+  override def withDagStorage[R](f: DagStorage[Task] => Task[R]): R = {
+    import monix.execution.Scheduler.Implicits.global
+    import monix.execution.schedulers.CanBlock.permit
+    val program: Task[R] = for {
+      _          <- Task(cleanupTables())
+      _          <- Task(setupTables())
+      dagStorage <- SQLiteDagStorage.create[Task]
+      res        <- f(dagStorage)
+    } yield res
+
+    program.runSyncUnsafe(5.seconds)
+  }
+
+  private def setupTables(): Unit = flyway.migrate()
+
+  private def cleanupTables(): Unit = flyway.clean()
+
+  private def cleanupDatabase(): Unit =
+    Try(Files.delete(Paths.get("/", "tmp", "deploy_buffer_spec.db")))
+
+  override protected def beforeEach(): Unit = cleanupTables()
+
+  override protected def afterEach(): Unit = cleanupTables()
+
+  override protected def beforeAll(): Unit = cleanupDatabase()
+
+  override protected def afterAll(): Unit = cleanupDatabase()
 }
