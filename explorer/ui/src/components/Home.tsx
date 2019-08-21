@@ -120,13 +120,15 @@ const CardMessage = (props: { message: string }) => {
 
 const AccountsCard = (props: { accounts: UserAccount[] | null }) => {
   const background =
-    props.accounts && props.accounts.length > 0 ? 'success' : 'primary';
+    props.accounts && props.accounts.length > 0 ? 'success' : 'success';
   return (
     <Card background={background} icon="address-book" to={Pages.Accounts}>
       {props.accounts == null || props.accounts.length === 0 ? (
         <CardMessage message="Create an account" />
       ) : (
-        <CardMessage message={`You have ${props.accounts.length} account(s)`} />
+        <CardMessage
+          message={`You have ${props.accounts.length} account key(s)`}
+        />
       )}
     </Card>
   );
@@ -135,7 +137,7 @@ const AccountsCard = (props: { accounts: UserAccount[] | null }) => {
 const FaucetCard = (_: {}) => {
   // TODO: Display available funds.
   return (
-    <Card background="primary" icon="coins" to={Pages.Faucet}>
+    <Card background="info" icon="coins" to={Pages.Faucet}>
       <CardMessage message="Request tokens" />
     </Card>
   );
@@ -144,7 +146,7 @@ const FaucetCard = (_: {}) => {
 const ExploreCard = (_: {}) => {
   // TODO: Display latest block timestamp.
   return (
-    <Card background="success" icon="project-diagram" to={Pages.Explorer}>
+    <Card background="info" icon="project-diagram" to={Pages.Explorer}>
       <CardMessage message="Explore the blockchain" />
     </Card>
   );
@@ -153,7 +155,7 @@ const ExploreCard = (_: {}) => {
 const GraphQLCard = (_: {}) => {
   return (
     <Card
-      background="success"
+      background="info"
       icon="flask"
       to="http://devnet-graphql.casperlabs.io:40403/graphql"
     >
