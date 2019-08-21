@@ -1,14 +1,14 @@
-package io.casperlabs.casper.finality
+package io.casperlabs.casper.finality.votingmatrix
 
 import cats.Monad
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.mtl.{DefaultMonadState, MonadState}
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.VotingMatrixImpl.{Vote, VotingMatrix}
+import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetectorUtil}
+import io.casperlabs.casper.finality.votingmatrix.VotingMatrixImpl.{Vote, VotingMatrix}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadStateOps._
 
@@ -50,7 +50,7 @@ object VotingMatrix {
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
-      panoramaM        <- panoramaM[F](dag, validatorToIndex, blockMetadata)
+      panoramaM        <- FinalityDetectorUtil.panoramaM[F](dag, validatorToIndex, blockMetadata)
       // Replace row i in voting-matrix by panoramaM
       _ <- (matrix >> 'votingMatrix).modify(
             _.updated(validatorToIndex(blockMetadata.validatorPublicKey), panoramaM)
@@ -80,26 +80,6 @@ object VotingMatrix {
               ().pure[F]
           }
     } yield ()
-
-  private def panoramaM[F[_]: Monad](
-      dag: DagRepresentation[F],
-      validatorsToIndex: Map[Validator, Int],
-      blockMetadata: BlockMetadata
-  ): F[MutableSeq[Long]] =
-    FinalityDetectorUtil
-      .panoramaDagLevelsOfBlock(
-        dag,
-        blockMetadata,
-        validatorsToIndex.keySet
-      )
-      .map(
-        latestBlockDagLevelsAsMap =>
-          // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
-          VotingMatrixImpl.fromMapToArray(
-            validatorsToIndex,
-            latestBlockDagLevelsAsMap.getOrElse(_, 0L)
-          )
-      )
 
   /**
     * Check whether provide branch should be finalized

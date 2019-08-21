@@ -1,23 +1,21 @@
-package io.casperlabs.casper.finality
+package io.casperlabs.casper.finality.votingmatrix
 
 import cats.mtl.MonadState
-import cats.Monad
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, IndexedDagStorage}
-import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.casper.finality.FinalityDetectorVotingMatrix._votingMatrixS
-import io.casperlabs.casper.finality.VotingMatrixImpl.VotingMatrixState
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
-import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValue
+import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.casper.finality.CommitteeWithConsensusValue
+import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
+import io.casperlabs.casper.finality.votingmatrix.VotingMatrixImpl.VotingMatrixState
+import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
-import io.casperlabs.shared.Time
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
-import scala.collection.immutable.{HashMap, Map}
+import scala.collection.immutable.Map
+
 @silent("is never used")
 class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
 

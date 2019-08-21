@@ -15,7 +15,7 @@ import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.deploybuffer.DeployBuffer
-import io.casperlabs.casper.finality.FinalityDetector
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Catscontrib._

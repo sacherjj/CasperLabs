@@ -8,7 +8,7 @@ import io.casperlabs.blockstorage.IndexedDagStorage
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Bond
-import io.casperlabs.casper.finality.FinalityDetectorBySingleSweepImpl
+import io.casperlabs.casper.finality.singlesweep.FinalityDetectorBySingleSweepImpl
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.catscontrib.MonadThrowable

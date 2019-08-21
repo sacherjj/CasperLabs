@@ -1,4 +1,4 @@
-package io.casperlabs.casper.finality
+package io.casperlabs.casper.finality.singlesweep
 
 import io.casperlabs.blockstorage.DagRepresentation
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
@@ -23,14 +23,6 @@ trait FinalityDetector[F[_]] {
 
 object FinalityDetector {
   def apply[F[_]](implicit ev: FinalityDetector[F]): FinalityDetector[F] = ev
-
-  case class Committee(validators: Set[Validator], quorum: Long)
-
-  case class CommitteeWithConsensusValue(
-      validator: Set[Validator],
-      quorum: Long,
-      consensusValue: BlockHash
-  )
 
   // Calculate threshold value as described in the specification.
   // Note that validator weights (`q` and `n`) are normalized to 1.

@@ -1,10 +1,10 @@
-package io.casperlabs.casper.finality
+package io.casperlabs.casper.finality.singlesweep
 
 import cats.Monad
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.finality.FinalityDetector.Committee
+import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.shared.Log
 

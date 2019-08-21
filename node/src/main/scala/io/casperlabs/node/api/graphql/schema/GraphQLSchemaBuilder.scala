@@ -7,7 +7,7 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.deploybuffer.DeployBuffer
-import io.casperlabs.casper.finality.FinalityDetector
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils
 import io.casperlabs.node.api.graphql.RunToFuture.ops._

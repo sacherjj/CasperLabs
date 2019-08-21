@@ -4,7 +4,9 @@ import cats.Monad
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.finality.votingmatrix.VotingMatrixImpl
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 object FinalityDetectorUtil {
 
@@ -58,7 +60,7 @@ object FinalityDetectorUtil {
       .map(_._2)
   }
 
-  def panoramaDagLevelsOfBlock[F[_]: Monad](
+  private[casper] def panoramaDagLevelsOfBlock[F[_]: Monad](
       blockDag: DagRepresentation[F],
       block: BlockMetadata,
       validators: Set[Validator]
@@ -69,7 +71,7 @@ object FinalityDetectorUtil {
   /**
     * Get level zero messages of the specified validator and specified candidateBlock
     */
-  def levelZeroMsgsOfValidator[F[_]: Monad](
+  private[casper] def levelZeroMsgsOfValidator[F[_]: Monad](
       dag: DagRepresentation[F],
       validator: Validator,
       candidateBlockHash: BlockHash
@@ -93,7 +95,7 @@ object FinalityDetectorUtil {
    * Traverses back the j-DAG of `block` (one step at a time), following `validator`'s blocks
    * and collecting them as long as they are descendants of the `candidateBlockHash`.
    */
-  private def previousAgreedBlockFromTheSameValidator[F[_]: Monad](
+  private[casper] def previousAgreedBlockFromTheSameValidator[F[_]: Monad](
       dag: DagRepresentation[F],
       block: BlockMetadata,
       candidateBlockHash: BlockHash,
@@ -121,4 +123,24 @@ object FinalityDetectorUtil {
         List.empty[BlockMetadata].pure[F]
     }
   }
+
+  private[casper] def panoramaM[F[_]: Monad](
+      dag: DagRepresentation[F],
+      validatorsToIndex: Map[Validator, Int],
+      blockMetadata: BlockMetadata
+  ): F[MutableSeq[Long]] =
+    FinalityDetectorUtil
+      .panoramaDagLevelsOfBlock(
+        dag,
+        blockMetadata,
+        validatorsToIndex.keySet
+      )
+      .map(
+        latestBlockDagLevelsAsMap =>
+          // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
+          VotingMatrixImpl.fromMapToArray(
+            validatorsToIndex,
+            latestBlockDagLevelsAsMap.getOrElse(_, 0L)
+          )
+      )
 }

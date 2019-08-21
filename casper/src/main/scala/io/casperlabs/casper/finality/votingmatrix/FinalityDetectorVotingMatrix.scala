@@ -1,17 +1,17 @@
-package io.casperlabs.casper.finality
+package io.casperlabs.casper.finality.votingmatrix
 
 import cats.Monad
+import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.finality.FinalityDetector.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.FinalityDetectorVotingMatrix._votingMatrixS
-import io.casperlabs.casper.finality.VotingMatrixImpl.{VotingMatrix, VotingMatrixState}
+import VotingMatrixImpl.VotingMatrixState
+import io.casperlabs.casper.finality.CommitteeWithConsensusValue
+import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.shared.Log
 

@@ -11,7 +11,7 @@ import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
-import io.casperlabs.casper.finality.FinalityDetector
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.helper.{
   DagStorageTestFixture,
   HashSetCasperTestNode,

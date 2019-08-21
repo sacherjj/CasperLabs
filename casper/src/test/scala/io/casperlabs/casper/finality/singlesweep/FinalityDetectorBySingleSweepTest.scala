@@ -1,9 +1,8 @@
-package io.casperlabs.casper.finality
+package io.casperlabs.casper.finality.singlesweep
 
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
-import io.casperlabs.casper.finality.FinalityDetector.Committee
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
