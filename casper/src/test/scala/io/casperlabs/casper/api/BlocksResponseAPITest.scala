@@ -1,17 +1,17 @@
 package io.casperlabs.casper.api
 
-import cats.Id
 import cats.effect.Sync
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, IndexedDagStorage}
+import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.{genesis, _}
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -167,6 +167,21 @@ class BlocksResponseAPITest
   }
 
   it should "return until depth" in withStorage { implicit blockStorage => implicit dagStorage =>
+    /**
+      * The Dag looks like
+      *
+      *
+      *  4          b8
+      *           /
+      *  3     b6 ----   b7
+      *                x
+      *  2          b5  b4
+      *           /    /
+      *  1     b3   b2
+      *         \   |
+      *  0       genesis
+      *
+      */
     for {
       genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
       b2 <- createBlock[Task](
@@ -217,17 +232,22 @@ class BlocksResponseAPITest
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips
                      )
-      logEff                 = new LogStub[Task]
-      casperRef              <- MultiParentCasperRef.of[Task]
-      _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
-      blocksResponse <- BlockAPI.showBlocks[Task](2)(
-                         Sync[Task],
-                         casperRef,
-                         logEff,
-                         finalityDetectorEffect,
-                         blockStorage
-                       )
-    } yield blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
+      implicit0(logEff: Log[Task])                     = new LogStub[Task]
+      implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
+      _                                                <- casperRef.set(casperEffect)
+      implicit0(finalityDetectorEffect: FinalityDetector[Task]) = new FinalityDetectorInstancesImpl[
+        Task
+      ]()
+      blocksWithRankBelow1 <- BlockAPI.showBlocks[Task](1)
+      _                    = blocksWithRankBelow1.length shouldBe 1
+      blocksWithRankBelow2 <- BlockAPI.showBlocks[Task](2)
+      _                    = blocksWithRankBelow2.length shouldBe 3
+      blocksWithRankBelow3 <- BlockAPI.showBlocks[Task](3)
+      _                    = blocksWithRankBelow3.length shouldBe 5
+      blocksWithRankBelow4 <- BlockAPI.showBlocks[Task](4)
+      _                    = blocksWithRankBelow4.length shouldBe 7
+      blocksWithRankBelow5 <- BlockAPI.showBlocks[Task](5)
+      result               = blocksWithRankBelow5.length shouldBe 8
+    } yield result
   }
 }

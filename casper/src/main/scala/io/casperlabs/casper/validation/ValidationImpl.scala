@@ -384,19 +384,17 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                               )
                             }
                           }
-      maxRank = justificationMsgs.foldLeft(-1L) {
-        case (acc, blockMetadata) => math.max(acc, blockMetadata.rank)
-      }
-      number = b.getHeader.rank
-      result = maxRank + 1 == number
+      calculatedRank = ProtoUtil.calculateRank(justificationMsgs)
+      actuallyRank   = b.getHeader.rank
+      result         = calculatedRank == actuallyRank
       _ <- if (result) {
             Applicative[F].unit
           } else {
             val logMessage =
               if (justificationMsgs.isEmpty)
-                s"block number $number is not zero, but block has no justifications."
+                s"block number $actuallyRank is not zero, but block has no justifications."
               else
-                s"block number $number is not one more than the maximum justification's number $maxRank."
+                s"block number $actuallyRank is not the maximum block number of justifications plus 1, i.e. $calculatedRank."
             for {
               _ <- Log[F].warn(ignore(b, logMessage))
               _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBlockNumber)

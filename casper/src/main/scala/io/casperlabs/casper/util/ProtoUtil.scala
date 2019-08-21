@@ -123,6 +123,11 @@ object ProtoUtil {
               }
     } yield block
 
+  def calculateRank(justificationMsgs: Seq[BlockMetadata]): Long =
+    1L + justificationMsgs.foldLeft(-1L) {
+      case (acc, blockMetadata) => math.max(acc, blockMetadata.rank)
+    }
+
   def creatorJustification(block: Block): Option[Justification] =
     creatorJustification(block.getHeader)
 
