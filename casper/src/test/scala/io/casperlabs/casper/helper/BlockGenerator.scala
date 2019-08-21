@@ -116,7 +116,7 @@ trait BlockGenerator {
       body = Block.Body().withDeploys(deploys)
       dag  <- IndexedDagStorage[F].getRepresentation
       // add parensHashList to justifications so that we can avoid passing parameter justification
-      updatedJustifications <- if (justifications.nonEmpty || !addParentsToJustifications) {
+      updatedJustifications <- if (!addParentsToJustifications) {
                                 justifications.pure[F]
                               } else {
                                 parentsHashList.toList.foldLeftM(justifications) {
