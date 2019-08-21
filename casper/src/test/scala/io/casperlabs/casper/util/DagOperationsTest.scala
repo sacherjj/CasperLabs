@@ -10,6 +10,7 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.storage.BlockMetadata
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -274,15 +275,16 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         /*
          *  DAG Looks like this:
          *
-         *         b6   b7
-         *        |  \ / |
-         *        b4  b5 |
-         *          \ |  |
-         *            b3 |
-         *            |  |
-         *           b1  b2
-         *            |  /
-         *          genesis
+         * rank
+         *  4        b6   b7
+         *          |  \ / |
+         *  3       b4  b5 |
+         *            \ |  |
+         *  2           b3 |
+         *              |  |
+         *  1          b1  b2
+         *              |  /
+         *  0         genesis
          */
         implicit def toMetadata = BlockMetadata.fromBlock _
         for {

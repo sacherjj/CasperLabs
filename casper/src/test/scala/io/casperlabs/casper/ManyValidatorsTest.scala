@@ -39,12 +39,8 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
     val v1 = bonds(0).validatorPublicKey
 
     val testProgram = for {
-      blockStorage <- DagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
-      dagStorage <- DagStorageTestFixture.createDagStorage(dagStorageDir)(
-                     metrics,
-                     log,
-                     blockStorage
-                   )
+      blockStorage      <- DagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+      dagStorage        <- DagStorageTestFixture.createDagStorage[Task](dagStorageDir)
       indexedDagStorage <- IndexedDagStorage.create(dagStorage)
       genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)(
                   Monad[Task],
@@ -64,11 +60,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
               initialLatestMessages
             )
           }
-      newDagStorage <- DagStorageTestFixture.createDagStorage(dagStorageDir)(
-                        metrics,
-                        log,
-                        blockStorage
-                      )
+      newDagStorage        <- DagStorageTestFixture.createDagStorage[Task](dagStorageDir)
       newIndexedDagStorage <- IndexedDagStorage.create(newDagStorage)
       dag                  <- newIndexedDagStorage.getRepresentation
       tips                 <- Estimator.tips[Task](dag, genesis.blockHash)(MonadThrowable[Task])

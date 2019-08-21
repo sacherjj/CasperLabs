@@ -1,9 +1,13 @@
 package io.casperlabs.casper.util.comm
 
+import java.nio.file.Files
+
 import cats.effect.concurrent.Ref
 import cats.syntax.show._
 import cats.{Applicative, ApplicativeError}
 import com.google.protobuf.ByteString
+import doobie.util.ExecutionContexts
+import doobie.util.transactor.Transactor
 import io.casperlabs.casper
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
@@ -40,6 +44,7 @@ import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, FilesAPI}
@@ -51,6 +56,8 @@ import io.casperlabs.storage.deploy.{DeployStorage, MockDeployStorage}
 import monix.catnap.Semaphore
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.Location
 import org.scalatest.{Matchers, WordSpec}
 
 import scala.concurrent.duration._
@@ -115,10 +122,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
     implicit val lock             = Semaphore[Task](1).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockStorage     = InMemBlockStorage.create[Task]
-    implicit val inMemDagStorage = InMemDagStorage
-      .create[Task]
-      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
+    implicit val inMemDagStorage  = createSQLiteDagStorage()
+    implicit val casperRef        = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new FinalityDetector[Task] {
       override def normalizedFaultTolerance(
           dag: DagRepresentation[Task],
@@ -129,6 +134,32 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       casper.validation.raiseValidateErrorThroughApplicativeError[Task]
     implicit val validation = new ValidationImpl[Task]
   }
+
+  private def createSQLiteDagStorage()(implicit metrics: Metrics[Task]) = {
+    val jdbcUrl =
+      s"jdbc:sqlite:${Files.createTempDirectory("casper-dag-storage-test-").resolve("dag_storage.db")}"
+    val flyway = {
+      val conf =
+        Flyway
+          .configure()
+          .dataSource(jdbcUrl, "", "")
+          .locations(new Location("classpath:db/migration"))
+      conf.load()
+    }
+    implicit val xa = Transactor
+      .fromDriverManager[Task](
+        "org.sqlite.JDBC",
+        jdbcUrl,
+        "",
+        "",
+        ExecutionContexts.synchronous
+      )
+
+    for {
+      _          <- Task.delay(flyway.migrate)
+      dagStorage <- SQLiteDagStorage.create[Task]
+    } yield dagStorage
+  }.unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
   "CasperPacketHandler" when {
     "in GenesisValidator state" should {

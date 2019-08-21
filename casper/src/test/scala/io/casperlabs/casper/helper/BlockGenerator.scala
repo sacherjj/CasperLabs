@@ -12,8 +12,8 @@ import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
 import io.casperlabs.casper.finality.votingmatrix.{FinalityDetectorVotingMatrix, VotingMatrix}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -144,7 +144,7 @@ trait BlockGenerator {
           parentsHashList,
           serializedJustifications,
           postState,
-          rank = 0,
+          rank = 0L,
           protocolVersion = 1,
           timestamp = now,
           chainId = chainId
@@ -152,9 +152,8 @@ trait BlockGenerator {
         .withValidatorPublicKey(creator)
       block               = ProtoUtil.unsignedBlockProto(body, header)
       serializedBlockHash = block.blockHash
-      modifiedBlock       <- IndexedDagStorage[F].insertIndexed(block)
       // NOTE: Block hash should be recalculated.
-      _ <- BlockStorage[F]
-            .put(serializedBlockHash, modifiedBlock, Seq.empty)
+      modifiedBlock <- IndexedDagStorage[F].insertIndexed(block)
+      _             <- BlockStorage[F].put(serializedBlockHash, modifiedBlock, Seq.empty)
     } yield modifiedBlock
 }

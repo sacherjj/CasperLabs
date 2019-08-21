@@ -35,10 +35,10 @@ final class IndexedDagStorage[F[_]: Monad](
       currentId <- currentIdRef.get
       nextId    = currentId + 1L
       dag       <- underlying.getRepresentation
-      justificationMsgs <- header.justifications.toList
-                            .traverse(j => dag.lookup(j.latestBlockHash))
-                            .map(_.flatten)
-      maxRank = justificationMsgs.foldLeft(-1L) {
+      dependenciesMsg <- (header.parentHashes ++ header.justifications.map(_.latestBlockHash)).toList.distinct
+                          .traverse(dag.lookup)
+                          .map(_.flatten)
+      maxRank = dependenciesMsg.foldLeft(-1L) {
         case (acc, b) => math.max(b.rank, acc)
       }
       rank = maxRank + 1

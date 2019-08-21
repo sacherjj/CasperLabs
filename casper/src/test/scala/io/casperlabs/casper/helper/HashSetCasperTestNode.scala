@@ -3,7 +3,7 @@ package io.casperlabs.casper.helper
 import java.nio.file.Path
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.temp.par.Par
@@ -132,7 +132,8 @@ trait HashSetCasperTestNodeFactory {
       errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       parF: Par[F],
-      timerF: Timer[F]
+      timerF: Timer[F],
+      contextShift: ContextShift[F]
   ): F[TestNode[F]]
 
   def standaloneEff(
@@ -148,7 +149,8 @@ trait HashSetCasperTestNodeFactory {
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
       Par[Effect],
-      Timer[Effect]
+      Timer[Effect],
+      ContextShift[Effect]
     ).value.unsafeRunSync.right.get
 
   def networkF[F[_]](
@@ -163,7 +165,8 @@ trait HashSetCasperTestNodeFactory {
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       parF: Par[F],
-      timerF: Timer[F]
+      timerF: Timer[F],
+      contextShift: ContextShift[F]
   ): F[IndexedSeq[TestNode[F]]]
 
   def networkEff(
@@ -187,19 +190,21 @@ trait HashSetCasperTestNodeFactory {
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
       Par[Effect],
-      Timer[Effect]
+      Timer[Effect],
+      ContextShift[Effect]
     )
 
-  protected def initStorage[F[_]: Concurrent: Log: Metrics](genesis: Block) = {
+  protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift](
+      genesis: Block
+  ): F[(Path, Path, DagStorage[F], BlockStorage[F])] = {
     val dagStorageDir   = DagStorageTestFixture.dagStorageDir
     val blockStorageDir = DagStorageTestFixture.blockStorageDir
     val env             = Context.env(blockStorageDir, DagStorageTestFixture.mapSize)
     for {
-      blockStorage <- FileLMDBIndexBlockStorage.create[F](env, blockStorageDir).map(_.right.get)
-      dagStorage <- FileDagStorage.createEmptyFromGenesis[F](
-                     FileDagStorage.Config(dagStorageDir),
-                     genesis
-                   )(Concurrent[F], Log[F], blockStorage, Metrics[F])
+      implicit0(blockStorage: BlockStorage[F]) <- FileLMDBIndexBlockStorage
+                                                   .create[F](env, blockStorageDir)
+                                                   .map(_.right.get)
+      dagStorage <- DagStorageTestFixture.createDagStorage[F](dagStorageDir, genesis.some)
     } yield (dagStorageDir, blockStorageDir, dagStorage, blockStorage)
   }
 }

@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.Monad
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
 import cats.temp.par.Par
 import io.casperlabs.casper
@@ -127,7 +127,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
   import HashSetCasperTestNode.peerNode
 
-  def standaloneF[F[_]](
+  override def standaloneF[F[_]](
       genesis: Block,
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
@@ -138,7 +138,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       parF: Par[F],
-      timerF: Timer[F]
+      timerF: Timer[F],
+      contextShift: ContextShift[F]
   ): F[TransportLayerCasperTestNode[F]] = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
@@ -177,7 +178,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     }
   }
 
-  def networkF[F[_]](
+  override def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
       genesis: Block,
       transforms: Seq[TransformEntry],
@@ -189,7 +190,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       parF: Par[F],
-      timerF: Timer[F]
+      timerF: Timer[F],
+      contextShift: ContextShift[F]
   ): F[IndexedSeq[TransportLayerCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (0 to n - 1).map(i => s"node-$i")
