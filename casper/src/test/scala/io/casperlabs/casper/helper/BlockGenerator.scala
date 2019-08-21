@@ -121,7 +121,23 @@ trait BlockGenerator {
         .withPostStateHash(postStateHash)
         .withBonds(bonds)
       body = Block.Body().withDeploys(deploys)
-      serializedJustifications = justifications.toList.map {
+      dag  <- IndexedDagStorage[F].getRepresentation
+      // Every parent should also include in the justification,by doing this we can avoid passing parameter justifications when creating block in test
+      updatedJustifications <- parentsHashList.toList.foldLeftM(justifications) {
+                                case (acc, b) =>
+                                  dag
+                                    .lookup(b)
+                                    .map(
+                                      _.fold(acc) { block =>
+                                        if (acc.contains(block.validatorPublicKey)) {
+                                          acc
+                                        } else {
+                                          acc + (block.validatorPublicKey -> block.blockHash)
+                                        }
+                                      }
+                                    )
+                              }
+      serializedJustifications = updatedJustifications.toList.map {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Block.Justification(creator, latestBlockHash)
       }

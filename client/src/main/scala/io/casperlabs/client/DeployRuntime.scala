@@ -4,11 +4,13 @@ import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
+import cats.Show
 import cats.effect.{Sync, Timer}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.client.configuration.Streaming
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -20,6 +22,7 @@ import org.apache.commons.io._
 
 import scala.concurrent.duration._
 import scala.language.higherKinds
+import scala.util.Try
 
 object DeployRuntime {
 
@@ -69,7 +72,7 @@ object DeployRuntime {
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
-            sessionArgs = ByteString.copyFrom(argsSer)
+            sessionArgs = argsSer
           )
     } yield ()
   }
@@ -96,7 +99,7 @@ object DeployRuntime {
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
-            sessionArgs = ByteString.copyFrom(argsSer)
+            sessionArgs = argsSer
           )
     } yield ()
   }
@@ -280,11 +283,93 @@ object DeployRuntime {
             maybeEitherPublicKey = senderPublicKey.asRight[String].some,
             maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
             gasPrice = 10L,
-            ByteString.copyFrom(args),
+            args,
             exit,
             ignoreOutput
           )
     } yield ()
+
+  private def readKey[F[_]: Sync, A](keyFile: File, keyType: String, f: String => Option[A]): F[A] =
+    readFileAsString[F](keyFile) >>= { key =>
+      Sync[F].fromOption[A](
+        f(key),
+        new IllegalArgumentException(s"$keyFile was not valid Ed25519 $keyType key.")
+      )
+    }
+
+  /** Signs a deploy with provided private key and writes it to the file (if provided),
+    * or prints to STDOUT.
+    */
+  def sign[F[_]: Sync](
+      deployBA: Array[Byte],
+      output: Option[File],
+      publicKeyFile: File,
+      privateKeyFile: File
+  ): F[Unit] = {
+
+    val program = for {
+      publicKey    <- readKey[F, PublicKey](publicKeyFile, "public", Ed25519.tryParsePublicKey _)
+      privateKey   <- readKey[F, PrivateKey](privateKeyFile, "private", Ed25519.tryParsePrivateKey _)
+      deploy       <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
+      signedDeploy = deploy.sign(privateKey, publicKey)
+      _            <- writeDeploy(signedDeploy, output)
+    } yield ()
+
+    gracefulExit(program.attempt)
+  }
+
+  /** Constructs a [[Deploy]] from the provided arguments and writes it to a file (or STDOUT).
+    */
+  def makeDeploy[F[_]: Sync](
+      from: ByteString,
+      nonce: Long,
+      gasPrice: Long,
+      sessionCode: Array[Byte],
+      sessionArguments: Array[Byte],
+      paymentCode: Array[Byte]
+  ): Deploy = {
+    val session     = ByteString.copyFrom(sessionCode)
+    val payment     = ByteString.copyFrom(paymentCode)
+    val sessionArgs = ByteString.copyFrom(sessionArguments)
+
+    consensus
+      .Deploy()
+      .withHeader(
+        consensus.Deploy
+          .Header()
+          .withTimestamp(System.currentTimeMillis)
+          .withAccountPublicKey(from)
+          .withNonce(nonce)
+          .withGasPrice(gasPrice)
+      )
+      .withBody(
+        consensus.Deploy
+          .Body()
+          .withSession(consensus.Deploy.Code().withCode(session).withArgs(sessionArgs))
+          .withPayment(consensus.Deploy.Code().withCode(payment))
+      )
+      .withHashes
+  }
+
+  /** Writes deploy to either a file (if `deployPath` is defined) or STDOUT.
+    */
+  def writeDeploy[F[_]: Sync](deploy: Deploy, deployPath: Option[File]): F[Unit] =
+    gracefulExit(
+      deployPath.fold {
+        Sync[F].delay(deploy.writeTo(System.out)).attempt
+      } { file =>
+        Sync[F].delay(Files.write(file.toPath, deploy.toByteArray)).void.attempt
+      },
+      ignoreOutput = true
+    )
+
+  def sendDeploy[F[_]: Sync: DeployService](deployBA: Array[Byte]): F[Unit] =
+    gracefulExit {
+      for {
+        deploy <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
+        result <- DeployService[F].deploy(deploy)
+      } yield result
+    }
 
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[String],
@@ -294,7 +379,7 @@ object DeployRuntime {
       maybeEitherPublicKey: Option[Either[String, PublicKey]],
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
       gasPrice: Long,
-      sessionArgs: ByteString = ByteString.EMPTY,
+      sessionArgs: Array[Byte] = Array.emptyByteArray,
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] = {
@@ -308,9 +393,6 @@ object DeployRuntime {
       either.fold(Ed25519.tryParsePublicKey, _.some)
     } orElse maybePrivateKey.flatMap(Ed25519.tryToPublic)
 
-    val session = ByteString.copyFrom(sessionCode)
-    val payment = ByteString.copyFrom(paymentCode)
-
     val deploy = for {
       accountPublicKey <- Sync[F].fromOption(
                            from
@@ -319,24 +401,8 @@ object DeployRuntime {
                            new IllegalArgumentException("--from or --public-key must be presented")
                          )
     } yield {
-      val deploy = consensus
-        .Deploy()
-        .withHeader(
-          consensus.Deploy
-            .Header()
-            .withTimestamp(System.currentTimeMillis)
-            .withAccountPublicKey(accountPublicKey)
-            .withNonce(nonce)
-            .withGasPrice(gasPrice)
-        )
-        .withBody(
-          consensus.Deploy
-            .Body()
-            .withSession(consensus.Deploy.Code().withCode(session).withArgs(sessionArgs))
-            .withPayment(consensus.Deploy.Code().withCode(payment))
-        )
-        .withHashes
-
+      val deploy =
+        makeDeploy(accountPublicKey, nonce, gasPrice, sessionCode, sessionArgs, paymentCode)
       (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
     }
 
@@ -351,8 +417,8 @@ object DeployRuntime {
     )
   }
 
-  private[client] def gracefulExit[F[_]: Sync](
-      program: F[Either[Throwable, String]],
+  private[client] def gracefulExit[F[_]: Sync, A: Show](
+      program: F[Either[Throwable, A]],
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
@@ -367,7 +433,7 @@ object DeployRuntime {
             case Right(msg) =>
               Sync[F].delay {
                 if (!ignoreOutput) {
-                  println(msg)
+                  println(Show[A].show(msg))
                 }
                 if (exit) {
                   System.exit(0)
@@ -400,7 +466,7 @@ object DeployRuntime {
     }
   }
 
-  private def readFileAsString[F[_]: Sync](file: File): F[String] = Sync[F].delay {
+  def readFileAsString[F[_]: Sync](file: File): F[String] = Sync[F].delay {
     new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8)
   }
 
@@ -438,27 +504,25 @@ object DeployRuntime {
     argsBytesLen ++ argsBytes
   }
 
+  implicit val ordering: Ordering[ByteString] =
+    Ordering.by[ByteString, String](bs => Base16.encode(bs.toByteArray))
+
   implicit class DeployOps(d: consensus.Deploy) {
     def withHashes = {
       val h = d.getHeader.withBodyHash(hash(d.getBody))
       d.withHeader(h).withDeployHash(hash(h))
     }
 
-    def sign(privateKey: PrivateKey, publicKey: PublicKey) = {
+    def sign(privateKey: PrivateKey, publicKey: PublicKey): Deploy = {
       val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
-      d.withApprovals(
-        List(
-          consensus
-            .Approval()
-            .withApproverPublicKey(ByteString.copyFrom(publicKey))
-            .withSignature(
-              consensus
-                .Signature()
-                .withSigAlgorithm(Ed25519.name)
-                .withSig(ByteString.copyFrom(sig))
-            )
+      val approval = consensus
+        .Approval()
+        .withApproverPublicKey(ByteString.copyFrom(publicKey))
+        .withSignature(
+          consensus.Signature().withSigAlgorithm(Ed25519.name).withSig(ByteString.copyFrom(sig))
         )
-      )
+      val approvals = d.approvals.toList :+ approval
+      d.withApprovals(approvals.distinct.sortBy(_.approverPublicKey))
     }
   }
 }

@@ -29,9 +29,6 @@ default-timeout = "5second"
 # Bootstrap casperlabs node address for initial seed.
 # bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
 
-# Type of Casperlabs space backing store. Valid values are: lmdb, inmem, mixed.
-store-type = "lmdb"
-
 # Path to data directory.
 data-dir = "$HOME/.casperlabs"
 
@@ -224,8 +221,9 @@ required-sigs = 0
 # Path to the PEM encoded public key to use for the system account.
 # genesis-account-public-key-path =
 
-# Initial amount of tokens to pass to the Mint contract.
-initial-tokens = 0
+# Initial amount of motes to pass to the Mint contract.
+# Note: a "mote" is the smallest, indivisible unit of a token.
+initial-motes = 0
 
 # Path to the Wasm file which contains the Mint contract.
 # mint-code-path =

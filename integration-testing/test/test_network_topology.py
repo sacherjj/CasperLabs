@@ -1,6 +1,7 @@
 import logging
 
 from .cl_node.wait import wait_for_block_contains, wait_for_new_fork_choice_tip_block
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 
 
 def test_metrics_api_socket(two_node_network):
@@ -26,19 +27,15 @@ def mk_expected_string(node, random_token):
     )
 
 
-def test_casper_propose_and_deploy(two_node_network):
-    for node in two_node_network.docker_nodes:
-        node.deploy_and_propose(
-            session_contract="test_helloname.wasm",
-            payment_contract="test_helloname.wasm",
-        )
-
-
 def test_star_network(star_network):
     # deploy and propose from one of the star edge nodes.
     node1 = star_network.docker_nodes[1]
     block = node1.deploy_and_propose(
-        session_contract="test_helloname.wasm", payment_contract="test_helloname.wasm"
+        from_address=GENESIS_ACCOUNT.public_key_hex,
+        public_key=GENESIS_ACCOUNT.public_key_path,
+        private_key=GENESIS_ACCOUNT.private_key_path,
+        session_contract="test_helloname.wasm",
+        payment_contract="test_helloname.wasm",
     )
 
     # validate all nodes get block

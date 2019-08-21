@@ -16,7 +16,6 @@ import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.ignore
 import io.casperlabs.node.configuration.Utils._
-import io.casperlabs.shared.StoreType
 import org.scalacheck.ScalacheckShapeless._
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -58,7 +57,6 @@ class ConfigurationSpec
         1,
         1
       ).some,
-      storeType = StoreType.LMDB,
       dataDir = Paths.get("/tmp"),
       maxNumOfConnections = 1,
       maxMessageSize = 1,
@@ -106,7 +104,7 @@ class ConfigurationSpec
       maximumBond = 1L,
       requiredSigs = 1,
       genesisAccountPublicKeyPath = Paths.get("/tmp/test").some,
-      initialTokens = BigInt(1),
+      initialMotes = BigInt(1),
       mintCodePath = Paths.get("/tmp/test").some,
       posCodePath = Paths.get("/tmp/test").some,
       shardId = "test",
@@ -376,14 +374,11 @@ class ConfigurationSpec
         .toLowerCase
 
     val tables = reduce(conf, Map.empty[String, Map[String, String]]) {
-      case s: String               => s""""$s""""
-      case d: FiniteDuration       => s""""${d.toString.replace(" ", "")}""""
-      case _: StoreType.Mixed.type => s""""mixed""""
-      case _: StoreType.LMDB.type  => s""""lmdb""""
-      case _: StoreType.InMem.type => s""""inmem""""
-      case p: Node                 => s""""${p.show}""""
-      case p: java.nio.file.Path   => s""""${p.toString}""""
-      case x                       => x.toString
+      case s: String             => s""""$s""""
+      case d: FiniteDuration     => s""""${d.toString.replace(" ", "")}""""
+      case p: Node               => s""""${p.show}""""
+      case p: java.nio.file.Path => s""""${p.toString}""""
+      case x                     => x.toString
     } { (acc, fullFieldName, field) =>
       val tableName :: fieldName = fullFieldName
       val table                  = dashify(tableName)

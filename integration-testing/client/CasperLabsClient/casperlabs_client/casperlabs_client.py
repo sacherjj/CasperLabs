@@ -25,6 +25,7 @@ import struct
 import json
 from operator import add
 from functools import reduce
+from itertools import dropwhile
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -59,7 +60,36 @@ DEFAULT_INTERNAL_PORT = 40402
 
 
 class ABI:
-    """ Encode deploy args.
+    """
+    Encode (serialize) deploy args.
+
+    Currently supported ABI types:
+    - unsigned integers: u32, u64, u512,
+    - byte_array, an array of bytes of arbitrary length,
+    - account, 32 bytes long byte_array, used for encoding of public keys.
+
+    There are two ways to serialize a list of deploy arguments:
+
+    1. Using method ABI.args, for example:
+
+        ABI.args([ABI.u32(100), ABI.u64(5000)])
+
+      Arguments are encoded with methods appropriate for their types,
+      and passed in a list to method ABI.args.
+
+      This is the recommended way of serializing ABI arguments in Python code.
+
+    2. By encoding arguments in a JSON format and passing them to method
+      ABI.args_from_json, for example:
+
+        ABI.args_from_json('[{"u32": 100}, {"u64": 5000}]')
+
+      The JSON encoded list contains arguments encoded as dictionaries,
+      each with just one (key, value) pair, where key is a name of one
+      of supported ABI type, and value being the argument's value.
+
+      This method has been developed to support passing deploy arguments
+      on command line.
     """
 
     @staticmethod
@@ -69,6 +99,18 @@ class ABI:
     @staticmethod
     def u64(n: int):
         return struct.pack("<Q", n)
+
+    @staticmethod
+    def u512(n: int):
+        bs = list(
+            dropwhile(
+                lambda b: b == 0,
+                reversed(n.to_bytes(64, byteorder="little", signed=False)),
+            )
+        )
+        return len(bs).to_bytes(1, byteorder="little", signed=False) + bytes(
+            reversed(bs)
+        )
 
     @staticmethod
     def byte_array(a: bytes):
@@ -103,11 +145,13 @@ class ABI:
                 )
 
         def python_value(typ, value: str):
-            if typ in ("u32", "u64"):
+            if typ in ("u32", "u64", "u512"):
                 return int(value)
             elif typ == "account":
                 return bytearray.fromhex(value)
-            raise ValueError(f"Unknown type {typ}, expected ('u32', 'u64', 'account')")
+            raise ValueError(
+                f"Unknown type {typ}, expected ('u32', 'u64', 'u512', 'account')"
+            )
 
         def encode(typ: str, value: str) -> bytes:
             v = python_value(typ, value)
@@ -231,7 +275,8 @@ class CasperLabsClient:
         nonce: int = 0,
         public_key: str = None,
         private_key: str = None,
-        args: bytes = None,
+        session_args: bytes = None,
+        payment_args: bytes = None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -249,9 +294,12 @@ class CasperLabsClient:
                               transactions that use the same nonce.
         :param public_key:    Path to a file with public key (Ed25519)
         :param private_key:   Path to a file with private key (Ed25519)
-        :param args:          List of ABI encoded arguments
+        :param session_args:  List of ABI encoded arguments of session contract
+        :param payment_args:  List of ABI encoded arguments of payment contract
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
+        if from_addr and len(from_addr) != 32:
+            raise Exception(f"from_addr must be 32 bytes")
 
         payment = payment or session
 
@@ -286,14 +334,19 @@ class CasperLabsClient:
         def serialize(o) -> bytes:
             return o.SerializeToString()
 
-        # args must go to payment as well for now cause otherwise we'll get GASLIMIT error:
+        # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,
+        # if payment is same as session:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
         body = consensus.Deploy.Body(
-            session=read_code(session, args),
-            payment=read_code(payment, payment == session and args or None),
+            session=read_code(session, session_args),
+            payment=read_code(
+                payment, payment == session and session_args or payment_args
+            ),
         )
 
-        account_public_key = public_key and read_pem_key(public_key)
+        approval_public_key = public_key and read_pem_key(public_key)
+        account_public_key = from_addr or approval_public_key
+
         header = consensus.Deploy.Header(
             account_public_key=account_public_key,
             nonce=nonce,
@@ -307,7 +360,7 @@ class CasperLabsClient:
             deploy_hash=deploy_hash,
             approvals=[
                 consensus.Approval(
-                    approver_public_key=account_public_key, signature=sign(deploy_hash)
+                    approver_public_key=approval_public_key, signature=sign(deploy_hash)
                 )
             ]
             if account_public_key
@@ -544,8 +597,14 @@ def no_command(casperlabs_client, args):
 
 @guarded_command
 def deploy_command(casperlabs_client, args):
+    from_addr = bytes.fromhex(getattr(args, "from"))
+    if len(from_addr) != 32:
+        raise Exception(
+            "--from must be 32 bytes encoded as 64 characters long hexadecimal"
+        )
+
     kwargs = dict(
-        from_addr=getattr(args, "from"),
+        from_addr=from_addr,
         gas_limit=None,
         gas_price=args.gas_price,
         payment=args.payment or args.session,
@@ -553,7 +612,12 @@ def deploy_command(casperlabs_client, args):
         nonce=args.nonce,
         public_key=args.public_key or None,
         private_key=args.private_key or None,
-        args=args.args and ABI.args_from_json(args.args) or None,
+        session_args=args.session_args
+        and ABI.args_from_json(args.session_args)
+        or None,
+        payment_args=args.payment_args
+        and ABI.args_from_json(args.payment_args)
+        or None,
     )
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy hash: {deploy_hash.hex()}")
@@ -671,12 +735,13 @@ def main():
 
     # fmt: off
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
-                      [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
+                      [[('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
                        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
                        [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
                        [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
-                       [('--args',), dict(required=False, type=str, help='JSON encoded list of args, e.g.: [{"u32":1024},{"u64":12}]')],
+                       [('--session-args',), dict(required=False, type=str, help='JSON encoded list of session args, e.g.: [{"u32":1024},{"u64":12}]')],
+                       [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: [{"u512":100000}]""")],
                        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
                        [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 

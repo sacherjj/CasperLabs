@@ -19,8 +19,8 @@ message Deploy {
     bytes address = 1; // length 32 bytes
     DeployCode session = 3;
     DeployCode payment = 4;
-    uint64 tokens_transferred_in_payment = 5; // in units of Tokens -- someday this will come from running payment code
-    uint64 gas_price = 6; // in units of Token / Gas
+    uint64 motes_transferred_in_payment = 5; // in units of Motes -- someday this will come from running payment code
+    uint64 gas_price = 6; // in units of Mote / Gas
     uint64 nonce = 7;
     // Public keys used to sign this deploy, to be checked against the keys
     // associated with the account.
@@ -245,7 +245,7 @@ message ValidateRequest {
 message GenesisRequest {
     // genesis account public key, length 32 bytes
     bytes address = 1;
-    io.casperlabs.casper.consensus.state.BigInt initial_tokens = 2;
+    io.casperlabs.casper.consensus.state.BigInt initial_motes = 2;
     uint64 timestamp = 3;
     DeployCode mint_code = 4;
     DeployCode proof_of_stake_code = 5;

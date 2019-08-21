@@ -61,12 +61,14 @@ class FinalityDetectorBySingleSweepTest
           b2 <- createBlock[Task](
                  Seq(b1.blockHash),
                  v1,
-                 bonds
+                 bonds,
+                 HashMap(v1 -> b1.blockHash)
                )
           b3 <- createBlock[Task](
                  Seq(b1.blockHash),
                  v2,
-                 bonds
+                 bonds,
+                 HashMap(v1 -> b1.blockHash)
                )
           b4 <- createBlock[Task](
                  Seq(b2.blockHash),
@@ -103,7 +105,7 @@ class FinalityDetectorBySingleSweepTest
           lowestLevelZeroMsgs = levelZeroMsgs.flatMap {
             case (_, msgs) => msgs.lastOption.map(_.blockHash)
           }.toSet
-          _ = lowestLevelZeroMsgs shouldBe Set(b2.blockHash, b3.blockHash)
+          _ = lowestLevelZeroMsgs shouldBe Set(b1.blockHash, b3.blockHash)
           _ <- dag.justificationToBlocks(b2.blockHash) shouldBeF Set(b4.blockHash)
           _ <- dag.justificationToBlocks(b3.blockHash) shouldBeF Set(b4.blockHash, b5.blockHash)
           _ <- dag.justificationToBlocks(b4.blockHash) shouldBeF Set(b6.blockHash, b7.blockHash)
@@ -143,7 +145,7 @@ class FinalityDetectorBySingleSweepTest
           _                              = blockLevels(b2.blockHash).blockLevel shouldBe (0)
           _                              = blockLevels(b3.blockHash).blockLevel shouldBe (0)
           _                              = blockLevels(b4.blockHash).blockLevel shouldBe (1)
-          _                              = blockLevels(b5.blockHash).blockLevel shouldBe (0)
+          _                              = blockLevels(b5.blockHash).blockLevel shouldBe (1)
           _                              = blockLevels(b6.blockHash).blockLevel shouldBe (1)
           _                              = blockLevels(b7.blockHash).blockLevel shouldBe (1)
           _                              = blockLevels(b8.blockHash).blockLevel shouldBe (2)

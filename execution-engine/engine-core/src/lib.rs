@@ -33,15 +33,10 @@ extern crate proptest;
 extern crate num_derive;
 extern crate num_traits;
 
-pub mod args;
-pub mod byte_size;
 pub mod engine_state;
 pub mod execution;
-pub mod function_index;
-pub mod meter;
 pub mod resolvers;
 pub mod runtime_context;
 pub mod tracking_copy;
-pub mod utils;
 
 type URefAddr = [u8; 32];

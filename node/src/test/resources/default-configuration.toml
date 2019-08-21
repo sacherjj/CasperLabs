@@ -13,7 +13,6 @@ default-timeout = "1second"
 standalone = false
 map-size = 1
 bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1"
-store-type = "lmdb"
 data-dir = "/tmp"
 max-num-of-connections = 1
 max-message-size = 1
@@ -72,7 +71,7 @@ minimum-bond = 1
 maximum-bond = 1
 required-sigs = 1
 genesis-account-public-key-path = "/tmp/test"
-initial-tokens = 1
+initial-motes = 1
 mint-code-path = "/tmp/test"
 pos-code-path = "/tmp/test"
 shard-id = "test"

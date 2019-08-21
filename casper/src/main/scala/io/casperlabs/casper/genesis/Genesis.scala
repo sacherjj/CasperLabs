@@ -39,7 +39,7 @@ object Genesis {
   @silent("is never used")
   def defaultBlessedTerms[F[_]: MonadThrowable: FilesAPI: Log](
       accountPublicKeyPath: Option[Path],
-      initialTokens: BigInt,
+      initialMotes: BigInt,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       bondsFile: Option[Path],
@@ -86,11 +86,11 @@ object Genesis {
       request = ipc
         .GenesisRequest()
         .withAddress(ByteString.copyFrom(accountPublicKey))
-        .withInitialTokens(
+        .withInitialMotes(
           state
             .BigInt(
-              initialTokens.toString,
-              bitWidth = 512 // We could use `initialTokens.bitLength` to map to the closest of 128, 256 or 512 but this is what the EE expects.
+              initialMotes.toString,
+              bitWidth = 512 // We could use `initialMotes.bitLength` to map to the closest of 128, 256 or 512 but this is what the EE expects.
             )
         )
         .withMintCode(mintCode)
@@ -201,7 +201,7 @@ object Genesis {
     conf.chainId,
     conf.deployTimestamp,
     conf.genesisAccountPublicKeyPath,
-    conf.initialTokens,
+    conf.initialMotes,
     conf.mintCodePath,
     conf.posCodePath
   )
@@ -214,7 +214,7 @@ object Genesis {
       chainId: String,
       deployTimestamp: Option[Long],
       accountPublicKeyPath: Option[Path],
-      initialTokens: BigInt,
+      initialMotes: BigInt,
       mintCodePath: Option[Path],
       posCodePath: Option[Path]
   ): F[BlockMsgWithTransform] =
@@ -230,7 +230,7 @@ object Genesis {
       validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq.sortBy(_.id)
       blessedContracts <- defaultBlessedTerms[F](
                            accountPublicKeyPath = accountPublicKeyPath,
-                           initialTokens = initialTokens,
+                           initialMotes = initialMotes,
                            posParams = ProofOfStakeParams(minimumBond, maximumBond, validators),
                            wallets = wallets,
                            mintCodePath = mintCodePath,

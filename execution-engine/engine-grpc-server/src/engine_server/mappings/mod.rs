@@ -15,7 +15,7 @@ use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::op::Op;
 use engine_core::execution::Error as ExecutionError;
-use engine_core::utils;
+use engine_core::tracking_copy::utils;
 use engine_server::{ipc, state};
 use engine_shared::logging;
 use engine_shared::logging::log_level;
@@ -710,11 +710,29 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     error @ EngineError::WasmSerializationError(_) => {
                         precondition_failure(error.to_string())
                     }
+                    error @ EngineError::ExecError(
+                        ExecutionError::DeploymentAuthorizationFailure,
+                    ) => precondition_failure(error.to_string()),
                     EngineError::StorageError(storage_err) => {
                         execution_error(storage_err.to_string(), cost, effect)
                     }
                     error @ EngineError::AuthorizationError => {
                         precondition_failure(error.to_string())
+                    }
+                    EngineError::MissingSystemContractError(msg) => {
+                        execution_error(msg, cost, effect)
+                    }
+                    error @ EngineError::InsufficientPaymentError => {
+                        let msg = error.to_string();
+                        execution_error(msg, cost, effect)
+                    }
+                    error @ EngineError::DeployError => {
+                        let msg = error.to_string();
+                        execution_error(msg, cost, effect)
+                    }
+                    error @ EngineError::FinalizationError => {
+                        let msg = error.to_string();
+                        execution_error(msg, cost, effect)
                     }
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {

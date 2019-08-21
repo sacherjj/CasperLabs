@@ -3,7 +3,7 @@ extern crate pwasm_utils;
 
 pub mod wasm_costs;
 
-use parity_wasm::elements::{deserialize_buffer, Error as ParityWasmError, Module};
+use parity_wasm::elements::{Error as ParityWasmError, Module};
 use pwasm_utils::{externalize_mem, inject_gas_counter, rules};
 use std::error::Error;
 use wasm_costs::WasmCosts;
@@ -25,6 +25,7 @@ use PreprocessingError::*;
 
 pub trait Preprocessor<A> {
     fn preprocess(&self, module_bytes: &[u8]) -> Result<A, PreprocessingError>;
+    fn deserialize(&self, module_bytes: &[u8]) -> Result<A, PreprocessingError>;
 }
 
 pub struct WasmiPreprocessor {
@@ -44,13 +45,20 @@ impl WasmiPreprocessor {
 
 impl Preprocessor<Module> for WasmiPreprocessor {
     fn preprocess(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
-        let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
-        let deserialized_module = deserialize_buffer(module_bytes).map_err(from_parity_err)?;
+        let deserialized_module = self.deserialize(module_bytes)?;
         let ext_mod = externalize_mem(deserialized_module, None, self.mem_pages);
         let gas_mod = inject_gas_counters(ext_mod, &self.wasm_costs)?;
         let module =
             pwasm_utils::stack_height::inject_limiter(gas_mod, self.wasm_costs.max_stack_height)
                 .map_err(|_| StackLimiterError)?;
+        Ok(module)
+    }
+
+    // returns a parity Module from bytes without making modifications or limits
+    fn deserialize(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
+        let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
+        let module =
+            parity_wasm::deserialize_buffer::<Module>(&module_bytes).map_err(from_parity_err)?;
         Ok(module)
     }
 }

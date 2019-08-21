@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 
-import cats.data.EitherT
+import cats.data.{EitherT, NonEmptyList}
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Bracket, Resource, Sync}
 import cats.implicits._
@@ -369,11 +369,8 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
         latestMessages   <- dag.latestMessages
         bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
         justifications   = toJustification(bondedLatestMsgs)
-        maxRank = bondedLatestMsgs.values.foldLeft(-1L) {
-          case (acc, b) => math.max(acc, b.rank)
-        }
-        number          = maxRank + 1
-        protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(number)
+        rank             = ProtoUtil.calculateRank(bondedLatestMsgs.values.toSeq)
+        protocolVersion  = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(rank)
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
                      createProposal(
                        parents,
@@ -408,19 +405,20 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
   ): F[Seq[Deploy]] =
     for {
       orphanedDeploys <- findOrphanedDeploys(dag, parents)
-      pendingDeploys  <- DeployBuffer[F].readPending
+      pendingDeploys  <- DeployBuffer[F].readPendingHashes
       // Pending deploys are most likely not in the past, or we'd have to go back indefinitely to
       // prove they aren't. The EE will ignore them if the nonce is less than the expected,
       // so it should be fine to include and see what happens.
-      candidates = orphanedDeploys ++ pendingDeploys
+      candidatesHashes = orphanedDeploys ++ pendingDeploys
 
       // Only send the next nonce per account.
-      remaining = candidates
-        .groupBy(_.getHeader.accountPublicKey)
-        .map {
-          case (_, deploys) => deploys.minBy(_.getHeader.nonce)
-        }
-        .toSeq
+      remaining <- DeployBuffer[F]
+                    .getByHashes(candidatesHashes)
+                    .map {
+                      _.groupBy(_.getHeader.accountPublicKey).map {
+                        case (_, deploys) => deploys.minBy(_.getHeader.nonce)
+                      }.toSeq
+                    }
     } yield remaining
 
   /** If another node proposed a block which orphaned something proposed by this node,
@@ -439,26 +437,26 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       parents = merged.parents
 
       orphanedDeploys <- findOrphanedDeploys(dag, parents)
-      _               <- DeployBuffer[F].markAsPending(orphanedDeploys) whenA orphanedDeploys.nonEmpty
+      _               <- DeployBuffer[F].markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
     } yield orphanedDeploys.size
 
   /** Find orphaned deploys in the processed buffer. */
   private def findOrphanedDeploys(
       dag: DagRepresentation[F],
       parents: Seq[Block]
-  ): F[List[Deploy]] =
+  ): F[List[ByteString]] =
     for {
-      processedDeploys <- DeployBuffer[F].readProcessed
-      parentSet        = parents.map(_.blockHash).toSet
-      deployToBlocksMap <- processedDeploys
-                            .traverse { deploy =>
-                              BlockStorage[F]
-                                .findBlockHashesWithDeployhash(deploy.deployHash)
-                                .map(deploy -> _)
-                            }
-                            .map(_.toMap)
+      processedDeploysHashes <- DeployBuffer[F].readProcessedHashes
+      parentSet              = parents.map(_.blockHash).toSet
+      deployHashToBlocksMap <- processedDeploysHashes
+                                .traverse { deployHash =>
+                                  BlockStorage[F]
+                                    .findBlockHashesWithDeployhash(deployHash)
+                                    .map(deployHash -> _)
+                                }
+                                .map(_.toMap)
 
-      blockHashes = deployToBlocksMap.values.flatten.toList.distinct
+      blockHashes = deployHashToBlocksMap.values.flatten.toList.distinct
 
       // Find the blocks from which there's no way through the descendants to reach a tip.
       orphanedBlockHashes <- blockHashes
@@ -474,8 +472,8 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
                                 _.filter(_._2).map(_._1).toSet
                               }
 
-      orphanedDeploys = deployToBlocksMap.collect {
-        case (deploy, blockHashes) if blockHashes.forall(orphanedBlockHashes) => deploy
+      orphanedDeploys = deployHashToBlocksMap.collect {
+        case (deployHash, blockHashes) if blockHashes.forall(orphanedBlockHashes) => deployHash
       }.toList
 
     } yield orphanedDeploys
@@ -513,10 +511,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       )                 = result
       dag               <- dag
       justificationMsgs <- justifications.toList.traverse(j => dag.lookup(j.latestBlockHash))
-      maxRank = justificationMsgs.flatten.foldLeft(-1L) {
-        case (acc, b) => math.max(b.rank, acc)
-      }
-      number = maxRank + 1
+      rank              = ProtoUtil.calculateRank(justificationMsgs.flatten)
       status = if (deploysForBlock.isEmpty) {
         CreateBlockStatus.noNewDeploys
       } else {
@@ -536,7 +531,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
           parentHashes = parents.map(_.blockHash),
           justifications = justifications,
           state = postState,
-          rank = number,
+          rank = rank,
           protocolVersion = protocolVersion.value,
           timestamp = now,
           chainId = chainId

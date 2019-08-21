@@ -32,7 +32,7 @@ final case class CasperConf(
     maximumBond: Long,
     requiredSigs: Int,
     genesisAccountPublicKeyPath: Option[Path],
-    initialTokens: BigInt,
+    initialMotes: BigInt,
     mintCodePath: Option[Path],
     posCodePath: Option[Path],
     shardId: String,
