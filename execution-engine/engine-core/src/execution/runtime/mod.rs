@@ -693,7 +693,7 @@ where
     fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
         let public_mint_key = self.get_mint_contract_public_uref_key()?;
         let internal_mint_uref = match self.context.read_gs(&public_mint_key)? {
-            Some(Value::Key(Key::URef(uref))) => uref,
+            Some(Value::Key(Key::URef(uref))) => URef::new(uref.addr(), AccessRights::READ),
             _ => return Err(KeyNotFound(public_mint_key)),
         };
         Ok(internal_mint_uref)

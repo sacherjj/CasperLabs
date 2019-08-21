@@ -1,6 +1,5 @@
 package io.casperlabs.client.configuration
 import java.io.File
-import java.nio.file.Path
 
 final case class ConnectOptions(
     host: String,
@@ -11,6 +10,20 @@ final case class ConnectOptions(
 
 sealed trait Configuration
 
+final case class MakeDeploy(
+    from: Option[String],
+    publicKey: Option[File],
+    nonce: Long,
+    sessionCode: File,
+    paymentCode: File,
+    gasPrice: Long,
+    deployPath: Option[File]
+) extends Configuration
+
+final case class SendDeploy(
+    deploy: Array[Byte]
+) extends Configuration
+
 final case class Deploy(
     from: Option[String],
     nonce: Long,
@@ -19,6 +32,15 @@ final case class Deploy(
     publicKey: Option[File],
     privateKey: Option[File],
     gasPrice: Long
+) extends Configuration
+
+/** Client command to sign a deploy.
+  */
+final case class Sign(
+    deploy: Array[Byte],
+    signedDeployPath: Option[File],
+    publicKey: File,
+    privateKey: File
 ) extends Configuration
 
 final case object Propose extends Configuration
@@ -86,6 +108,25 @@ object Configuration {
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption,
           options.deploy.gasPrice()
+        )
+      case options.makeDeploy =>
+        MakeDeploy(
+          options.makeDeploy.from.toOption,
+          options.makeDeploy.publicKey.toOption,
+          options.makeDeploy.nonce(),
+          options.makeDeploy.session(),
+          options.makeDeploy.payment(),
+          options.makeDeploy.gasPrice(),
+          options.makeDeploy.deployPath.toOption
+        )
+      case options.sendDeploy =>
+        SendDeploy(options.sendDeploy.deployPath())
+      case options.signDeploy =>
+        Sign(
+          options.signDeploy.deployPath(),
+          options.signDeploy.signedDeployPath.toOption,
+          options.signDeploy.publicKey(),
+          options.signDeploy.privateKey()
         )
       case options.propose =>
         Propose
