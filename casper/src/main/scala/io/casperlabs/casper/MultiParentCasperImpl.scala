@@ -468,23 +468,18 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
 
       blockHashes = deployHashToBlocksMap.values.flatten.toList.distinct
 
-      // Find the blocks from which there's no way through the descendants to reach a tip.
+      // Find the blocks from which there's a way through the descendants to reach a tip.
       parentSet = parents.map(_.blockHash).toSet
-      orphanedBlockHashes <- blockHashes
-                              .filterA { blockHash =>
-                                DagOperations
-                                  .anyDescendantPathExists[F](
-                                    dag,
-                                    Set(blockHash),
-                                    parentSet
-                                  )
-                                  .map(!_)
-                              }
-                              .map(_.toSet)
+      nonOrphanedBlockHashes <- DagOperations
+                                 .collectWhereDescendantPathExists[F](
+                                   dag,
+                                   blockHashes.toSet,
+                                   parentSet
+                                 )
 
       deploysNotInPast = deployHashToBlocksMap.collect {
         case (deployHash, blockHashes)
-            if blockHashes.isEmpty || blockHashes.forall(orphanedBlockHashes) =>
+            if blockHashes.isEmpty || !blockHashes.exists(nonOrphanedBlockHashes) =>
           deployHash
       }.toList
 
