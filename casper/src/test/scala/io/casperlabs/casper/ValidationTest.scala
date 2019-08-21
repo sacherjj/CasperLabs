@@ -399,7 +399,7 @@ class ValidationTest
   it should "return false for non-sequential numbering" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       for {
-        _     <- createChain[Task](2)
+        _     <- createChainWithRoundRobinValidators[Task](2, 2)
         block <- dagStorage.lookupByIdUnsafe(1)
         dag   <- dagStorage.getRepresentation
         _ <- ValidationImpl[Task]
@@ -480,15 +480,16 @@ class ValidationTest
                     creator = validators(validator),
                     bonds = bonds,
                     deploys = Seq(deploy),
-                    justifications = latestMessages(justifications)
+                    justifications = latestMessages(justifications),
+                    addParentsToJustifications = false
                   )
         } yield block
 
       for {
         b0  <- createBlock[Task](Seq.empty, bonds = bonds)
-        b1  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 0)
-        b2  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 1)
-        b3  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 2)
+        b1  <- createValidatorBlock[Task](Seq(b0), Seq(b0), 0)
+        b2  <- createValidatorBlock[Task](Seq(b0), Seq(b0), 1)
+        b3  <- createValidatorBlock[Task](Seq(b0), Seq(b0), 2)
         b4  <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
         b5  <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
         b6  <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)

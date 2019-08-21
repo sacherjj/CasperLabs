@@ -169,19 +169,18 @@ class BlocksResponseAPITest
   it should "return until depth" in withStorage { implicit blockStorage => implicit dagStorage =>
     /**
       * The Dag looks like
-			*
-			* rank
       *
-			*  4          b8
-			*           /
-			*  3     b6 ----   b7
+      *
+      *  4          b8
+      *           /
+      *  3     b6 ----   b7
       *                x
-			*  2          b5  b4
-			*           /    /
-			*  1     b3   b2
+      *  2          b5  b4
+      *           /    /
+      *  1     b3   b2
       *         \   |
       *  0       genesis
-			*
+      *
       */
     for {
       genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)

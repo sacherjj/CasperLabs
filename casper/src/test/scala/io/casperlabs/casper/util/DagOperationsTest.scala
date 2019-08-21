@@ -30,25 +30,29 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         /*
          * DAG Looks like this:
          *
-         *        b6   b7
-         *       |  \ /  \
-         *       |   b4  b5
-         *       |    \ /
-         *       b2    b3
+         *       b6      b7
+         *       |  \ /  |
+         *       |  b4   b5
+         *       |     \ |
+         *       b2      b3
          *         \  /
          *          b1
          *           |
          *         genesis
          */
+        val v1 = generateValidator("v1")
+        val v2 = generateValidator("v2")
+        val v3 = generateValidator("v3")
+
         for {
           genesis <- createBlock[Task](Seq.empty)
-          b1      <- createBlock[Task](Seq(genesis.blockHash))
-          b2      <- createBlock[Task](Seq(b1.blockHash))
-          b3      <- createBlock[Task](Seq(b1.blockHash))
-          b4      <- createBlock[Task](Seq(b3.blockHash))
-          b5      <- createBlock[Task](Seq(b3.blockHash))
-          b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
-          b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
+          b1      <- createBlock[Task](Seq(genesis.blockHash), v2)
+          b2      <- createBlock[Task](Seq(b1.blockHash), v1)
+          b3      <- createBlock[Task](Seq(b1.blockHash), v3)
+          b4      <- createBlock[Task](Seq(b3.blockHash), v2)
+          b5      <- createBlock[Task](Seq(b3.blockHash), v3)
+          b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash), v1)
+          b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash), v3)
 
           implicit0(dagTopoOrderingAsc: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingAsc
           dag                                                    <- dagStorage.getRepresentation
