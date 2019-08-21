@@ -99,10 +99,4 @@ object FinalityDetectorVotingMatrix {
       lock         <- Semaphore[F](1)
       votingMatrix <- VotingMatrix.create[F](dag, block)
     } yield synchronizedVotingMatrix(lock, votingMatrix)
-
-  def empty[F[_]: Concurrent]: F[_votingMatrixS[F]] =
-    for {
-      lock  <- Semaphore[F](1)
-      empty <- VotingMatrix.empty[F]
-    } yield synchronizedVotingMatrix(lock, empty)
 }

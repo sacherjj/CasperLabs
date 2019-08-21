@@ -31,11 +31,6 @@ object VotingMatrix {
           }
       )
 
-  private[votingmatrix] def empty[F[_]: Concurrent]: F[VotingMatrix[F]] =
-    of[F](
-      VotingMatrixState(MutableSeq.empty, MutableSeq.empty, Map.empty, Map.empty, MutableSeq.empty)
-    )
-
   /** Creates a new voting matrix basing new finalized block.
     */
   private[votingmatrix] def create[F[_]: Concurrent](
