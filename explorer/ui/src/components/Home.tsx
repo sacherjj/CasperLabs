@@ -14,7 +14,7 @@ const Home = observer((props: Props) => {
     <div>
       <div className="jumbotron shadow">
         <div>
-          <h1>CasperLabs Explorer</h1>
+          <h1>CasperLabs Clarity</h1>
           <p>
             This is a self service portal for dApp developers to interact with
             the blockchain. On devnet you can use this portal to create accounts
