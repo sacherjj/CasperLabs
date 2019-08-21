@@ -12,14 +12,20 @@ use cl_std::key::Key;
 const POS_CONTRACT_NAME: &str = "pos";
 const SET_REFUND_PURSE: &str = "set_refund_purse";
 
+#[repr(u32)]
+enum Error {
+    GetPosOuterURef = 1,
+    GetPosInnerURef = 2,
+}
+
 fn get_pos() -> ContractPointer {
     let pos_public: UPointer<Key> = contract_api::get_uref(POS_CONTRACT_NAME)
         .and_then(Key::to_u_ptr)
-        .unwrap_or_else(|| contract_api::revert(66));
+        .unwrap_or_else(|| contract_api::revert(Error::GetPosOuterURef as u32));
 
     contract_api::read(pos_public)
         .to_c_ptr()
-        .unwrap_or_else(|| contract_api::revert(67))
+        .unwrap_or_else(|| contract_api::revert(Error::GetPosInnerURef as u32))
 }
 
 fn malicious_revenue_stealing_contract() {
