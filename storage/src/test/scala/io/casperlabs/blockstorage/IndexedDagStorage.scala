@@ -40,19 +40,8 @@ final class IndexedDagStorage[F[_]: Monad](
       justificationMsgs <- header.justifications.toList
                             .traverse(j => dag.lookup(j.latestBlockHash))
                             .map(_.flatten)
-      parentMsg <- header.parentHashes.toList
-                    .traverse(b => dag.lookup(b))
-                    .map(_.flatten)
-      maxRank = if (justificationMsgs.nonEmpty) {
-        justificationMsgs.foldLeft(-1L) {
-          case (acc, b) => math.max(b.rank, acc)
-        }
-      } else {
-        // Caution: here is different from PROD
-        // If there are no justifications, then maxRank = max {rank of parent}
-        parentMsg.foldLeft(-1L) {
-          case (acc, b) => math.max(b.rank, acc)
-        }
+      maxRank = justificationMsgs.foldLeft(-1L) {
+        case (acc, b) => math.max(b.rank, acc)
       }
       rank = maxRank + 1
       nextCreatorSeqNum <- dag
