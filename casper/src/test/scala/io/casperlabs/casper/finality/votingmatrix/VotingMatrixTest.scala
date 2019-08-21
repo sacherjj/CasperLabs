@@ -8,7 +8,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
 import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetectorUtil}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
@@ -30,7 +29,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
 
   def checkWeightMap(
       expect: Map[Validator, Long]
-  )(implicit _votingMatrixS: _votingMatrixS[Task]): Task[Assertion] =
+  )(implicit matrix: VotingMatrix[Task]): Task[Assertion] =
     for {
       votingMatrixState <- MonadState[Task, VotingMatrixState].get
       result            = votingMatrixState.weightMap shouldBe expect
@@ -38,7 +37,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
 
   def checkMatrix(
       expect: Map[Validator, Map[Validator, Long]]
-  )(implicit _votingMatrixS: _votingMatrixS[Task]): Task[Assertion] = {
+  )(implicit matrix: VotingMatrix[Task]): Task[Assertion] = {
 
     def fromMapTo2DArray(
         validators: IndexedSeq[Validator],
@@ -56,7 +55,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
         .toArray
 
     for {
-      votingMatrixState <- MonadState[Task, VotingMatrixState].get
+      votingMatrixState <- matrix.get
       result = votingMatrixState.votingMatrix shouldBe fromMapTo2DArray(
         votingMatrixState.validators,
         expect
@@ -66,9 +65,9 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
 
   def checkFirstLevelZeroVote(
       expect: Map[Validator, Option[(BlockHash, Long)]]
-  )(implicit _votingMatrixS: _votingMatrixS[Task]): Task[Assertion] =
+  )(implicit matrix: VotingMatrix[Task]): Task[Assertion] =
     for {
-      votingMatrixState <- MonadState[Task, VotingMatrixState].get
+      votingMatrixState <- matrix.get
       result = votingMatrixState.firstLevelZeroVotes shouldBe (FinalityDetectorUtil.fromMapToArray(
         votingMatrixState.validatorToIdx,
         expect
@@ -99,8 +98,8 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
-          implicit0(votingMatrixS: _votingMatrixS[Task]) <- FinalityDetectorVotingMatrix
-                                                             .of[Task](dag, genesis.blockHash)
+          implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
+                                                          .create[Task](dag, genesis.blockHash)
           _            <- checkMatrix(Map.empty)
           _            <- checkFirstLevelZeroVote(Map(v1 -> None, v2 -> None))
           _            <- checkWeightMap(Map(v1 -> 10, v2 -> 10))
@@ -220,24 +219,24 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
 
           updatedDag <- blockDagStorage.getRepresentation
           // rebuild from new finalized block b1
-          implicit0(updatedVotingMatrixS: _votingMatrixS[Task]) <- FinalityDetectorVotingMatrix
-                                                                    .of[Task](
-                                                                      updatedDag,
-                                                                      b1.blockHash
-                                                                    )
-          _ <- checkWeightMap(Map(v1 -> 20, v2 -> 10))(updatedVotingMatrixS)
+          newVotingMatrix <- VotingMatrix
+                              .create[Task](
+                                updatedDag,
+                                b1.blockHash
+                              )
+          _ <- checkWeightMap(Map(v1 -> 20, v2 -> 10))(newVotingMatrix)
           _ <- checkMatrix(
                 Map(
                   v1 -> Map(v1 -> b5.getHeader.rank, v2 -> b4.getHeader.rank),
                   v2 -> Map(v1 -> b3.getHeader.rank, v2 -> b4.getHeader.rank)
                 )
-              )(updatedVotingMatrixS)
+              )(newVotingMatrix)
           result <- checkFirstLevelZeroVote(
                      Map(
                        v1 -> Some((b3.blockHash, b3.getHeader.rank)),
                        v2 -> Some((b3.blockHash, b4.getHeader.rank))
                      )
-                   )(updatedVotingMatrixS)
+                   )(newVotingMatrix)
         } yield result
   }
 

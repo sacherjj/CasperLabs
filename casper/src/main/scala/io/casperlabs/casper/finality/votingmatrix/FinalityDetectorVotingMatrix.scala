@@ -45,7 +45,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log](rFTT: Double)(
                              // On new LFB we rebuild VotingMatrix and start the new game.
                              VotingMatrix
                                .create[F](dag, newLFB.consensusValue)
-                               .flatMap(newMatrix => matrix.set(newMatrix))
+                               .flatMap(_.get.flatMap(matrix.set(_)))
                            case None =>
                              ().pure[F]
                          }
@@ -96,10 +96,9 @@ object FinalityDetectorVotingMatrix {
       block: BlockHash
   ): F[_votingMatrixS[F]] =
     for {
-      lock              <- Semaphore[F](1)
-      votingMatrix      <- VotingMatrix.create[F](dag, block)
-      votingMatrixState <- VotingMatrix.of[F](votingMatrix)
-    } yield synchronizedVotingMatrix(lock, votingMatrixState)
+      lock         <- Semaphore[F](1)
+      votingMatrix <- VotingMatrix.create[F](dag, block)
+    } yield synchronizedVotingMatrix(lock, votingMatrix)
 
   def empty[F[_]: Concurrent]: F[_votingMatrixS[F]] =
     for {
