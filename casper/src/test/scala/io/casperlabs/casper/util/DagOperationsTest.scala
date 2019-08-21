@@ -58,7 +58,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                 .children(b.blockHash)
                 .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
           }
-          result <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 3, 4, 5, 6, 7))
+          result <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 2, 3, 3, 4, 4))
         } yield result
   }
 

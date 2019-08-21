@@ -37,6 +37,24 @@ final class IndexedDagStorage[F[_]: Monad](
       currentId <- currentIdRef.get
       nextId    = currentId + 1L
       dag       <- underlying.getRepresentation
+      justificationMsgs <- header.justifications.toList
+                            .traverse(j => dag.lookup(j.latestBlockHash))
+                            .map(_.flatten)
+      parentMsg <- header.parentHashes.toList
+                    .traverse(b => dag.lookup(b))
+                    .map(_.flatten)
+      maxRank = if (justificationMsgs.nonEmpty) {
+        justificationMsgs.foldLeft(-1L) {
+          case (acc, b) => math.max(b.rank, acc)
+        }
+      } else {
+        // Caution: here is different from PROD
+        // If there are no justifications, then maxRank = max {rank of parent}
+        parentMsg.foldLeft(-1L) {
+          case (acc, b) => math.max(b.rank, acc)
+        }
+      }
+      rank = maxRank + 1
       nextCreatorSeqNum <- dag
                             .latestMessage(block.getHeader.validatorPublicKey)
                             .map(_.fold(-1)(_.validatorBlockSeqNum) + 1)
@@ -44,7 +62,7 @@ final class IndexedDagStorage[F[_]: Monad](
         .withHeader(
           header
             .withValidatorBlockSeqNum(nextCreatorSeqNum)
-            .withRank(nextId)
+            .withRank(rank)
         )
       _ <- underlying.insert(modifiedBlock)
       _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
