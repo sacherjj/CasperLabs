@@ -3,6 +3,7 @@ import logging
 import pytest
 import json
 import subprocess
+import time
 from pathlib import Path
 from typing import List
 from pytest import fixture, raises
@@ -628,23 +629,37 @@ class CLIErrorExit(Exception):
 
 
 class CLI:
-    CLI_CMD = "casperlabs_client"
-
-    def __init__(self, node, host, port):
+    def __init__(self, node, host, port, cli_cmd="casperlabs_client"):
         self.node = node
         self.host = host
         self.port = port
+        self.cli_cmd = cli_cmd
 
-    def __call__(self, *args):
-        command_line = [self.CLI_CMD, "--host", f"{self.host}", "--port", f"{self.port}"] + list(args)
-        command_line = [str(a) for a in command_line]
+    def expand_args(self, args):
+        def _args(args, connection_details=["--host", f"{self.host}", "--port", f"{self.port}"]):
+            return [str(a) for a in [self.cli_cmd] + connection_details + list(args)]
+
+        return '--help' in args and _args(args, []) or _args(args)
+
+    def __call__(self, *args, sleep=0):
+        command_line = self.expand_args(args)
+        logging.info(f"EXECUTING []: {command_line}")
         logging.info(f"EXECUTING: {' '.join(command_line)}")
+        if sleep:
+            # For debugging
+            time.sleep(int(sleep) == 1 and 1000 or int(sleep))
         cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        output = cp.stdout.decode("utf-8")
+        binary_output = cp.stdout
         if cp.returncode != 0:
+            output = binary_output.decode("utf-8")
             raise CLIErrorExit(cp, output)
 
-        if 'deploy' in args or 'propose' in args:
+        if 'make-deploy' in args or 'sign-deploy' in args:
+            return binary_output
+
+        output = binary_output.decode("utf-8")
+
+        if 'deploy' in args or 'propose' in args or 'send-deploy' in args:
             return output.split()[3]
 
         if 'show-blocks' in args:
@@ -662,12 +677,21 @@ class CLI:
         return output
 
 
-@pytest.fixture()  # scope="module")
-def cli(one_node_network):
-    node = one_node_network.docker_nodes[0]
+def make_cli(node, cli_cmd):
     host = os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
     port = node.grpc_external_docker_port
-    return CLI(node, host, port)
+    return CLI(node, host, port, cli_cmd)
+
+
+@pytest.fixture()  # scope="module")
+def cli(one_node_network):
+    return make_cli(one_node_network.docker_nodes[0], "casperlabs_client")
+
+
+@pytest.fixture()  # scope="module")
+def scala_cli(one_node_network):
+    cli_cmd = testing_root_path() / "../client/target/universal/stage/bin/casperlabs-client"
+    return make_cli(one_node_network.docker_nodes[0], cli_cmd)
 
 
 def test_cli_no_parameters(cli):
@@ -794,8 +818,8 @@ def test_cli_abi_multiple(cli):
 
     args = json.dumps([{'account': account_hex}, {'u32': number}])
     deploy_hash = cli('deploy',
-                      '--from', account.public_key_hex,
                       '--nonce', 1,
+                      '--from', account.public_key_hex,
                       '--session', resource(test_contract),
                       '--session-args', f"{args}",
                       '--payment', resource(test_contract),
@@ -805,3 +829,63 @@ def test_cli_abi_multiple(cli):
     deploy_info = cli("show-deploy", deploy_hash)
     assert deploy_info.processing_results[0].is_error is True
     assert deploy_info.processing_results[0].error_message == f"Exit code: {total_sum}"
+
+
+def test_cli_scala_help(scala_cli):
+    output = scala_cli('--help')
+    assert 'Subcommand: make-deploy' in output
+
+
+def test_cli_scala_extended_deploy(scala_cli):
+    account = GENESIS_ACCOUNT
+    test_contract = resource("test_helloname.wasm")
+
+    output = scala_cli('make-deploy',
+                       '--nonce', 1,
+                       '-o', 'created.deploy',
+                       '--from', account.public_key_hex,
+                       '--session', resource(test_contract),
+                       '--payment', resource(test_contract))
+    """
+         - Subcommand: make-deploy - Constructs a deploy that can be signed and sent to a node.
+         -   -o, --deploy-path  <arg>   Path to the file where deploy will be saved.
+         -                              Optional, if not provided the deploy will be
+         -                              printed to STDOUT.
+         -   -f, --from  <arg>          The public key of the account which is the context
+         -                              of this deployment, base16 encoded.
+         -   -g, --gas-price  <arg>     The price of gas for this transaction in units
+         -                              dust/gas. Must be positive integer.
+         -   -n, --nonce  <arg>         This allows you to overwrite your own pending
+         -                              transactions that use the same nonce.
+         -       --payment  <arg>       Path to the file with payment code, by default
+         -                              fallbacks to the --session code
+         -   -p, --public-key  <arg>    Path to the file with account public key (Ed25519)
+         -   -s, --session  <arg>       Path to the file with session code
+    """
+
+    output = scala_cli('sign-deploy',
+                       '--deploy-path', 'created.deploy',
+                       '--signed-deploy-path', 'signed.deploy',
+                       '--private-key', account.private_key_path,
+                       '--public-key', account.public_key_path,)
+    """
+         - Subcommand: sign-deploy - Cryptographically signs a deploy. The signature is appended to existing approvals.
+         -   -i, --deploy-path  <arg>          Path to the deploy file.
+         -       --private-key  <arg>          Path to the file with account private key
+         -                                     (Ed25519)
+         -       --public-key  <arg>           Path to the file with account public key
+         -                                     (Ed25519)
+         -   -o, --signed-deploy-path  <arg>   Path to the file where signed deploy will be
+         -                                     saved.If not provided, the signed deploy
+         -                                     will be sent to stdout.
+         -   -h, --help                        Show help message
+    """
+
+    output = scala_cli('send-deploy',
+                       '--deploy-path', 'signed.deploy',)
+    output = output
+
+    """
+         - Subcommand: send-deploy - Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
+         -   -i, --deploy-path  <arg>   Path to the file with signed Deploy.
+    """
