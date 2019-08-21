@@ -498,6 +498,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ee-572-regression-create"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
+name = "ee-572-regression-escalate"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
 name = "either"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

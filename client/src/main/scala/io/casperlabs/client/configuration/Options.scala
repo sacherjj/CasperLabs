@@ -1,10 +1,12 @@
 package io.casperlabs.client.configuration
 
 import java.io.File
+import java.nio.file.Files
 
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
 import io.casperlabs.client.BuildInfo
+import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
 
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -49,9 +51,84 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
 
-  val deploy = new Subcommand("deploy") {
+  val makeDeploy = new Subcommand("make-deploy") {
+    descr("Constructs a deploy that can be signed and sent to a node.")
+
+    val from = opt[String](
+      descr =
+        "The public key of the account which is the context of this deployment, base16 encoded.",
+      required = false
+    )
+
+    val publicKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck
+      )
+
+    val gasPrice = opt[Long](
+      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
+      validate = _ > 0,
+      required = false,
+      default = 10L.some
+    )
+
+    val nonce = opt[Long](
+      descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val session =
+      opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
+
+    val payment =
+      opt[File](
+        required = false,
+        descr = "Path to the file with payment code, by default fallbacks to the --session code",
+        validate = fileCheck
+      )
+
+    val deployPath =
+      opt[File](
+        required = false,
+        descr = "Path to the file where deploy will be saved. " +
+          "Optional, if not provided the deploy will be printed to STDOUT.",
+        short = 'o'
+      )
+
+    addValidation {
+      if (publicKey.isDefined && from.isDefined)
+        Left("Both --from  and --public-key were provided. Please provide one of them.")
+      else if (publicKey.isEmpty && from.isEmpty)
+        Left("Neither --from nor --public-key were provided. Please provide one of them.")
+      else Right(())
+    }
+  }
+  addSubcommand(makeDeploy)
+
+  val sendDeploy = new Subcommand("send-deploy") {
     descr(
       "Deploy a smart contract source file to Casper on an existing running node. " +
+        "The deploy will be packaged and sent as a block to the network depending " +
+        "on the configuration of the Casper instance."
+    )
+
+    val deployPath = opt[File](
+      required = false,
+      descr = "Path to the file with signed Deploy.",
+      validate = fileCheck,
+      short = 'i'
+    ).map(file => Files.readAllBytes(file.toPath))
+      .orElse(Some(IOUtils.toByteArray(System.in)))
+
+  }
+  addSubcommand(sendDeploy)
+
+  val deploy = new Subcommand("deploy") {
+    descr(
+      "Constructs a Deploy and sends it to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
         "on the configuration of the Casper instance."
     )
@@ -108,6 +185,45 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
   }
   addSubcommand(deploy)
+
+  val signDeploy = new Subcommand("sign-deploy") {
+    descr("Cryptographically signs a deploy. The signature is appended to existing approvals.")
+
+    val publicKey =
+      opt[File](
+        required = true,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck,
+        noshort = true
+      )
+
+    val privateKey =
+      opt[File](
+        required = true,
+        descr = "Path to the file with account private key (Ed25519)",
+        validate = fileCheck,
+        noshort = true
+      )
+
+    val signedDeployPath =
+      opt[File](
+        required = false,
+        descr = "Path to the file where signed deploy will be saved." +
+          "If not provided, the signed deploy will be sent to stdout.",
+        short = 'o'
+      )
+
+    val deployPath =
+      opt[File](
+        required = false,
+        descr = "Path to the deploy file.",
+        validate = fileCheck,
+        short = 'i'
+      ).map(file => Files.readAllBytes(file.toPath))
+        .orElse(Some(IOUtils.toByteArray(System.in)))
+  }
+
+  addSubcommand(signDeploy)
 
   val propose = new Subcommand("propose") {
     descr(
