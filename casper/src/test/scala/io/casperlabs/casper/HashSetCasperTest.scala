@@ -1277,6 +1277,37 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
+  it should "not execute deploys which are already in the past" in effectTest {
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+    for {
+      deploy          <- ProtoUtil.basicDeploy[Effect](1L)
+      _               <- node.casperEff.deploy(deploy)
+      create1         <- node.casperEff.createBlock
+      Created(block1) = create1
+      _               <- node.casperEff.addBlock(block1) shouldBeF Valid
+
+      // Should be finalized, so not stop it appearing again as pending.
+      processedDeploys <- node.deployBufferEff.readProcessed
+      _                = processedDeploys shouldBe empty
+
+      // Should be able to enquee the deploy again.
+      _               <- node.casperEff.deploy(deploy)
+      pendingDeploys1 <- node.deployBufferEff.readPending
+      _               = pendingDeploys1 should not be empty
+
+      // Should not put it in a block.
+      createB <- node.casperEff.createBlock
+      _       = createB shouldBe CreateBlockStatus.noNewDeploys
+
+      // Should discard the deploy.
+      pendingDeploys2 <- node.deployBufferEff.readPending
+      _               = pendingDeploys2 shouldBe empty
+
+      _ <- node.tearDown()
+    } yield ()
+  }
+
   it should "remove deploys with lower than expected nonces from the buffer" in effectTest {
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
 
