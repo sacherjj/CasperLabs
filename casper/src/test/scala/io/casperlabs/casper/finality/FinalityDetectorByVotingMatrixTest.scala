@@ -157,6 +157,8 @@ class FinalityDetectorByVotingMatrixTest
         /* The DAG looks like:
          *
          *
+         *    b7 ----
+         *           \
          *            b6
          *           /
          *        b5
