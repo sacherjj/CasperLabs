@@ -5,13 +5,9 @@ extern crate alloc;
 
 extern crate cl_std;
 
-use cl_std::contract_api::{get_arg, revert, transfer_to_account, TransferResult};
+use cl_std::contract_api::{get_arg, transfer_to_account, TransferResult};
 use cl_std::value::account::PublicKey;
 use cl_std::value::U512;
-
-enum ContractResult {
-    TransferError = 101,
-}
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -19,7 +15,5 @@ pub extern "C" fn call() {
 
     let public_key = PublicKey::new([42; 32]);
     let result = transfer_to_account(public_key, amount);
-    if result != TransferResult::TransferredToNewAccount {
-        revert(ContractResult::TransferError as u32);
-    }
+    assert_eq!(result, TransferResult::TransferError)
 }
