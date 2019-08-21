@@ -365,4 +365,58 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
       } yield ()
   }
 
+  "collectWhereDescendantPathExists" should
+    "return from the possible ancestor blocks the ones which have a path to any of the potential descendants" in withStorage {
+    implicit blockStorage => implicit dagStorage =>
+      def collect(
+          dag: DagRepresentation[Task],
+          start: Set[Block],
+          targets: Set[Block]
+      ) =
+        DagOperations.collectWhereDescendantPathExists[Task](
+          dag,
+          start.map(_.blockHash),
+          targets.map(_.blockHash)
+        )
+      /*
+       * DAG Looks like this:
+       *
+       *        b6   b7
+       *       |  \ /  \
+       *       |   b4  b5
+       *       |    \ /
+       *       b2    b3
+       *         \  /
+       *          b1
+       *           |
+       *         genesis
+       */
+      for {
+        genesis <- createBlock[Task](Seq.empty)
+        b1      <- createBlock[Task](Seq(genesis.blockHash))
+        b2      <- createBlock[Task](Seq(b1.blockHash))
+        b3      <- createBlock[Task](Seq(b1.blockHash))
+        b4      <- createBlock[Task](Seq(b3.blockHash))
+        b5      <- createBlock[Task](Seq(b3.blockHash))
+        b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
+        b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
+        dag     <- dagStorage.getRepresentation
+        // self
+        _ <- collect(dag, Set(genesis), Set(genesis)) shouldBeF Set(genesis.blockHash)
+        // any descendant
+        _ <- collect(dag, Set(b3), Set(b2, b7)) shouldBeF Set(b3.blockHash)
+        // any ancestor
+        _ <- collect(dag, Set(b2, b3), Set(b5)) shouldBeF Set(b3.blockHash)
+        _ <- collect(dag, Set(b1, b3), Set(b5)) shouldBeF Set(b1.blockHash, b3.blockHash)
+        // main parent
+        _ <- collect(dag, Set(b4), Set(b7)) shouldBeF Set(b4.blockHash)
+        // secondary parent
+        _ <- collect(dag, Set(b5), Set(b7)) shouldBeF Set(b5.blockHash)
+        // not to ancestor
+        _ <- collect(dag, Set(b2, b4), Set(b1)) shouldBeF Set.empty
+        // not to sibling
+        _ <- collect(dag, Set(b2), Set(b3)) shouldBeF Set.empty
+      } yield ()
+  }
+
 }
