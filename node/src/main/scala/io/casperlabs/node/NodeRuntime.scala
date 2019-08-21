@@ -71,7 +71,6 @@ class NodeRuntime private[node] (
   private val port             = conf.server.port
   private val kademliaPort     = conf.server.kademliaPort
   private val blockStoragePath = conf.server.dataDir.resolve("blockstorage")
-  private val dagStoragePath   = conf.server.dataDir.resolve("dagstorage")
 
   /**
     * Main node entry. It will:
@@ -161,12 +160,7 @@ class NodeRuntime private[node] (
                                                           )
                                                         }
 
-        implicit0(dagStorage: DagStorage[Effect]) <- FileDagStorage[Effect](
-                                                      dagStoragePath,
-                                                      conf.blockstorage.latestMessagesLogMaxSizeFactor,
-                                                      blockStorage
-                                                    )
-
+        implicit0(dagStorage: DagStorage[Effect]) <- SQLiteDagStorage[Effect]
         _ <- Resource.liftF {
               Task
                 .delay {

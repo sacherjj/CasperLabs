@@ -41,23 +41,10 @@ object ValidationImpl {
 class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
     extends Validation[F] {
   import ValidationImpl.DRIFT
+  import io.casperlabs.models.BlockImplicits._
 
   type Data        = Array[Byte]
   type BlockHeight = Long
-
-  implicit class BlockSummaryOps(summary: BlockSummary) {
-    def isGenesisLike =
-      summary.getHeader.parentHashes.isEmpty &&
-        summary.getHeader.validatorPublicKey.isEmpty &&
-        summary.getSignature.sig.isEmpty
-  }
-
-  implicit class BlockOps(block: Block) {
-    def isGenesisLike =
-      block.getHeader.parentHashes.isEmpty &&
-        block.getHeader.validatorPublicKey.isEmpty &&
-        block.getSignature.sig.isEmpty
-  }
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -400,6 +387,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                 s"block number $actuallyRank is not the maximum block number of justifications plus 1, i.e. $calculatedRank."
             for {
               _ <- Log[F].warn(ignore(b, logMessage))
+              _ = println(logMessage)
               _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBlockNumber)
             } yield ()
           }

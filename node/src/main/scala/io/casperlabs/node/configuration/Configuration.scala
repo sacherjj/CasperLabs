@@ -89,7 +89,6 @@ object Configuration extends ParserImplicits {
   ) extends SubConfig
 
   case class BlockStorage(
-      latestMessagesLogMaxSizeFactor: Int,
       cacheMaxSizeBytes: Long
   ) extends SubConfig
 

@@ -480,10 +480,6 @@ private[configuration] final case class Options private (
       gen[Flag]("LMDB use TLS.")
 
     @scallop
-    val blockstorageLatestMessagesLogMaxSizeFactor =
-      gen[Int]("Size factor for squashing block storage latest messages.")
-
-    @scallop
     val blockstorageCacheMaxSizeBytes =
       gen[Long]("Maximum size of the in-memory block cache in bytes.")
 
