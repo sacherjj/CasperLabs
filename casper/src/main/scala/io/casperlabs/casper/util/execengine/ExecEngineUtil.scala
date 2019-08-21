@@ -18,6 +18,7 @@ import io.casperlabs.casper.consensus.state
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.casper.consensus.state.{Key, Value}
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -364,8 +365,28 @@ object ExecEngineUtil {
     def parents(b: BlockMetadata): F[List[BlockMetadata]] =
       b.parents.traverse(b => dag.lookup(b).map(_.get))
 
-    def effect(block: BlockMetadata): F[Option[TransformMap]] =
-      BlockStorage[F].getTransforms(block.blockHash)
+    def effect(blockMeta: BlockMetadata): F[Option[TransformMap]] =
+      BlockStorage[F]
+        .get(blockMeta.blockHash)
+        .map(_.map { blockWithTransforms =>
+          val blockHash  = blockWithTransforms.getBlockMessage.blockHash
+          val transforms = blockWithTransforms.transformEntry
+          // To avoid the possibility of duplicate deploys, pretend that a deploy
+          // writes to its own deploy hash, to generate conflicts between blocks
+          // that have the same deploy in their bodies.
+          val deployHashTransforms =
+            blockWithTransforms.getBlockMessage.getBody.deploys.map(_.getDeploy).map { deploy =>
+              val k = Key(Key.Value.Hash(Key.Hash(deploy.deployHash)))
+              val t = Transform(
+                Transform.TransformInstance.Write(
+                  TransformWrite().withValue(Value(Value.Value.BytesValue(blockHash)))
+                )
+              )
+              TransformEntry().withKey(k).withTransform(t)
+            }
+
+          transforms ++ deployHashTransforms
+        })
 
     def toOps(t: TransformMap): OpMap[state.Key] = Op.fromTransforms(t)
 

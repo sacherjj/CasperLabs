@@ -1308,6 +1308,43 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
+  it should "not merge blocks which have the same deploy in their history" in effectTest {
+    // Make a network where we don't validate nonces, I just want the merge conflict.
+    for {
+      nodes <- networkEff(
+                validatorKeys.take(2),
+                genesis,
+                transforms
+              )
+
+      deployA          <- ProtoUtil.basicDeploy[Effect](1L)
+      _                <- nodes(0).casperEff.deploy(deployA)
+      createA0         <- nodes(0).casperEff.createBlock
+      Created(blockA0) = createA0
+      _                <- nodes(0).casperEff.addBlock(blockA0) shouldBeF Valid
+
+      _                <- nodes(1).casperEff.deploy(deployA)
+      createA1         <- nodes(1).casperEff.createBlock
+      Created(blockA1) = createA1
+      _                <- nodes(1).casperEff.addBlock(blockA1) shouldBeF Valid
+
+      // Tell nodes(1) about the block from nodes(0) which has the same deploy.
+      _ <- nodes(1).casperEff.addBlock(blockA0) shouldBeF Valid
+
+      // Try to build a new block on top of both, they shouldn't merge.
+      deployB          <- ProtoUtil.basicDeploy[Effect](2L)
+      _                <- nodes(1).casperEff.deploy(deployB)
+      createB1         <- nodes(1).casperEff.createBlock
+      Created(blockB1) = createB1
+
+      // nodes(1) has more weight then nodes(0)
+      _ = blockB1.getHeader.parentHashes should have size 1
+      _ = blockB1.getHeader.parentHashes.head shouldBe blockA1.blockHash
+
+      _ <- nodes.map(_.tearDown()).toList.sequence
+    } yield ()
+  }
+
   it should "remove deploys with lower than expected nonces from the buffer" in effectTest {
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
 
