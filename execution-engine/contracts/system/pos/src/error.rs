@@ -37,6 +37,7 @@ pub enum Error {
     InsufficientPaymentForAmountSpent,
     FailedTransferToRewardsPurse,
     FailedTransferToAccountPurse,
+    SetRefundPurseCalledOutsidePayment,
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -73,6 +74,7 @@ impl Into<u32> for Error {
             Error::InsufficientPaymentForAmountSpent => 1025,
             Error::FailedTransferToRewardsPurse => 1026,
             Error::FailedTransferToAccountPurse => 1027,
+            Error::SetRefundPurseCalledOutsidePayment => 1028,
         }
     }
 }

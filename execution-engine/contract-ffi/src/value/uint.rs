@@ -1,7 +1,6 @@
 use crate::bytesrepr::{self, Error, FromBytes, ToBytes};
 use alloc::vec::Vec;
-use num::traits::{WrappingAdd, WrappingSub};
-use num::{Bounded, Num, One, Unsigned, Zero};
+use num_traits::{Bounded, Num, One, Unsigned, WrappingAdd, WrappingSub, Zero};
 
 // Clippy generates a ton of warnings/errors for the code the macro generates.
 #[allow(clippy::all)]
