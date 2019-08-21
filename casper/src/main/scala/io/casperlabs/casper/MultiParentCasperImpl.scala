@@ -13,6 +13,7 @@ import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
@@ -681,7 +682,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
       chainId: String
   ) {
     //TODO pull out
@@ -919,7 +920,7 @@ object MultiParentCasperImpl {
     def establishMetrics[F[_]: Metrics]: F[Unit] =
       Metrics[F].incrementCounter("gas_spent", 0L)(CasperMetricsSource)
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
+    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
         chainId: String
     ): F[StatelessExecutor[F]] =
       for {

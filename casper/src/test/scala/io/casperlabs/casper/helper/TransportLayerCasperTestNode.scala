@@ -12,6 +12,10 @@ import io.casperlabs.casper
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
+import io.casperlabs.casper.finality.singlesweep.{
+  FinalityDetector,
+  FinalityDetectorBySingleSweepImpl
+}
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
@@ -19,7 +23,6 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
-import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node
@@ -77,7 +80,7 @@ class TransportLayerCasperTestNode[F[_]](
   implicit val transportLayerEff = tle
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
-  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
+  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorBySingleSweepImpl[F]
 
   val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 

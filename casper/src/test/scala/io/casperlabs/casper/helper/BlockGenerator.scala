@@ -4,14 +4,22 @@ import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, IndexedDagStorage}
+import io.casperlabs.blockstorage.{
+  BlockMetadata,
+  BlockStorage,
+  DagRepresentation,
+  IndexedDagStorage
+}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
-import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.execengine.DeploysCheckpoint
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
+import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.finality.CommitteeWithConsensusValue
+import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
+import io.casperlabs.casper.finality.votingmatrix.{FinalityDetectorVotingMatrix, VotingMatrix}
+import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService

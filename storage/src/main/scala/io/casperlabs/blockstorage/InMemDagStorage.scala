@@ -37,8 +37,8 @@ class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStorage](
   ) extends DagRepresentation[F] {
     def children(blockHash: BlockHash): F[Set[BlockHash]] =
       childMap.getOrElse(blockHash, Set.empty).pure[F]
-    def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
-      justificationMap.get(blockHash).pure[F]
+    def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
+      justificationMap.getOrElse(blockHash, Set.empty).pure[F]
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
       dataLookup.get(blockHash).pure[F]
     def contains(blockHash: BlockHash): F[Boolean] =

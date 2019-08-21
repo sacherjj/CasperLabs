@@ -13,7 +13,11 @@ import eu.timepit.refined.auto._
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.finality.singlesweep.{
+  FinalityDetector,
+  FinalityDetectorBySingleSweepImpl
+}
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
@@ -61,7 +65,7 @@ class GossipServiceCasperTestNode[F[_]](
     )(concurrentF, blockStorage, dagStorage, metricEff, casperState) {
   implicit val deployBufferEff: DeployBuffer[F] =
     MockDeployBuffer.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
-  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
+  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorBySingleSweepImpl[F]
 
   //val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 
@@ -78,7 +82,7 @@ class GossipServiceCasperTestNode[F[_]](
   // - the download manager tries to validate a block
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
-      new MultiParentCasperImpl.StatelessExecutor(chainId),
+      new MultiParentCasperImpl.StatelessExecutor[F](chainId),
       MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
       Some(validatorId),
       genesis,

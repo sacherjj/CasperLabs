@@ -6,6 +6,11 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.finality.singlesweep.{
+  FinalityDetector,
+  FinalityDetectorBySingleSweepImpl
+}
+import io.casperlabs.casper.{genesis, _}
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
@@ -26,9 +31,9 @@ class BlocksResponseAPITest
     with BlockGenerator
     with DagStorageFixture {
 
-  val v1     = generateValidator("Validator One")
-  val v2     = generateValidator("Validator Two")
-  val v3     = generateValidator("Validator Three")
+  val v1     = generateValidator("V1")
+  val v2     = generateValidator("V2")
+  val v3     = generateValidator("V3")
   val v1Bond = Bond(v1, 25)
   val v2Bond = Bond(v2, 20)
   val v3Bond = Bond(v3, 15)
@@ -89,7 +94,7 @@ class BlocksResponseAPITest
         logEff                 = new LogStub[Task]
         casperRef              <- MultiParentCasperRef.of[Task]
         _                      <- casperRef.set(casperEffect)
-        finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
+        finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()(Sync[Task], logEff)
         blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
@@ -155,7 +160,7 @@ class BlocksResponseAPITest
         logEff                 = new LogStub[Task]
         casperRef              <- MultiParentCasperRef.of[Task]
         _                      <- casperRef.set(casperEffect)
-        finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
+        finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()(Sync[Task], logEff)
         blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
@@ -235,7 +240,7 @@ class BlocksResponseAPITest
       implicit0(logEff: Log[Task])                     = new LogStub[Task]
       implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
       _                                                <- casperRef.set(casperEffect)
-      implicit0(finalityDetectorEffect: FinalityDetector[Task]) = new FinalityDetectorInstancesImpl[
+      implicit0(finalityDetectorEffect: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
         Task
       ]()
       blocksWithRankBelow1 <- BlockAPI.showBlocks[Task](1)

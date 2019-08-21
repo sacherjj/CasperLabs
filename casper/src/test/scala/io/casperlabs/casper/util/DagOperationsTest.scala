@@ -54,16 +54,24 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
           b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash), v1)
           b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash), v3)
 
-          implicit0(dagTopoOrderingAsc: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingAsc
-          dag                                                    <- dagStorage.getRepresentation
+          dag                <- dagStorage.getRepresentation
+          dagTopoOrderingAsc = DagOperations.blockTopoOrderingAsc
           stream = DagOperations.bfToposortTraverseF[Task](List(BlockMetadata.fromBlock(genesis))) {
             b =>
               dag
                 .children(b.blockHash)
                 .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
-          }
-          result <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 2, 3, 3, 4, 4))
-        } yield result
+          }(Monad[Task], dagTopoOrderingAsc)
+          _                   <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 2, 3, 3, 4, 4))
+          dagTopoOrderingDesc = DagOperations.blockTopoOrderingDesc
+          stream2 = DagOperations
+            .bfToposortTraverseF[Task](
+              List(BlockMetadata.fromBlock(b6), BlockMetadata.fromBlock(b7))
+            ) { b =>
+              b.parents.traverse(l => dag.lookup(l).map(_.get))
+            }(Monad[Task], dagTopoOrderingDesc)
+          _ <- stream2.toList.map(_.map(_.rank) shouldBe List(4, 4, 3, 3, 2, 2, 1, 0))
+        } yield ()
   }
 
   "Greatest common ancestor" should "be computed properly" in withStorage {

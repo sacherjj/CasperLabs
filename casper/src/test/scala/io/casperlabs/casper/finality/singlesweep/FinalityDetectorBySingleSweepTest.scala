@@ -1,12 +1,11 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.finality.singlesweep
 
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.FinalityDetector.Committee
+import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
@@ -15,13 +14,13 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.immutable.HashMap
 
 @silent("is never used")
-class FinalityDetectorTest
+class FinalityDetectorBySingleSweepTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
     with DagStorageFixture {
 
-  behavior of "Finality Detector"
+  behavior of "Finality Detector by Single Sweep"
 
   implicit val logEff = new LogStub[Task]
 
@@ -43,13 +42,13 @@ class FinalityDetectorTest
          *      \
          *       genesis
          */
-        val v1     = generateValidator("Validator One")
-        val v2     = generateValidator("Validator Two")
+        val v1     = generateValidator("V1")
+        val v2     = generateValidator("V2")
         val v1Bond = Bond(v1, 1)
         val v2Bond = Bond(v2, 1)
         val bonds  = Seq(v1Bond, v2Bond)
 
-        implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
+        implicit val finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
 
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
@@ -107,13 +106,9 @@ class FinalityDetectorTest
             case (_, msgs) => msgs.lastOption.map(_.blockHash)
           }.toSet
           _ = lowestLevelZeroMsgs shouldBe Set(b1.blockHash, b3.blockHash)
-          _ <- dag.justificationToBlocks(b2.blockHash) shouldBeF Some(Set(b4.blockHash))
-          _ <- dag.justificationToBlocks(b3.blockHash) shouldBeF Some(
-                Set(b4.blockHash, b5.blockHash)
-              )
-          _ <- dag.justificationToBlocks(b4.blockHash) shouldBeF Some(
-                Set(b6.blockHash, b7.blockHash)
-              )
+          _ <- dag.justificationToBlocks(b2.blockHash) shouldBeF Set(b4.blockHash)
+          _ <- dag.justificationToBlocks(b3.blockHash) shouldBeF Set(b4.blockHash, b5.blockHash)
+          _ <- dag.justificationToBlocks(b4.blockHash) shouldBeF Set(b6.blockHash, b7.blockHash)
           sweepResult <- finalityDetectorEffect.sweep(
                           dag,
                           Set(v1, v2),
@@ -167,15 +162,15 @@ class FinalityDetectorTest
 
   it should "take into account indirect justifications by non-level-zero direct justification" in withStorage {
     implicit blockStorage => implicit dagStorage =>
-      val v0 = generateValidator("Validator 0")
-      val v1 = generateValidator("Validator 1")
+      val v0 = generateValidator("V0")
+      val v1 = generateValidator("V1")
 
-      val v2         = generateValidator("Validator 2")
-      val v3         = generateValidator("Validator 3")
+      val v2         = generateValidator("V2")
+      val v3         = generateValidator("V3")
       val validators = List(v0, v1, v2, v3)
 
       val bonds                           = validators.map(v => Bond(v, 1))
-      implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
+      implicit val finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
 
       /* The DAG looks like (|| means main parent)
        *
@@ -273,15 +268,15 @@ class FinalityDetectorTest
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   it should "detect possible disagreements appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage =>
-      val v1     = generateValidator("Validator One")
-      val v2     = generateValidator("Validator Two")
-      val v3     = generateValidator("Validator Three")
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
       val v1Bond = Bond(v1, 25)
       val v2Bond = Bond(v2, 20)
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-      implicit val finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
+      implicit val finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
