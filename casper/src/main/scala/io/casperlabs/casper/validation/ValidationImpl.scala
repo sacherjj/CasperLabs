@@ -745,23 +745,24 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                                 }
                                 .map(_.toMap)
 
-          blockHashes = deployToBlocksMap.values.flatten.toList
+          blockHashes = deployToBlocksMap.values.flatten.toSet
 
-          maybeDuplicateBlockHash <- blockHashes.findM[F] { blockHash =>
-                                      DagOperations.anyDescendantPathExists(
-                                        dag,
-                                        Set(blockHash),
-                                        Set(block.blockHash)
-                                      )
-                                    }
+          duplicateBlockHashes <- DagOperations.collectWhereDescendantPathExists(
+                                   dag,
+                                   blockHashes,
+                                   Set(block.blockHash)
+                                 )
 
-          _ <- maybeDuplicateBlockHash.fold(().pure[F]) { duplicatBlockHash =>
+          _ <- if (duplicateBlockHashes.isEmpty) ().pure[F]
+              else {
+                val exampleBlockHash = duplicateBlockHashes.head
                 val exampleDeploy = deployToBlocksMap.collectFirst {
-                  case (deploy, blockHashes) if blockHashes.contains(duplicatBlockHash) => deploy
+                  case (deploy, blockHashes) if blockHashes.contains(exampleBlockHash) =>
+                    deploy
                 }.get
                 raise(
                   s"block contains a duplicate ${PrettyPrinter.buildString(exampleDeploy)} already present in ${PrettyPrinter
-                    .buildString(duplicatBlockHash)}"
+                    .buildString(exampleBlockHash)}"
                 )
               }
 
