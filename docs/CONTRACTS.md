@@ -82,7 +82,7 @@ Success!
 
 Every account can associate multiple keys with it and give each a weight. Collective weight of signing keys decides whether an action of certain type can be made. In order to collect weight of different associated keys a deploy has to be signed by corresponding private keys. `deploy` command does it all (creates a deploy, signs it and deploys to the node) but doesn't allow for signing with multiple keys. Therefore we split `deploy` into three separate commands:
 * `make-deploy` - creates a deploy from input parameters
-* `sign-deployfuck` - signs a deploy with given private key
+* `sign-deploy` - signs a deploy with given private key
 * `send-deploy` - sends a deploy to CasperLabs node
 
 Commands read input deploy from both a file (`-i` flag) and STDIN. They can also write to both file and STDOUT.
