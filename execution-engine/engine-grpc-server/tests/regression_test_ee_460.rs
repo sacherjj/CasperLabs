@@ -18,7 +18,6 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 #[ignore]
 #[test]
 fn should_run_ee_460_no_side_effects_on_error_regression() {
-    // This test runs a contract that's after every call extends the same key with more data
     let result = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
@@ -53,9 +52,9 @@ fn should_run_ee_460_no_side_effects_on_error_regression() {
         .commit()
         .finish();
 
-    // Verify that in case of successful transfer where user is sending all their tokens to a new account a new purse is created
-    // with correct balance. Checking if transforms are made on mint uref should be sufficient to prove the precondition check
-    // is working already.
+    // Verify that in case of successful transfer where user is sending all their tokens to a new
+    // account a new purse is created with correct balance. Checking if transforms are made on
+    // mint uref should be sufficient to prove the precondition check is working already.
     let mint_contract_uref = result.builder().get_mint_contract_uref();
 
     let transforms = &result.builder().get_transforms()[0];

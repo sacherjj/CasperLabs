@@ -15,9 +15,6 @@ enum ContractResult {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    // That will fail for sure because genesis account has less tokens,
-    // and the value is 'random' enough to verify correct precondition check
-    // in the engine.
     let amount: U512 = get_arg(0);
 
     let public_key = PublicKey::new([42; 32]);
