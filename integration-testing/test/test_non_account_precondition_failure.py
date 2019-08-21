@@ -10,7 +10,7 @@ def test_non_account_precondition_failure(trillion_payment_node_network):
     # Getting a non-existent account
     non_existent_account = Account(300)
 
-    # Deploy will return hash, but not stay in buffer for proposes.
+    # Client returns deploy hash, but will not stay in buffer for proposes.
     _, deploy_hash = node.p_client.deploy(
         from_address=non_existent_account.public_key_hex,
         public_key=non_existent_account.public_key_path,
