@@ -507,6 +507,7 @@ class ValidationTest
                    _ <- Validation[Task].parents(b3, genesisBlockHash, dag)
                    _ <- Validation[Task].parents(b4, genesisBlockHash, dag)
                    _ <- Validation[Task].parents(b5, genesisBlockHash, dag)
+                   _ <- Validation[Task].parents(b6, genesisBlockHash, dag)
 
                    // Not valid
                    _ <- Validation[Task].parents(b7, genesisBlockHash, dag).attempt
