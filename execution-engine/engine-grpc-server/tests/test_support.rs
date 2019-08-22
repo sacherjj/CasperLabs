@@ -480,6 +480,8 @@ pub struct WasmTestBuilder {
     genesis_transforms: Option<HashMap<contract_ffi::key::Key, Transform>>,
     /// Mint contract uref
     mint_contract_uref: Option<contract_ffi::uref::URef>,
+    /// PoS contract uref
+    pos_contract_uref: Option<contract_ffi::uref::URef>,
 }
 
 impl Default for WasmTestBuilder {
@@ -495,6 +497,7 @@ impl Default for WasmTestBuilder {
             bonded_validators: Vec::new(),
             genesis_account: None,
             mint_contract_uref: None,
+            pos_contract_uref: None,
             genesis_transforms: None,
         }
     }
@@ -523,6 +526,7 @@ impl WasmTestBuilder {
             bonded_validators: result.0.bonded_validators,
             genesis_account: result.0.genesis_account,
             mint_contract_uref: result.0.mint_contract_uref,
+            pos_contract_uref: result.0.pos_contract_uref,
             genesis_transforms: result.0.genesis_transforms,
         }
     }
@@ -539,6 +543,7 @@ impl WasmTestBuilder {
             bonded_validators: Vec::new(),
             genesis_account: None,
             mint_contract_uref: None,
+            pos_contract_uref: None,
             genesis_transforms: None,
         }
     }
@@ -566,8 +571,12 @@ impl WasmTestBuilder {
         let mint_contract_uref = get_mint_contract_uref(&genesis_transforms, &contracts)
             .expect("Unable to get mint contract uref");
 
+        let pos_contract_uref = get_pos_contract_uref(&genesis_transforms, &contracts)
+            .expect("Unable to get pos contract uref");
+
         // Cache mint uref
         self.mint_contract_uref = Some(mint_contract_uref);
+        self.pos_contract_uref = Some(pos_contract_uref);
 
         // Cache the account
         self.genesis_account = Some(
@@ -827,6 +836,11 @@ impl WasmTestBuilder {
     pub fn get_mint_contract_uref(&self) -> contract_ffi::uref::URef {
         self.mint_contract_uref
             .expect("Unable to obtain mint contract uref. Please run genesis first.")
+    }
+
+    pub fn get_pos_contract_uref(&self) -> contract_ffi::uref::URef {
+        self.pos_contract_uref
+            .expect("Unable to obtain pos contract uref. Please run genesis first.")
     }
 
     pub fn get_genesis_transforms(
