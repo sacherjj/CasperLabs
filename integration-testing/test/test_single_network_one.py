@@ -641,6 +641,27 @@ class CLI:
 
         return '--help' in args and _args(args, []) or _args(args)
 
+    def parse_output(self, command, binary_output):
+
+        if command in ('make-deploy', 'sign-deploy'):
+            return binary_output
+
+        output = binary_output.decode("utf-8")
+
+        if command in ('deploy', 'propose', 'send-deploy'):
+            return output.split()[3]
+
+        if command == 'show-blocks':
+            return parse_show_blocks(output)
+
+        if command == 'show-deploys':
+            return parse_show_deploys(output)
+
+        if command in ('show-deploy', 'show-block', 'query-state'):
+            return parse(output)
+
+        return output
+
     def __call__(self, *args, sleep=0):
         command_line = self.expand_args(args)
         logging.info(f"EXECUTING []: {command_line}")
@@ -651,30 +672,14 @@ class CLI:
         cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         binary_output = cp.stdout
         if cp.returncode != 0:
-            output = binary_output.decode("utf-8")
+            output = binary_output
+            try:
+                output = binary_output.decode("utf-8")
+            except UnicodeDecodeError:
+                pass
             raise CLIErrorExit(cp, output)
 
-        if 'make-deploy' in args or 'sign-deploy' in args:
-            return binary_output
-
-        output = binary_output.decode("utf-8")
-
-        if 'deploy' in args or 'propose' in args or 'send-deploy' in args:
-            return output.split()[3]
-
-        if 'show-blocks' in args:
-            return parse_show_blocks(output)
-
-        if 'show-deploys' in args:
-            return parse_show_deploys(output)
-
-        if 'show-deploy' in args or 'show-block' in args:
-            return parse(output)
-
-        if 'query-state' in args:
-            return parse(output)
-
-        return output
+        return self.parse_output(args[0], binary_output)
 
 
 def make_cli(node, cli_cmd):
