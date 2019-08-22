@@ -1,4 +1,4 @@
-from casper_client import ABI
+from casperlabs_client import ABI
 from test.cl_node.casperlabs_accounts import Account
 from test.cl_node.common import (
     PAYMENT_CONTRACT,
