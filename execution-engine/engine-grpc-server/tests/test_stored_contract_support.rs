@@ -105,6 +105,24 @@ impl DeployBuilder {
         self
     }
 
+    pub fn with_stored_session_hash(
+        mut self,
+        hash: Vec<u8>,
+        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    ) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item: StoredContractHash = StoredContractHash::new();
+        item.set_args(args);
+        item.set_hash(hash);
+        let mut session = DeployPayload::new();
+        session.set_stored_contract_hash(item);
+        self.deploy.set_session(session);
+        self
+    }
+
     pub fn with_stored_session_named_key(
         mut self,
         uref_name: &str,

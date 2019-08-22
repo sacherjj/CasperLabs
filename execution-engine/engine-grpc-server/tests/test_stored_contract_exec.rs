@@ -154,7 +154,7 @@ fn should_exec_stored_code_by_hash() {
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
-    // first, store standared payment contract
+    // first, store standard payment contract
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
@@ -278,7 +278,7 @@ fn should_exec_stored_code_by_named_hash() {
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
-    // first, store standared payment contract
+    // first, store standard payment contract
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
@@ -382,7 +382,7 @@ fn should_exec_stored_code_by_named_uref() {
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
-    // first, store standared payment contract
+    // first, store transfer contract
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
@@ -423,7 +423,7 @@ fn should_exec_stored_code_by_named_uref() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = 1;
 
-    // next make another deploy that USES stored payment logic
+    // next make another deploy that USES stored session logic
     let exec_request_stored_session = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
@@ -470,6 +470,126 @@ fn should_exec_stored_code_by_named_uref() {
         modified_balance_bravo < modified_balance_alpha,
         "second modified balance should be less than first modified balance"
     );
+
+    assert_eq!(
+        initial_balance, tally,
+        "no net resources should be gained or lost post-distribution"
+    );
+}
+
+#[ignore]
+#[test]
+fn should_exec_payment_and_session_stored_code() {
+    let genesis_addr = GENESIS_ADDR;
+    let genesis_public_key = PublicKey::new(genesis_addr);
+    let genesis_account_key = Key::Account(genesis_addr);
+    let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
+
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
+
+    // first, store standard payment contract
+    let exec_request = {
+        let deploy = DeployBuilder::new()
+            .with_address(genesis_addr)
+            .with_session_code(
+                &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+                (),
+            )
+            .with_payment_code(
+                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+                U512::from(payment_purse_amount),
+            )
+            .with_authorization_keys(&[genesis_public_key])
+            .with_nonce(1)
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    let mut builder = WasmTestBuilder::new(engine_config);
+    builder.run_genesis(genesis_addr, HashMap::default());
+
+    let test_result = get_test_result(&mut builder, exec_request);
+
+    let response = test_result
+        .builder()
+        .get_exec_response(0)
+        .expect("there should be a response")
+        .clone();
+
+    let motes_alpha = test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
+
+    // next store transfer contract
+    let exec_request_store_transfer = {
+        let deploy = DeployBuilder::new()
+            .with_address(genesis_addr)
+            .with_session_code(
+                &format!("{}_stored.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
+                (),
+            )
+            .with_stored_payment_named_key(
+                STANDARD_PAYMENT_CONTRACT_NAME,
+                U512::from(payment_purse_amount),
+            )
+            .with_authorization_keys(&[genesis_public_key])
+            .with_nonce(2)
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    let test_result = get_test_result(&mut builder, exec_request_store_transfer);
+
+    let response = test_result
+        .builder()
+        .get_exec_response(1)
+        .expect("there should be a response")
+        .clone();
+
+    let motes_bravo = test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
+
+    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let transferred_amount = 1;
+
+    // next make another deploy that USES stored payment logic & stored transfer logic
+    let exec_request_stored_only = {
+        let deploy = DeployBuilder::new()
+            .with_address(genesis_addr)
+            .with_stored_session_named_key(
+                TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
+                (account_1_public_key, U512::from(transferred_amount)),
+            )
+            .with_stored_payment_named_key(
+                STANDARD_PAYMENT_CONTRACT_NAME,
+                U512::from(payment_purse_amount),
+            )
+            .with_authorization_keys(&[genesis_public_key])
+            .with_nonce(3)
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    let test_result = get_test_result(&mut builder, exec_request_stored_only);
+
+    let response = test_result
+        .builder()
+        .get_exec_response(2)
+        .expect("there should be a response")
+        .clone();
+
+    let motes_charlie =
+        test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
+
+    let transforms = &test_result.builder().get_transforms()[2];
+
+    let modified_balance: U512 =
+        get_transformed_balance(&builder, transforms, &genesis_account_key);
+
+    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+
+    let tally = U512::from(motes_alpha + motes_bravo + motes_charlie + transferred_amount)
+        + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
