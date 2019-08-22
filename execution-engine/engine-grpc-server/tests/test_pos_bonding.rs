@@ -350,3 +350,85 @@ fn should_run_successful_bond_and_unbond() {
         1
     );
 }
+
+#[ignore]
+#[test]
+fn should_fail_bonding_with_insufficient_funds() {
+    let genesis_validators = {
+        let mut result = HashMap::new();
+        result.insert(PublicKey::new([42; 32]), U512::from(50_000));
+        result
+    };
+
+    let result = WasmTestBuilder::default()
+        .run_genesis(GENESIS_ADDR, genesis_validators)
+        .exec_with_args(
+            GENESIS_ADDR,
+            "pos_bonding.wasm",
+            DEFAULT_BLOCK_TIME,
+            1,
+            (
+                String::from("seed_new_account"),
+                PublicKey::new(ACCOUNT_1_ADDR),
+                U512::from(100_000),
+            ),
+        )
+        .commit()
+        .exec_with_args(
+            ACCOUNT_1_ADDR,
+            "pos_bonding.wasm",
+            DEFAULT_BLOCK_TIME,
+            1,
+            (String::from("bond-from-main-purse"), U512::from(100_101)),
+        )
+        .commit()
+        .finish();
+
+    let response = result
+        .builder()
+        .get_exec_response(1)
+        .expect("should have a response")
+        .to_owned();
+
+    let error_message = {
+        let execution_result = test_support::get_success_result(&response);
+        test_support::get_error_message(execution_result)
+    };
+    // Error::BondTransferFailed => 7
+    assert_eq!(error_message, "Exit code: 7");
+}
+
+#[ignore]
+#[test]
+fn should_fail_unbonding_validator_without_bonding_first() {
+    let genesis_validators = {
+        let mut result = HashMap::new();
+        result.insert(PublicKey::new([42; 32]), U512::from(50_000));
+        result
+    };
+
+    let result = WasmTestBuilder::default()
+        .run_genesis(GENESIS_ADDR, genesis_validators)
+        .exec_with_args(
+            GENESIS_ADDR,
+            "pos_bonding.wasm",
+            DEFAULT_BLOCK_TIME,
+            1,
+            (String::from("unbond"), Some(U512::from(42))),
+        )
+        .commit()
+        .finish();
+
+    let response = result
+        .builder()
+        .get_exec_response(0)
+        .expect("should have a response")
+        .to_owned();
+
+    let error_message = {
+        let execution_result = test_support::get_success_result(&response);
+        test_support::get_error_message(execution_result)
+    };
+    // Error::NotBonded => 0
+    assert_eq!(error_message, "Exit code: 0");
+}

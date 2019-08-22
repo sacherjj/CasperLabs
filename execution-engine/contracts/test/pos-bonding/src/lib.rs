@@ -58,7 +58,6 @@ pub extern "C" fn call() {
     let pos_pointer = get_pos_contract();
 
     let command: String = get_arg(0);
-
     if command == "bond" {
         // Creates new purse with desired amount based on main purse and sends funds
 
@@ -72,6 +71,10 @@ pub extern "C" fn call() {
         }
 
         bond(&pos_pointer, &amount, p1);
+    } else if command == "bond-from-main-purse" {
+        let amount = get_arg(1);
+
+        bond(&pos_pointer, &amount, main_purse());
     } else if command == "seed_new_account" {
         let account: PublicKey = get_arg(1);
         let amount: U512 = get_arg(2);
