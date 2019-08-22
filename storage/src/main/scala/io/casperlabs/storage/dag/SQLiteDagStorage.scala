@@ -14,18 +14,15 @@ import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.MeteredDagStorage
+import io.casperlabs.storage.util.DoobieCodecs
 
 class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
     xa: Transactor[F]
 ) extends DagStorage[F]
-    with DagRepresentation[F] {
-  import io.casperlabs.models.BlockImplicits._
-
-  implicit val metaByteString: Meta[ByteString] =
-    Meta[Array[Byte]].imap(ByteString.copyFrom)(_.toByteArray)
-
-  implicit val metaBlockSummary: Meta[BlockSummary] =
-    Meta[Array[Byte]].imap(BlockSummary.parseFrom)(_.toByteString.toByteArray)
+    with DagRepresentation[F]
+    with DoobieCodecs {
+  // Do not forget updating Flyway migration scripts at:
+  // resources/db/migrations
 
   private def msg(b: BlockHash): String = Base16.encode(b.toByteArray).take(10)
 

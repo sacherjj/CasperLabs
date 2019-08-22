@@ -13,16 +13,17 @@ import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
-import simulacrum.typeclass
+import io.casperlabs.storage.util.DoobieCodecs
 
 import scala.concurrent.duration._
 
 class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     implicit val xa: Transactor[F],
     metricsSource: Source
-) extends DeployStorage[F] {
+) extends DeployStorage[F]
+    with DoobieCodecs {
   // Do not forget updating Flyway migration scripts at:
-  // block-storage/src/main/resources/db/migrations
+  // resources/db/migrations
 
   // Deploys not yet included in a block
   private val PendingStatusCode = 0
@@ -33,27 +34,6 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
   private val DiscardedStatusCode = 2
 
   private val StatusMessageTtlExpired = "TTL expired"
-
-  private implicit val metaByteString: Meta[ByteString] =
-    Meta[Array[Byte]].imap(ByteString.copyFrom)(_.toByteArray)
-  // Doesn't work as implicit
-  // Compiler: Cannot find or construct a Read instance for type ...
-  private implicit val readDeploy: Read[Deploy] =
-    Read[Array[Byte]].map(Deploy.parseFrom)
-  private implicit val readProcessingResult: Read[(ByteString, ProcessedDeploy)] = {
-    Read[(Array[Byte], Long, Option[String])].map {
-      case (blockHash, cost, maybeError) =>
-        (
-          ByteString.copyFrom(blockHash),
-          ProcessedDeploy(
-            deploy = None,
-            cost = cost,
-            isError = maybeError.nonEmpty,
-            errorMessage = maybeError.getOrElse("")
-          )
-        )
-    }
-  }
 
   override def addAsExecuted(block: Block): F[Unit] = {
     val writeToDeploysTable = Update[(ByteString, ByteString, Long, ByteString)](
