@@ -387,7 +387,6 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                 s"block number $actuallyRank is not the maximum block number of justifications plus 1, i.e. $calculatedRank."
             for {
               _ <- Log[F].warn(ignore(b, logMessage))
-              _ = println(logMessage)
               _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBlockNumber)
             } yield ()
           }
