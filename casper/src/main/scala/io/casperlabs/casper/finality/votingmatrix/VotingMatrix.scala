@@ -9,6 +9,7 @@ import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.models.BlockImplicits._
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 

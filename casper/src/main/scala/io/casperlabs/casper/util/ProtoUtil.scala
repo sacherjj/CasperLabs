@@ -11,6 +11,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -19,7 +20,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.BlockMetadata
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -32,22 +33,22 @@ object ProtoUtil {
   // TODO: Move into DAG and remove corresponding param once that is moved over from simulator
   def isInMainChain[F[_]: Monad](
       dag: DagRepresentation[F],
-      candidateBlockMetadata: BlockMetadata,
+      candidateBlockSummary: BlockSummary,
       targetBlockHash: BlockHash
   ): F[Boolean] =
-    if (candidateBlockMetadata.blockHash == targetBlockHash) {
+    if (candidateBlockSummary.blockHash == targetBlockHash) {
       true.pure[F]
     } else {
       for {
         targetBlockOpt <- dag.lookup(targetBlockHash)
         result <- targetBlockOpt match {
                    case Some(targetBlockMeta) =>
-                     if (targetBlockMeta.rank <= candidateBlockMetadata.rank)
+                     if (targetBlockMeta.rank <= candidateBlockSummary.rank)
                        false.pure[F]
                      else {
                        targetBlockMeta.parents.headOption match {
                          case Some(mainParentHash) =>
-                           isInMainChain(dag, candidateBlockMetadata, mainParentHash)
+                           isInMainChain(dag, candidateBlockSummary, mainParentHash)
                          case None => false.pure[F]
                        }
                      }
@@ -64,8 +65,8 @@ object ProtoUtil {
       targetBlockHash: BlockHash
   ): F[Boolean] =
     for {
-      candidateBlockMetadata <- dag.lookup(candidateBlockHash)
-      result                 <- isInMainChain(dag, candidateBlockMetadata.get, targetBlockHash)
+      candidateBlockSummary <- dag.lookup(candidateBlockHash)
+      result                <- isInMainChain(dag, candidateBlockSummary.get, targetBlockHash)
     } yield result
 
   // calculate which branch of latestFinalizedBlockHash that the newBlockHash vote for
@@ -82,8 +83,8 @@ object ProtoUtil {
 
   def votedBranch[F[_]: Monad](
       dag: DagRepresentation[F],
-      latestFinalizedBlock: BlockMetadata,
-      newBlock: BlockMetadata
+      latestFinalizedBlock: BlockSummary,
+      newBlock: BlockSummary
   ): F[Option[BlockHash]] =
     if (newBlock.rank <= latestFinalizedBlock.rank) {
       none[BlockHash].pure[F]
@@ -160,9 +161,9 @@ object ProtoUtil {
               }
     } yield block
 
-  def calculateRank(justificationMsgs: Seq[BlockMetadata]): Long =
+  def calculateRank(justificationMsgs: Seq[BlockSummary]): Long =
     1L + justificationMsgs.foldLeft(-1L) {
-      case (acc, blockMetadata) => math.max(acc, blockMetadata.rank)
+      case (acc, blockSummary) => math.max(acc, blockSummary.rank)
     }
 
   def creatorJustification(block: Block): Option[Justification] =
@@ -263,8 +264,8 @@ object ProtoUtil {
       blockHash: BlockHash,
       maxCliqueMinSize: Int
   ): F[Long] =
-    dag.lookup(blockHash).map { blockMetadataOpt =>
-      val sortedWeights = blockMetadataOpt.get.weightMap.values.toVector.sorted
+    dag.lookup(blockHash).map { blockSummaryOpt =>
+      val sortedWeights = blockSummaryOpt.get.weightMap.values.toVector.sorted
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
@@ -292,14 +293,14 @@ object ProtoUtil {
       validator: Validator
   ): F[Long] =
     for {
-      blockMetadata  <- dag.lookup(blockHash)
-      blockParentOpt = blockMetadata.get.parents.headOption
+      blockSummary   <- dag.lookup(blockHash)
+      blockParentOpt = blockSummary.get.parents.headOption
       resultOpt <- blockParentOpt.traverse { bh =>
                     dag.lookup(bh).map(_.get.weightMap.getOrElse(validator, 0L))
                   }
       result = resultOpt match {
         case Some(result) => result
-        case None         => blockMetadata.get.weightMap.getOrElse(validator, 0L)
+        case None         => blockSummary.get.weightMap.getOrElse(validator, 0L)
       }
     } yield result
 
@@ -310,7 +311,7 @@ object ProtoUtil {
     for {
       maybeMainParent <- mainParent[F](header)
       weightFromValidator = maybeMainParent
-        .map(p => weightMap(p.getHeader).getOrElse(validator, 0L))
+        .map(_.weightMap.getOrElse(validator, 0L))
         .getOrElse(weightMap(header).getOrElse(validator, 0L)) //no parents means genesis -- use itself
     } yield weightFromValidator
 
@@ -378,14 +379,14 @@ object ProtoUtil {
     b.getHeader.rank
 
   def toJustification(
-      latestMessages: collection.Map[Validator, BlockMetadata]
+      latestMessages: collection.Map[Validator, BlockSummary]
   ): Seq[Justification] =
     latestMessages.toSeq.map {
-      case (validator, blockMetadata) =>
+      case (validator, blockSummary) =>
         Block
           .Justification()
           .withValidatorPublicKey(validator)
-          .withLatestBlockHash(blockMetadata.blockHash)
+          .withLatestBlockHash(blockSummary.blockHash)
     }
 
   def toLatestMessageHashes(
@@ -398,12 +399,12 @@ object ProtoUtil {
 
   def toLatestMessage[F[_]: MonadThrowable: BlockStorage](
       justifications: Seq[Justification]
-  ): F[immutable.Map[Validator, BlockMetadata]] =
-    justifications.toList.foldM(Map.empty[Validator, BlockMetadata]) {
+  ): F[immutable.Map[Validator, BlockSummary]] =
+    justifications.toList.foldM(Map.empty[Validator, BlockSummary]) {
       case (acc, Justification(validator, hash)) =>
         for {
           block <- ProtoUtil.unsafeGetBlock[F](hash)
-        } yield acc.updated(validator, BlockMetadata.fromBlock(block))
+        } yield acc.updated(validator, BlockSummary.fromBlock(block))
     }
 
   def protoHash[A <: scalapb.GeneratedMessage](protoSeq: A*): ByteString =

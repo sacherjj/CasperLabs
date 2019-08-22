@@ -13,6 +13,7 @@ import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.InvalidArgument
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
@@ -100,7 +101,7 @@ object GrpcCasperService {
         ): Task[BatchGetBlockStateResponse] = TaskLike[F].toTask {
           for {
             info      <- BlockAPI.getBlockInfo[F](request.blockHashBase16)
-            stateHash = info.getSummary.getHeader.getState.postStateHash
+            stateHash = info.getSummary.state.postStateHash
             values    <- request.queries.toList.traverse(getState(stateHash, _))
           } yield BatchGetBlockStateResponse(values)
         }

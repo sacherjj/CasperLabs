@@ -9,6 +9,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.protocol.{
@@ -412,9 +413,7 @@ object BlockAPI {
     for {
       dag            <- MultiParentCasper[F].dag
       faultTolerance <- FinalityDetector[F].normalizedFaultTolerance(dag, summary.blockHash)
-      initialFault <- MultiParentCasper[F].normalizedInitialFault(
-                       ProtoUtil.weightMap(summary.getHeader)
-                     )
+      initialFault   <- MultiParentCasper[F].normalizedInitialFault(summary.weightMap)
       maybeStats = maybeBlock.map { block =>
         BlockStatus
           .Stats()

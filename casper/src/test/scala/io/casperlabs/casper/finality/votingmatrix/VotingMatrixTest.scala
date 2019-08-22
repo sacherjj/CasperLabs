@@ -5,7 +5,8 @@ import cats.mtl.MonadState
 import com.github.ghik.silencer.silent
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.BlockMetadata
+import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.IndexedDagStorage
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
@@ -257,7 +258,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
       votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlockHash, b.blockHash)
       _ <- updateVoterPerspective(
             dag,
-            BlockMetadata.fromBlock(b),
+            BlockSummary.fromBlock(b),
             votedBranch.get
           )
     } yield b

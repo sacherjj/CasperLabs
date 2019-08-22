@@ -4,6 +4,7 @@ import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
@@ -200,7 +201,7 @@ trait ArbitraryConsensus {
   // It's backwards but then the DAG of summaries doesn't need to spend time generating bodies.
   private def genBlockFromSummary(summary: BlockSummary)(implicit c: ConsensusConfig): Gen[Block] =
     for {
-      deploys <- Gen.listOfN(summary.getHeader.deployCount, arbitrary[Block.ProcessedDeploy])
+      deploys <- Gen.listOfN(summary.deployCount, arbitrary[Block.ProcessedDeploy])
     } yield {
       Block()
         .withBlockHash(summary.blockHash)
@@ -227,10 +228,10 @@ trait ArbitraryConsensus {
             .withJustifications(justifications.toSeq.map { j =>
               Block.Justification(
                 latestBlockHash = j.blockHash,
-                validatorPublicKey = j.getHeader.validatorPublicKey
+                validatorPublicKey = j.validatorPublicKey
               )
             })
-            .withRank(parents.map(_.getHeader.rank).max + 1)
+            .withRank(parents.map(_.rank).max + 1)
           block.withHeader(header)
         }
 
@@ -242,7 +243,7 @@ trait ArbitraryConsensus {
 
       // Continue until no children were generated or we reach maximum height.
       genChildren.flatMap { children =>
-        val parentHashes = children.flatMap(_.getHeader.parentHashes).toSet
+        val parentHashes = children.flatMap(_.parentHashes).toSet
         val stillTips    = tips.filterNot(tip => parentHashes(tip.blockHash))
         val nextTips     = stillTips ++ children
         val nextAcc      = acc ++ children
@@ -289,7 +290,7 @@ trait ArbitraryConsensus {
           .withJustifications(parents.map { j =>
             Block.Justification(
               latestBlockHash = j.blockHash,
-              validatorPublicKey = j.getHeader.validatorPublicKey
+              validatorPublicKey = j.validatorPublicKey
             )
           })
       )

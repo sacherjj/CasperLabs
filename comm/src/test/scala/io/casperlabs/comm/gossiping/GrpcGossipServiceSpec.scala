@@ -6,6 +6,7 @@ import cats.Id
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated, Unavailable}
 import io.casperlabs.comm.{ServiceError, TestRuntime}
@@ -427,8 +428,8 @@ class GrpcGossipServiceSpec
     implicit val consensusConfig                = ConsensusConfig()
 
     def elders(summary: BlockSummary): Seq[ByteString] =
-      summary.getHeader.parentHashes ++
-        summary.getHeader.justifications.map(_.latestBlockHash)
+      summary.parentHashes ++
+        summary.justifications.map(_.latestBlockHash)
 
     /** Collect the ancestors of a hash and return their minimum distance to the target. */
     def collectAncestors(
@@ -753,7 +754,7 @@ class GrpcGossipServiceSpec
           // Tips are the ones without children.
           val tips = dag.filterNot { parent =>
             dag.exists { child =>
-              child.getHeader.parentHashes.contains(parent.blockHash)
+              child.parentHashes.contains(parent.blockHash)
             }
           }
           val consensus = new GossipServiceServer.Consensus[Task] {

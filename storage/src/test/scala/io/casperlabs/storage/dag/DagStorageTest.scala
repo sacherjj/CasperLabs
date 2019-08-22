@@ -7,7 +7,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.ExecutionContexts
 import doobie.util.transactor.Transactor
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
@@ -19,7 +20,7 @@ import io.casperlabs.storage.block.{BlockStorage, FileLMDBIndexBlockStorage}
 import io.casperlabs.storage.blockImplicits._
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.util.byteOps._
-import io.casperlabs.storage.{BlockMetadata, BlockMsgWithTransform, Context}
+import io.casperlabs.storage.{BlockMsgWithTransform, Context}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.flywaydb.core.Flyway
@@ -51,14 +52,14 @@ trait DagStorageTest
           blockElementLookups <- blockElements.traverse {
                                   case BlockMsgWithTransform(Some(b), _) =>
                                     for {
-                                      blockMetadata <- dag.lookup(b.blockHash)
+                                      blockSummary <- dag.lookup(b.blockHash)
                                       latestMessageHash <- dag.latestMessageHash(
                                                             b.getHeader.validatorPublicKey
                                                           )
                                       latestMessage <- dag.latestMessage(
                                                         b.getHeader.validatorPublicKey
                                                       )
-                                    } yield (blockMetadata, latestMessageHash, latestMessage)
+                                    } yield (blockSummary, latestMessageHash, latestMessage)
                                   case _ => ???
                                 }
           latestMessageHashes <- dag.latestMessageHashes
@@ -66,12 +67,12 @@ trait DagStorageTest
           _                   <- dagStorage.clear()
           _ = blockElementLookups.zip(blockElements).foreach {
             case (
-                (blockMetadata, latestMessageHash, latestMessage),
+                (blockSummary, latestMessageHash, latestMessage),
                 BlockMsgWithTransform(Some(b), _)
                 ) =>
-              blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
+              blockSummary shouldBe Some(BlockSummary.fromBlock(b))
               latestMessageHash shouldBe Some(b.blockHash)
-              latestMessage shouldBe Some(BlockMetadata.fromBlock(b))
+              latestMessage shouldBe Some(BlockSummary.fromBlock(b))
           }
           _      = latestMessageHashes.size shouldBe blockElements.size
           result = latestMessages.size shouldBe blockElements.size
@@ -121,11 +122,11 @@ class FileDagStorageTest extends DagStorageTest {
   private def defaultLatestMessagesLog(dagStorageDataDir: Path): Path =
     dagStorageDataDir.resolve("latest-messages-log")
 
-  private def defaultBlockMetadataLog(dagStorageDataDir: Path): Path =
-    dagStorageDataDir.resolve("block-metadata-log")
+  private def defaultBlockSummaryLog(dagStorageDataDir: Path): Path =
+    dagStorageDataDir.resolve("block-summary-log")
 
-  private def defaultBlockMetadataCrc(dagStorageDataDir: Path): Path =
-    dagStorageDataDir.resolve("block-metadata-crc")
+  private def defaultBlockSummaryCrc(dagStorageDataDir: Path): Path =
+    dagStorageDataDir.resolve("block-summary-crc")
 
   private def defaultCheckpointsDir(dagStorageDataDir: Path): Path =
     dagStorageDataDir.resolve("checkpoints")
@@ -155,16 +156,16 @@ class FileDagStorageTest extends DagStorageTest {
     (
         List[
           (
-              Option[BlockMetadata],
+              Option[BlockSummary],
               Option[BlockHash],
-              Option[BlockMetadata],
+              Option[BlockSummary],
               Set[BlockHash],
               Set[BlockHash],
               Boolean
           )
         ],
         Map[Validator, BlockHash],
-        Map[Validator, BlockMetadata],
+        Map[Validator, BlockSummary],
         Vector[Vector[BlockHash]],
         Vector[Vector[BlockHash]]
     )
@@ -180,14 +181,14 @@ class FileDagStorageTest extends DagStorageTest {
       list <- blockElements.traverse {
                case BlockMsgWithTransform(Some(b), _) =>
                  for {
-                   blockMetadata                    <- dag.lookup(b.blockHash)
+                   blockSummary                     <- dag.lookup(b.blockHash)
                    latestMessageHash                <- dag.latestMessageHash(b.getHeader.validatorPublicKey)
                    latestMessage                    <- dag.latestMessage(b.getHeader.validatorPublicKey)
                    children                         <- dag.children(b.blockHash)
                    blocksWithSpecifiedJustification <- dag.justificationToBlocks(b.blockHash)
                    contains                         <- dag.contains(b.blockHash)
                  } yield (
-                   blockMetadata,
+                   blockSummary,
                    latestMessageHash,
                    latestMessage,
                    children,
@@ -209,18 +210,18 @@ class FileDagStorageTest extends DagStorageTest {
       topoSortTailLength: Int = 5
   ): Assertion = {
     val (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) = lookupResult
-    val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockMetadata]) {
+    val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockSummary]) {
       case (lm, b) =>
         // Ignore empty sender for genesis block
         if (b.getHeader.validatorPublicKey != ByteString.EMPTY)
-          lm.updated(b.getHeader.validatorPublicKey, BlockMetadata.fromBlock(b))
+          lm.updated(b.getHeader.validatorPublicKey, BlockSummary.fromBlock(b))
         else
           lm
     }
     list.zip(blockElements).foreach {
       case (
           (
-            blockMetadata,
+            blockSummary,
             latestMessageHash,
             latestMessage,
             children,
@@ -229,7 +230,7 @@ class FileDagStorageTest extends DagStorageTest {
           ),
           b
           ) =>
-        blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
+        blockSummary shouldBe Some(BlockSummary.fromBlock(b))
         latestMessageHash shouldBe realLatestMessages
           .get(b.getHeader.validatorPublicKey)
           .map(_.blockHash)
@@ -355,11 +356,11 @@ class FileDagStorageTest extends DagStorageTest {
             firstStorage      <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
             _                 <- blockElements.traverse_(b => firstStorage.insert(b.getBlockMessage))
             _                 <- firstStorage.close()
-            garbageByteString = BlockMetadata.fromBlock(garbageBlock.getBlockMessage).toByteString
+            garbageByteString = BlockSummary.fromBlock(garbageBlock.getBlockMessage).toByteString
             garbageBytes      = garbageByteString.size.toByteString.concat(garbageByteString).toByteArray
             _ <- Sync[Task].delay {
                   Files.write(
-                    defaultBlockMetadataLog(dagStorageDataDir),
+                    defaultBlockSummaryLog(dagStorageDataDir),
                     garbageBytes,
                     StandardOpenOption.APPEND
                   )
@@ -431,10 +432,10 @@ class FileDagStorageTest extends DagStorageTest {
           _ <- firstStorage.close()
           _ <- Sync[Task].delay {
                 Files.move(
-                  defaultBlockMetadataLog(dagStorageDataDir),
+                  defaultBlockSummaryLog(dagStorageDataDir),
                   defaultCheckpointsDir(dagStorageDataDir).resolve("0-1")
                 )
-                Files.delete(defaultBlockMetadataCrc(dagStorageDataDir))
+                Files.delete(defaultBlockSummaryCrc(dagStorageDataDir))
               }
           secondStorage <- createAtDefaultLocation(dagStorageDataDir)(blockStorage)
           result        <- lookupElements(blockElements, secondStorage)

@@ -5,6 +5,7 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.models.BlockImplicits._
 
 final class IndexedDagStorage[F[_]: Monad](
     lock: Semaphore[F],

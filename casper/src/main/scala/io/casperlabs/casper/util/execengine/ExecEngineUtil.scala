@@ -15,8 +15,9 @@ import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.casper.consensus.state.{Key, Value}
-import io.casperlabs.storage.BlockMetadata
-import io.casperlabs.storage.BlockMetadata.ordering
+import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.shared.Sorting.blockSummaryOrdering
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -362,10 +363,10 @@ object ExecEngineUtil {
       dag: DagRepresentation[F]
   ): F[MergeResult[TransformMap, Block]] = {
 
-    def parents(b: BlockMetadata): F[List[BlockMetadata]] =
-      b.parents.traverse(b => dag.lookup(b).map(_.get))
+    def parents(b: BlockSummary): F[List[BlockSummary]] =
+      b.parents.toList.traverse(b => dag.lookup(b).map(_.get))
 
-    def effect(blockMeta: BlockMetadata): F[Option[TransformMap]] =
+    def effect(blockMeta: BlockSummary): F[Option[TransformMap]] =
       BlockStorage[F]
         .get(blockMeta.blockHash)
         .map(_.map { blockWithTransforms =>
@@ -390,10 +391,10 @@ object ExecEngineUtil {
 
     def toOps(t: TransformMap): OpMap[state.Key] = Op.fromTransforms(t)
 
-    val candidateParents = candidateParentBlocks.map(BlockMetadata.fromBlock).toVector
+    val candidateParents = candidateParentBlocks.map(BlockSummary.fromBlock).toVector
 
     for {
-      merged <- abstractMerge[F, TransformMap, BlockMetadata, state.Key](
+      merged <- abstractMerge[F, TransformMap, BlockSummary, state.Key](
                  candidateParents,
                  parents,
                  effect,

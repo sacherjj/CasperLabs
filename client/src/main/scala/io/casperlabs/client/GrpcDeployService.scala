@@ -9,11 +9,10 @@ import java.util.concurrent.TimeUnit
 import java.security.KeyStore
 
 import javax.net.ssl._
-import com.google.protobuf.ByteString
-import com.google.protobuf.empty.Empty
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.HostnameTrustManager
 import io.casperlabs.casper.consensus
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.state.Value
 import io.casperlabs.graphz
@@ -186,7 +185,7 @@ class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with C
       .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfo.View.BASIC))
       .map { bi =>
         s"""
-         |------------- block @ ${bi.getSummary.getHeader.rank} ---------------
+         |------------- block @ ${bi.getSummary.rank} ---------------
          |${Printer.printToUnicodeString(bi)}
          |-----------------------------------------------------
          |""".stripMargin

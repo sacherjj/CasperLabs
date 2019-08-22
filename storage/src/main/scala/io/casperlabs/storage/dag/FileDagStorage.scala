@@ -9,7 +9,8 @@ import cats.implicits._
 import cats.mtl.MonadState
 import cats.{Apply, Monad, MonadError}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
@@ -35,7 +36,7 @@ private final case class FileDagStorageState[F[_]: Sync](
     latestMessages: Map[Validator, BlockHash],
     childMap: Map[BlockHash, Set[BlockHash]],
     justificationMap: Map[BlockHash, Set[BlockHash]],
-    dataLookup: Map[BlockHash, BlockMetadata],
+    dataLookup: Map[BlockHash, BlockSummary],
     // Top layers of the DAG, rank by rank.
     topoSort: Vector[Vector[BlockHash]],
     // The rank of the blocks in `topoSort.head`. Everything before it is in checkpoints.
@@ -44,8 +45,8 @@ private final case class FileDagStorageState[F[_]: Sync](
     latestMessagesLogOutputStream: FileOutputStreamIO[F],
     latestMessagesLogSize: Int,
     latestMessagesCrc: Crc32[F],
-    blockMetadataLogOutputStream: FileOutputStreamIO[F],
-    blockMetadataCrc: Crc32[F]
+    blockSummaryLogOutputStream: FileOutputStreamIO[F],
+    blockSummaryCrc: Crc32[F]
 )
 
 class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private (
@@ -53,8 +54,8 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
     latestMessagesDataFilePath: Path,
     latestMessagesCrcFilePath: Path,
     latestMessagesLogMaxSizeFactor: Int,
-    blockMetadataLogPath: Path,
-    blockMetadataCrcPath: Path,
+    blockSummaryLogPath: Path,
+    blockSummaryCrcPath: Path,
     state: MonadState[F, FileDagStorageState[F]]
 ) extends DagStorage[F] {
   import FileDagStorage._
@@ -65,7 +66,7 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
       latestMessagesMap: Map[Validator, BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
       justificationMap: Map[BlockHash, Set[BlockHash]],
-      dataLookup: Map[BlockHash, BlockMetadata],
+      dataLookup: Map[BlockHash, BlockSummary],
       topoSortVector: Vector[Vector[BlockHash]],
       sortOffset: Long
   ) extends DagRepresentation[F] {
@@ -123,12 +124,12 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
           } yield result
       }
 
-    def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
+    def lookup(blockHash: BlockHash): F[Option[BlockSummary]] =
       dataLookup
         .get(blockHash)
         .fold(
-          BlockStorage[F].getBlockMessage(blockHash).map(_.map(BlockMetadata.fromBlock))
-        )(blockMetadata => Option(blockMetadata).pure[F])
+          BlockStorage[F].getBlockMessage(blockHash).map(_.map(BlockSummary.fromBlock))
+        )(blockSummary => Option(blockSummary).pure[F])
 
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.get(blockHash).fold(BlockStorage[F].contains(blockHash))(_ => true.pure[F])
@@ -180,13 +181,13 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
 
-    def latestMessage(validator: Validator): F[Option[BlockMetadata]] =
+    def latestMessage(validator: Validator): F[Option[BlockSummary]] =
       latestMessagesMap.get(validator).flatTraverse(lookup)
 
     def latestMessageHashes: F[Map[Validator, BlockHash]] =
       latestMessagesMap.pure[F]
 
-    def latestMessages: F[Map[Validator, BlockMetadata]] =
+    def latestMessages: F[Map[Validator, BlockSummary]] =
       latestMessagesMap.toList
         .traverse {
           case (validator, hash) => lookup(hash).map(validator -> _.get)
@@ -199,11 +200,11 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
       RandomAccessIO.open[F](checkpoint.path, RandomAccessIO.Read)
     )(_.close)
     for {
-      blockMetadataList            <- checkpointDataInputResource.use(readDataLookupData[F])
-      dataLookup                   = blockMetadataList.toMap
-      childAndJustificationMap     = extractChildAndJustificationMap(blockMetadataList)
+      blockSummaryList             <- checkpointDataInputResource.use(readDataLookupData[F])
+      dataLookup                   = blockSummaryList.toMap
+      childAndJustificationMap     = extractChildAndJustificationMap(blockSummaryList)
       (childMap, justificationMap) = childAndJustificationMap
-      topoSort                     <- extractTopoSort[F](blockMetadataList)
+      topoSort                     <- extractTopoSort[F](blockSummaryList)
     } yield CheckpointedDagInfo(childMap, justificationMap, dataLookup, topoSort, checkpoint.start)
   }
 
@@ -303,12 +304,12 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
                }
     } yield result
 
-  private def updateDataLookupFile(blockMetadata: BlockMetadata): F[Unit] =
+  private def updateDataLookupFile(blockSummary: BlockSummary): F[Unit] =
     for {
-      dataLookupCrc          <- (state >> 'blockMetadataCrc).get
-      blockBytes             = blockMetadata.toByteString
+      dataLookupCrc          <- (state >> 'blockSummaryCrc).get
+      blockBytes             = blockSummary.toByteString
       toAppend               = blockBytes.size.toByteString.concat(blockBytes).toByteArray
-      dataLookupOutputStream <- (state >> 'blockMetadataLogOutputStream).get
+      dataLookupOutputStream <- (state >> 'blockSummaryLogOutputStream).get
       _                      <- dataLookupOutputStream.write(toAppend)
       _                      <- dataLookupOutputStream.flush
       _                      <- dataLookupCrc.update(toAppend)
@@ -318,9 +319,9 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
   private def updateDataLookupCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createSameDirectoryTemporaryFile(blockMetadataCrcPath)
+      tmpCrc      <- createSameDirectoryTemporaryFile(blockSummaryCrcPath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
-      _           <- replaceFile(tmpCrc, blockMetadataCrcPath)
+      _           <- replaceFile(tmpCrc, blockSummaryCrcPath)
     } yield ()
 
   private def representation: F[DagRepresentation[F]] =
@@ -348,15 +349,15 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
 
   private def insertBlock(block: Block) =
     for {
-      _             <- squashLatestMessagesDataFileIfNeeded()
-      blockMetadata = BlockMetadata.fromBlock(block)
+      _            <- squashLatestMessagesDataFileIfNeeded()
+      blockSummary = BlockSummary.fromBlock(block)
       _ <- assertCond[F](
             "Cannot insert block: blockHash.size != 32",
             block.blockHash.size == 32
           )
-      _ <- (state >> 'dataLookup).modify(_.updated(block.blockHash, blockMetadata))
+      _ <- (state >> 'dataLookup).modify(_.updated(block.blockHash, blockSummary))
       _ <- (state >> 'childMap).modify(
-            block.getHeader.parentHashes
+            block.parents
               .foldLeft(_) {
                 case (acc, p) =>
                   val currChildren = acc.getOrElse(p, Set.empty[BlockHash])
@@ -411,7 +412,7 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
             toUpdateValidators.toList,
             block.blockHash
           )
-      _ <- updateDataLookupFile(blockMetadata)
+      _ <- updateDataLookupFile(blockSummary)
     } yield ()
 
   def checkpoint(): F[Unit] =
@@ -422,16 +423,16 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
       for {
         latestMessagesLogOutputStream <- (state >> 'latestMessagesLogOutputStream).get
         _                             <- latestMessagesLogOutputStream.close
-        blockMetadataLogOutputStream  <- (state >> 'blockMetadataLogOutputStream).get
-        _                             <- blockMetadataLogOutputStream.close
+        blockSummaryLogOutputStream   <- (state >> 'blockSummaryLogOutputStream).get
+        _                             <- blockSummaryLogOutputStream.close
         _                             <- writeToFile(latestMessagesDataFilePath, Array.emptyByteArray)
-        _                             <- writeToFile(blockMetadataLogPath, Array.emptyByteArray)
+        _                             <- writeToFile(blockSummaryLogPath, Array.emptyByteArray)
         newLatestMessagesCrc          <- Crc32.emptyF[F]()
         newLatestMessagesCrcBytes     <- newLatestMessagesCrc.bytes
         _                             <- writeToFile(latestMessagesCrcFilePath, newLatestMessagesCrcBytes)
-        newBlockMetadataCrc           <- Crc32.emptyF[F]()
-        newBlockMetadataCrcBytes      <- newBlockMetadataCrc.bytes
-        _                             <- writeToFile(blockMetadataCrcPath, newBlockMetadataCrcBytes)
+        newBlockSummaryCrc            <- Crc32.emptyF[F]()
+        newBlockSummaryCrcBytes       <- newBlockSummaryCrc.bytes
+        _                             <- writeToFile(blockSummaryCrcPath, newBlockSummaryCrcBytes)
         _                             <- (state >> 'dataLookup).set(Map.empty)
         _                             <- (state >> 'childMap).set(Map.empty)
         _                             <- (state >> 'justificationMap).set(Map.empty)
@@ -439,12 +440,12 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
         _                             <- (state >> 'latestMessages).set(Map.empty)
         newLatestMessagesLogOutputStream <- FileOutputStreamIO
                                              .open[F](latestMessagesDataFilePath, true)
-        _                               <- (state >> 'latestMessagesLogOutputStream).set(newLatestMessagesLogOutputStream)
-        newBlockMetadataLogOutputStream <- FileOutputStreamIO.open[F](blockMetadataLogPath, true)
-        _                               <- (state >> 'blockMetadataLogOutputStream).set(newBlockMetadataLogOutputStream)
-        _                               <- (state >> 'latestMessagesLogSize).set(0)
-        _                               <- (state >> 'latestMessagesCrc).set(newLatestMessagesCrc)
-        _                               <- (state >> 'blockMetadataCrc).set(newBlockMetadataCrc)
+        _                              <- (state >> 'latestMessagesLogOutputStream).set(newLatestMessagesLogOutputStream)
+        newBlockSummaryLogOutputStream <- FileOutputStreamIO.open[F](blockSummaryLogPath, true)
+        _                              <- (state >> 'blockSummaryLogOutputStream).set(newBlockSummaryLogOutputStream)
+        _                              <- (state >> 'latestMessagesLogSize).set(0)
+        _                              <- (state >> 'latestMessagesCrc).set(newLatestMessagesCrc)
+        _                              <- (state >> 'blockSummaryCrc).set(newBlockSummaryCrc)
       } yield ()
     )
 
@@ -453,8 +454,8 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
       for {
         latestMessagesLogOutputStream <- (state >> 'latestMessagesLogOutputStream).get
         _                             <- latestMessagesLogOutputStream.close
-        blockMetadataLogOutputStream  <- (state >> 'blockMetadataLogOutputStream).get
-        _                             <- blockMetadataLogOutputStream.close
+        blockSummaryLogOutputStream   <- (state >> 'blockSummaryLogOutputStream).get
+        _                             <- blockSummaryLogOutputStream.close
       } yield ()
     )
 }
@@ -473,8 +474,8 @@ object FileDagStorage {
   ) extends SubConfig {
     val latestMessagesLogPath: Path = dir.resolve("latest-messages-log")
     val latestMessagesCrcPath: Path = dir.resolve("latest-messages-crc")
-    val blockMetadataLogPath: Path  = dir.resolve("block-metadata-log")
-    val blockMetadataCrcPath: Path  = dir.resolve("block-metadata-crc")
+    val blockSummaryLogPath: Path   = dir.resolve("block-summary-log")
+    val blockSummaryCrcPath: Path   = dir.resolve("block-summary-crc")
     val checkpointsDirPath: Path    = dir.resolve("checkpoints")
   }
 
@@ -484,7 +485,7 @@ object FileDagStorage {
   private[storage] final case class CheckpointedDagInfo(
       childMap: Map[BlockHash, Set[BlockHash]],
       justificationMap: Map[BlockHash, Set[BlockHash]],
-      dataLookup: Map[BlockHash, BlockMetadata],
+      dataLookup: Map[BlockHash, BlockSummary],
       topoSort: Vector[Vector[BlockHash]],
       sortOffset: Long
   )
@@ -585,13 +586,13 @@ object FileDagStorage {
   }
 
   private def calculateDataLookupCrc[F[_]: Monad](
-      dataLookupList: List[(BlockHash, BlockMetadata)]
+      dataLookupList: List[(BlockHash, BlockSummary)]
   ): Crc32[F] =
     Crc32[F](
       dataLookupList
         .foldLeft(ByteString.EMPTY) {
-          case (byteString, (_, blockMetadata)) =>
-            val blockBytes = blockMetadata.toByteString
+          case (byteString, (_, blockSummary)) =>
+            val blockBytes = blockSummary.toByteString
             byteString.concat(blockBytes.size().toByteString.concat(blockBytes))
         }
         .toByteArray
@@ -599,19 +600,19 @@ object FileDagStorage {
 
   private def readDataLookupData[F[_]: Sync](
       randomAccessIO: RandomAccessIO[F]
-  ): F[List[(BlockHash, BlockMetadata)]] = {
+  ): F[List[(BlockHash, BlockSummary)]] = {
     def readRec(
-        result: List[(BlockHash, BlockMetadata)]
-    ): F[List[(BlockHash, BlockMetadata)]] =
+        result: List[(BlockHash, BlockSummary)]
+    ): F[List[(BlockHash, BlockSummary)]] =
       for {
         blockSizeOpt <- randomAccessIO.readInt
         result <- blockSizeOpt match {
                    case Some(blockSize) =>
                      val blockMetaBytes = Array.ofDim[Byte](blockSize)
                      for {
-                       _             <- randomAccessIO.readFully(blockMetaBytes)
-                       blockMetadata <- Sync[F].delay { BlockMetadata.fromBytes(blockMetaBytes) }
-                       result        <- readRec((blockMetadata.blockHash -> blockMetadata) :: result)
+                       _            <- randomAccessIO.readFully(blockMetaBytes)
+                       blockSummary <- Sync[F].delay { BlockSummary.parseFrom(blockMetaBytes) }
+                       result       <- readRec((blockSummary.blockHash -> blockSummary) :: result)
                      } yield result
                    case None =>
                      result.reverse.pure[F]
@@ -623,8 +624,8 @@ object FileDagStorage {
   private def validateDataLookupData[F[_]: Monad](
       dataLookupRandomAccessFile: RandomAccessIO[F],
       readDataLookupCrc: Long,
-      dataLookupList: List[(BlockHash, BlockMetadata)]
-  ): F[(List[(BlockHash, BlockMetadata)], Crc32[F])] = {
+      dataLookupList: List[(BlockHash, BlockSummary)]
+  ): F[(List[(BlockHash, BlockSummary)], Crc32[F])] = {
     val fullCalculatedCrc = calculateDataLookupCrc[F](dataLookupList)
     fullCalculatedCrc.value.flatMap { fullCalculatedCrcValue =>
       if (fullCalculatedCrcValue == readDataLookupCrc) {
@@ -633,8 +634,8 @@ object FileDagStorage {
         val withoutLastCalculatedCrc = calculateDataLookupCrc[F](dataLookupList.init)
         withoutLastCalculatedCrc.value.flatMap { withoutLastCalculatedCrcValue =>
           if (withoutLastCalculatedCrcValue == readDataLookupCrc) {
-            val (_, blockMetadata)            = dataLookupList.last
-            val byteString                    = blockMetadata.toByteString
+            val (_, blockSummary)             = dataLookupList.last
+            val byteString                    = blockSummary.toByteString
             val lastDataLookupEntrySize: Long = 4L + byteString.size()
             for {
               length <- dataLookupRandomAccessFile.length
@@ -643,19 +644,19 @@ object FileDagStorage {
           } else {
             // TODO: Restore data lookup from block storage
             dataLookupRandomAccessFile.setLength(0)
-            (List.empty[(BlockHash, BlockMetadata)], Crc32.empty[F]()).pure[F]
+            (List.empty[(BlockHash, BlockSummary)], Crc32.empty[F]()).pure[F]
           }
         }
       } else {
         // TODO: Restore data lookup from block storage
         dataLookupRandomAccessFile.setLength(0)
-        (List.empty[(BlockHash, BlockMetadata)], Crc32.empty[F]()).pure[F]
+        (List.empty[(BlockHash, BlockSummary)], Crc32.empty[F]()).pure[F]
       }
     }
   }
 
   private def extractChildAndJustificationMap(
-      dataLookup: List[(BlockHash, BlockMetadata)]
+      dataLookup: List[(BlockHash, BlockSummary)]
   ): ChildrenMapAndJustificationMap =
     dataLookup.foldLeft(
       dataLookup
@@ -666,30 +667,31 @@ object FileDagStorage {
         .unzip
         .bimap(_.toMap, _.toMap)
     ) {
-      case ((childMap, justificationMap), (_, blockMetadata)) =>
-        val updatedChildMap = blockMetadata.parents.foldLeft(childMap) {
+      case ((childMap, justificationMap), (_, blockSummary)) =>
+        val updatedChildMap = blockSummary.parents.foldLeft(childMap) {
           case (acc, p) =>
             val currentChildren = acc.getOrElse(p, Set.empty[BlockHash])
-            acc.updated(p, currentChildren + blockMetadata.blockHash)
+            acc.updated(p, currentChildren + blockSummary.blockHash)
         }
-        val updatedJustificationMap = blockMetadata.justifications.foldLeft(justificationMap) {
-          case (acc, justification) =>
-            val currBlockWithSpecifyJustification =
-              acc.getOrElse(justification.latestBlockHash, Set.empty[BlockHash])
-            acc.updated(
-              justification.latestBlockHash,
-              currBlockWithSpecifyJustification + blockMetadata.blockHash
-            )
-        }
+        val updatedJustificationMap =
+          blockSummary.justifications.foldLeft(justificationMap) {
+            case (acc, justification) =>
+              val currBlockWithSpecifyJustification =
+                acc.getOrElse(justification.latestBlockHash, Set.empty[BlockHash])
+              acc.updated(
+                justification.latestBlockHash,
+                currBlockWithSpecifyJustification + blockSummary.blockHash
+              )
+          }
         (updatedChildMap, updatedJustificationMap)
     }
 
   private def extractTopoSort[F[_]: MonadError[?[_], Throwable]](
-      dataLookup: List[(BlockHash, BlockMetadata)]
+      dataLookup: List[(BlockHash, BlockSummary)]
   ): F[Vector[Vector[BlockHash]]] = {
-    val blockMetadatas = dataLookup.map(_._2).toVector
+    val blockSummarys = dataLookup.map(_._2).toVector
     val indexedTopoSort =
-      blockMetadatas.groupBy(_.rank).mapValues(_.map(_.blockHash)).toVector.sortBy(_._1)
+      blockSummarys.groupBy(_.rank).mapValues(_.map(_.blockHash)).toVector.sortBy(_._1)
     val topoSortInvariant = indexedTopoSort.zipWithIndex.forall {
       case ((readI, _), i) => readI == i
     }
@@ -753,9 +755,9 @@ object FileDagStorage {
                                } yield (latestMessagesMap, calculatedLatestMessagesCrc, logSize)
                              }
       (latestMessagesMap, calculatedLatestMessagesCrc, logSize) = latestMessagesResult
-      readDataLookupCrc                                         <- readCrc[F](config.blockMetadataCrcPath)
+      readDataLookupCrc                                         <- readCrc[F](config.blockSummaryCrcPath)
       dataLookupFileResource = Resource.make(
-        RandomAccessIO.open[F](config.blockMetadataLogPath, RandomAccessIO.ReadWrite)
+        RandomAccessIO.open[F](config.blockSummaryLogPath, RandomAccessIO.ReadWrite)
       )(_.close)
       dataLookupResult <- dataLookupFileResource.use { randomAccessIO =>
                            for {
@@ -776,10 +778,10 @@ object FileDagStorage {
                                         config.latestMessagesLogPath,
                                         true
                                       )
-      blockMetadataLogOutputStream <- FileOutputStreamIO.open[F](
-                                       config.blockMetadataLogPath,
-                                       true
-                                     )
+      blockSummaryLogOutputStream <- FileOutputStreamIO.open[F](
+                                      config.blockSummaryLogPath,
+                                      true
+                                    )
       state = FileDagStorageState(
         latestMessages = latestMessagesMap,
         childMap = childMap,
@@ -791,8 +793,8 @@ object FileDagStorage {
         latestMessagesLogOutputStream = latestMessagesLogOutputStream,
         latestMessagesLogSize = logSize,
         latestMessagesCrc = calculatedLatestMessagesCrc,
-        blockMetadataLogOutputStream = blockMetadataLogOutputStream,
-        blockMetadataCrc = calculatedDataLookupCrc
+        blockSummaryLogOutputStream = blockSummaryLogOutputStream,
+        blockSummaryCrc = calculatedDataLookupCrc
       )
 
       res <- fileDagStorageState[F](config, lock, state)
@@ -824,34 +826,34 @@ object FileDagStorage {
       latestMessagesCrcBytes <- latestMessagesCrc.bytes
       _                      <- writeToFile[F](config.latestMessagesLogPath, latestMessagesData)
       _                      <- writeToFile[F](config.latestMessagesCrcPath, latestMessagesCrcBytes)
-      blockMetadataCrc       <- Crc32.emptyF[F]()
+      blockSummaryCrc        <- Crc32.emptyF[F]()
       genesisByteString      = genesis.toByteString
       genesisData            = genesisByteString.size.toByteString.concat(genesisByteString).toByteArray
-      _                      <- blockMetadataCrc.update(genesisData)
-      blockMetadataCrcBytes  <- blockMetadataCrc.bytes
-      _                      <- writeToFile[F](config.blockMetadataLogPath, genesisData)
-      _                      <- writeToFile[F](config.blockMetadataCrcPath, blockMetadataCrcBytes)
+      _                      <- blockSummaryCrc.update(genesisData)
+      blockSummaryCrcBytes   <- blockSummaryCrc.bytes
+      _                      <- writeToFile[F](config.blockSummaryLogPath, genesisData)
+      _                      <- writeToFile[F](config.blockSummaryCrcPath, blockSummaryCrcBytes)
       latestMessagesLogOutputStream <- FileOutputStreamIO.open[F](
                                         config.latestMessagesLogPath,
                                         true
                                       )
-      blockMetadataLogOutputStream <- FileOutputStreamIO.open[F](
-                                       config.blockMetadataLogPath,
-                                       true
-                                     )
+      blockSummaryLogOutputStream <- FileOutputStreamIO.open[F](
+                                      config.blockSummaryLogPath,
+                                      true
+                                    )
       state = FileDagStorageState(
         latestMessages = initialLatestMessages,
         childMap = Map(genesis.blockHash         -> Set.empty[BlockHash]),
         justificationMap = Map(genesis.blockHash -> Set.empty[BlockHash]),
-        dataLookup = Map(genesis.blockHash       -> BlockMetadata.fromBlock(genesis)),
+        dataLookup = Map(genesis.blockHash       -> BlockSummary.fromBlock(genesis)),
         topoSort = Vector(Vector(genesis.blockHash)),
         sortOffset = 0L,
         checkpoints = List.empty,
         latestMessagesLogOutputStream = latestMessagesLogOutputStream,
         latestMessagesLogSize = initialLatestMessages.size,
         latestMessagesCrc = latestMessagesCrc,
-        blockMetadataLogOutputStream = blockMetadataLogOutputStream,
-        blockMetadataCrc = blockMetadataCrc
+        blockSummaryLogOutputStream = blockSummaryLogOutputStream,
+        blockSummaryCrc = blockSummaryCrc
       )
 
       res <- fileDagStorageState[F](config, lock, state)
@@ -869,8 +871,8 @@ object FileDagStorage {
         config.latestMessagesLogPath,
         config.latestMessagesCrcPath,
         config.latestMessagesLogMaxSizeFactor,
-        config.blockMetadataLogPath,
-        config.blockMetadataCrcPath,
+        config.blockSummaryLogPath,
+        config.blockSummaryCrcPath,
         _
       ) with MeteredDagStorage[F] {
         override implicit val m: Metrics[F] = met

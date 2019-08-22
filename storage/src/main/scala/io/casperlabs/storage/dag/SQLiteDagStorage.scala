@@ -6,11 +6,12 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.{BlockMetadata, DagStorageMetricsSource}
+import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.MeteredDagStorage
@@ -24,15 +25,15 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
   implicit val metaByteString: Meta[ByteString] =
     Meta[Array[Byte]].imap(ByteString.copyFrom)(_.toByteArray)
 
-  implicit val metaBlockMetadata: Meta[BlockMetadata] =
-    Meta[Array[Byte]].imap(BlockMetadata.fromBytes)(_.toByteString.toByteArray)
+  implicit val metaBlockSummary: Meta[BlockSummary] =
+    Meta[Array[Byte]].imap(BlockSummary.parseFrom)(_.toByteString.toByteArray)
 
   private def msg(b: BlockHash): String = Base16.encode(b.toByteArray).take(10)
 
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
   override def insert(block: Block): F[DagRepresentation[F]] = {
-    val blockMetadata = BlockMetadata.fromBlock(block)
+    val blockSummary = BlockSummary.fromBlock(block)
 
     val justificationsQuery =
       Update[(BlockHash, BlockHash)](
@@ -40,15 +41,17 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
            |(justification_block_hash, block_hash) 
            |VALUES (?, ?)""".stripMargin
       ).updateMany(
-        blockMetadata.justifications.map(j => (j.latestBlockHash, blockMetadata.blockHash))
+        blockSummary.justifications
+          .map(j => (j.latestBlockHash, blockSummary.blockHash))
+          .toList
       )
 
     val blocksMetadataQuery = {
-      val newValidators = block.getHeader.getState.bonds
+      val newValidators = block.state.bonds
         .map(_.validatorPublicKey)
         .toSet
-        .diff(block.getHeader.justifications.map(_.validatorPublicKey).toSet)
-      val validator = block.getHeader.validatorPublicKey
+        .diff(block.justifications.map(_.validatorPublicKey).toSet)
+      val validator = block.validatorPublicKey
 
       val toUpdateValidators = if (block.isGenesisLike) {
         // For Genesis, all validators are "new".
@@ -71,7 +74,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
            |""".stripMargin
       ).updateMany(
         toUpdateValidators
-          .map((blockMetadata.blockHash, _, blockMetadata.rank, blockMetadata.toByteString))
+          .map((blockSummary.blockHash, _, blockSummary.rank, blockSummary.toByteString))
       )
     }
 
@@ -79,14 +82,16 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       if (block.isGenesisLike) {
         sql"""|INSERT OR IGNORE INTO dag_storage_topological_sorting 
               |(parent_block_hash, child_block_hash, child_rank) 
-              |VALUES (${ByteString.EMPTY}, ${blockMetadata.blockHash}, 0)""".stripMargin.update.run
+              |VALUES (${ByteString.EMPTY}, ${blockSummary.blockHash}, 0)""".stripMargin.update.run
       } else {
         Update[(BlockHash, BlockHash, Long)](
           """|INSERT OR IGNORE INTO dag_storage_topological_sorting 
              |(parent_block_hash, child_block_hash, child_rank) 
              |VALUES (?, ?, ?)""".stripMargin
         ).updateMany(
-          blockMetadata.parents.map((_, blockMetadata.blockHash, blockMetadata.rank))
+          blockSummary.parentHashes
+            .map((_, blockSummary.blockHash, blockSummary.rank))
+            .toList
         )
       }
 
@@ -129,11 +134,11 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .to[Set]
       .transact(xa)
 
-  override def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
+  override def lookup(blockHash: BlockHash): F[Option[BlockSummary]] =
     sql"""|SELECT data 
           |FROM dag_storage_blocks_metadata 
           |WHERE block_hash=$blockHash""".stripMargin
-      .query[BlockMetadata]
+      .query[BlockSummary]
       .option
       .transact(xa)
 
@@ -217,13 +222,13 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .option
       .transact(xa)
 
-  override def latestMessage(validator: Validator): F[Option[BlockMetadata]] =
+  override def latestMessage(validator: Validator): F[Option[BlockSummary]] =
     sql"""|SELECT data
           |FROM (SELECT data, MAX(rank)
           |      FROM dag_storage_blocks_metadata
           |      WHERE validator = $validator
           |      GROUP BY validator)""".stripMargin
-      .query[BlockMetadata]
+      .query[BlockSummary]
       .option
       .transact(xa)
 
@@ -238,13 +243,13 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .transact(xa)
       .map(_.toMap)
 
-  override def latestMessages: F[Map[Validator, BlockMetadata]] =
+  override def latestMessages: F[Map[Validator, BlockSummary]] =
     sql"""|SELECT validator, data
           |FROM (SELECT validator, data, MAX(rank)
           |      FROM dag_storage_blocks_metadata
           |      WHERE validator!=${ByteString.EMPTY}
           |      GROUP BY validator)""".stripMargin
-      .query[(Validator, BlockMetadata)]
+      .query[(Validator, BlockSummary)]
       .to[List]
       .transact(xa)
       .map(_.toMap)

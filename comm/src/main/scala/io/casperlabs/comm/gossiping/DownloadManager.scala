@@ -9,6 +9,7 @@ import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
@@ -151,7 +152,7 @@ object DownloadManagerImpl {
 
   /** All dependencies that need to be downloaded before a block. */
   private def dependencies(summary: BlockSummary): Seq[ByteString] =
-    summary.getHeader.parentHashes ++ summary.getHeader.justifications.map(_.latestBlockHash)
+    summary.parentHashes ++ summary.justifications.map(_.latestBlockHash)
 }
 
 class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
