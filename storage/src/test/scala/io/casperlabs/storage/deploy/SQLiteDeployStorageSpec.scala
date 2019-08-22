@@ -44,7 +44,7 @@ class SQLiteDeployStorageSpec
       Flyway
         .configure()
         .dataSource(s"jdbc:sqlite:$db", "", "")
-        .locations(new Location("classpath:db/migration"))
+        .locations(new Location("classpath:/db/migration"))
     conf.load()
   }
 
