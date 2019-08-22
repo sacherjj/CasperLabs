@@ -36,7 +36,7 @@ fn get_transformed_balance(
     let modified_account = {
         let account_transforms = transforms
             .get(account_key)
-            .expect("Unable to find transforms for genesis");
+            .expect("Unable to find transforms for account");
 
         if let Transform::Write(Value::Account(account)) = account_transforms {
             account
@@ -192,7 +192,7 @@ fn should_exec_stored_code_by_hash() {
         for (k, t) in transforms {
             if let Transform::Write(Value::Contract(_)) = t {
                 if let Key::Hash(hash) = k {
-                    ret = Some(hash.to_bytes().expect("should serialize"));
+                    ret = Some(hash);
                     break;
                 }
             }
@@ -207,7 +207,6 @@ fn should_exec_stored_code_by_hash() {
 
     let motes_alpha = test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
 
-    let transforms = &test_result.builder().get_transforms()[0];
     let modified_balance_alpha: U512 =
         get_transformed_balance(&builder, transforms, &genesis_account_key);
 
@@ -223,7 +222,9 @@ fn should_exec_stored_code_by_hash() {
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_stored_payment_hash(
-                stored_payment_contract_hash.expect("hash should exist"),
+                stored_payment_contract_hash
+                    .expect("hash should exist")
+                    .to_vec(),
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])

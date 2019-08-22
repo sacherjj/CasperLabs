@@ -14,6 +14,7 @@ const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
 const LOCAL_ID: u8 = 3;
 
+pub const HASH_SIZE: usize = 32;
 pub const LOCAL_KEY_SIZE: usize = 32;
 pub const LOCAL_SEED_SIZE: usize = 32;
 
@@ -37,7 +38,7 @@ fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_SIZE] {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Key {
     Account([u8; 32]),
-    Hash([u8; 32]),
+    Hash([u8; HASH_SIZE]),
     URef(URef),
     Local([u8; LOCAL_KEY_SIZE]),
 }

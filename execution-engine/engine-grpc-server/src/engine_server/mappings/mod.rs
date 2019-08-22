@@ -702,6 +702,9 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // TODO(mateusz.gorski): Fix error model for the storage errors.
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
+                    error @ EngineError::InvalidHashLength { .. } => {
+                        precondition_failure(error.to_string())
+                    }
                     error @ EngineError::InvalidPublicKeyLength { .. } => {
                         precondition_failure(error.to_string())
                     }

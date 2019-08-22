@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
-use contract_ffi::key::Key;
+use contract_ffi::key::{Key, HASH_SIZE};
 use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
@@ -199,9 +199,18 @@ where
                 Ok(module)
             }
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
-                let stored_contract_key = contract_ffi::bytesrepr::deserialize(&hash)
-                    .map(Key::Hash)
-                    .map_err(|e| error::Error::ExecError(e.into()))?;
+                let stored_contract_key = {
+                    let hash_len = hash.len();
+                    if hash_len != HASH_SIZE {
+                        return Err(error::Error::InvalidHashLength {
+                            expected: HASH_SIZE,
+                            actual: hash_len,
+                        });
+                    }
+                    let mut arr = [0u8; HASH_SIZE];
+                    arr.copy_from_slice(&hash);
+                    Key::Hash(arr)
+                };
                 let contract = tracking_copy
                     .borrow_mut()
                     .get_contract(correlation_id, stored_contract_key)?;
