@@ -3,7 +3,6 @@ import logging
 import pytest
 import json
 import subprocess
-import time
 from pathlib import Path
 from typing import List
 from pytest import fixture, raises
@@ -665,13 +664,10 @@ class CLI:
 
         return output
 
-    def __call__(self, *args, sleep=0):
+    def __call__(self, *args):
         command_line = [str(self.cli_cmd)] + self.expand_args(args)
         logging.info(f"EXECUTING []: {command_line}")
         logging.info(f"EXECUTING: {' '.join(command_line)}")
-        if sleep:
-            # For debugging
-            time.sleep(int(sleep) == 1 and 1000 or int(sleep))
         cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         binary_output = cp.stdout
         if cp.returncode != 0:
@@ -851,6 +847,10 @@ def test_cli_scala_extended_deploy(scala_cli):
     cli = scala_cli
     account = GENESIS_ACCOUNT
 
+    # TODO: when paralelizing testd, make sure test don't collide
+    # when trying to access the same file, perhaps map containers /tmp
+    # to a unique hosts's directory.
+
     test_contract = "/data/test_helloname.wasm"
     cli('make-deploy',
         '--nonce', 1,
@@ -873,5 +873,5 @@ def test_cli_scala_extended_deploy(scala_cli):
     try:
         os.remove('/tmp/unsigned.deploy')
         os.remove('/tmp/signed.deploy')
-    except Exception:
-        pass
+    except Exception as e:
+        logging.warning(f"Could not delete temporary files: {str(e)}")
