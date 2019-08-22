@@ -23,6 +23,7 @@ members = [
     "contracts/test/ee-539-regression",
     "contracts/test/ee-536-regression",
     "contracts/test/ee-532-regression",
+    "contracts/test/ee-460-regression",
     "contracts/test/ee-549-regression",
     "contracts/test/ee-572-regression-create",
     "contracts/test/ee-572-regression-escalate",
