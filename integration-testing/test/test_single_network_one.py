@@ -857,46 +857,14 @@ def test_cli_scala_extended_deploy(scala_cli):
                        '--from', account.public_key_hex,
                        '--session', test_contract,
                        '--payment', test_contract)
-    """
-         - Subcommand: make-deploy - Constructs a deploy that can be signed and sent to a node.
-         -   -o, --deploy-path  <arg>   Path to the file where deploy will be saved.
-         -                              Optional, if not provided the deploy will be
-         -                              printed to STDOUT.
-         -   -f, --from  <arg>          The public key of the account which is the context
-         -                              of this deployment, base16 encoded.
-         -   -g, --gas-price  <arg>     The price of gas for this transaction in units
-         -                              dust/gas. Must be positive integer.
-         -   -n, --nonce  <arg>         This allows you to overwrite your own pending
-         -                              transactions that use the same nonce.
-         -       --payment  <arg>       Path to the file with payment code, by default
-         -                              fallbacks to the --session code
-         -   -p, --public-key  <arg>    Path to the file with account public key (Ed25519)
-         -   -s, --session  <arg>       Path to the file with session code
-    """
+
+    logging.info(f"make-deploy => =|{output}|=")
 
     output = scala_cli('sign-deploy',
                        '-i', '/tmp/unsigned.deploy',
                        '-o', '/tmp/signed.deploy',
                        '--private-key', account.private_key_docker_path,
                        '--public-key', account.public_key_docker_path)
-    """
-         - Subcommand: sign-deploy - Cryptographically signs a deploy. The signature is appended to existing approvals.
-         -   -i, --deploy-path  <arg>          Path to the deploy file.
-         -       --private-key  <arg>          Path to the file with account private key
-         -                                     (Ed25519)
-         -       --public-key  <arg>           Path to the file with account public key
-         -                                     (Ed25519)
-         -   -o, --signed-deploy-path  <arg>   Path to the file where signed deploy will be
-         -                                     saved.If not provided, the signed deploy
-         -                                     will be sent to stdout.
-         -   -h, --help                        Show help message
-    """
 
-    output = scala_cli('send-deploy',
-                       '-i', '/tmp/signed.deploy',)
+    output = scala_cli('send-deploy', '-i', '/tmp/signed.deploy',)
     output = output
-
-    """
-         - Subcommand: send-deploy - Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
-         -   -i, --deploy-path  <arg>   Path to the file with signed Deploy.
-    """
