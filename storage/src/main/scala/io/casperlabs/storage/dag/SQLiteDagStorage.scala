@@ -121,14 +121,13 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .to[Set]
       .transact(xa)
 
-  override def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
+  override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
     sql"""|SELECT block_hash 
           |FROM dag_storage_justifications 
           |WHERE justification_block_hash=$blockHash""".stripMargin
       .query[BlockHash]
       .to[Set]
       .transact(xa)
-      .map(set => if (set.isEmpty) None else set.some)
 
   override def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
     sql"""|SELECT data 
