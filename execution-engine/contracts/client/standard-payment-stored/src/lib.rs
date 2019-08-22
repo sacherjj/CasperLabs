@@ -27,6 +27,8 @@ const TRANSFER_TO_PAYMENT_PURSE_FUNCTION_NAME: &str = "transfer";
 /// 66                          // failed to get proof of stake public key
 /// 67                          // failed to get proof of stake c_ptr
 /// 99                          // failed to transfer from purse to purse
+/// NOTE
+/// this is a functional duplicate of standard-payment, adding only stored contract mechanics
 #[no_mangle]
 pub extern "C" fn transfer() {
     let amount = contract_api::get_arg(0);

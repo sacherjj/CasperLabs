@@ -28,6 +28,8 @@ const MAIN_PURSE_FINAL_BALANCE_UREF_NAME: &str = "final_balance";
 /// URef("final_balance")       // calling account's main purse resting balance
 /// ERROR
 /// 103                         // failed to get final_balance
+/// NOTE
+/// this is a functional duplicate of transfer-purse-to-account, adding only stored contract mechanics
 #[no_mangle]
 pub extern "C" fn transfer() {
     let source: PurseId = contract_api::main_purse();

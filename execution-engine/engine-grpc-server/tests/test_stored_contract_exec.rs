@@ -73,9 +73,8 @@ fn get_transformed_balance(
 fn get_test_result(builder: &mut WasmTestBuilder, exec_request: ExecuteRequest) -> WasmTestResult {
     builder
         .exec_with_exec_request(exec_request)
-        .expect_success()
+        .expect_success() // <- assert equivalent
         .commit()
-        .expect_success() //<-- assert equivalent
         .finish()
 }
 
