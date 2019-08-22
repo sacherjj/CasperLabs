@@ -27,6 +27,7 @@ import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
+import io.casperlabs.casper.util.DagOperations
 
 object ValidationImpl {
   type Data        = Array[Byte]
@@ -167,6 +168,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       _ <- deployCount(block)
       _ <- deployHashes(block)
       _ <- deploySignatures(block)
+      _ <- deployUniqueness(block, dag)
     } yield ()
   }
 
@@ -709,6 +711,60 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         for {
           _ <- Log[F].warn(s"Block ${PrettyPrinter.buildString(b)} is missing a post state hash.")
           _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBondsCache)
+        } yield ()
+    }
+  }
+
+  /** Check that none of the deploys in the block have been included in another block already
+    * which was in the P-past cone of the block itself.
+    */
+  def deployUniqueness(
+      block: Block,
+      dag: DagRepresentation[F]
+  )(implicit bs: BlockStorage[F]): F[Unit] = {
+    val deploys        = block.getBody.deploys.map(_.getDeploy).toList
+    val maybeDuplicate = deploys.groupBy(_.deployHash).find(_._2.size > 1).map(_._2.head)
+    def raise(msg: String) =
+      for {
+        _ <- Log[F].warn(ignore(block, msg))
+        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidRepeatDeploy)
+      } yield ()
+    maybeDuplicate match {
+      case Some(duplicate) =>
+        raise(s"block contains duplicate ${PrettyPrinter.buildString(duplicate)}")
+
+      case None =>
+        for {
+          deployToBlocksMap <- deploys
+                                .traverse { deploy =>
+                                  bs.findBlockHashesWithDeployhash(deploy.deployHash).map {
+                                    blockHashes =>
+                                      deploy -> blockHashes.filterNot(_ == block.blockHash)
+                                  }
+                                }
+                                .map(_.toMap)
+
+          blockHashes = deployToBlocksMap.values.flatten.toSet
+
+          duplicateBlockHashes <- DagOperations.collectWhereDescendantPathExists(
+                                   dag,
+                                   blockHashes,
+                                   Set(block.blockHash)
+                                 )
+
+          _ <- if (duplicateBlockHashes.isEmpty) ().pure[F]
+              else {
+                val exampleBlockHash = duplicateBlockHashes.head
+                val exampleDeploy = deployToBlocksMap.collectFirst {
+                  case (deploy, blockHashes) if blockHashes.contains(exampleBlockHash) =>
+                    deploy
+                }.get
+                raise(
+                  s"block contains a duplicate ${PrettyPrinter.buildString(exampleDeploy)} already present in ${PrettyPrinter
+                    .buildString(exampleBlockHash)}"
+                )
+              }
+
         } yield ()
     }
   }

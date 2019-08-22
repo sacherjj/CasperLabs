@@ -453,9 +453,9 @@ object ExecEngineUtilTest {
 
   val other: String = """ """.stripMargin
 
-  def prepareDeploys(v: Vector[ByteString], c: Long): Vector[ProcessedDeploy] = {
-    val genesisDeploys =
-      v.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
-    genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
+  def prepareDeploys(contracts: Vector[ByteString], cost: Long): Vector[ProcessedDeploy] = {
+    val deploys =
+      contracts.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+    deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(cost))
   }
 }

@@ -7,6 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.casper.finality.singlesweep.FinalityDetectorBySingleSweepImpl
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.catscontrib.MonadThrowable
@@ -78,7 +79,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
       logEff                 = new LogStub[Task]
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]
+      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
       result <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                  MonadThrowable[Task],
                  casperRef,

@@ -155,7 +155,7 @@ class FileDagStorageTest extends DagStorageTest {
               Option[BlockHash],
               Option[BlockMetadata],
               Set[BlockHash],
-              Option[Set[BlockHash]],
+              Set[BlockHash],
               Boolean
           )
         ],
@@ -235,12 +235,10 @@ class FileDagStorageTest extends DagStorageTest {
             .map(_.blockHash)
             .toSet
         blocksWithSpecifiedJustification shouldBe
-          Some(
-            blockElements
-              .filter(_.getHeader.justifications.map(_.latestBlockHash).contains(b.blockHash))
-              .map(_.blockHash)
-              .toSet
-          )
+          blockElements
+            .filter(_.getHeader.justifications.map(_.latestBlockHash).contains(b.blockHash))
+            .map(_.blockHash)
+            .toSet
         contains shouldBe true
     }
     latestMessageHashes shouldBe realLatestMessages.mapValues(_.blockHash)
@@ -468,7 +466,7 @@ class FileDagStorageTest extends DagStorageTest {
           _      <- secondStorage.close()
         } yield result match {
           case (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) => {
-            list.foreach(_ shouldBe ((None, None, None, Set.empty, None, false)))
+            list.foreach(_ shouldBe ((None, None, None, Set.empty, Set.empty, false)))
             latestMessageHashes shouldBe Map()
             latestMessages shouldBe Map()
             topoSort shouldBe Vector()

@@ -709,3 +709,32 @@ fn should_create_purse() {
         [&Key::URef(URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE)).normalize()];
     assert_eq!(account, &Transform::Write(Value::UInt512(U512::from(0))));
 }
+
+#[ignore]
+#[test]
+fn should_transfer_total_amount() {
+    let mut builder = test_support::WasmTestBuilder::default();
+
+    builder
+        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .exec_with_args(
+            GENESIS_ADDR,
+            // Genesis transfers N tokens to new account
+            "transfer_to_account_01.wasm",
+            DEFAULT_BLOCK_TIME,
+            1,
+            ACCOUNT_1_ADDR,
+        )
+        .expect_success()
+        .commit()
+        .exec_with_args(
+            ACCOUNT_1_ADDR,
+            // New account transfers exactly N tokens to new account (total amount)
+            "transfer_to_account_01.wasm",
+            DEFAULT_BLOCK_TIME,
+            1,
+            ACCOUNT_2_ADDR,
+        )
+        .commit()
+        .expect_success();
+}

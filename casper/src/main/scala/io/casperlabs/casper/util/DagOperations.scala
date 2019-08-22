@@ -353,4 +353,48 @@ object DagOperations {
       )
       .map(_.blockHash)
   }
+
+  /** Check if there's a (possibly empty) path leading from any of the starting points to any of the targets. */
+  def anyPathExists[F[_]: Monad, A](
+      start: Set[A],
+      targets: Set[A]
+  )(neighbours: A => F[List[A]])(
+      implicit k: Key[A]
+  ): F[Boolean] =
+    bfTraverseF[F, A](start.toList)(neighbours).find(targets).map(_.nonEmpty)
+
+  /** Check if a path in the p-DAG exists from ancestors to descendants (or self). */
+  def anyDescendantPathExists[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      ancestors: Set[BlockHash],
+      descendants: Set[BlockHash]
+  ): F[Boolean] =
+    anyPathExists(ancestors, descendants) { blockHash =>
+      dag.children(blockHash).map(_.toList)
+    }
+
+  /** Collect all block hashes from the ancestor candidates through which can reach any of the descendants. */
+  def collectWhereDescendantPathExists[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      ancestors: Set[BlockHash],
+      descendants: Set[BlockHash]
+  ): F[Set[BlockHash]] = {
+    // Traverse backwards rank by rank until we either visit all ancestors or go beyond the oldest.
+    implicit val ord = blockTopoOrderingDesc
+    for {
+      ancestorMeta   <- ancestors.toList.traverse(dag.lookup).map(_.flatten)
+      descendantMeta <- descendants.toList.traverse(dag.lookup).map(_.flatten)
+      minRank        = if (ancestorMeta.isEmpty) 0 else ancestorMeta.map(_.rank).min
+      reachable <- bfToposortTraverseF[F](descendantMeta) { blockMeta =>
+                    blockMeta.parents.traverse(dag.lookup).map(_.flatten)
+                  }.foldWhileLeft(Set.empty[BlockHash]) {
+                    case (reachable, blockMeta) if ancestors(blockMeta.blockHash) =>
+                      Left(reachable + blockMeta.blockHash)
+                    case (reachable, blockMeta) if blockMeta.rank >= minRank =>
+                      Left(reachable)
+                    case (reachable, _) =>
+                      Right(reachable)
+                  }
+    } yield reachable
+  }
 }

@@ -14,7 +14,7 @@ const Home = observer((props: Props) => {
     <div>
       <div className="jumbotron shadow">
         <div>
-          <h1>CasperLabs Explorer</h1>
+          <h1>CasperLabs Clarity</h1>
           <p>
             This is a self service portal for dApp developers to interact with
             the blockchain. On devnet you can use this portal to create accounts
@@ -24,50 +24,46 @@ const Home = observer((props: Props) => {
             <a href="https://t.me/casperlabs">Telegram</a> or{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/issues">Github</a>
           </p>
-          <ul className="list-inline" id="go-to-buttons">
-            <li className="list-inline-item">
-              <a
-                className="btn btn-success btn-lg"
-                href="https://techspec.casperlabs.io/"
-                role="button"
-              >
+
+          <div className="row">
+            <AccountsCard accounts={props.auth.accounts} />
+            {props.auth.accounts &&
+              props.auth.accounts.length > 0 && [
+                <FaucetCard />,
+                <ExploreCard />,
+                <GraphQLCard />
+              ]}
+          </div>
+        </div>
+      </div>
+
+      <div className="card-body">
+        <ul className="list-inline" id="go-to-buttons">
+          <li className="list-inline-item">
+            <h4>
+              <a href="https://techspec.casperlabs.io/" role="button">
                 Read our Tech Spec &raquo;
               </a>
-            </li>
-          </ul>
-        </div>
-      </div>
+            </h4>
+          </li>
+        </ul>
 
-      <div className="row">
-        <AccountsCard accounts={props.auth.accounts} />
-        {props.auth.accounts && props.auth.accounts.length > 0 && (
-          <FaucetCard />
-        )}
-        <ExploreCard />
-        <GraphQLCard />
-      </div>
-
-      <div className="card mt-5">
-        <div className="card-header bg-danger text-white">
-          Looking for help?
-        </div>
-        <div className="card-body">
-          <p>
-            To write contracts have a look at the{' '}
-            <a href="https://github.com/CasperLabs/contract-examples/tree/master">
-              contract examples
-            </a>
-            , the{' '}
-            <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md">
-              main docs
-            </a>{' '}
-            and the{' '}
-            <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker">
-              local docker network setup
-            </a>
-            .
-          </p>
-        </div>
+        <h3>Looking for help?</h3>
+        <p>
+          To write contracts have a look at the{' '}
+          <a href="https://github.com/CasperLabs/contract-examples/tree/master">
+            contract examples
+          </a>
+          , the{' '}
+          <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md">
+            main docs
+          </a>{' '}
+          and the{' '}
+          <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/hack/docker">
+            local docker network setup
+          </a>
+          .
+        </p>
       </div>
 
       <br />
@@ -90,7 +86,7 @@ const Card = (props: CardProps) => {
   const view = [
     <span className="float-left">View Details</span>,
     <span className="float-right">
-      ,<i className="fa fa-angle-right"></i>,
+      <i className="fa fa-angle-right"></i>
     </span>
   ];
   return (
@@ -124,13 +120,15 @@ const CardMessage = (props: { message: string }) => {
 
 const AccountsCard = (props: { accounts: UserAccount[] | null }) => {
   const background =
-    props.accounts && props.accounts.length > 0 ? 'success' : 'primary';
+    props.accounts && props.accounts.length > 0 ? 'success' : 'success';
   return (
     <Card background={background} icon="address-book" to={Pages.Accounts}>
       {props.accounts == null || props.accounts.length === 0 ? (
         <CardMessage message="Create an account" />
       ) : (
-        <CardMessage message={`You have ${props.accounts.length} account(s)`} />
+        <CardMessage
+          message={`You have ${props.accounts.length} account key(s)`}
+        />
       )}
     </Card>
   );
@@ -139,7 +137,7 @@ const AccountsCard = (props: { accounts: UserAccount[] | null }) => {
 const FaucetCard = (_: {}) => {
   // TODO: Display available funds.
   return (
-    <Card background="primary" icon="coins" to={Pages.Faucet}>
+    <Card background="info" icon="coins" to={Pages.Faucet}>
       <CardMessage message="Request tokens" />
     </Card>
   );
@@ -148,7 +146,7 @@ const FaucetCard = (_: {}) => {
 const ExploreCard = (_: {}) => {
   // TODO: Display latest block timestamp.
   return (
-    <Card background="success" icon="project-diagram" to={Pages.Explorer}>
+    <Card background="info" icon="project-diagram" to={Pages.Explorer}>
       <CardMessage message="Explore the blockchain" />
     </Card>
   );
@@ -157,7 +155,7 @@ const ExploreCard = (_: {}) => {
 const GraphQLCard = (_: {}) => {
   return (
     <Card
-      background="success"
+      background="info"
       icon="flask"
       to="http://devnet-graphql.casperlabs.io:40403/graphql"
     >

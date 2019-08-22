@@ -174,7 +174,8 @@ dependencies = [
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "num 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "proptest 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "siphasher 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -442,6 +443,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "do-nothing"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
 name = "ee-221-regression"
 version = "0.1.0"
 dependencies = [
@@ -470,6 +478,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ee-460-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
 name = "ee-532-regression"
 version = "0.1.0"
 dependencies = [
@@ -485,6 +500,13 @@ dependencies = [
 
 [[package]]
 name = "ee-539-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
+name = "ee-549-regression"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.12.0",
@@ -598,6 +620,20 @@ dependencies = [
 
 [[package]]
 name = "get-caller-subcall"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
+name = "get-phase"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.12.0",
+]
+
+[[package]]
+name = "get-phase-payment"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.12.0",

@@ -4,8 +4,10 @@ import cats.Id
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Effect => _, _}
 import cats.implicits._
-import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
+import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}

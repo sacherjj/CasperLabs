@@ -6,6 +6,7 @@ use std::rc::Rc;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;
 
+use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::{self, Account, Contract, Value};
@@ -117,6 +118,7 @@ fn mock_runtime_context<'a>(
         Rc::new(RefCell::new(rng)),
         1,
         CorrelationId::new(),
+        Phase::Session,
     )
 }
 
@@ -408,6 +410,7 @@ fn contract_key_addable_valid() {
         Rc::new(RefCell::new(chacha_rng)),
         1,
         CorrelationId::new(),
+        Phase::Session,
     );
 
     let uref_name = "NewURef".to_owned();
@@ -461,6 +464,7 @@ fn contract_key_addable_invalid() {
         Rc::new(RefCell::new(chacha_rng)),
         1,
         CorrelationId::new(),
+        Phase::Session,
     );
 
     let uref_name = "NewURef".to_owned();

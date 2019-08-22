@@ -5,7 +5,7 @@ import java.util.NoSuchElementException
 import cats.data.OptionT
 import cats.implicits._
 import cats.{Applicative, Monad}
-import com.google.protobuf.ByteString
+import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.PrettyPrinter
@@ -67,6 +67,41 @@ object ProtoUtil {
       candidateBlockMetadata <- dag.lookup(candidateBlockHash)
       result                 <- isInMainChain(dag, candidateBlockMetadata.get, targetBlockHash)
     } yield result
+
+  // calculate which branch of latestFinalizedBlockHash that the newBlockHash vote for
+  def votedBranch[F[_]: Monad](
+      dag: DagRepresentation[F],
+      latestFinalizeBlockHash: BlockHash,
+      newBlockHash: BlockHash
+  ): F[Option[BlockHash]] =
+    for {
+      newBlock             <- dag.lookup(newBlockHash)
+      latestFinalizedBlock <- dag.lookup(latestFinalizeBlockHash)
+      r                    <- votedBranch(dag, latestFinalizedBlock.get, newBlock.get)
+    } yield r
+
+  def votedBranch[F[_]: Monad](
+      dag: DagRepresentation[F],
+      latestFinalizedBlock: BlockMetadata,
+      newBlock: BlockMetadata
+  ): F[Option[BlockHash]] =
+    if (newBlock.rank <= latestFinalizedBlock.rank) {
+      none[BlockHash].pure[F]
+    } else {
+      for {
+        result <- newBlock.parents.headOption match {
+                   case Some(mainParentHash) =>
+                     if (mainParentHash == latestFinalizedBlock.blockHash) {
+                       newBlock.blockHash.some.pure[F]
+                     } else {
+                       dag
+                         .lookup(mainParentHash)
+                         .flatMap(b => votedBranch(dag, latestFinalizedBlock, b.get))
+                     }
+                   case None => none[BlockHash].pure[F]
+                 }
+      } yield result
+    }
 
   def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStorage](
       estimate: Block,

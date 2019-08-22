@@ -5,6 +5,7 @@ use std::rc::Rc;
 use parity_wasm::elements::Module;
 
 use contract_ffi::bytesrepr::deserialize;
+use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey};
@@ -33,6 +34,7 @@ pub trait Executor<A> {
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -51,6 +53,7 @@ pub trait Executor<A> {
         protocol_version: u64,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -109,6 +112,7 @@ impl Executor<Module> for WasmiExecutor {
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
@@ -151,6 +155,7 @@ impl Executor<Module> for WasmiExecutor {
             Rc::new(RefCell::new(rng)),
             protocol_version,
             correlation_id,
+            phase,
         );
 
         let mut runtime = Runtime::new(memory, parity_module, context);
@@ -179,6 +184,7 @@ impl Executor<Module> for WasmiExecutor {
         protocol_version: u64,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
@@ -219,6 +225,7 @@ impl Executor<Module> for WasmiExecutor {
             rng,
             protocol_version,
             correlation_id,
+            phase,
         );
 
         let (instance, memory) =

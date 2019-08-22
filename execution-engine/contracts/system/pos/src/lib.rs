@@ -12,6 +12,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use cl_std::contract_api;
+use cl_std::execution::Phase;
 use cl_std::key::Key;
 use cl_std::uref::{AccessRights, URef};
 use cl_std::value::account::{BlockTime, PublicKey, PurseId};
@@ -160,7 +161,11 @@ fn get_rewards_purse() -> Result<PurseId> {
 /// Note that if this function is never called, the default location is the main purse of
 /// the deployer's account.
 fn set_refund(purse_id: URef) {
-    contract_api::add_uref(REFUND_PURSE_KEY, &Key::URef(purse_id));
+    if let Phase::Payment = contract_api::get_phase() {
+        contract_api::add_uref(REFUND_PURSE_KEY, &Key::URef(purse_id));
+    } else {
+        contract_api::revert(Error::SetRefundPurseCalledOutsidePayment.into())
+    }
 }
 
 /// Returns the currently set refund purse.

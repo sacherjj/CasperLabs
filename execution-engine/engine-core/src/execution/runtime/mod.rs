@@ -170,6 +170,7 @@ where
             current_runtime.context.rng(),
             protocol_version,
             current_runtime.context.correlation_id(),
+            current_runtime.context.phase(),
         ),
     };
 
@@ -362,6 +363,15 @@ where
     fn get_caller(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         let key = self.context.get_caller();
         let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
+        self.memory
+            .set(dest_ptr, &bytes)
+            .map_err(|e| Error::Interpreter(e).into())
+    }
+
+    /// Writes runtime context's phase to [dest_ptr] in the Wasm memory.
+    fn get_phase(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        let phase = self.context.phase();
+        let bytes = phase.to_bytes().map_err(Error::BytesRepr)?;
         self.memory
             .set(dest_ptr, &bytes)
             .map_err(|e| Error::Interpreter(e).into())
@@ -761,6 +771,12 @@ where
         let pos_contract_key = Key::URef(pos_contract_uref);
         let target_addr = target.value();
         let target_key = Key::Account(target_addr);
+
+        // A precondition check that verifies that the transfer can be done
+        // as the source purse has enough funds to cover the transfer.
+        if amount > self.get_balance(source)?.unwrap_or_default() {
+            return Ok(TransferResult::TransferError);
+        }
 
         let target_purse_id = self.mint_create(mint_contract_key)?;
 
