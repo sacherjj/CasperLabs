@@ -207,19 +207,6 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .map(_.acc)
   }
 
-  override def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
-    sql"""|SELECT child_block_hash 
-          |FROM dag_storage_topological_sorting 
-          |WHERE child_rank>=$startBlockNumber
-          |ORDER BY child_rank""".stripMargin
-      .query[BlockHash]
-      .to[Vector]
-      .transact(xa)
-      .map { blockHashes =>
-        val order = blockHashes.zipWithIndex.toMap
-        Ordering.by(blockMetadata => order(blockMetadata.blockHash))
-      }
-
   override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
     sql"""|SELECT block_hash
           |FROM (SELECT block_hash, MAX(rank)

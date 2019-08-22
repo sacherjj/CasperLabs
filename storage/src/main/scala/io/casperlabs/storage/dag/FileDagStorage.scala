@@ -177,12 +177,6 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
       topoSort(startBlockNumber, endBlockNumber)
     }
 
-    def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
-      topoSort(startBlockNumber).map { topologicalSorting =>
-        val order = topologicalSorting.flatten.zipWithIndex.toMap
-        Ordering.by(b => order(b.blockHash))
-      }
-
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
 

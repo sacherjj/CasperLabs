@@ -16,6 +16,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.casper.consensus.state.{Key, Value}
 import io.casperlabs.storage.BlockMetadata
+import io.casperlabs.storage.BlockMetadata.ordering
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -392,16 +393,12 @@ object ExecEngineUtil {
     val candidateParents = candidateParentBlocks.map(BlockMetadata.fromBlock).toVector
 
     for {
-      ordering <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
-      merged <- {
-        implicit val order = ordering
-        abstractMerge[F, TransformMap, BlockMetadata, state.Key](
-          candidateParents,
-          parents,
-          effect,
-          toOps
-        )
-      }
+      merged <- abstractMerge[F, TransformMap, BlockMetadata, state.Key](
+                 candidateParents,
+                 parents,
+                 effect,
+                 toOps
+               )
       // TODO: Aren't these parents already in `candidateParentBlocks`?
       blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
     } yield merged.transform.fold(MergeResult.empty[TransformMap, Block])(

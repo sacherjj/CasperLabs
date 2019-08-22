@@ -50,6 +50,7 @@ import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.{DeployStorage, MockDeployStorage}
 import monix.catnap.Semaphore
 import monix.eval.Task
+import monix.execution.schedulers.CanBlock.permit
 import monix.execution.Scheduler
 import org.scalatest.{Matchers, WordSpec}
 
@@ -118,7 +119,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val dagStorage =
       DagStorageTestFixture
         .createDagStorage[Task](DagStorageTestFixture.dagStorageDir)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(1.second)(scheduler, permit)
     implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new FinalityDetector[Task] {
       override def normalizedFaultTolerance(

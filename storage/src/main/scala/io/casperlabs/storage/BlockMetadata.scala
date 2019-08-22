@@ -1,6 +1,7 @@
 package io.casperlabs.storage
 
 import com.google.protobuf.ByteString
+import io.casperlabs.shared.Sorting._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{Block, Bond}
 import scalapb.TypeMapper
@@ -18,6 +19,14 @@ final case class BlockMetadata(
 }
 
 object BlockMetadata {
+  implicit val ordering: Ordering[BlockMetadata] = new Ordering[BlockMetadata] {
+    override def compare(x: BlockMetadata, y: BlockMetadata): Int =
+      x.rank.compare(y.rank) match {
+        case 0 => Ordering[ByteString].compare(x.blockHash, y.blockHash)
+        case x => x
+      }
+  }
+
   implicit val typeMapper = TypeMapper[BlockMetadataInternal, BlockMetadata] { internal =>
     BlockMetadata(
       internal.blockHash,

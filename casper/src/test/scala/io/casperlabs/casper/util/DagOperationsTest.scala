@@ -11,6 +11,7 @@ import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.storage.BlockMetadata
+import io.casperlabs.storage.BlockMetadata.ordering
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -299,21 +300,20 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
 
           dag <- dagStorage.getRepresentation
 
-          ordering <- dag.deriveOrdering(0L)
-          _ <- DagOperations.uncommonAncestors(Vector(b6, b7), dag)(Monad[Task], ordering) shouldBeF Map(
+          _ <- DagOperations.uncommonAncestors[Task](Vector(b6, b7), dag) shouldBeF Map(
                 toMetadata(b6) -> BitSet(0),
                 toMetadata(b4) -> BitSet(0),
                 toMetadata(b7) -> BitSet(1),
                 toMetadata(b2) -> BitSet(1)
               )
 
-          _ <- DagOperations.uncommonAncestors(Vector(b6, b3), dag)(Monad[Task], ordering) shouldBeF Map(
+          _ <- DagOperations.uncommonAncestors[Task](Vector(b6, b3), dag) shouldBeF Map(
                 toMetadata(b6) -> BitSet(0),
                 toMetadata(b4) -> BitSet(0),
                 toMetadata(b5) -> BitSet(0)
               )
 
-          _ <- DagOperations.uncommonAncestors(Vector(b2, b4, b5), dag)(Monad[Task], ordering) shouldBeF Map(
+          _ <- DagOperations.uncommonAncestors[Task](Vector(b2, b4, b5), dag) shouldBeF Map(
                 toMetadata(b2) -> BitSet(0),
                 toMetadata(b4) -> BitSet(1),
                 toMetadata(b5) -> BitSet(2),
@@ -321,7 +321,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                 toMetadata(b1) -> BitSet(1, 2)
               )
 
-          result <- DagOperations.uncommonAncestors(Vector(b1), dag)(Monad[Task], ordering) shouldBeF Map
+          result <- DagOperations.uncommonAncestors[Task](Vector(b1), dag) shouldBeF Map
                      .empty[BlockMetadata, BitSet]
         } yield result
   }
