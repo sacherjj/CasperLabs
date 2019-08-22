@@ -240,7 +240,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 }
 
 object SQLiteDagStorage {
-  def create[F[_]: Sync](implicit xa: Transactor[F], met: Metrics[F]): F[DagStorage[F]] =
+  private def create[F[_]: Sync](implicit xa: Transactor[F], met: Metrics[F]): F[DagStorage[F]] =
     for {
       dagStorage <- Sync[F].delay(new SQLiteDagStorage[F](xa) with MeteredDagStorage[F] {
                      override implicit val m: Metrics[F] = met

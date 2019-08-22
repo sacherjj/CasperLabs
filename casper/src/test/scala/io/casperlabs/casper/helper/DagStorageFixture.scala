@@ -124,10 +124,12 @@ object DagStorageTestFixture {
         ExecutionContexts.synchronous
       )
 
-    for {
-      _          <- Sync[F].delay(flyway.migrate)
-      dagStorage <- SQLiteDagStorage.create[F]
-      _          <- maybeGenesis.fold(().pure[F])(genesis => dagStorage.insert(genesis).void)
-    } yield dagStorage
+    SQLiteDagStorage[F].use(
+      dagStorage =>
+        for {
+          _ <- Sync[F].delay(flyway.migrate)
+          _ <- maybeGenesis.fold(().pure[F])(genesis => dagStorage.insert(genesis).void)
+        } yield dagStorage
+    )
   }
 }

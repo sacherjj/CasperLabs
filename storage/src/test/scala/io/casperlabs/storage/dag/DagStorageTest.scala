@@ -509,12 +509,15 @@ class SQLiteDagStorageTest extends DagStorageTest with BeforeAndAfterEach {
   override def withDagStorage[R](f: DagStorage[Task] => Task[R]): R = {
     import monix.execution.Scheduler.Implicits.global
     import monix.execution.schedulers.CanBlock.permit
-    val program: Task[R] = for {
-      _          <- Task(cleanupTables())
-      _          <- Task(setupTables())
-      dagStorage <- SQLiteDagStorage.create[Task]
-      res        <- f(dagStorage)
-    } yield res
+
+    val program: Task[R] = SQLiteDagStorage[Task].use(
+      dagStorage =>
+        for {
+          _   <- Task(cleanupTables())
+          _   <- Task(setupTables())
+          res <- f(dagStorage)
+        } yield res
+    )
 
     program.runSyncUnsafe(5.seconds)
   }
