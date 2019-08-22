@@ -20,7 +20,7 @@ import io.casperlabs.storage.block.{BlockStorage, FileLMDBIndexBlockStorage}
 import io.casperlabs.storage.blockImplicits._
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.util.byteOps._
-import io.casperlabs.storage.{BlockMsgWithTransform, Context}
+import io.casperlabs.storage.{BlockMsgWithTransform, Context, SQLiteFixture}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.flywaydb.core.Flyway
@@ -484,56 +484,10 @@ class FileDagStorageTest extends DagStorageTest {
   }
 }
 
-class SQLiteDagStorageTest extends DagStorageTest with BeforeAndAfterEach {
-  private val db                              = Paths.get("/", "tmp", "dag_storage_test.db")
-  private implicit val metrics: Metrics[Task] = new MetricsNOP[Task]
+class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[Task]] {
+  override def withDagStorage[R](f: DagStorage[Task] => Task[R]): R = runSQLiteTest[R](f)
 
-  private implicit val xa: Transactor[Task] = Transactor
-    .fromDriverManager[Task](
-      "org.sqlite.JDBC",
-      s"jdbc:sqlite:$db",
-      "",
-      "",
-      ExecutionContexts.synchronous
-    )
+  override def db: String = "/tmp/dag_storage.db"
 
-  private val flyway = {
-    val conf =
-      Flyway
-        .configure()
-        .dataSource(s"jdbc:sqlite:$db", "", "")
-        .locations(new Location("classpath:/db/migration"))
-    conf.load()
-  }
-
-  override def withDagStorage[R](f: DagStorage[Task] => Task[R]): R = {
-    import monix.execution.Scheduler.Implicits.global
-    import monix.execution.schedulers.CanBlock.permit
-
-    val program: Task[R] = SQLiteDagStorage[Task].use(
-      dagStorage =>
-        for {
-          _   <- Task(cleanupTables())
-          _   <- Task(setupTables())
-          res <- f(dagStorage)
-        } yield res
-    )
-
-    program.runSyncUnsafe(5.seconds)
-  }
-
-  private def setupTables(): Unit = flyway.migrate()
-
-  private def cleanupTables(): Unit = flyway.clean()
-
-  private def cleanupDatabase(): Unit =
-    Try(Files.delete(Paths.get("/", "tmp", "deploy_buffer_spec.db")))
-
-  override protected def beforeEach(): Unit = cleanupTables()
-
-  override protected def afterEach(): Unit = cleanupTables()
-
-  override protected def beforeAll(): Unit = cleanupDatabase()
-
-  override protected def afterAll(): Unit = cleanupDatabase()
+  override def createTestResource: Task[DagStorage[Task]] = SQLiteDagStorage.create[Task]
 }
