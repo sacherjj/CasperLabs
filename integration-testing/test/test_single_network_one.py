@@ -685,6 +685,7 @@ class CLI:
 class DockerCLI(CLI):
     def __call__(self, *args):
         logging.info(f"EXECUTING []: {args}")
+        self.host = self.node.container_name
         command = ' '.join(self.expand_args(args))
         logging.info(f"EXECUTING: {command}")
         binary_output = self.node.d_client.invoke_client(command, decode_stdout=False, add_host=False)
