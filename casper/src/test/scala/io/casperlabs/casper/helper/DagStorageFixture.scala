@@ -105,7 +105,7 @@ object DagStorageTestFixture {
   def createDagStorage[F[_]: Metrics: Async: ContextShift](
       dagStorageDir: Path,
       maybeGenesis: Option[Block] = None
-  )(): F[DagStorage[F]] = {
+  ): F[DagStorage[F]] = {
     val jdbcUrl = s"jdbc:sqlite:${dagStorageDir.resolve("dag_storage.db")}"
     val flyway = {
       val conf =
