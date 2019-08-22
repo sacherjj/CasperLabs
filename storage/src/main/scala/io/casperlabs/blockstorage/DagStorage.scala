@@ -3,8 +3,8 @@ package io.casperlabs.blockstorage
 import cats.implicits._
 import cats.Monad
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.DagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStorage.BlockHash
+import io.casperlabs.blockstorage.DagRepresentation.Validator
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.metrics.Metered
 
@@ -36,7 +36,7 @@ trait DagRepresentation[F[_]] {
   def children(blockHash: BlockHash): F[Set[BlockHash]]
 
   /** Return blocks that having a specify justification */
-  def justificationToBlocks(blockHash: BlockHash): F[Option[Set[BlockHash]]]
+  def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]]
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
 

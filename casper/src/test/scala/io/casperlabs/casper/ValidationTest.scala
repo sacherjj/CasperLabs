@@ -399,7 +399,7 @@ class ValidationTest
   it should "return false for non-sequential numbering" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       for {
-        _     <- createChain[Task](2)
+        _     <- createChainWithRoundRobinValidators[Task](2, 2)
         block <- dagStorage.lookupByIdUnsafe(1)
         dag   <- dagStorage.getRepresentation
         _ <- ValidationImpl[Task]
@@ -456,9 +456,9 @@ class ValidationTest
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       val validators = Vector(
-        generateValidator("Validator 1"),
-        generateValidator("Validator 2"),
-        generateValidator("Validator 3")
+        generateValidator("V1"),
+        generateValidator("V2"),
+        generateValidator("V3")
       )
       val bonds = validators.zipWithIndex.map {
         case (v, i) => Bond(v, 2L * i.toLong + 1L)
@@ -485,16 +485,17 @@ class ValidationTest
         } yield block
 
       for {
-        b0  <- createBlock[Task](Seq.empty, bonds = bonds)
-        b1  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 0)
-        b2  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 1)
-        b3  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 2)
-        b4  <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
-        b5  <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
-        b6  <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
-        b7  <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
-        b8  <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
-        b9  <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0) //empty justification
+        b0 <- createBlock[Task](Seq.empty, bonds = bonds)
+        b1 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 0)
+        b2 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 1)
+        b3 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 2)
+        b4 <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
+        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
+        b6 <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
+        b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
+        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
+        b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0)
+               .map(b => b.withHeader(b.getHeader.withJustifications(Seq.empty))) //empty justification
         b10 <- createValidatorBlock[Task](Seq.empty, Seq.empty, 0) //empty justification
         result <- for {
                    dag              <- dagStorage.getRepresentation
@@ -512,16 +513,20 @@ class ValidationTest
                    _ <- Validation[Task].parents(b7, genesisBlockHash, dag).attempt
                    _ <- Validation[Task].parents(b8, genesisBlockHash, dag).attempt
                    _ <- Validation[Task].parents(b9, genesisBlockHash, dag).attempt
-                   _ <- Validation[Task].parents(b10, genesisBlockHash, dag).attempt
 
                    _ = log.warns should have size 3
-                   result = log.warns.forall(
+                   _ = log.warns.forall(
                      _.matches(
                        ".* block parents .* did not match estimate .* based on justification .*"
                      )
                    ) should be(
                      true
                    )
+
+                   result <- Validation[Task]
+                              .parents(b10, genesisBlockHash, dag)
+                              .attempt shouldBeF Left(ValidateErrorWrapper(InvalidParents))
+
                  } yield result
       } yield result
   }

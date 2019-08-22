@@ -1,14 +1,20 @@
-from typing import List
+import os
 import logging
 import pytest
-from pytest import raises
-from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+import json
+import subprocess
+from pathlib import Path
+from typing import List
+from pytest import fixture, raises
+from test import contract_hash
+from test.cl_node.common import testing_root_path
+from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
 from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import wait_for_genesis_block
-from test import contract_hash
+from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
+from casperlabs_client import ABI
 
 
 """
@@ -498,40 +504,170 @@ def test_deploy_with_higher_nonce_does_not_include_previous_deploy(
     assert deploy_hash4 in deploy_hashes(node, block_hash)
 
 
+# Python Client (library)
+
+# fmt: off
+
+
+def resource(fn):
+    cur_path = Path(os.path.realpath(__file__)).parent
+    while cur_path.name != "integration-testing":
+        cur_path = cur_path.parent
+    return cur_path / "resources" / fn
+
+
+def test_args_parser():
+    account_hex = "0001000200030004000500060007000800000001000200030004000500060007"
+    account_bytes = (
+        b"\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08"
+        b"\x00\x00\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07"
+    )
+    u32 = 1024
+    u64 = 1234567890
+    json_str = json.dumps([{"u32": u32}, {"account": account_hex}, {"u64": u64}])
+
+    assert ABI.args_from_json(json_str) == ABI.args(
+        [ABI.u32(1024), ABI.account(account_bytes), ABI.u64(1234567890)]
+    )
+
+
+@fixture()
+def genesis_public_signing_key():
+    with GENESIS_ACCOUNT.public_key_binary_file() as f:
+        yield f
+
+
+def test_deploy_with_args(one_node_network, genesis_public_signing_key):
+    """
+    Deploys test contracts that do:
+
+        revert(get_arg(0)); // for u32 and u512
+
+    and
+
+        revert(sum(address_bytes[u8; 32]) + u32); for multiple argument test.
+
+    Tests args get correctly encoded and decoded in the contract.
+
+    Test expects the test contracts test_args_u32.wasm and test_args_u512.wasm
+    to deserialize correctly their arguments and then call revert with value
+    of the argument (converted to a Rust native int, as expected by revert).
+    If the test contracts don't fail or if their exit code is different
+    than expected, the test will fail.
+    """
+    node = one_node_network.docker_nodes[0]
+    client = node.p_client.client
+
+    nonce = 1
+    for wasm, encode in [
+        (resource("test_args_u32.wasm"), ABI.u32),
+        (resource("test_args_u512.wasm"), ABI.u512),
+    ]:
+        for number in [1, 12, 256, 1024]:
+            response, deploy_hash = client.deploy(
+                payment=wasm,
+                session=wasm,
+                public_key=resource("accounts/account-public-genesis.pem"),
+                private_key=resource("accounts/account-private-genesis.pem"),
+                session_args=ABI.args([encode(number)]),
+                nonce=nonce,
+            )
+            nonce += 1
+            logging.info(
+                f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}"
+            )
+
+            response = client.propose()
+            # Need to convert to hex string from bytes
+            block_hash = response.block_hash.hex()
+
+            for deploy_info in client.showDeploys(block_hash):
+                assert deploy_info.is_error is True
+                assert deploy_info.error_message == f"Exit code: {number}"
+
+            logging.info(f"NONCE ===================== {nonce}")
+
+    wasm = resource("test_args_multi.wasm")
+    account_hex = "0101010102020202030303030404040405050505060606060707070708080808"
+    number = 1000
+    total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
+
+    response, deploy_hash = client.deploy(
+        payment=wasm,
+        session=wasm,
+        public_key=resource("accounts/account-public-genesis.pem"),
+        private_key=resource("accounts/account-private-genesis.pem"),
+        session_args=ABI.args(
+            [ABI.account(bytes.fromhex(account_hex)), ABI.u32(number)]
+        ),
+        nonce=nonce,
+    )
+    logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
+    response = client.propose()
+
+    block_hash = response.block_hash.hex()
+
+    for deploy_info in client.showDeploys(block_hash):
+        assert deploy_info.is_error is True
+        assert deploy_info.error_message == f"Exit code: {total_sum}"
+
+    for blockInfo in client.showBlocks(10):
+        assert blockInfo.status.stats.block_size_bytes > 0
+
+
 # Python CLI #
-
-import subprocess
-import pytest
-import os
-from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
-from test.cl_node.common import testing_root_path
-
-CLI = "casperlabs_client"
 
 
 class CLIErrorExit(Exception):
-    def __init__(self, cp):
+    def __init__(self, cp, output):
         self.cp = cp
+        self.output = output
+
+    def __str__(self):
+        return f"{self.cp}: {self.output}"
+
+
+class CLI:
+    CLI_CMD = "casperlabs_client"
+
+    def __init__(self, node, host, port):
+        self.node = node
+        self.host = host
+        self.port = port
+
+    def __call__(self, *args):
+        command_line = [self.CLI_CMD, "--host", f"{self.host}", "--port", f"{self.port}"] + list(args)
+        command_line = [str(a) for a in command_line]
+        logging.info(f"EXECUTING: {' '.join(command_line)}")
+        cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output = cp.stdout.decode("utf-8")
+        if cp.returncode != 0:
+            raise CLIErrorExit(cp, output)
+
+        if 'deploy' in args or 'propose' in args:
+            return output.split()[3]
+
+        if 'show-blocks' in args:
+            return parse_show_blocks(output)
+
+        if 'show-deploys' in args:
+            return parse_show_deploys(output)
+
+        if 'show-deploy' in args or 'show-block' in args:
+            return parse(output)
+
+        if 'query-state' in args:
+            return parse(output)
+
+        return output
 
 
 @pytest.fixture()  # scope="module")
 def cli(one_node_network):
-
     node = one_node_network.docker_nodes[0]
     host = os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
     port = node.grpc_external_docker_port
-
-    def invoker(*args):
-        command_line = [CLI, "--host", f"{host}", "--port", f"{port}"] + list(args)
-        logging.info(f"EXECUTING: {' '.join(command_line)}")
-        cp = subprocess.run(
-            command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        if cp.returncode != 0:
-            raise CLIErrorExit(cp)
-        return cp.stdout.decode("utf-8")
-
-    return invoker
+    return CLI(node, host, port)
 
 
 def test_cli_no_parameters(cli):
@@ -547,40 +683,49 @@ def test_cli_help(cli):
 
 
 def test_cli_show_blocks_and_show_block(cli):
-    blocks = parse_show_blocks(cli("show-blocks", "--depth", "1"))
+    blocks = cli("show-blocks", "--depth", "1")
     assert len(blocks) > 0
 
     for block in blocks:
         block_hash = block.summary.block_hash
         assert len(block_hash) == 32 * 2  # hex
 
-        b = parse(cli("show-block", block_hash))
+        b = cli("show-block", block_hash)
         assert block_hash == b.summary.block_hash
 
 
 def test_cli_show_block_not_found(cli):
     block_hash = "00" * 32
     with raises(CLIErrorExit) as ex_info:
-        parse(cli("show-block", block_hash))
+        cli("show-block", block_hash)
     # StatusCode.NOT_FOUND: Cannot find block matching hash 0000000000000000000000000000000000000000000000000000000000000000
     assert "NOT_FOUND" in str(ex_info.value)
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
-@pytest.mark.skip
-def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
-    cli, one_node_network
-):
+def account_nonce(account_public_key_base16, node):
+    client = node.p_client
+    nonces = [
+        d.deploy.header.nonce
+        for b in client.show_blocks(1000000)
+        for d in client.show_deploys(b.summary.block_hash.hex())
+        if d.deploy.header.account_public_key.hex() == account_public_key_base16
+    ]
+    return max(nonces, default=0) + 1
+
+
+def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli):
     resources_path = testing_root_path() / "resources"
 
     account = GENESIS_ACCOUNT
+    nonce = 1
 
-    deploy_response = cli(
+    deploy_hash = cli(
         "deploy",
         "--from",
         account.public_key_hex,
         "--nonce",
-        "1",
+        nonce,
         "--payment",
         str(resources_path / "test_helloname.wasm"),
         "--session",
@@ -590,32 +735,19 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
         "--public-key",
         str(account.public_key_path),
     )
-    # 'Success! Deploy hash: xxxxxxxxx...'
-    deploy_hash = deploy_response.split()[3]
-
-    # 'Success! Block hash: xxxxxxxxx...'
-    propose_response = cli("propose")
-    block_hash = propose_response.split()[3]
-    deploys = parse_show_deploys(cli("show-deploys", block_hash))
+    block_hash = cli("propose")
+    deploys = cli("show-deploys", block_hash)
     deploy_hashes = [d.deploy.deploy_hash for d in deploys]
     assert deploy_hash in deploy_hashes
 
-    deploy_info = parse(cli("show-deploy", deploy_hash))
+    deploy_info = cli("show-deploy", deploy_hash)
     assert deploy_info.deploy.deploy_hash == deploy_hash
 
-    result = parse(
-        cli(
-            "query-state",
-            "--block-hash",
-            block_hash,
-            "--type",
-            "address",
-            "--key",
-            account.public_key_hex,
-            "--path",
-            "",
-        )
-    )
+    result = cli("query-state",
+                 "--block-hash", block_hash,
+                 "--type", "address",
+                 "--key", account.public_key_hex,
+                 "--path", "",)
     assert "hello_name" in [u.name for u in result.account.known_urefs]
 
     balance = int(
@@ -623,3 +755,53 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(
     )
     # assert balance == 1000000 # regular test account
     assert balance == 1000000000  # genesis
+
+# CLI ABI
+
+
+abi_unsigned_test_data = [
+    ("u32", 'test_args_u32.wasm'),
+    ("u512", 'test_args_u512.wasm'),
+]
+@pytest.mark.parametrize("unsigned_type, test_contract", abi_unsigned_test_data)
+def test_cli_abi_unsigned(cli, unsigned_type, test_contract):
+    account = GENESIS_ACCOUNT
+    nonce = 0
+    for number in [2, 256, 1024]:
+        nonce += 1
+        args = json.dumps([{unsigned_type: number}])
+        deploy_hash = cli('deploy',
+                          '--from', account.public_key_hex,
+                          '--nonce', nonce,
+                          '--session', resource(test_contract),
+                          '--session-args', f"{args}",
+                          '--payment', resource(test_contract),
+                          '--private-key', account.private_key_path,
+                          '--public-key', account.public_key_path,)
+
+        cli('propose')
+        deploy_info = cli("show-deploy", deploy_hash)
+        assert deploy_info.processing_results[0].is_error is True
+        assert deploy_info.processing_results[0].error_message == f"Exit code: {number}"
+
+
+def test_cli_abi_multiple(cli):
+    account = GENESIS_ACCOUNT
+    test_contract = resource("test_args_multi.wasm")
+    account_hex = "0101010102020202030303030404040405050505060606060707070708080808"
+    number = 1000
+    total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
+
+    args = json.dumps([{'account': account_hex}, {'u32': number}])
+    deploy_hash = cli('deploy',
+                      '--from', account.public_key_hex,
+                      '--nonce', 1,
+                      '--session', resource(test_contract),
+                      '--session-args', f"{args}",
+                      '--payment', resource(test_contract),
+                      '--private-key', account.private_key_path,
+                      '--public-key', account.public_key_path,)
+    cli('propose')
+    deploy_info = cli("show-deploy", deploy_hash)
+    assert deploy_info.processing_results[0].is_error is True
+    assert deploy_info.processing_results[0].error_message == f"Exit code: {total_sum}"

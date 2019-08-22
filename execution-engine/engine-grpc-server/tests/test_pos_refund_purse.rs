@@ -7,7 +7,10 @@ extern crate grpc;
 
 use std::collections::HashMap;
 
-use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::U512;
+use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
+use test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder};
 
 #[allow(unused)]
 mod test_support;
@@ -18,33 +21,69 @@ const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 #[ignore]
 #[test]
 fn should_run_pos_refund_purse_contract_genesis_account() {
-    WasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, "pos_refund_purse.wasm", DEFAULT_BLOCK_TIME, 1)
-        .expect_success()
-        .commit();
+    let mut builder = initialize();
+    refund_tests(&mut builder, GENESIS_ADDR);
 }
 
 #[ignore]
 #[test]
 fn should_run_pos_refund_purse_contract_account_1() {
-    WasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec_with_args(
-            GENESIS_ADDR,
-            "transfer_to_account_01.wasm",
-            DEFAULT_BLOCK_TIME,
-            1,
-            ACCOUNT_1_ADDR,
-        )
+    let mut builder = initialize();
+    transfer(&mut builder, ACCOUNT_1_ADDR, U512::from(2 * MAX_PAYMENT));
+    refund_tests(&mut builder, ACCOUNT_1_ADDR);
+}
+
+fn initialize() -> WasmTestBuilder {
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
+    let mut builder = WasmTestBuilder::new(engine_config);
+
+    builder.run_genesis(GENESIS_ADDR, HashMap::default());
+
+    builder
+}
+
+fn transfer(builder: &mut WasmTestBuilder, address: [u8; 32], amount: U512) {
+    let exec_request = {
+        let genesis_public_key = PublicKey::new(GENESIS_ADDR);
+        let account_1_public_key = PublicKey::new(address);
+
+        let deploy = DeployBuilder::new()
+            .with_address(GENESIS_ADDR)
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (account_1_public_key, amount),
+            )
+            .with_payment_code("standard_payment.wasm", U512::from(MAX_PAYMENT))
+            .with_authorization_keys(&[genesis_public_key])
+            .with_nonce(1)
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    builder
+        .exec_with_exec_request(exec_request)
         .expect_success()
-        .commit()
-        .exec(
-            ACCOUNT_1_ADDR,
-            "pos_refund_purse.wasm",
-            DEFAULT_BLOCK_TIME,
-            1,
-        )
+        .commit();
+}
+
+fn refund_tests(builder: &mut WasmTestBuilder, address: [u8; 32]) {
+    let exec_request = {
+        let public_key = PublicKey::new(address);
+
+        let deploy = DeployBuilder::new()
+            .with_address(address)
+            .with_session_code("do_nothing.wasm", ())
+            .with_payment_code("pos_refund_purse.wasm", U512::from(MAX_PAYMENT))
+            .with_authorization_keys(&[public_key])
+            .with_nonce(1)
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    builder
+        .exec_with_exec_request(exec_request)
         .expect_success()
         .commit();
 }

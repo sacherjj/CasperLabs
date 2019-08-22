@@ -27,6 +27,10 @@ import io.casperlabs.blockstorage.{
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, DeployBufferImpl}
+import io.casperlabs.casper.finality.singlesweep.{
+  FinalityDetector,
+  FinalityDetectorBySingleSweepImpl
+}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -206,7 +210,7 @@ class NodeRuntime private[node] (
                                                                             .of[Effect]
                                                                         )
 
-        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorInstancesImpl[
+        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorBySingleSweepImpl[
           Effect
         ]()(
           Monad[Effect],

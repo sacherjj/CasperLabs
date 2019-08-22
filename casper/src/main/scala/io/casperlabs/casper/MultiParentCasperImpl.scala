@@ -13,6 +13,7 @@ import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
@@ -368,11 +369,8 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
         latestMessages   <- dag.latestMessages
         bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
         justifications   = toJustification(bondedLatestMsgs)
-        maxRank = bondedLatestMsgs.values.foldLeft(-1L) {
-          case (acc, b) => math.max(acc, b.rank)
-        }
-        number          = maxRank + 1
-        protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(number)
+        rank             = ProtoUtil.calculateRank(bondedLatestMsgs.values.toSeq)
+        protocolVersion  = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(rank)
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
                      createProposal(
                        parents,
@@ -513,10 +511,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       )                 = result
       dag               <- dag
       justificationMsgs <- justifications.toList.traverse(j => dag.lookup(j.latestBlockHash))
-      maxRank = justificationMsgs.flatten.foldLeft(-1L) {
-        case (acc, b) => math.max(b.rank, acc)
-      }
-      number = maxRank + 1
+      rank              = ProtoUtil.calculateRank(justificationMsgs.flatten)
       status = if (deploysForBlock.isEmpty) {
         CreateBlockStatus.noNewDeploys
       } else {
@@ -536,7 +531,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
           parentHashes = parents.map(_.blockHash),
           justifications = justifications,
           state = postState,
-          rank = number,
+          rank = rank,
           protocolVersion = protocolVersion.value,
           timestamp = now,
           chainId = chainId
@@ -687,7 +682,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
       chainId: String
   ) {
     //TODO pull out
@@ -925,7 +920,7 @@ object MultiParentCasperImpl {
     def establishMetrics[F[_]: Metrics]: F[Unit] =
       Metrics[F].incrementCounter("gas_spent", 0L)(CasperMetricsSource)
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation](
+    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
         chainId: String
     ): F[StatelessExecutor[F]] =
       for {

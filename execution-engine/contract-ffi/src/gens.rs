@@ -1,3 +1,4 @@
+use crate::execution::Phase;
 use crate::key::*;
 use crate::uref::{AccessRights, URef};
 use crate::value::account::{
@@ -32,6 +33,14 @@ pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
         Just(AccessRights::READ_WRITE),
         Just(AccessRights::ADD_WRITE),
         Just(AccessRights::READ_ADD_WRITE),
+    ]
+}
+
+pub fn phase_arb() -> impl Strategy<Value = Phase> {
+    prop_oneof![
+        Just(Phase::Payment),
+        Just(Phase::Session),
+        Just(Phase::FinalizePayment),
     ]
 }
 
