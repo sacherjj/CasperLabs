@@ -102,6 +102,8 @@ object DagStorageTestFixture {
     FileLMDBIndexBlockStorage.create[F](env, blockStorageDir).map(_.right.get)
   }
 
+  //TODO: Use single database for all storages when we have SQLiteBlockStorage
+  //https://casperlabs.atlassian.net/browse/NODE-663
   def createDagStorage[F[_]: Metrics: Async: ContextShift](
       dagStorageDir: Path,
       maybeGenesis: Option[Block] = None
