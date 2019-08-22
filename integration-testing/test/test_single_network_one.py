@@ -648,7 +648,10 @@ class CLI:
 
         output = binary_output.decode("utf-8")
 
-        if command in ('deploy', 'propose', 'send-deploy'):
+        if command == 'send-deploy':
+            return output.split()[2]
+
+        if command in ('deploy', 'propose'):
             return output.split()[3]
 
         if command == 'show-blocks':
@@ -845,27 +848,30 @@ def test_cli_scala_help(scala_cli):
 
 
 def test_cli_scala_extended_deploy(scala_cli):
+    cli = scala_cli
     account = GENESIS_ACCOUNT
 
-    def resource(file_name):
-        return f"/data/{file_name}"
+    test_contract = "/data/test_helloname.wasm"
+    cli('make-deploy',
+        '--nonce', 1,
+        '-o', '/tmp/unsigned.deploy',
+        '--from', account.public_key_hex,
+        '--session', test_contract,
+        '--payment', test_contract)
 
-    test_contract = resource("test_helloname.wasm")
+    cli('sign-deploy',
+        '-i', '/tmp/unsigned.deploy',
+        '-o', '/tmp/signed.deploy',
+        '--private-key', account.private_key_docker_path,
+        '--public-key', account.public_key_docker_path)
 
-    output = scala_cli('make-deploy',
-                       '--nonce', 1,
-                       '-o', '/tmp/unsigned.deploy',
-                       '--from', account.public_key_hex,
-                       '--session', test_contract,
-                       '--payment', test_contract)
+    deploy_hash = cli('send-deploy', '-i', '/tmp/signed.deploy')
+    cli('propose')
+    deploy_info = cli("show-deploy", deploy_hash)
+    assert not deploy_info.processing_results[0].is_error
 
-    logging.info(f"make-deploy => =|{output}|=")
-
-    output = scala_cli('sign-deploy',
-                       '-i', '/tmp/unsigned.deploy',
-                       '-o', '/tmp/signed.deploy',
-                       '--private-key', account.private_key_docker_path,
-                       '--public-key', account.public_key_docker_path)
-
-    output = scala_cli('send-deploy', '-i', '/tmp/signed.deploy',)
-    output = output
+    try:
+        os.remove('/tmp/unsigned.deploy')
+        os.remove('/tmp/signed.deploy')
+    except Exception:
+        pass
