@@ -637,7 +637,7 @@ class CLI:
 
     def expand_args(self, args):
         def _args(args, connection_details=["--host", f"{self.host}", "--port", f"{self.port}"]):
-            return [str(a) for a in [self.cli_cmd] + connection_details + list(args)]
+            return [str(a) for a in connection_details + list(args)]
 
         return '--help' in args and _args(args, []) or _args(args)
 
@@ -663,7 +663,7 @@ class CLI:
         return output
 
     def __call__(self, *args, sleep=0):
-        command_line = self.expand_args(args)
+        command_line = [str(self.cli_cmd)] + self.expand_args(args)
         logging.info(f"EXECUTING []: {command_line}")
         logging.info(f"EXECUTING: {' '.join(command_line)}")
         if sleep:
@@ -679,6 +679,13 @@ class CLI:
                 pass
             raise CLIErrorExit(cp, output)
 
+        return self.parse_output(args[0], binary_output)
+
+
+class DockerCLI(CLI):
+    def __call__(self, *args):
+        command = ' '.join(self.expand_args(args))
+        binary_output = self.node.d_client.invoke_client(command, decode_stdout=False)
         return self.parse_output(args[0], binary_output)
 
 
