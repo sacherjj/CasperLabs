@@ -329,7 +329,7 @@ where
             // Session code execution
             let session_result = executor.exec(
                 session_module,
-                &session.args(),
+                session.args(),
                 address,
                 &account,
                 authorization_keys,
@@ -503,7 +503,7 @@ where
             // payment_code_spec_2: execute payment code
             executor.exec(
                 payment_module,
-                &payment.args(),
+                payment.args(),
                 address,
                 &account,
                 authorization_keys.clone(),
@@ -575,7 +575,7 @@ where
 
             executor.exec(
                 session_module,
-                &session.args(),
+                session.args(),
                 address,
                 &account,
                 authorization_keys.clone(),

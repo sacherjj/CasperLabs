@@ -14,12 +14,11 @@ pub enum ExecutableDeployItem {
 }
 
 impl ExecutableDeployItem {
-    pub fn args(&self) -> Vec<u8> {
+    pub fn args(&self) -> &[u8] {
         match self {
             ExecutableDeployItem::ModuleBytes { args, .. } => args,
             ExecutableDeployItem::StoredContractByHash { args, .. } => args,
             ExecutableDeployItem::StoredContractByName { args, .. } => args,
         }
-        .to_owned()
     }
 }
