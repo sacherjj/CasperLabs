@@ -3,14 +3,13 @@ package io.casperlabs.storage.dag
 import cats.Apply
 import cats.effect._
 import cats.implicits._
-import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
@@ -35,9 +34,15 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
   override def insert(block: Block): F[DagRepresentation[F]] = {
     val blockSummary = BlockSummary.fromBlock(block)
 
+    val blockMetadataQuery =
+      sql"""|INSERT OR IGNORE INTO block_metadata
+            |(block_hash, rank, data)
+            |VALUES (${block.blockHash}, ${block.rank}, ${blockSummary.toByteString})
+            |""".stripMargin.update.run
+
     val justificationsQuery =
       Update[(BlockHash, BlockHash)](
-        """|INSERT OR IGNORE INTO dag_storage_justifications 
+        """|INSERT OR IGNORE INTO block_justifications 
            |(justification_block_hash, block_hash) 
            |VALUES (?, ?)""".stripMargin
       ).updateMany(
@@ -46,7 +51,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           .toList
       )
 
-    val blocksMetadataQuery = {
+    val latestMessagesQuery = {
       val newValidators = block.state.bonds
         .map(_.validatorPublicKey)
         .toSet
@@ -55,49 +60,36 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
       val toUpdateValidators = if (block.isGenesisLike) {
         // For Genesis, all validators are "new".
-        if (newValidators.nonEmpty) {
-          newValidators.toList
-        } else {
-          // We still need to be able to 'lookup' such block
-          List(ByteString.EMPTY)
-        }
+        newValidators.toList
       } else {
         // For any other block, only validator that produced it
         // needs to have its "latest message" updated.
         List(validator)
       }
 
-      Update[(BlockHash, Validator, Long, ByteString)](
-        """|INSERT OR IGNORE INTO dag_storage_blocks_metadata
-           |(block_hash, validator, rank, data)
-           |VALUES (?, ?, ?, ?)
+      Update[(Validator, BlockHash)](
+        """|INSERT OR REPLACE INTO validator_latest_messages
+           |(validator, block_hash)
+           |VALUES (?, ?)
            |""".stripMargin
-      ).updateMany(
-        toUpdateValidators
-          .map((blockSummary.blockHash, _, blockSummary.rank, blockSummary.toByteString))
-      )
+      ).updateMany(toUpdateValidators.map((_, blockSummary.blockHash)))
     }
 
     val topologicalSortingQuery =
       if (block.isGenesisLike) {
-        sql"""|INSERT OR IGNORE INTO dag_storage_topological_sorting 
-              |(parent_block_hash, child_block_hash, child_rank) 
-              |VALUES (${ByteString.EMPTY}, ${blockSummary.blockHash}, 0)""".stripMargin.update.run
+        ().pure[ConnectionIO]
       } else {
-        Update[(BlockHash, BlockHash, Long)](
-          """|INSERT OR IGNORE INTO dag_storage_topological_sorting 
-             |(parent_block_hash, child_block_hash, child_rank) 
-             |VALUES (?, ?, ?)""".stripMargin
-        ).updateMany(
-          blockSummary.parentHashes
-            .map((_, blockSummary.blockHash, blockSummary.rank))
-            .toList
-        )
+        Update[(BlockHash, BlockHash)](
+          """|INSERT OR IGNORE INTO block_parents 
+             |(parent_block_hash, child_block_hash) 
+             |VALUES (?, ?)""".stripMargin
+        ).updateMany(blockSummary.parentHashes.map((_, blockSummary.blockHash)).toList).void
       }
 
     val transaction = for {
+      _ <- blockMetadataQuery
       _ <- justificationsQuery
-      _ <- blocksMetadataQuery
+      _ <- latestMessagesQuery
       _ <- topologicalSortingQuery
     } yield ()
 
@@ -111,16 +103,17 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
   override def clear(): F[Unit] =
     (for {
-      _ <- sql"DELETE FROM dag_storage_topological_sorting".update.run
-      _ <- sql"DELETE FROM dag_storage_justifications".update.run
-      _ <- sql"DELETE FROM dag_storage_blocks_metadata".update.run
+      _ <- sql"DELETE FROM block_parents".update.run
+      _ <- sql"DELETE FROM block_justifications".update.run
+      _ <- sql"DELETE FROM validator_latest_messages".update.run
+      _ <- sql"DELETE FROM block_metadata".update.run
     } yield ()).transact(xa)
 
   override def close(): F[Unit] = ().pure[F]
 
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
     sql"""|SELECT child_block_hash
-          |FROM dag_storage_topological_sorting 
+          |FROM block_parents 
           |WHERE parent_block_hash=$blockHash""".stripMargin
       .query[BlockHash]
       .to[Set]
@@ -128,7 +121,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
   override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
     sql"""|SELECT block_hash 
-          |FROM dag_storage_justifications 
+          |FROM block_justifications 
           |WHERE justification_block_hash=$blockHash""".stripMargin
       .query[BlockHash]
       .to[Set]
@@ -136,7 +129,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
   override def lookup(blockHash: BlockHash): F[Option[BlockSummary]] =
     sql"""|SELECT data 
-          |FROM dag_storage_blocks_metadata 
+          |FROM block_metadata 
           |WHERE block_hash=$blockHash""".stripMargin
       .query[BlockSummary]
       .option
@@ -144,7 +137,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
   override def contains(blockHash: BlockHash): F[Boolean] =
     sql"""|SELECT 1 
-          |FROM dag_storage_blocks_metadata 
+          |FROM block_metadata 
           |WHERE block_hash=$blockHash""".stripMargin
       .query[Long]
       .option
@@ -155,34 +148,35 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       startBlockNumber: Long,
       endBlockNumber: Long
   ): F[Vector[Vector[BlockHash]]] =
-    sql"""|SELECT DISTINCT child_rank, child_block_hash
-          |FROM dag_storage_topological_sorting
-          |WHERE child_rank >= $startBlockNumber
-          |  AND child_rank <= $endBlockNumber
-          |ORDER BY child_rank""".stripMargin
+    sql"""|SELECT rank, block_hash
+          |FROM block_metadata
+          |WHERE rank>=$startBlockNumber AND rank<=$endBlockNumber
+          |ORDER BY rank
+          |""".stripMargin
       .query[(Long, BlockHash)]
       .to[Vector]
       .transact(xa)
       .flatMap(rearrangeSQLiteResult)
 
   override def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
-    sql"""|SELECT DISTINCT child_rank, child_block_hash
-          |FROM dag_storage_topological_sorting
-          |WHERE child_rank >= $startBlockNumber
-          |ORDER BY child_rank""".stripMargin
+    sql"""SELECT rank, block_hash
+         |FROM block_metadata
+         |WHERE rank>=$startBlockNumber
+         |ORDER BY rank""".stripMargin
       .query[(Long, BlockHash)]
       .to[Vector]
       .transact(xa)
       .flatMap(rearrangeSQLiteResult)
 
   override def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
-    sql"""|SELECT DISTINCT a.child_rank, a.child_block_hash
-          |FROM dag_storage_topological_sorting a
+    sql"""|SELECT a.rank, a.block_hash
+          |FROM block_metadata a
           |INNER JOIN (
-          |    SELECT max(child_rank) max_rank FROM dag_storage_topological_sorting
+          | SELECT max(rank) max_rank FROM block_metadata
           |) b
-          |ON a.child_rank>b.max_rank-${tailLength}
-          |ORDER BY a.child_rank""".stripMargin
+          |ON a.rank>b.max_rank-$tailLength
+          |ORDER BY a.rank
+          |""".stripMargin
       .query[(Long, BlockHash)]
       .to[Vector]
       .transact(xa)
@@ -214,41 +208,34 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
   override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
     sql"""|SELECT block_hash
-          |FROM (SELECT block_hash, MAX(rank)
-          |      FROM dag_storage_blocks_metadata
-          |      WHERE validator = $validator
-          |      GROUP BY validator)""".stripMargin
+          |FROM validator_latest_messages
+          |WHERE validator=$validator""".stripMargin
       .query[BlockHash]
       .option
       .transact(xa)
 
   override def latestMessage(validator: Validator): F[Option[BlockSummary]] =
-    sql"""|SELECT data
-          |FROM (SELECT data, MAX(rank)
-          |      FROM dag_storage_blocks_metadata
-          |      WHERE validator = $validator
-          |      GROUP BY validator)""".stripMargin
+    sql"""|SELECT m.data
+          |FROM validator_latest_messages v
+          |INNER JOIN block_metadata m
+          |ON v.validator=$validator AND v.block_hash=m.block_hash""".stripMargin
       .query[BlockSummary]
       .option
       .transact(xa)
 
   override def latestMessageHashes: F[Map[Validator, BlockHash]] =
-    sql"""|SELECT validator, block_hash
-          |FROM (SELECT validator, block_hash, MAX(rank)
-          |      FROM dag_storage_blocks_metadata
-          |      WHERE validator!=${ByteString.EMPTY}
-          |      GROUP BY validator)""".stripMargin
+    sql"""|SELECT *
+          |FROM validator_latest_messages""".stripMargin
       .query[(Validator, BlockHash)]
       .to[List]
       .transact(xa)
       .map(_.toMap)
 
   override def latestMessages: F[Map[Validator, BlockSummary]] =
-    sql"""|SELECT validator, data
-          |FROM (SELECT validator, data, MAX(rank)
-          |      FROM dag_storage_blocks_metadata
-          |      WHERE validator!=${ByteString.EMPTY}
-          |      GROUP BY validator)""".stripMargin
+    sql"""|SELECT v.validator, m.data
+          |FROM validator_latest_messages v
+          |INNER JOIN block_metadata m
+          |ON m.block_hash=v.block_hash""".stripMargin
       .query[(Validator, BlockSummary)]
       .to[List]
       .transact(xa)
