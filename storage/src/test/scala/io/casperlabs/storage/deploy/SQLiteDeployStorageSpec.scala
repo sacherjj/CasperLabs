@@ -57,7 +57,7 @@ class SQLiteDeployStorageSpec
       storage <- SQLiteDeployStorage.create[Task]
       _       <- test(storage, storage)
     } yield ()
-    program.runSyncUnsafe(5.seconds)
+    program.runSyncUnsafe(15.seconds)
   }
 
   private def setupTables(): Unit = flyway.migrate()

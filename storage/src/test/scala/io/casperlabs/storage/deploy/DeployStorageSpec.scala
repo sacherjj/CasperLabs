@@ -272,13 +272,13 @@ trait DeployStorageSpec
           for {
             _ <- writer.addAsPending(List(first, second))
             _ <- writer.markAsDiscarded(List(first))
-            _ <- Task.sleep(1.second)
+            _ <- Task.sleep(2.seconds)
             _ <- writer.markAsDiscarded(List(second))
-            _ <- writer.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 1)
-            _ <- Task.sleep(1.second)
-            _ <- writer.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 1)
-            _ <- Task.sleep(1.second)
-            _ <- writer.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 0)
+            _ <- writer.cleanupDiscarded(expirationPeriod = 1.second).foreachL(_ shouldBe 1)
+            _ <- Task.sleep(2.seconds)
+            _ <- writer.cleanupDiscarded(expirationPeriod = 1.second).foreachL(_ shouldBe 1)
+            _ <- Task.sleep(2.seconds)
+            _ <- writer.cleanupDiscarded(expirationPeriod = 1.second).foreachL(_ shouldBe 0)
           } yield ()
       }
     }
@@ -291,14 +291,14 @@ trait DeployStorageSpec
           for {
             _ <- writer.addAsPending(List(first))
             _ <- reader.pendingNum.foreachL(_ shouldBe 1)
-            _ <- Task.sleep(1.second)
+            _ <- Task.sleep(2.seconds)
             _ <- writer.addAsProcessed(List(second))
             _ <- writer.markAsPending(List(second))
             _ <- reader.pendingNum.foreachL(_ shouldBe 2)
-            _ <- writer.markAsDiscarded(expirationPeriod = 500.millis)
+            _ <- writer.markAsDiscarded(expirationPeriod = 1.second)
             _ <- reader.pendingNum.foreachL(_ shouldBe 1)
-            _ <- Task.sleep(1.second)
-            _ <- writer.markAsDiscarded(expirationPeriod = 500.millis)
+            _ <- Task.sleep(2.seconds)
+            _ <- writer.markAsDiscarded(expirationPeriod = 1.second)
             _ <- reader.pendingNum.foreachL(_ shouldBe 0)
           } yield ()
       }
