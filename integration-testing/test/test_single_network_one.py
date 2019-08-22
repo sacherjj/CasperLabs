@@ -629,10 +629,10 @@ class CLIErrorExit(Exception):
 
 
 class CLI:
-    def __init__(self, node, host, port, cli_cmd="casperlabs_client"):
+    def __init__(self, node, cli_cmd="casperlabs_client"):
         self.node = node
-        self.host = host
-        self.port = port
+        self.host = os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
+        self.port = node.grpc_external_docker_port
         self.cli_cmd = cli_cmd
 
     def expand_args(self, args):
@@ -684,26 +684,21 @@ class CLI:
 
 class DockerCLI(CLI):
     def __call__(self, *args):
+        logging.info(f"EXECUTING []: {args}")
         command = ' '.join(self.expand_args(args))
-        binary_output = self.node.d_client.invoke_client(command, decode_stdout=False)
+        logging.info(f"EXECUTING: {command}")
+        binary_output = self.node.d_client.invoke_client(command, decode_stdout=False, add_host=False)
         return self.parse_output(args[0], binary_output)
-
-
-def make_cli(node, cli_cmd):
-    host = os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
-    port = node.grpc_external_docker_port
-    return CLI(node, host, port, cli_cmd)
 
 
 @pytest.fixture()  # scope="module")
 def cli(one_node_network):
-    return make_cli(one_node_network.docker_nodes[0], "casperlabs_client")
+    return CLI(one_node_network.docker_nodes[0], "casperlabs_client")
 
 
 @pytest.fixture()  # scope="module")
 def scala_cli(one_node_network):
-    cli_cmd = testing_root_path() / "../client/target/universal/stage/bin/casperlabs-client"
-    return make_cli(one_node_network.docker_nodes[0], cli_cmd)
+    return DockerCLI(one_node_network.docker_nodes[0])
 
 
 def test_cli_no_parameters(cli):
@@ -850,14 +845,18 @@ def test_cli_scala_help(scala_cli):
 
 def test_cli_scala_extended_deploy(scala_cli):
     account = GENESIS_ACCOUNT
+
+    def resource(file_name):
+        return f"/data/{file_name}"
+
     test_contract = resource("test_helloname.wasm")
 
     output = scala_cli('make-deploy',
                        '--nonce', 1,
-                       '-o', 'created.deploy',
+                       '-o', '/tmp/unsigned.deploy',
                        '--from', account.public_key_hex,
-                       '--session', resource(test_contract),
-                       '--payment', resource(test_contract))
+                       '--session', test_contract,
+                       '--payment', test_contract)
     """
          - Subcommand: make-deploy - Constructs a deploy that can be signed and sent to a node.
          -   -o, --deploy-path  <arg>   Path to the file where deploy will be saved.
@@ -876,10 +875,10 @@ def test_cli_scala_extended_deploy(scala_cli):
     """
 
     output = scala_cli('sign-deploy',
-                       '--deploy-path', 'created.deploy',
-                       '--signed-deploy-path', 'signed.deploy',
-                       '--private-key', account.private_key_path,
-                       '--public-key', account.public_key_path,)
+                       '-i', '/tmp/unsigned.deploy',
+                       '-o', '/tmp/signed.deploy',
+                       '--private-key', account.private_key_docker_path,
+                       '--public-key', account.public_key_docker_path)
     """
          - Subcommand: sign-deploy - Cryptographically signs a deploy. The signature is appended to existing approvals.
          -   -i, --deploy-path  <arg>          Path to the deploy file.
@@ -894,7 +893,7 @@ def test_cli_scala_extended_deploy(scala_cli):
     """
 
     output = scala_cli('send-deploy',
-                       '--deploy-path', 'signed.deploy',)
+                       '-i', '/tmp/signed.deploy',)
     output = output
 
     """

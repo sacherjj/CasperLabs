@@ -36,6 +36,14 @@ class Account:
         return self.account_path / self.private_key_filename
 
     @property
+    def public_key_docker_path(self) -> Path:
+        return f"/data/accounts/{self.public_key_filename}"
+
+    @property
+    def private_key_docker_path(self) -> Path:
+        return f"/data/accounts/{self.private_key_filename}"
+
+    @property
     def private_key_filename(self) -> str:
         return f"account-private-{self.file_id}.pem"
 

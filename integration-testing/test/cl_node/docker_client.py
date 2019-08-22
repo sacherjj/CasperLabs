@@ -33,9 +33,12 @@ class DockerClient(CasperLabsClient, LoggingMixin):
     def client_type(self) -> str:
         return "docker"
 
-    def invoke_client(self, command: str, decode_stdout: bool = True) -> str:
+    def invoke_client(
+        self, command: str, decode_stdout: bool = True, add_host: bool = True
+    ) -> str:
         volumes = {self.node.host_mount_dir: {"bind": "/data", "mode": "ro"}}
-        command = f"--host {self.node.container_name} {command}"
+        if add_host:
+            command = f"--host {self.node.container_name} {command}"
         self.logger.info(f"COMMAND {command}")
         container = self.docker_client.containers.run(
             image=f"casperlabs/client:{self.node.docker_tag}",
