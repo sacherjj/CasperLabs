@@ -179,7 +179,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .transact(xa)
       .flatMap(rearrangeSQLiteResult)
 
-  /* Expects that ranks are monotonically increasing */
+  /* Returns hashes grouped by ranks, in ascending order. */
   private def rearrangeSQLiteResult(
       blockHashesAndRanks: Vector[(Long, BlockHash)]
   ): F[Vector[Vector[BlockHash]]] = {
