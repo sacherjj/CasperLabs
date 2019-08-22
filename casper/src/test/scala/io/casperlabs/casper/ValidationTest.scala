@@ -788,6 +788,32 @@ class ValidationTest
       } yield postState shouldBe Left(ValidateErrorWrapper(InvalidPreStateHash))
   }
 
+  "deployUniqueness" should "return InvalidRepeatDeploy when a deploy is present in an ancestor" in withStorage {
+    implicit blockStorage => implicit dagStorage =>
+      val contract        = ByteString.copyFromUtf8("some contract")
+      val deploysWithCost = prepareDeploys(Vector(contract), 1)
+      for {
+        genesis <- createBlock[Task](Seq.empty, deploys = deploysWithCost)
+        block   <- createBlock[Task](Seq(genesis.blockHash), deploys = deploysWithCost)
+        dag     <- dagStorage.getRepresentation
+        result  <- ValidationImpl[Task].deployUniqueness(block, dag).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(InvalidRepeatDeploy))
+  }
+
+  it should "return InvalidRepeatDeploy when a deploy is present in the body twice" in withStorage {
+    implicit blockStorage => implicit dagStorage =>
+      val contract        = ByteString.copyFromUtf8("some contract")
+      val deploysWithCost = prepareDeploys(Vector(contract), 1)
+      for {
+        genesis <- createBlock[Task](
+                    Seq.empty,
+                    deploys = deploysWithCost ++ deploysWithCost
+                  )
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployUniqueness(genesis, dag).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(InvalidRepeatDeploy))
+  }
+
   it should "return InvalidPostStateHash when postStateHash of block is not correct" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       implicit val executionEngineService: ExecutionEngineService[Task] =

@@ -407,6 +407,13 @@ where
 
                 Ok(Some(RuntimeValue::I32(ret)))
             }
+
+            FunctionIndex::GetPhaseIndex => {
+                // args(0) = pointer to Wasm memory where to write.
+                let dest_ptr = Args::parse(args)?;
+                self.get_phase(dest_ptr)?;
+                Ok(None)
+            }
         }
     }
 }

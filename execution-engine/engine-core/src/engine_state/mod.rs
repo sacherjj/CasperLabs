@@ -7,6 +7,7 @@ use parking_lot::Mutex;
 
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
+use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
@@ -214,6 +215,7 @@ where
                 protocol_version,
                 correlation_id,
                 tracking_copy,
+                Phase::Session,
             );
 
             return Ok(session_result);
@@ -254,29 +256,27 @@ where
             *mint_info.inner_key().as_uref().unwrap()
         };
 
+        // Get proof of stake system contract URef from account (an account on a different
+        // network may have a pos contract other than the CLPoS)
+        // payment_code_spec_6: system contract validity
+        let proof_of_stake_public_uref: Key = match account.urefs_lookup().get(POS_NAME) {
+            Some(uref) => uref.normalize(),
+            None => {
+                return Ok(ExecutionResult::precondition_failure(
+                    Error::MissingSystemContractError(POS_NAME.to_string()),
+                ));
+            }
+        };
+
         // Get proof of stake system contract details
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_info = {
-            // Get proof of stake system contract URef from account (an account on a different
-            // network may have a pos contract other than the CLPoS)
-            // payment_code_spec_6: system contract validity
-            let proof_of_stake_public_uref: Key = match account.urefs_lookup().get(POS_NAME) {
-                Some(uref) => uref.normalize(),
-                None => {
-                    return Ok(ExecutionResult::precondition_failure(
-                        Error::MissingSystemContractError(POS_NAME.to_string()),
-                    ));
-                }
-            };
-
-            match tracking_copy
-                .borrow_mut()
-                .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
-            {
-                Ok(contract_info) => contract_info,
-                Err(error) => {
-                    return Ok(ExecutionResult::precondition_failure(error.into()));
-                }
+        let proof_of_stake_info = match tracking_copy
+            .borrow_mut()
+            .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
+        {
+            Ok(contract_info) => contract_info,
+            Err(error) => {
+                return Ok(ExecutionResult::precondition_failure(error.into()));
             }
         };
 
@@ -381,6 +381,7 @@ where
                 protocol_version,
                 correlation_id,
                 Rc::clone(&tracking_copy),
+                Phase::Payment,
             )
         };
 
@@ -452,6 +453,7 @@ where
                 protocol_version,
                 correlation_id,
                 Rc::clone(&tracking_copy),
+                Phase::Session,
             )
         };
 
@@ -477,7 +479,15 @@ where
                     .expect("args should parse")
             };
 
-            let mut proof_of_stake_keys = proof_of_stake_info.contract().urefs_lookup().clone();
+            // The PoS keys may have changed because of effects during payment and/or session,
+            // so we need to look them up again from the tracking copy
+            let mut proof_of_stake_keys = tracking_copy
+                .borrow_mut()
+                .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
+                .expect("PoS must be found because we found it earlier")
+                .contract()
+                .urefs_lookup()
+                .clone();
 
             executor.exec_direct(
                 proof_of_stake_module,
@@ -491,6 +501,7 @@ where
                 protocol_version,
                 correlation_id,
                 Rc::clone(&tracking_copy),
+                Phase::FinalizePayment,
             )
         };
 

@@ -21,6 +21,8 @@ extern crate failure;
 extern crate wee_alloc;
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate num_derive;
 
 #[cfg(any(test, feature = "gens"))]
 extern crate proptest;
@@ -32,6 +34,7 @@ pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 pub mod base16;
 pub mod bytesrepr;
 pub mod contract_api;
+pub mod execution;
 #[cfg(any(test, feature = "gens"))]
 pub mod gens;
 pub mod key;
@@ -123,6 +126,7 @@ mod ext_ffi {
             amount_size: usize,
         ) -> i32;
         pub fn get_balance(purse_id_ptr: *const u8, purse_id_size: usize) -> i32;
+        pub fn get_phase(dest_ptr: *mut u8);
     }
 }
 

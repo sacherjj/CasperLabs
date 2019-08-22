@@ -13,6 +13,7 @@ use rand::RngCore;
 use rand_chacha::ChaChaRng;
 
 use contract_ffi::bytesrepr::{deserialize, ToBytes};
+use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{
@@ -49,6 +50,7 @@ pub struct RuntimeContext<'a, R> {
     rng: Rc<RefCell<ChaChaRng>>,
     protocol_version: u64,
     correlation_id: CorrelationId,
+    phase: Phase,
 }
 
 impl<'a, R: StateReader<Key, Value>> RuntimeContext<'a, R>
@@ -71,6 +73,7 @@ where
         rng: Rc<RefCell<ChaChaRng>>,
         protocol_version: u64,
         correlation_id: CorrelationId,
+        phase: Phase,
     ) -> Self {
         RuntimeContext {
             state,
@@ -87,6 +90,7 @@ where
             rng,
             protocol_version,
             correlation_id,
+            phase,
         }
     }
 
@@ -248,6 +252,10 @@ where
 
     pub fn correlation_id(&self) -> CorrelationId {
         self.correlation_id
+    }
+
+    pub fn phase(&self) -> Phase {
+        self.phase
     }
 
     /// Generates new function address.

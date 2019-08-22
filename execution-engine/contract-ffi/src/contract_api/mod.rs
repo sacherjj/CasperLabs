@@ -5,6 +5,7 @@ pub mod pointers;
 use self::alloc_util::*;
 use self::pointers::*;
 use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
+use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
@@ -547,4 +548,11 @@ pub fn transfer_from_purse_to_purse(
     }
     .try_into()
     .expect("Should parse result")
+}
+
+pub fn get_phase() -> Phase {
+    let dest_ptr = alloc_bytes(PHASE_SIZE);
+    unsafe { ext_ffi::get_phase(dest_ptr) };
+    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SIZE, PHASE_SIZE) };
+    deserialize(&bytes).unwrap()
 }

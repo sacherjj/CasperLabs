@@ -404,16 +404,22 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       parents: Seq[Block]
   ): F[Seq[Deploy]] =
     for {
-      orphanedDeploys <- findOrphanedDeploys(dag, parents)
-      pendingDeploys  <- DeployBuffer[F].readPendingHashes
-      // Pending deploys are most likely not in the past, or we'd have to go back indefinitely to
-      // prove they aren't. The EE will ignore them if the nonce is less than the expected,
-      // so it should be fine to include and see what happens.
-      candidatesHashes = orphanedDeploys ++ pendingDeploys
+      // We have re-queued orphan deploys already, so we can just look at pending ones.
+      pendingDeployHashes <- DeployBuffer[F].readPendingHashes
 
-      // Only send the next nonce per account.
+      // Make sure pending deploys have never been processed in the past cone of the new parents.
+      candidateBlockHashes <- filterDeploysNotInPast(dag, parents, pendingDeployHashes)
+
+      // The ones which aren't candidates now can be discarded as duplicates.
+      deploysToDiscard = pendingDeployHashes.toSet -- candidateBlockHashes
+      _ <- DeployBuffer[F]
+            .markAsDiscardedByHashes(deploysToDiscard.toList)
+            .whenA(deploysToDiscard.nonEmpty)
+
+      // Only send the next nonce per account. This will change once the nonce check is removed in the EE
+      // and support for SEQ/PAR blocks is added, then we can send all deploys for the account.
       remaining <- DeployBuffer[F]
-                    .getByHashes(candidatesHashes)
+                    .getByHashes(candidateBlockHashes)
                     .map {
                       _.groupBy(_.getHeader.accountPublicKey).map {
                         case (_, deploys) => deploys.minBy(_.getHeader.nonce)
@@ -435,20 +441,22 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       tips    <- tipHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
       merged  <- ExecEngineUtil.merge[F](tips, dag)
       parents = merged.parents
-
-      orphanedDeploys <- findOrphanedDeploys(dag, parents)
-      _               <- DeployBuffer[F].markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
+      // Consider deploys which this node has processed but hasn't finalized yet.
+      processedDeploys <- DeployBuffer[F].readProcessedHashes
+      orphanedDeploys  <- filterDeploysNotInPast(dag, parents, processedDeploys)
+      _                <- DeployBuffer[F].markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
     } yield orphanedDeploys.size
 
-  /** Find orphaned deploys in the processed buffer. */
-  private def findOrphanedDeploys(
+  /** Find deploys which either haven't been processed yet or are in blocks which are
+    * not in the past cone of the chosen parents.
+    */
+  private def filterDeploysNotInPast(
       dag: DagRepresentation[F],
-      parents: Seq[Block]
+      parents: Seq[Block],
+      deployHashes: List[ByteString]
   ): F[List[ByteString]] =
     for {
-      processedDeploysHashes <- DeployBuffer[F].readProcessedHashes
-      parentSet              = parents.map(_.blockHash).toSet
-      deployHashToBlocksMap <- processedDeploysHashes
+      deployHashToBlocksMap <- deployHashes
                                 .traverse { deployHash =>
                                   BlockStorage[F]
                                     .findBlockHashesWithDeployhash(deployHash)
@@ -458,25 +466,22 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
 
       blockHashes = deployHashToBlocksMap.values.flatten.toList.distinct
 
-      // Find the blocks from which there's no way through the descendants to reach a tip.
-      orphanedBlockHashes <- blockHashes
-                              .traverse { blockHash =>
-                                DagOperations
-                                  .bfTraverseF[F, BlockHash](List(blockHash))(
-                                    h => dag.children(h).map(_.toList)
-                                  )
-                                  .find(parentSet)
-                                  .map(blockHash -> _.isEmpty)
-                              }
-                              .map {
-                                _.filter(_._2).map(_._1).toSet
-                              }
+      // Find the blocks from which there's a way through the descendants to reach a tip.
+      parentSet = parents.map(_.blockHash).toSet
+      nonOrphanedBlockHashes <- DagOperations
+                                 .collectWhereDescendantPathExists[F](
+                                   dag,
+                                   blockHashes.toSet,
+                                   parentSet
+                                 )
 
-      orphanedDeploys = deployHashToBlocksMap.collect {
-        case (deployHash, blockHashes) if blockHashes.forall(orphanedBlockHashes) => deployHash
+      deploysNotInPast = deployHashToBlocksMap.collect {
+        case (deployHash, blockHashes)
+            if blockHashes.isEmpty || !blockHashes.exists(nonOrphanedBlockHashes) =>
+          deployHash
       }.toList
 
-    } yield orphanedDeploys
+    } yield deploysNotInPast
 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */

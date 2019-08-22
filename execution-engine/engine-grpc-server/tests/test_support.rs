@@ -108,7 +108,6 @@ impl DeployBuilder {
 impl Default for DeployBuilder {
     fn default() -> Self {
         let mut deploy = Deploy::new();
-        deploy.set_motes_transferred_in_payment(1_000_000_000);
         deploy.set_gas_price(1);
         DeployBuilder { deploy }
     }
@@ -181,7 +180,6 @@ pub fn get_protocol_version() -> ProtocolVersion {
 pub fn get_mock_deploy() -> Deploy {
     let mut deploy = Deploy::new();
     deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
-    deploy.set_motes_transferred_in_payment(1000);
     deploy.set_gas_price(1);
     deploy.set_nonce(1);
     let mut deploy_code = DeployCode::new();
@@ -222,7 +220,7 @@ pub fn create_genesis_request(
     let initial_tokens = {
         let mut ret = BigInt::new();
         ret.set_bit_width(512);
-        ret.set_value("100000000000".to_string());
+        ret.set_value(format!("{}", GENESIS_INITIAL_BALANCE));
         ret
     };
 

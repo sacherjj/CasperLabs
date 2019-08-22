@@ -38,7 +38,7 @@ class MenuItem {
 
 const SideMenuItems: MenuItem[] = [
   new MenuItem(Pages.Home, 'Home', 'home', true),
-  new MenuItem(Pages.Accounts, 'Accounts', 'address-book'),
+  new MenuItem(Pages.Accounts, 'Account Keys', 'address-book'),
   new MenuItem(Pages.Faucet, 'Faucet', 'coins'),
   new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
   new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),

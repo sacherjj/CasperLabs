@@ -609,6 +609,11 @@ mod proptests {
         fn test_result(result in result_arb()) {
             assert!(test_serialization_roundtrip(&result))
         }
+
+        #[test]
+        fn test_phase_serialization(phase in phase_arb()) {
+            assert!(test_serialization_roundtrip(&phase));
+        }
     }
 
 }
