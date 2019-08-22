@@ -33,9 +33,15 @@ class DockerClient(CasperLabsClient, LoggingMixin):
     def client_type(self) -> str:
         return "docker"
 
-    def invoke_client(self, command: str) -> str:
-        volumes = {self.node.host_mount_dir: {"bind": "/data", "mode": "ro"}}
-        command = f"--host {self.node.container_name} {command}"
+    def invoke_client(
+        self, command: str, decode_stdout: bool = True, add_host: bool = True
+    ) -> str:
+        volumes = {
+            self.node.host_mount_dir: {"bind": "/data", "mode": "ro"},
+            "/tmp": {"bind": "/tmp", "mode": "rw"},
+        }
+        if add_host:
+            command = f"--host {self.node.container_name} {command}"
         self.logger.info(f"COMMAND {command}")
         container = self.docker_client.containers.run(
             image=f"casperlabs/client:{self.node.docker_tag}",
@@ -49,7 +55,8 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         )
         r = container.wait()
         status_code = r["StatusCode"]
-        stdout = container.logs(stdout=True, stderr=False).decode("utf-8")
+        stdout_raw = container.logs(stdout=True, stderr=False)
+        stdout = decode_stdout and stdout_raw.decode("utf-8") or stdout_raw
         stderr = container.logs(stdout=False, stderr=True).decode("utf-8")
 
         # TODO: I don't understand why bug if I just call `self.logger.debug` then
