@@ -7,7 +7,6 @@
 * [protoc](https://github.com/protocolbuffers/protobuf/releases), version 3.6.1 or greater
 * [sbt](https://www.scala-sbt.org/download.html)
 * [rustup](https://www.rust-lang.org/tools/install)
-* [npm](https://github.com/nodesource/distributions#installation-instructions)
 
 ### Instructions
 
