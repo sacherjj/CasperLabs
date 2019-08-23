@@ -217,7 +217,7 @@ pub fn create_genesis_request(
     let genesis_account_addr = address.to_vec();
     let mut contracts: HashMap<SystemContractType, WasmiBytes> = HashMap::new();
 
-    let initial_tokens = {
+    let initial_motes = {
         let mut ret = BigInt::new();
         ret.set_bit_width(512);
         ret.set_value(format!("{}", GENESIS_INITIAL_BALANCE));
@@ -266,7 +266,7 @@ pub fn create_genesis_request(
 
     let mut ret = GenesisRequest::new();
     ret.set_address(genesis_account_addr.to_vec());
-    ret.set_initial_motes(initial_tokens);
+    ret.set_initial_motes(initial_motes);
     ret.set_mint_code(mint_code);
     ret.set_proof_of_stake_code(proof_of_stake_code);
     ret.set_protocol_version(protocol_version);
