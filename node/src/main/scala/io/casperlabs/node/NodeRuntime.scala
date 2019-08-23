@@ -65,6 +65,12 @@ class NodeRuntime private[node] (
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionHandler)
   private[this] val blockingScheduler =
     Scheduler.cached("blocking-io", 4, 64, reporter = UncaughtExceptionHandler)
+
+  private[this] val dbConnScheduler =
+    Scheduler.cached("db-conn", 1, 64, reporter = UncaughtExceptionHandler)
+  private[this] val dbIOScheduler =
+    Scheduler.cached("db-io", 1, Int.MaxValue, reporter = UncaughtExceptionHandler)
+
   private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
     catsConcurrentEffectForEffect(
       scheduler
@@ -123,8 +129,8 @@ class NodeRuntime private[node] (
                                                                             )
         //TODO: We may want to adjust threading model for better performance
         implicit0(doobieTransactor: Transactor[Effect]) <- effects.doobieTransactor(
-                                                            blockingScheduler,
-                                                            blockingScheduler,
+                                                            connectEC = dbConnScheduler,
+                                                            transactEC = dbIOScheduler,
                                                             conf.server.dataDir
                                                           )
         implicit0(deployBuffer: DeployBuffer[Effect]) <- Resource
