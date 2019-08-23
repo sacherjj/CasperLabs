@@ -11,12 +11,10 @@ use std::convert::TryInto;
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{Account, PublicKey, PurseId};
-use contract_ffi::value::contract::Contract;
 use contract_ffi::value::U512;
 
 use engine_core::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
 use engine_core::engine_state::{EngineConfig, CONV_RATE};
-use engine_core::execution::POS_NAME;
 
 use test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
@@ -199,7 +197,7 @@ fn get_pos_rewards_purse_balance(builder: &WasmTestBuilder) -> U512 {
 }
 
 fn get_pos_refund_purse(builder: &WasmTestBuilder) -> Option<Key> {
-    let pos_contract = get_pos_contract(builder);
+    let pos_contract = builder.get_pos_contract();
 
     pos_contract
         .urefs_lookup()
@@ -207,21 +205,8 @@ fn get_pos_refund_purse(builder: &WasmTestBuilder) -> Option<Key> {
         .cloned()
 }
 
-fn get_pos_contract(builder: &WasmTestBuilder) -> Contract {
-    let genesis_key = Key::Account(GENESIS_ADDR);
-    let pos_uref: Key = builder
-        .query(None, genesis_key, &[POS_NAME])
-        .and_then(|v| v.try_into().ok())
-        .expect("should find PoS URef");
-
-    builder
-        .query(None, pos_uref, &[])
-        .and_then(|v| v.try_into().ok())
-        .expect("should find PoS Contract")
-}
-
 fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Option<PurseId> {
-    let pos_contract = get_pos_contract(builder);
+    let pos_contract = builder.get_pos_contract();
 
     pos_contract
         .urefs_lookup()

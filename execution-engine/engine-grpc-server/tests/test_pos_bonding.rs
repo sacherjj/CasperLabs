@@ -14,11 +14,9 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::Account;
-use contract_ffi::value::Contract;
 use contract_ffi::value::{Value, U512};
 
 use engine_core::engine_state::genesis::POS_BONDING_PURSE;
-use engine_core::execution::POS_NAME;
 use engine_shared::transform::Transform;
 
 use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
@@ -29,21 +27,8 @@ mod test_support;
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 
-fn get_pos_contract(builder: &WasmTestBuilder) -> Contract {
-    let genesis_key = Key::Account(GENESIS_ADDR);
-    let pos_uref: Key = builder
-        .query(None, genesis_key, &[POS_NAME])
-        .and_then(|v| v.try_into().ok())
-        .expect("should find PoS URef");
-
-    builder
-        .query(None, pos_uref, &[])
-        .and_then(|v| v.try_into().ok())
-        .expect("should find PoS Contract")
-}
-
 fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Option<PurseId> {
-    let pos_contract = get_pos_contract(builder);
+    let pos_contract = builder.get_pos_contract();
 
     pos_contract
         .urefs_lookup()
@@ -213,7 +198,7 @@ fn should_run_successful_bond_and_unbond() {
         U512::from(50_000 + 100_000 + 22_000)
     );
 
-    let pos_contract = get_pos_contract(result.builder());
+    let pos_contract = result.builder().get_pos_contract();
 
     let lookup_key = format!("v_{}_{}", base16::encode_lower(&ACCOUNT_1_ADDR), 42_000);
     assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
@@ -275,7 +260,7 @@ fn should_run_successful_bond_and_unbond() {
         U512::from(50_000 + 55_000)
     );
 
-    let pos_contract = get_pos_contract(result.builder());
+    let pos_contract = result.builder().get_pos_contract();
 
     let lookup_key = format!("v_{}_{}", base16::encode_lower(&ACCOUNT_1_ADDR), 22_000);
     // Account 1 isn't tracked anymore in the bonding queue
@@ -310,7 +295,7 @@ fn should_run_successful_bond_and_unbond() {
         U512::from(50_000)
     );
 
-    let pos_contract = get_pos_contract(result.builder());
+    let pos_contract = result.builder().get_pos_contract();
     let lookup_key = format!("v_{}_{}", base16::encode_lower(&GENESIS_ADDR), 55_000);
     // Genesis is still tracked anymore in the bonding queue with different uref name
     assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));

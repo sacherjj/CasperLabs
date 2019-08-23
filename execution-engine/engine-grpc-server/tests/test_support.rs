@@ -26,6 +26,7 @@ use casperlabs_engine_grpc_server::engine_server::mappings::{
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState};
+use engine_core::execution::POS_NAME;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -870,5 +871,21 @@ impl WasmTestBuilder {
 
     pub fn finish(&self) -> WasmTestResult {
         WasmTestResult(self.clone())
+    }
+
+    pub fn get_pos_contract(&self) -> contract_ffi::value::contract::Contract {
+        let genesis_account = self
+            .genesis_account
+            .clone()
+            .expect("should run genesis process first");
+        let genesis_key = contract_ffi::key::Key::Account(genesis_account.pub_key());
+        let pos_uref: contract_ffi::key::Key = self
+            .query(None, genesis_key, &[POS_NAME])
+            .and_then(|v| v.try_into().ok())
+            .expect("should find PoS URef");
+
+        self.query(None, pos_uref, &[])
+            .and_then(|v| v.try_into().ok())
+            .expect("should find PoS Contract")
     }
 }
