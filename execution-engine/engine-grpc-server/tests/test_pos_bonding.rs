@@ -6,15 +6,12 @@ extern crate engine_storage;
 extern crate grpc;
 
 use std::collections::HashMap;
-use std::convert::TryInto;
 
 use contract_ffi::base16;
-use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::account::PurseId;
-use contract_ffi::value::Account;
-use contract_ffi::value::{Value, U512};
+use contract_ffi::value::U512;
 
 use engine_core::engine_state::genesis::POS_BONDING_PURSE;
 use engine_shared::transform::Transform;
@@ -37,39 +34,10 @@ fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Opti
         .map(|u| PurseId::new(*u))
 }
 
-fn get_purse_balance(builder: &WasmTestBuilder, purse_id: PurseId) -> U512 {
-    let mint = builder.get_mint_contract_uref();
-    let purse_bytes = purse_id
-        .value()
-        .addr()
-        .to_bytes()
-        .expect("should be able to serialize purse bytes");
-
-    let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
-    let balance_uref = builder
-        .query(None, balance_mapping_key, &[])
-        .and_then(|v| v.try_into().ok())
-        .expect("should find balance uref");
-
-    builder
-        .query(None, balance_uref, &[])
-        .and_then(|v| v.try_into().ok())
-        .expect("should parse balance into a U512")
-}
-
 fn get_pos_bonding_purse_balance(builder: &WasmTestBuilder) -> U512 {
     let purse_id = get_pos_purse_id_by_name(builder, POS_BONDING_PURSE)
         .expect("should find PoS payment purse");
-    get_purse_balance(builder, purse_id)
-}
-
-fn get_account(builder: &WasmTestBuilder, key: Key) -> Option<Account> {
-    let account_value = builder.query(None, key, &[]).expect("should query account");
-    if let Value::Account(account) = account_value {
-        Some(account)
-    } else {
-        None
-    }
+    builder.get_purse_balance(purse_id)
 }
 
 const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
@@ -111,8 +79,10 @@ fn should_run_successful_bond_and_unbond() {
         .expect_success()
         .commit()
         .finish();
-    let genesis_account =
-        get_account(result.builder(), genesis_account_key).expect("should get account 1");
+    let genesis_account = result
+        .builder()
+        .get_account(genesis_account_key)
+        .expect("should get account 1");
 
     let pos = result.builder().get_pos_contract_uref();
 
@@ -168,7 +138,10 @@ fn should_run_successful_bond_and_unbond() {
 
     let account_1_key = Key::Account(ACCOUNT_1_ADDR);
 
-    let account_1 = get_account(result.builder(), account_1_key).expect("should get account 1");
+    let account_1 = result
+        .builder()
+        .get_account(account_1_key)
+        .expect("should get account 1");
 
     let pos = result.builder().get_pos_contract_uref();
 
@@ -216,7 +189,7 @@ fn should_run_successful_bond_and_unbond() {
         .finish();
 
     assert_eq!(
-        get_purse_balance(result.builder(), account_1.purse_id()),
+        result.builder().get_purse_balance(account_1.purse_id()),
         U512::from(ACCOUNT_1_SEED_AMOUNT - ACCOUNT_1_STAKE + ACCOUNT_1_UNBOND_1)
     );
 
@@ -263,7 +236,9 @@ fn should_run_successful_bond_and_unbond() {
         .finish();
 
     assert_eq!(
-        get_purse_balance(result.builder(), genesis_account.purse_id()),
+        result
+            .builder()
+            .get_purse_balance(genesis_account.purse_id()),
         U512::from(
             test_support::GENESIS_INITIAL_BALANCE
                 - ACCOUNT_1_SEED_AMOUNT
@@ -296,7 +271,7 @@ fn should_run_successful_bond_and_unbond() {
         .finish();
 
     assert_eq!(
-        get_purse_balance(result.builder(), account_1.purse_id()),
+        result.builder().get_purse_balance(account_1.purse_id()),
         U512::from(ACCOUNT_1_SEED_AMOUNT)
     );
 
@@ -335,7 +310,9 @@ fn should_run_successful_bond_and_unbond() {
 
     // Back to original after funding account1's pursee
     assert_eq!(
-        get_purse_balance(result.builder(), genesis_account.purse_id()),
+        result
+            .builder()
+            .get_purse_balance(genesis_account.purse_id()),
         U512::from(test_support::GENESIS_INITIAL_BALANCE - ACCOUNT_1_SEED_AMOUNT)
     );
 

@@ -888,4 +888,36 @@ impl WasmTestBuilder {
             .and_then(|v| v.try_into().ok())
             .expect("should find PoS Contract")
     }
+
+    pub fn get_purse_balance(
+        &self,
+        purse_id: contract_ffi::value::account::PurseId,
+    ) -> contract_ffi::value::uint::U512 {
+        let mint = self.get_mint_contract_uref();
+        let purse_addr = purse_id.value().addr();
+        let purse_bytes = contract_ffi::bytesrepr::ToBytes::to_bytes(&purse_addr)
+            .expect("should be able to serialize purse bytes");
+        let balance_mapping_key = contract_ffi::key::Key::local(mint.addr(), &purse_bytes);
+        let balance_uref = self
+            .query(None, balance_mapping_key, &[])
+            .and_then(|v| v.try_into().ok())
+            .expect("should find balance uref");
+
+        self.query(None, balance_uref, &[])
+            .and_then(|v| v.try_into().ok())
+            .expect("should parse balance into a U512")
+    }
+
+    pub fn get_account(
+        &self,
+        key: contract_ffi::key::Key,
+    ) -> Option<contract_ffi::value::account::Account> {
+        let account_value = self.query(None, key, &[]).expect("should query account");
+
+        if let contract_ffi::value::Value::Account(account) = account_value {
+            Some(account)
+        } else {
+            None
+        }
+    }
 }

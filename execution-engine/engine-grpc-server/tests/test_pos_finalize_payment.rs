@@ -8,7 +8,6 @@ extern crate grpc;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
-use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{Account, PublicKey, PurseId};
 use contract_ffi::value::U512;
@@ -187,13 +186,13 @@ fn finalize_payment_should_refund_to_specified_purse() {
 fn get_pos_payment_purse_balance(builder: &WasmTestBuilder) -> U512 {
     let purse_id = get_pos_purse_id_by_name(builder, POS_PAYMENT_PURSE)
         .expect("should find PoS payment purse");
-    get_purse_balance(builder, purse_id)
+    builder.get_purse_balance(purse_id)
 }
 
 fn get_pos_rewards_purse_balance(builder: &WasmTestBuilder) -> U512 {
     let purse_id = get_pos_purse_id_by_name(builder, POS_REWARDS_PURSE)
         .expect("should find PoS rewards purse");
-    get_purse_balance(builder, purse_id)
+    builder.get_purse_balance(purse_id)
 }
 
 fn get_pos_refund_purse(builder: &WasmTestBuilder) -> Option<Key> {
@@ -225,7 +224,7 @@ fn get_account_balance(builder: &WasmTestBuilder, account_address: [u8; 32]) -> 
 
     let purse_id = account.purse_id();
 
-    get_purse_balance(builder, purse_id)
+    builder.get_purse_balance(purse_id)
 }
 
 fn get_named_account_balance(
@@ -246,25 +245,5 @@ fn get_named_account_balance(
         .and_then(Key::as_uref)
         .map(|u| PurseId::new(*u));
 
-    purse_id.map(|id| get_purse_balance(builder, id))
-}
-
-fn get_purse_balance(builder: &WasmTestBuilder, purse_id: PurseId) -> U512 {
-    let mint = builder.get_mint_contract_uref();
-    let purse_bytes = purse_id
-        .value()
-        .addr()
-        .to_bytes()
-        .expect("should be able to serialize purse bytes");
-
-    let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
-    let balance_uref = builder
-        .query(None, balance_mapping_key, &[])
-        .and_then(|v| v.try_into().ok())
-        .expect("should find balance uref");
-
-    builder
-        .query(None, balance_uref, &[])
-        .and_then(|v| v.try_into().ok())
-        .expect("should parse balance into a U512")
+    purse_id.map(|id| builder.get_purse_balance(id))
 }
