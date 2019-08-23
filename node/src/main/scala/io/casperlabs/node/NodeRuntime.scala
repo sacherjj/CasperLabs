@@ -124,7 +124,6 @@ class NodeRuntime private[node] (
         //TODO: We may want to adjust threading model for better performance
         implicit0(doobieTransactor: Transactor[Effect]) <- effects.doobieTransactor(
                                                             blockingScheduler,
-                                                            blockingScheduler,
                                                             conf.server.dataDir
                                                           )
         implicit0(deployBuffer: DeployBuffer[Effect]) <- Resource

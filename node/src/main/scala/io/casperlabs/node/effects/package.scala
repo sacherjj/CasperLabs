@@ -95,31 +95,33 @@ package object effects {
     }
 
   def doobieTransactor(
-      connectionEC: ExecutionContext,
-      transactionEC: ExecutionContext,
+      blockingEC: ExecutionContext,
       serverDataDir: Path
   ): Resource[Effect, Transactor[Effect]] =
-    HikariTransactor
-      .newHikariTransactor[Effect](
-        driverClassName = "org.sqlite.JDBC",
-        url = s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}",
-        //TODO: Shouldn't we protect data by user/pass?
-        user = "",
-        pass = "",
-        connectEC = connectionEC,
-        transactEC = transactionEC
-      )
-      .map(
-        xa => {
-          // Foreign keys support must be enabled explicitly in SQLite
-          // https://www.sqlite.org/foreignkeys.html#fk_enable
-          val mxa = Transactor.before
-            .set(xa, sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa))
-          // `autoCommit=true` is a default for Hikari; doobie sets `autoCommit=false`.
-          // From doobie's docs:
-          // * - Auto-commit will be set to `false`;
-          // * - the transaction will `commit` on success and `rollback` on failure;
-          Transactor.before.modify(mxa, _ >> connection.setAutoCommit(false))
+    Resource
+      .liftF[Task, Transactor[Effect]](
+        Task.delay {
+          // Using this instead of the HikariTransactor because with the default connection pool settings
+          // we got SQLITE_BUSY errors. The SQLite docs say the driver is thread safe, but only one connection
+          // should be made per process (the file locking mechanism depends on process IDs, closing one connection
+          // would invalidate the locks for all of them).
+          Transactor.fromDriverManager[Effect](
+            driver = "org.sqlite.JDBC",
+            url = s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}",
+            blockingContext = blockingEC
+          )
         }
       )
+      .map { xa =>
+        // Foreign keys support must be enabled explicitly in SQLite
+        // https://www.sqlite.org/foreignkeys.html#fk_enable
+        val mxa = Transactor.before
+          .set(xa, sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa))
+        // `autoCommit=true` is a default for Hikari; doobie sets `autoCommit=false`.
+        // From doobie's docs:
+        // * - Auto-commit will be set to `false`;
+        // * - the transaction will `commit` on success and `rollback` on failure;
+        Transactor.before.modify(mxa, _ >> connection.setAutoCommit(false))
+      }
+      .toEffect
 }
