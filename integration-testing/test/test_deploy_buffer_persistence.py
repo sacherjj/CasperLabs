@@ -50,7 +50,9 @@ def test_deploy_buffer_persistence(trillion_payment_node_network):
         block_hash = response.block_hash.hex()
         for deploy in node.p_client.show_deploys(block_hash):
             deploy_hash = deploy.deploy.deploy_hash.hex()
-            assert deploy_hash in deploy_hashes
+            assert (
+                deploy_hash in deploy_hashes
+            ), f"Expected deploy hash: {deploy_hash} in previous hashes: {deploy_hashes}."
             deploy_hashes.remove(deploy_hash)
 
     assert len(deploy_hashes) == 0
