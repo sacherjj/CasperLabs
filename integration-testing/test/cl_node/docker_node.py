@@ -47,8 +47,8 @@ class DockerNode(LoggingDockerBase):
     DOCKER_CLIENT = "d"
     PYTHON_CLIENT = "p"
 
-    def __init__(self, cl_network, config: DockerConfig, socket_volume: str):
-        super().__init__(config, socket_volume)
+    def __init__(self, cl_network, config: DockerConfig):
+        super().__init__(config)
         self.cl_network = cl_network
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
@@ -60,7 +60,7 @@ class DockerNode(LoggingDockerBase):
         if self.is_in_docker:
             return 0
         else:
-            return self.number * 10
+            return self.config.number * 10
 
     @property
     def grpc_external_docker_port(self) -> int:
@@ -85,10 +85,6 @@ class DockerNode(LoggingDockerBase):
         :return: int (seconds)
         """
         return self.config.command_timeout
-
-    @property
-    def number(self) -> int:
-        return self.config.number
 
     @property
     def container_type(self):
@@ -137,14 +133,17 @@ class DockerNode(LoggingDockerBase):
             f"{self.GRPC_EXTERNAL_PORT}/tcp": self.grpc_external_docker_port,
         }
 
+    @property
+    def volumes(self) -> dict:
+        return {
+            self.host_genesis_dir: {"bind": self.CL_GENESIS_DIR, "mode": "rw"},
+            self.host_bootstrap_dir: {"bind": self.CL_BOOTSTRAP_DIR, "mode": "rw"},
+            self.host_accounts_dir: {"bind": self.CL_ACCOUNTS_DIR, "mode": "rw"},
+            self.deploy_dir: {"bind": self.CL_NODE_DEPLOY_DIR, "mode": "rw"},
+            self.config.socket_volume: {"bind": self.CL_SOCKETS_DIR, "mode": "rw"},
+        }
+
     def _get_container(self):
-        env = self.config.node_env.copy()
-        env[
-            "CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH"
-        ] = self.CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH
-        java_options = os.environ.get("_JAVA_OPTIONS")
-        if java_options is not None:
-            env["_JAVA_OPTIONS"] = java_options
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix="deploy_")
         self.create_resources_dir()
 
@@ -164,17 +163,13 @@ class DockerNode(LoggingDockerBase):
             detach=True,
             mem_limit=self.config.mem_limit,
             ports=ports,  # Exposing grpc for Python Client
-            network=self.network,
+            network=self.config.network,
             volumes=self.volumes,
             command=commands,
             hostname=self.container_name,
-            environment=env,
+            environment=self.config.node_env,
         )
         return container
-
-    @property
-    def network(self):
-        return self.config.network
 
     def create_resources_dir(self) -> None:
         if os.path.exists(self.host_mount_dir):
@@ -211,19 +206,6 @@ class DockerNode(LoggingDockerBase):
     @property
     def from_address(self) -> str:
         return self.cl_network.from_address(self)
-
-    @property
-    def volumes(self) -> dict:
-        if self.config.volumes is not None:
-            return self.config.volumes
-
-        return {
-            self.host_genesis_dir: {"bind": self.CL_GENESIS_DIR, "mode": "rw"},
-            self.host_bootstrap_dir: {"bind": self.CL_BOOTSTRAP_DIR, "mode": "rw"},
-            self.host_accounts_dir: {"bind": self.CL_ACCOUNTS_DIR, "mode": "rw"},
-            self.deploy_dir: {"bind": self.CL_NODE_DEPLOY_DIR, "mode": "rw"},
-            self.socket_volume: {"bind": self.CL_SOCKETS_DIR, "mode": "rw"},
-        }
 
     @property
     def container_command(self):
@@ -305,7 +287,7 @@ class DockerNode(LoggingDockerBase):
 
         :returns block_hash in hex str
         """
-        logging.info(f"=== Transfering {amount} to {to_account_id}")
+        logging.info(f"=== Transferring {amount} to {to_account_id}")
 
         assert (
             is_valid_account(to_account_id) and to_account_id != "genesis"

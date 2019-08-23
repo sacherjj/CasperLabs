@@ -1,11 +1,20 @@
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from docker import DockerClient
 
 
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 from test.cl_node.common import random_string
+
+
+DEFAULT_NODE_ENV = {
+    "RUST_BACKTRACE": "full",
+    "CL_LOG_LEVEL": os.environ.get("CL_LOG_LEVEL", "INFO"),
+    "CL_CASPER_IGNORE_DEPLOY_SIGNATURE": "false",
+    "CL_SERVER_NO_UPNP": "true",
+    "CL_VERSION": "test",
+}
 
 
 @dataclass
@@ -21,7 +30,6 @@ class DockerConfig:
     network: Optional[Any] = None
     number: int = 0
     rand_str: Optional[str] = None
-    volumes: Optional[Dict[str, Dict[str, str]]] = None
     command_timeout: int = 180
     mem_limit: str = "4G"
     is_bootstrap: bool = False
@@ -29,21 +37,18 @@ class DockerConfig:
     is_signed_deploy: bool = True
     bootstrap_address: Optional[str] = None
     use_new_gossiping: bool = True
-    genesis_public_key_path: str = None
     is_payment_code_enabled: bool = False
     initial_motes: int = 100 * (10 ** 9)  # 100 billion
+    socket_volume: Optional[str] = None
 
     def __post_init__(self):
         if self.rand_str is None:
             self.rand_str = random_string(5)
         if self.node_env is None:
-            self.node_env = {
-                "RUST_BACKTRACE": "full",
-                "CL_LOG_LEVEL": os.environ.get("CL_LOG_LEVEL", "INFO"),
-                "CL_CASPER_IGNORE_DEPLOY_SIGNATURE": "false",
-                "CL_SERVER_NO_UPNP": "true",
-                "CL_VERSION": "test",
-            }
+            self.node_env = DEFAULT_NODE_ENV
+        java_options = os.environ.get("_JAVA_OPTIONS")
+        if java_options is not None:
+            self.node_env["_JAVA_OPTIONS"] = java_options
 
     def node_command_options(self, server_host: str) -> dict:
         bootstrap_path = "/root/.casperlabs/bootstrap"
@@ -56,9 +61,6 @@ class DockerConfig:
             "--tls-certificate": f"{bootstrap_path}/node-{self.number}.certificate.pem",
             "--tls-key": f"{bootstrap_path}/node-{self.number}.key.pem",
         }
-        # if self.is_validator:
-        #     options['--casper-validator-private-key-path'] = f'{bootstrap_path}/validator-{self.number}-private.pem'
-        #     options['--casper-validator-public-key-path'] = f'{bootstrap_path}/validator-{self.number}-public.pem'
         if self.bootstrap_address:
             options["--server-bootstrap"] = self.bootstrap_address
         if self.is_bootstrap:

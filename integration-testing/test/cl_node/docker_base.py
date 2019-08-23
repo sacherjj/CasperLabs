@@ -65,9 +65,8 @@ class DockerBase:
 
     DOCKER_BASE_NAME = "casperlabs"
 
-    def __init__(self, config: DockerConfig, socket_volume: str) -> None:
+    def __init__(self, config: DockerConfig) -> None:
         self.config = config
-        self.socket_volume = socket_volume
         self.connected_networks = []
 
         self.docker_tag: str = "test"
@@ -205,8 +204,8 @@ class LoggingDockerBase(DockerBase):
     This adds logging to DockerBase
     """
 
-    def __init__(self, config: DockerConfig, socket_volume: str) -> None:
-        super().__init__(config, socket_volume)
+    def __init__(self, config: DockerConfig) -> None:
+        super().__init__(config)
         self.terminate_background_logging_event = threading.Event()
         self._start_logging_thread()
         self._truncatedLength = 0
