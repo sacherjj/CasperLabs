@@ -22,9 +22,6 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     metricsSource: Source
 ) extends DeployStorage[F]
     with DoobieCodecs {
-  // Do not forget updating Flyway migration scripts at:
-  // resources/db/migrations
-
   // Deploys not yet included in a block
   private val PendingStatusCode = 0
   // Deploys that have been processed at least once,

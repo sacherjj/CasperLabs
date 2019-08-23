@@ -21,8 +21,6 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 ) extends DagStorage[F]
     with DagRepresentation[F]
     with DoobieCodecs {
-  // Do not forget updating Flyway migration scripts at:
-  // resources/db/migrations
 
   private def msg(b: BlockHash): String = Base16.encode(b.toByteArray).take(10)
 
