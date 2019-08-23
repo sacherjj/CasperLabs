@@ -33,7 +33,7 @@ fn should_run_purse_to_account_transfer() {
             GENESIS_ADDR,
             "transfer_purse_to_account.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             (account_1_public_key, U512::from(42)),
         )
         .expect_success()
@@ -42,7 +42,7 @@ fn should_run_purse_to_account_transfer() {
             account_1_public_key.value(),
             "transfer_purse_to_account.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
             (genesis_public_key, U512::from(1)),
         )
         .expect_success()
@@ -222,7 +222,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
             GENESIS_ADDR,
             "transfer_purse_to_account.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             (account_1_key, U512::max_value()),
         )
         .expect_success()

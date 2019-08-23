@@ -52,7 +52,6 @@ fn mock_account_with_purse_id(addr: [u8; 32], purse_id: [u8; 32]) -> (Key, value
     let associated_keys = AssociatedKeys::new(PublicKey::new(addr), Weight::new(1));
     let account = value::account::Account::new(
         addr,
-        0,
         BTreeMap::new(),
         PurseId::new(URef::new(purse_id, AccessRights::READ_ADD_WRITE)),
         associated_keys,
@@ -112,6 +111,7 @@ fn mock_runtime_context<'a>(
         &account,
         base_key,
         BlockTime(0),
+        [1u8; 32],
         0,
         0,
         0,
@@ -146,9 +146,10 @@ where
     F: Fn(RuntimeContext<InMemoryGlobalState>) -> Result<T, Error>,
 {
     let base_acc_addr = [0u8; 32];
+    let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc_addr);
     let mut uref_map = BTreeMap::new();
-    let chacha_rng = create_rng(base_acc_addr, 0);
+    let chacha_rng = create_rng(deploy_hash);
     let runtime_context =
         mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
     query(runtime_context)
@@ -379,6 +380,7 @@ fn contract_key_not_writeable() {
 fn contract_key_addable_valid() {
     // Contract key is addable if it is a "base" key - current context of the execution.
     let base_acc_addr = [0u8; 32];
+    let deploy_hash = [1u8; 32];
     let (account_key, account) = mock_account(base_acc_addr);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
@@ -393,7 +395,7 @@ fn contract_key_addable_valid() {
     let mut uref_map = BTreeMap::new();
     let uref = random_uref_key(&mut rng, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
-    let chacha_rng = create_rng(base_acc_addr, 0);
+    let chacha_rng = create_rng(deploy_hash);
 
     let mut runtime_context = RuntimeContext::new(
         Rc::clone(&tc),
@@ -404,9 +406,10 @@ fn contract_key_addable_valid() {
         &account,
         contract_key,
         BlockTime(0),
+        deploy_hash,
         0,
         0,
-        0,
+        1,
         Rc::new(RefCell::new(chacha_rng)),
         1,
         CorrelationId::new(),
@@ -433,6 +436,7 @@ fn contract_key_addable_valid() {
 fn contract_key_addable_invalid() {
     // Contract key is addable if it is a "base" key - current context of the execution.
     let base_acc_addr = [0u8; 32];
+    let deploy_hash = [1u8; 32];
     let (account_key, account) = mock_account(base_acc_addr);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
@@ -448,7 +452,7 @@ fn contract_key_addable_invalid() {
     let mut uref_map = BTreeMap::new();
     let uref = random_uref_key(&mut rng, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
-    let chacha_rng = create_rng(base_acc_addr, 0);
+    let chacha_rng = create_rng(deploy_hash);
     let mut runtime_context = RuntimeContext::new(
         Rc::clone(&tc),
         &mut uref_map,
@@ -458,6 +462,7 @@ fn contract_key_addable_invalid() {
         &account,
         other_contract_key,
         BlockTime(0),
+        deploy_hash,
         0,
         0,
         0,
@@ -815,8 +820,9 @@ fn remove_uref_works() {
 
     let known_urefs = HashMap::new();
     let base_acc_addr = [0u8; 32];
+    let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc_addr);
-    let mut chacha_rng = create_rng(base_acc_addr, 0);
+    let mut chacha_rng = create_rng(deploy_hash);
     let uref_name = "Foo".to_owned();
     let uref_key = random_uref_key(&mut chacha_rng, AccessRights::READ);
     let mut uref_map = iter::once((uref_name.clone(), uref_key)).collect();
@@ -842,8 +848,9 @@ fn validate_valid_purse_id_of_an_account() {
     let mock_purse_id = [42u8; 32];
     let known_urefs = HashMap::new();
     let base_acc_addr = [0u8; 32];
+    let deploy_hash = [1u8; 32];
     let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
-    let chacha_rng = create_rng(base_acc_addr, 0);
+    let chacha_rng = create_rng(deploy_hash);
     let mut uref_map = BTreeMap::new();
     let runtime_context =
         mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);

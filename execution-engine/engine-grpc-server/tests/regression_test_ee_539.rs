@@ -25,7 +25,7 @@ fn should_run_ee_539_serialize_action_thresholds_regression() {
             GENESIS_ADDR,
             "ee_539_regression.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             (Weight::new(4), Weight::new(3)),
         )
         .expect_success()

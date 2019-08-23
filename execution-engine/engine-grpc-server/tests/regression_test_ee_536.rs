@@ -24,7 +24,7 @@ fn should_run_ee_536_get_uref_regression_test() {
             GENESIS_ADDR,
             "ee_536_regression.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit()

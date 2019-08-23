@@ -25,7 +25,7 @@ fn should_run_get_caller_contract() {
             GENESIS_ADDR,
             "get_caller.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             PublicKey::new(GENESIS_ADDR),
         )
         .commit()
@@ -37,7 +37,7 @@ fn should_run_get_caller_contract() {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
             ACCOUNT_1_ADDR,
         )
         .commit()
@@ -46,7 +46,7 @@ fn should_run_get_caller_contract() {
             ACCOUNT_1_ADDR,
             "get_caller.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [3u8; 32],
             PublicKey::new(ACCOUNT_1_ADDR),
         )
         .commit()
@@ -62,7 +62,7 @@ fn should_run_get_caller_subcall_contract() {
             GENESIS_ADDR,
             "get_caller_subcall.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             PublicKey::new(GENESIS_ADDR),
         )
         .commit()
@@ -74,7 +74,7 @@ fn should_run_get_caller_subcall_contract() {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
             ACCOUNT_1_ADDR,
         )
         .commit()
@@ -83,7 +83,7 @@ fn should_run_get_caller_subcall_contract() {
             ACCOUNT_1_ADDR,
             "get_caller_subcall.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [3u8; 32],
             PublicKey::new(ACCOUNT_1_ADDR),
         )
         .commit()

@@ -16,15 +16,16 @@ message Bond {
 
 message Deploy {
     reserved 5;
+    reserved 7;
     // Public key of the account which is the context of the execution.
     bytes address = 1; // length 32 bytes
     DeployCode session = 3;
     DeployCode payment = 4;
     uint64 gas_price = 6; // in units of Mote / Gas
-    uint64 nonce = 7;
     // Public keys used to sign this deploy, to be checked against the keys
     // associated with the account.
     repeated bytes authorization_keys = 8;
+    bytes deploy_hash = 9;
 }
 
 message ExecRequest {
@@ -180,13 +181,6 @@ message DeployError {
 }
 
 message DeployResult {
-    // Invalid nonce is not an error, it's also not a successful execution.
-    // Deploys with invalid nonce are returned to the deploy buffer.
-    message InvalidNonce {
-        uint64 deploy_nonce = 1;
-        uint64 expected_nonce = 2;
-    }
-
     // Deploys that failed because of precondition failure that we can't charge for
     // (invalid key format, invalid key address, invalid Wasm deploys).
     message PreconditionFailure {
@@ -194,7 +188,7 @@ message DeployResult {
     }
 
     // Execution result has effects and/or errors.
-    // Failed execution mutates the GlobalState by increasing the nonce and paying for the deploy.
+    // Failed execution mutates the GlobalState by paying for the deploy.
     message ExecutionResult {
         ExecutionEffect effects = 1;
         DeployError error = 2;
@@ -202,7 +196,6 @@ message DeployResult {
     }
 
     oneof value {
-        InvalidNonce invalid_nonce = 1;
         PreconditionFailure precondition_failure = 2;
         ExecutionResult execution_result = 3;
     }

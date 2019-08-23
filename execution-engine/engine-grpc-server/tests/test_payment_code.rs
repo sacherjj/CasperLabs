@@ -1,10 +1,9 @@
-extern crate grpc;
-
 extern crate casperlabs_engine_grpc_server;
 extern crate contract_ffi;
 extern crate engine_core;
 extern crate engine_shared;
 extern crate engine_storage;
+extern crate grpc;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -13,7 +12,6 @@ use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
-
 use engine_core::engine_state::{EngineConfig, CONV_RATE, MAX_PAYMENT};
 use engine_shared::transform::Transform;
 use test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder, GENESIS_INITIAL_BALANCE};
@@ -41,7 +39,6 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
             )
             .with_payment_code("standard_payment.wasm", U512::from(MAX_PAYMENT))
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -64,7 +61,6 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
             .with_session_code("revert.wasm", ())
             .with_payment_code("standard_payment.wasm", U512::from(MAX_PAYMENT - 1))
             .with_authorization_keys(&[account_1_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -115,7 +111,6 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
             )
             .with_payment_code("standard_payment.wasm", U512::from(1))
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -204,7 +199,6 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
                 (account_1_public_key, transferred_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -295,7 +289,6 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -337,7 +330,6 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
             .with_payment_code("standard_payment.wasm", U512::from(payment_purse_amount))
             .with_session_code("endless_loop.wasm", ())
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -362,7 +354,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
                 account
             } else {
                 panic!(
-                    "Transform {:?} is not a Transform with a Value(Account)",
+                    "Transform {:?} is not a Transform with a Write(Value(Account))",
                     account_transforms
                 );
             }
@@ -439,7 +431,6 @@ fn should_correctly_charge_when_session_code_fails() {
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -536,7 +527,6 @@ fn should_correctly_charge_when_session_code_succeeds() {
             )
             .with_payment_code("standard_payment.wasm", U512::from(payment_purse_amount))
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()

@@ -31,7 +31,7 @@ fn should_run_purse_to_purse_transfer() {
             GENESIS_ADDR,
             "transfer_purse_to_purse.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             (source, target, U512::from(42)),
         )
         .expect_success()
@@ -131,7 +131,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
             GENESIS_ADDR,
             "transfer_purse_to_purse.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             (
                 source,
                 target,

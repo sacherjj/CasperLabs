@@ -133,8 +133,8 @@ fn should_transfer_to_account() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         DEFAULT_BLOCK_TIME,
-        1,
         ACCOUNT_1_ADDR,
+        [1u8; 32],
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -221,8 +221,8 @@ fn should_transfer_from_account_to_account() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         DEFAULT_BLOCK_TIME,
-        1,
         ACCOUNT_1_ADDR,
+        [1u8; 32],
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -286,7 +286,7 @@ fn should_transfer_from_account_to_account() {
         "transfer_to_account_02.wasm",
         commit_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [2u8; 32],
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
@@ -383,7 +383,7 @@ fn should_transfer_to_existing_account() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [1u8; 32],
         ACCOUNT_1_ADDR,
         vec![PublicKey::new(GENESIS_ADDR)],
     );
@@ -448,7 +448,7 @@ fn should_transfer_to_existing_account() {
         "transfer_to_account_02.wasm",
         commit_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [2u8; 32],
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
@@ -514,7 +514,7 @@ fn should_fail_when_insufficient_funds() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [1u8; 32],
         ACCOUNT_1_ADDR,
         vec![PublicKey::new(GENESIS_ADDR)],
     );
@@ -550,7 +550,7 @@ fn should_fail_when_insufficient_funds() {
         "transfer_to_account_02.wasm",
         commit_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [2u8; 32],
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
@@ -580,7 +580,7 @@ fn should_fail_when_insufficient_funds() {
         "transfer_to_account_02.wasm",
         commit_hash,
         DEFAULT_BLOCK_TIME,
-        2,
+        [3u8; 32],
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
@@ -645,7 +645,7 @@ fn should_create_purse() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [1u8; 32],
         ACCOUNT_1_ADDR,
         vec![PublicKey::new(GENESIS_ADDR)],
     );
@@ -688,7 +688,7 @@ fn should_create_purse() {
         "create_purse_01.wasm",
         commit_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [2u8; 32],
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
@@ -722,7 +722,7 @@ fn should_transfer_total_amount() {
             // Genesis transfers N tokens to new account
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             ACCOUNT_1_ADDR,
         )
         .expect_success()
@@ -732,7 +732,7 @@ fn should_transfer_total_amount() {
             // New account transfers exactly N tokens to new account (total amount)
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
             ACCOUNT_2_ADDR,
         )
         .commit()

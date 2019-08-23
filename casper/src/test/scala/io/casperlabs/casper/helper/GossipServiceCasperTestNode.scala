@@ -40,7 +40,6 @@ class GossipServiceCasperTestNode[F[_]](
     blockStorageDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
-    validateNonces: Boolean = true,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainId: String = "casperlabs",
     relaying: Relaying[F],
@@ -60,7 +59,6 @@ class GossipServiceCasperTestNode[F[_]](
       genesis,
       dagDir,
       blockStorageDir,
-      validateNonces,
       maybeMakeEE
     )(concurrentF, blockStorage, dagStorage, metricEff, casperState) {
   implicit val deployBufferEff: DeployBuffer[F] =
@@ -174,7 +172,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit errorHandler: ErrorHandler[F],
@@ -233,7 +230,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
-                  validateNonces = validateNonces,
                   maybeMakeEE = maybeMakeEE
                 )(
                   concurrentF,

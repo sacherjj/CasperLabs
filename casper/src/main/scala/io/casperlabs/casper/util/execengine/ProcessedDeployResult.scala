@@ -11,9 +11,6 @@ sealed trait DeployEffects extends ProcessedDeployResult {
   val effects: ipc.ExecutionEffect
 }
 
-final case class InvalidNonceDeploy(deploy: Deploy, deployNonce: Long, expectedNonce: Long)
-    extends ProcessedDeployResult
-
 // Precondition failures don't have effects or cost.
 // They are errors that we can't charge for (like key not found, key not being an public key of the account).
 final case class PreconditionFailure(deploy: Deploy, errorMessage: String)
@@ -34,8 +31,6 @@ final case class ExecutionSuccessful(deploy: Deploy, effects: ipc.ExecutionEffec
 object ProcessedDeployResult {
   def apply(deploy: Deploy, result: ipc.DeployResult): ProcessedDeployResult =
     result match {
-      case ipc.DeployResult(ipc.DeployResult.Value.InvalidNonce(invalidNonce)) =>
-        InvalidNonceDeploy(deploy, invalidNonce.deployNonce, invalidNonce.expectedNonce)
       case ipc.DeployResult(ipc.DeployResult.Value.PreconditionFailure(value)) =>
         PreconditionFailure(deploy, value.message)
       case ipc.DeployResult(ipc.DeployResult.Value.ExecutionResult(exec_result)) =>

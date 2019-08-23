@@ -24,7 +24,7 @@ fn should_run_get_payment_purse_contract_genesis_account() {
             GENESIS_ADDR,
             "pos_get_payment_purse.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit();
@@ -39,8 +39,8 @@ fn should_run_get_payment_purse_contract_account_1() {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
             ACCOUNT_1_ADDR,
+            [2u8; 32],
         )
         .expect_success()
         .commit()
@@ -48,7 +48,7 @@ fn should_run_get_payment_purse_contract_account_1() {
             ACCOUNT_1_ADDR,
             "pos_get_payment_purse.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [3u8; 32],
         )
         .expect_success()
         .commit();

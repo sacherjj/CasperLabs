@@ -29,7 +29,12 @@ fn should_return_bonded_validators() {
 
     let bonded_validators = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators.clone())
-        .exec(GENESIS_ADDR, "local_state.wasm", DEFAULT_BLOCK_TIME, 1)
+        .exec(
+            GENESIS_ADDR,
+            "local_state.wasm",
+            DEFAULT_BLOCK_TIME,
+            [1u8; 32],
+        )
         .commit()
         .get_bonded_validators();
 

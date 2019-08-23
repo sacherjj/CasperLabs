@@ -122,7 +122,7 @@ where
         address: Key,                         // TODO?: rename 'base_key'
         authorized_keys: BTreeSet<PublicKey>, //TODO?: rename authorization_keys
         blocktime: BlockTime,
-        nonce: u64,
+        deploy_hash: [u8; 32],
         prestate_hash: Blake2bHash,
         protocol_version: u64,
         correlation_id: CorrelationId,
@@ -153,7 +153,7 @@ where
 
         // Get account from tracking copy
         // validation_spec_3: account validity
-        let mut account: Account = match tracking_copy
+        let account: Account = match tracking_copy
             .borrow_mut()
             .get_account(correlation_id, account_addr)
         {
@@ -171,12 +171,6 @@ where
             return Ok(ExecutionResult::precondition_failure(
                 ::engine_state::error::Error::AuthorizationError,
             ));
-        }
-
-        // Handle nonce check & increment (NOTE: nonce is scheduled to be removed)
-        // validation_spec_3: account validity
-        if let Err(error) = tracking_copy.borrow_mut().handle_nonce(&mut account, nonce) {
-            return Ok(ExecutionResult::precondition_failure(error.into()));
         }
 
         // Check total key weight against deploy threshold
@@ -211,6 +205,7 @@ where
                 &account,
                 authorized_keys,
                 blocktime,
+                deploy_hash,
                 gas_limit,
                 protocol_version,
                 correlation_id,
@@ -347,7 +342,6 @@ where
         let system_account = Account::new(
             SYSTEM_ACCOUNT_ADDR,
             Default::default(),
-            Default::default(),
             PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE)),
             Default::default(),
             Default::default(),
@@ -377,6 +371,7 @@ where
                 &account,
                 authorized_keys.clone(),
                 blocktime,
+                deploy_hash,
                 pay_gas_limit,
                 protocol_version,
                 correlation_id,
@@ -449,6 +444,7 @@ where
                 &account,
                 authorized_keys.clone(),
                 blocktime,
+                deploy_hash,
                 session_gas_limit,
                 protocol_version,
                 correlation_id,
@@ -497,6 +493,7 @@ where
                 &system_account,
                 authorized_keys.clone(),
                 blocktime,
+                deploy_hash,
                 std::u64::MAX, // <-- this execution should be unlimited but approximating
                 protocol_version,
                 correlation_id,

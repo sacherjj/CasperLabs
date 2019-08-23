@@ -550,7 +550,12 @@ where
                 }
             };
 
-            let nonce = deploy.nonce;
+            let deploy_hash = {
+                let mut buff = [0u8; 32];
+                let hash_slice = deploy.get_deploy_hash();
+                buff.copy_from_slice(hash_slice);
+                buff
+            };
             let protocol_version = protocol_version.value;
             engine_state
                 .run_deploy(
@@ -561,7 +566,7 @@ where
                     address,
                     authorized_keys,
                     blocktime,
-                    nonce,
+                    deploy_hash,
                     prestate_hash,
                     protocol_version,
                     correlation_id,

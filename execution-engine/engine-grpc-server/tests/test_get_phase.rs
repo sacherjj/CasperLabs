@@ -30,7 +30,6 @@ fn should_run_get_phase_contract() {
             .with_session_code("get_phase.wasm", Phase::Session)
             .with_payment_code("get_phase_payment.wasm", Phase::Payment)
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()

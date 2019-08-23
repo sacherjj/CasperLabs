@@ -23,7 +23,7 @@ fn should_not_fail_deserializing() {
             GENESIS_ADDR,
             "deserialize_error.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             GENESIS_ADDR,
         )
         .commit()

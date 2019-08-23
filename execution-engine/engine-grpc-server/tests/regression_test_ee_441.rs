@@ -9,7 +9,6 @@ use std::collections::HashMap;
 
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
-use contract_ffi::value::Value;
 use engine_shared::transform::Transform;
 use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
@@ -33,7 +32,7 @@ fn do_pass(pass: &str) -> (URef, URef) {
             GENESIS_ADDR,
             "ee_441_rng_state.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             pass.to_string(),
         )
         .expect_success()
@@ -42,19 +41,16 @@ fn do_pass(pass: &str) -> (URef, URef) {
 
     let transform = &transforms[0];
     let account_transform = &transform[&Key::Account(GENESIS_ADDR)];
-    let account = if let Transform::Write(Value::Account(account)) = account_transform {
-        account
+    let keys = if let Transform::AddKeys(keys) = account_transform {
+        keys
     } else {
         panic!(
-            "Transform for account is expected to be of type Write(Account) but got {:?}",
+            "Transform for account is expected to be of type AddKeys(keys) but got {:?}",
             account_transform
         );
     };
 
-    (
-        get_uref(account.urefs_lookup()["uref1"]),
-        get_uref(account.urefs_lookup()["uref2"]),
-    )
+    (get_uref(keys["uref1"]), get_uref(keys["uref2"]))
 }
 
 #[ignore]

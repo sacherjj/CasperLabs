@@ -3,7 +3,7 @@ use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::{Account, Contract, Value, U512};
 
-use engine_shared::newtypes::{CorrelationId, Validated};
+use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::TypeMismatch;
 use engine_storage::global_state::StateReader;
 use execution;
@@ -74,8 +74,6 @@ pub trait TrackingCopyExt<R> {
         correlation_id: CorrelationId,
         outer_key: Key,
     ) -> Result<SystemContractInfo, Self::Error>;
-
-    fn handle_nonce(&mut self, account: &mut Account, nonce: u64) -> Result<(), Self::Error>;
 }
 
 impl<R: StateReader<Key, Value>> TrackingCopyExt<R> for TrackingCopy<R>
@@ -174,24 +172,5 @@ where
             None => return Err(execution::Error::KeyNotFound(inner_uref_key)),
         };
         Ok(SystemContractInfo::new(outer_key, inner_uref_key, contract))
-    }
-
-    fn handle_nonce(&mut self, account: &mut Account, nonce: u64) -> Result<(), Self::Error> {
-        if nonce.checked_sub(account.nonce()).unwrap_or(0) != 1 {
-            return Err(execution::Error::InvalidNonce {
-                deploy_nonce: nonce,
-                expected_nonce: account.nonce() + 1,
-            });
-        } else {
-            account.increment_nonce();
-        }
-        // Safe to unwrap in the following cases as the error type is `!`.
-        let validated_key: Validated<Key> =
-            Validated::new::<!, _>(Key::Account(account.pub_key()), Validated::valid).unwrap();
-        let validated_account: Validated<Value> =
-            Validated::new(account.clone().into(), Validated::valid).unwrap();
-        // Store updated account with new nonce
-        self.write(validated_key, validated_account);
-        Ok(())
     }
 }

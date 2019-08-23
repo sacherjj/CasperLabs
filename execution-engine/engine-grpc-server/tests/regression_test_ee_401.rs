@@ -45,7 +45,7 @@ fn should_execute_contracts_which_provide_extra_urefs() {
         "ee_401_regression.wasm",
         genesis_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [1u8; 32],
         (),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
@@ -75,7 +75,7 @@ fn should_execute_contracts_which_provide_extra_urefs() {
         "ee_401_regression_call.wasm",
         commit_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [2u8; 32],
         (),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
