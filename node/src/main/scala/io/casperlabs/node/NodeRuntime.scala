@@ -333,7 +333,7 @@ class NodeRuntime private[node] (
       _ <- log.info("Goodbye.")
     } yield ()
     // Run the release synchronously so that we can see the final message.
-    task.unsafeRunSync(scheduler)
+    task.runSyncUnsafe(1.minute)
   }
 
   private def addShutdownHook(release: Effect[Unit]): Task[Unit] =

@@ -628,46 +628,77 @@ class CLIErrorExit(Exception):
 
 
 class CLI:
-    CLI_CMD = "casperlabs_client"
-
-    def __init__(self, node, host, port):
+    def __init__(self, node, cli_cmd="casperlabs_client"):
         self.node = node
-        self.host = host
-        self.port = port
+        self.host = os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
+        self.port = node.grpc_external_docker_port
+        self.cli_cmd = cli_cmd
 
-    def __call__(self, *args):
-        command_line = [self.CLI_CMD, "--host", f"{self.host}", "--port", f"{self.port}"] + list(args)
-        command_line = [str(a) for a in command_line]
-        logging.info(f"EXECUTING: {' '.join(command_line)}")
-        cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        output = cp.stdout.decode("utf-8")
-        if cp.returncode != 0:
-            raise CLIErrorExit(cp, output)
+    def expand_args(self, args):
+        def _args(args, connection_details=["--host", f"{self.host}", "--port", f"{self.port}"]):
+            return [str(a) for a in connection_details + list(args)]
 
-        if 'deploy' in args or 'propose' in args:
+        return '--help' in args and _args(args, []) or _args(args)
+
+    def parse_output(self, command, binary_output):
+
+        if command in ('make-deploy', 'sign-deploy'):
+            return binary_output
+
+        output = binary_output.decode("utf-8")
+
+        if command == 'send-deploy':
+            return output.split()[2]
+
+        if command in ('deploy', 'propose'):
             return output.split()[3]
 
-        if 'show-blocks' in args:
+        if command == 'show-blocks':
             return parse_show_blocks(output)
 
-        if 'show-deploys' in args:
+        if command == 'show-deploys':
             return parse_show_deploys(output)
 
-        if 'show-deploy' in args or 'show-block' in args:
-            return parse(output)
-
-        if 'query-state' in args:
+        if command in ('show-deploy', 'show-block', 'query-state'):
             return parse(output)
 
         return output
 
+    def __call__(self, *args):
+        command_line = [str(self.cli_cmd)] + self.expand_args(args)
+        logging.info(f"EXECUTING []: {command_line}")
+        logging.info(f"EXECUTING: {' '.join(command_line)}")
+        cp = subprocess.run(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        binary_output = cp.stdout
+        if cp.returncode != 0:
+            output = binary_output
+            try:
+                output = binary_output.decode("utf-8")
+            except UnicodeDecodeError:
+                pass
+            raise CLIErrorExit(cp, output)
+
+        return self.parse_output(args[0], binary_output)
+
+
+class DockerCLI(CLI):
+    def __call__(self, *args):
+        logging.info(f"EXECUTING []: {args}")
+        self.host = self.node.container_name
+        command = ' '.join(self.expand_args(args))
+        logging.info(f"EXECUTING: {command}")
+        binary_output = self.node.d_client.invoke_client(command, decode_stdout=False, add_host=False)
+        return self.parse_output(args[0], binary_output)
+
 
 @pytest.fixture()  # scope="module")
 def cli(one_node_network):
-    node = one_node_network.docker_nodes[0]
-    host = os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
-    port = node.grpc_external_docker_port
-    return CLI(node, host, port)
+    return CLI(one_node_network.docker_nodes[0], "casperlabs_client")
+
+
+@pytest.fixture()  # scope="module")
+def scala_cli(one_node_network):
+    return DockerCLI(one_node_network.docker_nodes[0])
 
 
 def test_cli_no_parameters(cli):
@@ -794,8 +825,8 @@ def test_cli_abi_multiple(cli):
 
     args = json.dumps([{'account': account_hex}, {'u32': number}])
     deploy_hash = cli('deploy',
-                      '--from', account.public_key_hex,
                       '--nonce', 1,
+                      '--from', account.public_key_hex,
                       '--session', resource(test_contract),
                       '--session-args', f"{args}",
                       '--payment', resource(test_contract),
@@ -805,3 +836,42 @@ def test_cli_abi_multiple(cli):
     deploy_info = cli("show-deploy", deploy_hash)
     assert deploy_info.processing_results[0].is_error is True
     assert deploy_info.processing_results[0].error_message == f"Exit code: {total_sum}"
+
+
+def test_cli_scala_help(scala_cli):
+    output = scala_cli('--help')
+    assert 'Subcommand: make-deploy' in output
+
+
+def test_cli_scala_extended_deploy(scala_cli):
+    cli = scala_cli
+    account = GENESIS_ACCOUNT
+
+    # TODO: when paralelizing testd, make sure test don't collide
+    # when trying to access the same file, perhaps map containers /tmp
+    # to a unique hosts's directory.
+
+    test_contract = "/data/test_helloname.wasm"
+    cli('make-deploy',
+        '--nonce', 1,
+        '-o', '/tmp/unsigned.deploy',
+        '--from', account.public_key_hex,
+        '--session', test_contract,
+        '--payment', test_contract)
+
+    cli('sign-deploy',
+        '-i', '/tmp/unsigned.deploy',
+        '-o', '/tmp/signed.deploy',
+        '--private-key', account.private_key_docker_path,
+        '--public-key', account.public_key_docker_path)
+
+    deploy_hash = cli('send-deploy', '-i', '/tmp/signed.deploy')
+    cli('propose')
+    deploy_info = cli("show-deploy", deploy_hash)
+    assert not deploy_info.processing_results[0].is_error
+
+    try:
+        os.remove('/tmp/unsigned.deploy')
+        os.remove('/tmp/signed.deploy')
+    except Exception as e:
+        logging.warning(f"Could not delete temporary files: {str(e)}")
