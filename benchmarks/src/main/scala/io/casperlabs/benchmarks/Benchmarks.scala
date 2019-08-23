@@ -89,13 +89,17 @@ object Benchmarks {
         _ <- Log[F].info("Initializing accounts...")
         _ <- (recipient :: senders).zipWithIndex.traverse {
               case ((_, pk), i) =>
-                send(
-                  nonce = i.toLong + 1L,
-                  recipientPublicKeyBase64 = Base64.encode(pk),
-                  senderPrivateKey = initialFundsPrivateKey,
-                  senderPublicKey = initialFundsPublicKey,
-                  amount = initialFundsPerAccount
-                ) >> propose(print = false)
+                for {
+                  _ <- send(
+                        nonce = i.toLong + 1L,
+                        recipientPublicKeyBase64 = Base64.encode(pk),
+                        senderPrivateKey = initialFundsPrivateKey,
+                        senderPublicKey = initialFundsPublicKey,
+                        amount = initialFundsPerAccount
+                      )
+                  blockHash <- propose(print = false)
+                  _         <- checkSuccess(blockHash, 1)
+                } yield ()
             }
       } yield ()
 
@@ -114,21 +118,39 @@ object Benchmarks {
             }
       } yield ()
 
-    def propose(print: Boolean): F[Unit] =
+    def propose(print: Boolean): F[String] =
       for {
-        _ <- Log[F].info("Proposing...").whenA(print)
-        _ <- DeployRuntime.propose[F](
-              exit = false,
-              ignoreOutput = true
-            )
+        _         <- Log[F].info("Proposing...").whenA(print)
+        blockHash <- DeployService[F].propose().rethrow
+      } yield blockHash
+
+    def checkSuccess(blockHash: String, expectedDeployNum: Int): F[Unit] =
+      for {
+        blockInfo   <- DeployService[F].showBlock(blockHash).rethrow
+        deployCount = blockInfo.getSummary.getHeader.deployCount
+        _ <- Sync[F]
+              .raiseError(
+                new IllegalStateException(
+                  s"Proposed block $blockInfo contains $deployCount!=$expectedDeployNum"
+                )
+              )
+              .whenA(deployCount != expectedDeployNum)
+        deployErrorCount = blockInfo.getStatus.getStats.deployErrorCount
+        _ <- Sync[F]
+              .raiseError(
+                new IllegalStateException(
+                  s"Proposed block $blockInfo contains $deployErrorCount!=0 failed deploys"
+                )
+              )
+              .whenA(deployErrorCount != 0)
       } yield ()
 
-    def measure(task: F[Unit]): F[FiniteDuration] =
+    def measure[A](task: F[A]): F[(FiniteDuration, A)] =
       for {
         start <- Timer[F].clock.monotonic(MILLISECONDS)
-        _     <- task
+        a     <- task
         end   <- Timer[F].clock.monotonic(MILLISECONDS)
-      } yield FiniteDuration(end - start, MILLISECONDS)
+      } yield (FiniteDuration(end - start, MILLISECONDS), a)
 
     def writeResults(
         deployTime: FiniteDuration,
@@ -151,11 +173,12 @@ object Benchmarks {
 
     def round(nonce: Long): F[Unit] =
       for {
-        _           <- Log[F].info(s"Starting new round ${nonce - 1}")
-        deployTime  <- measure(oneRoundTransfer(nonce))
-        proposeTime <- measure(propose(print = true))
-        totalTime   = deployTime + proposeTime
-        _           <- writeResults(deployTime, proposeTime, totalTime, nonce)
+        _                        <- Log[F].info(s"Starting new round ${nonce - 1}")
+        (deployTime, _)          <- measure(oneRoundTransfer(nonce))
+        (proposeTime, blockHash) <- measure(propose(print = true))
+        _                        <- checkSuccess(blockHash, accountsNum)
+        totalTime                = deployTime + proposeTime
+        _                        <- writeResults(deployTime, proposeTime, totalTime, nonce)
       } yield ()
 
     def rounds(n: Int): F[Unit] = {

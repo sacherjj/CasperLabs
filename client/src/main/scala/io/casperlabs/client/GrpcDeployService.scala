@@ -102,16 +102,12 @@ class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with C
   def propose(): Task[Either[Throwable, String]] =
     controlServiceStub
       .propose(ProposeRequest())
-      .map { response =>
-        val hash = Base16.encode(response.blockHash.toByteArray)
-        s"Success! Block $hash created and added."
-      }
+      .map(response => Base16.encode(response.blockHash.toByteArray))
       .attempt
 
-  def showBlock(hash: String): Task[Either[Throwable, String]] =
+  def showBlock(hash: String): Task[Either[Throwable, BlockInfo]] =
     casperServiceStub
       .getBlockInfo(GetBlockInfoRequest(hash, BlockInfo.View.FULL))
-      .map(Printer.printToUnicodeString(_))
       .attempt
 
   def showDeploy(hash: String): Task[Either[Throwable, String]] =
