@@ -506,7 +506,9 @@ package object gossiping {
       isInitialRef: Ref[F, Boolean]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
-      _ <- SynchronizerImpl.establishMetrics[F]
+      _         <- SynchronizerImpl.establishMetrics[F]
+      isInitial <- isInitialRef.get
+      _         <- Log[F].info(s"Creating synchronizer in initial mode: $isInitial")
       underlying <- SynchronizerImpl[F](
                      connectToGossip,
                      new SynchronizerImpl.Backend[F] {
@@ -634,7 +636,13 @@ package object gossiping {
                       )
                     }
       _ <- makeFiberResource {
-            awaitApproved >> initialSync.sync() >> isInitialRef.set(false)
+            for {
+              _         <- awaitApproved
+              awaitSync <- initialSync.sync()
+              _         <- awaitSync
+              _         <- isInitialRef.set(false)
+              _         <- Log[F].info("Initial synchronization complete.")
+            } yield ()
           }
     } yield ()
 
