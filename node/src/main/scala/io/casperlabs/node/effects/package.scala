@@ -26,6 +26,7 @@ import scala.concurrent.duration._
 import scala.io.Source
 
 package object effects {
+  import com.zaxxer.hikari.HikariConfig
 
   def log: Log[Task] = Log.log
 
@@ -94,23 +95,25 @@ package object effects {
       def ask: Task[Node]                = state.get.map(_.local)
     }
 
+  // https://tpolecat.github.io/doobie/docs/14-Managing-Connections.html#about-threading
   def doobieTransactor(
-      blockingEC: ExecutionContext,
+      connectEC: ExecutionContext,  // for waiting on connections, should be bounded
+      transactEC: ExecutionContext, // for JDBC, can be unbounded
       serverDataDir: Path
-  ): Resource[Effect, Transactor[Effect]] =
-    Resource
-      .liftF[Task, Transactor[Effect]](
-        Task.delay {
-          // Using this instead of the HikariTransactor because with the default connection pool settings
-          // we got SQLITE_BUSY errors. The SQLite docs say the driver is thread safe, but only one connection
-          // should be made per process (the file locking mechanism depends on process IDs, closing one connection
-          // would invalidate the locks for all of them).
-          Transactor.fromDriverManager[Effect](
-            driver = "org.sqlite.JDBC",
-            url = s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}",
-            blockingContext = blockingEC
-          )
-        }
+  ): Resource[Effect, Transactor[Effect]] = {
+    val config = new HikariConfig()
+    config.setDriverClassName("org.sqlite.JDBC")
+    config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
+    config.setMinimumIdle(1)
+    config.setMaximumPoolSize(1)
+    // Using a connection pool with maximum size of 1 becuase with the default settings we got SQLITE_BUSY errors.
+    // The SQLite docs say the driver is thread safe, but only one connection should be made per process
+    // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
+    HikariTransactor
+      .fromHikariConfig[Effect](
+        config,
+        connectEC,
+        transactEC
       )
       .map { xa =>
         // Foreign keys support must be enabled explicitly in SQLite
@@ -123,5 +126,5 @@ package object effects {
         // * - the transaction will `commit` on success and `rollback` on failure;
         Transactor.before.modify(mxa, _ >> connection.setAutoCommit(false))
       }
-      .toEffect
+  }
 }
