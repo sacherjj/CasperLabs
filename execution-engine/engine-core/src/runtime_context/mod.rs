@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod tests;
-
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
@@ -12,7 +9,7 @@ use blake2::VarBlake2b;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;
 
-use contract_ffi::bytesrepr::deserialize;
+use contract_ffi::bytesrepr::{deserialize, ToBytes};
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
 use contract_ffi::uref::{AccessRights, URef};
@@ -22,12 +19,14 @@ use contract_ffi::value::account::{
 };
 use contract_ffi::value::{Contract, Value};
 use engine_shared::newtypes::{CorrelationId, Validated};
-use engine_storage::global_state::StateReader;
-
 use engine_state::execution_effect::ExecutionEffect;
+use engine_storage::global_state::StateReader;
 use execution::Error;
 use tracking_copy::{AddResult, TrackingCopy};
 use URefAddr;
+
+#[cfg(test)]
+mod tests;
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
@@ -271,8 +270,9 @@ where
     /// If function address was based only on account's public key and deploy's nonce,
     /// then all function addresses generated within one deploy would have been the same.
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
-        let mut pre_hash_bytes = Vec::with_capacity(32); //32 bytes for deploy hash
+        let mut pre_hash_bytes = Vec::with_capacity(36); //32 bytes for deploy hash + 4 bytes ID
         pre_hash_bytes.extend_from_slice(&self.deploy_hash);
+        pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
 
         self.inc_fn_store_id();
 
