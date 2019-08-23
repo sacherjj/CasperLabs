@@ -78,7 +78,7 @@ impl StakesProvider for ContractStakes {
     }
 }
 
-/// The stakes map, assigning the staked amount of tokens to each bonded validator.
+/// The stakes map, assigning the staked amount of motes to each bonded validator.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Stakes(pub BTreeMap<PublicKey, U512>);
 

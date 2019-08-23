@@ -757,7 +757,7 @@ where
         Ok(result.map_err(system_contracts::error::Error::from)?)
     }
 
-    /// Creates a new account at a given public key, transferring a given amount of tokens from
+    /// Creates a new account at a given public key, transferring a given amount of motes from
     /// the given source purse to the new account's purse.
     fn transfer_to_new_account(
         &mut self,
@@ -815,7 +815,7 @@ where
         }
     }
 
-    /// Transferring a given amount of tokens from the given source purse to the new account's
+    /// Transferring a given amount of motes from the given source purse to the new account's
     /// purse. Requires that the [`PurseId`]s have already been created by the mint contract (or
     /// are the genesis account's).
     fn transfer_to_existing_account(
@@ -835,7 +835,7 @@ where
         }
     }
 
-    /// Transfers `amount` of tokens from default purse of the account to `target` account.
+    /// Transfers `amount` of motes from default purse of the account to `target` account.
     /// If that account does not exist, creates one.
     fn transfer_to_account(
         &mut self,
@@ -846,7 +846,7 @@ where
         self.transfer_from_purse_to_account(source, target, amount)
     }
 
-    /// Transfers `amount` of tokens from `source` purse to `target` account.
+    /// Transfers `amount` of motes from `source` purse to `target` account.
     /// If that account does not exist, creates one.
     fn transfer_from_purse_to_account(
         &mut self,
@@ -876,7 +876,7 @@ where
         }
     }
 
-    /// Transfers `amount` of tokens from `source` purse to `target` purse.
+    /// Transfers `amount` of motes from `source` purse to `target` purse.
     fn transfer_from_purse_to_purse(
         &mut self,
         source_ptr: u32,
