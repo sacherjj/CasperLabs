@@ -4,17 +4,18 @@ import cats.implicits._
 import cats.{Id, Monad}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.BlockMetadata
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.shared.Sorting.blockSummaryOrdering
+import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
-import io.casperlabs.storage.dag.DagRepresentation
 
 @silent("deprecated")
 @silent("is never used")
@@ -58,7 +59,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
 
           dag                <- dagStorage.getRepresentation
           dagTopoOrderingAsc = DagOperations.blockTopoOrderingAsc
-          stream = DagOperations.bfToposortTraverseF[Task](List(BlockMetadata.fromBlock(genesis))) {
+          stream = DagOperations.bfToposortTraverseF[Task](List(BlockSummary.fromBlock(genesis))) {
             b =>
               dag
                 .children(b.blockHash)
@@ -68,9 +69,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
           dagTopoOrderingDesc = DagOperations.blockTopoOrderingDesc
           stream2 = DagOperations
             .bfToposortTraverseF[Task](
-              List(BlockMetadata.fromBlock(b6), BlockMetadata.fromBlock(b7))
+              List(BlockSummary.fromBlock(b6), BlockSummary.fromBlock(b7))
             ) { b =>
-              b.parents.traverse(l => dag.lookup(l).map(_.get))
+              b.parents.toList.traverse(l => dag.lookup(l).map(_.get))
             }(Monad[Task], dagTopoOrderingDesc)
           _ <- stream2.toList.map(_.map(_.rank) shouldBe List(4, 4, 3, 3, 2, 2, 1, 0))
         } yield ()
@@ -274,17 +275,18 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         /*
          *  DAG Looks like this:
          *
-         *         b6   b7
-         *        |  \ / |
-         *        b4  b5 |
-         *          \ |  |
-         *            b3 |
-         *            |  |
-         *           b1  b2
-         *            |  /
-         *          genesis
+         * rank
+         *  4        b6   b7
+         *          |  \ / |
+         *  3       b4  b5 |
+         *            \ |  |
+         *  2           b3 |
+         *              |  |
+         *  1          b1  b2
+         *              |  /
+         *  0         genesis
          */
-        implicit def toMetadata = BlockMetadata.fromBlock _
+        implicit def toBlockSummary: Block => BlockSummary = BlockSummary.fromBlock(_)
         for {
           genesis <- createBlock[Task](Seq.empty)
           b1      <- createBlock[Task](Seq(genesis.blockHash))
@@ -297,30 +299,29 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
 
           dag <- dagStorage.getRepresentation
 
-          ordering <- dag.deriveOrdering(0L)
-          _ <- DagOperations.uncommonAncestors(Vector(b6, b7), dag)(Monad[Task], ordering) shouldBeF Map(
-                toMetadata(b6) -> BitSet(0),
-                toMetadata(b4) -> BitSet(0),
-                toMetadata(b7) -> BitSet(1),
-                toMetadata(b2) -> BitSet(1)
+          _ <- DagOperations.uncommonAncestors[Task](Vector(b6, b7), dag) shouldBeF Map(
+                toBlockSummary(b6) -> BitSet(0),
+                toBlockSummary(b4) -> BitSet(0),
+                toBlockSummary(b7) -> BitSet(1),
+                toBlockSummary(b2) -> BitSet(1)
               )
 
-          _ <- DagOperations.uncommonAncestors(Vector(b6, b3), dag)(Monad[Task], ordering) shouldBeF Map(
-                toMetadata(b6) -> BitSet(0),
-                toMetadata(b4) -> BitSet(0),
-                toMetadata(b5) -> BitSet(0)
+          _ <- DagOperations.uncommonAncestors[Task](Vector(b6, b3), dag) shouldBeF Map(
+                toBlockSummary(b6) -> BitSet(0),
+                toBlockSummary(b4) -> BitSet(0),
+                toBlockSummary(b5) -> BitSet(0)
               )
 
-          _ <- DagOperations.uncommonAncestors(Vector(b2, b4, b5), dag)(Monad[Task], ordering) shouldBeF Map(
-                toMetadata(b2) -> BitSet(0),
-                toMetadata(b4) -> BitSet(1),
-                toMetadata(b5) -> BitSet(2),
-                toMetadata(b3) -> BitSet(1, 2),
-                toMetadata(b1) -> BitSet(1, 2)
+          _ <- DagOperations.uncommonAncestors[Task](Vector(b2, b4, b5), dag) shouldBeF Map(
+                toBlockSummary(b2) -> BitSet(0),
+                toBlockSummary(b4) -> BitSet(1),
+                toBlockSummary(b5) -> BitSet(2),
+                toBlockSummary(b3) -> BitSet(1, 2),
+                toBlockSummary(b1) -> BitSet(1, 2)
               )
 
-          result <- DagOperations.uncommonAncestors(Vector(b1), dag)(Monad[Task], ordering) shouldBeF Map
-                     .empty[BlockMetadata, BitSet]
+          result <- DagOperations.uncommonAncestors[Task](Vector(b1), dag) shouldBeF Map
+                     .empty[BlockSummary, BitSet]
         } yield result
   }
 

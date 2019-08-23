@@ -15,6 +15,7 @@ import io.casperlabs.casper.finality.singlesweep.{
 import io.casperlabs.casper.helper.{DagStorageFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -149,7 +150,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
                                casperRef,
                                logEff,
                                finalityDetectorEffect,
-                               blockStorage
+                               blockStorage,
+                               implicitly[Fs2Compiler[Task]]
                              )
         blockInfo = blockQueryResponse.blockInfo.get
         _         = blockQueryResponse.status should be("Success")
@@ -178,7 +180,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
                                casperRef,
                                logEff,
                                finalityDetectorEffect,
-                               blockStorage
+                               blockStorage,
+                               implicitly[Fs2Compiler[Task]]
                              )
       } yield blockQueryResponse.status should be(
         s"Error: Failure to find block containing deploy signed by  with timestamp ${timestamp.toString}"

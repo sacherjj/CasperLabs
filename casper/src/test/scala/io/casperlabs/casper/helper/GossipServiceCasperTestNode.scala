@@ -106,7 +106,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   import GossipServiceCasperTestNodeFactory._
   import HashSetCasperTestNode.peerNode
 
-  def standaloneF[F[_]](
+  override def standaloneF[F[_]](
       genesis: consensus.Block,
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
@@ -117,7 +117,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       parF: Par[F],
-      timerF: Timer[F]
+      timerF: Timer[F],
+      contextShift: ContextShift[F]
   ): F[GossipServiceCasperTestNode[F]] = {
     val name               = "standalone"
     val identity           = peerNode(name, 40400)
@@ -165,7 +166,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     }
   }
 
-  def networkF[F[_]](
+  override def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
       genesis: consensus.Block,
       transforms: Seq[TransformEntry],
@@ -177,7 +178,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       parF: Par[F],
-      timerF: Timer[F]
+      timerF: Timer[F],
+      contextShift: ContextShift[F]
   ): F[IndexedSeq[GossipServiceCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (0 to n - 1).map(i => s"node-$i")

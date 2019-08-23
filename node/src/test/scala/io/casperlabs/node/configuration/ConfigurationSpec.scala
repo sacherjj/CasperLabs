@@ -131,7 +131,6 @@ class ConfigurationSpec
       useTls = false
     )
     val blockStorage = Configuration.BlockStorage(
-      latestMessagesLogMaxSizeFactor = 1,
       cacheMaxSizeBytes = 1
     )
     val kamonSettings = Configuration.Kamon(

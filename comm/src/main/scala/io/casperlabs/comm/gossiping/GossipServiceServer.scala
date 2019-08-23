@@ -7,6 +7,7 @@ import cats.effect.implicits._
 import cats.implicits._
 import cats.temp.par._
 import com.google.protobuf.ByteString
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
@@ -167,8 +168,8 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
                 val ancestors =
                   if (canGoDeeper(depth) && !knownHashes(summary.blockHash)) {
                     val ancestors =
-                      summary.getHeader.parentHashes ++
-                        summary.getHeader.justifications.map(_.latestBlockHash)
+                      summary.parentHashes ++
+                        summary.justifications.map(_.latestBlockHash)
 
                     ancestors.map(depth + 1 -> _)
                   } else {

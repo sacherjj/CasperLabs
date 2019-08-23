@@ -11,6 +11,7 @@ import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
@@ -185,7 +186,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
   }
 
   private def topologicalSort(syncState: SyncState): Vector[BlockSummary] =
-    syncState.summaries.values.toVector.sortBy(_.getHeader.rank)
+    syncState.summaries.values.toVector.sortBy(_.rank)
 
   /** Remember that we got these summaries from this source,
     * so next time we don't have to travel that far back in their DAG. */
@@ -321,7 +322,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     // seeing how many different values we observed so far.
     val depth = syncState.ranks.size
     val maxValidatorCountAtTargets = syncState.originalTargets.map { t =>
-      syncState.summaries.get(t).fold(1)(s => s.getHeader.getState.bonds.size)
+      syncState.summaries.get(t).fold(1)(s => s.state.bonds.size)
     }.max
     // Validators can come and leave at a certain rate. If someone unbonded at every step along
     // the way we'd get as wide a graph as we can get (looking back).
@@ -467,13 +468,13 @@ object SynchronizerImpl {
             acc + (summary.blockHash -> (acc(summary.blockHash) + dependency))
         },
         distanceFromOriginalTarget.updated(summary.blockHash, distance),
-        ranks = ranks + summary.getHeader.rank
+        ranks = ranks + summary.rank
       )
     }
   }
 
   private def dependencies(summary: BlockSummary): List[ByteString] =
-    (summary.getHeader.justifications.map(_.latestBlockHash) ++ summary.getHeader.parentHashes).toList
+    (summary.justifications.map(_.latestBlockHash) ++ summary.parentHashes).toList
 
   object SyncState {
     def initial(originalTargets: Set[ByteString]) =

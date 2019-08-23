@@ -2,11 +2,12 @@ package io.casperlabs.casper.finality
 
 import cats.Monad
 import cats.implicits._
-import io.casperlabs.storage.BlockMetadata
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.{Vote, VotingMatrix}
 import io.casperlabs.catscontrib.MonadStateOps._
+import io.casperlabs.models.BlockImplicits._
 
 import scala.annotation.tailrec
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
@@ -16,26 +17,26 @@ package object votingmatrix {
   /**
     * Updates voting matrix when a new block added to dag
     * @param dag
-    * @param blockMetadata the new block
+    * @param blockSummary the new block
     * @param currentVoteValue which branch the new block vote for
     * @return
     */
   def updateVoterPerspective[F[_]: Monad](
       dag: DagRepresentation[F],
-      blockMetadata: BlockMetadata,
+      blockSummary: BlockSummary,
       currentVoteValue: BlockHash
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
-      voter            = blockMetadata.validatorPublicKey
+      voter            = blockSummary.validatorPublicKey
       _ <- if (!validatorToIndex.contains(voter)) {
             // The creator of block isn't from the validatorsSet
             // e.g. It is bonded after creating the latestFinalizedBlock
             ().pure[F]
           } else {
             for {
-              _ <- updateVotingMatrixOnNewBlock[F](dag, blockMetadata)
-              _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, blockMetadata.rank)
+              _ <- updateVotingMatrixOnNewBlock[F](dag, blockSummary)
+              _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, blockSummary.rank)
             } yield ()
           }
     } yield ()
@@ -86,14 +87,14 @@ package object votingmatrix {
 
   private[votingmatrix] def updateVotingMatrixOnNewBlock[F[_]: Monad](
       dag: DagRepresentation[F],
-      blockMetadata: BlockMetadata
+      blockSummary: BlockSummary
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
-      panoramaM        <- FinalityDetectorUtil.panoramaM[F](dag, validatorToIndex, blockMetadata)
+      panoramaM        <- FinalityDetectorUtil.panoramaM[F](dag, validatorToIndex, blockSummary)
       // Replace row i in voting-matrix by panoramaM
       _ <- (matrix >> 'votingMatrix).modify(
-            _.updated(validatorToIndex(blockMetadata.validatorPublicKey), panoramaM)
+            _.updated(validatorToIndex(blockSummary.validatorPublicKey), panoramaM)
           )
     } yield ()
 

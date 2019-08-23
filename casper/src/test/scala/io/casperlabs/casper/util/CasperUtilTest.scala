@@ -11,12 +11,13 @@ import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
-import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.storage._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy._
 import io.casperlabs.storage.block._
+import io.casperlabs.models.BlockImplicits._
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
 
@@ -236,14 +237,14 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
         panoramaDagLevel <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                              dag,
-                             BlockMetadata.fromBlock(genesis),
+                             BlockSummary.fromBlock(genesis),
                              validators.toSet + v4
                            )
         _ = panoramaDagLevel shouldEqual Map()
 
         panoramaDagLevel1 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                               dag,
-                              BlockMetadata.fromBlock(b1),
+                              BlockSummary.fromBlock(b1),
                               validators.toSet + v4
                             )
         _ = panoramaDagLevel1 shouldEqual Map(
@@ -252,7 +253,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
         panoramaDagLevel2 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                               dag,
-                              BlockMetadata.fromBlock(b3),
+                              BlockSummary.fromBlock(b3),
                               validators.toSet + v4
                             )
         _ = panoramaDagLevel2 shouldEqual Map(
@@ -262,7 +263,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
         panoramaDagLevel3 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                               dag,
-                              BlockMetadata.fromBlock(b5),
+                              BlockSummary.fromBlock(b5),
                               validators.toSet + v4
                             )
         _ = panoramaDagLevel3 shouldEqual Map(
@@ -273,7 +274,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
         panoramaDagLevel4 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                               dag,
-                              BlockMetadata.fromBlock(b6),
+                              BlockSummary.fromBlock(b6),
                               validators.toSet + v4
                             )
         _ = panoramaDagLevel4 shouldEqual Map(
@@ -285,7 +286,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
         panoramaDagLevel5 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                               dag,
-                              BlockMetadata.fromBlock(b7),
+                              BlockSummary.fromBlock(b7),
                               validators.toSet + v4
                             )
         _ = panoramaDagLevel5 shouldEqual Map(

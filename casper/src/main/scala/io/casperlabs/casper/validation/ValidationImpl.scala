@@ -6,6 +6,7 @@ import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
@@ -41,23 +42,10 @@ object ValidationImpl {
 class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
     extends Validation[F] {
   import ValidationImpl.DRIFT
+  import io.casperlabs.models.BlockImplicits._
 
   type Data        = Array[Byte]
   type BlockHeight = Long
-
-  implicit class BlockSummaryOps(summary: BlockSummary) {
-    def isGenesisLike =
-      summary.getHeader.parentHashes.isEmpty &&
-        summary.getHeader.validatorPublicKey.isEmpty &&
-        summary.getSignature.sig.isEmpty
-  }
-
-  implicit class BlockOps(block: Block) {
-    def isGenesisLike =
-      block.getHeader.parentHashes.isEmpty &&
-        block.getHeader.validatorPublicKey.isEmpty &&
-        block.getSignature.sig.isEmpty
-  }
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -178,7 +166,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         verify(
           b.blockHash.toByteArray,
           Signature(b.getSignature.sig.toByteArray),
-          PublicKey(b.getHeader.validatorPublicKey.toByteArray)
+          PublicKey(b.validatorPublicKey.toByteArray)
         )
       ) match {
         case Success(true) => true.pure[F]
@@ -235,7 +223,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                    _ <- Log[F].warn(
                          ignore(
                            block,
-                           s"block creator ${PrettyPrinter.buildString(block.getHeader.validatorPublicKey)} has 0 weight."
+                           s"block creator ${PrettyPrinter.buildString(block.validatorPublicKey)} has 0 weight."
                          )
                        )
                  } yield false
@@ -269,15 +257,15 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       for {
         _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
       } yield false
-    } else if (b.getHeader.chainId.isEmpty) {
+    } else if (b.chainId.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block chain identifier is empty."))
       } yield false
-    } else if (b.getHeader.getState.postStateHash.isEmpty) {
+    } else if (b.state.postStateHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
       } yield false
-    } else if (b.getHeader.bodyHash.isEmpty) {
+    } else if (b.bodyHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
       } yield false
@@ -290,8 +278,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       b: BlockSummary,
       m: BlockHeight => state.ProtocolVersion
   ): F[Boolean] = {
-    val blockVersion = b.getHeader.protocolVersion
-    val blockHeight  = b.getHeader.rank
+    val blockVersion = b.protocolVersion
+    val blockHeight  = b.rank
     val version      = m(blockHeight).value
     if (blockVersion == version) {
       true.pure[F]
@@ -312,9 +300,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       block: BlockSummary
   )(implicit bs: BlockStorage[F]): F[Unit] =
     for {
-      parentsPresent <- block.getHeader.parentHashes.toList
+      parentsPresent <- block.parentHashes.toList
                          .forallM(p => BlockStorage[F].contains(p))
-      justificationsPresent <- block.getHeader.justifications.toList
+      justificationsPresent <- block.justifications.toList
                                 .forallM(j => BlockStorage[F].contains(j.latestBlockHash))
       _ <- FunctorRaise[F, InvalidBlock]
             .raise[Unit](MissingBlocks)
@@ -327,9 +315,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   )(implicit bs: BlockStorage[F]): F[Unit] =
     for {
       currentTime  <- Time[F].currentMillis
-      timestamp    = b.getHeader.timestamp
+      timestamp    = b.timestamp
       beforeFuture = currentTime + ValidationImpl.DRIFT >= timestamp
-      latestParentTimestamp <- b.getHeader.parentHashes.toList.foldM(0L) {
+      latestParentTimestamp <- b.parentHashes.toList.foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
                                   ProtoUtil
                                     .unsafeGetBlockSummary[F](parentHash)
@@ -361,7 +349,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   ): F[Option[FiniteDuration]] =
     for {
       currentMillis <- Time[F].currentMillis
-      delay <- b.getHeader.timestamp - currentMillis match {
+      delay <- b.timestamp - currentMillis match {
                 case n if n <= 0     => none[FiniteDuration].pure[F]
                 case n if n <= DRIFT =>
                   // Sleep for a little bit more time to ensure we won't propose block on top of block from future
@@ -377,7 +365,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F]
   ): F[Unit] =
     for {
-      justificationMsgs <- b.getHeader.justifications.toList.traverse { justification =>
+      justificationMsgs <- b.justifications.toList.traverse { justification =>
                             dag.lookup(justification.latestBlockHash).flatMap {
                               MonadThrowable[F].fromOption(
                                 _,
@@ -388,7 +376,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                             }
                           }
       calculatedRank = ProtoUtil.calculateRank(justificationMsgs)
-      actuallyRank   = b.getHeader.rank
+      actuallyRank   = b.rank
       result         = calculatedRank == actuallyRank
       _ <- if (result) {
             Applicative[F].unit
@@ -430,7 +418,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                                               )
                                           }
                                       }
-      number = b.getHeader.validatorBlockSeqNum
+      number = b.validatorBlockSeqNum
       ok     = creatorJustificationSeqNumber + 1 == number
       _ <- if (ok) {
             Applicative[F].unit
@@ -452,12 +440,12 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       b: BlockSummary,
       chainId: String
   ): F[Unit] =
-    if (b.getHeader.chainId == chainId) {
+    if (b.chainId == chainId) {
       Applicative[F].unit
     } else {
       for {
         _ <- Log[F].warn(
-              ignore(b, s"got chain identifier ${b.getHeader.chainId} while $chainId was expected.")
+              ignore(b, s"got chain identifier ${b.chainId} while $chainId was expected.")
             )
         _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidChainId)
       } yield ()
@@ -491,7 +479,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     val bodyHashComputed  = ProtoUtil.protoHash(b.getBody)
 
     if (b.blockHash == blockHashComputed &&
-        b.getHeader.bodyHash == bodyHashComputed) {
+        b.bodyHash == bodyHashComputed) {
       Applicative[F].unit
     } else {
       def show(hash: ByteString) = PrettyPrinter.buildString(hash)
@@ -504,9 +492,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               .whenA(b.blockHash != blockHashComputed)
         _ <- Log[F]
               .warn(
-                s"Expected body hash ${show(bodyHashComputed)}; got ${show(b.getHeader.bodyHash)}"
+                s"Expected body hash ${show(bodyHashComputed)}; got ${show(b.bodyHash)}"
               )
-              .whenA(b.getHeader.bodyHash != bodyHashComputed)
+              .whenA(b.bodyHash != bodyHashComputed)
         _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBlockHash)
       } yield ()
     }
@@ -524,7 +512,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def deployCount(
       b: Block
   ): F[Unit] =
-    if (b.getHeader.deployCount == b.getBody.deploys.length) {
+    if (b.deployCount == b.getBody.deploys.length) {
       Applicative[F].unit
     } else {
       for {
@@ -587,7 +575,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
 
     for {
-      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.getHeader.justifications).pure[F]
+      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
       tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
@@ -669,7 +657,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       block: Block,
       invalidBlockTracker: Set[BlockHash]
   ): F[Unit] = {
-    val invalidJustifications = block.getHeader.justifications.filter(
+    val invalidJustifications = block.justifications.filter(
       justification => invalidBlockTracker.contains(justification.latestBlockHash)
     )
     val neglectedInvalidJustification = invalidJustifications.exists { justification =>

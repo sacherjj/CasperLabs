@@ -15,5 +15,5 @@ class MockDeployStorageSpec extends DeployStorageSpec {
       implicit0(logNOP: Log[Task]) <- Task(new NOPLog[Task])
       mock                         <- MockDeployStorage.create[Task]()
       _                            <- test(mock, mock)
-    } yield ()).runSyncUnsafe(5.seconds)
+    } yield ()).runSyncUnsafe(15.seconds)
 }

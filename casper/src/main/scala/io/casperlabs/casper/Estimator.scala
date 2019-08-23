@@ -3,6 +3,7 @@ package io.casperlabs.casper
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
@@ -97,7 +98,7 @@ object Estimator {
       case (acc, (validator, latestMessageHash)) =>
         DagOperations
           .bfTraverseF[F, BlockHash](List(latestMessageHash))(
-            hash => dag.lookup(hash).map(_.get.parents.take(1))
+            hash => dag.lookup(hash).map(_.get.parents.take(1).toList)
           )
           .takeUntil(_ == stopHash)
           .foldLeftF(acc) {

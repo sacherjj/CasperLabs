@@ -39,12 +39,9 @@ lazy val projectSettings = Seq(
     case None    => Seq()
     case Some(v) => Seq("-source", v, "-target", v)
   }),
-  Test / fork := false, // Forking may cause "Reporter closed abruptly..." messages due to non-serializable exceptions.
+  Test / fork := true, // Forking may cause "Reporter closed abruptly..." messages due to non-serializable exceptions.
   Test / parallelExecution := false,
   Test / testForkedParallel := false,
-  IntegrationTest / fork := true,
-  IntegrationTest / parallelExecution := false,
-  IntegrationTest / testForkedParallel := false,
   Compile / doc / sources := Seq.empty,
   Compile / packageDoc / publishArtifact := false
 )
@@ -84,6 +81,8 @@ lazy val shared = (project in file("shared"))
   .settings(
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
+      sqlLite,
+      fs2,
       catsCore,
       catsPar,
       catsEffect,
@@ -123,7 +122,8 @@ lazy val casper = (project in file("casper"))
       nettyAll,
       nettyTransNativeEpoll,
       nettyTransNativeKqueue
-    )
+    ),
+    Test / unmanagedClasspath ++= storage.base / "src" / "main" / "resources" :: Nil
   )
   .dependsOn(
     storage        % "compile->compile;test->test",
@@ -360,7 +360,6 @@ lazy val storage = (project in file("storage"))
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       lmdbjava,
-      sqlLite,
       doobieCore,
       doobieHikari,
       flyway,

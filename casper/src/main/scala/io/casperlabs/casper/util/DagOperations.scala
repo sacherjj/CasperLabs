@@ -6,9 +6,10 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.StreamT
-import io.casperlabs.storage.BlockMetadata
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.models.BlockImplicits._
 import simulacrum.typeclass
 
 import scala.collection.immutable.{BitSet, HashSet, Queue}
@@ -29,10 +30,10 @@ object DagOperations {
       type K = B
       def key(a: A) = k(a)
     }
-    def identity[A]               = instance[A, A](a => a)
-    implicit val blockKey         = instance[Block, BlockHash](_.blockHash)
-    implicit val blockMetadataKey = instance[BlockMetadata, BlockHash](_.blockHash)
-    implicit val blockHashKey     = identity[BlockHash]
+    def identity[A]              = instance[A, A](a => a)
+    implicit val blockKey        = instance[Block, BlockHash](_.blockHash)
+    implicit val blockSummaryKey = instance[BlockSummary, BlockHash](_.blockHash)
+    implicit val blockHashKey    = identity[BlockHash]
   }
 
   def bfTraverseF[F[_]: Monad, A](
@@ -56,21 +57,21 @@ object DagOperations {
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[k.K])))
   }
 
-  val blockTopoOrderingAsc: Ordering[BlockMetadata] =
-    Ordering.by[BlockMetadata, Long](_.rank).reverse
+  val blockTopoOrderingAsc: Ordering[BlockSummary] =
+    Ordering.by[BlockSummary, Long](_.rank).reverse
 
-  val blockTopoOrderingDesc: Ordering[BlockMetadata] = Ordering.by(_.rank)
+  val blockTopoOrderingDesc: Ordering[BlockSummary] = Ordering.by(_.rank)
 
   def bfToposortTraverseF[F[_]: Monad](
-      start: List[BlockMetadata]
+      start: List[BlockSummary]
   )(
-      neighbours: BlockMetadata => F[List[BlockMetadata]]
-  )(implicit ord: Ordering[BlockMetadata]): StreamT[F, BlockMetadata] = {
+      neighbours: BlockSummary => F[List[BlockSummary]]
+  )(implicit ord: Ordering[BlockSummary]): StreamT[F, BlockSummary] = {
     def build(
-        q: mutable.PriorityQueue[BlockMetadata],
+        q: mutable.PriorityQueue[BlockSummary],
         prevVisited: HashSet[BlockHash]
-    ): F[StreamT[F, BlockMetadata]] =
-      if (q.isEmpty) StreamT.empty[F, BlockMetadata].pure[F]
+    ): F[StreamT[F, BlockSummary]] =
+      if (q.isEmpty) StreamT.empty[F, BlockSummary].pure[F]
       else {
         val curr = q.dequeue
         if (prevVisited(curr.blockHash)) build(q, prevVisited)
@@ -83,7 +84,7 @@ object DagOperations {
       }
 
     StreamT.delay(
-      Eval.now(build(mutable.PriorityQueue.empty[BlockMetadata] ++ start, HashSet.empty[BlockHash]))
+      Eval.now(build(mutable.PriorityQueue.empty[BlockSummary] ++ start, HashSet.empty[BlockHash]))
     )
   }
 
@@ -238,15 +239,15 @@ object DagOperations {
   }
 
   def uncommonAncestors[F[_]: Monad](
-      blocks: IndexedSeq[BlockMetadata],
+      blocks: IndexedSeq[BlockSummary],
       dag: DagRepresentation[F]
   )(
-      implicit topoSort: Ordering[BlockMetadata]
-  ): F[Map[BlockMetadata, BitSet]] = {
-    def parents(b: BlockMetadata): F[List[BlockMetadata]] =
-      b.parents.traverse(b => dag.lookup(b).map(_.get))
+      implicit topoSort: Ordering[BlockSummary]
+  ): F[Map[BlockSummary, BitSet]] = {
+    def parents(b: BlockSummary): F[List[BlockSummary]] =
+      b.parents.toList.traverse(b => dag.lookup(b).map(_.get))
 
-    abstractUncommonAncestors[F, BlockMetadata](blocks, parents)
+    abstractUncommonAncestors[F, BlockSummary](blocks, parents)
   }
 
   //Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
@@ -339,8 +340,8 @@ object DagOperations {
       starters: List[BlockHash]
   ): F[BlockHash] = {
     implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
-    import io.casperlabs.casper.util.implicits.{eqBlockMetadata, showBlockHash}
-    def lookup[A](f: A => BlockHash): A => F[BlockMetadata] =
+    import io.casperlabs.casper.util.implicits.{eqBlockSummary, showBlockHash}
+    def lookup[A](f: A => BlockHash): A => F[BlockSummary] =
       el =>
         dag
           .lookup(f(el))
@@ -349,7 +350,7 @@ object DagOperations {
     starters
       .traverse(lookup(identity))
       .flatMap(
-        latestCommonAncestorF[F, BlockMetadata](_)(lookup[BlockMetadata](_.parents.head)(_))
+        latestCommonAncestorF[F, BlockSummary](_)(lookup[BlockSummary](_.parents.head)(_))
       )
       .map(_.blockHash)
   }
@@ -386,7 +387,7 @@ object DagOperations {
       descendantMeta <- descendants.toList.traverse(dag.lookup).map(_.flatten)
       minRank        = if (ancestorMeta.isEmpty) 0 else ancestorMeta.map(_.rank).min
       reachable <- bfToposortTraverseF[F](descendantMeta) { blockMeta =>
-                    blockMeta.parents.traverse(dag.lookup).map(_.flatten)
+                    blockMeta.parents.toList.traverse(dag.lookup).map(_.flatten)
                   }.foldWhileLeft(Set.empty[BlockHash]) {
                     case (reachable, blockMeta) if ancestors(blockMeta.blockHash) =>
                       Left(reachable + blockMeta.blockHash)

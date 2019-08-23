@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.helper.{
   DagStorageTestFixture,
@@ -50,6 +50,7 @@ import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.{DeployStorage, MockDeployStorage}
 import monix.catnap.Semaphore
 import monix.eval.Task
+import monix.execution.schedulers.CanBlock.permit
 import monix.execution.Scheduler
 import org.scalatest.{Matchers, WordSpec}
 
@@ -115,9 +116,10 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
     implicit val lock             = Semaphore[Task](1).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockStorage     = InMemBlockStorage.create[Task]
-    implicit val inMemDagStorage = InMemDagStorage
-      .create[Task]
-      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+    implicit val dagStorage =
+      DagStorageTestFixture
+        .createDagStorage[Task](DagStorageTestFixture.dagStorageDir)
+        .runSyncUnsafe(1.second)(scheduler, permit)
     implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new FinalityDetector[Task] {
       override def normalizedFaultTolerance(

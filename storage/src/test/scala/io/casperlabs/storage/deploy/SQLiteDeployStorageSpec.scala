@@ -1,77 +1,17 @@
 package io.casperlabs.storage.deploy
 
-import java.nio.file.{Files, Paths}
-
-import doobie._
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.metrics.Metrics.MetricsNOP
-import io.casperlabs.shared.Time
+import io.casperlabs.storage.SQLiteFixture
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
-import monix.execution.schedulers.CanBlock.permit
-import org.flywaydb.core.Flyway
-import org.flywaydb.core.api.Location
-import org.scalatest._
-
-import scala.concurrent.duration._
-import scala.util.Try
 
 class SQLiteDeployStorageSpec
     extends DeployStorageSpec
-    with BeforeAndAfterEach
-    with BeforeAndAfterAll {
-  private val db = Paths.get("/", "tmp", "deploy_buffer_spec.db")
-
-  private implicit val xa: Transactor[Task] = Transactor
-    .fromDriverManager[Task](
-      "org.sqlite.JDBC",
-      s"jdbc:sqlite:$db",
-      "",
-      "",
-      ExecutionContexts.synchronous
-    )
-  private implicit val metricsNOP: Metrics[Task] = new MetricsNOP[Task]
-  private implicit val time: Time[Task] = new Time[Task] {
-    override def currentMillis: Task[Long] = Task(System.currentTimeMillis())
-
-    override def nanoTime: Task[Long] = Task(System.nanoTime())
-
-    override def sleep(duration: FiniteDuration): Task[Unit] = Task.sleep(duration)
-  }
-
-  private val flyway = {
-    val conf =
-      Flyway
-        .configure()
-        .dataSource(s"jdbc:sqlite:$db", "", "")
-        .locations(new Location("classpath:db/migration"))
-    conf.load()
-  }
-
+    with SQLiteFixture[(DeployStorageReader[Task], DeployStorageWriter[Task])] {
   override protected def testFixture(
       test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit]
-  ): Unit = {
-    val program = for {
-      _       <- Task(cleanupTables())
-      _       <- Task(setupTables())
-      storage <- SQLiteDeployStorage.create[Task]
-      _       <- test(storage, storage)
-    } yield ()
-    program.runSyncUnsafe(5.seconds)
-  }
+  ): Unit = runSQLiteTest[Unit](test.tupled)
 
-  private def setupTables(): Unit = flyway.migrate()
+  override def db: String = "/tmp/deploy_storage.db"
 
-  private def cleanupTables(): Unit = flyway.clean()
-
-  private def cleanupDatabase(): Unit =
-    Try(Files.delete(Paths.get("/", "tmp", "deploy_buffer_spec.db")))
-
-  override protected def beforeEach(): Unit = cleanupTables()
-
-  override protected def afterEach(): Unit = cleanupTables()
-
-  override protected def beforeAll(): Unit = cleanupDatabase()
-
-  override protected def afterAll(): Unit = cleanupDatabase()
+  override def createTestResource: Task[(DeployStorageReader[Task], DeployStorageWriter[Task])] =
+    SQLiteDeployStorage.create[Task].map(s => (s, s))
 }

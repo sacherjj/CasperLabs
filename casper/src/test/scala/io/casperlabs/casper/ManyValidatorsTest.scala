@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.finality.singlesweep.FinalityDetectorBySingleSweepImpl
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.{Log, Time}
@@ -39,12 +39,8 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
     val v1 = bonds(0).validatorPublicKey
 
     val testProgram = for {
-      blockStorage <- DagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
-      dagStorage <- DagStorageTestFixture.createDagStorage(dagStorageDir)(
-                     metrics,
-                     log,
-                     blockStorage
-                   )
+      blockStorage      <- DagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+      dagStorage        <- DagStorageTestFixture.createDagStorage[Task](dagStorageDir)
       indexedDagStorage <- IndexedDagStorage.create(dagStorage)
       genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)(
                   Monad[Task],
@@ -64,11 +60,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
               initialLatestMessages
             )
           }
-      newDagStorage <- DagStorageTestFixture.createDagStorage(dagStorageDir)(
-                        metrics,
-                        log,
-                        blockStorage
-                      )
+      newDagStorage        <- DagStorageTestFixture.createDagStorage[Task](dagStorageDir)
       newIndexedDagStorage <- IndexedDagStorage.create(newDagStorage)
       dag                  <- newIndexedDagStorage.getRepresentation
       tips                 <- Estimator.tips[Task](dag, genesis.blockHash)(MonadThrowable[Task])
@@ -85,7 +77,8 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
                  casperRef,
                  logEff,
                  finalityDetectorEffect,
-                 blockStorage
+                 blockStorage,
+                 implicitly[Fs2Compiler[Task]]
                )
     } yield result
     testProgram.runSyncUnsafe(1 minute)(scheduler, CanBlock.permit)

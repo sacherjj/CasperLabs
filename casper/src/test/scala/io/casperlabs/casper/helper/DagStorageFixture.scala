@@ -4,9 +4,11 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util.zip.CRC32
 
-import cats.effect.{Concurrent, Sync}
-import cats.syntax.functor._
+import cats.effect._
+import cats.implicits._
 import com.google.protobuf.ByteString
+import doobie.util.ExecutionContexts
+import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.metrics.Metrics
@@ -19,6 +21,8 @@ import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag._
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.Location
 import org.lmdbjava.{Env, EnvFlags}
 import org.scalatest.{BeforeAndAfter, Suite}
 
@@ -35,12 +39,8 @@ trait DagStorageFixture extends BeforeAndAfter { self: Suite =>
         implicit val metrics = new MetricsNOP[Task]()
         implicit val log     = new Log.NOPLog[Task]()
         for {
-          blockStorage <- DagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
-          dagStorage <- DagStorageTestFixture.createDagStorage(dagStorageDir)(
-                         metrics,
-                         log,
-                         blockStorage
-                       )
+          blockStorage      <- DagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+          dagStorage        <- DagStorageTestFixture.createDagStorage[Task](dagStorageDir)
           indexedDagStorage <- IndexedDagStorage.create(dagStorage)
           result            <- f(blockStorage)(indexedDagStorage)
         } yield result
@@ -102,12 +102,36 @@ object DagStorageTestFixture {
     FileLMDBIndexBlockStorage.create[F](env, blockStorageDir).map(_.right.get)
   }
 
-  def createDagStorage(dagStorageDir: Path)(
-      implicit metrics: Metrics[Task],
-      log: Log[Task],
-      blockStorage: BlockStorage[Task]
-  ): Task[DagStorage[Task]] =
-    FileDagStorage.create[Task](
-      FileDagStorage.Config(dagStorageDir)
+  //TODO: Use single database for all storages when we have SQLiteBlockStorage
+  //https://casperlabs.atlassian.net/browse/NODE-663
+  def createDagStorage[F[_]: Metrics: Async: ContextShift](
+      dagStorageDir: Path,
+      maybeGenesis: Option[Block] = None
+  ): F[DagStorage[F]] = {
+    val jdbcUrl = s"jdbc:sqlite:${dagStorageDir.resolve("dag_storage.db")}"
+    val flyway = {
+      val conf =
+        Flyway
+          .configure()
+          .dataSource(jdbcUrl, "", "")
+          .locations(new Location("classpath:/db/migration"))
+      conf.load()
+    }
+    implicit val xa = Transactor
+      .fromDriverManager[F](
+        "org.sqlite.JDBC",
+        jdbcUrl,
+        "",
+        "",
+        ExecutionContexts.synchronous
+      )
+
+    SQLiteDagStorage[F].use(
+      dagStorage =>
+        for {
+          _ <- Sync[F].delay(flyway.migrate)
+          _ <- maybeGenesis.fold(().pure[F])(genesis => dagStorage.insert(genesis).void)
+        } yield dagStorage
     )
+  }
 }
