@@ -208,6 +208,67 @@ where
         grpc::SingleResponse::completed(exec_response)
     }
 
+    fn execute(
+        &self,
+        _request_options: ::grpc::RequestOptions,
+        exec_request: ipc::ExecuteRequest,
+    ) -> grpc::SingleResponse<ipc::ExecuteResponse> {
+        let start = Instant::now();
+        let correlation_id = CorrelationId::new();
+
+        let protocol_version = exec_request.get_protocol_version();
+
+        // TODO: don't unwrap
+        let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
+
+        let blocktime = BlockTime(exec_request.get_block_time());
+
+        // TODO: don't unwrap
+        let wasm_costs = WasmCosts::from_version(protocol_version.value).unwrap();
+
+        let deploys = exec_request.get_deploys();
+
+        let preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
+
+        let executor = WasmiExecutor;
+
+        let deploys_result: Result<Vec<ipc::DeployResult>, ipc::RootNotFound> = execute_deploys(
+            &self,
+            &executor,
+            &preprocessor,
+            prestate_hash,
+            blocktime,
+            deploys,
+            protocol_version,
+            correlation_id,
+        );
+
+        let exec_response = match deploys_result {
+            Ok(deploy_results) => {
+                let mut exec_response = ipc::ExecuteResponse::new();
+                let mut exec_result = ipc::ExecResult::new();
+                exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(deploy_results));
+                exec_response.set_success(exec_result);
+                exec_response
+            }
+            Err(error) => {
+                logging::log_error("deploy results error: RootNotFound");
+                let mut exec_response = ipc::ExecuteResponse::new();
+                exec_response.set_missing_parent(error);
+                exec_response
+            }
+        };
+
+        log_duration(
+            correlation_id,
+            METRIC_DURATION_EXEC,
+            TAG_RESPONSE_EXEC,
+            start.elapsed(),
+        );
+
+        grpc::SingleResponse::completed(exec_response)
+    }
+
     fn commit(
         &self,
         _request_options: ::grpc::RequestOptions,
@@ -560,6 +621,110 @@ where
                     payment_args,
                     address,
                     authorized_keys,
+                    blocktime,
+                    nonce,
+                    prestate_hash,
+                    protocol_version,
+                    correlation_id,
+                    executor,
+                    preprocessor,
+                )
+                .map(Into::into)
+                .map_err(Into::into)
+        })
+        .collect()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_deploys<A, H, E, P>(
+    engine_state: &EngineState<H>,
+    executor: &E,
+    preprocessor: &P,
+    prestate_hash: Blake2bHash,
+    blocktime: BlockTime,
+    deploys: &[ipc::DeployItem],
+    protocol_version: &state::ProtocolVersion,
+    correlation_id: CorrelationId,
+) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
+where
+    H: History,
+    E: Executor<A>,
+    P: Preprocessor<A>,
+    EngineError: From<H::Error>,
+    H::Error: Into<engine_core::execution::Error>,
+{
+    // We want to treat RootNotFound error differently b/c it should short-circuit
+    // the execution of ALL deploys within the block. This is because all of them share
+    // the same prestate and all of them would fail.
+    // Iterator (Result<_, _> + collect()) will short circuit the execution
+    // when run_deploy returns Err.
+    deploys
+        .iter()
+        .map(|deploy| {
+            let session_payload = match deploy.get_session().to_owned().payload {
+                Some(payload) => payload.into(),
+                None => {
+                    return Ok(
+                        ExecutionResult::precondition_failure(EngineError::DeployError).into(),
+                    )
+                }
+            };
+
+            let payment_payload = match deploy.get_payment().to_owned().payload {
+                Some(payload) => payload.into(),
+                None => {
+                    return Ok(
+                        ExecutionResult::precondition_failure(EngineError::DeployError).into(),
+                    )
+                }
+            };
+
+            let address = {
+                let address_len = deploy.address.len();
+                if address_len != EXPECTED_PUBLIC_KEY_LENGTH {
+                    let err = EngineError::InvalidPublicKeyLength {
+                        expected: EXPECTED_PUBLIC_KEY_LENGTH,
+                        actual: address_len,
+                    };
+                    let failure = ExecutionResult::precondition_failure(err);
+                    return Ok(failure.into());
+                }
+                let mut dest = [0; EXPECTED_PUBLIC_KEY_LENGTH];
+                dest.copy_from_slice(&deploy.address);
+                Key::Account(dest)
+            };
+
+            // Parse all authorization keys from IPC into a vector
+            let authorization_keys: BTreeSet<PublicKey> = {
+                let maybe_keys: Result<BTreeSet<_>, EngineError> = deploy
+                    .authorization_keys
+                    .iter()
+                    .map(|key_bytes| {
+                        // Try to convert an element of bytes into a possibly
+                        // valid PublicKey with error handling
+                        PublicKey::try_from(key_bytes.as_slice()).map_err(|_| {
+                            EngineError::InvalidPublicKeyLength {
+                                expected: EXPECTED_PUBLIC_KEY_LENGTH,
+                                actual: key_bytes.len(),
+                            }
+                        })
+                    })
+                    .collect();
+
+                match maybe_keys {
+                    Ok(keys) => keys,
+                    Err(error) => return Ok(ExecutionResult::precondition_failure(error).into()),
+                }
+            };
+
+            let nonce = deploy.nonce;
+            let protocol_version = protocol_version.value;
+            engine_state
+                .run_deploy_item(
+                    session_payload,
+                    payment_payload,
+                    address,
+                    authorization_keys,
                     blocktime,
                     nonce,
                     prestate_hash,
