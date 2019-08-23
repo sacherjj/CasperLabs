@@ -9,15 +9,22 @@ from test.cl_node.wait import wait_for_good_bye, wait_for_node_started
 
 
 def test_deploy_buffer_persistence(trillion_payment_node_network):
+    """
+    Creates accounts, then creates deploys for these accounts while storing deploy_hashes.
+    Shuts down the node.  Starts back up the node.
+    Persistence should still have deploys ready for propose.
+    Proposes until all deploys are added to blocks.
+    """
+
     node = trillion_payment_node_network.docker_nodes[0]
 
     # Storing deploys to verify they are processed
     deploy_hashes = []
 
-    def create_and_deploy(acct_num: int):
-        node.transfer_to_account(acct_num, 10 ** 8)
+    def create_associate_deploy(acct_num: int):
+        """ Add associated key of acct_num + 1 to acct_num account """
         acct = Account(acct_num)
-        associated_acct = Account(acct_num + 2)
+        associated_acct = Account(acct_num + 1)
         args = ABI.args([ABI.account(associated_acct.public_key_binary), ABI.u32(1)])
         _, deploy_hash_bytes = node.p_client.deploy(
             from_address=acct.public_key_hex,
@@ -30,12 +37,21 @@ def test_deploy_buffer_persistence(trillion_payment_node_network):
         )
         return deploy_hash_bytes.hex()
 
-    # Create Account 1 and associate Account 3
-    deploy_hashes.append(create_and_deploy(1))
-    # Create Account 2 and associate Account 4
-    deploy_hashes.append(create_and_deploy(2))
+    # Currently hit gRPC limit with greater than around 16.
+    acct_count = 2
 
-    block_count_prior = len(list(node.p_client.show_blocks(10)))
+    # We will add associated key for acct_num + 1, so skipping by 2.
+    odd_acct_numbers = list(range(1, acct_count * 2 + 1, 2))
+
+    # Create accounts for use
+    for acct_num in odd_acct_numbers:
+        node.transfer_to_account(acct_num, 10 ** 8)
+
+    # Adding associated key for even account numbers one greater than acct_num
+    for acct_num in odd_acct_numbers:
+        deploy_hashes.append(create_associate_deploy(acct_num))
+
+    block_count_prior = len(list(node.p_client.show_blocks(1000)))
 
     # Restart node to verify persistence
     node.stop()
@@ -55,6 +71,7 @@ def test_deploy_buffer_persistence(trillion_payment_node_network):
             ), f"Expected deploy hash: {deploy_hash} in previous hashes: {deploy_hashes}."
             deploy_hashes.remove(deploy_hash)
 
-    assert len(deploy_hashes) == 0
-    block_count_post = len(list(node.p_client.show_blocks(10)))
+    # Validate all deploy hashes were used and new blocks were proposes.
+    assert len(deploy_hashes) == 0, "We did not propose all stored deploy_hashes."
+    block_count_post = len(list(node.p_client.show_blocks(1000)))
     assert block_count_post > block_count_prior
