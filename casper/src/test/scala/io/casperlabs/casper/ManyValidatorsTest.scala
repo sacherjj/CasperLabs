@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.finality.singlesweep.FinalityDetectorBySingleSweepImpl
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.{Log, Time}
@@ -77,7 +77,8 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
                  casperRef,
                  logEff,
                  finalityDetectorEffect,
-                 blockStorage
+                 blockStorage,
+                 implicitly[Fs2Compiler[Task]]
                )
     } yield result
     testProgram.runSyncUnsafe(1 minute)(scheduler, CanBlock.permit)

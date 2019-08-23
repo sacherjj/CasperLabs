@@ -82,6 +82,7 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       sqlLite,
+      fs2,
       catsCore,
       catsPar,
       catsEffect,

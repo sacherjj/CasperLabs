@@ -15,6 +15,7 @@ import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -166,7 +167,8 @@ class BlocksResponseAPITest
                            casperRef,
                            logEff,
                            finalityDetectorEffect,
-                           blockStorage
+                           blockStorage,
+                           implicitly[Fs2Compiler[Task]]
                          )
       } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }

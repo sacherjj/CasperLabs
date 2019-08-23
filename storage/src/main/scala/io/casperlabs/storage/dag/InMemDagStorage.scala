@@ -46,14 +46,16 @@ class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStorage](
       dataLookup.get(blockHash).pure[F]
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.contains(blockHash).pure[F]
-    def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
+    def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]] =
       topoSort(startBlockNumber, topoSortVector.size.toLong - 1)
-    def topoSort(startBlockNumber: Long, endBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
-      topoSortVector
-        .slice(startBlockNumber.toInt, endBlockNumber.toInt + 1)
-        .pure[F]
-    def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
-      topoSortVector.takeRight(tailLength).pure[F]
+    def topoSort(startBlockNumber: Long, endBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]] =
+      fs2.Stream.emits[F, Vector[BlockHash]](
+        topoSortVector
+          .slice(startBlockNumber.toInt, endBlockNumber.toInt + 1)
+      )
+
+    def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockHash]] =
+      fs2.Stream.emits[F, Vector[BlockHash]](topoSortVector.takeRight(tailLength))
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
     def latestMessage(validator: Validator): F[Option[BlockSummary]] =

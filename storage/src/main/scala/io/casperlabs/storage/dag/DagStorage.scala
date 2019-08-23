@@ -42,12 +42,12 @@ trait DagRepresentation[F[_]] {
   def contains(blockHash: BlockHash): F[Boolean]
 
   /** Return the ranks of blocks in the DAG between start and end, inclusive. */
-  def topoSort(startBlockNumber: Long, endBlockNumber: Long): F[Vector[Vector[BlockHash]]]
+  def topoSort(startBlockNumber: Long, endBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]]
 
   /** Return ranks of blocks in the DAG from a start index to the end. */
-  def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]]
+  def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]]
 
-  def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]]
+  def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockHash]]
 
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]
   def latestMessage(validator: Validator): F[Option[BlockSummary]]

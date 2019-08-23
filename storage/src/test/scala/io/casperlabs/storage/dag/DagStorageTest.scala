@@ -1,17 +1,14 @@
 package io.casperlabs.storage.dag
 
-import java.nio.file.{Files, Paths, StandardOpenOption}
+import java.nio.file.StandardOpenOption
 
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import doobie.util.ExecutionContexts
-import doobie.util.transactor.Transactor
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
@@ -23,13 +20,10 @@ import io.casperlabs.storage.util.byteOps._
 import io.casperlabs.storage.{BlockMsgWithTransform, Context, SQLiteFixture}
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.flywaydb.core.Flyway
-import org.flywaydb.core.api.Location
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
-import scala.concurrent.duration._
-import scala.util.{Random, Try}
+import scala.util.Random
 
 trait DagStorageTest
     extends FlatSpecLike
@@ -199,8 +193,8 @@ class FileDagStorageTest extends DagStorageTest {
              }
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
-      topoSort            <- dag.topoSort(topoSortStartBlockNumber)
-      topoSortTail        <- dag.topoSortTail(topoSortTailLength)
+      topoSort            <- dag.topoSort(topoSortStartBlockNumber).compile.toVector
+      topoSortTail        <- dag.topoSortTail(topoSortTailLength).compile.toVector
     } yield (list, latestMessageHashes, latestMessages, topoSort, topoSortTail)
 
   private def testLookupElementsResult(

@@ -1,6 +1,7 @@
 package io.casperlabs.storage.dag
 
-import cats.Apply
+import cats._
+import cats.data._
 import cats.effect._
 import cats.implicits._
 import doobie._
@@ -21,8 +22,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 ) extends DagStorage[F]
     with DagRepresentation[F]
     with DoobieCodecs {
-
-  private def msg(b: BlockHash): String = Base16.encode(b.toByteArray).take(10)
+  import SQLiteDagStorage.StreamOps
 
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
@@ -142,28 +142,28 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
   override def topoSort(
       startBlockNumber: Long,
       endBlockNumber: Long
-  ): F[Vector[Vector[BlockHash]]] =
+  ): fs2.Stream[F, Vector[BlockHash]] =
     sql"""|SELECT rank, block_hash
           |FROM block_metadata
           |WHERE rank>=$startBlockNumber AND rank<=$endBlockNumber
           |ORDER BY rank
           |""".stripMargin
       .query[(Long, BlockHash)]
-      .to[Vector]
+      .stream
       .transact(xa)
-      .flatMap(rearrangeSQLiteResult)
+      .groupByRank
 
-  override def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
+  override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]] =
     sql"""SELECT rank, block_hash
          |FROM block_metadata
          |WHERE rank>=$startBlockNumber
          |ORDER BY rank""".stripMargin
       .query[(Long, BlockHash)]
-      .to[Vector]
+      .stream
       .transact(xa)
-      .flatMap(rearrangeSQLiteResult)
+      .groupByRank
 
-  override def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
+  override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockHash]] =
     sql"""|SELECT a.rank, a.block_hash
           |FROM block_metadata a
           |INNER JOIN (
@@ -173,33 +173,9 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           |ORDER BY a.rank
           |""".stripMargin
       .query[(Long, BlockHash)]
-      .to[Vector]
+      .stream
       .transact(xa)
-      .flatMap(rearrangeSQLiteResult)
-
-  /* Returns hashes grouped by ranks, in ascending order. */
-  private def rearrangeSQLiteResult(
-      blockHashesAndRanks: Vector[(Long, BlockHash)]
-  ): F[Vector[Vector[BlockHash]]] = {
-    case class State(acc: Vector[Vector[BlockHash]] = Vector.empty, rank: Long = -1)
-
-    blockHashesAndRanks
-      .foldLeftM(State()) {
-        case (State(_, currentRank), (rank, blockHash)) if currentRank == -1 =>
-          State(Vector(Vector(blockHash)), rank).pure[F]
-        case (State(acc, currentRank), (rank, blockHash)) if rank == currentRank =>
-          State(acc.updated(acc.size - 1, acc.last :+ blockHash), currentRank).pure[F]
-        case (State(acc, currentRank), (rank, blockHash)) if rank > currentRank =>
-          State(acc :+ Vector(blockHash), rank).pure[F]
-        case (State(acc, currentRank), (rank, blockHash)) =>
-          new IllegalArgumentException(
-            s"Ranks must increase monotonically, got prev rank: $currentRank, prev block: ${msg(
-              acc.last.last
-            )}, next rank: ${rank}, next block: ${msg(blockHash)}"
-          ).raiseError[F, State]
-      }
-      .map(_.acc)
-  }
+      .groupByRank
 
   override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
     sql"""|SELECT block_hash
@@ -238,6 +214,67 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 }
 
 object SQLiteDagStorage {
+
+  private case class Fs2State(
+      buffer: Vector[BlockHash] = Vector.empty,
+      rank: Long = -1
+  )
+
+  private implicit class StreamOps[F[_]: Bracket[?[_], Throwable]](
+      val stream: fs2.Stream[F, (Long, BlockHash)]
+  ) {
+    private type ErrorOr[A] = Either[Throwable, A]
+    private type G[A]       = StateT[ErrorOr, Vector[Vector[BlockHash]], A]
+
+    /* Returns hashes grouped by ranks, in ascending order. */
+    def groupByRank: fs2.Stream[F, Vector[BlockHash]] = go(Fs2State(), stream).stream
+
+    /** Check [[https://fs2.io/guide.html#statefully-transforming-streams]]
+      * and [[https://blog.leifbattermann.de/2017/10/08/error-and-state-handling-with-monad-transformers-in-scala/]]
+      * if it's hard to understand what's going on
+      *  */
+    private def go(
+        state: Fs2State,
+        s: fs2.Stream[F, (Long, BlockHash)]
+    ): fs2.Pull[F, Vector[BlockHash], Unit] =
+      s.pull.uncons.flatMap {
+        case Some((chunk, streamTail)) =>
+          chunk
+            .foldLeftM[G, Fs2State](state) {
+              case (Fs2State(_, currentRank), (rank, blockHash)) if currentRank == -1 =>
+                Fs2State(Vector(blockHash), rank).pure[G]
+              case (Fs2State(acc, currentRank), (rank, blockHash)) if rank == currentRank =>
+                Fs2State(acc :+ blockHash, currentRank).pure[G]
+              case (Fs2State(acc, currentRank), (rank, blockHash)) if rank > currentRank =>
+                put(acc) >> Fs2State(Vector(blockHash), rank).pure[G]
+              case (Fs2State(acc, currentRank), (rank, blockHash)) =>
+                error(
+                  new IllegalArgumentException(
+                    s"Ranks must increase monotonically, got prev rank: $currentRank, prev block: ${msg(
+                      acc.last
+                    )}, next rank: ${rank}, next block: ${msg(blockHash)}"
+                  )
+                )
+            }
+            .run(Vector.empty)
+            .fold(
+              ex => fs2.Pull.raiseError[F](ex), {
+                case (output, newState) =>
+                  fs2.Pull.output(fs2.Chunk.vector(output)) >> go(newState, streamTail)
+              }
+            )
+        case None => fs2.Pull.output(fs2.Chunk(state.buffer)) >> fs2.Pull.done
+      }
+
+    private def put(blockHashes: Vector[BlockHash]) =
+      StateT.modify[ErrorOr, Vector[Vector[BlockHash]]](_ :+ blockHashes)
+
+    private def error(e: Throwable) =
+      StateT.liftF[ErrorOr, Vector[Vector[BlockHash]], Fs2State](e.asLeft[Fs2State])
+
+    private def msg(b: BlockHash): String = Base16.encode(b.toByteArray).take(10)
+  }
+
   private[dag] def create[F[_]: Sync](
       implicit xa: Transactor[F],
       met: Metrics[F]

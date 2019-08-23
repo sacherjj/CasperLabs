@@ -22,7 +22,7 @@ import io.casperlabs.casper.protocol.{
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{protocol, BlockStatus => _, _}
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
@@ -230,7 +230,7 @@ object BlockAPI {
 
   // TOOD extract common code from show blocks
   @deprecated("To be removed before devnet. Use `getBlockInfos`.", "0.4")
-  def showBlocks[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStorage](
+  def showBlocks[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStorage: Fs2Compiler](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
     val errorMessage =
@@ -252,12 +252,12 @@ object BlockAPI {
     )
   }
 
-  private def getFlattenedBlockInfosUntilDepth[F[_]: MonadThrowable: MultiParentCasper: Log: FinalityDetector: BlockStorage](
+  private def getFlattenedBlockInfosUntilDepth[F[_]: MonadThrowable: MultiParentCasper: Log: FinalityDetector: BlockStorage: Fs2Compiler](
       depth: Int,
       dag: DagRepresentation[F]
   ): F[List[BlockInfoWithoutTuplespace]] =
     for {
-      topoSort <- dag.topoSortTail(depth)
+      topoSort <- dag.topoSortTail(depth).compile.toVector
       result <- topoSort.foldM(List.empty[BlockInfoWithoutTuplespace]) {
                  case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
                    for {
@@ -293,7 +293,7 @@ object BlockAPI {
 
   // TODO: Replace with call to BlockStorage
   @deprecated("To be removed before devnet. Will add `getDeployInfo`.", "0.4")
-  def findBlockWithDeploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStorage](
+  def findBlockWithDeploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStorage: Fs2Compiler](
       accountPublicKey: ByteString,
       timestamp: Long
   ): F[BlockQueryResponse] = {
@@ -303,7 +303,7 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
       for {
         dag               <- MultiParentCasper[F].dag
-        allBlocksTopoSort <- dag.topoSort(0L)
+        allBlocksTopoSort <- dag.topoSort(0L).compile.toVector
         maybeBlock <- findBlockWithDeploy[F](
                        allBlocksTopoSort.flatten.reverse,
                        accountPublicKey,
@@ -492,7 +492,7 @@ object BlockAPI {
   /** Return block infos and maybe according blocks (if 'full' is true) in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfosMaybeWithBlocks[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
+  def getBlockInfosMaybeWithBlocks[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0,
       full: Boolean = false
@@ -501,9 +501,12 @@ object BlockAPI {
       implicit casper =>
         casper.dag flatMap { dag =>
           maxRank match {
-            case 0 => dag.topoSortTail(depth)
+            case 0 => dag.topoSortTail(depth).compile.toVector
             case r =>
-              dag.topoSort(endBlockNumber = r, startBlockNumber = math.max(r - depth + 1, 0))
+              dag
+                .topoSort(endBlockNumber = r, startBlockNumber = math.max(r - depth + 1, 0))
+                .compile
+                .toVector
           }
         } handleErrorWith {
           case ex: StorageError =>
@@ -519,7 +522,7 @@ object BlockAPI {
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
+  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0,
       full: Boolean = false

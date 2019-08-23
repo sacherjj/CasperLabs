@@ -134,12 +134,12 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.get(blockHash).fold(BlockStorage[F].contains(blockHash))(_ => true.pure[F])
 
-    def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
+    def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]] =
       topoSort(startBlockNumber, sortEndBlockNumber)
 
-    def topoSort(startBlockNumber: Long, endBlockNumber: Long): F[Vector[Vector[BlockHash]]] = {
+    def topoSort(startBlockNumber: Long, endBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]] = {
       val length = endBlockNumber - startBlockNumber + 1
-      if (length > Int.MaxValue) { // Max Vector length
+      val res: F[Vector[Vector[BlockHash]]] = if (length > Int.MaxValue) { // Max Vector length
         Sync[F].raiseError(TopoSortLengthIsTooBig(length))
       } else if (startBlockNumber >= sortOffset) {
         val offset = startBlockNumber - sortOffset
@@ -170,9 +170,10 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
           } yield result
         )
       }
+      fs2.Stream.eval(res).flatMap(v => fs2.Stream.emits(v))
     }
 
-    def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] = {
+    def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockHash]] = {
       val endBlockNumber   = sortEndBlockNumber
       val startBlockNumber = Math.max(0L, endBlockNumber - tailLength + 1)
       topoSort(startBlockNumber, endBlockNumber)
