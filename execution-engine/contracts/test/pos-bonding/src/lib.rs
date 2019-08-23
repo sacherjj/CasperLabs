@@ -44,21 +44,29 @@ fn get_pos_contract() -> ContractPointer {
 fn bond(pos: &ContractPointer, amount: &U512, source: PurseId) {
     call_contract::<_, ()>(
         pos.clone(),
-        &("bond", *amount, source),
+        &(POS_BOND, *amount, source),
         &vec![purse_to_key(source)],
     );
 }
 
 fn unbond(pos: &ContractPointer, amount: Option<U512>) {
-    call_contract::<_, ()>(pos.clone(), &("unbond", amount), &Vec::<Key>::new());
+    call_contract::<_, ()>(pos.clone(), &(POS_UNBOND, amount), &Vec::<Key>::new());
 }
+
+const POS_BOND: &str = "bond";
+const POS_UNBOND: &str = "unbond";
+
+const TEST_BOND: &str = "bond";
+const TEST_BOND_FROM_MAIN_PURSE: &str = "bond-from-main-purse";
+const TEST_SEED_NEW_ACCOUNT: &str = "seed_new_account";
+const TEST_UNBOND: &str = "unbond";
 
 #[no_mangle]
 pub extern "C" fn call() {
     let pos_pointer = get_pos_contract();
 
     let command: String = get_arg(0);
-    if command == "bond" {
+    if command == TEST_BOND {
         // Creates new purse with desired amount based on main purse and sends funds
 
         let amount = get_arg(1);
@@ -71,11 +79,11 @@ pub extern "C" fn call() {
         }
 
         bond(&pos_pointer, &amount, p1);
-    } else if command == "bond-from-main-purse" {
+    } else if command == TEST_BOND_FROM_MAIN_PURSE {
         let amount = get_arg(1);
 
         bond(&pos_pointer, &amount, main_purse());
-    } else if command == "seed_new_account" {
+    } else if command == TEST_SEED_NEW_ACCOUNT {
         let account: PublicKey = get_arg(1);
         let amount: U512 = get_arg(2);
         if transfer_from_purse_to_account(main_purse(), account, amount)
@@ -83,7 +91,7 @@ pub extern "C" fn call() {
         {
             revert(Error::UnableToSeedAccount as u32);
         }
-    } else if command == "unbond" {
+    } else if command == TEST_UNBOND {
         let maybe_amount: Option<U512> = get_arg(1);
         unbond(&pos_pointer, maybe_amount);
     } else {

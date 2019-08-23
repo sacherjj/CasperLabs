@@ -72,13 +72,30 @@ fn get_account(builder: &WasmTestBuilder, key: Key) -> Option<Account> {
     }
 }
 
+const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
+const ACCOUNT_1_SEED_AMOUNT: u64 = 1_000_000;
+const GENESIS_ACCOUNT_STAKE: u64 = 100_000;
+const ACCOUNT_1_STAKE: u64 = 42_000;
+const ACCOUNT_1_UNBOND_1: u64 = 22_000;
+const ACCOUNT_1_UNBOND_2: u64 = 20_000;
+const GENESIS_ACCOUNT_UNBOND_1: u64 = 45_000;
+const GENESIS_ACCOUNT_UNBOND_2: u64 = 55_000;
+
+const TEST_BOND: &str = "bond";
+const TEST_BOND_FROM_MAIN_PURSE: &str = "bond-from-main-purse";
+const TEST_SEED_NEW_ACCOUNT: &str = "seed_new_account";
+const TEST_UNBOND: &str = "unbond";
+
 #[ignore]
 #[test]
 fn should_run_successful_bond_and_unbond() {
     let genesis_account_key = Key::Account(GENESIS_ADDR);
     let genesis_validators = {
         let mut result = HashMap::new();
-        result.insert(PublicKey::new([42; 32]), U512::from(50_000));
+        result.insert(
+            PublicKey::new([42; 32]),
+            U512::from(GENESIS_VALIDATOR_STAKE),
+        );
         result
     };
 
@@ -89,7 +106,7 @@ fn should_run_successful_bond_and_unbond() {
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            (String::from("bond"), U512::from(100_000)),
+            (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
         )
         .expect_success()
         .commit()
@@ -110,13 +127,17 @@ fn should_run_successful_bond_and_unbond() {
         panic!("pos transform is expected to be of AddKeys variant");
     };
 
-    let lookup_key = format!("v_{}_{}", base16::encode_lower(&GENESIS_ADDR), 100_000);
+    let lookup_key = format!(
+        "v_{}_{}",
+        base16::encode_lower(&GENESIS_ADDR),
+        GENESIS_ACCOUNT_STAKE
+    );
     assert!(add_keys.contains_key(&lookup_key));
 
     // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside the test contract
     assert_eq!(
         get_pos_bonding_purse_balance(result.builder()),
-        U512::from(50_000 + 100_000)
+        U512::from(GENESIS_VALIDATOR_STAKE + GENESIS_ACCOUNT_STAKE)
     );
 
     // Create new account (from genesis funds) and bond with it
@@ -127,9 +148,9 @@ fn should_run_successful_bond_and_unbond() {
             DEFAULT_BLOCK_TIME,
             2,
             (
-                String::from("seed_new_account"),
+                String::from(TEST_SEED_NEW_ACCOUNT),
                 PublicKey::new(ACCOUNT_1_ADDR),
-                U512::from(1_000_000),
+                U512::from(ACCOUNT_1_SEED_AMOUNT),
             ),
         )
         .expect_success()
@@ -139,7 +160,7 @@ fn should_run_successful_bond_and_unbond() {
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            (String::from("bond"), U512::from(42_000)),
+            (String::from(TEST_BOND), U512::from(ACCOUNT_1_STAKE)),
         )
         .expect_success()
         .commit()
@@ -162,13 +183,17 @@ fn should_run_successful_bond_and_unbond() {
         panic!("pos transform is expected to be of AddKeys variant");
     };
 
-    let lookup_key = format!("v_{}_{}", base16::encode_lower(&ACCOUNT_1_ADDR), 42_000);
+    let lookup_key = format!(
+        "v_{}_{}",
+        base16::encode_lower(&ACCOUNT_1_ADDR),
+        ACCOUNT_1_STAKE
+    );
     assert!(add_keys.contains_key(&lookup_key));
 
     // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside the test contract
     assert_eq!(
         get_pos_bonding_purse_balance(result.builder()),
-        U512::from(50_000 + 100_000 + 42_000)
+        U512::from(GENESIS_VALIDATOR_STAKE + GENESIS_ACCOUNT_STAKE + ACCOUNT_1_STAKE)
     );
 
     //
@@ -181,7 +206,10 @@ fn should_run_successful_bond_and_unbond() {
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
             2,
-            (String::from("unbond"), Some(U512::from(20_000))),
+            (
+                String::from(TEST_UNBOND),
+                Some(U512::from(ACCOUNT_1_UNBOND_1)),
+            ),
         )
         .expect_success()
         .commit()
@@ -189,21 +217,29 @@ fn should_run_successful_bond_and_unbond() {
 
     assert_eq!(
         get_purse_balance(result.builder(), account_1.purse_id()),
-        U512::from(1_000_000 - 42_000 + 20_000)
+        U512::from(ACCOUNT_1_SEED_AMOUNT - ACCOUNT_1_STAKE + ACCOUNT_1_UNBOND_1)
     );
 
     // POS bonding purse is decreased
     assert_eq!(
         get_pos_bonding_purse_balance(result.builder()),
-        U512::from(50_000 + 100_000 + 22_000)
+        U512::from(GENESIS_VALIDATOR_STAKE + GENESIS_ACCOUNT_STAKE + ACCOUNT_1_UNBOND_2)
     );
 
     let pos_contract = result.builder().get_pos_contract();
 
-    let lookup_key = format!("v_{}_{}", base16::encode_lower(&ACCOUNT_1_ADDR), 42_000);
+    let lookup_key = format!(
+        "v_{}_{}",
+        base16::encode_lower(&ACCOUNT_1_ADDR),
+        ACCOUNT_1_STAKE
+    );
     assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
 
-    let lookup_key = format!("v_{}_{}", base16::encode_lower(&ACCOUNT_1_ADDR), 22_000);
+    let lookup_key = format!(
+        "v_{}_{}",
+        base16::encode_lower(&ACCOUNT_1_ADDR),
+        ACCOUNT_1_UNBOND_2
+    );
     // Account 1 is still tracked anymore in the bonding queue with different uref name
     assert!(pos_contract.urefs_lookup().contains_key(&lookup_key));
 
@@ -217,7 +253,10 @@ fn should_run_successful_bond_and_unbond() {
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
             3,
-            (String::from("unbond"), Some(U512::from(45_000))),
+            (
+                String::from(TEST_UNBOND),
+                Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
+            ),
         )
         .expect_success()
         .commit()
@@ -225,13 +264,17 @@ fn should_run_successful_bond_and_unbond() {
 
     assert_eq!(
         get_purse_balance(result.builder(), genesis_account.purse_id()),
-        U512::from(test_support::GENESIS_INITIAL_BALANCE - 1_000_000 - 55_000)
+        U512::from(
+            test_support::GENESIS_INITIAL_BALANCE
+                - ACCOUNT_1_SEED_AMOUNT
+                - GENESIS_ACCOUNT_UNBOND_2
+        )
     );
 
     // POS bonding purse is further decreased
     assert_eq!(
         get_pos_bonding_purse_balance(result.builder()),
-        U512::from(50_000 + 55_000 + 22_000)
+        U512::from(GENESIS_VALIDATOR_STAKE + GENESIS_ACCOUNT_UNBOND_2 + ACCOUNT_1_UNBOND_2)
     );
 
     //
@@ -243,7 +286,10 @@ fn should_run_successful_bond_and_unbond() {
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
             3,
-            (String::from("unbond"), Some(U512::from(22_000))), // <-- rest of accont1's funds
+            (
+                String::from(TEST_UNBOND),
+                Some(U512::from(ACCOUNT_1_UNBOND_2)),
+            ), // <-- rest of accont1's funds
         )
         .expect_success()
         .commit()
@@ -251,18 +297,22 @@ fn should_run_successful_bond_and_unbond() {
 
     assert_eq!(
         get_purse_balance(result.builder(), account_1.purse_id()),
-        U512::from(1_000_000)
+        U512::from(ACCOUNT_1_SEED_AMOUNT)
     );
 
     // POS bonding purse contains now genesis validator (50k) + genesis account (55k)
     assert_eq!(
         get_pos_bonding_purse_balance(result.builder()),
-        U512::from(50_000 + 55_000)
+        U512::from(GENESIS_VALIDATOR_STAKE + GENESIS_ACCOUNT_UNBOND_2)
     );
 
     let pos_contract = result.builder().get_pos_contract();
 
-    let lookup_key = format!("v_{}_{}", base16::encode_lower(&ACCOUNT_1_ADDR), 22_000);
+    let lookup_key = format!(
+        "v_{}_{}",
+        base16::encode_lower(&ACCOUNT_1_ADDR),
+        ACCOUNT_1_UNBOND_2
+    );
     // Account 1 isn't tracked anymore in the bonding queue
     assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
 
@@ -277,7 +327,7 @@ fn should_run_successful_bond_and_unbond() {
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
             4,
-            (String::from("unbond"), None as Option<U512>), // <-- va banque
+            (String::from(TEST_UNBOND), None as Option<U512>), // <-- va banque
         )
         .expect_success()
         .commit()
@@ -286,17 +336,21 @@ fn should_run_successful_bond_and_unbond() {
     // Back to original after funding account1's pursee
     assert_eq!(
         get_purse_balance(result.builder(), genesis_account.purse_id()),
-        U512::from(test_support::GENESIS_INITIAL_BALANCE - 1_000_000)
+        U512::from(test_support::GENESIS_INITIAL_BALANCE - ACCOUNT_1_SEED_AMOUNT)
     );
 
     // Final balance after two full unbonds is the initial bond valuee
     assert_eq!(
         get_pos_bonding_purse_balance(result.builder()),
-        U512::from(50_000)
+        U512::from(GENESIS_VALIDATOR_STAKE)
     );
 
     let pos_contract = result.builder().get_pos_contract();
-    let lookup_key = format!("v_{}_{}", base16::encode_lower(&GENESIS_ADDR), 55_000);
+    let lookup_key = format!(
+        "v_{}_{}",
+        base16::encode_lower(&GENESIS_ADDR),
+        GENESIS_ACCOUNT_UNBOND_2
+    );
     // Genesis is still tracked anymore in the bonding queue with different uref name
     assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
 
@@ -341,7 +395,10 @@ fn should_run_successful_bond_and_unbond() {
 fn should_fail_bonding_with_insufficient_funds() {
     let genesis_validators = {
         let mut result = HashMap::new();
-        result.insert(PublicKey::new([42; 32]), U512::from(50_000));
+        result.insert(
+            PublicKey::new([42; 32]),
+            U512::from(GENESIS_VALIDATOR_STAKE),
+        );
         result
     };
 
@@ -353,9 +410,9 @@ fn should_fail_bonding_with_insufficient_funds() {
             DEFAULT_BLOCK_TIME,
             1,
             (
-                String::from("seed_new_account"),
+                String::from(TEST_SEED_NEW_ACCOUNT),
                 PublicKey::new(ACCOUNT_1_ADDR),
-                U512::from(100_000),
+                U512::from(GENESIS_ACCOUNT_STAKE),
             ),
         )
         .commit()
@@ -364,7 +421,10 @@ fn should_fail_bonding_with_insufficient_funds() {
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            (String::from("bond-from-main-purse"), U512::from(100_101)),
+            (
+                String::from(TEST_BOND_FROM_MAIN_PURSE),
+                U512::from(GENESIS_ACCOUNT_STAKE + 1),
+            ),
         )
         .commit()
         .finish();
@@ -388,7 +448,10 @@ fn should_fail_bonding_with_insufficient_funds() {
 fn should_fail_unbonding_validator_without_bonding_first() {
     let genesis_validators = {
         let mut result = HashMap::new();
-        result.insert(PublicKey::new([42; 32]), U512::from(50_000));
+        result.insert(
+            PublicKey::new([42; 32]),
+            U512::from(GENESIS_VALIDATOR_STAKE),
+        );
         result
     };
 
@@ -399,7 +462,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            (String::from("unbond"), Some(U512::from(42))),
+            (String::from(TEST_UNBOND), Some(U512::from(42))),
         )
         .commit()
         .finish();
