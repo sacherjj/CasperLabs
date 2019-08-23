@@ -190,7 +190,7 @@ impl MessageProperties {
         self.0.to_owned()
     }
 
-    /// strips out brace encased tokens in message_template
+    /// strips out brace encased motes in message_template
     /// and applies them as candidate keys for the encapsulated collection of
     /// message properties. the underlying value of any candidate key that
     /// has an entry in the collection will be spliced into the output in
