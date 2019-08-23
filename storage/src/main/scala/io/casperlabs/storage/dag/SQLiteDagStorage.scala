@@ -33,8 +33,8 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
     val blockMetadataQuery =
       sql"""|INSERT OR IGNORE INTO block_metadata
-            |(block_hash, rank, data)
-            |VALUES (${block.blockHash}, ${block.rank}, ${blockSummary.toByteString})
+            |(block_hash, validator, rank, data)
+            |VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString})
             |""".stripMargin.update.run
 
     val justificationsQuery =
