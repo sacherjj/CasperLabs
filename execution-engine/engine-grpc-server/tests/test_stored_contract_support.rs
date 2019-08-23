@@ -938,3 +938,63 @@ impl WasmTestBuilder {
         WasmTestResult(self.clone())
     }
 }
+
+/// Represents the difference between two [`HashMap`]s.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Diff {
+    left: HashMap<contract_ffi::key::Key, Transform>,
+    both: HashMap<contract_ffi::key::Key, Transform>,
+    right: HashMap<contract_ffi::key::Key, Transform>,
+}
+
+impl Diff {
+    /// Creates a diff from two [`HashMap`]s.
+    pub fn new(
+        left: HashMap<contract_ffi::key::Key, Transform>,
+        right: HashMap<contract_ffi::key::Key, Transform>,
+    ) -> Diff {
+        let both = Default::default();
+        let left_clone = left.clone();
+        let mut ret = Diff { left, both, right };
+
+        for key in left_clone.keys() {
+            let l = ret.left.remove_entry(key);
+            let r = ret.right.remove_entry(key);
+
+            match (l, r) {
+                (Some(le), Some(re)) => {
+                    if le == re {
+                        ret.both.insert(*key, re.1);
+                    } else {
+                        ret.left.insert(*key, le.1);
+                        ret.right.insert(*key, re.1);
+                    }
+                }
+                (None, Some(re)) => {
+                    ret.right.insert(*key, re.1);
+                }
+                (Some(le), None) => {
+                    ret.left.insert(*key, le.1);
+                }
+                (None, None) => unreachable!(),
+            }
+        }
+
+        ret
+    }
+
+    /// Returns the entries that are unique to the `left` input.
+    pub fn left(&self) -> &HashMap<contract_ffi::key::Key, Transform> {
+        &self.left
+    }
+
+    /// Returns the entries that are unique to the `right` input.
+    pub fn right(&self) -> &HashMap<contract_ffi::key::Key, Transform> {
+        &self.right
+    }
+
+    /// Returns the entries shared by both inputs.
+    pub fn both(&self) -> &HashMap<contract_ffi::key::Key, Transform> {
+        &self.both
+    }
+}

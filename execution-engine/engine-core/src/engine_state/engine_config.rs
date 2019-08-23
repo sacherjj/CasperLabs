@@ -1,5 +1,5 @@
 /// The runtime configuration of the execution engine
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EngineConfig {
     use_payment_code: bool,
 }

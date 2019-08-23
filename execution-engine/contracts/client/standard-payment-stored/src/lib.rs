@@ -18,7 +18,7 @@ use contract_ffi::value::U512;
 const POS_CONTRACT_NAME: &str = "pos";
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
-const TRANSFER_TO_PAYMENT_PURSE_FUNCTION_NAME: &str = "transfer";
+const PAY_FUNCTION_NAME: &str = "pay";
 
 enum Arg {
     Amount = 0,
@@ -31,7 +31,7 @@ enum Error {
 }
 
 #[no_mangle]
-pub extern "C" fn transfer() {
+pub extern "C" fn pay() {
     let amount: U512 = contract_api::get_arg(Arg::Amount as u32);
     let main_purse: PurseId = contract_api::main_purse();
 
@@ -59,7 +59,6 @@ pub extern "C" fn transfer() {
 #[no_mangle]
 pub extern "C" fn call() {
     let known_urefs: BTreeMap<String, Key> = BTreeMap::new();
-    let pointer =
-        contract_api::store_function(TRANSFER_TO_PAYMENT_PURSE_FUNCTION_NAME, known_urefs);
+    let pointer = contract_api::store_function(PAY_FUNCTION_NAME, known_urefs);
     contract_api::add_uref(STANDARD_PAYMENT_CONTRACT_NAME, &pointer.into());
 }
