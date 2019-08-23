@@ -26,6 +26,7 @@ use casperlabs_engine_grpc_server::engine_server::mappings::{
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState};
+use engine_core::execution::POS_NAME;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -108,7 +109,6 @@ impl DeployBuilder {
 impl Default for DeployBuilder {
     fn default() -> Self {
         let mut deploy = Deploy::new();
-        deploy.set_motes_transferred_in_payment(1_000_000_000);
         deploy.set_gas_price(1);
         DeployBuilder { deploy }
     }
@@ -181,7 +181,6 @@ pub fn get_protocol_version() -> ProtocolVersion {
 pub fn get_mock_deploy() -> Deploy {
     let mut deploy = Deploy::new();
     deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
-    deploy.set_motes_transferred_in_payment(1000);
     deploy.set_gas_price(1);
     deploy.set_nonce(1);
     let mut deploy_code = DeployCode::new();
@@ -219,7 +218,7 @@ pub fn create_genesis_request(
     let genesis_account_addr = address.to_vec();
     let mut contracts: HashMap<SystemContractType, WasmiBytes> = HashMap::new();
 
-    let initial_tokens = {
+    let initial_motes = {
         let mut ret = BigInt::new();
         ret.set_bit_width(512);
         ret.set_value(format!("{}", GENESIS_INITIAL_BALANCE));
@@ -268,7 +267,7 @@ pub fn create_genesis_request(
 
     let mut ret = GenesisRequest::new();
     ret.set_address(genesis_account_addr.to_vec());
-    ret.set_initial_motes(initial_tokens);
+    ret.set_initial_motes(initial_motes);
     ret.set_mint_code(mint_code);
     ret.set_proof_of_stake_code(proof_of_stake_code);
     ret.set_protocol_version(protocol_version);
@@ -480,6 +479,8 @@ pub struct WasmTestBuilder {
     genesis_transforms: Option<HashMap<contract_ffi::key::Key, Transform>>,
     /// Mint contract uref
     mint_contract_uref: Option<contract_ffi::uref::URef>,
+    /// PoS contract uref
+    pos_contract_uref: Option<contract_ffi::uref::URef>,
 }
 
 impl Default for WasmTestBuilder {
@@ -495,6 +496,7 @@ impl Default for WasmTestBuilder {
             bonded_validators: Vec::new(),
             genesis_account: None,
             mint_contract_uref: None,
+            pos_contract_uref: None,
             genesis_transforms: None,
         }
     }
@@ -523,6 +525,7 @@ impl WasmTestBuilder {
             bonded_validators: result.0.bonded_validators,
             genesis_account: result.0.genesis_account,
             mint_contract_uref: result.0.mint_contract_uref,
+            pos_contract_uref: result.0.pos_contract_uref,
             genesis_transforms: result.0.genesis_transforms,
         }
     }
@@ -539,6 +542,7 @@ impl WasmTestBuilder {
             bonded_validators: Vec::new(),
             genesis_account: None,
             mint_contract_uref: None,
+            pos_contract_uref: None,
             genesis_transforms: None,
         }
     }
@@ -566,8 +570,12 @@ impl WasmTestBuilder {
         let mint_contract_uref = get_mint_contract_uref(&genesis_transforms, &contracts)
             .expect("Unable to get mint contract uref");
 
+        let pos_contract_uref = get_pos_contract_uref(&genesis_transforms, &contracts)
+            .expect("Unable to get pos contract uref");
+
         // Cache mint uref
         self.mint_contract_uref = Some(mint_contract_uref);
+        self.pos_contract_uref = Some(pos_contract_uref);
 
         // Cache the account
         self.genesis_account = Some(
@@ -829,6 +837,11 @@ impl WasmTestBuilder {
             .expect("Unable to obtain mint contract uref. Please run genesis first.")
     }
 
+    pub fn get_pos_contract_uref(&self) -> contract_ffi::uref::URef {
+        self.pos_contract_uref
+            .expect("Unable to obtain pos contract uref. Please run genesis first.")
+    }
+
     pub fn get_genesis_transforms(
         &self,
     ) -> &HashMap<contract_ffi::key::Key, engine_shared::transform::Transform> {
@@ -856,5 +869,53 @@ impl WasmTestBuilder {
 
     pub fn finish(&self) -> WasmTestResult {
         WasmTestResult(self.clone())
+    }
+
+    pub fn get_pos_contract(&self) -> contract_ffi::value::contract::Contract {
+        let genesis_account = self
+            .genesis_account
+            .clone()
+            .expect("should run genesis process first");
+        let genesis_key = contract_ffi::key::Key::Account(genesis_account.pub_key());
+        let pos_uref: contract_ffi::key::Key = self
+            .query(None, genesis_key, &[POS_NAME])
+            .and_then(|v| v.try_into().ok())
+            .expect("should find PoS URef");
+
+        self.query(None, pos_uref, &[])
+            .and_then(|v| v.try_into().ok())
+            .expect("should find PoS Contract")
+    }
+
+    pub fn get_purse_balance(
+        &self,
+        purse_id: contract_ffi::value::account::PurseId,
+    ) -> contract_ffi::value::uint::U512 {
+        let mint = self.get_mint_contract_uref();
+        let purse_addr = purse_id.value().addr();
+        let purse_bytes = contract_ffi::bytesrepr::ToBytes::to_bytes(&purse_addr)
+            .expect("should be able to serialize purse bytes");
+        let balance_mapping_key = contract_ffi::key::Key::local(mint.addr(), &purse_bytes);
+        let balance_uref = self
+            .query(None, balance_mapping_key, &[])
+            .and_then(|v| v.try_into().ok())
+            .expect("should find balance uref");
+
+        self.query(None, balance_uref, &[])
+            .and_then(|v| v.try_into().ok())
+            .expect("should parse balance into a U512")
+    }
+
+    pub fn get_account(
+        &self,
+        key: contract_ffi::key::Key,
+    ) -> Option<contract_ffi::value::account::Account> {
+        let account_value = self.query(None, key, &[]).expect("should query account");
+
+        if let contract_ffi::value::Value::Account(account) = account_value {
+            Some(account)
+        } else {
+            None
+        }
     }
 }

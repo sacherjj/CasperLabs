@@ -465,7 +465,7 @@ impl From<TransferResult> for i32 {
     }
 }
 
-/// Transfers `amount` of tokens from default purse of the account to `target` account.
+/// Transfers `amount` of motes from default purse of the account to `target` account.
 /// If `target` does not exist it will create it.
 pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
@@ -475,7 +475,7 @@ pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
         .expect("should parse result")
 }
 
-/// Transfers `amount` of tokens from `source` purse to `target` account.
+/// Transfers `amount` of motes from `source` purse to `target` account.
 /// If `target` does not exist it will create it.
 pub fn transfer_from_purse_to_account(
     source: PurseId,
@@ -527,7 +527,7 @@ impl From<PurseTransferResult> for i32 {
     }
 }
 
-/// Transfers `amount` of tokens from `source` purse to `target` purse.
+/// Transfers `amount` of motes from `source` purse to `target` purse.
 pub fn transfer_from_purse_to_purse(
     source: PurseId,
     target: PurseId,

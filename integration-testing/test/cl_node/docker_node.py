@@ -19,6 +19,11 @@ from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_accounts import is_valid_account, Account
+from test.cl_node.common import (
+    PAYMENT_CONTRACT,
+    TRANSFER_TO_ACCOUNT_CONTRACT,
+    MAX_PAYMENT_ABI,
+)
 
 
 class DockerNode(LoggingDockerBase):
@@ -204,9 +209,8 @@ class DockerNode(LoggingDockerBase):
         return self.cl_network.genesis_account
 
     @property
-    def test_account(self):
-        amount = 10 ** 6
-        return self.cl_network.test_account(self, amount)
+    def test_account(self) -> Account:
+        return self.cl_network.test_account(self)
 
     @property
     def from_address(self) -> str:
@@ -285,8 +289,8 @@ class DockerNode(LoggingDockerBase):
         to_account_id: int,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
-        session_contract: str = "transfer_to_account.wasm",
-        payment_contract: str = "standard_payment.wasm",
+        session_contract: str = TRANSFER_TO_ACCOUNT_CONTRACT,
+        payment_contract: str = PAYMENT_CONTRACT,
         gas_price: int = 1,
         gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
         is_deploy_error_check: bool = True,
@@ -333,7 +337,7 @@ class DockerNode(LoggingDockerBase):
             # NOTE: this shouldn't necesserily be amount
             # but this is temporary, anyway, eventually we want all tests
             # running with execution cost on.
-            payment_args = ABI.args([ABI.u512(amount)])
+            payment_args = MAX_PAYMENT_ABI
 
         response, deploy_hash_bytes = self.p_client.deploy(
             from_address=from_account.public_key_hex,

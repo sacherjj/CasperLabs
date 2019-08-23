@@ -425,8 +425,8 @@ where
             ret
         };
 
-        let initial_tokens: U512 = match genesis_request.get_initial_motes().try_into() {
-            Ok(initial_tokens) => initial_tokens,
+        let initial_motes: U512 = match genesis_request.get_initial_motes().try_into() {
+            Ok(initial_motes) => initial_motes,
             Err(err) => {
                 let err_msg = format!("{:?}", err);
                 logging::log_error(&err_msg);
@@ -486,7 +486,7 @@ where
         let genesis_response = match self.commit_genesis(
             correlation_id,
             genesis_account_addr,
-            initial_tokens,
+            initial_motes,
             mint_code_bytes,
             proof_of_stake_code_bytes,
             genesis_validators,

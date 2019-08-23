@@ -72,7 +72,7 @@ where
         &self,
         correlation_id: CorrelationId,
         genesis_account_addr: [u8; 32],
-        initial_tokens: U512,
+        initial_motes: U512,
         mint_code_bytes: &[u8],
         proof_of_stake_code_bytes: &[u8],
         genesis_validators: Vec<(PublicKey, U512)>,
@@ -83,7 +83,7 @@ where
 
         let effects = create_genesis_effects(
             genesis_account_addr,
-            initial_tokens,
+            initial_motes,
             mint_code,
             pos_code,
             genesis_validators,

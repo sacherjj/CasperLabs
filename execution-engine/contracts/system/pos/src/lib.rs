@@ -25,8 +25,8 @@ use crate::stakes::{ContractStakes, StakesProvider};
 /// Account used to run system functions (in particular `finalize_payment`).
 const SYSTEM_ACCOUNT: [u8; 32] = [0u8; 32];
 
-/// The uref name where the PoS purse is stored. It contains all staked tokens, and all unbonded
-/// tokens that are yet to be paid out.
+/// The uref name where the PoS purse is stored. It contains all staked motes, and all unbonded
+/// motes that are yet to be paid out.
 const BONDING_PURSE_KEY: &str = "pos_bonding_purse";
 
 /// The uref name where the PoS accepts payment for computation on behalf of validators.
