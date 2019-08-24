@@ -7,7 +7,6 @@ from test.cl_node.docker_base import DockerConfig
 from test.cl_node.docker_execution_engine import DockerExecutionEngine
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
-from test.cl_node.nonce_registry import NonceRegistry
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS  # TODO: remove
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, Account
 from test.cl_node.wait import (
@@ -45,7 +44,6 @@ class CasperLabsNetwork:
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []
         self._created_networks: List[str] = []
-        NonceRegistry.reset()
         self._lock = (
             threading.RLock()
         )  # protect self.cl_nodes and self._created_networks

@@ -3,7 +3,6 @@ import pytest
 from casperlabs_client import ABI
 from test.cl_node.casperlabs_accounts import Account
 from test.cl_node.casperlabs_network import TrillionPaymentNodeNetwork
-from test.cl_node.nonce_registry import NonceRegistry
 from test.cl_node.common import MAX_PAYMENT_ABI, PAYMENT_CONTRACT, HELLO_NAME_CONTRACT
 
 """
@@ -181,9 +180,6 @@ def test_key_cannot_deploy_with_weight_below_threshold(account_setup):
     with pytest.raises(Exception):
         _ = hello_name_deploy(node, DEPLOY_KEY)
 
-    # Reset Nonce consumed calling error
-    NonceRegistry.revert(IDENTITY_KEY.public_key_hex)
-
 
 def test_key_can_deploy_with_weight_at_and_above_threshold(account_setup):
     onn, node = account_setup
@@ -291,5 +287,3 @@ def test_removed_key_cannot_be_used_for_deploy(account_setup):
     # Deploy should fail with a removed key
     with pytest.raises(Exception):
         _ = hello_name_deploy(node, IDENTITY_KEY)
-
-    NonceRegistry.revert(IDENTITY_KEY.public_key_hex)
