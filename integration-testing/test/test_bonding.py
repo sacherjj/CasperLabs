@@ -327,14 +327,18 @@ def test_unbonding_then_creating_block(payment_node_network):
     bonding_account = nodes[1].config.node_account
 
     logging.info(f"{'='*10} | test_unbonding_then_creating_block: CREATE ACCOUNT MATCHING NEW VALIDATOR'S PUBLIC KEY")
-    nodes[0].transfer_to_account(bonding_account.file_id, 1000000)
+    nodes[0].transfer_to_account(to_account_id=bonding_account.file_id,
+                                 amount=1000000,
+                                 from_account_id="genesis",
+                                 payment_contract="standard_payment.wasm",
+                                 payment_args=ABI.args([ABI.u512(800000)]))
 
     logging.info(f"{'='*10} | test_unbonding_then_creating_block: BONDING")
     bonding_block_hash = nodes[0].bond(session_contract=BONDING_CONTRACT,
                                        payment_contract=PAYMENT_CONTRACT,
                                        payment_args=ABI.args([ABI.u512(1000000)]),
                                        from_account_id=bonding_account.file_id,
-                                       amount=3)
+                                       amount=100)
 
     logging.info(f"{'='*10} | test_unbonding_then_creating_block: bonding_block_hash={bonding_block_hash}")
     check_no_errors_in_deploys(nodes[1], bonding_block_hash)

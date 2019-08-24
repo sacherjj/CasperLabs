@@ -292,6 +292,7 @@ class DockerNode(LoggingDockerBase):
         from_account_id: Union[str, int] = "genesis",
         session_contract: str = "transfer_to_account.wasm",
         payment_contract: str = "standard_payment.wasm",
+        payment_args: bytes = None,
         gas_price: int = 1,
         gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
         is_deploy_error_check: bool = True,
@@ -329,16 +330,19 @@ class DockerNode(LoggingDockerBase):
         )
         # Until payment is on for all, we have to fix the default payment args
         if not self.config.is_payment_code_enabled:
+            logging.info("===== transfer_to_account: payment not enabled")
             payment_contract = session_contract
 
-        if session_contract == payment_contract:
-            # Compatibility mode with the way things worked before execution cost era
-            payment_args = None
-        else:
-            # NOTE: this shouldn't necesserily be amount
-            # but this is temporary, anyway, eventually we want all tests
-            # running with execution cost on.
-            payment_args = ABI.args([ABI.u512(amount)])
+        # "Compatibility mode": supply payment if a test forgot to do it
+        payment_args = (
+            None
+            if payment_contract == session_contract
+            else (
+                # TODO: have a default max payment amount defined somewhere
+                payment_args
+                or ABI.args([ABI.u512(amount * 2)])
+            )
+        )
 
         response, deploy_hash_bytes = self.p_client.deploy(
             from_address=from_account.public_key_hex,
