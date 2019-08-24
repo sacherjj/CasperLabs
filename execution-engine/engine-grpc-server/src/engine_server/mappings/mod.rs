@@ -11,6 +11,7 @@ use contract_ffi::value::account::{
 };
 use contract_ffi::value::U512;
 use engine_core::engine_state::error::{Error as EngineError, RootNotFound};
+use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::op::Op;
@@ -701,6 +702,9 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // TODO(mateusz.gorski): Fix error model for the storage errors.
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
+                    error @ EngineError::InvalidHashLength { .. } => {
+                        precondition_failure(error.to_string())
+                    }
                     error @ EngineError::InvalidPublicKeyLength { .. } => {
                         precondition_failure(error.to_string())
                     }
@@ -884,6 +888,31 @@ where
             err.set_message(format!("{:?}", storage_error));
             tmp_res.set_failed_transform(err);
             tmp_res
+        }
+    }
+}
+
+impl From<ipc::DeployPayload_oneof_payload> for ExecutableDeployItem {
+    fn from(deploy_payload: ipc::DeployPayload_oneof_payload) -> Self {
+        match deploy_payload {
+            ipc::DeployPayload_oneof_payload::deploy_code(deploy_code) => {
+                ExecutableDeployItem::ModuleBytes {
+                    module_bytes: deploy_code.code,
+                    args: deploy_code.args,
+                }
+            }
+            ipc::DeployPayload_oneof_payload::stored_contract_hash(stored_contract_hash) => {
+                ExecutableDeployItem::StoredContractByHash {
+                    hash: stored_contract_hash.hash,
+                    args: stored_contract_hash.args,
+                }
+            }
+            ipc::DeployPayload_oneof_payload::stored_contract_name(stored_contract_name) => {
+                ExecutableDeployItem::StoredContractByName {
+                    name: stored_contract_name.stored_contract_name,
+                    args: stored_contract_name.args,
+                }
+            }
         }
     }
 }

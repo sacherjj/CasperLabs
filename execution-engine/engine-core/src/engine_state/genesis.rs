@@ -99,7 +99,7 @@ fn create_local_key<T: ToBytes>(
 fn create_mint_effects(
     rng: &GenesisURefsSource,
     genesis_account_addr: [u8; 32],
-    initial_tokens: U512,
+    initial_motes: U512,
     mint_code_bytes: WasmiBytes,
     pos_bonded_balance: U512,
     protocol_version: u64,
@@ -193,7 +193,7 @@ fn create_mint_effects(
 
     // Create & store balance
 
-    let balance: Value = Value::UInt512(initial_tokens);
+    let balance: Value = Value::UInt512(initial_motes);
     tmp.insert(balance_uref_key, balance);
 
     // Create mint_contract
@@ -284,7 +284,7 @@ fn create_pos_effects(
 // TODO: Post devnet, make genesis creation regular contract execution.
 pub fn create_genesis_effects(
     genesis_account_addr: [u8; 32],
-    initial_tokens: U512,
+    initial_motes: U512,
     mint_code_bytes: WasmiBytes,
     pos_code_bytes: WasmiBytes,
     genesis_validators: Vec<(PublicKey, U512)>,
@@ -303,7 +303,7 @@ pub fn create_genesis_effects(
     let mint_effects = create_mint_effects(
         &rng,
         genesis_account_addr,
-        initial_tokens,
+        initial_motes,
         mint_code_bytes,
         genesis_validator_stakes,
         protocol_version,
@@ -392,7 +392,7 @@ mod tests {
     const INITIAL_GENESIS_ACCOUNT_BALANCE: &str = "1000";
     const INITIAL_POS_VALIDATORS_BALANCE: &str = "15000";
 
-    fn get_initial_tokens(initial_balance: &str) -> U512 {
+    fn get_initial_motes(initial_balance: &str) -> U512 {
         U512::from_dec_str(initial_balance).expect("should create U512")
     }
 
@@ -407,8 +407,8 @@ mod tests {
     }
 
     fn get_genesis_transforms() -> HashMap<Key, Transform> {
-        let initial_genesis_account_balance = get_initial_tokens(INITIAL_GENESIS_ACCOUNT_BALANCE);
-        let initial_pos_validators_balance = get_initial_tokens(INITIAL_POS_VALIDATORS_BALANCE);
+        let initial_genesis_account_balance = get_initial_motes(INITIAL_GENESIS_ACCOUNT_BALANCE);
+        let initial_pos_validators_balance = get_initial_motes(INITIAL_POS_VALIDATORS_BALANCE);
 
         let mint_code_bytes = get_mint_code_bytes();
         let pos_code_bytes = get_pos_code_bytes();
@@ -663,8 +663,8 @@ mod tests {
             extract_transform_u512(&transforms, &pos_balance_uref_key)
                 .expect("transform was not a write of a key");
 
-        let initial_genesis_account_balance = get_initial_tokens(INITIAL_GENESIS_ACCOUNT_BALANCE);
-        let initial_pos_validators_balance = get_initial_tokens(INITIAL_POS_VALIDATORS_BALANCE);
+        let initial_genesis_account_balance = get_initial_motes(INITIAL_GENESIS_ACCOUNT_BALANCE);
+        let initial_pos_validators_balance = get_initial_motes(INITIAL_POS_VALIDATORS_BALANCE);
 
         // the value under the outer balance_uref_key should be a U512 value (the actual balance)
         assert_eq!(

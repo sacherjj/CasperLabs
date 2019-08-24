@@ -71,7 +71,7 @@ class CasperLabsNetwork:
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
 
-    def test_account(self, node, amount=1000000) -> str:
+    def test_account(self, node, amount=1000000) -> Account:
         name = test_name()
         if not name:
             # This happens when a thread tries to deploy.
