@@ -1,8 +1,16 @@
-from test.cl_node.common import BONDING_CONTRACT, UNBONDING_CONTRACT
+from test.cl_node.common import (
+    BONDING_CONTRACT,
+    UNBONDING_CONTRACT,
+    HELLO_NAME_CONTRACT,
+)
 from test.cl_node.client_parser import parse_show_block
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.casperlabs_network import OneNodeNetwork
+from test.cl_node.wait import wait_for_block_hash_propagated_to_all_nodes
+from casperlabs_client import ABI
+
 from typing import List
+import logging
 
 
 def bond_to_the_network(network: OneNodeNetwork, contract: str, bond_amount: int):
@@ -289,3 +297,64 @@ def test_unbonding_without_bonding(one_node_network_fn):
         )
     )
     assert len(item) == 0
+
+
+PAYMENT_CONTRACT = "standard_payment.wasm"
+
+
+def check_no_errors_in_deploys(node, block_hash):
+    deploy_infos = list(node.p_client.show_deploys(block_hash))
+    assert len(deploy_infos) > 0
+    for deploy_info in deploy_infos:
+        assert deploy_info.error_message == ""
+        assert deploy_info.is_error is False
+
+
+# fmt: off
+
+# A new validator bonds
+# and crates a block which is accepted by the network,
+# then that validator unbonds and creates a block which is not accepted by the network.
+def test_unbonding_then_creating_block(payment_node_network):
+    network = payment_node_network
+    assert len(network.docker_nodes) == 1
+
+    logging.info(f"{'='*10} | test_unbonding_then_creating_block: ADD NEW NODE")
+    network.add_new_node_to_network()
+    assert len(network.docker_nodes) == 2
+
+    nodes = network.docker_nodes
+    bonding_account = nodes[1].config.node_account
+
+    logging.info(f"{'='*10} | test_unbonding_then_creating_block: CREATE ACCOUNT MATCHING NEW VALIDATOR'S PUBLIC KEY")
+    nodes[0].transfer_to_account(bonding_account.file_id, 1000000)
+
+    logging.info(f"{'='*10} | test_unbonding_then_creating_block: BONDING")
+    bonding_block_hash = nodes[0].bond(session_contract=BONDING_CONTRACT,
+                                       payment_contract=PAYMENT_CONTRACT,
+                                       payment_args=ABI.args([ABI.u512(1000000)]),
+                                       from_account_id=bonding_account.file_id,
+                                       amount=3)
+
+    logging.info(f"{'='*10} | test_unbonding_then_creating_block: bonding_block_hash={bonding_block_hash}")
+    check_no_errors_in_deploys(nodes[1], bonding_block_hash)
+
+    logging.info(f"{'='*10} | test_unbonding_then_creating_block: DEPLOY")
+    first_deploy_hash_after_bonding = nodes[0].p_client.deploy(from_address=bonding_account.public_key_hex,
+                                                               public_key=bonding_account.public_key_path,
+                                                               private_key=bonding_account.private_key_path,
+                                                               session_contract=HELLO_NAME_CONTRACT,
+                                                               payment_contract=PAYMENT_CONTRACT,
+                                                               payment_args=ABI.args([ABI.u512(1000000)]))
+    first_deploy_hash_after_bonding = first_deploy_hash_after_bonding
+    first_block_hash_after_bonding = nodes[1].p_client.propose().block_hash.hex()
+    logging.info(f"{'='*10} | test_unbonding_then_creating_block: first_block_hash_after_bonding={first_block_hash_after_bonding}")
+    check_no_errors_in_deploys(nodes[1], first_block_hash_after_bonding)
+
+    wait_for_block_hash_propagated_to_all_nodes(nodes, first_block_hash_after_bonding)
+
+    unbonding_block_hash = nodes[1].unbond(session_contract=UNBONDING_CONTRACT,
+                                           payment_contract=PAYMENT_CONTRACT,
+                                           from_account_id=bonding_account.file_id,
+                                           maybe_amount=1000)
+    unbonding_block_hash = unbonding_block_hash

@@ -166,6 +166,13 @@ class ABI:
         return ABI.args([encode(*only_one(arg)) for arg in args])
 
 
+def read_pem_key(file_name: str):
+    with open(file_name) as f:
+        s = [l for l in f.readlines() if l and not l.startswith("-----")][0].strip()
+        r = base64.b64decode(s)
+        return len(r) % 32 == 0 and r[:32] or r[-32:]
+
+
 class InternalError(Exception):
     """
     The only exception that API calls can throw.
@@ -311,14 +318,6 @@ class CasperLabsClient:
         def read_binary(file_name: str):
             with open(file_name, "rb") as f:
                 return f.read()
-
-        def read_pem_key(file_name: str):
-            with open(file_name) as f:
-                s = [l for l in f.readlines() if l and not l.startswith("-----")][
-                    0
-                ].strip()
-                r = base64.b64decode(s)
-                return len(r) % 32 == 0 and r[:32] or r[-32:]
 
         def read_code(file_name: str, abi_encoded_args: bytes = None):
             return consensus.Deploy.Code(

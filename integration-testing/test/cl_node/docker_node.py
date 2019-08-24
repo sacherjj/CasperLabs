@@ -15,10 +15,12 @@ from test.cl_node.common import (
 from test.cl_node.docker_base import LoggingDockerBase
 from test.cl_node.docker_client import DockerClient
 from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
-from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_accounts import is_valid_account, Account
+
+
+FIRST_VALIDATOR_ACCOUNT = 100
 
 
 class DockerNode(LoggingDockerBase):
@@ -188,7 +190,10 @@ class DockerNode(LoggingDockerBase):
         path = f"{self.host_genesis_dir}/bonds.txt"
         os.makedirs(os.path.dirname(path))
         with open(path, "a") as f:
-            for i, pair in enumerate(PREGENERATED_KEYPAIRS[:N]):
+            for i, pair in enumerate(
+                Account(i)
+                for i in range(FIRST_VALIDATOR_ACCOUNT, FIRST_VALIDATOR_ACCOUNT + N)
+            ):
                 bond = N + 2 * i
                 f.write(f"{pair.public_key} {bond}\n")
 
@@ -357,7 +362,8 @@ class DockerNode(LoggingDockerBase):
 
         if is_deploy_error_check:
             for deploy_info in self.p_client.show_deploys(block_hash):
-                assert deploy_info.is_error is False
+                if deploy_info.is_error:
+                    raise Exception(f"transfer_to_account: {deploy_info.error_message}")
 
         return block_hash
 
@@ -367,6 +373,8 @@ class DockerNode(LoggingDockerBase):
         payment_contract: str,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
+        session_args: bytes = None,
+        payment_args: bytes = None,
     ) -> str:
         abi_json_args = json.dumps([{"u32": amount}])
         return self._deploy_and_propose_with_abi_args(
@@ -394,9 +402,8 @@ class DockerNode(LoggingDockerBase):
         json_args: str,
         gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
         gas_price: int = 1,
+        payment_args: bytes = None,
     ) -> str:
-
-        # TODO: pass payment_args as well
         response, deploy_hash_bytes = self.p_client.deploy(
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
@@ -406,16 +413,12 @@ class DockerNode(LoggingDockerBase):
             public_key=from_account.public_key_path,
             private_key=from_account.private_key_path,
             session_args=self.p_client.abi.args_from_json(json_args),
+            payment_args=payment_args,
         )
-
-        deploy_hash_hex = deploy_hash_bytes.hex()
-        assert len(deploy_hash_hex) == 64
 
         response = self.p_client.propose()
 
         block_hash = response.block_hash.hex()
-        assert len(deploy_hash_hex) == 64
-
         return block_hash
 
     def transfer_to_accounts(self, account_value_list) -> List[str]:

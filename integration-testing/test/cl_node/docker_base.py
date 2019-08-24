@@ -11,6 +11,7 @@ from docker.models.containers import Container
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 from test.cl_node.common import random_string
 from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
+from test.cl_node.casperlabs_accounts import Account
 
 
 def humanify(line):
@@ -81,6 +82,7 @@ class DockerConfig:
     genesis_public_key_path: str = None
     is_payment_code_enabled: bool = False
     initial_motes: int = 100 * (10 ** 9)  # 100 billion
+    node_account: Account = None
 
     def __post_init__(self):
         if self.rand_str is None:
