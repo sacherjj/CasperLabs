@@ -7,6 +7,7 @@ from test.cl_node.client_parser import parse_show_block
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.casperlabs_network import OneNodeNetwork
 from test.cl_node.wait import wait_for_block_hash_propagated_to_all_nodes
+from test.cl_node.casperlabs_accounts import Account
 from casperlabs_client import ABI
 
 from typing import List
@@ -312,6 +313,81 @@ def check_no_errors_in_deploys(node, block_hash):
 
 # fmt: off
 
+def transfer_to_account(node,
+                        from_address: str,
+                        to_address: str,
+                        amount: int,
+                        public_key: str,
+                        private_key: str,
+                        gas_price: int = 1,
+                        gas_limit: int = 5000000,
+                        session_contract="transfer_to_account.wasm",
+                        payment_contract="standard_payment.wasm",
+                        payment_args=ABI.args([ABI.u512(5000000)])):
+
+    session_args = ABI.args([ABI.account(bytes.fromhex(to_address)), ABI.u32(amount)])
+
+    _, deploy_hash_bytes = node.p_client.deploy(from_address=from_address,
+                                                session_contract=session_contract,
+                                                payment_contract=payment_contract,
+                                                public_key=public_key,
+                                                private_key=private_key,
+                                                gas_price=gas_price,
+                                                gas_limit=gas_limit,
+                                                session_args=session_args,
+                                                payment_args=payment_args)
+    deploy_hash_hex = deploy_hash_bytes.hex()
+    deploy_hash_hex = deploy_hash_hex
+    block_hash = node.p_client.propose().block_hash.hex()
+    for deploy_info in node.p_client.show_deploys(block_hash):
+        if deploy_info.is_error:
+            raise Exception(f"transfer_to_account: {deploy_info.error_message}")
+    return block_hash
+
+
+def test_basic_transfer_to_account(payment_node_network):
+    network = payment_node_network
+    node = network.docker_nodes[0]
+
+    to_account = Account(1)
+
+    transfer_to_account(node,
+                        node.genesis_account.public_key_hex,
+                        to_account.public_key_hex,
+                        1000000,
+                        public_key=node.genesis_account.public_key_path,
+                        private_key=node.genesis_account.private_key_path)
+
+
+def bond(node,
+         from_address: str,
+         amount: int,
+         public_key: str,
+         private_key: str,
+         gas_price: int = 1,
+         gas_limit: int = 5000000,
+         session_contract: str = "test_bondingcall.wasm",
+         payment_contract: str = "standard_payment.wasm",
+         payment_args: bytes = ABI.args([ABI.u512(50000000)])):
+
+    _, deploy_hash_bytes = node.p_client.deploy(from_address=from_address,
+                                                session_contract=session_contract,
+                                                payment_contract=payment_contract,
+                                                gas_limit=gas_limit,
+                                                gas_price=gas_price,
+                                                public_key=public_key,
+                                                private_key=private_key,
+                                                session_args=ABI.args([ABI.u32(amount)]),
+                                                payment_args=payment_args)
+    deploy_hash_hex = deploy_hash_bytes.hex()
+    deploy_hash_hex = deploy_hash_hex
+    block_hash = node.p_client.propose().block_hash.hex()
+    for deploy_info in node.p_client.show_deploys(block_hash):
+        if deploy_info.is_error:
+            raise Exception(f"bond: {deploy_info.error_message}")
+    return block_hash
+
+
 # A new validator bonds
 # and crates a block which is accepted by the network,
 # then that validator unbonds and creates a block which is not accepted by the network.
@@ -327,21 +403,29 @@ def test_unbonding_then_creating_block(payment_node_network):
     bonding_account = nodes[1].config.node_account
 
     logging.info(f"{'='*10} | test_unbonding_then_creating_block: CREATE ACCOUNT MATCHING NEW VALIDATOR'S PUBLIC KEY")
-    nodes[0].transfer_to_account(to_account_id=bonding_account.file_id,
-                                 amount=1000000,
-                                 from_account_id="genesis",
-                                 payment_contract="standard_payment.wasm",
-                                 payment_args=ABI.args([ABI.u512(800000)]))
+    block_hash = nodes[0].transfer_to_account(to_account_id=bonding_account.file_id,
+                                              amount=500000000,
+                                              from_account_id="genesis",
+                                              payment_contract="standard_payment.wasm",
+                                              payment_args=ABI.args([ABI.u512(5000000)]))
+    check_no_errors_in_deploys(nodes[0], block_hash)
 
-    logging.info(f"{'='*10} | test_unbonding_then_creating_block: BONDING")
+    """
     bonding_block_hash = nodes[0].bond(session_contract=BONDING_CONTRACT,
                                        payment_contract=PAYMENT_CONTRACT,
-                                       payment_args=ABI.args([ABI.u512(1000000)]),
+                                       payment_args=ABI.args([ABI.u512(5000000)]),
                                        from_account_id=bonding_account.file_id,
                                        amount=100)
+    """
+    logging.info(f"{'='*10} | test_unbonding_then_creating_block: BONDING: {bonding_account.public_key_hex}")
+    bonding_block_hash = bond(nodes[0],
+                              bonding_account.public_key_hex,
+                              100,
+                              bonding_account.public_key_path,
+                              bonding_account.private_key_path)
 
     logging.info(f"{'='*10} | test_unbonding_then_creating_block: bonding_block_hash={bonding_block_hash}")
-    check_no_errors_in_deploys(nodes[1], bonding_block_hash)
+    check_no_errors_in_deploys(nodes[0], bonding_block_hash)
 
     logging.info(f"{'='*10} | test_unbonding_then_creating_block: DEPLOY")
     first_deploy_hash_after_bonding = nodes[0].p_client.deploy(from_address=bonding_account.public_key_hex,
