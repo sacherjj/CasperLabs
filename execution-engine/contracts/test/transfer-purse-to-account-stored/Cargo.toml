@@ -1,0 +1,15 @@
+[package]
+name = "transfer-purse-to-account-stored"
+version = "0.1.0"
+authors = ["Michał Papierski <michal@casperlabs.io>", "Ed Hastings <ed@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["contract-ffi/std"]
+
+[dependencies]
+contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
