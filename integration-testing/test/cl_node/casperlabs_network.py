@@ -38,6 +38,8 @@ class CasperLabsNetwork:
     Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
 
+    is_payment_code_enabled = False
+
     def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
         self.extra_docker_params = extra_docker_params or {}
         self._next_key_number = FIRST_VALIDATOR_ACCOUNT

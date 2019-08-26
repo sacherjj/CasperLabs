@@ -8,11 +8,11 @@ from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.casperlabs_network import OneNodeNetwork
 from test.cl_node.casperlabs_accounts import Account
 from test.cl_node.wait import wait_for_block_hash_propagated_to_all_nodes
-from casperlabs_client import ABI
-from casperlabs_client import hexify
+from casperlabs_client import ABI, InternalError, hexify
 
 from typing import List
 import logging
+import pytest
 
 
 def bond_to_the_network(network: OneNodeNetwork, contract: str, bond_amount: int):
@@ -483,23 +483,32 @@ def test_unbonding_then_creating_block(payment_node_network):
     check_no_errors_in_deploys(nodes[0], bonding_block_hash)
     wait_for_block_hash_propagated_to_all_nodes(nodes, bonding_block_hash)
 
-    first_deploy_hash_after_bonding = nodes[0].p_client.deploy(from_address=bonding_account.public_key_hex,
-                                                               public_key=bonding_account.public_key_path,
-                                                               private_key=bonding_account.private_key_path,
-                                                               session_contract=HELLO_NAME_CONTRACT,
-                                                               payment_contract=PAYMENT_CONTRACT,
-                                                               payment_args=ABI.args([ABI.u512(5000000)]))
-    first_deploy_hash_after_bonding = first_deploy_hash_after_bonding
-    first_block_hash_after_bonding = nodes[0].p_client.propose().block_hash.hex()
+    nodes[1].p_client.deploy(from_address=bonding_account.public_key_hex,
+                             public_key=bonding_account.public_key_path,
+                             private_key=bonding_account.private_key_path,
+                             session_contract=HELLO_NAME_CONTRACT,
+                             payment_contract=PAYMENT_CONTRACT,
+                             payment_args=ABI.args([ABI.u512(5000000)]))
+    first_block_hash_after_bonding = nodes[1].p_client.propose().block_hash.hex()
     info(f"AFTER BONDING block_hash={first_block_hash_after_bonding}")
-    check_no_errors_in_deploys(nodes[0], first_block_hash_after_bonding)
+    check_no_errors_in_deploys(nodes[1], first_block_hash_after_bonding)
     wait_for_block_hash_propagated_to_all_nodes(nodes, first_block_hash_after_bonding)
 
     info(f"UNBONDING: {bonding_account.public_key_hex}")
     unbonding_block_hash = unbond(nodes[0],
                                   bonding_account.public_key_hex,
-                                  100,
+                                  300,
                                   bonding_account.public_key_path,
                                   bonding_account.private_key_path)
     check_no_errors_in_deploys(nodes[0], unbonding_block_hash)
     wait_for_block_hash_propagated_to_all_nodes(nodes, unbonding_block_hash)
+
+    nodes[1].p_client.deploy(from_address=bonding_account.public_key_hex,
+                             public_key=bonding_account.public_key_path,
+                             private_key=bonding_account.private_key_path,
+                             session_contract=HELLO_NAME_CONTRACT,
+                             payment_contract=PAYMENT_CONTRACT,
+                             payment_args=ABI.args([ABI.u512(5000000)]))
+    with pytest.raises(InternalError) as excinfo:
+        nodes[1].p_client.propose().block_hash.hex()
+    assert 'InvalidUnslashableBlock' in str(excinfo.value)
