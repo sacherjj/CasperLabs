@@ -1,14 +1,17 @@
-use lmdb;
+use std::sync;
+
+use failure::Fail;
+use lmdb as lmdb_external;
 use wasmi;
 
 use contract_ffi::bytesrepr;
 
-use crate::trie_store::in_memory;
+use super::in_memory;
 
 #[derive(Debug, Fail, PartialEq, Eq)]
 pub enum Error {
     #[fail(display = "{}", _0)]
-    Lmdb(#[fail(cause)] lmdb::Error),
+    Lmdb(#[fail(cause)] lmdb_external::Error),
 
     #[fail(display = "{}", _0)]
     BytesRepr(#[fail(cause)] bytesrepr::Error),
@@ -19,20 +22,20 @@ pub enum Error {
 
 impl wasmi::HostError for Error {}
 
-impl From<lmdb::Error> for Error {
-    fn from(e: lmdb::Error) -> Self {
-        Error::Lmdb(e)
+impl From<lmdb_external::Error> for Error {
+    fn from(error: lmdb_external::Error) -> Self {
+        Error::Lmdb(error)
     }
 }
 
 impl From<bytesrepr::Error> for Error {
-    fn from(e: bytesrepr::Error) -> Self {
-        Error::BytesRepr(e)
+    fn from(error: bytesrepr::Error) -> Self {
+        Error::BytesRepr(error)
     }
 }
 
-impl<T> From<std::sync::PoisonError<T>> for Error {
-    fn from(_e: std::sync::PoisonError<T>) -> Self {
+impl<T> From<sync::PoisonError<T>> for Error {
+    fn from(_error: sync::PoisonError<T>) -> Self {
         Error::PoisonError
     }
 }
