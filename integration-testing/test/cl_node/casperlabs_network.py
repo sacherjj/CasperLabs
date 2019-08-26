@@ -130,7 +130,10 @@ class CasperLabsNetwork:
     def add_new_node_to_network(self) -> None:
         kp = self.get_key()
         config = DockerConfig(
-            self.docker_client, node_private_key=kp.private_key, node_account=kp
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_account=kp,
+            is_payment_code_enabled=self.is_payment_code_enabled,
         )
         self.add_cl_node(config)
         self.wait_method(wait_for_approved_block_received_handler_state, 1)
