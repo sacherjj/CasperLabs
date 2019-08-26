@@ -61,6 +61,7 @@ final case class Transfer(
     recipientPublicKeyBase64: String,
     nonce: Long,
     sessionCode: Option[File],
+    paymentCode: Option[File],
     privateKey: File
 ) extends Configuration
 final case class Unbond(
@@ -162,6 +163,7 @@ object Configuration {
           options.transfer.targetAccount(),
           options.transfer.nonce(),
           options.transfer.session.toOption,
+          options.transfer.paymentPath.toOption,
           options.transfer.privateKey()
         )
       case options.visualizeBlocks =>

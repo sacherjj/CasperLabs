@@ -239,6 +239,7 @@ object DeployRuntime {
   def transferCLI[F[_]: Sync: DeployService: FilesAPI](
       nonce: Long,
       sessionCode: Option[File],
+      paymentCode: Option[File],
       privateKeyFile: File,
       recipientPublicKeyBase64: String,
       amount: Long
@@ -257,12 +258,21 @@ object DeployRuntime {
                       "Failed to compute Ed25519 public key from given private key."
                     )
                   )
-      _ <- transfer[F](nonce, sessionCode, publicKey, privateKey, recipientPublicKeyBase64, amount)
+      _ <- transfer[F](
+            nonce,
+            sessionCode,
+            paymentCode,
+            publicKey,
+            privateKey,
+            recipientPublicKeyBase64,
+            amount
+          )
     } yield ()
 
   def transfer[F[_]: Sync: DeployService: FilesAPI](
       nonce: Long,
       sessionCode: Option[File],
+      paymentCode: Option[File],
       senderPublicKey: PublicKey,
       senderPrivateKey: PrivateKey,
       recipientPublicKeyBase64: String,
@@ -278,14 +288,16 @@ object DeployRuntime {
                   )
                 )
       sessionCode <- readFileOrDefault[F](sessionCode, TRANSFER_WASM_FILE)
-      // currently, sessionCode == paymentCode in order to get some gas limit for the execution
-      paymentCode = sessionCode.toList.toArray
-      args        = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
+      // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
+      // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
+      // to not fail the session code execution even when EE will use hardcoded limit.
+      payment = paymentCode.map(f => Files.readAllBytes(f.toPath)).getOrElse(sessionCode)
+      args    = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
             sessionCode = sessionCode,
-            paymentCode = paymentCode,
+            paymentCode = payment,
             maybeEitherPublicKey = senderPublicKey.asRight[String].some,
             maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
             gasPrice = 10L,

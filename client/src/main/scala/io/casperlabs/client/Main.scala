@@ -81,11 +81,13 @@ object Main {
           recipientPublicKeyBase64,
           nonce,
           contractCode,
+          paymentCode,
           privateKey
           ) =>
         DeployRuntime.transferCLI(
           nonce,
           contractCode,
+          paymentCode,
           privateKey,
           recipientPublicKeyBase64,
           amount
