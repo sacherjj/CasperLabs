@@ -52,12 +52,14 @@ object Main {
           amount,
           nonce,
           contractCode,
+          paymentCode,
           privateKey
           ) =>
         DeployRuntime.unbond(
           amount,
           nonce,
           contractCode,
+          paymentCode,
           privateKey
         )
       case Bond(

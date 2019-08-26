@@ -66,6 +66,7 @@ final case class Unbond(
     amount: Option[Long],
     nonce: Long,
     sessionCode: Option[File],
+    paymentCode: Option[File],
     privateKey: File
 ) extends Configuration
 final case class VisualizeDag(
