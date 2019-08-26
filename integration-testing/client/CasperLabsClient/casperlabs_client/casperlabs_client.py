@@ -346,6 +346,7 @@ class CasperLabsClient:
 
         header = consensus.Deploy.Header(
             account_public_key=account_public_key,
+            nonce=0,  # Not used, but still required in interface currently.
             timestamp=int(time.time()),
             gas_price=gas_price,
             body_hash=hash(serialize(body)),
