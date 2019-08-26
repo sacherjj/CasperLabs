@@ -9,6 +9,7 @@ from test.cl_node.casperlabs_network import OneNodeNetwork
 from test.cl_node.wait import wait_for_block_hash_propagated_to_all_nodes
 from test.cl_node.casperlabs_accounts import Account
 from casperlabs_client import ABI
+from casperlabs_client import hexify
 
 from typing import List
 import logging
@@ -395,14 +396,17 @@ def test_unbonding_then_creating_block(payment_node_network):
     network = payment_node_network
     assert len(network.docker_nodes) == 1
 
-    logging.info(f"{'='*10} | test_unbonding_then_creating_block: ADD NEW NODE")
+    def info(s):
+        logging.info(f"{'='*10} | test_unbonding_then_creating_block: {s}")
+
+    info(f"ADD NEW NODE")
     network.add_new_node_to_network()
     assert len(network.docker_nodes) == 2
 
     nodes = network.docker_nodes
     bonding_account = nodes[1].config.node_account
 
-    logging.info(f"{'='*10} | test_unbonding_then_creating_block: CREATE ACCOUNT MATCHING NEW VALIDATOR'S PUBLIC KEY")
+    info(f"CREATE ACCOUNT MATCHING NEW VALIDATOR'S PUBLIC KEY")
     block_hash = nodes[0].transfer_to_account(to_account_id=bonding_account.file_id,
                                               amount=500000000,
                                               from_account_id="genesis",
@@ -410,17 +414,20 @@ def test_unbonding_then_creating_block(payment_node_network):
                                               payment_args=ABI.args([ABI.u512(5000000)]))
     check_no_errors_in_deploys(nodes[0], block_hash)
 
-    logging.info(f"{'='*10} | test_unbonding_then_creating_block: BONDING: {bonding_account.public_key_hex}")
+    response = nodes[0].p_client.query_state(block_hash, bonding_account.public_key_hex, "", "address")
+    info(f"GLOBAL STATE:\n {hexify(response)}")
+
+    info(f"BONDING: {bonding_account.public_key_hex}")
     bonding_block_hash = bond(nodes[0],
                               bonding_account.public_key_hex,
                               100,
                               bonding_account.public_key_path,
                               bonding_account.private_key_path)
 
-    logging.info(f"{'='*10} | test_unbonding_then_creating_block: bonding_block_hash={bonding_block_hash}")
+    info(f"bonding_block_hash={bonding_block_hash}")
     check_no_errors_in_deploys(nodes[0], bonding_block_hash)
 
-    logging.info(f"{'='*10} | test_unbonding_then_creating_block: DEPLOY")
+    info(f"DEPLOY")
     first_deploy_hash_after_bonding = nodes[0].p_client.deploy(from_address=bonding_account.public_key_hex,
                                                                public_key=bonding_account.public_key_path,
                                                                private_key=bonding_account.private_key_path,
@@ -429,7 +436,7 @@ def test_unbonding_then_creating_block(payment_node_network):
                                                                payment_args=ABI.args([ABI.u512(1000000)]))
     first_deploy_hash_after_bonding = first_deploy_hash_after_bonding
     first_block_hash_after_bonding = nodes[1].p_client.propose().block_hash.hex()
-    logging.info(f"{'='*10} | test_unbonding_then_creating_block: first_block_hash_after_bonding={first_block_hash_after_bonding}")
+    info(f"first_block_hash_after_bonding={first_block_hash_after_bonding}")
     check_no_errors_in_deploys(nodes[1], first_block_hash_after_bonding)
 
     wait_for_block_hash_propagated_to_all_nodes(nodes, first_block_hash_after_bonding)
