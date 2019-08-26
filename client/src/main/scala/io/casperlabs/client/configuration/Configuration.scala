@@ -53,6 +53,7 @@ final case class Bond(
     amount: Long,
     nonce: Long,
     sessionCode: Option[File],
+    paymentCode: Option[File],
     privateKey: File
 ) extends Configuration
 final case class Transfer(
@@ -150,6 +151,7 @@ object Configuration {
           options.bond.amount(),
           options.bond.nonce(),
           options.bond.session.toOption,
+          options.bond.paymentPath.toOption,
           options.bond.privateKey()
         )
       case options.transfer =>
