@@ -70,7 +70,7 @@ class CasperLabsNetwork:
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
 
-    def test_account(self, node, amount=1000000) -> str:
+    def test_account(self, node, amount=1000000) -> Account:
         name = test_name()
         if not name:
             # This happens when a thread tries to deploy.
@@ -148,7 +148,7 @@ class CasperLabsNetwork:
                 raise Exception("Must create bootstrap first")
             config.bootstrap_address = self.cl_nodes[0].node.address
             if network_with_bootstrap:
-                config.network = self.cl_nodes[0].node.network
+                config.network = self.cl_nodes[0].node.config.network
             self._add_cl_node(config)
 
     def stop_cl_node(self, node_number: int) -> None:

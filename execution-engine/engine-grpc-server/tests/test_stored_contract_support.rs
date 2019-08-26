@@ -15,9 +15,10 @@ use grpc::RequestOptions;
 
 use casperlabs_engine_grpc_server::engine_server::ipc;
 use casperlabs_engine_grpc_server::engine_server::ipc::{
-    CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
-    DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisRequest, GenesisResponse,
-    QueryRequest, TransformEntry,
+    CommitRequest, DeployCode, DeployItem, DeployPayload, DeployResult,
+    DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
+    ExecuteResponse, GenesisRequest, GenesisResponse, QueryRequest, StoredContractHash,
+    StoredContractName, TransformEntry,
 };
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use casperlabs_engine_grpc_server::engine_server::mappings::{
@@ -26,7 +27,6 @@ use casperlabs_engine_grpc_server::engine_server::mappings::{
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState};
-use engine_core::execution::POS_NAME;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -37,7 +37,7 @@ pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
 pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
 
 pub struct DeployBuilder {
-    deploy: Deploy,
+    deploy: DeployItem,
 }
 
 impl DeployBuilder {
@@ -47,6 +47,42 @@ impl DeployBuilder {
 
     pub fn with_address(mut self, address: [u8; 32]) -> Self {
         self.deploy.set_address(address.to_vec());
+        self
+    }
+
+    pub fn with_stored_payment_hash(
+        mut self,
+        hash: Vec<u8>,
+        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    ) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item: StoredContractHash = StoredContractHash::new();
+        item.set_args(args);
+        item.set_hash(hash);
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_hash(item);
+        self.deploy.set_payment(payment);
+        self
+    }
+
+    pub fn with_stored_payment_named_key(
+        mut self,
+        uref_name: &str,
+        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    ) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item = StoredContractName::new();
+        item.set_args(args);
+        item.set_stored_contract_name(uref_name.to_owned()); // <-- named uref
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_name(item);
+        self.deploy.set_payment(payment);
         self
     }
 
@@ -60,10 +96,48 @@ impl DeployBuilder {
             .parse()
             .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
             .expect("should serialize args");
-        let mut payment = DeployCode::new();
-        payment.set_code(wasm_bytes);
-        payment.set_args(args);
+        let mut deploy_code = DeployCode::new();
+        deploy_code.set_args(args);
+        deploy_code.set_code(wasm_bytes);
+        let mut payment = DeployPayload::new();
+        payment.set_deploy_code(deploy_code);
         self.deploy.set_payment(payment);
+        self
+    }
+
+    pub fn with_stored_session_hash(
+        mut self,
+        hash: Vec<u8>,
+        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    ) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item: StoredContractHash = StoredContractHash::new();
+        item.set_args(args);
+        item.set_hash(hash);
+        let mut session = DeployPayload::new();
+        session.set_stored_contract_hash(item);
+        self.deploy.set_session(session);
+        self
+    }
+
+    pub fn with_stored_session_named_key(
+        mut self,
+        uref_name: &str,
+        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    ) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item = StoredContractName::new();
+        item.set_args(args);
+        item.set_stored_contract_name(uref_name.to_owned()); // <-- named uref
+        let mut session = DeployPayload::new();
+        session.set_stored_contract_name(item);
+        self.deploy.set_session(session);
         self
     }
 
@@ -77,10 +151,17 @@ impl DeployBuilder {
             .parse()
             .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
             .expect("should serialize args");
-        let mut session = DeployCode::new();
-        session.set_code(wasm_bytes);
-        session.set_args(args);
+        let mut deploy_code = DeployCode::new();
+        deploy_code.set_code(wasm_bytes);
+        deploy_code.set_args(args);
+        let mut session = DeployPayload::new();
+        session.set_deploy_code(deploy_code);
         self.deploy.set_session(session);
+        self
+    }
+
+    pub fn with_nonce(mut self, nonce: u64) -> Self {
+        self.deploy.set_nonce(nonce);
         self
     }
 
@@ -96,27 +177,23 @@ impl DeployBuilder {
         self
     }
 
-    pub fn with_deploy_hash(mut self, hash: [u8; 32]) -> Self {
-        self.deploy.set_deploy_hash(hash.to_vec());
-        self
-    }
-
-    pub fn build(self) -> Deploy {
+    pub fn build(self) -> DeployItem {
         self.deploy
     }
 }
 
 impl Default for DeployBuilder {
     fn default() -> Self {
-        let mut deploy = Deploy::new();
+        let mut deploy = DeployItem::new();
+        deploy.set_motes_transferred_in_payment(1_000_000_000);
         deploy.set_gas_price(1);
         DeployBuilder { deploy }
     }
 }
 
 pub struct ExecRequestBuilder {
-    deploys: Vec<Deploy>,
-    exec_request: ExecRequest,
+    deploys: Vec<DeployItem>,
+    exec_request: ExecuteRequest,
 }
 
 impl ExecRequestBuilder {
@@ -124,7 +201,7 @@ impl ExecRequestBuilder {
         Default::default()
     }
 
-    pub fn push_deploy(mut self, deploy: Deploy) -> Self {
+    pub fn push_deploy(mut self, deploy: DeployItem) -> Self {
         self.deploys.push(deploy);
         self
     }
@@ -147,8 +224,9 @@ impl ExecRequestBuilder {
         self
     }
 
-    pub fn build(mut self) -> ExecRequest {
-        let mut deploys: protobuf::RepeatedField<Deploy> = <protobuf::RepeatedField<Deploy>>::new();
+    pub fn build(mut self) -> ExecuteRequest {
+        let mut deploys: protobuf::RepeatedField<DeployItem> =
+            <protobuf::RepeatedField<DeployItem>>::new();
         for deploy in self.deploys {
             deploys.push(deploy);
         }
@@ -160,7 +238,7 @@ impl ExecRequestBuilder {
 impl Default for ExecRequestBuilder {
     fn default() -> Self {
         let deploys = vec![];
-        let mut exec_request = ExecRequest::new();
+        let mut exec_request = ExecuteRequest::new();
         exec_request.set_block_time(DEFAULT_BLOCK_TIME);
         let mut protocol_version = ProtocolVersion::new();
         protocol_version.set_value(1);
@@ -178,14 +256,17 @@ pub fn get_protocol_version() -> ProtocolVersion {
     protocol_version
 }
 
-pub fn get_mock_deploy() -> Deploy {
-    let mut deploy = Deploy::new();
+pub fn get_mock_deploy() -> DeployItem {
+    let mut deploy = DeployItem::new();
     deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
+    deploy.set_motes_transferred_in_payment(1000);
     deploy.set_gas_price(1);
+    deploy.set_nonce(1);
     let mut deploy_code = DeployCode::new();
     deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
-    deploy.set_session(deploy_code);
-    deploy.set_deploy_hash([1u8; 32].to_vec());
+    let mut deploy_payload = DeployPayload::new();
+    deploy_payload.set_deploy_code(deploy_code);
+    deploy.set_session(deploy_payload);
     deploy
 }
 
@@ -218,7 +299,7 @@ pub fn create_genesis_request(
     let genesis_account_addr = address.to_vec();
     let mut contracts: HashMap<SystemContractType, WasmiBytes> = HashMap::new();
 
-    let initial_motes = {
+    let initial_tokens = {
         let mut ret = BigInt::new();
         ret.set_bit_width(512);
         ret.set_value(format!("{}", GENESIS_INITIAL_BALANCE));
@@ -267,7 +348,7 @@ pub fn create_genesis_request(
 
     let mut ret = GenesisRequest::new();
     ret.set_address(genesis_account_addr.to_vec());
-    ret.set_initial_motes(initial_motes);
+    ret.set_initial_motes(initial_tokens);
     ret.set_mint_code(mint_code);
     ret.set_proof_of_stake_code(proof_of_stake_code);
     ret.set_protocol_version(protocol_version);
@@ -295,15 +376,15 @@ pub fn create_exec_request(
     session_contract_file_name: &str,
     pre_state_hash: &[u8],
     block_time: u64,
-    deploy_hash: [u8; 32],
+    nonce: u64,
     arguments: impl contract_ffi::contract_api::argsparser::ArgsParser,
     authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
-) -> ExecRequest {
+) -> ExecuteRequest {
     let deploy = DeployBuilder::new()
         .with_session_code(session_contract_file_name, arguments)
+        .with_nonce(nonce)
         .with_address(address)
         .with_authorization_keys(&authorized_keys)
-        .with_deploy_hash(deploy_hash)
         .build();
 
     ExecRequestBuilder::new()
@@ -344,7 +425,7 @@ pub fn get_genesis_transforms(
 }
 
 pub fn get_exec_transforms(
-    exec_response: &ExecResponse,
+    exec_response: &ExecuteResponse,
 ) -> Vec<HashMap<contract_ffi::key::Key, Transform>> {
     let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
 
@@ -428,7 +509,7 @@ pub fn get_account(
     })
 }
 
-pub fn get_success_result(response: &ExecResponse) -> DeployResult_ExecutionResult {
+pub fn get_success_result(response: &ExecuteResponse) -> DeployResult_ExecutionResult {
     let result = response.get_success();
 
     result
@@ -439,7 +520,7 @@ pub fn get_success_result(response: &ExecResponse) -> DeployResult_ExecutionResu
         .to_owned()
 }
 
-pub fn get_precondition_failure(response: &ExecResponse) -> DeployResult_PreconditionFailure {
+pub fn get_precondition_failure(response: &ExecuteResponse) -> DeployResult_PreconditionFailure {
     let result = response.get_success();
 
     result
@@ -465,7 +546,7 @@ pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> Stri
 pub struct WasmTestBuilder {
     /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for EngineState`
     engine_state: Rc<EngineState<InMemoryGlobalState>>,
-    exec_responses: Vec<ExecResponse>,
+    exec_responses: Vec<ExecuteResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
     /// Cached transform maps after subsequent successful runs
@@ -479,8 +560,6 @@ pub struct WasmTestBuilder {
     genesis_transforms: Option<HashMap<contract_ffi::key::Key, Transform>>,
     /// Mint contract uref
     mint_contract_uref: Option<contract_ffi::uref::URef>,
-    /// PoS contract uref
-    pos_contract_uref: Option<contract_ffi::uref::URef>,
 }
 
 impl Default for WasmTestBuilder {
@@ -496,7 +575,6 @@ impl Default for WasmTestBuilder {
             bonded_validators: Vec::new(),
             genesis_account: None,
             mint_contract_uref: None,
-            pos_contract_uref: None,
             genesis_transforms: None,
         }
     }
@@ -525,7 +603,6 @@ impl WasmTestBuilder {
             bonded_validators: result.0.bonded_validators,
             genesis_account: result.0.genesis_account,
             mint_contract_uref: result.0.mint_contract_uref,
-            pos_contract_uref: result.0.pos_contract_uref,
             genesis_transforms: result.0.genesis_transforms,
         }
     }
@@ -542,7 +619,6 @@ impl WasmTestBuilder {
             bonded_validators: Vec::new(),
             genesis_account: None,
             mint_contract_uref: None,
-            pos_contract_uref: None,
             genesis_transforms: None,
         }
     }
@@ -570,12 +646,8 @@ impl WasmTestBuilder {
         let mint_contract_uref = get_mint_contract_uref(&genesis_transforms, &contracts)
             .expect("Unable to get mint contract uref");
 
-        let pos_contract_uref = get_pos_contract_uref(&genesis_transforms, &contracts)
-            .expect("Unable to get pos contract uref");
-
         // Cache mint uref
         self.mint_contract_uref = Some(mint_contract_uref);
-        self.pos_contract_uref = Some(pos_contract_uref);
 
         // Cache the account
         self.genesis_account = Some(
@@ -637,7 +709,7 @@ impl WasmTestBuilder {
 
     pub fn exec_with_exec_request(
         &mut self,
-        mut exec_request: ExecRequest,
+        mut exec_request: ExecuteRequest,
     ) -> &mut WasmTestBuilder {
         let exec_request = {
             let hash = self
@@ -649,7 +721,7 @@ impl WasmTestBuilder {
         };
         let exec_response = self
             .engine_state
-            .exec(RequestOptions::new(), exec_request)
+            .execute(RequestOptions::new(), exec_request)
             .wait_drop_metadata()
             .expect("should exec");
         self.exec_responses.push(exec_response.clone());
@@ -679,7 +751,7 @@ impl WasmTestBuilder {
         address: [u8; 32],
         wasm_file: &str,
         block_time: u64,
-        deploy_hash: [u8; 32],
+        nonce: u64,
         args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
     ) -> &mut WasmTestBuilder {
@@ -690,7 +762,7 @@ impl WasmTestBuilder {
                 .as_ref()
                 .expect("Should have post state hash"),
             block_time,
-            deploy_hash,
+            nonce,
             args,
             authorized_keys,
         );
@@ -702,14 +774,14 @@ impl WasmTestBuilder {
         address: [u8; 32],
         wasm_file: &str,
         block_time: u64,
-        deploy_hash: [u8; 32],
+        nonce: u64,
         args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     ) -> &mut WasmTestBuilder {
         self.exec_with_args_and_keys(
             address,
             wasm_file,
             block_time,
-            deploy_hash,
+            nonce,
             args,
             // Exec with different account also implies the authorized keys should default to
             // the calling account.
@@ -722,9 +794,9 @@ impl WasmTestBuilder {
         address: [u8; 32],
         wasm_file: &str,
         block_time: u64,
-        deploy_hash: [u8; 32],
+        nonce: u64,
     ) -> &mut WasmTestBuilder {
-        self.exec_with_args(address, wasm_file, block_time, deploy_hash, ())
+        self.exec_with_args(address, wasm_file, block_time, nonce, ())
     }
 
     /// Commit effects of previous exec call on the latest post-state hash.
@@ -837,11 +909,6 @@ impl WasmTestBuilder {
             .expect("Unable to obtain mint contract uref. Please run genesis first.")
     }
 
-    pub fn get_pos_contract_uref(&self) -> contract_ffi::uref::URef {
-        self.pos_contract_uref
-            .expect("Unable to obtain pos contract uref. Please run genesis first.")
-    }
-
     pub fn get_genesis_transforms(
         &self,
     ) -> &HashMap<contract_ffi::key::Key, engine_shared::transform::Transform> {
@@ -863,59 +930,71 @@ impl WasmTestBuilder {
             .expect("Should have post-state hash.")
     }
 
-    pub fn get_exec_response(&self, index: usize) -> Option<&ExecResponse> {
+    pub fn get_exec_response(&self, index: usize) -> Option<&ExecuteResponse> {
         self.exec_responses.get(index)
     }
 
     pub fn finish(&self) -> WasmTestResult {
         WasmTestResult(self.clone())
     }
+}
 
-    pub fn get_pos_contract(&self) -> contract_ffi::value::contract::Contract {
-        let genesis_account = self
-            .genesis_account
-            .clone()
-            .expect("should run genesis process first");
-        let genesis_key = contract_ffi::key::Key::Account(genesis_account.pub_key());
-        let pos_uref: contract_ffi::key::Key = self
-            .query(None, genesis_key, &[POS_NAME])
-            .and_then(|v| v.try_into().ok())
-            .expect("should find PoS URef");
+/// Represents the difference between two [`HashMap`]s.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Diff {
+    left: HashMap<contract_ffi::key::Key, Transform>,
+    both: HashMap<contract_ffi::key::Key, Transform>,
+    right: HashMap<contract_ffi::key::Key, Transform>,
+}
 
-        self.query(None, pos_uref, &[])
-            .and_then(|v| v.try_into().ok())
-            .expect("should find PoS Contract")
-    }
+impl Diff {
+    /// Creates a diff from two [`HashMap`]s.
+    pub fn new(
+        left: HashMap<contract_ffi::key::Key, Transform>,
+        right: HashMap<contract_ffi::key::Key, Transform>,
+    ) -> Diff {
+        let both = Default::default();
+        let left_clone = left.clone();
+        let mut ret = Diff { left, both, right };
 
-    pub fn get_purse_balance(
-        &self,
-        purse_id: contract_ffi::value::account::PurseId,
-    ) -> contract_ffi::value::uint::U512 {
-        let mint = self.get_mint_contract_uref();
-        let purse_addr = purse_id.value().addr();
-        let purse_bytes = contract_ffi::bytesrepr::ToBytes::to_bytes(&purse_addr)
-            .expect("should be able to serialize purse bytes");
-        let balance_mapping_key = contract_ffi::key::Key::local(mint.addr(), &purse_bytes);
-        let balance_uref = self
-            .query(None, balance_mapping_key, &[])
-            .and_then(|v| v.try_into().ok())
-            .expect("should find balance uref");
+        for key in left_clone.keys() {
+            let l = ret.left.remove_entry(key);
+            let r = ret.right.remove_entry(key);
 
-        self.query(None, balance_uref, &[])
-            .and_then(|v| v.try_into().ok())
-            .expect("should parse balance into a U512")
-    }
-
-    pub fn get_account(
-        &self,
-        key: contract_ffi::key::Key,
-    ) -> Option<contract_ffi::value::account::Account> {
-        let account_value = self.query(None, key, &[]).expect("should query account");
-
-        if let contract_ffi::value::Value::Account(account) = account_value {
-            Some(account)
-        } else {
-            None
+            match (l, r) {
+                (Some(le), Some(re)) => {
+                    if le == re {
+                        ret.both.insert(*key, re.1);
+                    } else {
+                        ret.left.insert(*key, le.1);
+                        ret.right.insert(*key, re.1);
+                    }
+                }
+                (None, Some(re)) => {
+                    ret.right.insert(*key, re.1);
+                }
+                (Some(le), None) => {
+                    ret.left.insert(*key, le.1);
+                }
+                (None, None) => unreachable!(),
+            }
         }
+
+        ret
+    }
+
+    /// Returns the entries that are unique to the `left` input.
+    pub fn left(&self) -> &HashMap<contract_ffi::key::Key, Transform> {
+        &self.left
+    }
+
+    /// Returns the entries that are unique to the `right` input.
+    pub fn right(&self) -> &HashMap<contract_ffi::key::Key, Transform> {
+        &self.right
+    }
+
+    /// Returns the entries shared by both inputs.
+    pub fn both(&self) -> &HashMap<contract_ffi::key::Key, Transform> {
+        &self.both
     }
 }

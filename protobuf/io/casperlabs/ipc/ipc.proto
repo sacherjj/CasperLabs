@@ -9,6 +9,25 @@ message DeployCode {
   bytes args = 2; // ABI-encoded arguments
 }
 
+message StoredContractHash{
+  bytes hash = 1; // public hash of a stored contract
+  bytes args = 2; // ABI-encoded arguments
+}
+
+message StoredContractName{
+  // name of a stored contract associated with the executing account (uref or hash)
+  string stored_contract_name = 1;
+  bytes args = 2;   // ABI-encoded arguments
+}
+
+message DeployPayload {
+  oneof payload {
+    DeployCode deploy_code = 1;
+    StoredContractHash stored_contract_hash = 2;
+    StoredContractName stored_contract_name = 3;
+  }
+}
+
 message Bond {
     bytes validator_public_key = 1;
     io.casperlabs.casper.consensus.state.BigInt stake = 2;
@@ -28,6 +47,19 @@ message Deploy {
     bytes deploy_hash = 9;
 }
 
+message DeployItem {
+    // Public key of the account which is the context of the execution.
+    bytes address = 1; // length 32 bytes
+    DeployPayload session = 3;
+    DeployPayload payment = 4;
+    uint64 motes_transferred_in_payment = 5; // in units of Motes -- someday this will come from running payment code
+    uint64 gas_price = 6; // in units of Mote / Gas
+    uint64 nonce = 7;
+    // Public keys used to sign this deploy, to be checked against the keys
+    // associated with the account.
+    repeated bytes authorization_keys = 8;
+}
+
 message ExecRequest {
     bytes parent_state_hash = 1;
     uint64 block_time = 2;
@@ -36,6 +68,20 @@ message ExecRequest {
 }
 
 message ExecResponse {
+    oneof result {
+        ExecResult success = 1;
+        RootNotFound missing_parent = 2;
+    }
+}
+
+message ExecuteRequest {
+    bytes parent_state_hash = 1;
+    uint64 block_time = 2;
+    repeated DeployItem deploys = 3;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 4;
+}
+
+message ExecuteResponse {
     oneof result {
         ExecResult success = 1;
         RootNotFound missing_parent = 2;
@@ -271,4 +317,5 @@ service ExecutionEngineService {
     rpc query (QueryRequest) returns (QueryResponse) {}
     rpc validate (ValidateRequest) returns (ValidateResponse) {}
     rpc run_genesis (GenesisRequest) returns (GenesisResponse) {}
+    rpc execute (ExecuteRequest) returns (ExecuteResponse) {}
 }

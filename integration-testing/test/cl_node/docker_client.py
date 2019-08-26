@@ -46,7 +46,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
             image=f"casperlabs/client:{self.node.docker_tag}",
             name=f"client-{self.node.config.number}-{random_string(5)}",
             command=command,
-            network=self.node.network,
+            network=self.node.config.network,
             volumes=volumes,
             detach=True,
             stderr=True,

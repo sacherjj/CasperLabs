@@ -4,16 +4,19 @@ import re
 import random
 import string
 import tempfile
-import typing
 from pathlib import Path
 
-from docker.client import DockerClient
 from .errors import (
     UnexpectedProposeOutputFormatError,
     UnexpectedShowBlocksOutputFormatError,
 )
 from casperlabs_client import ABI
 
+
+# Args  key: account, weight: u32
+ADD_ASSOCIATED_KEY_CONTRACT = "add_associated_key.wasm"
+# Args  key: account, amount: u32
+TRANSFER_TO_ACCOUNT_CONTRACT = "transfer_to_account.wasm"
 HELLO_NAME_CONTRACT = "test_helloname.wasm"
 HELLO_WORLD = "test_helloworld.wasm"
 COUNTER_CALL = "test_countercall.wasm"
@@ -25,6 +28,7 @@ INVALID_BONDING_CONTRACT = "test_invalid_bondingcall.wasm"
 INVALID_UNBONDING_CONTRACT = "test_invalid_unbondingcall.wasm"
 PAYMENT_PURSE_CONTRACT = "test_payment_purse.wasm"
 PAYMENT_CONTRACT = "standard_payment.wasm"
+
 MAX_PAYMENT_COST = 10000000  # ten million
 MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
 CONV_RATE = 10
@@ -43,24 +47,6 @@ def testing_root_path() -> Path:
     return cur_path
 
 
-@dataclasses.dataclass
-class TestingContext:
-    # Tell pytest this isn't Unittest class due to 'Test' name start
-    __test__ = False
-
-    peer_count: int
-    node_startup_timeout: int
-    network_converge_timeout: int
-    receive_timeout: int
-    command_timeout: int
-    blocks: int
-    mount_dir: str
-    bonds_file: str
-    bootstrap_keypair: KeyPair
-    peers_keypairs: typing.List[KeyPair]
-    docker: DockerClient
-
-
 def random_string(length: int) -> str:
     return "".join(random.choice(string.ascii_letters) for _ in range(length)).lower()
 
@@ -76,15 +62,6 @@ def make_tempfile(prefix: str, content: str) -> str:
 
 def make_tempdir(prefix: str) -> str:
     return tempfile.mkdtemp(dir="/tmp", prefix=prefix)
-
-
-class Network:
-    def __init__(self, network, bootstrap, peers, engines):
-        self.network = network
-        self.bootstrap = bootstrap
-        self.peers = peers
-        self.nodes = [bootstrap] + peers
-        self.engines = engines
 
 
 def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:

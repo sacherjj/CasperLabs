@@ -719,7 +719,7 @@ fn should_transfer_total_amount() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
-            // Genesis transfers N tokens to new account
+            // Genesis transfers N motes to new account
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
@@ -729,7 +729,7 @@ fn should_transfer_total_amount() {
         .commit()
         .exec_with_args(
             ACCOUNT_1_ADDR,
-            // New account transfers exactly N tokens to new account (total amount)
+            // New account transfers exactly N motes to new account (total amount)
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
             [2u8; 32],
