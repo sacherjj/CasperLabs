@@ -67,6 +67,7 @@ final case class Unbond(
     amount: Option[Long],
     nonce: Long,
     sessionCode: Option[File],
+    paymentCode: Option[File],
     privateKey: File
 ) extends Configuration
 final case class VisualizeDag(
@@ -144,6 +145,7 @@ object Configuration {
           options.unbond.amount.toOption,
           options.unbond.nonce(),
           options.unbond.session.toOption,
+          options.unbond.paymentPath.toOption,
           options.unbond.privateKey()
         )
       case options.bond =>
