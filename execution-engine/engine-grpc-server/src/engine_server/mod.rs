@@ -17,7 +17,7 @@ use engine_core::engine_state::{
 };
 use engine_core::execution::{Executor, WasmiExecutor};
 use engine_core::tracking_copy::QueryResult;
-use engine_server::ipc::CommitResponse;
+use crate::engine_server::ipc::CommitResponse;
 use engine_shared::logging;
 use engine_shared::logging::{log_duration, log_info};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};

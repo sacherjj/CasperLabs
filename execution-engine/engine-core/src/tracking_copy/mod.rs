@@ -19,8 +19,8 @@ use engine_storage::global_state::StateReader;
 pub use self::ext::TrackingCopyExt;
 use self::meter::heap_meter::HeapSize;
 use self::meter::Meter;
-use engine_state::execution_effect::ExecutionEffect;
-use engine_state::op::Op;
+use crate::engine_state::execution_effect::ExecutionEffect;
+use crate::engine_state::op::Op;
 
 #[derive(Debug)]
 pub enum QueryResult {

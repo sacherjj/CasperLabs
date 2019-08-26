@@ -10,7 +10,7 @@ use super::args::Args;
 use super::{Error, Runtime};
 use contract_ffi::bytesrepr::{self, ToBytes};
 use contract_ffi::value::account::{PublicKey, PurseId};
-use resolvers::v1_function_index::FunctionIndex;
+use crate::resolvers::v1_function_index::FunctionIndex;
 
 impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
 where

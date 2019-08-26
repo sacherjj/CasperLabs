@@ -13,11 +13,11 @@ use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Account, Contract, Value, U512};
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{Transform, TypeMismatch};
-use engine_state::execution_effect::ExecutionEffect;
-use engine_state::op::Op;
-use engine_state::utils::WasmiBytes;
+use crate::engine_state::execution_effect::ExecutionEffect;
+use crate::engine_state::op::Op;
+use crate::engine_state::utils::WasmiBytes;
 use engine_storage::global_state::CommitResult;
-use execution;
+use crate::execution;
 
 pub const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 pub const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
@@ -374,14 +374,14 @@ mod tests {
     use contract_ffi::value::{Contract, Value, U512};
     use engine_shared::test_utils;
     use engine_shared::transform::Transform;
-    use engine_state::create_genesis_effects;
-    use engine_state::genesis::{
+    use crate::engine_state::create_genesis_effects;
+    use crate::engine_state::genesis::{
         GenesisURefsSource, GENESIS_ACCOUNT_PURSE, MINT_GENESIS_ACCOUNT_BALANCE_UREF,
         MINT_POS_BONDING_BALANCE_UREF, MINT_POS_PAYMENT_BALANCE_UREF,
         MINT_POS_REWARDS_BALANCE_UREF, MINT_PRIVATE_ADDRESS, MINT_PUBLIC_ADDRESS,
         POS_PRIVATE_ADDRESS, POS_PUBLIC_ADDRESS,
     };
-    use engine_state::utils::{pos_validator_key, WasmiBytes};
+    use crate::engine_state::utils::{pos_validator_key, WasmiBytes};
     use engine_wasm_prep::wasm_costs::WasmCosts;
 
     use super::{create_local_key, POS_BONDING_PURSE};

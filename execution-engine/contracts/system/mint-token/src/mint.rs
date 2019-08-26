@@ -1,6 +1,6 @@
 use cl_std::value::U512;
 
-use capabilities::{Addable, Readable, Writable};
+use crate::capabilities::{Addable, Readable, Writable};
 use cl_std::system_contracts::mint::error::Error;
 
 pub trait Mint<A, RW>
@@ -43,8 +43,8 @@ mod tests {
 
     use cl_std::value::U512;
 
-    use capabilities::{Addable, Readable, Writable};
-    use mint::{Error, Mint};
+    use crate::capabilities::{Addable, Readable, Writable};
+    use crate::mint::{Error, Mint};
 
     const GENESIS_PURSE_AMOUNT: u32 = 150;
     const GENESIS_PURSE: FullId = FullId(0);

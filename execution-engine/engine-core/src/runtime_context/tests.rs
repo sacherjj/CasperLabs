@@ -20,8 +20,8 @@ use contract_ffi::value::account::{
     RemoveKeyFailure, SetThresholdFailure, Weight,
 };
 use engine_shared::newtypes::CorrelationId;
-use execution::{create_rng, extract_access_rights_from_keys};
-use tracking_copy::TrackingCopy;
+use crate::execution::{create_rng, extract_access_rights_from_keys};
+use crate::tracking_copy::TrackingCopy;
 
 fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemoryGlobalState> {
     let correlation_id = CorrelationId::new();

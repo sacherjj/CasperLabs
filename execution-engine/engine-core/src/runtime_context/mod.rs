@@ -24,10 +24,10 @@ use contract_ffi::value::{Contract, Value};
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_storage::global_state::StateReader;
 
-use engine_state::execution_effect::ExecutionEffect;
-use execution::Error;
-use tracking_copy::{AddResult, TrackingCopy};
-use URefAddr;
+use crate::engine_state::execution_effect::ExecutionEffect;
+use crate::execution::Error;
+use crate::tracking_copy::{AddResult, TrackingCopy};
+use crate::URefAddr;
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {

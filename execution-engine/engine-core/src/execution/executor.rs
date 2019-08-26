@@ -11,14 +11,14 @@ use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::{Account, Value};
 use engine_shared::newtypes::CorrelationId;
-use engine_state::execution_result::ExecutionResult;
+use crate::engine_state::execution_result::ExecutionResult;
 use engine_storage::global_state::StateReader;
 
 use super::Error;
 use super::{create_rng, extract_access_rights_from_keys, instance_and_memory, Runtime};
-use runtime_context::RuntimeContext;
-use tracking_copy::TrackingCopy;
-use URefAddr;
+use crate::runtime_context::RuntimeContext;
+use crate::tracking_copy::TrackingCopy;
+use crate::URefAddr;
 
 pub trait Executor<A> {
     #[allow(clippy::too_many_arguments)]
@@ -66,7 +66,7 @@ macro_rules! on_fail_charge {
         match $fn {
             Ok(res) => res,
             Err(e) => {
-                let exec_err: ::execution::Error = e.into();
+                let exec_err: crate::execution::Error = e.into();
                 return ExecutionResult::precondition_failure(exec_err.into());
             }
         }
@@ -75,7 +75,7 @@ macro_rules! on_fail_charge {
         match $fn {
             Ok(res) => res,
             Err(e) => {
-                let exec_err: ::execution::Error = e.into();
+                let exec_err: crate::execution::Error = e.into();
                 return ExecutionResult::Failure {
                     error: exec_err.into(),
                     effect: Default::default(),
@@ -88,7 +88,7 @@ macro_rules! on_fail_charge {
         match $fn {
             Ok(res) => res,
             Err(e) => {
-                let exec_err: ::execution::Error = e.into();
+                let exec_err: crate::execution::Error = e.into();
                 return ExecutionResult::Failure {
                     error: exec_err.into(),
                     effect: $effect,

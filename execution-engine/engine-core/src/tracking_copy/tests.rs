@@ -15,7 +15,7 @@ use contract_ffi::value::account::{
 use contract_ffi::value::{Account, Contract, Value};
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
-use engine_state::op::Op;
+use crate::engine_state::op::Op;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 use engine_storage::global_state::StateReader;
 

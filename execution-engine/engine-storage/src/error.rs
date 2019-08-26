@@ -3,7 +3,7 @@ use wasmi;
 
 use contract_ffi::bytesrepr;
 
-use trie_store::in_memory;
+use crate::trie_store::in_memory;
 
 #[derive(Debug, Fail, PartialEq, Eq)]
 pub enum Error {

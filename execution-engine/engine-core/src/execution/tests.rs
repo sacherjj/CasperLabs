@@ -2,8 +2,8 @@ use rand::RngCore;
 use rand_chacha::ChaChaRng;
 
 use super::Error;
-use engine_state::execution_result::ExecutionResult;
-use execution::create_rng;
+use crate::engine_state::execution_result::ExecutionResult;
+use crate::execution::create_rng;
 
 fn on_fail_charge_test_helper<T>(
     f: impl Fn() -> Result<T, Error>,
@@ -35,8 +35,8 @@ fn on_fail_charge_err_laziness_test() {
 fn on_fail_charge_with_action() {
     use contract_ffi::key::Key;
     use engine_shared::transform::Transform;
-    use engine_state::execution_effect::ExecutionEffect;
-    use engine_state::op::Op;
+    use crate::engine_state::execution_effect::ExecutionEffect;
+    use crate::engine_state::op::Op;
     let f = || {
         let input: Result<(), Error> = Err(Error::GasLimit);
         on_fail_charge!(input, 456, {

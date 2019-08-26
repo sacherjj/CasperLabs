@@ -108,12 +108,12 @@
 
 use std::path::PathBuf;
 
-use lmdb::{self, Database, DatabaseFlags, Environment, RoTransaction, RwTransaction, WriteFlags};
+use crate::lmdb::{self, Database, DatabaseFlags, Environment, RoTransaction, RwTransaction, WriteFlags};
 
 use contract_ffi::bytesrepr::{deserialize, FromBytes, ToBytes};
 
 use super::*;
-use error;
+use crate::error;
 
 impl<'a> Transaction for RoTransaction<'a> {
     type Error = lmdb::Error;

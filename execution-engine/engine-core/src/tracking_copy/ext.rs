@@ -6,8 +6,8 @@ use contract_ffi::value::{Account, Contract, Value, U512};
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_shared::transform::TypeMismatch;
 use engine_storage::global_state::StateReader;
-use execution;
-use tracking_copy::{QueryResult, TrackingCopy};
+use crate::execution;
+use crate::tracking_copy::{QueryResult, TrackingCopy};
 
 pub struct SystemContractInfo {
     outer_key: Key,

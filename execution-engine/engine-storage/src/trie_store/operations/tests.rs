@@ -5,13 +5,13 @@ use tempfile::{tempdir, TempDir};
 use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 
-use error;
-use trie::{Pointer, Trie};
-use trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
-use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use trie_store::operations::{read, write, ReadResult, WriteResult};
-use trie_store::{Readable, Transaction, TransactionSource, TrieStore};
-use TEST_MAP_SIZE;
+use crate::error;
+use crate::trie::{Pointer, Trie};
+use crate::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+use crate::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+use crate::trie_store::operations::{read, write, ReadResult, WriteResult};
+use crate::trie_store::{Readable, Transaction, TransactionSource, TrieStore};
+use crate::TEST_MAP_SIZE;
 
 const TEST_KEY_LENGTH: usize = 7;
 
@@ -584,7 +584,7 @@ mod read {
 
     use super::*;
     use error;
-    use trie_store::in_memory;
+    use crate::trie_store::in_memory;
 
     mod partial_tries {
         //! Here we construct 6 separate "partial" tries, increasing in size
@@ -708,8 +708,8 @@ mod scan {
 
     use super::*;
     use error;
-    use trie_store::in_memory;
-    use trie_store::operations::{scan, TrieScan};
+    use crate::trie_store::in_memory;
+    use crate::trie_store::operations::{scan, TrieScan};
 
     fn check_scan<'a, R, S, E>(
         correlation_id: CorrelationId,

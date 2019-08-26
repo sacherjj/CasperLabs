@@ -4,6 +4,7 @@ version = "0.6.0"
 authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 description = "WASM execution engine for CasperLabs smart contracts"
 license = "Apache-2.0"
+edition = "2018"
 
 [dependencies]
 clap = "2.32.0"

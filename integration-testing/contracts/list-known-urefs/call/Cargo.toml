@@ -2,6 +2,7 @@
 name = "list-known-urefs-call"
 version = "0.1.0"
 authors = ["Mateusz Górski <mateusz@casperlabs.io>"]
+edition = "2018"
 
 [lib]
 name = "listknownurefscall"
@@ -9,4 +10,3 @@ crate-type = ["cdylib"]
 
 [dependencies]
 common = { package = "casperlabs-contract-ffi", path = "../../../../execution-engine/contract-ffi" }
-
