@@ -28,7 +28,7 @@ final case class Deploy(
     from: Option[String],
     nonce: Long,
     sessionCode: File,
-    paymentCode: File,
+    paymentCode: Option[File],
     publicKey: Option[File],
     privateKey: Option[File],
     gasPrice: Long
@@ -107,7 +107,7 @@ object Configuration {
           options.deploy.from.toOption,
           options.deploy.nonce(),
           options.deploy.session(),
-          options.deploy.payment.toOption.getOrElse(options.deploy.session()),
+          options.deploy.payment.toOption,
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption,
           options.deploy.gasPrice()

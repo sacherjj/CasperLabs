@@ -61,17 +61,13 @@ object DeployRuntime {
     val argsSer = serializeArgs(args)
 
     for {
-      sessionCode <- readFileOrDefault[F](sessionCode, UNBONDING_WASM_FILE)
-      // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
-      // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
-      // to not fail the session code execution even when EE will use hardcoded limit.
-      payment       = paymentCode.map(f => Files.readAllBytes(f.toPath)).getOrElse(sessionCode)
+      sessionCode   <- readFileOrDefault[F](sessionCode, UNBONDING_WASM_FILE)
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
             sessionCode = sessionCode,
-            paymentCode = payment,
+            paymentCode = paymentCode,
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
@@ -91,17 +87,13 @@ object DeployRuntime {
     val argsSer: Array[Byte]     = serializeArgs(args)
 
     for {
-      sessionCode <- readFileOrDefault[F](sessionCode, BONDING_WASM_FILE)
-      // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
-      // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
-      // to not fail the session code execution even when EE will use hardcoded limit.
-      payment       = paymentCode.map(f => Files.readAllBytes(f.toPath)).getOrElse(sessionCode)
+      sessionCode   <- readFileOrDefault[F](sessionCode, BONDING_WASM_FILE)
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
             sessionCode = sessionCode,
-            paymentCode = payment,
+            paymentCode = paymentCode,
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
@@ -288,16 +280,12 @@ object DeployRuntime {
                   )
                 )
       sessionCode <- readFileOrDefault[F](sessionCode, TRANSFER_WASM_FILE)
-      // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
-      // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
-      // to not fail the session code execution even when EE will use hardcoded limit.
-      payment = paymentCode.map(f => Files.readAllBytes(f.toPath)).getOrElse(sessionCode)
-      args    = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
+      args        = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
             sessionCode = sessionCode,
-            paymentCode = payment,
+            paymentCode = paymentCode,
             maybeEitherPublicKey = senderPublicKey.asRight[String].some,
             maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
             gasPrice = 10L,
@@ -393,7 +381,7 @@ object DeployRuntime {
       from: Option[String],
       nonce: Long,
       sessionCode: Array[Byte],
-      paymentCode: Array[Byte],
+      paymentCode: Option[File],
       maybeEitherPublicKey: Option[Either[String, PublicKey]],
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
       gasPrice: Long,
@@ -411,6 +399,11 @@ object DeployRuntime {
       either.fold(Ed25519.tryParsePublicKey, _.some)
     } orElse maybePrivateKey.flatMap(Ed25519.tryToPublic)
 
+    // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
+    // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
+    // to not fail the session code execution even when EE will use hardcoded limit.
+    val payment = paymentCode.map(f => Files.readAllBytes(f.toPath)).getOrElse(sessionCode)
+
     val deploy = for {
       accountPublicKey <- Sync[F].fromOption(
                            from
@@ -420,7 +413,7 @@ object DeployRuntime {
                          )
     } yield {
       val deploy =
-        makeDeploy(accountPublicKey, nonce, gasPrice, sessionCode, sessionArgs, paymentCode)
+        makeDeploy(accountPublicKey, nonce, gasPrice, sessionCode, sessionArgs, payment)
       (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
     }
 

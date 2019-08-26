@@ -105,7 +105,7 @@ object Main {
           from,
           nonce,
           Files.readAllBytes(sessionCode.toPath),
-          Files.readAllBytes(paymentCode.toPath),
+          paymentCode,
           maybePublicKey.map(
             file =>
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PublicKey]
