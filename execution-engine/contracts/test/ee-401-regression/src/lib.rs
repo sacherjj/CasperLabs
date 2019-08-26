@@ -22,5 +22,6 @@ pub extern "C" fn hello_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let known_urefs = BTreeMap::new();
-    let _contract_pointer: ContractPointer = contract_api::store_function("hello_ext", known_urefs);
+    let contract_pointer: ContractPointer = contract_api::store_function("hello_ext", known_urefs);
+    contract_api::add_uref("hello_ext", &contract_pointer.into());
 }
