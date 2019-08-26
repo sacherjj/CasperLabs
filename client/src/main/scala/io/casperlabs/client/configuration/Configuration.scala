@@ -144,6 +144,7 @@ object Configuration {
           options.unbond.amount.toOption,
           options.unbond.nonce(),
           options.unbond.session.toOption,
+          options.unbond.paymentPath.toOption,
           options.unbond.privateKey()
         )
       case options.bond =>
