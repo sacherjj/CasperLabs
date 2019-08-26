@@ -109,7 +109,7 @@ fn should_exec_non_stored_code() {
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -171,7 +171,7 @@ fn should_exec_stored_code_by_hash() {
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -232,7 +232,7 @@ fn should_exec_stored_code_by_hash() {
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -296,7 +296,7 @@ fn should_exec_stored_code_by_named_hash() {
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -336,7 +336,7 @@ fn should_exec_stored_code_by_named_hash() {
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -400,7 +400,7 @@ fn should_exec_stored_code_by_named_uref() {
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -441,7 +441,7 @@ fn should_exec_stored_code_by_named_uref() {
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -505,7 +505,7 @@ fn should_exec_payment_and_session_stored_code() {
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -537,7 +537,7 @@ fn should_exec_payment_and_session_stored_code() {
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -569,7 +569,7 @@ fn should_exec_payment_and_session_stored_code() {
                 U512::from(payment_purse_amount),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(3)
+            .with_deploy_hash([3; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -631,7 +631,7 @@ fn should_produce_same_transforms_as_exec() {
                     U512::from(payment_purse_amount),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(1)
+                .with_deploy_hash([1; 32])
                 .build();
 
             ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -660,7 +660,7 @@ fn should_produce_same_transforms_as_exec() {
                     U512::from(payment_purse_amount),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(1)
+                .with_deploy_hash([1; 32])
                 .build();
 
             test_support::ExecRequestBuilder::new()
@@ -693,7 +693,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     let stored_transforms = {
         let config = config.clone();
 
-        let store_request = |name: &str, nonce: u64| {
+        let store_request = |name: &str, deploy_hash: [u8; 32]| {
             let store_transfer = DeployBuilder::new()
                 .with_address(genesis_addr)
                 .with_session_code(&format!("{}_stored.wasm", name), ())
@@ -702,7 +702,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     U512::from(payment_purse_amount),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(nonce)
+                .with_deploy_hash(deploy_hash)
                 .build();
 
             ExecRequestBuilder::new()
@@ -714,10 +714,13 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
 
         let store_transforms = builder
             .run_genesis(genesis_addr, HashMap::default())
-            .exec_with_exec_request(store_request(TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME, 1))
+            .exec_with_exec_request(store_request(
+                TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
+                [1; 32],
+            ))
             .expect_success()
             .commit()
-            .exec_with_exec_request(store_request(STANDARD_PAYMENT_CONTRACT_NAME, 2))
+            .exec_with_exec_request(store_request(STANDARD_PAYMENT_CONTRACT_NAME, [2; 32]))
             .expect_success()
             .commit()
             .get_transforms()[1]
@@ -747,7 +750,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     U512::from(payment_purse_amount),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(3)
+                .with_deploy_hash([3; 32])
                 .build();
 
             ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -764,7 +767,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     let provided_transforms = {
         let config = config.clone();
 
-        let do_nothing_request = |nonce: u64| {
+        let do_nothing_request = |deploy_hash: [u8; 32]| {
             let deploy = DeployBuilder::new()
                 .with_address(genesis_addr)
                 .with_session_code("do_nothing.wasm", ())
@@ -773,7 +776,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     U512::from(payment_purse_amount),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(nonce)
+                .with_deploy_hash(deploy_hash)
                 .build();
 
             ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -791,7 +794,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     U512::from(payment_purse_amount),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(3)
+                .with_deploy_hash([3; 32])
                 .build();
 
             ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -799,10 +802,10 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
 
         WasmTestBuilder::new(config)
             .run_genesis(genesis_addr, HashMap::default())
-            .exec_with_exec_request(do_nothing_request(1))
+            .exec_with_exec_request(do_nothing_request([1; 32]))
             .expect_success()
             .commit()
-            .exec_with_exec_request(do_nothing_request(2))
+            .exec_with_exec_request(do_nothing_request([2; 32]))
             .expect_success()
             .commit()
             .exec_with_exec_request(provided_request)
@@ -827,7 +830,6 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
             }
             (Transform::Write(Value::Account(la)), Transform::Write(Value::Account(ra))) => {
                 assert_eq!(la.pub_key(), ra.pub_key());
-                assert_eq!(la.nonce(), ra.nonce());
                 assert_eq!(la.purse_id(), ra.purse_id());
                 assert_eq!(la.action_thresholds(), ra.action_thresholds());
                 assert_eq!(la.account_activity(), ra.account_activity());

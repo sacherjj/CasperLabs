@@ -160,8 +160,8 @@ impl DeployBuilder {
         self
     }
 
-    pub fn with_nonce(mut self, nonce: u64) -> Self {
-        self.deploy.set_nonce(nonce);
+    pub fn with_deploy_hash(mut self, deploy_hash: [u8; 32]) -> Self {
+        self.deploy.set_deploy_hash(deploy_hash.to_vec());
         self
     }
 
@@ -261,7 +261,7 @@ pub fn get_mock_deploy() -> DeployItem {
     deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
     deploy.set_motes_transferred_in_payment(1000);
     deploy.set_gas_price(1);
-    deploy.set_nonce(1);
+    deploy.set_deploy_hash(vec![1; 32]);
     let mut deploy_code = DeployCode::new();
     deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
     let mut deploy_payload = DeployPayload::new();
@@ -376,13 +376,13 @@ pub fn create_exec_request(
     session_contract_file_name: &str,
     pre_state_hash: &[u8],
     block_time: u64,
-    nonce: u64,
+    deploy_hash: [u8; 32],
     arguments: impl contract_ffi::contract_api::argsparser::ArgsParser,
     authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
 ) -> ExecuteRequest {
     let deploy = DeployBuilder::new()
         .with_session_code(session_contract_file_name, arguments)
-        .with_nonce(nonce)
+        .with_deploy_hash(deploy_hash)
         .with_address(address)
         .with_authorization_keys(&authorized_keys)
         .build();
@@ -751,7 +751,7 @@ impl WasmTestBuilder {
         address: [u8; 32],
         wasm_file: &str,
         block_time: u64,
-        nonce: u64,
+        deploy_hash: [u8; 32],
         args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
     ) -> &mut WasmTestBuilder {
@@ -762,7 +762,7 @@ impl WasmTestBuilder {
                 .as_ref()
                 .expect("Should have post state hash"),
             block_time,
-            nonce,
+            deploy_hash,
             args,
             authorized_keys,
         );
@@ -774,14 +774,14 @@ impl WasmTestBuilder {
         address: [u8; 32],
         wasm_file: &str,
         block_time: u64,
-        nonce: u64,
+        deploy_hash: [u8; 32],
         args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     ) -> &mut WasmTestBuilder {
         self.exec_with_args_and_keys(
             address,
             wasm_file,
             block_time,
-            nonce,
+            deploy_hash,
             args,
             // Exec with different account also implies the authorized keys should default to
             // the calling account.
@@ -794,9 +794,9 @@ impl WasmTestBuilder {
         address: [u8; 32],
         wasm_file: &str,
         block_time: u64,
-        nonce: u64,
+        deploy_hash: [u8; 32],
     ) -> &mut WasmTestBuilder {
-        self.exec_with_args(address, wasm_file, block_time, nonce, ())
+        self.exec_with_args(address, wasm_file, block_time, deploy_hash, ())
     }
 
     /// Commit effects of previous exec call on the latest post-state hash.
