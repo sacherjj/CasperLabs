@@ -93,6 +93,12 @@ class ABI:
     """
 
     @staticmethod
+    def option(o: bytes) -> bytes:
+        if o is None:
+            return bytes([0])
+        return bytes([1]) + o
+
+    @staticmethod
     def u32(n: int):
         return struct.pack("<I", n)
 
