@@ -369,7 +369,7 @@ def bond(node,
          session_contract: str = "test_bondingcall.wasm",
          payment_contract: str = "standard_payment.wasm",
          payment_args: bytes = ABI.args([ABI.u512(50000000)])):
-
+    session_args = ABI.args([ABI.u32(amount)])
     _, deploy_hash_bytes = node.p_client.deploy(from_address=from_address,
                                                 session_contract=session_contract,
                                                 payment_contract=payment_contract,
@@ -377,7 +377,7 @@ def bond(node,
                                                 gas_price=gas_price,
                                                 public_key=public_key,
                                                 private_key=private_key,
-                                                session_args=ABI.args([ABI.u32(amount)]),
+                                                session_args=session_args,
                                                 payment_args=payment_args)
     deploy_hash_hex = deploy_hash_bytes.hex()
     deploy_hash_hex = deploy_hash_hex
@@ -410,13 +410,6 @@ def test_unbonding_then_creating_block(payment_node_network):
                                               payment_args=ABI.args([ABI.u512(5000000)]))
     check_no_errors_in_deploys(nodes[0], block_hash)
 
-    """
-    bonding_block_hash = nodes[0].bond(session_contract=BONDING_CONTRACT,
-                                       payment_contract=PAYMENT_CONTRACT,
-                                       payment_args=ABI.args([ABI.u512(5000000)]),
-                                       from_account_id=bonding_account.file_id,
-                                       amount=100)
-    """
     logging.info(f"{'='*10} | test_unbonding_then_creating_block: BONDING: {bonding_account.public_key_hex}")
     bonding_block_hash = bond(nodes[0],
                               bonding_account.public_key_hex,
