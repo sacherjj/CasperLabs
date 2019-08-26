@@ -6,9 +6,7 @@ extern crate engine_storage;
 extern crate grpc;
 
 use std::collections::HashMap;
-use std::convert::TryInto;
 
-use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
@@ -33,6 +31,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(GENESIS_ADDR)
+            .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
@@ -58,6 +57,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     let account_1_request = {
         let deploy = DeployBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
+            .with_deploy_hash([1; 32])
             .with_session_code("revert.wasm", ())
             .with_payment_code("standard_payment.wasm", U512::from(MAX_PAYMENT - 1))
             .with_authorization_keys(&[account_1_public_key])
@@ -105,6 +105,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(GENESIS_ADDR)
+            .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, U512::from(1)),
@@ -193,6 +194,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             .with_payment_code("revert.wasm", payment_purse_amount)
             .with_session_code(
                 "transfer_purse_to_account.wasm",
@@ -283,6 +285,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             .with_payment_code("standard_payment.wasm", U512::from(payment_purse_amount))
             .with_session_code(
                 "endless_loop.wasm",
@@ -327,6 +330,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             .with_payment_code("standard_payment.wasm", U512::from(payment_purse_amount))
             .with_session_code("endless_loop.wasm", ())
             .with_authorization_keys(&[genesis_public_key])
@@ -343,45 +347,13 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         .commit()
         .finish();
 
-    let transforms = &transfer_result.builder().get_transforms()[0];
-
-    let modified_balance: U512 = {
-        let modified_account = {
-            let account_transforms = transforms
-                .get(&genesis_account_key)
-                .expect("Unable to find transforms for genesis");
-            if let Transform::Write(Value::Account(account)) = account_transforms {
-                account
-            } else {
-                panic!(
-                    "Transform {:?} is not a Transform with a Write(Value(Account))",
-                    account_transforms
-                );
-            }
-        };
-
-        let purse_bytes = modified_account
-            .purse_id()
-            .value()
-            .addr()
-            .to_bytes()
-            .expect("should be able to serialize purse bytes");
-
-        let mint = builder.get_mint_contract_uref();
-        let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
-        let balance_uref = builder
-            .query(None, balance_mapping_key, &[])
-            .and_then(|v| v.try_into().ok())
-            .expect("should find balance uref");
-
-        let balance: U512 = builder
-            .query(None, balance_uref, &[])
-            .and_then(|v| v.try_into().ok())
-            .expect("should parse balance into a U512");
-
-        balance
-    };
-
+    let genesis_account = transfer_result
+        .builder()
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
+    let modified_balance: U512 = transfer_result
+        .builder()
+        .get_purse_balance(genesis_account.purse_id());
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
     assert_ne!(
@@ -425,6 +397,7 @@ fn should_correctly_charge_when_session_code_fails() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             .with_payment_code("standard_payment.wasm", U512::from(payment_purse_amount))
             .with_session_code(
                 "revert.wasm",
@@ -444,45 +417,13 @@ fn should_correctly_charge_when_session_code_fails() {
         .commit()
         .finish();
 
-    let transforms = &transfer_result.builder().get_transforms()[0];
-
-    let modified_balance: U512 = {
-        let modified_account = {
-            let account_transforms = transforms
-                .get(&genesis_account_key)
-                .expect("Unable to find transforms for genesis");
-            if let Transform::Write(Value::Account(account)) = account_transforms {
-                account
-            } else {
-                panic!(
-                    "Transform {:?} is not a Transform with a Value(Account)",
-                    account_transforms
-                );
-            }
-        };
-
-        let purse_bytes = modified_account
-            .purse_id()
-            .value()
-            .addr()
-            .to_bytes()
-            .expect("should be able to serialize purse bytes");
-
-        let mint = builder.get_mint_contract_uref();
-        let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
-        let balance_uref = builder
-            .query(None, balance_mapping_key, &[])
-            .and_then(|v| v.try_into().ok())
-            .expect("should find balance uref");
-
-        let balance: U512 = builder
-            .query(None, balance_uref, &[])
-            .and_then(|v| v.try_into().ok())
-            .expect("should parse balance into a U512");
-
-        balance
-    };
-
+    let genesis_account = transfer_result
+        .builder()
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
+    let modified_balance: U512 = transfer_result
+        .builder()
+        .get_purse_balance(genesis_account.purse_id());
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
     assert_ne!(
@@ -521,6 +462,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, U512::from(transferred_amount)),
@@ -542,45 +484,13 @@ fn should_correctly_charge_when_session_code_succeeds() {
         .expect_success() //<-- assert equivalent
         .finish();
 
-    let transforms = &transfer_result.builder().get_transforms()[0];
-
-    let modified_balance: U512 = {
-        let modified_account = {
-            let account_transforms = transforms
-                .get(&genesis_account_key)
-                .expect("Unable to find transforms for genesis");
-            if let Transform::Write(Value::Account(account)) = account_transforms {
-                account
-            } else {
-                panic!(
-                    "Transform {:?} is not a Transform with a Value(Account)",
-                    account_transforms
-                );
-            }
-        };
-
-        let purse_bytes = modified_account
-            .purse_id()
-            .value()
-            .addr()
-            .to_bytes()
-            .expect("should be able to serialize purse bytes");
-
-        let mint = builder.get_mint_contract_uref();
-        let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
-        let balance_uref = builder
-            .query(None, balance_mapping_key, &[])
-            .and_then(|v| v.try_into().ok())
-            .expect("should find balance uref");
-
-        let balance: U512 = builder
-            .query(None, balance_uref, &[])
-            .and_then(|v| v.try_into().ok())
-            .expect("should parse balance into a U512");
-
-        balance
-    };
-
+    let genesis_account = transfer_result
+        .builder()
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
+    let modified_balance: U512 = transfer_result
+        .builder()
+        .get_purse_balance(genesis_account.purse_id());
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
     assert_ne!(
