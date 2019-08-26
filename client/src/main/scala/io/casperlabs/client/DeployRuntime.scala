@@ -81,6 +81,7 @@ object DeployRuntime {
       amount: Long,
       nonce: Long,
       sessionCode: Option[File],
+      paymentCode: Option[File],
       privateKeyFile: File
   ): F[Unit] = {
     val args: Array[Array[Byte]] = Array(serializeLong(amount))
@@ -88,14 +89,16 @@ object DeployRuntime {
 
     for {
       sessionCode <- readFileOrDefault[F](sessionCode, BONDING_WASM_FILE)
-      // currently, sessionCode == paymentCode in order to get some gas limit for the execution
-      paymentCode   = sessionCode.toList.toArray
+      // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
+      // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
+      // to not fail the session code execution even when EE will use hardcoded limit.
+      payment       = paymentCode.map(f => Files.readAllBytes(f.toPath)).getOrElse(sessionCode)
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
             sessionCode = sessionCode,
-            paymentCode = paymentCode,
+            paymentCode = payment,
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1

@@ -64,12 +64,14 @@ object Main {
           amount,
           nonce,
           contractCode,
+          paymentCode,
           privateKey
           ) =>
         DeployRuntime.bond(
           amount,
           nonce,
           contractCode,
+          paymentCode,
           privateKey
         )
       case Transfer(
