@@ -4,7 +4,7 @@ from typing import Any, Optional
 from docker import DockerClient
 
 
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, Account
 from test.cl_node.common import random_string
 
 
@@ -40,6 +40,7 @@ class DockerConfig:
     is_payment_code_enabled: bool = False
     initial_motes: int = 100 * (10 ** 9)  # 100 billion
     socket_volume: Optional[str] = None
+    node_account: Account = None
     grpc_encryption: bool = False
 
     def __post_init__(self):
