@@ -227,6 +227,7 @@ class OneNodeNetwork(CasperLabsNetwork):
 
     is_payment_code_enabled = False
     initial_motes = MAX_PAYMENT_COST * 100  # 10 millions * 100 = 1 billion motes
+    grpc_encryption = False
 
     def create_cl_network(self):
         kp = self.get_key()
@@ -237,6 +238,7 @@ class OneNodeNetwork(CasperLabsNetwork):
             network=self.create_docker_network(),
             is_payment_code_enabled=self.is_payment_code_enabled,
             initial_motes=self.initial_motes,
+            grpc_encryption=self.grpc_encryption,
         )
         self.add_bootstrap(config)
 
@@ -261,6 +263,12 @@ class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
 
     is_payment_code_enabled = True
     initial_motes = 10 ** 3
+
+
+class OneNodeWithGRPCEncryption(OneNodeNetwork):
+    is_payment_code_enabled = True
+    initial_motes = MAX_PAYMENT_COST * 100
+    grpc_encryption = True
 
 
 class TwoNodeNetwork(CasperLabsNetwork):

@@ -40,6 +40,7 @@ class DockerConfig:
     is_payment_code_enabled: bool = False
     initial_motes: int = 100 * (10 ** 9)  # 100 billion
     socket_volume: Optional[str] = None
+    grpc_encryption: bool = False
 
     def __post_init__(self):
         if self.rand_str is None:
@@ -61,6 +62,8 @@ class DockerConfig:
             "--tls-certificate": f"{bootstrap_path}/node-{self.number}.certificate.pem",
             "--tls-key": f"{bootstrap_path}/node-{self.number}.key.pem",
         }
+        if self.grpc_encryption:
+            options["--grpc-use-tls"] = ""
         if self.bootstrap_address:
             options["--server-bootstrap"] = self.bootstrap_address
         if self.is_bootstrap:
