@@ -434,24 +434,6 @@ class DockerNode(LoggingDockerBase):
     def show_blocks(self) -> Tuple[int, str]:
         return self.exec_run(f"{self.CL_NODE_BINARY} show-blocks")
 
-    def blocks_as_list_with_depth(self, depth: int) -> List:
-        # TODO: Replace with generator using Python client
-        result = self.client.show_blocks(depth)
-        block_list = []
-        for i, section in enumerate(result.split(" ---------------\n")):
-            if i == 0:
-                continue
-            cur_block = {}
-            for line in section.split("\n"):
-                try:
-                    name, value = line.split(": ", 1)
-                    cur_block[name] = value.replace('"', "")
-                except ValueError:
-                    pass
-            block_list.append(cur_block)
-        block_list.reverse()
-        return block_list
-
     @property
     def address(self) -> str:
         m = re.search(
