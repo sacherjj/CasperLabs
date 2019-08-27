@@ -59,17 +59,21 @@ import scala.concurrent.duration._
 class NodeRuntime private[node] (
     conf: Configuration,
     id: NodeIdentifier
-)(implicit log: Log[Task], scheduler: Scheduler) {
+)(
+    implicit log: Log[Task],
+    scheduler: Scheduler,
+    uncaughtExceptionHandler: UncaughtExceptionHandler
+) {
 
   private[this] val loopScheduler =
-    Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionHandler)
+    Scheduler.fixedPool("loop", 4, reporter = uncaughtExceptionHandler)
   private[this] val blockingScheduler =
-    Scheduler.cached("blocking-io", 4, 64, reporter = UncaughtExceptionHandler)
+    Scheduler.cached("blocking-io", 4, 64, reporter = uncaughtExceptionHandler)
 
   private[this] val dbConnScheduler =
-    Scheduler.cached("db-conn", 1, 64, reporter = UncaughtExceptionHandler)
+    Scheduler.cached("db-conn", 1, 64, reporter = uncaughtExceptionHandler)
   private[this] val dbIOScheduler =
-    Scheduler.cached("db-io", 1, Int.MaxValue, reporter = UncaughtExceptionHandler)
+    Scheduler.cached("db-io", 1, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
   private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
     catsConcurrentEffectForEffect(
@@ -425,7 +429,11 @@ class NodeRuntime private[node] (
 object NodeRuntime {
   def apply(
       conf: Configuration
-  )(implicit scheduler: Scheduler, log: Log[Task]): Effect[NodeRuntime] =
+  )(
+      implicit scheduler: Scheduler,
+      log: Log[Task],
+      uncaughtExceptionHandler: UncaughtExceptionHandler
+  ): Effect[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
       runtime <- Task.delay(new NodeRuntime(conf, id)).toEffect
