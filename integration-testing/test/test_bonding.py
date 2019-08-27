@@ -312,31 +312,33 @@ def check_no_errors_in_deploys(node, block_hash):
         assert deploy_info.is_error is False
 
 
-# fmt: off
-
-def transfer_to_account(node,
-                        from_address: str,
-                        to_address: str,
-                        amount: int,
-                        public_key: str,
-                        private_key: str,
-                        gas_price: int = 1,
-                        gas_limit: int = 5000000,
-                        session_contract="transfer_to_account.wasm",
-                        payment_contract="standard_payment.wasm",
-                        payment_args=ABI.args([ABI.u512(5000000)])):
+def transfer_to_account(
+    node,
+    from_address: str,
+    to_address: str,
+    amount: int,
+    public_key: str,
+    private_key: str,
+    gas_price: int = 1,
+    gas_limit: int = 5000000,
+    session_contract="transfer_to_account.wasm",
+    payment_contract="standard_payment.wasm",
+    payment_args=ABI.args([ABI.u512(5000000)]),
+):
 
     session_args = ABI.args([ABI.account(bytes.fromhex(to_address)), ABI.u32(amount)])
 
-    _, deploy_hash_bytes = node.p_client.deploy(from_address=from_address,
-                                                session_contract=session_contract,
-                                                payment_contract=payment_contract,
-                                                public_key=public_key,
-                                                private_key=private_key,
-                                                gas_price=gas_price,
-                                                gas_limit=gas_limit,
-                                                session_args=session_args,
-                                                payment_args=payment_args)
+    _, deploy_hash_bytes = node.p_client.deploy(
+        from_address=from_address,
+        session_contract=session_contract,
+        payment_contract=payment_contract,
+        public_key=public_key,
+        private_key=private_key,
+        gas_price=gas_price,
+        gas_limit=gas_limit,
+        session_args=session_args,
+        payment_args=payment_args,
+    )
     deploy_hash_hex = deploy_hash_bytes.hex()
     deploy_hash_hex = deploy_hash_hex
     block_hash = node.p_client.propose().block_hash.hex()
@@ -352,43 +354,49 @@ def test_basic_transfer_to_account(payment_node_network):
 
     to_account = Account(1)
 
-    transfer_to_account(node,
-                        node.genesis_account.public_key_hex,
-                        to_account.public_key_hex,
-                        1000000,
-                        public_key=node.genesis_account.public_key_path,
-                        private_key=node.genesis_account.private_key_path)
+    transfer_to_account(
+        node,
+        node.genesis_account.public_key_hex,
+        to_account.public_key_hex,
+        1000000,
+        public_key=node.genesis_account.public_key_path,
+        private_key=node.genesis_account.private_key_path,
+    )
 
 
-def _call_pos_bonding(node,
-                      from_address: str,
-                      amount: int,
-                      public_key: str,
-                      private_key: str,
-                      gas_price: int = 1,
-                      gas_limit: int = 5000000,
-                      session_contract: str = "pos_bonding.wasm",
-                      payment_contract: str = "standard_payment.wasm",
-                      payment_args: bytes = ABI.args([ABI.u512(50000000)]),
-                      method: bytes = b'bond',
-                      nonce: int = None):
-    if method == b'bond':
+def _call_pos_bonding(
+    node,
+    from_address: str,
+    amount: int,
+    public_key: str,
+    private_key: str,
+    gas_price: int = 1,
+    gas_limit: int = 5000000,
+    session_contract: str = "pos_bonding.wasm",
+    payment_contract: str = "standard_payment.wasm",
+    payment_args: bytes = ABI.args([ABI.u512(50000000)]),
+    method: bytes = b"bond",
+    nonce: int = None,
+):
+    if method == b"bond":
         session_args = ABI.args([ABI.byte_array(method), ABI.u512(amount)])
-    elif method == b'unbond':
+    elif method == b"unbond":
         session_args = ABI.args([ABI.byte_array(method), ABI.option(ABI.u512(amount))])
     else:
         raise Exception(f"_call_pos_bonding: method {method} not supported")
 
-    node.p_client.deploy(from_address=from_address,
-                         nonce=nonce,
-                         session_contract=session_contract,
-                         payment_contract=payment_contract,
-                         gas_limit=gas_limit,
-                         gas_price=gas_price,
-                         public_key=public_key,
-                         private_key=private_key,
-                         session_args=session_args,
-                         payment_args=payment_args)
+    node.p_client.deploy(
+        from_address=from_address,
+        nonce=nonce,
+        session_contract=session_contract,
+        payment_contract=payment_contract,
+        gas_limit=gas_limit,
+        gas_price=gas_price,
+        public_key=public_key,
+        private_key=private_key,
+        session_args=session_args,
+        payment_args=payment_args,
+    )
     block_hash = node.p_client.propose().block_hash.hex()
     for deploy_info in node.p_client.show_deploys(block_hash):
         if deploy_info.is_error:
@@ -396,54 +404,62 @@ def _call_pos_bonding(node,
     return block_hash
 
 
-def bond(node,
-         from_address: str,
-         amount: int,
-         public_key: str,
-         private_key: str,
-         gas_price: int = 1,
-         gas_limit: int = 5000000,
-         session_contract: str = "pos_bonding.wasm",
-         payment_contract: str = "standard_payment.wasm",
-         payment_args: bytes = ABI.args([ABI.u512(50000000)]),
-         nonce=None):
-    return _call_pos_bonding(node,
-                             from_address,
-                             amount,
-                             public_key,
-                             private_key,
-                             gas_price,
-                             gas_limit,
-                             session_contract,
-                             payment_contract,
-                             payment_args,
-                             b'bond',
-                             nonce)
+def bond(
+    node,
+    from_address: str,
+    amount: int,
+    public_key: str,
+    private_key: str,
+    gas_price: int = 1,
+    gas_limit: int = 5000000,
+    session_contract: str = "pos_bonding.wasm",
+    payment_contract: str = "standard_payment.wasm",
+    payment_args: bytes = ABI.args([ABI.u512(50000000)]),
+    nonce=None,
+):
+    return _call_pos_bonding(
+        node,
+        from_address,
+        amount,
+        public_key,
+        private_key,
+        gas_price,
+        gas_limit,
+        session_contract,
+        payment_contract,
+        payment_args,
+        b"bond",
+        nonce,
+    )
 
 
-def unbond(node,
-           from_address: str,
-           amount: int,
-           public_key: str,
-           private_key: str,
-           gas_price: int = 1,
-           gas_limit: int = 5000000,
-           session_contract: str = "pos_bonding.wasm",
-           payment_contract: str = "standard_payment.wasm",
-           payment_args: bytes = ABI.args([ABI.u512(50000000)]),
-           nonce=None):
-    return _call_pos_bonding(node,
-                             from_address,
-                             amount,
-                             public_key,
-                             private_key,
-                             gas_price,
-                             gas_limit,
-                             session_contract,
-                             payment_contract,
-                             payment_args,
-                             b'unbond',
-                             nonce)
+def unbond(
+    node,
+    from_address: str,
+    amount: int,
+    public_key: str,
+    private_key: str,
+    gas_price: int = 1,
+    gas_limit: int = 5000000,
+    session_contract: str = "pos_bonding.wasm",
+    payment_contract: str = "standard_payment.wasm",
+    payment_args: bytes = ABI.args([ABI.u512(50000000)]),
+    nonce=None,
+):
+    return _call_pos_bonding(
+        node,
+        from_address,
+        amount,
+        public_key,
+        private_key,
+        gas_price,
+        gas_limit,
+        session_contract,
+        payment_contract,
+        payment_args,
+        b"unbond",
+        nonce,
+    )
 
 
 # A new validator bonds
@@ -463,67 +479,79 @@ def test_unbonding_then_creating_block(payment_node_network):
     bonding_account = nodes[1].config.node_account
 
     info(f"CREATE ACCOUNT MATCHING NEW VALIDATOR'S PUBLIC KEY")
-    block_hash = nodes[0].transfer_to_account(to_account_id=bonding_account.file_id,
-                                              amount=500000000,
-                                              from_account_id="genesis",
-                                              payment_contract="standard_payment.wasm",
-                                              payment_args=ABI.args([ABI.u512(5000000)]))
+    block_hash = nodes[0].transfer_to_account(
+        to_account_id=bonding_account.file_id,
+        amount=500000000,
+        from_account_id="genesis",
+        payment_contract="standard_payment.wasm",
+        payment_args=ABI.args([ABI.u512(5000000)]),
+    )
     info(f"TRANSFER block_hash={block_hash}")
     check_no_errors_in_deploys(nodes[0], block_hash)
     wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
     # Newly added node is already a validator listed in bonds.txt.
     # Deploy and propose should succeed.
-    nodes[1].p_client.deploy(from_address=bonding_account.public_key_hex,
-                             public_key=bonding_account.public_key_path,
-                             private_key=bonding_account.private_key_path,
-                             session_contract=HELLO_NAME_CONTRACT,
-                             payment_contract=PAYMENT_CONTRACT,
-                             payment_args=ABI.args([ABI.u512(5000000)]))
+    nodes[1].p_client.deploy(
+        from_address=bonding_account.public_key_hex,
+        public_key=bonding_account.public_key_path,
+        private_key=bonding_account.private_key_path,
+        session_contract=HELLO_NAME_CONTRACT,
+        payment_contract=PAYMENT_CONTRACT,
+        payment_args=ABI.args([ABI.u512(5000000)]),
+    )
     first_block_hash_after_bonding = nodes[1].p_client.propose().block_hash.hex()
     check_no_errors_in_deploys(nodes[1], first_block_hash_after_bonding)
     wait_for_block_hash_propagated_to_all_nodes(nodes, first_block_hash_after_bonding)
 
     # Unbond amount larger than validator's current stake (small 2 digit number).
     info(f"UNBONDING: {bonding_account.public_key_hex}")
-    unbonding_block_hash = unbond(nodes[0],
-                                  bonding_account.public_key_hex,
-                                  300,
-                                  bonding_account.public_key_path,
-                                  bonding_account.private_key_path)
+    unbonding_block_hash = unbond(
+        nodes[0],
+        bonding_account.public_key_hex,
+        300,
+        bonding_account.public_key_path,
+        bonding_account.private_key_path,
+    )
     check_no_errors_in_deploys(nodes[0], unbonding_block_hash)
     wait_for_block_hash_propagated_to_all_nodes(nodes, unbonding_block_hash)
 
     # Now deploy and propose is expected to fail, as validator has 0 stakes.
-    nodes[1].p_client.deploy(from_address=bonding_account.public_key_hex,
-                             public_key=bonding_account.public_key_path,
-                             private_key=bonding_account.private_key_path,
-                             session_contract=HELLO_NAME_CONTRACT,
-                             payment_contract=PAYMENT_CONTRACT,
-                             payment_args=ABI.args([ABI.u512(5000000)]))
+    nodes[1].p_client.deploy(
+        from_address=bonding_account.public_key_hex,
+        public_key=bonding_account.public_key_path,
+        private_key=bonding_account.private_key_path,
+        session_contract=HELLO_NAME_CONTRACT,
+        payment_contract=PAYMENT_CONTRACT,
+        payment_args=ABI.args([ABI.u512(5000000)]),
+    )
     with pytest.raises(InternalError) as excinfo:
         nodes[1].p_client.propose().block_hash.hex()
-    assert 'InvalidUnslashableBlock' in str(excinfo.value)
+    assert "InvalidUnslashableBlock" in str(excinfo.value)
 
     info(f"BONDING AGAIN: {bonding_account.public_key_hex}")
-    bonding_block_hash = bond(nodes[0],
-                              bonding_account.public_key_hex,
-                              100,
-                              bonding_account.public_key_path,
-                              bonding_account.private_key_path,
-                              nonce=3)
+    bonding_block_hash = bond(
+        nodes[0],
+        bonding_account.public_key_hex,
+        100,
+        bonding_account.public_key_path,
+        bonding_account.private_key_path,
+        nonce=3,
+    )
 
     info(f"BONDING block_hash={bonding_block_hash}")
     check_no_errors_in_deploys(nodes[0], bonding_block_hash)
     wait_for_block_hash_propagated_to_all_nodes(nodes, bonding_block_hash)
 
     # After bonding again deploy & propose will succeed.
-    nodes[0].p_client.deploy(from_address=bonding_account.public_key_hex,
-                             public_key=bonding_account.public_key_path,
-                             private_key=bonding_account.private_key_path,
-                             session_contract=HELLO_NAME_CONTRACT,
-                             payment_contract=PAYMENT_CONTRACT,
-                             payment_args=ABI.args([ABI.u512(5000000)]),
-                             nonce=4)
+    nodes[0].p_client.deploy(
+        from_address=bonding_account.public_key_hex,
+        public_key=bonding_account.public_key_path,
+        private_key=bonding_account.private_key_path,
+        session_contract=HELLO_NAME_CONTRACT,
+        payment_contract=PAYMENT_CONTRACT,
+        payment_args=ABI.args([ABI.u512(5000000)]),
+        nonce=4,
+    )
     block_hash = nodes[0].p_client.propose().block_hash.hex()
     check_no_errors_in_deploys(nodes[0], block_hash)
