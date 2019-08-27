@@ -1,6 +1,6 @@
 
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
 extern crate cl_std;
@@ -23,7 +23,3 @@ pub extern "C" fn call() {
         revert(1);
     }
 }
-
-
-
-

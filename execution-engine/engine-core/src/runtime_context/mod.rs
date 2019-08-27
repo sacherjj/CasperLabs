@@ -157,7 +157,7 @@ where
                 // is always able to remove keys from its own known_urefs.
                 let contract_key = Validated::new(contract_uref, Validated::valid)?;
 
-                let mut contract: Contract = {
+                let contract: Contract = {
                     let value: Value = self
                         .state
                         .borrow_mut()
@@ -177,12 +177,12 @@ where
                 self.remove_uref_from_contract(contract_uref, contract, name)
             }
             contract_hash @ Key::Hash(_) => {
-                let mut contract: Contract = self.read_gs_typed(&contract_hash)?;
+                let contract: Contract = self.read_gs_typed(&contract_hash)?;
                 self.uref_lookup.remove(name);
                 self.remove_uref_from_contract(contract_hash, contract, name)
             }
             contract_local @ Key::Local(_) => {
-                let mut contract: Contract = self.read_gs_typed(&contract_local)?;
+                let contract: Contract = self.read_gs_typed(&contract_local)?;
                 self.uref_lookup.remove(name);
                 self.remove_uref_from_contract(contract_local, contract, name)
             }

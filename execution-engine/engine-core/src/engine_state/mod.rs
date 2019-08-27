@@ -261,7 +261,7 @@ where
         let tracking_copy = match self.tracking_copy(prestate_hash) {
             Err(error) => return Ok(ExecutionResult::precondition_failure(error)),
             Ok(None) => return Err(RootNotFound(prestate_hash)),
-            Ok(Some(mut tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
+            Ok(Some(tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
         };
 
         // Get addr bytes from `address` (which is actually a Key)

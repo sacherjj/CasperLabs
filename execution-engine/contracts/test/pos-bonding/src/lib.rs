@@ -1,11 +1,10 @@
 #![no_std]
-#![feature(alloc)]
 
 #[macro_use]
 extern crate alloc;
 extern crate cl_std;
 
-use alloc::prelude::*;
+use alloc::prelude::v1::{String, Vec};
 
 use cl_std::contract_api::pointers::{ContractPointer, UPointer};
 use cl_std::contract_api::{

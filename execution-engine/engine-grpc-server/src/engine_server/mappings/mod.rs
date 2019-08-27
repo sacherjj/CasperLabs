@@ -685,7 +685,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 effect: effects,
                 cost,
             } => {
-                let mut ipc_ee = effects.into();
+                let ipc_ee = effects.into();
                 let mut deploy_result = ipc::DeployResult::new();
                 let mut execution_result = ipc::DeployResult_ExecutionResult::new();
                 execution_result.set_effects(ipc_ee);
