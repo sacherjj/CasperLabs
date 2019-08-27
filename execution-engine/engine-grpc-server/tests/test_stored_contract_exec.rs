@@ -106,7 +106,7 @@ fn should_exec_non_stored_code() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(1)
@@ -168,7 +168,7 @@ fn should_exec_stored_code_by_hash() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(1)
@@ -229,7 +229,7 @@ fn should_exec_stored_code_by_hash() {
                 stored_payment_contract_hash
                     .expect("hash should exist")
                     .to_vec(),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(2)
@@ -293,7 +293,7 @@ fn should_exec_stored_code_by_named_hash() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(1)
@@ -333,7 +333,7 @@ fn should_exec_stored_code_by_named_hash() {
             )
             .with_stored_payment_named_key(
                 STANDARD_PAYMENT_CONTRACT_NAME,
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(2)
@@ -397,7 +397,7 @@ fn should_exec_stored_code_by_named_uref() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(1)
@@ -438,7 +438,7 @@ fn should_exec_stored_code_by_named_uref() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(2)
@@ -502,7 +502,7 @@ fn should_exec_payment_and_session_stored_code() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(1)
@@ -534,7 +534,7 @@ fn should_exec_payment_and_session_stored_code() {
             )
             .with_stored_payment_named_key(
                 STANDARD_PAYMENT_CONTRACT_NAME,
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(2)
@@ -566,7 +566,7 @@ fn should_exec_payment_and_session_stored_code() {
             )
             .with_stored_payment_named_key(
                 STANDARD_PAYMENT_CONTRACT_NAME,
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(3)
@@ -628,7 +628,7 @@ fn should_produce_same_transforms_as_exec() {
                 )
                 .with_payment_code(
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                    U512::from(payment_purse_amount),
+                    (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
                 .with_nonce(1)
@@ -657,7 +657,7 @@ fn should_produce_same_transforms_as_exec() {
                 )
                 .with_payment_code(
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                    U512::from(payment_purse_amount),
+                    (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
                 .with_nonce(1)
@@ -699,7 +699,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .with_session_code(&format!("{}_stored.wasm", name), ())
                 .with_payment_code(
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                    U512::from(payment_purse_amount),
+                    (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
                 .with_nonce(nonce)
@@ -744,7 +744,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     stored_payment_contract_hash
                         .expect("hash should exist")
                         .to_vec(),
-                    U512::from(payment_purse_amount),
+                    (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
                 .with_nonce(3)
@@ -770,7 +770,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .with_session_code("do_nothing.wasm", ())
                 .with_payment_code(
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                    U512::from(payment_purse_amount),
+                    (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
                 .with_nonce(nonce)
@@ -788,7 +788,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 )
                 .with_payment_code(
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                    U512::from(payment_purse_amount),
+                    (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
                 .with_nonce(3)

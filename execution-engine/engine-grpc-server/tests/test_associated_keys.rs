@@ -31,7 +31,7 @@ fn should_manage_associated_key() {
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            ACCOUNT_1_ADDR,
+            (ACCOUNT_1_ADDR,),
         )
         .expect_success()
         .commit()
@@ -40,7 +40,7 @@ fn should_manage_associated_key() {
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            GENESIS_ADDR,
+            (GENESIS_ADDR,),
         )
         .expect_success()
         .commit();
@@ -67,7 +67,7 @@ fn should_manage_associated_key() {
             "remove_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
             2,
-            GENESIS_ADDR,
+            (GENESIS_ADDR,),
         )
         .expect_success()
         .commit();
