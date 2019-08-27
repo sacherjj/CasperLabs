@@ -497,7 +497,7 @@ object ProtoUtil {
   ): Deploy = {
     val b = Deploy
       .Body()
-      .withSession(Deploy.Code().withCode(sessionCode))
+      .withSession(Deploy.Code().withWasm(sessionCode))
       .withPayment(Deploy.Code())
     val h = Deploy
       .Header()
@@ -536,11 +536,19 @@ object ProtoUtil {
     authorizationKeys = d.approvals.map(_.approverPublicKey)
   )
 
-  def deployCodeToDeployPayload(code: Deploy.Code): ipc.DeployPayload =
-    code match {
-      case Deploy.Code(code, args) =>
-        ipc.DeployPayload(ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(code, args)))
+  def deployCodeToDeployPayload(code: Deploy.Code): ipc.DeployPayload = {
+    val payload = code.contract match {
+      case Deploy.Code.Contract.Wasm(wasm) =>
+        ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, code.args))
+      case Deploy.Code.Contract.Hash(hash) =>
+        ipc.DeployPayload.Payload.StoredContractHash(ipc.StoredContractHash(hash, code.args))
+      case Deploy.Code.Contract.Name(name) =>
+        ipc.DeployPayload.Payload.StoredContractName(ipc.StoredContractName(name, code.args))
+      case Deploy.Code.Contract.Empty =>
+        ipc.DeployPayload.Payload.Empty
     }
+    ipc.DeployPayload(payload)
+  }
 
   def dependenciesHashesOf(b: Block): List[BlockHash] = {
     val missingParents = parentHashes(b).toSet

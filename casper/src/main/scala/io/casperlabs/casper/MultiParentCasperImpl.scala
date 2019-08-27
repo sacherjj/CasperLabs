@@ -296,13 +296,18 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
     case Some(_) =>
       (deploy.getBody.session, deploy.getBody.payment) match {
         case (Some(session), Some(payment)) =>
-          val req =
-            ExecutionEngineService[F].verifyWasm(ValidateRequest(session.code, payment.code))
+          val req: F[Either[String, Unit]] =
+            if (session.contract.isWasm && payment.contract.isWasm)
+              ExecutionEngineService[F]
+                .verifyWasm(ValidateRequest(session.getWasm, payment.getWasm))
+            else
+              Log[F].warn("Cannot verify contracts unless both are Wasm.").as(().asRight[String])
 
           EitherT(req)
             .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
             .flatMapF(_ => addDeploy(deploy))
             .value
+
         case (None, _) | (_, None) =>
           new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
             .asLeft[Unit]
