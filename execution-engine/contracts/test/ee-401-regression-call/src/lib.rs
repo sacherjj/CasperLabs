@@ -11,11 +11,6 @@ use cl_std::contract_api::pointers::{ContractPointer, UPointer};
 use cl_std::key::Key;
 use cl_std::uref::URef;
 
-// const CONTRACT_HASH: [u8; 32] = [
-//     94, 95, 50, 162, 218, 237, 110, 252, 109, 151, 87, 89, 218, 215, 97, 65, 124, 183, 21, 252,
-//     197, 6, 112, 204, 31, 83, 118, 122, 225, 214, 26, 52,
-// ];
-
 enum Error {
     HelloExtNotFound = 1,
     InvalidURef = 2,
