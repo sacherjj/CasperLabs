@@ -108,7 +108,9 @@
 
 use std::path::PathBuf;
 
-use crate::lmdb::{self, Database, DatabaseFlags, Environment, RoTransaction, RwTransaction, WriteFlags};
+use crate::lmdb::{
+    self, Database, DatabaseFlags, Environment, RoTransaction, RwTransaction, WriteFlags,
+};
 
 use contract_ffi::bytesrepr::{deserialize, FromBytes, ToBytes};
 

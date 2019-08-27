@@ -583,8 +583,8 @@ mod read {
     //! [`full_tries`] modules for more info.
 
     use super::*;
-    use error;
     use crate::trie_store::in_memory;
+    use error;
 
     mod partial_tries {
         //! Here we construct 6 separate "partial" tries, increasing in size
@@ -707,9 +707,9 @@ mod scan {
     use engine_shared::newtypes::Blake2bHash;
 
     use super::*;
-    use error;
     use crate::trie_store::in_memory;
     use crate::trie_store::operations::{scan, TrieScan};
+    use error;
 
     fn check_scan<'a, R, S, E>(
         correlation_id: CorrelationId,

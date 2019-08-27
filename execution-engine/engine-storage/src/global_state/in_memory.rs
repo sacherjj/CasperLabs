@@ -2,10 +2,6 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use contract_ffi::key::Key;
-use contract_ffi::value::Value;
-use engine_shared::newtypes::{Blake2bHash, CorrelationId};
-use engine_shared::transform::Transform;
 use crate::error;
 use crate::global_state::StateReader;
 use crate::global_state::{commit, CommitResult, History};
@@ -16,6 +12,10 @@ use crate::trie_store::in_memory::{
 };
 use crate::trie_store::operations::{read, write, ReadResult, WriteResult};
 use crate::trie_store::{Transaction, TransactionSource, TrieStore};
+use contract_ffi::key::Key;
+use contract_ffi::value::Value;
+use engine_shared::newtypes::{Blake2bHash, CorrelationId};
+use engine_shared::transform::Transform;
 
 /// Represents a "view" of global state at a particular root hash.
 pub struct InMemoryGlobalState {

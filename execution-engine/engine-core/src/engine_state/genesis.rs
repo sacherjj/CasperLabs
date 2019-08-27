@@ -6,6 +6,10 @@ use std::fmt;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;
 
+use crate::engine_state::execution_effect::ExecutionEffect;
+use crate::engine_state::op::Op;
+use crate::engine_state::utils::WasmiBytes;
+use crate::execution;
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
@@ -13,11 +17,7 @@ use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Account, Contract, Value, U512};
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{Transform, TypeMismatch};
-use crate::engine_state::execution_effect::ExecutionEffect;
-use crate::engine_state::op::Op;
-use crate::engine_state::utils::WasmiBytes;
 use engine_storage::global_state::CommitResult;
-use crate::execution;
 
 pub const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 pub const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
@@ -369,11 +369,6 @@ mod tests {
     use std::collections::btree_map::BTreeMap;
     use std::collections::HashMap;
 
-    use contract_ffi::key::Key;
-    use contract_ffi::value::account::PublicKey;
-    use contract_ffi::value::{Contract, Value, U512};
-    use engine_shared::test_utils;
-    use engine_shared::transform::Transform;
     use crate::engine_state::create_genesis_effects;
     use crate::engine_state::genesis::{
         GenesisURefsSource, GENESIS_ACCOUNT_PURSE, MINT_GENESIS_ACCOUNT_BALANCE_UREF,
@@ -382,6 +377,11 @@ mod tests {
         POS_PRIVATE_ADDRESS, POS_PUBLIC_ADDRESS,
     };
     use crate::engine_state::utils::{pos_validator_key, WasmiBytes};
+    use contract_ffi::key::Key;
+    use contract_ffi::value::account::PublicKey;
+    use contract_ffi::value::{Contract, Value, U512};
+    use engine_shared::test_utils;
+    use engine_shared::transform::Transform;
     use engine_wasm_prep::wasm_costs::WasmCosts;
 
     use super::{create_local_key, POS_BONDING_PURSE};
@@ -799,5 +799,4 @@ mod tests {
             "create_pos_effects should store POS_BONDING_PURSE in PoS contract's known urefs map."
         );
     }
-
 }

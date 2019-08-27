@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use parity_wasm::elements::Module;
 
+use crate::engine_state::execution_result::ExecutionResult;
 use contract_ffi::bytesrepr::deserialize;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
@@ -11,7 +12,6 @@ use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::{Account, Value};
 use engine_shared::newtypes::CorrelationId;
-use crate::engine_state::execution_result::ExecutionResult;
 use engine_storage::global_state::StateReader;
 
 use super::Error;

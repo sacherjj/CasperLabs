@@ -615,5 +615,4 @@ mod proptests {
             assert!(test_serialization_roundtrip(&phase));
         }
     }
-
 }

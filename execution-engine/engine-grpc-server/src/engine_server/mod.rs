@@ -6,6 +6,7 @@ use std::io::ErrorKind;
 use std::marker::{Send, Sync};
 use std::time::Instant;
 
+use crate::engine_server::ipc::CommitResponse;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::U512;
@@ -17,7 +18,6 @@ use engine_core::engine_state::{
 };
 use engine_core::execution::{Executor, WasmiExecutor};
 use engine_core::tracking_copy::QueryResult;
-use crate::engine_server::ipc::CommitResponse;
 use engine_shared::logging;
 use engine_shared::logging::{log_duration, log_info};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
