@@ -527,14 +527,20 @@ object ProtoUtil {
   // Later, post DEV NET, conversion rate will be part of a deploy.
   val GAS_PRICE = 10L
 
-  def deployDataToEEDeploy(d: Deploy): ipc.Deploy = ipc.Deploy(
+  def deployDataToEEDeploy(d: Deploy): ipc.DeployItem = ipc.DeployItem(
     address = d.getHeader.accountPublicKey,
-    session = d.getBody.session.map { case Deploy.Code(code, args) => ipc.DeployCode(code, args) },
-    payment = d.getBody.payment.map { case Deploy.Code(code, args) => ipc.DeployCode(code, args) },
+    session = d.getBody.session.map(deployCodeToDeployPayload),
+    payment = d.getBody.payment.map(deployCodeToDeployPayload),
     gasPrice = GAS_PRICE,
     nonce = d.getHeader.nonce,
     authorizationKeys = d.approvals.map(_.approverPublicKey)
   )
+
+  def deployCodeToDeployPayload(code: Deploy.Code): ipc.DeployPayload =
+    code match {
+      case Deploy.Code(code, args) =>
+        ipc.DeployPayload(ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(code, args)))
+    }
 
   def dependenciesHashesOf(b: Block): List[BlockHash] = {
     val missingParents = parentHashes(b).toSet

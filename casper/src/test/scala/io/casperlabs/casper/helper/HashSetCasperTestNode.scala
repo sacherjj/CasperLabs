@@ -288,12 +288,17 @@ object HashSetCasperTestNode {
       private val zero  = Array.fill(32)(0.toByte)
       private val bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
-      private def getExecutionEffect(deploy: ipc.Deploy) = {
+      private def getExecutionEffect(deploy: ipc.DeployItem) = {
         // The real execution engine will get the keys from what the code changes, which will include
         // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
         // here isn't more specific to a deploy then the real thing would be.
+        val code = deploy.getSession.payload match {
+          case ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(code, _)) =>
+            code
+          case _ => sys.error("Expected DeployPayload.Code")
+        }
         val key = Key(
-          Key.Value.Hash(Key.Hash(deploy.session.fold(ByteString.EMPTY)(_.code)))
+          Key.Value.Hash(Key.Hash(code))
         )
         val (op, transform) = if (!generateConflict) {
           Op(Op.OpInstance.Read(ReadOp())) ->
@@ -315,7 +320,7 @@ object HashSetCasperTestNode {
 
       // Validate that account's nonces increment monotonically by 1.
       // Assumes that any account address already exists in the GlobalState with nonce = 0.
-      private def validateNonce(deploy: ipc.Deploy): Int = synchronized {
+      private def validateNonce(deploy: ipc.DeployItem): Int = synchronized {
         if (!validateNonces) {
           0
         } else {
@@ -334,7 +339,7 @@ object HashSetCasperTestNode {
       override def exec(
           prestate: ByteString,
           blocktime: Long,
-          deploys: Seq[ipc.Deploy],
+          deploys: Seq[ipc.DeployItem],
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =
         //This function returns the same `DeployResult` for all deploys,
@@ -363,7 +368,7 @@ object HashSetCasperTestNode {
           .pure[F]
 
       override def runGenesis(
-          deploys: Seq[ipc.Deploy],
+          deploys: Seq[ipc.DeployItem],
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, GenesisResult]] =
         commit(emptyStateHash, Seq.empty).map {
