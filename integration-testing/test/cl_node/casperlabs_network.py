@@ -263,14 +263,6 @@ class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
     initial_motes = 10 ** 3
 
 
-class PaymentNodForOnlyPaymentContract(OneNodeNetwork):
-    """ A single node network with payment code enabled"""
-
-    is_payment_code_enabled = True
-    # enough to run payment, but not enough to run session
-    initial_motes = 3093878
-
-
 class TwoNodeNetwork(CasperLabsNetwork):
     def create_cl_network(self):
         kp = self.get_key()
