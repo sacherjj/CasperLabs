@@ -39,8 +39,8 @@ fn should_run_get_payment_purse_contract_account_1() {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            ACCOUNT_1_ADDR,
             [2u8; 32],
+            ACCOUNT_1_ADDR,
         )
         .expect_success()
         .commit()

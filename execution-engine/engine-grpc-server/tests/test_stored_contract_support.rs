@@ -27,6 +27,7 @@ use casperlabs_engine_grpc_server::engine_server::mappings::{
 use casperlabs_engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState};
+use engine_core::execution::POS_NAME;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -936,6 +937,54 @@ impl WasmTestBuilder {
 
     pub fn finish(&self) -> WasmTestResult {
         WasmTestResult(self.clone())
+    }
+
+    pub fn get_pos_contract(&self) -> contract_ffi::value::contract::Contract {
+        let genesis_account = self
+            .genesis_account
+            .clone()
+            .expect("should run genesis process first");
+        let genesis_key = contract_ffi::key::Key::Account(genesis_account.pub_key());
+        let pos_uref: contract_ffi::key::Key = self
+            .query(None, genesis_key, &[POS_NAME])
+            .and_then(|v| v.try_into().ok())
+            .expect("should find PoS URef");
+
+        self.query(None, pos_uref, &[])
+            .and_then(|v| v.try_into().ok())
+            .expect("should find PoS Contract")
+    }
+
+    pub fn get_purse_balance(
+        &self,
+        purse_id: contract_ffi::value::account::PurseId,
+    ) -> contract_ffi::value::uint::U512 {
+        let mint = self.get_mint_contract_uref();
+        let purse_addr = purse_id.value().addr();
+        let purse_bytes = contract_ffi::bytesrepr::ToBytes::to_bytes(&purse_addr)
+            .expect("should be able to serialize purse bytes");
+        let balance_mapping_key = contract_ffi::key::Key::local(mint.addr(), &purse_bytes);
+        let balance_uref = self
+            .query(None, balance_mapping_key, &[])
+            .and_then(|v| v.try_into().ok())
+            .expect("should find balance uref");
+
+        self.query(None, balance_uref, &[])
+            .and_then(|v| v.try_into().ok())
+            .expect("should parse balance into a U512")
+    }
+
+    pub fn get_account(
+        &self,
+        key: contract_ffi::key::Key,
+    ) -> Option<contract_ffi::value::account::Account> {
+        let account_value = self.query(None, key, &[]).expect("should query account");
+
+        if let contract_ffi::value::Value::Account(account) = account_value {
+            Some(account)
+        } else {
+            None
+        }
     }
 }
 

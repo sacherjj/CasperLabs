@@ -32,6 +32,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, U512::from(transferred_amount)),
@@ -73,6 +74,7 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             // empty authorization keys to force error
             .with_authorization_keys(&[])
             .build();
@@ -113,6 +115,7 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, U512::from(transferred_amount)),
