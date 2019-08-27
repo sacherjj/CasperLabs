@@ -8,7 +8,7 @@ from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.casperlabs_network import OneNodeNetwork
 from test.cl_node.casperlabs_accounts import Account
 from test.cl_node.wait import wait_for_block_hash_propagated_to_all_nodes
-from casperlabs_client import ABI, InternalError, hexify
+from casperlabs_client import ABI, InternalError
 
 from typing import List
 import logging
@@ -472,20 +472,8 @@ def test_unbonding_then_creating_block(payment_node_network):
     check_no_errors_in_deploys(nodes[0], block_hash)
     wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
-    response = nodes[0].p_client.query_state(block_hash, bonding_account.public_key_hex, "", "address")
-    info(f"GLOBAL STATE:\n {hexify(response)}")
-
-    info(f"BONDING: {bonding_account.public_key_hex}")
-    bonding_block_hash = bond(nodes[0],
-                              bonding_account.public_key_hex,
-                              100,
-                              bonding_account.public_key_path,
-                              bonding_account.private_key_path)
-
-    info(f"BONDING block_hash={bonding_block_hash}")
-    check_no_errors_in_deploys(nodes[0], bonding_block_hash)
-    wait_for_block_hash_propagated_to_all_nodes(nodes, bonding_block_hash)
-
+    # Newly added node is already a validator listed in bonds.txt.
+    # Deploy and propose should succeed.
     nodes[1].p_client.deploy(from_address=bonding_account.public_key_hex,
                              public_key=bonding_account.public_key_path,
                              private_key=bonding_account.private_key_path,
@@ -493,10 +481,10 @@ def test_unbonding_then_creating_block(payment_node_network):
                              payment_contract=PAYMENT_CONTRACT,
                              payment_args=ABI.args([ABI.u512(5000000)]))
     first_block_hash_after_bonding = nodes[1].p_client.propose().block_hash.hex()
-    info(f"AFTER BONDING block_hash={first_block_hash_after_bonding}")
     check_no_errors_in_deploys(nodes[1], first_block_hash_after_bonding)
     wait_for_block_hash_propagated_to_all_nodes(nodes, first_block_hash_after_bonding)
 
+    # Unbond amount larger than validator's current stake (small 2 digit number).
     info(f"UNBONDING: {bonding_account.public_key_hex}")
     unbonding_block_hash = unbond(nodes[0],
                                   bonding_account.public_key_hex,
@@ -506,6 +494,7 @@ def test_unbonding_then_creating_block(payment_node_network):
     check_no_errors_in_deploys(nodes[0], unbonding_block_hash)
     wait_for_block_hash_propagated_to_all_nodes(nodes, unbonding_block_hash)
 
+    # Now deploy and propose is expected to fail, as validator has 0 stakes.
     nodes[1].p_client.deploy(from_address=bonding_account.public_key_hex,
                              public_key=bonding_account.public_key_path,
                              private_key=bonding_account.private_key_path,
@@ -522,18 +511,19 @@ def test_unbonding_then_creating_block(payment_node_network):
                               100,
                               bonding_account.public_key_path,
                               bonding_account.private_key_path,
-                              nonce=4)
+                              nonce=3)
 
     info(f"BONDING block_hash={bonding_block_hash}")
     check_no_errors_in_deploys(nodes[0], bonding_block_hash)
     wait_for_block_hash_propagated_to_all_nodes(nodes, bonding_block_hash)
 
+    # After bonding again deploy & propose will succeed.
     nodes[0].p_client.deploy(from_address=bonding_account.public_key_hex,
                              public_key=bonding_account.public_key_path,
                              private_key=bonding_account.private_key_path,
                              session_contract=HELLO_NAME_CONTRACT,
                              payment_contract=PAYMENT_CONTRACT,
                              payment_args=ABI.args([ABI.u512(5000000)]),
-                             nonce=5)
+                             nonce=4)
     block_hash = nodes[0].p_client.propose().block_hash.hex()
     check_no_errors_in_deploys(nodes[0], block_hash)
