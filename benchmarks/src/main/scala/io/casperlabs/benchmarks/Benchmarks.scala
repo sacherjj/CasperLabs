@@ -7,7 +7,6 @@ import java.nio.file.StandardOpenOption
 import cats._
 import cats.effect.{Sync, Timer}
 import cats.implicits._
-import cats.temp.par._
 import io.casperlabs.client.{DeployRuntime, DeployService}
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -22,13 +21,13 @@ object Benchmarks {
   /** Each round consists of many token transfer deploys from different accounts to single recipient
     * TODO: Remove Sync
     *  */
-  def run[F[_]: Log: DeployService: Par: Timer: FilesAPI: Monad: Sync](
+  def run[F[_]: Log: DeployService: Timer: FilesAPI: Monad: Sync](
       outputStats: File,
       initialFundsPrivateKeyFile: File,
       initialFundsPublicKeyFile: File,
       accountsNum: Int = 250,
       roundsNum: Int = 100,
-      approximateTransferCost: Long = 100000
+      approximateTransferCost: Long = 10000000
   ): F[Unit] = {
     // TODO: Probably can cause overflow problems, for the time being it can stay as is.
     val initialFundsPerAccount = roundsNum * approximateTransferCost
@@ -106,7 +105,7 @@ object Benchmarks {
     def oneRoundTransfer(nonce: Long): F[Unit] =
       for {
         _ <- Log[F].info("Sending deploys...")
-        _ <- senders.parTraverse {
+        _ <- senders.traverse {
               case (sk, pk) =>
                 send(
                   nonce = nonce,
