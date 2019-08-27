@@ -20,6 +20,7 @@ from grpc._channel import _Rendezvous
 import functools
 from pyblake2 import blake2b
 import ed25519
+from Crypto.Hash import keccak
 import base64
 import struct
 import json
@@ -177,6 +178,12 @@ def read_pem_key(file_name: str):
         s = [l for l in f.readlines() if l and not l.startswith("-----")][0].strip()
         r = base64.b64decode(s)
         return len(r) % 32 == 0 and r[:32] or r[-32:]
+
+
+def keccak_hash(s: str):
+    h = keccak.new(digest_bits=256)
+    h.update(s)
+    return h.hexdigest()
 
 
 class InternalError(Exception):
