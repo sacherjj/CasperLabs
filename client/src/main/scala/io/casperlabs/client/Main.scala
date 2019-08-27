@@ -52,24 +52,28 @@ object Main {
           amount,
           nonce,
           contractCode,
+          paymentCode,
           privateKey
           ) =>
         DeployRuntime.unbond(
           amount,
           nonce,
           contractCode,
+          paymentCode,
           privateKey
         )
       case Bond(
           amount,
           nonce,
           contractCode,
+          paymentCode,
           privateKey
           ) =>
         DeployRuntime.bond(
           amount,
           nonce,
           contractCode,
+          paymentCode,
           privateKey
         )
       case Transfer(
@@ -77,11 +81,13 @@ object Main {
           recipientPublicKeyBase64,
           nonce,
           contractCode,
+          paymentCode,
           privateKey
           ) =>
         DeployRuntime.transferCLI(
           nonce,
           contractCode,
+          paymentCode,
           privateKey,
           recipientPublicKeyBase64,
           amount
@@ -99,7 +105,7 @@ object Main {
           from,
           nonce,
           Files.readAllBytes(sessionCode.toPath),
-          Files.readAllBytes(paymentCode.toPath),
+          paymentCode,
           maybePublicKey.map(
             file =>
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PublicKey]
