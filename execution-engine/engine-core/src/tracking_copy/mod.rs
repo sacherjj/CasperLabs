@@ -112,6 +112,12 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         }
     }
 
+    /// Creates a new TrackingCopy, using this one (including its mutations)
+    /// as the base state to read against.
+    pub fn fork(&self) -> TrackingCopy<&TrackingCopy<R>> {
+        TrackingCopy::new(self)
+    }
+
     pub fn get(
         &mut self,
         correlation_id: CorrelationId,
@@ -290,5 +296,20 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
             error_msg.push_str(p);
         }
         error_msg
+    }
+}
+
+impl<R: StateReader<Key, Value>> StateReader<Key, Value> for &TrackingCopy<R> {
+    type Error = R::Error;
+
+    fn read(&self, correlation_id: CorrelationId, key: &Key) -> Result<Option<Value>, Self::Error> {
+        if let Some(value) = self.cache.muts_cached.get(key) {
+            return Ok(Some(value.to_owned()));
+        }
+        if let Some(value) = self.reader.read(correlation_id, key)? {
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
     }
 }

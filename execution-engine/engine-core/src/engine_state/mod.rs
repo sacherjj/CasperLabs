@@ -575,6 +575,9 @@ where
             return Ok(failure);
         }
 
+        let post_payment_tc = tracking_copy.borrow();
+        let session_tc = Rc::new(RefCell::new(post_payment_tc.fork()));
+
         // session_code_spec_2: execute session code
         let session_result = {
             // payment_code_spec_3_b_i: if (balance of PoS pay purse) >= (gas spent during payment code execution) * conv_rate, yes session
@@ -592,9 +595,17 @@ where
                 session_gas_limit,
                 protocol_version,
                 correlation_id,
-                Rc::clone(&tracking_copy),
+                Rc::clone(&session_tc),
                 Phase::Session,
             )
+        };
+
+        let post_session_rc = if session_result.is_failure() {
+            // If session code fails we do not include its effects,
+            // so we start again from the post-payment state.
+            Rc::new(RefCell::new(post_payment_tc.fork()))
+        } else {
+            session_tc
         };
 
         let _session_result_cost = session_result.cost();
@@ -604,6 +615,9 @@ where
 
         // payment_code_spec_5: run finalize process
         let finalize_result = {
+            let post_session_tc = post_session_rc.borrow();
+            let finalization_tc = Rc::new(RefCell::new(post_session_tc.fork()));
+
             // validation_spec_1: valid wasm bytes
             let proof_of_stake_module =
                 match preprocessor.deserialize(&proof_of_stake_info.module_bytes()) {
@@ -623,7 +637,7 @@ where
 
             // The PoS keys may have changed because of effects during payment and/or session,
             // so we need to look them up again from the tracking copy
-            let mut proof_of_stake_keys = tracking_copy
+            let mut proof_of_stake_keys = finalization_tc
                 .borrow_mut()
                 .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
                 .expect("PoS must be found because we found it earlier")
@@ -642,7 +656,7 @@ where
                 std::u64::MAX, // <-- this execution should be unlimited but approximating
                 protocol_version,
                 correlation_id,
-                Rc::clone(&tracking_copy),
+                finalization_tc,
                 Phase::FinalizePayment,
             )
         };
