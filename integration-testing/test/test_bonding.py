@@ -517,10 +517,14 @@ def test_unbonding_then_creating_block(payment_node_network):
     wait_for_block_hash_propagated_to_all_nodes(nodes, unbonding_block_hash)
 
     # Now deploy and propose is expected to fail, as validator has 0 stakes.
+    # Use a different account because otherwise the deploy will get stuck
+    # in the deploy buffer and we will not be able to make a new deploy
+    # later from the same account on this node.
+    genesis_account = nodes[1].genesis_account
     nodes[1].p_client.deploy(
-        from_address=bonding_account.public_key_hex,
-        public_key=bonding_account.public_key_path,
-        private_key=bonding_account.private_key_path,
+        from_address=genesis_account.public_key_hex,
+        public_key=genesis_account.public_key_path,
+        private_key=genesis_account.private_key_path,
         session_contract=HELLO_NAME_CONTRACT,
         payment_contract=PAYMENT_CONTRACT,
         payment_args=ABI.args([ABI.u512(5000000)]),
@@ -544,14 +548,14 @@ def test_unbonding_then_creating_block(payment_node_network):
     wait_for_block_hash_propagated_to_all_nodes(nodes, bonding_block_hash)
 
     # After bonding again deploy & propose will succeed.
-    nodes[0].p_client.deploy(
+    nodes[1].p_client.deploy(
         from_address=bonding_account.public_key_hex,
         public_key=bonding_account.public_key_path,
         private_key=bonding_account.private_key_path,
         session_contract=HELLO_NAME_CONTRACT,
         payment_contract=PAYMENT_CONTRACT,
         payment_args=ABI.args([ABI.u512(5000000)]),
-        nonce=4,
+        nonce=3,
     )
-    block_hash = nodes[0].p_client.propose().block_hash.hex()
-    check_no_errors_in_deploys(nodes[0], block_hash)
+    block_hash = nodes[1].p_client.propose().block_hash.hex()
+    check_no_errors_in_deploys(nodes[1], block_hash)
