@@ -159,8 +159,8 @@ trait ArbitraryConsensus {
   implicit def arbDeploy(implicit c: ConsensusConfig): Arbitrary[Deploy] = Arbitrary {
     for {
       accountKeys <- Gen.oneOf(randomAccounts)
-      nonce       <- arbitrary[Long]
-      timestamp   <- arbitrary[Long]
+      nonce       <- Gen.choose(0L, Long.MaxValue)
+      timestamp   <- Gen.choose(0L, Long.MaxValue)
       gasPrice    <- arbitrary[Long]
       sessionCode <- Gen.choose(0, c.maxSessionCodeBytes).flatMap(genBytes(_))
       paymentCode <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
