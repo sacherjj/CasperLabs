@@ -5,7 +5,7 @@ from docker import DockerClient
 
 
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, Account
-from test.cl_node.common import random_string
+from test.cl_node.common import random_string, BOOTSTRAP_PATH
 
 
 DEFAULT_NODE_ENV = {
@@ -52,15 +52,11 @@ class DockerConfig:
         if java_options is not None:
             self.node_env["_JAVA_OPTIONS"] = java_options
 
-    @property
-    def bootstrap_path(self):
-        return "/root/.casperlabs/bootstrap"
-
     def tls_certificate_path(self):
-        return f"{self.bootstrap_path}/node-{self.number}.certificate.pem"
+        return f"{BOOTSTRAP_PATH}/node-{self.number}.certificate.pem"
 
     def tls_key_path(self):
-        return f"{self.bootstrap_path}/node-{self.number}.key.pem"
+        return f"{BOOTSTRAP_PATH}/node-{self.number}.key.pem"
 
     def tls_certificate_local_path(self):
         return f"resources/bootstrap_certificate/node-{self.number}.certificate.pem"
