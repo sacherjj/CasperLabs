@@ -11,6 +11,7 @@ pub enum Error {
     SpreadTooHigh,
     /// Returned when there is another QueueEntry in a Queue, for validator making a request.
     MultipleRequests,
+    BondTooSmall,
     BondTooLarge,
     UnbondTooLarge,
     BondTransferFailed,
@@ -54,6 +55,7 @@ impl Into<u32> for Error {
             Error::UnbondTooLarge => 6,
             Error::BondTransferFailed => 7,
             Error::UnbondTransferFailed => 8,
+            Error::BondTooSmall => 9,
             // System errors
             Error::TimeWentBackwards => 256, // 0x100
             Error::StakesNotFound => 257,
