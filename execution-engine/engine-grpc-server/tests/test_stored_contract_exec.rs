@@ -293,7 +293,7 @@ fn should_exec_stored_code_by_uref() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(1)
@@ -376,7 +376,7 @@ fn should_exec_stored_code_by_uref() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(2)
@@ -771,7 +771,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(1)
@@ -840,7 +840,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(2)
@@ -867,7 +867,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                U512::from(payment_purse_amount),
+                (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(2)
