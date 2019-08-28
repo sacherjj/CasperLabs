@@ -54,8 +54,7 @@ class CLI:
         self.cli_cmd = cli_cmd
         self.grpc_encryption = grpc_encryption
 
-        cert_file_name = f"resources/bootstrap_certificate/node-{self.node.config.number}.certificate.pem"
-        cert_dict = ssl._ssl._test_decode_cert(cert_file_name)
+        cert_dict = ssl._ssl._test_decode_cert(node.config.tls_certificate_local_path())
         common_name = [
             t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"
         ][0]

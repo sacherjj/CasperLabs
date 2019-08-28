@@ -62,6 +62,9 @@ class DockerConfig:
     def tls_key_path(self):
         return f"{self.bootstrap_path}/node-{self.number}.key.pem"
 
+    def tls_certificate_local_path(self):
+        return f"resources/bootstrap_certificate/node-{self.number}.certificate.pem"
+
     def node_command_options(self, server_host: str) -> dict:
         options = {
             "--server-default-timeout": "10second",
