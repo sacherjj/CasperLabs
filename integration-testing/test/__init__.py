@@ -4,7 +4,6 @@ import logging
 import subprocess
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
 from pyblake2 import blake2b
-from casperlabs_client import keccak_hash
 import ssl
 
 
@@ -55,14 +54,12 @@ class CLI:
         self.cli_cmd = cli_cmd
         self.grpc_encryption = grpc_encryption
 
-        # TODO:
-        cert_file_name = "./resources/bootstrap_certificate/node-0.certificate.pem"
+        cert_file_name = f"resources/bootstrap_certificate/node-{self.node.config.number}.certificate.pem"
         cert_dict = ssl._ssl._test_decode_cert(cert_file_name)
         common_name = [
             t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"
         ][0]
-        # common_name == '4d802045c3e4d2e031f25878517bc8e2c9710ee7'
-        self.node_id = keccak_hash(bytes.fromhex(common_name))
+        self.node_id = common_name
 
     def expand_args(self, args):
         connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
