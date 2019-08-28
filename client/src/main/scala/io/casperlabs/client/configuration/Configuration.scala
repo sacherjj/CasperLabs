@@ -1,5 +1,10 @@
 package io.casperlabs.client.configuration
-import java.io.File
+import com.google.protobuf.ByteString
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, InputStream}
+import java.nio.file.Files
+import io.casperlabs.client.configuration.Options.ContractArgs
+import io.casperlabs.casper.consensus.Deploy.Code.Contract
+import org.apache.commons.io._
 
 final case class ConnectOptions(
     host: String,
@@ -8,14 +13,53 @@ final case class ConnectOptions(
     nodeId: Option[String]
 )
 
+final case class ContractOptions(
+    file: Option[File],
+    resource: Option[String]
+)
+
+final case class Contracts(
+    sessionOptions: ContractOptions,
+    paymentOptions: ContractOptions
+) {
+  lazy val session = Contracts.toContract(sessionOptions)
+  lazy val payment = Contracts.toContract(paymentOptions)
+}
+object Contracts {
+  def apply(args: ContractArgs, sessionResource: Option[String]): Contracts =
+    Contracts(
+      ContractOptions(args.session.toOption, sessionResource),
+      ContractOptions(args.payment.toOption, None)
+    )
+
+  def toContract(opts: ContractOptions): Contract =
+    opts.file.map { f =>
+      val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
+      Contract.Wasm(wasm)
+    } orElse {
+      opts.resource.map { n =>
+        val wasm =
+          ByteString.copyFrom(consumeInputStream(getClass.getClassLoader.getResourceAsStream(n)))
+        Contract.Wasm(wasm)
+      }
+    } getOrElse {
+      Contract.Empty
+    }
+
+  private def consumeInputStream(is: InputStream): Array[Byte] = {
+    val baos = new ByteArrayOutputStream()
+    IOUtils.copy(is, baos)
+    baos.toByteArray
+  }
+}
+
 sealed trait Configuration
 
 final case class MakeDeploy(
     from: Option[String],
     publicKey: Option[File],
     nonce: Long,
-    sessionCode: File,
-    paymentCode: File,
+    contracts: Contracts,
     gasPrice: Long,
     deployPath: Option[File]
 ) extends Configuration
@@ -27,8 +71,7 @@ final case class SendDeploy(
 final case class Deploy(
     from: Option[String],
     nonce: Long,
-    sessionCode: File,
-    paymentCode: Option[File],
+    contracts: Contracts,
     publicKey: Option[File],
     privateKey: Option[File],
     gasPrice: Long
@@ -52,23 +95,20 @@ final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
     nonce: Long,
-    sessionCode: Option[File],
-    paymentCode: Option[File],
+    contracts: Contracts,
     privateKey: File
 ) extends Configuration
 final case class Transfer(
     amount: Long,
     recipientPublicKeyBase64: String,
     nonce: Long,
-    sessionCode: Option[File],
-    paymentCode: Option[File],
+    contracts: Contracts,
     privateKey: File
 ) extends Configuration
 final case class Unbond(
     amount: Option[Long],
     nonce: Long,
-    sessionCode: Option[File],
-    paymentCode: Option[File],
+    contracts: Contracts,
     privateKey: File
 ) extends Configuration
 final case class VisualizeDag(
@@ -93,6 +133,10 @@ final case class Query(
 ) extends Configuration
 
 object Configuration {
+  val BONDING_WASM_FILE   = "bonding.wasm"
+  val UNBONDING_WASM_FILE = "unbonding.wasm"
+  val TRANSFER_WASM_FILE  = "transfer_to_account.wasm"
+
   def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
     val options = Options(args)
     val connect = ConnectOptions(
@@ -106,8 +150,7 @@ object Configuration {
         Deploy(
           options.deploy.from.toOption,
           options.deploy.nonce(),
-          options.deploy.session(),
-          options.deploy.payment.toOption,
+          Contracts(options.deploy, None),
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption,
           options.deploy.gasPrice()
@@ -117,8 +160,7 @@ object Configuration {
           options.makeDeploy.from.toOption,
           options.makeDeploy.publicKey.toOption,
           options.makeDeploy.nonce(),
-          options.makeDeploy.session(),
-          options.makeDeploy.payment(),
+          Contracts(options.makeDeploy, None),
           options.makeDeploy.gasPrice(),
           options.makeDeploy.deployPath.toOption
         )
@@ -145,16 +187,14 @@ object Configuration {
         Unbond(
           options.unbond.amount.toOption,
           options.unbond.nonce(),
-          options.unbond.session.toOption,
-          options.unbond.payment.toOption,
+          Contracts(options.unbond, Some(UNBONDING_WASM_FILE)),
           options.unbond.privateKey()
         )
       case options.bond =>
         Bond(
           options.bond.amount(),
           options.bond.nonce(),
-          options.bond.session.toOption,
-          options.bond.payment.toOption,
+          Contracts(options.bond, Some(BONDING_WASM_FILE)),
           options.bond.privateKey()
         )
       case options.transfer =>
@@ -162,8 +202,7 @@ object Configuration {
           options.transfer.amount(),
           options.transfer.targetAccount(),
           options.transfer.nonce(),
-          options.transfer.session.toOption,
-          options.transfer.payment.toOption,
+          Contracts(options.transfer, Some(TRANSFER_WASM_FILE)),
           options.transfer.privateKey()
         )
       case options.visualizeBlocks =>

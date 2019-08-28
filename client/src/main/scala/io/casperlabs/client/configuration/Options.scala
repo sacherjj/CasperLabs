@@ -9,7 +9,36 @@ import io.casperlabs.client.BuildInfo
 import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
 
+object Options {
+  val hexCheck: String => Boolean = _.matches("[0-9a-fA-F]+")
+
+  val fileCheck: File => Boolean = file =>
+    file.exists() && file.canRead && !file.isDirectory && file.isFile
+
+  trait ContractArgs { self: Subcommand =>
+    def sessionRequired: Boolean = true
+    def paymentPathName: String  = "payment"
+
+    val session =
+      opt[File](
+        required = sessionRequired,
+        descr = "Path to the file with session code",
+        validate = fileCheck
+      )
+
+    val payment =
+      opt[File](
+        name = paymentPathName,
+        required = false,
+        descr = "Path to the file with payment code.",
+        validate = fileCheck
+      )
+  }
+}
+
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
+  import Options._
+
   implicit val streamingConverter: ValueConverter[Streaming] = new ValueConverter[Streaming] {
     override def parse(s: List[(String, List[String])]): Either[String, Option[Streaming]] =
       s match {
@@ -46,30 +75,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Node ID (i.e. the Keccak256 hash of the public key the node uses for TLS) in case secure communication is needed.",
       required = false
     )
-
-  val hexCheck: String => Boolean = _.matches("[0-9a-fA-F]+")
-  val fileCheck: File => Boolean = file =>
-    file.exists() && file.canRead && !file.isDirectory && file.isFile
-
-  trait ContractArgs { self: Subcommand =>
-    def sessionRequired: Boolean = true
-    def paymentPathName: String  = "payment"
-
-    val session =
-      opt[File](
-        required = sessionRequired,
-        descr = "Path to the file with session code",
-        validate = fileCheck
-      )
-
-    val payment =
-      opt[File](
-        name = paymentPathName,
-        required = false,
-        descr = "Path to the file with payment code.",
-        validate = fileCheck
-      )
-  }
 
   val makeDeploy = new Subcommand("make-deploy") with ContractArgs {
     descr("Constructs a deploy that can be signed and sent to a node.")
