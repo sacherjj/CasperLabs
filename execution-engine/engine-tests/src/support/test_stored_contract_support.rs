@@ -5,6 +5,8 @@ use std::rc::Rc;
 
 use grpc::RequestOptions;
 
+use contract_ffi::uref::URef;
+
 use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState};
 use engine_grpc_server::engine_server::ipc;
@@ -12,7 +14,7 @@ use engine_grpc_server::engine_server::ipc::{
     CommitRequest, DeployCode, DeployItem, DeployPayload, DeployResult,
     DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
     ExecuteResponse, GenesisRequest, GenesisResponse, QueryRequest, StoredContractHash,
-    StoredContractName, TransformEntry,
+    StoredContractName, StoredContractURef, TransformEntry,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{to_domain_validators, CommitTransforms};
@@ -54,6 +56,24 @@ impl DeployBuilder {
         item.set_hash(hash);
         let mut payment = DeployPayload::new();
         payment.set_stored_contract_hash(item);
+        self.deploy.set_payment(payment);
+        self
+    }
+
+    pub fn with_stored_payment_uref(
+        mut self,
+        uref: URef,
+        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    ) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item: StoredContractURef = StoredContractURef::new();
+        item.set_args(args);
+        item.set_uref(uref.addr().to_vec());
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_uref(item);
         self.deploy.set_payment(payment);
         self
     }
@@ -110,6 +130,24 @@ impl DeployBuilder {
         let mut session = DeployPayload::new();
         session.set_stored_contract_hash(item);
         self.deploy.set_session(session);
+        self
+    }
+
+    pub fn with_stored_session_uref(
+        mut self,
+        uref: URef,
+        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    ) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| contract_ffi::bytesrepr::ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item: StoredContractURef = StoredContractURef::new();
+        item.set_args(args);
+        item.set_uref(uref.addr().to_vec());
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_uref(item);
+        self.deploy.set_session(payment);
         self
     }
 
@@ -534,7 +572,8 @@ pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> Stri
 /// Builder for simple WASM test
 #[derive(Clone)]
 pub struct WasmTestBuilder {
-    /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for EngineState`
+    /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for
+    /// EngineState`
     engine_state: Rc<EngineState<InMemoryGlobalState>>,
     exec_responses: Vec<ExecuteResponse>,
     genesis_hash: Option<Vec<u8>>,

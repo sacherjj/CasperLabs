@@ -9,7 +9,7 @@ use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, HASH_SIZE};
-use contract_ffi::uref::AccessRights;
+use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
@@ -232,6 +232,54 @@ where
                 let contract = tracking_copy
                     .borrow_mut()
                     .get_contract(correlation_id, stored_contract_key.normalize())?;
+                let (ret, _, _) = contract.destructure();
+                let module = preprocessor.deserialize(&ret)?;
+                Ok(module)
+            }
+            ExecutableDeployItem::StoredContractByURef { uref, .. } => {
+                let stored_contract_key = {
+                    let len = uref.len();
+                    if len != UREF_ADDR_SIZE {
+                        return Err(error::Error::InvalidHashLength {
+                            expected: UREF_ADDR_SIZE,
+                            actual: len,
+                        });
+                    }
+                    let read_only_uref = {
+                        let mut arr = [0u8; UREF_ADDR_SIZE];
+                        arr.copy_from_slice(&uref);
+                        URef::new(arr, AccessRights::READ)
+                    };
+                    let normalized_uref = Key::URef(read_only_uref).normalize();
+                    let maybe_known_uref = account
+                        .urefs_lookup()
+                        .values()
+                        .find(|&known_uref| known_uref.normalize() == normalized_uref);
+                    match maybe_known_uref {
+                        Some(Key::URef(known_uref)) if known_uref.is_readable() => normalized_uref,
+                        Some(Key::URef(_)) => {
+                            return Err(error::Error::ExecError(
+                                execution::Error::ForgedReference(read_only_uref),
+                            ));
+                        }
+                        Some(key) => {
+                            return Err(error::Error::ExecError(execution::Error::TypeMismatch(
+                                engine_shared::transform::TypeMismatch::new(
+                                    "Key::URef".to_string(),
+                                    key.type_string(),
+                                ),
+                            )));
+                        }
+                        None => {
+                            return Err(error::Error::ExecError(execution::Error::KeyNotFound(
+                                Key::URef(read_only_uref),
+                            )));
+                        }
+                    }
+                };
+                let contract = tracking_copy
+                    .borrow_mut()
+                    .get_contract(correlation_id, stored_contract_key)?;
                 let (ret, _, _) = contract.destructure();
                 let module = preprocessor.deserialize(&ret)?;
                 Ok(module)
