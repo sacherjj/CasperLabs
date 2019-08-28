@@ -20,11 +20,17 @@ message StoredContractName{
   bytes args = 2;   // ABI-encoded arguments
 }
 
+message StoredContractURef{
+  bytes uref = 1; // uref of a stored contract
+  bytes args = 2; // ABI-encoded arguments
+}
+
 message DeployPayload {
   oneof payload {
     DeployCode deploy_code = 1;
     StoredContractHash stored_contract_hash = 2;
     StoredContractName stored_contract_name = 3;
+    StoredContractURef stored_contract_uref = 4;
   }
 }
 
