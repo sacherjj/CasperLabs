@@ -34,6 +34,8 @@ MAX_PAYMENT_COST = 10000000  # ten million
 MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
 CONV_RATE = 10
 
+BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
+
 
 @dataclasses.dataclass(eq=True, frozen=True)
 class KeyPair:
