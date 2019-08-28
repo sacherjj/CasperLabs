@@ -93,6 +93,12 @@ class ABI:
     """
 
     @staticmethod
+    def option(o: bytes) -> bytes:
+        if o is None:
+            return bytes([0])
+        return bytes([1]) + o
+
+    @staticmethod
     def u32(n: int):
         return struct.pack("<I", n)
 
@@ -164,6 +170,13 @@ class ABI:
             return items[0]
 
         return ABI.args([encode(*only_one(arg)) for arg in args])
+
+
+def read_pem_key(file_name: str):
+    with open(file_name) as f:
+        s = [l for l in f.readlines() if l and not l.startswith("-----")][0].strip()
+        r = base64.b64decode(s)
+        return len(r) % 32 == 0 and r[:32] or r[-32:]
 
 
 class InternalError(Exception):
@@ -312,17 +325,9 @@ class CasperLabsClient:
             with open(file_name, "rb") as f:
                 return f.read()
 
-        def read_pem_key(file_name: str):
-            with open(file_name) as f:
-                s = [l for l in f.readlines() if l and not l.startswith("-----")][
-                    0
-                ].strip()
-                r = base64.b64decode(s)
-                return len(r) % 32 == 0 and r[:32] or r[-32:]
-
         def read_code(file_name: str, abi_encoded_args: bytes = None):
             return consensus.Deploy.Code(
-                code=read_binary(file_name), args=abi_encoded_args
+                wasm=read_binary(file_name), args=abi_encoded_args
             )
 
         def sign(data: bytes):

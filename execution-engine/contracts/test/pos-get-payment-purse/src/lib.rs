@@ -38,7 +38,7 @@ pub extern "C" fn call() {
     let source_purse = contract_api::main_purse();
     let payment_amount: U512 = 100.into();
     let payment_purse: PurseId =
-        contract_api::call_contract(pos_pointer, &"get_payment_purse", &Vec::new());
+        contract_api::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
 
     // can deposit
     if let PurseTransferResult::TransferError =

@@ -305,6 +305,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         validate = fileCheck
       )
 
+    val paymentPath =
+      opt[File](
+        descr = "Path to the file with payment code.",
+        validate = fileCheck,
+        required = false
+      )
+
     val nonce = opt[Long](
       descr =
         "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
@@ -376,6 +383,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[File](
         descr = "Path to the file with transfer contract.",
         validate = fileCheck
+      )
+
+    val paymentPath =
+      opt[File](
+        descr = "Path to the file with payment code.",
+        validate = fileCheck,
+        required = false
       )
 
     val nonce = opt[Long](

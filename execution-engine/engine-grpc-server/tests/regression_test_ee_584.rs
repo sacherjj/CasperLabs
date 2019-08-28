@@ -29,7 +29,7 @@ fn should_run_ee_584_no_errored_session_transforms() {
         let deploy = DeployBuilder::new()
             .with_address(GENESIS_ADDR)
             .with_session_code("ee_584_regression.wasm", ())
-            .with_payment_code("standard_payment.wasm", U512::from(MAX_PAYMENT))
+            .with_payment_code("standard_payment.wasm", (U512::from(MAX_PAYMENT),))
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(1)
             .build();

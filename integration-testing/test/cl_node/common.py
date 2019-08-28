@@ -24,6 +24,7 @@ MAILING_LIST_CALL = "test_mailinglistcall.wasm"
 COMBINED_CONTRACT = "test_combinedcontractsdefine.wasm"
 BONDING_CONTRACT = "test_bondingcall.wasm"
 UNBONDING_CONTRACT = "test_unbondingcall.wasm"
+POS_BONDING_CONTRACT = "pos_bonding.wasm"
 INVALID_BONDING_CONTRACT = "test_invalid_bondingcall.wasm"
 INVALID_UNBONDING_CONTRACT = "test_invalid_unbondingcall.wasm"
 PAYMENT_PURSE_CONTRACT = "test_payment_purse.wasm"
@@ -32,6 +33,8 @@ PAYMENT_CONTRACT = "standard_payment.wasm"
 MAX_PAYMENT_COST = 10000000  # ten million
 MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
 CONV_RATE = 10
+
+BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
 
 
 @dataclasses.dataclass(eq=True, frozen=True)

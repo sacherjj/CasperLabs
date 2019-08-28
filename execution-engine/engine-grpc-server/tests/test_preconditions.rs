@@ -38,7 +38,7 @@ fn should_raise_precondition_invalid_nonce() {
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, U512::from(42)),
             )
-            .with_payment_code("standard_payment.wasm", U512::from(10_000_000))
+            .with_payment_code("standard_payment.wasm", (U512::from(10_000_000),))
             .with_authorization_keys(&[genesis_public_key])
             .with_nonce(invalid_nonce)
             .build();
@@ -100,7 +100,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_address(nonexistent_account_addr)
-            .with_payment_code("standard_payment.wasm", U512::from(payment_purse_amount))
+            .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
             .with_authorization_keys(&[PublicKey::new(nonexistent_account_addr)])
             .with_nonce(0)
             .build();
@@ -182,7 +182,7 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, U512::from(transferred_amount)),
             )
-            .with_payment_code("standard_payment.wasm", U512::from(payment_purse_amount))
+            .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
             // invalid authorization key to force error
             .with_authorization_keys(&[PublicKey::new(nonexistent_account_addr)])
             .with_nonce(0)

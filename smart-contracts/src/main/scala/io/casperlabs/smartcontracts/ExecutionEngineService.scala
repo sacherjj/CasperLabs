@@ -23,13 +23,13 @@ import io.casperlabs.catscontrib.MonadThrowable
 @typeclass trait ExecutionEngineService[F[_]] {
   def emptyStateHash: ByteString
   def runGenesis(
-      deploys: Seq[Deploy],
+      deploys: Seq[DeployItem],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, GenesisResult]]
   def exec(
       prestate: ByteString,
       blocktime: Long,
-      deploys: Seq[Deploy],
+      deploys: Seq[DeployItem],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(
@@ -70,21 +70,21 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   override def exec(
       prestate: ByteString,
       blocktime: Long,
-      deploys: Seq[Deploy],
+      deploys: Seq[DeployItem],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]] =
     for {
       result <- sendMessage(
-                 ExecRequest(prestate, blocktime, deploys, Some(protocolVersion)),
-                 _.exec
+                 ExecuteRequest(prestate, blocktime, deploys, Some(protocolVersion)),
+                 _.execute
                ) {
                  _.result match {
-                   case ExecResponse.Result.Success(ExecResult(deployResults)) =>
+                   case ExecuteResponse.Result.Success(ExecResult(deployResults)) =>
                      Right(deployResults)
                    //TODO: Capture errors better than just as a string
-                   case ExecResponse.Result.Empty =>
+                   case ExecuteResponse.Result.Empty =>
                      Left(new SmartContractEngineError("empty response"))
-                   case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
+                   case ExecuteResponse.Result.MissingParent(RootNotFound(missing)) =>
                      Left(
                        new SmartContractEngineError(
                          s"Missing states: ${Base16.encode(missing.toByteArray)}"
@@ -103,7 +103,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
     } yield result
 
   override def runGenesis(
-      deploys: Seq[Deploy],
+      deploys: Seq[DeployItem],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, GenesisResult]] =
     deploys.length match {
@@ -115,8 +115,17 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
           .asRight[Throwable]
           .pure[F]
       case 1 =>
-        val code = deploys.head.getSession.code
         for {
+          code <- deploys.head.getSession.payload match {
+                   case DeployPayload.Payload.DeployCode(code) =>
+                     code.code.pure[F]
+                   case _ =>
+                     MonadThrowable[F].raiseError[ByteString](
+                       new IllegalArgumentException(
+                         "Executing Genesis deploys without code is not supported."
+                       )
+                     )
+                 }
           request <- MonadThrowable[F].fromTry(Try(GenesisRequest.parseFrom(code.toByteArray)))
           response <- sendMessage(request, _.runGenesis) {
                        _.result match {
