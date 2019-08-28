@@ -13,7 +13,7 @@ from test.cl_node.docker_node import DockerNode
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import wait_for_genesis_block
 from casperlabs_client import ABI
-from test import CLI, DockerCLI, CLIErrorExit
+from test.cl_node.cli import CLI, DockerCLI, CLIErrorExit
 
 
 """
