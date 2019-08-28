@@ -9,6 +9,7 @@ import cats.effect.{Sync, Timer}
 import cats.implicits._
 import cats.temp.par._
 import io.casperlabs.client.{DeployRuntime, DeployService}
+import io.casperlabs.client.configuration.Contracts
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base64
@@ -62,8 +63,7 @@ object Benchmarks {
         amount: Long
     ): F[Unit] = DeployRuntime.transfer[F](
       nonce = nonce,
-      sessionCode = None,
-      paymentCode = None,
+      contracts = Contracts.empty,
       senderPublicKey = senderPublicKey,
       senderPrivateKey = senderPrivateKey,
       recipientPublicKeyBase64 = recipientPublicKeyBase64,

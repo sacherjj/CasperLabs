@@ -26,6 +26,10 @@ import scala.util.Try
 
 object DeployRuntime {
 
+  val BONDING_WASM_FILE   = "bonding.wasm"
+  val UNBONDING_WASM_FILE = "unbonding.wasm"
+  val TRANSFER_WASM_FILE  = "transfer_to_account.wasm"
+
   def propose[F[_]: Sync: DeployService](
       exit: Boolean = true,
       ignoreOutput: Boolean = false
@@ -60,7 +64,7 @@ object DeployRuntime {
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
-            contracts,
+            contracts.withSessionResource(UNBONDING_WASM_FILE),
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
@@ -83,7 +87,7 @@ object DeployRuntime {
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
-            contracts,
+            contracts.withSessionResource(BONDING_WASM_FILE),
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
@@ -270,7 +274,7 @@ object DeployRuntime {
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
-            contracts,
+            contracts.withSessionResource(TRANSFER_WASM_FILE),
             maybeEitherPublicKey = senderPublicKey.asRight[String].some,
             maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
             gasPrice = 10L,

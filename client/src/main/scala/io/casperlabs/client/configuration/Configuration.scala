@@ -13,26 +13,39 @@ final case class ConnectOptions(
     nodeId: Option[String]
 )
 
+/** Options to capture all the possible ways of passing one of the session or payment contracts. */
 final case class ContractOptions(
+    // Point at a file on disk.
     file: Option[File],
-    resource: Option[String]
+    // Name of a pre-packaged contract.
+    resource: Option[String] = None
+    // TODO: Stored contracts by hash, name or uref.
 )
 
+/** Encapsulate reading session and payment contracts from disk or resources
+  * before putting them into the the format expected by the API.
+  */
 final case class Contracts(
     sessionOptions: ContractOptions,
     paymentOptions: ContractOptions
 ) {
   lazy val session = Contracts.toContract(sessionOptions)
   lazy val payment = Contracts.toContract(paymentOptions)
+
+  def withSessionResource(resource: String) =
+    copy(sessionOptions = sessionOptions.copy(resource = Some(resource)))
 }
+
 object Contracts {
-  def apply(args: ContractArgs, sessionResource: Option[String]): Contracts =
+  def apply(args: ContractArgs): Contracts =
     Contracts(
-      ContractOptions(args.session.toOption, sessionResource),
-      ContractOptions(args.payment.toOption, None)
+      ContractOptions(args.session.toOption),
+      ContractOptions(args.payment.toOption)
     )
 
-  def toContract(opts: ContractOptions): Contract =
+  val empty = Contracts(ContractOptions(None), ContractOptions(None))
+
+  private def toContract(opts: ContractOptions): Contract =
     opts.file.map { f =>
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
       Contract.Wasm(wasm)
@@ -133,9 +146,6 @@ final case class Query(
 ) extends Configuration
 
 object Configuration {
-  val BONDING_WASM_FILE   = "bonding.wasm"
-  val UNBONDING_WASM_FILE = "unbonding.wasm"
-  val TRANSFER_WASM_FILE  = "transfer_to_account.wasm"
 
   def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
     val options = Options(args)
@@ -150,7 +160,7 @@ object Configuration {
         Deploy(
           options.deploy.from.toOption,
           options.deploy.nonce(),
-          Contracts(options.deploy, None),
+          Contracts(options.deploy),
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption,
           options.deploy.gasPrice()
@@ -160,7 +170,7 @@ object Configuration {
           options.makeDeploy.from.toOption,
           options.makeDeploy.publicKey.toOption,
           options.makeDeploy.nonce(),
-          Contracts(options.makeDeploy, None),
+          Contracts(options.makeDeploy),
           options.makeDeploy.gasPrice(),
           options.makeDeploy.deployPath.toOption
         )
@@ -187,14 +197,14 @@ object Configuration {
         Unbond(
           options.unbond.amount.toOption,
           options.unbond.nonce(),
-          Contracts(options.unbond, Some(UNBONDING_WASM_FILE)),
+          Contracts(options.unbond),
           options.unbond.privateKey()
         )
       case options.bond =>
         Bond(
           options.bond.amount(),
           options.bond.nonce(),
-          Contracts(options.bond, Some(BONDING_WASM_FILE)),
+          Contracts(options.bond),
           options.bond.privateKey()
         )
       case options.transfer =>
@@ -202,7 +212,7 @@ object Configuration {
           options.transfer.amount(),
           options.transfer.targetAccount(),
           options.transfer.nonce(),
-          Contracts(options.transfer, Some(TRANSFER_WASM_FILE)),
+          Contracts(options.transfer),
           options.transfer.privateKey()
         )
       case options.visualizeBlocks =>
