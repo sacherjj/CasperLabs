@@ -489,6 +489,7 @@ object ProtoUtil {
       basicDeploy(now, ByteString.EMPTY, nonce)
     }
 
+  // This is only used for tests.
   def basicDeploy(
       timestamp: Long,
       sessionCode: ByteString = ByteString.EMPTY,
@@ -498,7 +499,7 @@ object ProtoUtil {
     val b = Deploy
       .Body()
       .withSession(Deploy.Code().withWasm(sessionCode))
-      .withPayment(Deploy.Code())
+      .withPayment(Deploy.Code().withWasm(sessionCode))
     val h = Deploy
       .Header()
       .withAccountPublicKey(accountPublicKey)
@@ -511,7 +512,6 @@ object ProtoUtil {
       .withBody(b)
   }
 
-  // TODO: it is for testing
   def basicProcessedDeploy[F[_]: Monad: Time](id: Long): F[Block.ProcessedDeploy] =
     basicDeploy[F](id).map(deploy => Block.ProcessedDeploy(deploy = Some(deploy)))
 
