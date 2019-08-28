@@ -310,7 +310,7 @@ trait DeployBufferSpec
               .mapValues(_.minBy(_.getHeader.timestamp))
               .values
               .toSet
-            got <- db.readAccountPendingOldest
+            got <- db.readAccountPendingOldest().compile.toList
           } yield got.toSet shouldBe expected
         }
       }
