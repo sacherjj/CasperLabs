@@ -84,6 +84,7 @@ lazy val shared = (project in file("shared"))
   .settings(
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
+      fs2,
       catsCore,
       catsPar,
       catsEffect,
@@ -131,7 +132,9 @@ lazy val casper = (project in file("casper"))
     shared         % "compile->compile;test->test",
     smartContracts % "compile->compile;test->test",
     crypto,
-    models
+    models,
+    client,
+    benchmarks
   )
 
 lazy val comm = (project in file("comm"))

@@ -40,7 +40,7 @@ fn should_run_get_payment_purse_contract_account_1() {
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            ACCOUNT_1_ADDR,
+            (ACCOUNT_1_ADDR,),
         )
         .expect_success()
         .commit()
