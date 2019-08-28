@@ -1,5 +1,11 @@
+use contract_ffi::bytesrepr;
+use contract_ffi::bytesrepr::{FromBytes, ToBytes, U32_SIZE};
+
+const NUM_FIELDS: usize = 10;
+pub const WASM_COSTS_SIZE_SERIALIZED: usize = NUM_FIELDS * U32_SIZE;
+
 // Taken (partially) from parity-ethereum
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct WasmCosts {
     /// Default opcode cost
     pub regular: u32,
@@ -55,5 +61,65 @@ impl WasmCosts {
             opcodes_mul: 1,
             opcodes_div: 1,
         }
+    }
+}
+
+impl ToBytes for WasmCosts {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let mut ret: Vec<u8> = Vec::with_capacity(WASM_COSTS_SIZE_SERIALIZED);
+        ret.append(&mut self.regular.to_bytes()?);
+        ret.append(&mut self.div.to_bytes()?);
+        ret.append(&mut self.mul.to_bytes()?);
+        ret.append(&mut self.mem.to_bytes()?);
+        ret.append(&mut self.initial_mem.to_bytes()?);
+        ret.append(&mut self.grow_mem.to_bytes()?);
+        ret.append(&mut self.memcpy.to_bytes()?);
+        ret.append(&mut self.max_stack_height.to_bytes()?);
+        ret.append(&mut self.opcodes_mul.to_bytes()?);
+        ret.append(&mut self.opcodes_div.to_bytes()?);
+        Ok(ret)
+    }
+}
+
+impl FromBytes for WasmCosts {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+        let (regular, rem): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (div, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (mul, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (mem, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (initial_mem, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (grow_mem, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (memcpy, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (max_stack_height, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (opcodes_mul, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (opcodes_div, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        let wasm_costs = WasmCosts {
+            regular,
+            div,
+            mul,
+            mem,
+            initial_mem,
+            grow_mem,
+            memcpy,
+            max_stack_height,
+            opcodes_mul,
+            opcodes_div,
+        };
+        Ok((wasm_costs, rem))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use engine_shared::test_utils;
+
+    use super::WasmCosts;
+
+    #[test]
+    fn should_serialize_and_deserialize() {
+        let v1 = WasmCosts::from_version(1).unwrap();
+        let free = WasmCosts::free();
+        assert!(test_utils::test_serialization_roundtrip(&v1));
+        assert!(test_utils::test_serialization_roundtrip(&free));
     }
 }
