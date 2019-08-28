@@ -257,9 +257,9 @@ where
                         .find(|&known_uref| known_uref.normalize() == normalized_uref);
                     match maybe_known_uref {
                         Some(Key::URef(known_uref)) if known_uref.is_readable() => normalized_uref,
-                        Some(Key::URef(known_uref)) => {
+                        Some(Key::URef(_)) => {
                             return Err(error::Error::ExecError(
-                                execution::Error::ForgedReference(*known_uref),
+                                execution::Error::ForgedReference(read_only_uref),
                             ));
                         }
                         Some(key) => {
