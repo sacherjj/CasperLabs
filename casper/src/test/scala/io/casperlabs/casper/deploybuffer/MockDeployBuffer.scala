@@ -114,6 +114,14 @@ class MockDeployBuffer[F[_]: Monad: Log](
 
   override def readPendingHashes: F[List[ByteString]] = readPending.map(_.map(_.deployHash))
 
+  override def readAccountPendingOldest: F[List[Deploy]] =
+    readPending.map(
+      _.groupBy(_.getHeader.accountPublicKey)
+        .mapValues(_.minBy(_.getHeader.timestamp))
+        .values
+        .toList
+    )
+
   override def getByHashes(l: List[ByteString]): F[List[Deploy]] = {
     val hashesSet = l.toSet
     (readPending, readProcessed).mapN(_ ++ _).map(_.filter(d => hashesSet.contains(d.deployHash)))

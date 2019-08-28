@@ -72,6 +72,13 @@ import scala.concurrent.duration.FiniteDuration
 
   def readPending: F[List[Deploy]]
 
+  /** Reads deploys in PENDING state, unique per account, returning oldest one.
+    *
+    * NOTE: Since deploy buffer tables don't have deploy's nonce we pick entry
+    * with the lowest `creation_time_seconds` value.
+    */
+  def readAccountPendingOldest: F[List[Deploy]]
+
   def readPendingHashes: F[List[ByteString]]
 
   def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]]
@@ -206,6 +213,19 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
 
   override def readPendingHashes: F[List[ByteString]] =
     readHashesByStatus(PendingStatusCode)
+
+  override def readAccountPendingOldest: F[List[Deploy]] =
+    sql"""| SELECT data FROM (SELECT data, deploys.account, create_time_seconds FROM deploys
+          | INNER JOIN buffered_deploys bd
+          | ON deploys.hash = bd.hash
+          | WHERE bd.status = $PendingStatusCode) pda
+          | GROUP BY pda.account
+          | HAVING MIN(pda.create_time_seconds)
+          | ORDER BY pda.create_time_seconds
+          |""".stripMargin
+      .query[Deploy]
+      .to[List]
+      .transact(xa)
 
   private def readByStatus(status: Int): F[List[Deploy]] =
     sql"""|SELECT data FROM deploys
