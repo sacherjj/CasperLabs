@@ -879,22 +879,10 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     let test_result = get_test_result(&mut builder_by_named_uref, exec_request_by_named_uref);
     let direct_named_uref_transforms = &test_result.builder().get_transforms()[1];
 
-    let diff = Diff::new(
-        direct_uref_transforms.to_owned(),
-        direct_named_uref_transforms.to_owned(),
-    );
-
-    let left: BTreeMap<&Key, &Transform> = diff.left().iter().collect();
-    let right: BTreeMap<&Key, &Transform> = diff.right().iter().collect();
-    let both: BTreeMap<&Key, &Transform> = diff.both().iter().collect();
-
-    assert_eq!(left.keys().len(), 0, "should be no unmatched items (left)");
     assert_eq!(
-        right.keys().len(),
-        0,
-        "should be no unmatched items (right)"
+        direct_uref_transforms, direct_named_uref_transforms,
+        "transforms should match"
     );
-    assert_ne!(both.keys().len(), 0, "should be matched items");
 }
 
 #[ignore]

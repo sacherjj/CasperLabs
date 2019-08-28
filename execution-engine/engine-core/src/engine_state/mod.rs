@@ -237,7 +237,6 @@ where
                 Ok(module)
             }
             ExecutableDeployItem::StoredContractByURef { uref, .. } => {
-                // get URef instance
                 let stored_contract_key = {
                     let len = uref.len();
                     if len != UREF_ADDR_SIZE {
@@ -246,20 +245,37 @@ where
                             actual: len,
                         });
                     }
-                    let mut arr = [0u8; UREF_ADDR_SIZE];
-                    arr.copy_from_slice(&uref);
-                    let readonly_uref = URef::new(arr, AccessRights::READ);
-                    let normalized_uref = Key::URef(readonly_uref).normalize();
-                    let known_uref = account
+                    let read_only_uref = {
+                        let mut arr = [0u8; UREF_ADDR_SIZE];
+                        arr.copy_from_slice(&uref);
+                        URef::new(arr, AccessRights::READ)
+                    };
+                    let normalized_uref = Key::URef(read_only_uref).normalize();
+                    let maybe_known_uref = account
                         .urefs_lookup()
                         .values()
                         .find(|&known_uref| known_uref.normalize() == normalized_uref);
-                    if known_uref == None {
-                        return Err(error::Error::ExecError(execution::Error::ForgedReference(
-                            readonly_uref,
-                        )));
+                    match maybe_known_uref {
+                        Some(Key::URef(known_uref)) if known_uref.is_readable() => normalized_uref,
+                        Some(Key::URef(known_uref)) => {
+                            return Err(error::Error::ExecError(
+                                execution::Error::ForgedReference(*known_uref),
+                            ));
+                        }
+                        Some(key) => {
+                            return Err(error::Error::ExecError(execution::Error::TypeMismatch(
+                                engine_shared::transform::TypeMismatch::new(
+                                    "Key::URef".to_string(),
+                                    key.type_string(),
+                                ),
+                            )));
+                        }
+                        None => {
+                            return Err(error::Error::ExecError(execution::Error::KeyNotFound(
+                                Key::URef(read_only_uref),
+                            )));
+                        }
                     }
-                    normalized_uref
                 };
                 let contract = tracking_copy
                     .borrow_mut()
