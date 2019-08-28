@@ -52,16 +52,25 @@ class DockerConfig:
         if java_options is not None:
             self.node_env["_JAVA_OPTIONS"] = java_options
 
+    @property
+    def bootstrap_path(self):
+        return "/root/.casperlabs/bootstrap"
+
+    def tls_certificate_path(self):
+        return f"{self.bootstrap_path}/node-{self.number}.certificate.pem"
+
+    def tls_key_path(self):
+        return f"{self.bootstrap_path}/node-{self.number}.key.pem"
+
     def node_command_options(self, server_host: str) -> dict:
-        bootstrap_path = "/root/.casperlabs/bootstrap"
         options = {
             "--server-default-timeout": "10second",
             "--server-host": server_host,
             "--casper-validator-private-key": self.node_private_key,
             "--grpc-socket": "/root/.casperlabs/sockets/.casper-node.sock",
             "--metrics-prometheus": "",
-            "--tls-certificate": f"{bootstrap_path}/node-{self.number}.certificate.pem",
-            "--tls-key": f"{bootstrap_path}/node-{self.number}.key.pem",
+            "--tls-certificate": self.tls_certificate_path(),
+            "--tls-key": self.tls_key_path(),
         }
         if self.grpc_encryption:
             options["--grpc-use-tls"] = ""

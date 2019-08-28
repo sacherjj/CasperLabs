@@ -4,6 +4,8 @@ import logging
 import subprocess
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
 from pyblake2 import blake2b
+from casperlabs_client import keccak_hash
+import ssl
 
 
 def contract_hash(from_addr_base16: str, nonce: int, function_counter: int) -> bytes:
@@ -44,19 +46,30 @@ class CLIErrorExit(Exception):
 
 
 class CLI:
-    def __init__(self, node, cli_cmd="casperlabs_client"):
+    def __init__(self, node, cli_cmd="casperlabs_client", grpc_encryption=False):
         self.node = node
         self.host = (
             os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
         )
         self.port = node.grpc_external_docker_port
         self.cli_cmd = cli_cmd
+        self.grpc_encryption = grpc_encryption
+
+        # TODO:
+        cert_file_name = "./resources/bootstrap_certificate/node-0.certificate.pem"
+        cert_dict = ssl._ssl._test_decode_cert(cert_file_name)
+        common_name = [
+            t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"
+        ][0]
+        # common_name == '4d802045c3e4d2e031f25878517bc8e2c9710ee7'
+        self.node_id = keccak_hash(bytes.fromhex(common_name))
 
     def expand_args(self, args):
-        def _args(
-            args,
-            connection_details=["--host", f"{self.host}", "--port", f"{self.port}"],
-        ):
+        connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
+        if self.grpc_encryption:
+            connection_details += ["--node-id", self.node_id]
+
+        def _args(args, connection_details=connection_details):
             return [str(a) for a in connection_details + list(args)]
 
         return "--help" in args and _args(args, []) or _args(args)
