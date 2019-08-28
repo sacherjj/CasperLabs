@@ -99,6 +99,10 @@ impl Stakes {
         let max_decrease = MAX_DECREASE.min(self.sum() * MAX_REL_DECREASE / 1_000_000);
 
         if let Some(amount) = maybe_amount {
+            if amount > self.get_validator_stake(*validator) {
+                return Err(Error::UnbondTooLarge);
+            }
+
             // The minimum stake value to not violate the maximum spread.
             let stake = self.0.get_mut(validator).ok_or(Error::NotBonded)?;
             if *stake > amount {
@@ -178,6 +182,14 @@ impl Stakes {
     fn sum(&self) -> U512 {
         self.0
             .values()
+            .fold(U512::zero(), |sum, s| sum.saturating_add(*s))
+    }
+
+    /// Returns total stake for given validator using his public key
+    fn get_validator_stake(&self, public_key: PublicKey) -> U512 {
+        self.0
+            .iter()
+            .filter_map(|(&key, value)| if key == public_key { Some(value) } else { None })
             .fold(U512::zero(), |sum, s| sum.saturating_add(*s))
     }
 }
