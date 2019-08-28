@@ -9,16 +9,22 @@
 //! # extern crate engine_shared;
 //! # extern crate tempfile;
 //! use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
-//! use casperlabs_engine_storage::trie_store::{Transaction, TransactionSource, TrieStore};
 //! use casperlabs_engine_storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+//! use casperlabs_engine_storage::trie_store::{Transaction, TransactionSource, TrieStore};
 //! use contract_ffi::bytesrepr::ToBytes;
-//! use lmdb::DatabaseFlags;
 //! use engine_shared::newtypes::Blake2bHash;
+//! use lmdb::DatabaseFlags;
 //! use tempfile::tempdir;
 //!
 //! // Create some leaves
-//! let leaf_1 = Trie::Leaf { key: vec![0u8, 0, 0], value: b"val_1".to_vec() };
-//! let leaf_2 = Trie::Leaf { key: vec![1u8, 0, 0], value: b"val_2".to_vec() };
+//! let leaf_1 = Trie::Leaf {
+//!     key: vec![0u8, 0, 0],
+//!     value: b"val_1".to_vec(),
+//! };
+//! let leaf_2 = Trie::Leaf {
+//!     key: vec![1u8, 0, 0],
+//!     value: b"val_2".to_vec(),
+//! };
 //!
 //! // Get their hashes
 //! let leaf_1_hash = Blake2bHash::new(&leaf_1.to_bytes().unwrap());
@@ -40,7 +46,7 @@
 //! // LMDB-backed implementations, the environment is the source of
 //! // transactions.
 //! let tmp_dir = tempdir().unwrap();
-//! let map_size = 4096 * 2560;  // map size should be a multiple of OS page size
+//! let map_size = 4096 * 2560; // map size should be a multiple of OS page size
 //! let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), map_size).unwrap();
 //! let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 //!

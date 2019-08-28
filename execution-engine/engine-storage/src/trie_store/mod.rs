@@ -1,4 +1,5 @@
-//! A store for persisting [`Trie`](crate::history::trie::Trie) values at their hashes.
+//! A store for persisting [`Trie`](crate::history::trie::Trie) values at their
+//! hashes.
 //!
 //! See the [in_memory](in_memory/index.html#usage) and
 //! [lmdb](lmdb/index.html#usage) modules for usage examples.
@@ -32,13 +33,16 @@ pub trait Transaction: Sized {
     }
 }
 
-/// A transaction with the capability to read from a given [`Handle`](Transaction::Handle).
+/// A transaction with the capability to read from a given
+/// [`Handle`](Transaction::Handle).
 pub trait Readable: Transaction {
-    /// Returns the value from the corresponding key from a given [`Transaction::Handle`].
+    /// Returns the value from the corresponding key from a given
+    /// [`Transaction::Handle`].
     fn read(&self, handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 }
 
-/// A transaction with the capability to write to a given [`Handle`](Transaction::Handle).
+/// A transaction with the capability to write to a given
+/// [`Handle`](Transaction::Handle).
 pub trait Writable: Transaction {
     /// Inserts a key-value pair into a given [`Transaction::Handle`].
     fn write(&mut self, handle: Self::Handle, key: &[u8], value: &[u8]) -> Result<(), Self::Error>;

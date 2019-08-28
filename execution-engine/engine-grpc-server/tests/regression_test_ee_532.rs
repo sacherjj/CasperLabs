@@ -19,7 +19,8 @@ const UNKNOWN_ADDR: [u8; 32] = [42u8; 32];
 #[ignore]
 #[test]
 fn should_run_ee_532_get_uref_regression_test() {
-    // This test runs a contract that's after every call extends the same key with more data
+    // This test runs a contract that's after every call extends the same key with
+    // more data
     let result = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec(

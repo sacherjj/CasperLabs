@@ -7,14 +7,22 @@
 //! # extern crate contract_ffi;
 //! # extern crate engine_shared;
 //! use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
+//! use casperlabs_engine_storage::trie_store::in_memory::{
+//!     InMemoryEnvironment, InMemoryTrieStore,
+//! };
 //! use casperlabs_engine_storage::trie_store::{Transaction, TransactionSource, TrieStore};
-//! use casperlabs_engine_storage::trie_store::in_memory::{InMemoryEnvironment, InMemoryTrieStore};
 //! use contract_ffi::bytesrepr::ToBytes;
 //! use engine_shared::newtypes::Blake2bHash;
 //!
 //! // Create some leaves
-//! let leaf_1 = Trie::Leaf { key: vec![0u8, 0, 0], value: b"val_1".to_vec() };
-//! let leaf_2 = Trie::Leaf { key: vec![1u8, 0, 0], value: b"val_2".to_vec() };
+//! let leaf_1 = Trie::Leaf {
+//!     key: vec![0u8, 0, 0],
+//!     value: b"val_1".to_vec(),
+//! };
+//! let leaf_2 = Trie::Leaf {
+//!     key: vec![1u8, 0, 0],
+//!     value: b"val_2".to_vec(),
+//! };
 //!
 //! // Get their hashes
 //! let leaf_1_hash = Blake2bHash::new(&leaf_1.to_bytes().unwrap());

@@ -556,7 +556,8 @@ fn should_exec_payment_and_session_stored_code() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = 1;
 
-    // next make another deploy that USES stored payment logic & stored transfer logic
+    // next make another deploy that USES stored payment logic & stored transfer
+    // logic
     let exec_request_stored_only = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
@@ -662,9 +663,10 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
         .expect("should have pos uref");
 
         // find the contract write transform, then get the uref from its key
-        // the pos contract gets re-written when the refund purse uref is removed from it
-        // and therefore there are two URef->Contract Writes present in transforms...
-        // we want to ignore the proof of stake URef as it is not the one we are interested in
+        // the pos contract gets re-written when the refund purse uref is removed from
+        // it and therefore there are two URef->Contract Writes present in
+        // transforms... we want to ignore the proof of stake URef as it is not
+        // the one we are interested in
         let stored_payment_contract_uref = transforms
             .iter()
             .find_map(|key_transform| match key_transform {

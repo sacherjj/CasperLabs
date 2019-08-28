@@ -576,8 +576,9 @@ mod read {
     //!
     //! Our primary goal here is to test this functionality in isolation.
     //! Therefore, we manually construct test tries from a well-known set of
-    //! leaves called [`TEST_LEAVES`](super::TEST_LEAVES), each of which represents a value we are
-    //! trying to store in the trie at a given key.
+    //! leaves called [`TEST_LEAVES`](super::TEST_LEAVES), each of which
+    //! represents a value we are trying to store in the trie at a given
+    //! key.
     //!
     //! We use two strategies for testing.  See the [`partial_tries`] and
     //! [`full_tries`] modules for more info.
@@ -642,8 +643,8 @@ mod read {
         //! from 0 to 5 leaves.  Each trie contains the history from preceding
         //! tries in this series, and past history can be read from the roots of
         //! each preceding trie.  The tests check that we can read only the
-        //! expected set of leaves from the trie at the current root and all past
-        //! roots.
+        //! expected set of leaves from the trie at the current root and all
+        //! past roots.
 
         use super::*;
 

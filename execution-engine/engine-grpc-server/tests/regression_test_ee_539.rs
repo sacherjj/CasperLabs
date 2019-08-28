@@ -18,7 +18,8 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 #[ignore]
 #[test]
 fn should_run_ee_539_serialize_action_thresholds_regression() {
-    // This test runs a contract that's after every call extends the same key with more data
+    // This test runs a contract that's after every call extends the same key with
+    // more data
     let _result = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(

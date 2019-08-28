@@ -22,7 +22,8 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 #[ignore]
 #[test]
 fn should_run_local_state_contract() {
-    // This test runs a contract that's after every call extends the same key with more data
+    // This test runs a contract that's after every call extends the same key with
+    // more data
     let result = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec(GENESIS_ADDR, "local_state.wasm", DEFAULT_BLOCK_TIME, 1)

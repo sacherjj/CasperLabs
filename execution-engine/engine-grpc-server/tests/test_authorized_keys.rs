@@ -38,7 +38,8 @@ fn should_deploy_with_authorized_identity_key() {
 #[ignore]
 #[test]
 fn should_raise_auth_failure_with_invalid_key() {
-    // tests that authorized keys that does not belong to account raises AuthorizationError
+    // tests that authorized keys that does not belong to account raises
+    // AuthorizationError
     let key_1 = [254; 32];
     assert_ne!(GENESIS_ADDR, key_1);
     // Basic deploy with single key
@@ -76,7 +77,8 @@ fn should_raise_auth_failure_with_invalid_key() {
 #[ignore]
 #[test]
 fn should_raise_auth_failure_with_invalid_keys() {
-    // tests that authorized keys that does not belong to account raises AuthorizationError
+    // tests that authorized keys that does not belong to account raises
+    // AuthorizationError
     let key_1 = [254; 32];
     let key_2 = [253; 32];
     let key_3 = [252; 32];
@@ -264,7 +266,8 @@ fn should_raise_deploy_authorization_failure() {
         )))
     }
 
-    // success: identity key weight + key_1 weight + key_2 weight >= deployment threshold
+    // success: identity key weight + key_1 weight + key_2 weight >= deployment
+    // threshold
     WasmTestBuilder::from_result(result4)
         .exec_with_args_and_keys(
             GENESIS_ADDR,
@@ -366,7 +369,8 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         .commit()
         .finish();
 
-    // success: identity key weight + key_1 weight + key_2 weight >= deployment threshold
+    // success: identity key weight + key_1 weight + key_2 weight >= deployment
+    // threshold
     let final_result = WasmTestBuilder::from_result(result1)
         .exec_with_args_and_keys(
             GENESIS_ADDR,

@@ -146,7 +146,8 @@ where
                 let (key_ptr, key_size, args_ptr, args_size, extra_urefs_ptr, extra_urefs_size) =
                     Args::parse(args)?;
 
-                // We have to explicitly tell rustc what type we expect as it cannot infer it otherwise.
+                // We have to explicitly tell rustc what type we expect as it cannot infer it
+                // otherwise.
                 let _args_size_u32: u32 = args_size;
                 let _extra_urefs_size_u32: u32 = extra_urefs_size;
 

@@ -111,7 +111,8 @@ fn should_run_purse_to_account_transfer() {
     };
 
     let new_purse_id = new_account.purse_id();
-    // This is the new PurseId lookup key that will be present in AddKeys for a mint contract uref
+    // This is the new PurseId lookup key that will be present in AddKeys for a mint
+    // contract uref
     let new_purse_id_lookup_key = new_purse_id.value().remove_access_rights().as_string();
 
     // Obtain transforms for a mint account
@@ -140,7 +141,8 @@ fn should_run_purse_to_account_transfer() {
     assert_eq!(purse_secondary_balance, &U512::from(42));
 
     //
-    // Exec 2 - Transfer from new account back to genesis to verify TransferToExisting
+    // Exec 2 - Transfer from new account back to genesis to verify
+    // TransferToExisting
 
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[1];

@@ -61,7 +61,8 @@ impl InMemoryGlobalState {
         }
     }
 
-    /// Creates a state from a given set of [`Key`](contract_ffi::key::key), [`Value`](contract_ffi::value::Value) pairs
+    /// Creates a state from a given set of [`Key`](contract_ffi::key::key),
+    /// [`Value`](contract_ffi::value::Value) pairs
     pub fn from_pairs(
         correlation_id: CorrelationId,
         pairs: &[(Key, Value)],

@@ -31,7 +31,8 @@ fn test_genesis_hash_match() {
         gs.root_hash
     };
 
-    // This is trie's post state hash after committing genesis effects on top of empty trie.
+    // This is trie's post state hash after committing genesis effects on top of
+    // empty trie.
     let genesis_transforms_hash = builder
         .commit_effects(empty_root_hash.to_vec(), genesis_transforms)
         .get_poststate_hash();

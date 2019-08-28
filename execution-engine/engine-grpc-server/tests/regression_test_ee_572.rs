@@ -36,7 +36,8 @@ fn should_run_ee_572_regression() {
     let account_1_creation_args = (account_1, account_amount);
     let account_2_creation_args = (account_2, account_amount);
 
-    // This test runs a contract that's after every call extends the same key with more data
+    // This test runs a contract that's after every call extends the same key with
+    // more data
     let mut builder = WasmTestBuilder::default();
 
     // Create Accounts
