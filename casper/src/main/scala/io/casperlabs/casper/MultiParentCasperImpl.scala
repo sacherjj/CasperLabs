@@ -295,19 +295,29 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
   def deploy(deploy: Deploy): F[Either[Throwable, Unit]] = validatorId match {
     case Some(_) =>
       (deploy.getBody.session, deploy.getBody.payment) match {
+        case (None, _) | (_, None) | (Some(Deploy.Code(_, Deploy.Code.Contract.Empty)), _) |
+            (_, Some(Deploy.Code(_, Deploy.Code.Contract.Empty))) =>
+          new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
+            .asLeft[Unit]
+            .pure[F]
+            .widen
+
         case (Some(session), Some(payment)) =>
-          val req =
-            ExecutionEngineService[F].verifyWasm(ValidateRequest(session.code, payment.code))
+          val req: F[Either[String, Unit]] =
+            if (session.contract.isWasm && payment.contract.isWasm)
+              ExecutionEngineService[F]
+                .verifyWasm(ValidateRequest(session.getWasm, payment.getWasm))
+            else
+              Log[F]
+                .warn(
+                  s"Cannot verify contracts unless both are Wasm. ${session.contract.getClass} & ${payment.contract.getClass()}"
+                )
+                .as(().asRight[String])
 
           EitherT(req)
             .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
             .flatMapF(_ => addDeploy(deploy))
             .value
-        case (None, _) | (_, None) =>
-          new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
-            .asLeft[Unit]
-            .pure[F]
-            .widen
       }
     case None =>
       new IllegalStateException(s"Node is in read-only mode.").asLeft[Unit].pure[F].widen

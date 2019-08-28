@@ -166,8 +166,8 @@ trait ArbitraryConsensus {
       paymentCode <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
       body = Deploy
         .Body()
-        .withSession(Deploy.Code().withCode(sessionCode))
-        .withPayment(Deploy.Code().withCode(paymentCode))
+        .withSession(Deploy.Code().withWasm(sessionCode))
+        .withPayment(Deploy.Code().withWasm(paymentCode))
       bodyHash = protoHash(body)
       header = Deploy
         .Header()

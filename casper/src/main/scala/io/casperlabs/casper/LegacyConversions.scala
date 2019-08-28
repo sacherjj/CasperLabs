@@ -159,13 +159,13 @@ object LegacyConversions {
       .withSession(
         protocol
           .DeployCode()
-          .withCode(deploy.getBody.getSession.code)
+          .withCode(deploy.getBody.getSession.getWasm)
           .withArgs(deploy.getBody.getSession.args)
       )
       .withPayment(
         protocol
           .DeployCode()
-          .withCode(deploy.getBody.getPayment.code)
+          .withCode(deploy.getBody.getPayment.getWasm)
           .withArgs(deploy.getBody.getPayment.args)
       )
       .withGasLimit(gasLimit) // New version doesn't have it.
@@ -181,13 +181,13 @@ object LegacyConversions {
       .withSession(
         consensus.Deploy
           .Code()
-          .withCode(deploy.getSession.code)
+          .withWasm(deploy.getSession.code)
           .withArgs(deploy.getSession.args)
       )
       .withPayment(
         consensus.Deploy
           .Code()
-          .withCode(deploy.getPayment.code)
+          .withWasm(deploy.getPayment.code)
           .withArgs(deploy.getPayment.args)
       )
 
