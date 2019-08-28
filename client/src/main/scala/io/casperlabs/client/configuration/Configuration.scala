@@ -146,7 +146,7 @@ object Configuration {
           options.unbond.amount.toOption,
           options.unbond.nonce(),
           options.unbond.session.toOption,
-          options.unbond.paymentPath.toOption,
+          options.unbond.payment.toOption,
           options.unbond.privateKey()
         )
       case options.bond =>
@@ -154,7 +154,7 @@ object Configuration {
           options.bond.amount(),
           options.bond.nonce(),
           options.bond.session.toOption,
-          options.bond.paymentPath.toOption,
+          options.bond.payment.toOption,
           options.bond.privateKey()
         )
       case options.transfer =>
@@ -163,7 +163,7 @@ object Configuration {
           options.transfer.targetAccount(),
           options.transfer.nonce(),
           options.transfer.session.toOption,
-          options.transfer.paymentPath.toOption,
+          options.transfer.payment.toOption,
           options.transfer.privateKey()
         )
       case options.visualizeBlocks =>

@@ -51,7 +51,27 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
 
-  val makeDeploy = new Subcommand("make-deploy") {
+  trait ContractArgs { self: Subcommand =>
+    def sessionRequired: Boolean = true
+    def paymentPathName: String  = "payment"
+
+    val session =
+      opt[File](
+        required = sessionRequired,
+        descr = "Path to the file with session code",
+        validate = fileCheck
+      )
+
+    val payment =
+      opt[File](
+        name = paymentPathName,
+        required = false,
+        descr = "Path to the file with payment code.",
+        validate = fileCheck
+      )
+  }
+
+  val makeDeploy = new Subcommand("make-deploy") with ContractArgs {
     descr("Constructs a deploy that can be signed and sent to a node.")
 
     val from = opt[String](
@@ -79,16 +99,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       validate = _ > 0,
       required = true
     )
-
-    val session =
-      opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
-
-    val payment =
-      opt[File](
-        required = false,
-        descr = "Path to the file with payment code, by default fallbacks to the --session code",
-        validate = fileCheck
-      )
 
     val deployPath =
       opt[File](
@@ -126,7 +136,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(sendDeploy)
 
-  val deploy = new Subcommand("deploy") {
+  val deploy = new Subcommand("deploy") with ContractArgs {
     descr(
       "Constructs a Deploy and sends it to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
@@ -159,16 +169,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       validate = _ > 0,
       required = true
     )
-
-    val session =
-      opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
-
-    val payment =
-      opt[File](
-        required = false,
-        descr = "Path to the file with payment code, by default fallbacks to the --session code",
-        validate = fileCheck
-      )
 
     val publicKey =
       opt[File](
@@ -289,8 +289,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showBlocks)
 
-  val unbond = new Subcommand("unbond") {
+  val unbond = new Subcommand("unbond") with ContractArgs {
     descr("Issues unbonding request")
+
+    override val sessionRequired = false
+    override val paymentPathName = "payment-path"
 
     val amount = opt[Long](
       name = "amount",
@@ -298,19 +301,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr =
         "Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made."
     )
-
-    val session =
-      opt[File](
-        descr = "Path to the file with unbonding contract.",
-        validate = fileCheck
-      )
-
-    val paymentPath =
-      opt[File](
-        descr = "Path to the file with payment code.",
-        validate = fileCheck,
-        required = false
-      )
 
     val nonce = opt[Long](
       descr =
@@ -329,8 +319,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(unbond)
 
-  val bond = new Subcommand("bond") {
+  val bond = new Subcommand("bond") with ContractArgs {
     descr("Issues bonding request")
+
+    override val sessionRequired = false
+    override val paymentPathName = "payment-path"
 
     val amount = opt[Long](
       name = "amount",
@@ -338,19 +331,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "amount of motes to bond",
       required = true
     )
-
-    val session =
-      opt[File](
-        descr = "Path to the file with bonding contract.",
-        validate = fileCheck
-      )
-
-    val paymentPath =
-      opt[File](
-        descr = "Path to the file with payment code.",
-        validate = fileCheck,
-        required = false
-      )
 
     val nonce = opt[Long](
       descr =
@@ -368,8 +348,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(bond)
 
-  val transfer = new Subcommand("transfer") {
+  val transfer = new Subcommand("transfer") with ContractArgs {
     descr("Transfers funds between accounts")
+
+    override val sessionRequired = false
+    override val paymentPathName = "payment-path"
 
     val amount = opt[Long](
       name = "amount",
@@ -378,19 +361,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.",
       required = true
     )
-
-    val session =
-      opt[File](
-        descr = "Path to the file with transfer contract.",
-        validate = fileCheck
-      )
-
-    val paymentPath =
-      opt[File](
-        descr = "Path to the file with payment code.",
-        validate = fileCheck,
-        required = false
-      )
 
     val nonce = opt[Long](
       descr =
