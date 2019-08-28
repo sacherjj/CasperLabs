@@ -30,7 +30,7 @@ impl InMemoryGlobalState {
     /// Creates an empty state.
     pub fn empty() -> Result<Self, error::Error> {
         let environment = Arc::new(InMemoryEnvironment::new());
-        let store = Arc::new(InMemoryTrieStore::new(&environment));
+        let store = Arc::new(InMemoryTrieStore::new(&environment, None));
         let root_hash: Blake2bHash = {
             let (root_hash, root) = create_hashed_empty_trie::<Key, Value>()?;
             let mut txn = environment.create_read_write_txn()?;

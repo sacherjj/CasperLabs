@@ -113,11 +113,11 @@ use lmdb::{Database, DatabaseFlags};
 use contract_ffi::bytesrepr::{deserialize, FromBytes, ToBytes};
 use engine_shared::newtypes::Blake2bHash;
 
-use crate::error;
 use crate::transaction_source::lmdb::LmdbEnvironment;
 use crate::transaction_source::{Readable, Writable};
 use crate::trie::Trie;
 use crate::trie_store::TrieStore;
+use crate::{error, trie_store};
 
 /// An LMDB-backed trie store.
 ///
@@ -130,10 +130,13 @@ pub struct LmdbTrieStore {
 impl LmdbTrieStore {
     pub fn new(
         env: &LmdbEnvironment,
-        name: Option<&str>,
+        maybe_name: Option<&str>,
         flags: DatabaseFlags,
     ) -> Result<Self, error::Error> {
-        let db = env.env().create_db(name, flags)?;
+        let name = maybe_name
+            .map(|name| format!("{}-{}", trie_store::NAME, name))
+            .unwrap_or_else(|| String::from(trie_store::NAME));
+        let db = env.env().create_db(Some(&name), flags)?;
         Ok(LmdbTrieStore { db })
     }
 

@@ -41,8 +41,10 @@ where
 }
 
 mod empty_tries {
-    use super::*;
     use std::collections::HashMap;
+
+    use super::*;
+    use crate::trie_store;
 
     fn writes_to_n_leaf_empty_trie_had_expected_results<'a, R, S, E>(
         correlation_id: CorrelationId,
@@ -189,7 +191,7 @@ mod empty_tries {
             )
             .unwrap();
 
-            context.environment.dump().unwrap()
+            context.environment.dump(Some(trie_store::NAME)).unwrap()
         };
 
         assert_eq!(expected_contents, actual_contents)
