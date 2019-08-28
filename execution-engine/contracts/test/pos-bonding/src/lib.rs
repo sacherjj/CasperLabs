@@ -3,20 +3,20 @@
 
 #[macro_use]
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::prelude::*;
 
-use cl_std::contract_api::pointers::{ContractPointer, UPointer};
-use cl_std::contract_api::{
+use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::contract_api::{
     call_contract, create_purse, get_arg, get_uref, main_purse, read, revert,
     transfer_from_purse_to_account, transfer_from_purse_to_purse, PurseTransferResult,
     TransferResult,
 };
-use cl_std::key::Key;
-use cl_std::uref::AccessRights;
-use cl_std::value::account::{PublicKey, PurseId};
-use cl_std::value::U512;
+use contract_ffi::key::Key;
+use contract_ffi::uref::AccessRights;
+use contract_ffi::value::account::{PublicKey, PurseId};
+use contract_ffi::value::U512;
 
 enum Error {
     GetPosOuterURef = 1000,
