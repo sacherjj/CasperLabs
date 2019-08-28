@@ -132,7 +132,8 @@ lazy val casper = (project in file("casper"))
     smartContracts % "compile->compile;test->test",
     crypto,
     models,
-    client
+    client,
+    benchmarks
   )
 
 lazy val comm = (project in file("comm"))
