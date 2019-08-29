@@ -1,20 +1,10 @@
-extern crate casperlabs_engine_grpc_server;
-extern crate contract_ffi;
-extern crate engine_core;
-extern crate engine_shared;
-extern crate engine_storage;
-extern crate grpc;
-
 use std::collections::HashMap;
 
+use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
 use engine_shared::transform::Transform;
-use test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder};
-
-#[allow(dead_code)]
-mod test_support;
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 
