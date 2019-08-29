@@ -85,12 +85,12 @@ object StorageBenchSuite {
           .withPayment(
             Deploy
               .Code()
-              .withCode(randomHexString(512))
+              .withWasm(randomHexString(512))
           )
           .withSession(
             Deploy
               .Code()
-              .withCode(randomHexString(480))
+              .withWasm(randomHexString(480))
           )
       )
 

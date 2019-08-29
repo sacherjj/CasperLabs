@@ -165,7 +165,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
           (_, _) => new Throwable("failed when run genesis").asLeft.pure[Task],
           (_, _, deploys, _) =>
             Task.now {
-              def getExecutionEffect(deploy: ipc.Deploy) = {
+              def getExecutionEffect(deploy: ipc.DeployItem) = {
                 val key =
                   Key(Key.Value.Hash(Key.Hash(ByteString.copyFromUtf8(deploy.toProtoString))))
                 val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))

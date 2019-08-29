@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::tracking_copy;
+
 use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
 use engine_shared::transform::Transform;
@@ -216,9 +218,7 @@ impl ExecutionResultBuilder {
                 if result.is_failure() {
                     return Ok(result);
                 } else {
-                    let effect = result.effect().to_owned();
-                    ops.extend(effect.ops.into_iter());
-                    transforms.extend(effect.transforms.into_iter());
+                    Self::add_effects(&mut ops, &mut transforms, result.effect());
                 }
             }
             None => return Err(ExecutionResultBuilderError::MissingPaymentExecutionResult),
@@ -230,9 +230,7 @@ impl ExecutionResultBuilder {
                 if result.is_failure() {
                     ret = result.with_cost(cost);
                 } else {
-                    let effect = result.effect().to_owned();
-                    ops.extend(effect.ops.into_iter());
-                    transforms.extend(effect.transforms.into_iter());
+                    Self::add_effects(&mut ops, &mut transforms, result.effect());
                 }
             }
             None => return Err(ExecutionResultBuilderError::MissingSessionExecutionResult),
@@ -246,14 +244,25 @@ impl ExecutionResultBuilder {
                         error::Error::FinalizationError,
                     ));
                 } else {
-                    let effect = result.effect().to_owned();
-                    ops.extend(effect.ops.into_iter());
-                    transforms.extend(effect.transforms.into_iter());
+                    Self::add_effects(&mut ops, &mut transforms, result.effect());
                 }
             }
             None => return Err(ExecutionResultBuilderError::MissingFinalizeExecutionResult),
         }
 
         Ok(ret.with_effect(ExecutionEffect::new(ops, transforms)))
+    }
+
+    fn add_effects(
+        ops: &mut HashMap<Key, Op>,
+        transforms: &mut HashMap<Key, Transform>,
+        effect: &ExecutionEffect,
+    ) {
+        for (k, op) in effect.ops.iter() {
+            tracking_copy::utils::add(ops, *k, op.clone());
+        }
+        for (k, t) in effect.transforms.iter() {
+            tracking_copy::utils::add(transforms, *k, t.clone());
+        }
     }
 }

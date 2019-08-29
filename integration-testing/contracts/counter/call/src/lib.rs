@@ -20,11 +20,11 @@ pub extern "C" fn call() {
 
     let _result: () = {
         let arg = "inc";
-        call_contract( pointer.clone(), &arg, &Vec::new())
+        call_contract(pointer.clone(), &(arg,), &Vec::new())
     };
 
     let _value: i32 = {
         let arg = "get";
-        call_contract(pointer, &arg, &Vec::new())
+        call_contract(pointer, &(arg,), &Vec::new())
     };
 }

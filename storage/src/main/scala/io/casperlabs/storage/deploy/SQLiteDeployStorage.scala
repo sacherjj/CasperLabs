@@ -197,6 +197,19 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
   override def readProcessed: F[List[Deploy]] =
     readByStatus(ProcessedStatusCode)
 
+  override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
+    sql"""| SELECT data FROM (SELECT data, deploys.account, create_time_seconds FROM deploys
+          | INNER JOIN buffered_deploys bd
+          | ON deploys.hash = bd.hash
+          | WHERE bd.status = $PendingStatusCode) pda
+          | GROUP BY pda.account
+          | HAVING MIN(pda.create_time_seconds)
+          | ORDER BY pda.create_time_seconds
+          |""".stripMargin
+      .query[Deploy]
+      .stream
+      .transact(xa)
+
   private def readByStatus(status: Int): F[List[Deploy]] =
     sql"""|SELECT data FROM deploys
           |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash

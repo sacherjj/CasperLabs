@@ -342,6 +342,26 @@ trait DeployStorageSpec
           }
       }
     }
+
+    "readAccountPendingOldest" should {
+      val existMultipleDeploysPerAccount: List[Deploy] => Boolean =
+        deploys => deploys.groupBy(_.getHeader.accountPublicKey).exists(_._2.size > 1)
+      "return PENDING deploys, one per account, with the lowest creation_time_second" in forAll(
+        deploysGen().suchThat(existMultipleDeploysPerAccount)
+      ) { deploys =>
+        testFixture { (reader, writer) =>
+          for {
+            _ <- writer.addAsPending(deploys)
+            expected = deploys
+              .groupBy(_.getHeader.accountPublicKey)
+              .mapValues(_.minBy(_.getHeader.timestamp))
+              .values
+              .toSet
+            got <- reader.readAccountPendingOldest().compile.toList
+          } yield got.toSet shouldBe expected
+        }
+      }
+    }
   }
 
   private def chooseHash(deploys: List[Deploy]): ByteString =

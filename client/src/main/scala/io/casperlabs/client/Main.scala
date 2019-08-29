@@ -14,6 +14,7 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
 import monix.execution.Scheduler
+import scala.concurrent.duration._
 
 object Main {
 
@@ -23,7 +24,7 @@ object Main {
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
       "node-runner",
-      reporter = UncaughtExceptionHandler
+      reporter = new UncaughtExceptionHandler(shutdownTimeout = 5.seconds)
     )
 
     val exec =

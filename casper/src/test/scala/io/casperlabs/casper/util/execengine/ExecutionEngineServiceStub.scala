@@ -48,13 +48,13 @@ object ExecutionEngineServiceStub {
 
   def mock[F[_]](
       runGenesisFunc: (
-          Seq[Deploy],
+          Seq[DeployItem],
           ProtocolVersion
       ) => F[Either[Throwable, GenesisResult]],
       execFunc: (
           ByteString,
           Long,
-          Seq[Deploy],
+          Seq[DeployItem],
           ProtocolVersion
       ) => F[Either[Throwable, Seq[DeployResult]]],
       commitFunc: (
@@ -66,14 +66,14 @@ object ExecutionEngineServiceStub {
   ): ExecutionEngineService[F] = new ExecutionEngineService[F] {
     override def emptyStateHash: ByteString = ByteString.EMPTY
     override def runGenesis(
-        deploys: Seq[Deploy],
+        deploys: Seq[DeployItem],
         protocolVersion: ProtocolVersion
     ): F[Either[Throwable, GenesisResult]] =
       runGenesisFunc(deploys, protocolVersion)
     override def exec(
         prestate: ByteString,
         blocktime: Long,
-        deploys: Seq[Deploy],
+        deploys: Seq[DeployItem],
         protocolVersion: ProtocolVersion
     ): F[Either[Throwable, Seq[DeployResult]]] =
       execFunc(prestate, blocktime, deploys, protocolVersion)

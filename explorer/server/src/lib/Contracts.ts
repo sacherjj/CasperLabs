@@ -30,7 +30,7 @@ export class Contract {
     signingKeyPair: nacl.SignKeyPair): Deploy {
 
     const code = new Deploy.Code();
-    code.setCode(this.contractWasm);
+    code.setWasm(this.contractWasm);
     code.setArgs(args);
 
     const body = new Deploy.Body();

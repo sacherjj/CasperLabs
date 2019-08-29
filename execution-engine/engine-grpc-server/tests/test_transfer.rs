@@ -134,7 +134,7 @@ fn should_transfer_to_account() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        ACCOUNT_1_ADDR,
+        (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -222,7 +222,7 @@ fn should_transfer_from_account_to_account() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        ACCOUNT_1_ADDR,
+        (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -384,7 +384,7 @@ fn should_transfer_to_existing_account() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        ACCOUNT_1_ADDR,
+        (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -515,7 +515,7 @@ fn should_fail_when_insufficient_funds() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        ACCOUNT_1_ADDR,
+        (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -646,7 +646,7 @@ fn should_create_purse() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        ACCOUNT_1_ADDR,
+        (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -723,7 +723,7 @@ fn should_transfer_total_amount() {
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            ACCOUNT_1_ADDR,
+            (ACCOUNT_1_ADDR,),
         )
         .expect_success()
         .commit()
@@ -733,7 +733,7 @@ fn should_transfer_total_amount() {
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            ACCOUNT_2_ADDR,
+            (ACCOUNT_2_ADDR,),
         )
         .commit()
         .expect_success();

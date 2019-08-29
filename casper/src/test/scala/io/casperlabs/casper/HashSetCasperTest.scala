@@ -1194,7 +1194,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       deploy <- ProtoUtil.basicDeploy[Effect](1L).map { d =>
                  d.withBody(
                    d.getBody.withPayment(
-                     Deploy.Code().withCode(ByteString.copyFromUtf8("some payment code"))
+                     Deploy.Code().withWasm(ByteString.copyFromUtf8("some payment code"))
                    )
                  )
                }

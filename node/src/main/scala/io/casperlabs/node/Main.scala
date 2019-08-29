@@ -19,11 +19,14 @@ object Main {
 
   implicit val log: Log[Task] = effects.log
 
+  implicit val uncaughtExceptionHandler = new UncaughtExceptionHandler(shutdownTimeout = 1.minute)
+
   def main(args: Array[String]): Unit = {
+
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
       "node-runner",
-      reporter = UncaughtExceptionHandler
+      reporter = uncaughtExceptionHandler
     )
 
     val exec: Task[Unit] =
