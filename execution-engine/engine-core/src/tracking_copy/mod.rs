@@ -112,6 +112,19 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         }
     }
 
+    /// Creates a new TrackingCopy, using this one (including its mutations) as the base state to
+    /// read against. The intended use case for this function is to "snapshot" the current
+    /// `TrackingCopy` and produce a new `TrackingCopy` where further changes can be made. This
+    /// allows isolating a specific set of changes (those in the new `TrackingCopy`) from existing
+    /// changes. Note that mutations to state caused by new changes (i.e. writes and adds) only
+    /// impact the new `TrackingCopy`, not this one. Note that currently there is no `join` /
+    /// `merge` function to bring changes from a fork back to the main `TrackingCopy`. this means
+    /// the current usage requires repeated forking, however we recognize this is sub-optimal and
+    /// will revisit in the future.
+    pub fn fork(&self) -> TrackingCopy<&TrackingCopy<R>> {
+        TrackingCopy::new(self)
+    }
+
     pub fn get(
         &mut self,
         correlation_id: CorrelationId,
@@ -290,5 +303,25 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
             error_msg.push_str(p);
         }
         error_msg
+    }
+}
+
+/// The purpose of this implementation is to allow a "snapshot" mechanism for
+/// TrackingCopy. The state of a TrackingCopy (including the effects of
+/// any transforms it has accumulated) can be read using an immutable
+/// reference to that TrackingCopy via this trait implementation. See
+/// `TrackingCopy::fork` for more information.
+impl<R: StateReader<Key, Value>> StateReader<Key, Value> for &TrackingCopy<R> {
+    type Error = R::Error;
+
+    fn read(&self, correlation_id: CorrelationId, key: &Key) -> Result<Option<Value>, Self::Error> {
+        if let Some(value) = self.cache.muts_cached.get(key) {
+            return Ok(Some(value.to_owned()));
+        }
+        if let Some(value) = self.reader.read(correlation_id, key)? {
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
     }
 }

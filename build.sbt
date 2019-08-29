@@ -84,6 +84,7 @@ lazy val shared = (project in file("shared"))
   .settings(
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
+      fs2,
       catsCore,
       catsPar,
       catsEffect,
