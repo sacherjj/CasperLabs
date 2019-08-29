@@ -10,7 +10,8 @@ import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
 
 object Options {
-  val hexCheck: String => Boolean = _.matches("[0-9a-fA-F]+")
+  val hexCheck: String => Boolean  = _.matches("[0-9a-fA-F]+")
+  val hashCheck: String => Boolean = x => hexCheck(x) && x.length == 32
 
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
@@ -19,11 +20,26 @@ object Options {
     def sessionRequired: Boolean = true
     def paymentPathName: String  = "payment"
 
+    // Session code on disk.
     val session =
       opt[File](
-        required = sessionRequired,
-        descr = "Path to the file with session code",
+        required = false,
+        descr = "Path to the file with session code.",
         validate = fileCheck
+      )
+
+    val sessionHash =
+      opt[String](
+        required = false,
+        descr = "Hash of the stored contract to be called in the session; base16 encoded.",
+        validate = hashCheck
+      )
+
+    val sessionName =
+      opt[String](
+        required = false,
+        descr =
+          "Name of the stored contract (associated with the executing account) to be called in the session."
       )
 
     val payment =
@@ -33,6 +49,35 @@ object Options {
         descr = "Path to the file with payment code.",
         validate = fileCheck
       )
+
+    val paymentHash =
+      opt[String](
+        required = false,
+        descr = "Hash of the stored contract to be called in the payment; base16 encoded.",
+        validate = hashCheck
+      )
+
+    val paymentName =
+      opt[String](
+        required = false,
+        descr =
+          "Name of the stored contract (associated with the executing account) to be called in the payment."
+      )
+
+    addValidation {
+      val sessionsProvided =
+        List(session.isDefined, sessionHash.isDefined, sessionName.isDefined).count(identity)
+      val paymentsProvided =
+        List(payment.isDefined, paymentHash.isDefined, paymentName.isDefined).count(identity)
+      if (sessionRequired && sessionsProvided == 0)
+        Left("No session contract options provided; please specify exactly one.")
+      else if (sessionsProvided > 1)
+        Left("Multiple session contract options provided; please specify exactly one.")
+      else if (paymentsProvided > 1)
+        Left("Multiple payment contract options provided; please specify exactly one.")
+      else Right(())
+    }
+
   }
 }
 
@@ -246,7 +291,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       trailArg[String](
         name = "hash",
         required = true,
-        descr = "Value of the block hash, base16 encoded."
+        descr = "Value of the block hash, base16 encoded.",
+        validate = hexCheck
       )
   }
   addSubcommand(showBlock)
@@ -260,7 +306,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       trailArg[String](
         name = "hash",
         required = true,
-        descr = "Value of the block hash, base16 encoded."
+        descr = "Value of the block hash, base16 encoded.",
+        validate = hexCheck
       )
   }
   addSubcommand(showDeploys)
@@ -274,7 +321,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       trailArg[String](
         name = "hash",
         required = true,
-        descr = "Value of the deploy hash, base16 encoded."
+        descr = "Value of the deploy hash, base16 encoded.",
+        validate = hashCheck
       )
   }
   addSubcommand(showDeploy)
@@ -297,8 +345,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val unbond = new Subcommand("unbond") with ContractArgs {
     descr("Issues unbonding request")
 
-    override val sessionRequired = false
-    override val paymentPathName = "payment-path"
+    override def sessionRequired = false
+    override def paymentPathName = "payment-path"
 
     val amount = opt[Long](
       name = "amount",
@@ -327,8 +375,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val bond = new Subcommand("bond") with ContractArgs {
     descr("Issues bonding request")
 
-    override val sessionRequired = false
-    override val paymentPathName = "payment-path"
+    override def sessionRequired = false
+    override def paymentPathName = "payment-path"
 
     val amount = opt[Long](
       name = "amount",
@@ -356,8 +404,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val transfer = new Subcommand("transfer") with ContractArgs {
     descr("Transfers funds between accounts")
 
-    override val sessionRequired = false
-    override val paymentPathName = "payment-path"
+    override def sessionRequired = false
+    override def paymentPathName = "payment-path"
 
     val amount = opt[Long](
       name = "amount",
@@ -446,7 +494,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[String](
         name = "key",
         descr = "Base16 encoding of the base key.",
-        required = true
+        required = true,
+        validate = hashCheck
       )
 
     val path =

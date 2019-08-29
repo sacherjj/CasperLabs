@@ -4,6 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, InputStream}
 import java.nio.file.Files
 import io.casperlabs.client.configuration.Options.ContractArgs
 import io.casperlabs.casper.consensus.Deploy.Code.Contract
+import io.casperlabs.crypto.codec.Base16
 import org.apache.commons.io._
 
 final case class ConnectOptions(
@@ -17,9 +18,12 @@ final case class ConnectOptions(
 final case class ContractOptions(
     // Point at a file on disk.
     file: Option[File],
-    // Name of a pre-packaged contract.
-    resource: Option[String] = None
-    // TODO: Stored contracts by hash, name or uref.
+    // Name of a pre-packaged contract in the client JAR.
+    resource: Option[String] = None,
+    // Hash of a stored contract.
+    hash: Option[String] = None,
+    // Name of a stored contract.
+    name: Option[String] = None
 )
 
 /** Encapsulate reading session and payment contracts from disk or resources
@@ -45,10 +49,19 @@ object Contracts {
 
   val empty = Contracts(ContractOptions(None), ContractOptions(None))
 
+  /** Produce a Deploy.Code.Contract DTO from the options. */
   private def toContract(opts: ContractOptions): Contract =
     opts.file.map { f =>
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
       Contract.Wasm(wasm)
+    } orElse {
+      opts.hash.map { h =>
+        Contract.Hash(ByteString.copyFrom(Base16.decode(h)))
+      }
+    } orElse {
+      opts.name.map { n =>
+        Contract.Name(n)
+      }
     } orElse {
       opts.resource.map { n =>
         val wasm =
