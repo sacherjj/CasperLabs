@@ -24,10 +24,10 @@ use contract_ffi::value::{Contract, Value};
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_storage::global_state::StateReader;
 
-use engine_state::execution_effect::ExecutionEffect;
-use execution::Error;
-use tracking_copy::{AddResult, TrackingCopy};
-use URefAddr;
+use crate::engine_state::execution_effect::ExecutionEffect;
+use crate::execution::Error;
+use crate::tracking_copy::{AddResult, TrackingCopy};
+use crate::URefAddr;
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
@@ -157,7 +157,7 @@ where
                 // is always able to remove keys from its own known_urefs.
                 let contract_key = Validated::new(contract_uref, Validated::valid)?;
 
-                let mut contract: Contract = {
+                let contract: Contract = {
                     let value: Value = self
                         .state
                         .borrow_mut()
@@ -177,12 +177,12 @@ where
                 self.remove_uref_from_contract(contract_uref, contract, name)
             }
             contract_hash @ Key::Hash(_) => {
-                let mut contract: Contract = self.read_gs_typed(&contract_hash)?;
+                let contract: Contract = self.read_gs_typed(&contract_hash)?;
                 self.uref_lookup.remove(name);
                 self.remove_uref_from_contract(contract_hash, contract, name)
             }
             contract_local @ Key::Local(_) => {
-                let mut contract: Contract = self.read_gs_typed(&contract_local)?;
+                let contract: Contract = self.read_gs_typed(&contract_local)?;
                 self.uref_lookup.remove(name);
                 self.remove_uref_from_contract(contract_local, contract, name)
             }

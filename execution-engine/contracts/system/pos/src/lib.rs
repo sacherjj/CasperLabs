@@ -1,5 +1,4 @@
 #![cfg_attr(not(test), no_std)]
-#![feature(alloc)]
 
 #[macro_use]
 extern crate alloc;
@@ -11,12 +10,12 @@ mod stakes;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use cl_std::contract_api;
-use cl_std::execution::Phase;
-use cl_std::key::Key;
-use cl_std::uref::{AccessRights, URef};
-use cl_std::value::account::{BlockTime, PublicKey, PurseId};
-use cl_std::value::U512;
+use contract_ffi::contract_api;
+use contract_ffi::execution::Phase;
+use contract_ffi::key::Key;
+use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
+use contract_ffi::value::U512;
 
 use crate::error::{Error, PurseLookupError, Result, ResultExt};
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
@@ -342,7 +341,7 @@ mod tests {
     use std::cell::RefCell;
     use std::iter;
 
-    use cl_std::value::{
+    use contract_ffi::value::{
         account::{BlockTime, PublicKey},
         U512,
     };

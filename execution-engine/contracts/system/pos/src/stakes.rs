@@ -2,9 +2,9 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use core::fmt::Write;
 
-use cl_std::contract_api;
-use cl_std::key::Key;
-use cl_std::value::{account::PublicKey, U512};
+use contract_ffi::contract_api;
+use contract_ffi::key::Key;
+use contract_ffi::value::{account::PublicKey, U512};
 
 use crate::error::{Error, Result};
 
@@ -184,7 +184,7 @@ impl Stakes {
 
 #[cfg(test)]
 mod tests {
-    use cl_std::value::{account::PublicKey, U512};
+    use contract_ffi::value::{account::PublicKey, U512};
 
     use crate::error::Error;
     use crate::stakes::Stakes;

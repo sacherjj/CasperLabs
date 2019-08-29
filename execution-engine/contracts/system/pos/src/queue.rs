@@ -2,10 +2,10 @@ use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::result;
 
-use cl_std::bytesrepr::{self, FromBytes, ToBytes};
-use cl_std::contract_api;
-use cl_std::value::account::{BlockTime, PublicKey};
-use cl_std::value::{Value, U512};
+use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
+use contract_ffi::contract_api;
+use contract_ffi::value::account::{BlockTime, PublicKey};
+use contract_ffi::value::{Value, U512};
 
 use crate::error::{Error, Result};
 
@@ -176,8 +176,8 @@ impl ToBytes for Queue {
 
 #[cfg(test)]
 mod tests {
-    use cl_std::value::account::{BlockTime, PublicKey};
-    use cl_std::value::U512;
+    use contract_ffi::value::account::{BlockTime, PublicKey};
+    use contract_ffi::value::U512;
 
     use crate::error::Error;
     use crate::queue::{Queue, QueueEntry};

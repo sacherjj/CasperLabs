@@ -1,9 +1,9 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 #[macro_use]
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 mod capabilities;
 
@@ -18,11 +18,11 @@ mod mint;
 use alloc::string::String;
 use core::convert::TryInto;
 
-use cl_std::contract_api;
-use cl_std::key::Key;
-use cl_std::system_contracts::mint::error::Error;
-use cl_std::uref::{AccessRights, URef};
-use cl_std::value::U512;
+use contract_ffi::contract_api;
+use contract_ffi::key::Key;
+use contract_ffi::system_contracts::mint::error::Error;
+use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::value::U512;
 
 use capabilities::{ARef, RAWRef};
 use internal_purse_id::{DepositId, WithdrawId};

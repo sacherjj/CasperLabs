@@ -10,7 +10,7 @@ mod tests;
 
 use engine_shared::newtypes::Blake2bHash;
 
-use trie::Trie;
+use crate::trie::Trie;
 
 /// A transaction which can be committed or aborted.
 pub trait Transaction: Sized {

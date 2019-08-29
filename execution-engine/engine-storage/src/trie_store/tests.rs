@@ -1,10 +1,10 @@
 use contract_ffi::bytesrepr::ToBytes;
 use engine_shared::newtypes::Blake2bHash;
 
-use trie::Trie;
-use trie::{Pointer, PointerBlock};
-use trie_store::{Readable, TrieStore, Writable};
-use TEST_MAP_SIZE;
+use crate::trie::Trie;
+use crate::trie::{Pointer, PointerBlock};
+use crate::trie_store::{Readable, TrieStore, Writable};
+use crate::TEST_MAP_SIZE;
 
 #[derive(Clone)]
 struct TestData<K, V>(Blake2bHash, Trie<K, V>);
@@ -110,12 +110,12 @@ mod simple {
     use engine_shared::newtypes::Blake2bHash;
 
     use super::TestData;
-    use error;
-    use trie::Trie;
-    use trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
-    use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-    use trie_store::tests::TEST_MAP_SIZE;
-    use trie_store::{Transaction, TransactionSource, TrieStore};
+    use crate::error;
+    use crate::trie::Trie;
+    use crate::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+    use crate::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+    use crate::trie_store::tests::TEST_MAP_SIZE;
+    use crate::trie_store::{Transaction, TransactionSource, TrieStore};
 
     fn put_succeeds<'a, K, V, S, X, E>(
         store: &S,
@@ -473,11 +473,11 @@ mod concurrent {
     use tempfile::tempdir;
 
     use super::TestData;
-    use trie::Trie;
-    use trie_store::in_memory::{InMemoryEnvironment, InMemoryTrieStore};
-    use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-    use trie_store::tests::TEST_MAP_SIZE;
-    use trie_store::{Transaction, TransactionSource, TrieStore};
+    use crate::trie::Trie;
+    use crate::trie_store::in_memory::{InMemoryEnvironment, InMemoryTrieStore};
+    use crate::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+    use crate::trie_store::tests::TEST_MAP_SIZE;
+    use crate::trie_store::{Transaction, TransactionSource, TrieStore};
 
     #[test]
     fn lmdb_writer_mutex_does_not_collide_with_readers() {
@@ -599,10 +599,10 @@ mod proptests {
     use engine_shared::newtypes::Blake2bHash;
 
     use super::TestData;
-    use trie::gens::trie_arb;
-    use trie::Trie;
-    use trie_store::tests::TEST_MAP_SIZE;
-    use trie_store::{Transaction, TransactionSource, TrieStore};
+    use crate::trie::gens::trie_arb;
+    use crate::trie::Trie;
+    use crate::trie_store::tests::TEST_MAP_SIZE;
+    use crate::trie_store::{Transaction, TransactionSource, TrieStore};
 
     const DEFAULT_MIN_LENGTH: usize = 1;
 
@@ -666,7 +666,7 @@ mod proptests {
     }
 
     fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
-        use trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+        use crate::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
 
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
@@ -675,8 +675,8 @@ mod proptests {
     }
 
     fn lmdb_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
-        use error;
-        use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+        use crate::error;
+        use crate::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
         let tmp_dir = tempdir().unwrap();
         let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();

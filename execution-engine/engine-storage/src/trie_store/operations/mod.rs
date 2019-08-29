@@ -4,8 +4,8 @@ use contract_ffi::bytesrepr::{self, ToBytes};
 use engine_shared::logging::{log_duration, log_metric, GAUGE};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 
-use trie::{self, Parents, Pointer, Trie};
-use trie_store::{Readable, TrieStore, Writable};
+use crate::trie::{self, Parents, Pointer, Trie};
+use crate::trie_store::{Readable, TrieStore, Writable};
 
 #[cfg(test)]
 mod tests;

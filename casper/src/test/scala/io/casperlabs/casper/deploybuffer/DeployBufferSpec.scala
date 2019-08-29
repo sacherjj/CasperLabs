@@ -23,7 +23,10 @@ trait DeployBufferSpec
     with GeneratorDrivenPropertyChecks {
 
   /* Implement this method in descendants substituting various DeployBuffer implementations */
-  protected def testFixture(test: DeployBuffer[Task] => Task[Unit]): Unit
+  protected def testFixture(
+      test: DeployBuffer[Task] => Task[Unit],
+      timeout: FiniteDuration = 5.seconds
+  ): Unit
 
   private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
@@ -258,42 +261,47 @@ trait DeployBufferSpec
     }
 
     "cleanupDiscarded" should {
-      "delete discarded deploys only older than 'now - expirationPeriod'" in testFixture { db =>
-        val first  = sample(arbDeploy.arbitrary)
-        val second = sample(arbDeploy.arbitrary)
-        for {
-          _ <- db.addAsPending(List(first, second))
-          _ <- db.markAsDiscarded(List(first))
-          _ <- Task.sleep(1.second)
-          _ <- db.markAsDiscarded(List(second))
-          _ <- db.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 1)
-          _ <- Task.sleep(1.second)
-          _ <- db.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 1)
-          _ <- Task.sleep(1.second)
-          _ <- db.cleanupDiscarded(expirationPeriod = 500.millis).foreachL(_ shouldBe 0)
-        } yield ()
-      }
+      "delete discarded deploys only older than 'now - expirationPeriod'" in testFixture(
+        { db =>
+          val first  = sample(arbDeploy.arbitrary)
+          val second = sample(arbDeploy.arbitrary)
+          for {
+            _ <- db.addAsPending(List(first, second))
+            _ <- db.markAsDiscarded(List(first))
+            _ <- Task.sleep(2.seconds)
+            _ <- db.markAsDiscarded(List(second))
+            _ <- db.cleanupDiscarded(expirationPeriod = 1.second).foreachL(_ shouldBe 1)
+            _ <- Task.sleep(2.seconds)
+            _ <- db.cleanupDiscarded(expirationPeriod = 1.second).foreachL(_ shouldBe 1)
+            _ <- Task.sleep(2.seconds)
+            _ <- db.cleanupDiscarded(expirationPeriod = 1.second).foreachL(_ shouldBe 0)
+          } yield ()
+        },
+        timeout = 15.seconds
+      )
     }
 
     "markAsDiscarded(duration)" should {
-      "mark only pending deploys were added more than 'now - expirationPeriod' time ago" in testFixture {
-        db =>
+      "mark only pending deploys were added more than 'now - expirationPeriod' time ago" in testFixture(
+        { db =>
           val first  = sample(arbDeploy.arbitrary)
           val second = sample(arbDeploy.arbitrary)
           for {
             _ <- db.addAsPending(List(first))
             _ <- db.pendingNum.foreachL(_ shouldBe 1)
-            _ <- Task.sleep(1.second)
+            _ <- Task.sleep(2.seconds)
             _ <- db.addAsProcessed(List(second))
             _ <- db.markAsPending(List(second))
             _ <- db.pendingNum.foreachL(_ shouldBe 2)
-            _ <- db.markAsDiscarded(expirationPeriod = 500.millis)
+            _ <- db.markAsDiscarded(expirationPeriod = 1.second)
             _ <- db.pendingNum.foreachL(_ shouldBe 1)
-            _ <- Task.sleep(1.second)
-            _ <- db.markAsDiscarded(expirationPeriod = 500.millis)
+            _ <- Task.sleep(2.seconds)
+            _ <- db.markAsDiscarded(expirationPeriod = 1.second)
             _ <- db.pendingNum.foreachL(_ shouldBe 0)
           } yield ()
-      }
+        },
+        timeout = 15.seconds
+      )
     }
 
     "readAccountPendingOldest" should {

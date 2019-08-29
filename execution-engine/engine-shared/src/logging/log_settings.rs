@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::logging::log_level::*;
 
-static mut LOG_SETTINGS_PROVIDER: &'static LogSettingsProvider = &NopLogSettingsProvider;
+static mut LOG_SETTINGS_PROVIDER: &'static dyn LogSettingsProvider = &NopLogSettingsProvider;
 
 static LOG_SETTINGS_STATE: AtomicUsize = AtomicUsize::new(0);
 
@@ -36,7 +36,7 @@ impl From<usize> for LogSettingsState {
     }
 }
 
-pub fn set_log_settings_provider(log_settings_provider: &'static LogSettingsProvider) {
+pub fn set_log_settings_provider(log_settings_provider: &'static dyn LogSettingsProvider) {
     match LOG_SETTINGS_STATE
         .compare_and_swap(
             <usize>::from(LogSettingsState::Uninitialized),
@@ -66,7 +66,7 @@ pub fn set_log_settings_provider(log_settings_provider: &'static LogSettingsProv
     }
 }
 
-pub(crate) fn get_log_settings_provider() -> &'static LogSettingsProvider {
+pub(crate) fn get_log_settings_provider() -> &'static dyn LogSettingsProvider {
     match LOG_SETTINGS_STATE.load(Ordering::SeqCst).into() {
         LogSettingsState::Initializing => get_log_settings_provider(),
         _ => unsafe { LOG_SETTINGS_PROVIDER },
