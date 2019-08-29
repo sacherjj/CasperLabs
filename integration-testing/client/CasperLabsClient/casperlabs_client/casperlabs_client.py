@@ -220,6 +220,56 @@ def api(function):
     return wrapper
 
 
+class InsecureGRPCService:
+    def __init__(self, host, port, serviceStub):
+        self.address = f"{host}:{port}"
+        self.serviceStub = serviceStub
+
+    def __getattr__(self, name):
+        def f(*args):
+            with grpc.insecure_channel(self.address) as channel:
+                return getattr(self.serviceStub(channel), name)(*args)
+
+        def g(*args):
+            with grpc.insecure_channel(self.address) as channel:
+                yield from getattr(self.serviceStub(channel), name[: -len("_stream")])(
+                    *args
+                )
+
+        return name.endswith("_stream") and g or f
+
+
+class SecureGRPCService:
+    def __init__(self, host, port, serviceStub, node_id, cert_file):
+        self.address = f"{host}:{port}"
+        self.serviceStub = serviceStub
+        self.node_id = node_id
+        self.cert_file = cert_file
+        with open(self.cert_file, "rb") as f:
+            self.credentials = grpc.ssl_channel_credentials(f.read())
+        self.secure_channel_options = node_id and (
+            ("grpc.ssl_target_name_override", self.node_id),
+            ("grpc.default_authority", self.node_id),
+        )
+
+    def __getattr__(self, name):
+        def f(*args):
+            with grpc.secure_channel(
+                self.address, self.credentials, options=self.secure_channel_options
+            ) as channel:
+                return getattr(self.serviceStub(channel), name)(*args)
+
+        def g(*args):
+            with grpc.secure_channel(
+                self.address, self.credentials, options=self.secure_channel_options
+            ) as channel:
+                yield from getattr(self.serviceStub(channel), name[: -len("_stream")])(
+                    *args
+                )
+
+        return name.endswith("_stream") and g or f
+
+
 class CasperLabsClient:
     """
     gRPC CasperLabs client.
@@ -240,6 +290,8 @@ class CasperLabsClient:
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
         internal_port: int = DEFAULT_INTERNAL_PORT,
+        node_id: str = None,
+        cert_file: str = None,
     ):
         """
         CasperLabs client's constructor.
@@ -247,35 +299,28 @@ class CasperLabsClient:
         :param host:           Hostname or IP of node on which gRPC service is running
         :param port:           Port used for external gRPC API
         :param internal_port:  Port used for internal gRPC API
+        :param node_id:        Node ID (i.e. the Keccak256 hash of the public
+                               key the node uses for TLS) in case secure
+                               communication is needed.
         """
         self.host = host
         self.port = port
         self.internal_port = internal_port
+        self.node_id = node_id
+        self.cert_file = cert_file
 
-        client = self
-
-        class GRPCService:
-            def __init__(self, port, serviceStub):
-                self.port = port
-                self.serviceStub = serviceStub
-
-            def __getattr__(self, name):
-                address = client.host + ":" + str(self.port)
-
-                def f(*args):
-                    with grpc.insecure_channel(address) as channel:
-                        return getattr(self.serviceStub(channel), name)(*args)
-
-                def g(*args):
-                    with grpc.insecure_channel(address) as channel:
-                        yield from getattr(
-                            self.serviceStub(channel), name[: -len("_stream")]
-                        )(*args)
-
-                return name.endswith("_stream") and g or f
-
-        self.casperService = GRPCService(self.port, CasperServiceStub)
-        self.controlService = GRPCService(self.internal_port, ControlServiceStub)
+        if node_id:
+            self.casperService = SecureGRPCService(
+                host, port, CasperServiceStub, node_id, cert_file
+            )
+            self.controlService = SecureGRPCService(
+                host, internal_port, ControlServiceStub, node_id, cert_file
+            )
+        else:
+            self.casperService = InsecureGRPCService(host, port, CasperServiceStub)
+            self.controlService = InsecureGRPCService(
+                host, internal_port, ControlServiceStub
+            )
 
     @api
     def deploy(

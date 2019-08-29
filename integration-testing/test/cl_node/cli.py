@@ -21,10 +21,12 @@ class CLI:
             os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
         )
         self.port = node.grpc_external_docker_port
+        self.internal_port = node.grpc_internal_docker_port
         self.cli_cmd = cli_cmd
         self.grpc_encryption = grpc_encryption
+        self.cert_file = node.config.tls_certificate_local_path()
 
-        cert_dict = ssl._ssl._test_decode_cert(node.config.tls_certificate_local_path())
+        cert_dict = ssl._ssl._test_decode_cert(self.cert_file)
         common_name = [
             t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"
         ][0]
