@@ -260,7 +260,7 @@ object ExecutionEngineService {
         else
           base
             .withDeploys(item :: batch.elements)
-            .serializedSize <= 0.9 * messageSizeLimit
+            .serializedSize <= messageSizeLimit
 
     batchElements(deploys, test)
       .map(batch => base.withDeploys(batch.elements))

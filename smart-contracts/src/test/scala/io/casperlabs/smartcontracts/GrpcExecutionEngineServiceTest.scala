@@ -4,11 +4,12 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.ipc.ExecuteRequest
 import org.scalacheck.{Gen, Shrink}
-import org.scalatest.FlatSpec
+import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 class GrpcExecutionEngineServiceTest
     extends FlatSpec
+    with Matchers
     with ArbitraryIpc
     with GeneratorDrivenPropertyChecks {
 
@@ -32,9 +33,9 @@ class GrpcExecutionEngineServiceTest
         ExecuteRequest(ByteString.EMPTY, 0L, protocolVersion = Some(ProtocolVersion(1L)))
       val batches =
         ExecutionEngineService.batchDeploysBySize(baseRequest, msgSize)(deployItems)
-      assert(batches.flatMap(_.deploys).toSet == deployItems.toSet) // Make sure we send all the deploys
+      batches.flatMap(_.deploys) should contain theSameElementsAs deployItems
       batches.foreach { request =>
-        assert(request.serializedSize < msgSize)
+        assert(request.serializedSize <= msgSize)
       }
   }
 
