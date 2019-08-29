@@ -30,6 +30,7 @@ pub trait Executor<A> {
         account: &Account,
         authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
+        deploy_hash: [u8; 32],
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
@@ -49,6 +50,7 @@ pub trait Executor<A> {
         account: &Account,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
+        deploy_hash: [u8; 32],
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
@@ -108,6 +110,7 @@ impl Executor<Module> for WasmiExecutor {
         account: &Account,
         authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
+        deploy_hash: [u8; 32],
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
@@ -123,8 +126,7 @@ impl Executor<Module> for WasmiExecutor {
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup_local.values().cloned());
-        let account_bytes = base_key.as_account().unwrap();
-        let rng = create_rng(account_bytes, account.nonce());
+        let rng = create_rng(deploy_hash);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
@@ -149,6 +151,7 @@ impl Executor<Module> for WasmiExecutor {
             &account,
             base_key,
             blocktime,
+            deploy_hash,
             gas_limit,
             gas_counter,
             fn_store_id,
@@ -180,6 +183,7 @@ impl Executor<Module> for WasmiExecutor {
         account: &Account,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
+        deploy_hash: [u8; 32],
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
@@ -195,7 +199,7 @@ impl Executor<Module> for WasmiExecutor {
 
         //let base_key = Key::Account(account.pub_key());
         let rng = {
-            let rng = create_rng(account.pub_key(), account.nonce());
+            let rng = create_rng(deploy_hash);
             Rc::new(RefCell::new(rng))
         };
         let gas_counter = 0u64; // maybe const?
@@ -219,6 +223,7 @@ impl Executor<Module> for WasmiExecutor {
             &account,
             base_key,
             blocktime,
+            deploy_hash,
             gas_limit,
             gas_counter,
             fn_store_id,

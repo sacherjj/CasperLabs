@@ -25,7 +25,6 @@ case class DeploysCheckpoint(
     postStateHash: StateHash,
     bondedValidators: Seq[io.casperlabs.casper.consensus.Bond],
     deploysForBlock: Seq[Block.ProcessedDeploy],
-    invalidNonceDeploys: Seq[InvalidNonceDeploy],
     deploysToDiscard: Seq[PreconditionFailure],
     protocolVersion: state.ProtocolVersion
 )
@@ -34,7 +33,6 @@ object ExecEngineUtil {
   type StateHash = ByteString
 
   case class InvalidDeploys(
-      invalidNonceDeploys: List[InvalidNonceDeploy],
       preconditionFailures: List[PreconditionFailure]
   )
 
@@ -53,9 +51,7 @@ object ExecEngineUtil {
                            protocolVersion
                          )
       processedDeployResults = zipDeploysResults(deploys, processedDeploys).toList
-      invalidDeploys <- processedDeployResults.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
-                         case (acc, d: InvalidNonceDeploy) =>
-                           acc.copy(invalidNonceDeploys = d :: acc.invalidNonceDeploys).pure[F]
+      invalidDeploys <- processedDeployResults.foldM[F, InvalidDeploys](InvalidDeploys(Nil)) {
                          case (acc, d: PreconditionFailure) =>
                            // Log precondition failures as we will be getting rid of them.
                            Log[F].warn(
@@ -84,7 +80,6 @@ object ExecEngineUtil {
       commitResult.postStateHash,
       commitResult.bondedValidators,
       deploysForBlock,
-      invalidDeploys.invalidNonceDeploys,
       invalidDeploys.preconditionFailures,
       protocolVersion
     )

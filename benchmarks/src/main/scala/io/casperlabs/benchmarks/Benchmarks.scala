@@ -55,13 +55,11 @@ object Benchmarks {
         )
 
     def send(
-        nonce: Long,
         recipientPublicKeyBase64: String,
         senderPrivateKey: PrivateKey,
         senderPublicKey: PublicKey,
         amount: Long
     ): F[Unit] = DeployRuntime.transfer[F](
-      nonce = nonce,
       sessionCode = None,
       paymentCode = None,
       senderPublicKey = senderPublicKey,
@@ -88,9 +86,8 @@ object Benchmarks {
       for {
         _ <- Log[F].info("Initializing accounts...")
         _ <- (recipient :: senders).zipWithIndex.traverse {
-              case ((_, pk), i) =>
+              case ((_, pk), _) =>
                 send(
-                  nonce = i.toLong + 1L,
                   recipientPublicKeyBase64 = Base64.encode(pk),
                   senderPrivateKey = initialFundsPrivateKey,
                   senderPublicKey = initialFundsPublicKey,
@@ -100,13 +97,12 @@ object Benchmarks {
         _ <- propose
       } yield ()
 
-    def oneRoundTransfer(nonce: Long): F[Unit] =
+    def oneRoundTransfer(): F[Unit] =
       for {
         _ <- Log[F].info("Sending deploys...")
         _ <- senders.parTraverse {
               case (sk, pk) =>
                 send(
-                  nonce = nonce,
                   recipientPublicKeyBase64 = recipientBase64,
                   senderPrivateKey = sk,
                   senderPublicKey = pk,
@@ -135,7 +131,7 @@ object Benchmarks {
         deployTime: FiniteDuration,
         proposeTime: FiniteDuration,
         total: FiniteDuration,
-        nonce: Long
+        round: Long
     ): F[Unit] = {
       def format(fd: FiniteDuration): String = fd.toCoarsest.toString()
       val message =
@@ -146,24 +142,24 @@ object Benchmarks {
         StandardCharsets.UTF_8,
         StandardOpenOption.WRITE ::
           StandardOpenOption.APPEND :: Nil
-      ) >> Log[F].info(s"Round: ${nonce - 1}: $message")
+      ) >> Log[F].info(s"Round: ${round - 1}: $message")
     }
 
-    def round(nonce: Long): F[Unit] =
+    def round(round: Long): F[Unit] =
       for {
-        _           <- Log[F].info(s"Starting new round ${nonce - 1}")
-        deployTime  <- measure(oneRoundTransfer(nonce))
+        _           <- Log[F].info(s"Starting new round ${round - 1}")
+        deployTime  <- measure(oneRoundTransfer())
         proposeTime <- measure(propose)
         totalTime   = deployTime + proposeTime
-        _           <- writeResults(deployTime, proposeTime, totalTime, nonce)
+        _           <- writeResults(deployTime, proposeTime, totalTime, round)
       } yield ()
 
     def rounds(n: Int): F[Unit] = {
-      def loop(nonce: Long): F[Unit] =
-        if (nonce == n) {
+      def loop(roundNum: Long): F[Unit] =
+        if (roundNum == n) {
           Monad[F].unit
         } else {
-          round(nonce).flatMap(_ => loop(nonce + 1))
+          round(roundNum).flatMap(_ => loop(roundNum + 1))
         }
 
       for {

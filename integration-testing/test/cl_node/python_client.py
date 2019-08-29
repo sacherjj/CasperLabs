@@ -4,7 +4,6 @@ import logging
 import time
 
 from test.cl_node import LoggingMixin
-from test.cl_node.nonce_registry import NonceRegistry
 from casperlabs_client import CasperLabsClient, ABI, InternalError
 
 
@@ -38,7 +37,6 @@ class PythonClient(CasperLabsClient, LoggingMixin):
         from_address: str = None,
         gas_limit: int = 1000000,
         gas_price: int = 1,
-        nonce: int = None,
         session_contract: Optional[str] = None,
         payment_contract: Optional[str] = None,
         private_key: Optional[str] = None,
@@ -54,7 +52,6 @@ class PythonClient(CasperLabsClient, LoggingMixin):
         private_key = private_key or self.node.test_account.private_key_path
 
         address = from_address or self.node.from_address
-        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
 
         resources_path = self.node.resources_folder
         session_contract_path = str(resources_path / session_contract)
@@ -64,28 +61,20 @@ class PythonClient(CasperLabsClient, LoggingMixin):
             f"PY_CLIENT.deploy(from_address={address}, gas_limit={gas_limit}, gas_price={gas_price}, "
             f"payment_contract={payment_contract_path}, session_contract={session_contract_path}, "
             f"private_key={private_key}, "
-            f"public_key={public_key}, "
-            f"nonce={deploy_nonce})"
+            f"public_key={public_key} "
         )
 
-        try:
-            r = self.client.deploy(
-                bytes.fromhex(address),
-                gas_limit,
-                gas_price,
-                payment_contract_path,
-                session_contract_path,
-                deploy_nonce,
-                public_key,
-                private_key,
-                session_args,
-                payment_args,
-            )
-            return r
-        except Exception:
-            if nonce is None:
-                NonceRegistry.revert(address)
-            raise
+        return self.client.deploy(
+            bytes.fromhex(address),
+            gas_limit,
+            gas_price,
+            payment_contract_path,
+            session_contract_path,
+            public_key,
+            private_key,
+            session_args,
+            payment_args,
+        )
 
     def propose(self) -> str:
         logging.info(f"PY_CLIENT.propose() for {self.client.host}")

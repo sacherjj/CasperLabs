@@ -50,7 +50,6 @@ object DeployRuntime {
 
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
-      nonce: Long,
       sessionCode: Option[File],
       paymentCode: Option[File],
       privateKeyFile: File
@@ -65,7 +64,6 @@ object DeployRuntime {
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
-            nonce = nonce,
             sessionCode = sessionCode,
             paymentCode = paymentCode,
             maybeEitherPublicKey = None,
@@ -78,7 +76,6 @@ object DeployRuntime {
 
   def bond[F[_]: Sync: DeployService](
       amount: Long,
-      nonce: Long,
       sessionCode: Option[File],
       paymentCode: Option[File],
       privateKeyFile: File
@@ -91,7 +88,6 @@ object DeployRuntime {
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
-            nonce = nonce,
             sessionCode = sessionCode,
             paymentCode = paymentCode,
             maybeEitherPublicKey = None,
@@ -229,7 +225,6 @@ object DeployRuntime {
     })
 
   def transferCLI[F[_]: Sync: DeployService: FilesAPI](
-      nonce: Long,
       sessionCode: Option[File],
       paymentCode: Option[File],
       privateKeyFile: File,
@@ -251,7 +246,6 @@ object DeployRuntime {
                     )
                   )
       _ <- transfer[F](
-            nonce,
             sessionCode,
             paymentCode,
             publicKey,
@@ -262,7 +256,6 @@ object DeployRuntime {
     } yield ()
 
   def transfer[F[_]: Sync: DeployService: FilesAPI](
-      nonce: Long,
       sessionCode: Option[File],
       paymentCode: Option[File],
       senderPublicKey: PublicKey,
@@ -283,7 +276,6 @@ object DeployRuntime {
       args        = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
       _ <- deployFileProgram[F](
             from = None,
-            nonce = nonce,
             sessionCode = sessionCode,
             paymentCode = paymentCode,
             maybeEitherPublicKey = senderPublicKey.asRight[String].some,
@@ -328,7 +320,6 @@ object DeployRuntime {
     */
   def makeDeploy[F[_]: Sync](
       from: ByteString,
-      nonce: Long,
       gasPrice: Long,
       sessionCode: Array[Byte],
       sessionArguments: Array[Byte],
@@ -345,7 +336,6 @@ object DeployRuntime {
           .Header()
           .withTimestamp(System.currentTimeMillis)
           .withAccountPublicKey(from)
-          .withNonce(nonce)
           .withGasPrice(gasPrice)
       )
       .withBody(
@@ -379,7 +369,6 @@ object DeployRuntime {
 
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[String],
-      nonce: Long,
       sessionCode: Array[Byte],
       paymentCode: Option[File],
       maybeEitherPublicKey: Option[Either[String, PublicKey]],
@@ -413,7 +402,7 @@ object DeployRuntime {
                          )
     } yield {
       val deploy =
-        makeDeploy(accountPublicKey, nonce, gasPrice, sessionCode, sessionArgs, payment)
+        makeDeploy(accountPublicKey, gasPrice, sessionCode, sessionArgs, payment)
       (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
     }
 

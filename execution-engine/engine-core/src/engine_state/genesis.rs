@@ -42,7 +42,7 @@ impl GenesisURefsSource {
         // This should never clash with the deploy's PRNG as there is no Ed25519 private key that
         // corresponds to `000..00` public key. Even if there was, because we are using nonce=0
         // and any valid deploy starts with nonce=1 the seed to deploy's PRNG will be different.
-        execution::create_rng([0u8; 32], 0)
+        execution::create_rng([0u8; 32])
     }
 
     pub fn get_uref(&self, label: &str) -> URef {

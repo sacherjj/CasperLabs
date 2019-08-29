@@ -25,7 +25,7 @@ fn should_run_get_blocktime_contract() {
             GENESIS_ADDR,
             "get_blocktime.wasm",
             block_time,
-            1,
+            [1u8; 32],
             (block_time,), // passing this to contract to test assertion
         )
         .commit()

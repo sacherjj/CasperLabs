@@ -25,7 +25,7 @@ pub enum ExecutionResult {
 impl ExecutionResult {
     /// Constructs [ExecutionResult::Failure] that has 0 cost and no effects.
     /// This is the case for failures that we can't (or don't want to) charge for,
-    /// like `PreprocessingError` or `InvalidNonce`.
+    /// like `PreprocessingError`.
     pub fn precondition_failure(error: error::Error) -> ExecutionResult {
         ExecutionResult::Failure {
             error,

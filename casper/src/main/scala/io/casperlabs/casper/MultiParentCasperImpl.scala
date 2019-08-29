@@ -329,10 +329,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
     (for {
       processedDeploys <- DeployBuffer[F].readProcessedByAccount(deploy.getHeader.accountPublicKey)
       _ <- processedDeploys
-            .find { d =>
-              d.getHeader.nonce >= deploy.getHeader.nonce &&
-              d.deployHash != deploy.deployHash
-            }
+            .find(_.deployHash == deploy.deployHash)
             .map { d =>
               new IllegalArgumentException(s"${show(d)} supersedes ${show(deploy)}.")
                 .raiseError[F, Unit]
@@ -432,7 +429,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
                     .getByHashes(candidateBlockHashes)
                     .map {
                       _.groupBy(_.getHeader.accountPublicKey).map {
-                        case (_, deploys) => deploys.minBy(_.getHeader.nonce)
+                        case (_, deploys) => deploys.head // TODO: Deploy sequencing
                       }.toSeq
                     }
     } yield remaining
@@ -516,11 +513,6 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
         postStateHash,
         bondedValidators,
         deploysForBlock,
-        // We don't have to put InvalidNonce deploys back to the buffer,
-        // as by default buffer is cleared when deploy gets included in
-        // the finalized block. If that strategy ever changes, we will have to
-        // put them back into the buffer explicitly.
-        invalidNonceDeploys,
         deploysToDiscard,
         protocolVersion
       )                 = result

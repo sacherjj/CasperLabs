@@ -27,7 +27,7 @@ fn should_deploy_with_authorized_identity_key() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             1,                                // blocktime
-            1,                                // nonce
+            [1u8; 32],                        //deploy hash
             (Weight::new(1), Weight::new(1)), //args
             vec![PublicKey::new(GENESIS_ADDR)],
         )
@@ -48,7 +48,7 @@ fn should_raise_auth_failure_with_invalid_key() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             1,                                // blocktime
-            1,                                // nonce
+            [1u8; 32],                        //deploy hash
             (Weight::new(1), Weight::new(1)), //args
             vec![PublicKey::new(key_1)],
         )
@@ -90,7 +90,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             1,                                // blocktime
-            1,                                // nonce
+            [1u8; 32],                        //deploy hash
             (Weight::new(1), Weight::new(1)), //args
             vec![
                 PublicKey::new(key_2),
@@ -137,7 +137,7 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32], //deploy hash
             (PublicKey::new(key_1),),
         )
         .expect_success()
@@ -146,7 +146,7 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
-            2,
+            [2u8; 32], //deploy hash
             (PublicKey::new(key_2),),
         )
         .expect_success()
@@ -155,7 +155,7 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
-            3,
+            [3u8; 32], //deploy hash
             (PublicKey::new(key_3),),
         )
         .expect_success()
@@ -166,7 +166,7 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            4, // nonce
+            [4u8; 32], //deploy hash
             // Deploy threshold is equal to 3, keymgmnt is still 1.
             // Even after verifying weights and thresholds to not
             // lock out the account, those values should work as
@@ -186,7 +186,7 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            5, // nonce
+            [5u8; 32], //deploy hash
             // Next deploy will see deploy threshold == 4, keymgmnt == 5
             (Weight::new(5), Weight::new(4)), //args
             vec![PublicKey::new(key_1)],
@@ -218,7 +218,7 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            5, // nonce
+            [6u8; 32], //deploy hash
             // change deployment threshold to 4
             (Weight::new(6), Weight::new(5)), //args
             vec![
@@ -239,7 +239,7 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            6,                                // nonce
+            [7u8; 32],
             (Weight::new(0), Weight::new(0)), //args
             vec![PublicKey::new(key_2), PublicKey::new(key_1)],
         )
@@ -270,7 +270,7 @@ fn should_raise_deploy_authorization_failure() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            6,                                // nonce
+            [8u8; 32],
             (Weight::new(0), Weight::new(0)), //args
             vec![
                 PublicKey::new(GENESIS_ADDR),
@@ -302,7 +302,7 @@ fn should_authorize_deploy_with_multiple_keys() {
             GENESIS_ADDR,
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32], // deploy hash
             (PublicKey::new(key_1),),
         )
         .expect_success()
@@ -311,7 +311,7 @@ fn should_authorize_deploy_with_multiple_keys() {
             GENESIS_ADDR,
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
-            2,
+            [2u8; 32], // deploy hash
             (PublicKey::new(key_2),),
         )
         .expect_success()
@@ -324,7 +324,7 @@ fn should_authorize_deploy_with_multiple_keys() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            3, // nonce
+            [3u8; 32], // deploy hash
             // change deployment threshold to 4
             (Weight::new(0), Weight::new(0)), //args
             vec![PublicKey::new(key_2), PublicKey::new(key_1)],
@@ -348,7 +348,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
             GENESIS_ADDR,
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32], // deploy hash
             (PublicKey::new(key_1),),
         )
         .expect_success()
@@ -357,7 +357,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            2, // nonce
+            [2u8; 32], // deploy hash
             // change deployment threshold to 3
             (Weight::new(4), Weight::new(3)), //args
             vec![PublicKey::new(GENESIS_ADDR)],
@@ -372,7 +372,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
             GENESIS_ADDR,
             "authorized_keys.wasm",
             DEFAULT_BLOCK_TIME,
-            3,                                // nonce
+            [3u8; 32],                        // deploy hash
             (Weight::new(0), Weight::new(0)), //args
             vec![
                 PublicKey::new(key_1),

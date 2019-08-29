@@ -285,7 +285,6 @@ class CasperLabsClient:
         gas_price: int = 10,
         payment: str = None,
         session: str = None,
-        nonce: int = 0,
         public_key: str = None,
         private_key: str = None,
         session_args: bytes = None,
@@ -303,8 +302,6 @@ class CasperLabsClient:
                               Must be positive integer.
         :param payment:       Path to the file with payment code.
         :param session:       Path to the file with session code.
-        :param nonce:         This allows you to overwrite your own pending
-                              transactions that use the same nonce.
         :param public_key:    Path to a file with public key (Ed25519)
         :param private_key:   Path to a file with private key (Ed25519)
         :param session_args:  List of ABI encoded arguments of session contract
@@ -354,7 +351,7 @@ class CasperLabsClient:
 
         header = consensus.Deploy.Header(
             account_public_key=account_public_key,
-            nonce=nonce,
+            nonce=0,  # Not used, but still required in interface currently.
             timestamp=int(time.time()),
             gas_price=gas_price,
             body_hash=hash(serialize(body)),
@@ -614,7 +611,6 @@ def deploy_command(casperlabs_client, args):
         gas_price=args.gas_price,
         payment=args.payment or args.session,
         session=args.session,
-        nonce=args.nonce,
         public_key=args.public_key or None,
         private_key=args.private_key or None,
         session_args=args.session_args
@@ -742,7 +738,6 @@ def main():
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
                       [[('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
                        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
-                       [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
                        [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
                        [('--session-args',), dict(required=False, type=str, help='JSON encoded list of session args, e.g.: [{"u32":1024},{"u64":12}]')],

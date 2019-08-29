@@ -10,9 +10,10 @@ use std::collections::HashMap;
 use grpc::RequestOptions;
 
 use casperlabs_engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+use contract_ffi::base16;
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
-use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::uref::URef;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::EngineState;
@@ -23,6 +24,8 @@ use test_support::DEFAULT_BLOCK_TIME;
 #[allow(unused)]
 mod test_support;
 
+use test_support::WasmTestBuilder;
+
 const INITIAL_GENESIS_AMOUNT: u64 = 100_000_000_000;
 
 const TRANSFER_1_AMOUNT: u32 = 1000;
@@ -31,13 +34,6 @@ const TRANSFER_2_AMOUNT: u32 = 750;
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
-
-// This value was acquired by observing the output of an execution of "create_purse_01.wasm"
-// made by ACCOUNT_1.
-const EXPECTED_UREF_BYTES: [u8; 32] = [
-    0xb9, 0x8a, 0x1b, 0xee, 0xd7, 0x95, 0x99, 0x1f, 0x3a, 0x54, 0xdf, 0xb1, 0xad, 0xc8, 0x48, 0x0b,
-    0x16, 0x20, 0x14, 0x25, 0x58, 0xb1, 0x4c, 0x09, 0x16, 0x1f, 0xf1, 0xe7, 0x69, 0xbd, 0x8f, 0xc9,
-];
 
 struct TestContext {
     mint_contract_uref: URef,
@@ -133,7 +129,7 @@ fn should_transfer_to_account() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [1u8; 32],
         (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
@@ -221,7 +217,7 @@ fn should_transfer_from_account_to_account() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [1u8; 32],
         (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
@@ -286,7 +282,7 @@ fn should_transfer_from_account_to_account() {
         "transfer_to_account_02.wasm",
         commit_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [2u8; 32],
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
@@ -383,7 +379,7 @@ fn should_transfer_to_existing_account() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [1u8; 32],
         (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
@@ -448,7 +444,7 @@ fn should_transfer_to_existing_account() {
         "transfer_to_account_02.wasm",
         commit_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [2u8; 32],
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
@@ -514,7 +510,7 @@ fn should_fail_when_insufficient_funds() {
         "transfer_to_account_01.wasm",
         genesis_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [1u8; 32],
         (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
@@ -550,7 +546,7 @@ fn should_fail_when_insufficient_funds() {
         "transfer_to_account_02.wasm",
         commit_hash,
         DEFAULT_BLOCK_TIME,
-        1,
+        [2u8; 32],
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
@@ -580,7 +576,7 @@ fn should_fail_when_insufficient_funds() {
         "transfer_to_account_02.wasm",
         commit_hash,
         DEFAULT_BLOCK_TIME,
-        2,
+        [3u8; 32],
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
@@ -607,107 +603,80 @@ fn should_fail_when_insufficient_funds() {
 #[ignore]
 #[test]
 fn should_create_purse() {
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
     let account_key = Key::Account(ACCOUNT_1_ADDR);
-    let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, Default::default());
 
-    // Run genesis & set up an account
-
-    let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
-
-    let genesis_response = engine_state
-        .run_genesis(RequestOptions::new(), genesis_request)
-        .wait_drop_metadata()
-        .unwrap();
-
-    let genesis_hash = genesis_response.get_success().get_poststate_hash();
-
-    let genesis_transforms = test_support::get_genesis_transforms(&genesis_response);
-
-    let mint_contract_uref = test_support::get_mint_contract_uref(&genesis_transforms, &contracts)
-        .expect("should get uref");
-
-    let mut test_context = TestContext::new(mint_contract_uref);
-
-    let genesis_account = test_support::get_account(&genesis_transforms, &genesis_account_key)
-        .expect("should get account");
-
-    let genesis_account_purse_id = genesis_account.purse_id();
-
-    test_context.track(&genesis_transforms, genesis_account_purse_id);
-
-    // Exec transfer
-
-    let exec_request = test_support::create_exec_request(
-        GENESIS_ADDR,
-        "transfer_to_account_01.wasm",
-        genesis_hash,
-        DEFAULT_BLOCK_TIME,
-        1,
-        (ACCOUNT_1_ADDR,),
-        vec![PublicKey::new(GENESIS_ADDR)],
-    );
-
-    let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
-        .wait_drop_metadata()
-        .unwrap();
-
-    let exec_transforms = &test_support::get_exec_transforms(&exec_response)[0];
-
-    let account =
-        test_support::get_account(&exec_transforms, &account_key).expect("should get account");
-
-    let account_purse_id = account.purse_id();
-
-    test_context.track(&exec_transforms, account_purse_id);
-
-    // Commit
-
-    let commit_request = test_support::create_commit_request(genesis_hash, &exec_transforms);
-
-    let commit_response = engine_state
-        .commit(RequestOptions::new(), commit_request)
-        .wait_drop_metadata()
-        .unwrap();
-
-    assert!(
-        commit_response.has_success(),
-        "Commit wasn't successful: {:?}",
-        commit_response
-    );
-
-    let commit_hash = commit_response.get_success().get_poststate_hash();
+    // This test runs a contract that's after every call extends the same key with more data
+    let result = WasmTestBuilder::default()
+        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .exec_with_args(
+            GENESIS_ADDR,
+            "transfer_to_account_01.wasm",
+            DEFAULT_BLOCK_TIME,
+            [1u8; 32],
+            (ACCOUNT_1_ADDR,),
+        )
+        .expect_success()
+        .commit()
+        .finish();
 
     // Create purse
 
-    let exec_request = test_support::create_exec_request(
-        ACCOUNT_1_ADDR,
-        "create_purse_01.wasm",
-        commit_hash,
-        DEFAULT_BLOCK_TIME,
-        1,
-        (),
-        vec![PublicKey::new(ACCOUNT_1_ADDR)],
+    let result = WasmTestBuilder::from_result(result)
+        .exec(
+            ACCOUNT_1_ADDR,
+            "create_purse_01.wasm",
+            DEFAULT_BLOCK_TIME,
+            [2u8; 32],
+        )
+        .expect_success()
+        .commit()
+        .finish();
+
+    let mint_contract_uref = result.builder().get_mint_contract_uref();
+    let mint_transform =
+        &result.builder().get_transforms()[0][&mint_contract_uref.remove_access_rights().into()];
+    // println!("mint transforms {:?}", mint_transforms);
+    let add_keys = if let Transform::AddKeys(keys) = mint_transform {
+        keys
+    } else {
+        panic!(
+            "Mint transform is expected to be an AddKeys variant instead got {:?}",
+            mint_transform
+        );
+    };
+    // Exactly one new key which is the new purse created
+    assert_eq!(add_keys.len(), 1);
+    let (key, _value) = add_keys.iter().nth(0).unwrap();
+
+    // Decode uref name
+    assert!(
+        key.starts_with("uref-"),
+        format!(
+            "expected uref to start with uref- but the map contains {:?}",
+            add_keys
+        )
     );
+    let decoded_purse_id = base16::decode_lower(&key[5..69]).expect("should decode base16");
+    assert_eq!(decoded_purse_id.len(), 32);
 
-    let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
-        .wait_drop_metadata()
-        .unwrap();
+    let account_1 = result
+        .builder()
+        .get_account(account_key)
+        .expect("should have account 1");
+    assert!(account_1.urefs_lookup().contains_key("actual_purse_id"));
+    let actual_purse_id = account_1.urefs_lookup()["actual_purse_id"];
+    let actual_purse_id_uref = actual_purse_id.as_uref().expect("should be uref");
 
-    let exec_transforms = &test_support::get_exec_transforms(&exec_response)[0];
+    // Purse created by mint matches purse stored by the contract
+    assert_eq!(decoded_purse_id, actual_purse_id_uref.addr());
 
-    let expected_purse_id = PurseId::new(
-        URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE).remove_access_rights(),
+    // Newly created purse has 0 balance
+    assert_eq!(
+        result
+            .builder()
+            .get_purse_balance(PurseId::new(*actual_purse_id_uref)),
+        U512::from(0)
     );
-    test_context.track(&exec_transforms, expected_purse_id);
-
-    let account = &exec_transforms
-        [&Key::URef(URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE)).normalize()];
-    assert_eq!(account, &Transform::Write(Value::UInt512(U512::from(0))));
 }
 
 #[ignore]
@@ -722,7 +691,7 @@ fn should_transfer_total_amount() {
             // Genesis transfers N motes to new account
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             (ACCOUNT_1_ADDR,),
         )
         .expect_success()
@@ -732,7 +701,7 @@ fn should_transfer_total_amount() {
             // New account transfers exactly N motes to new account (total amount)
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
             (ACCOUNT_2_ADDR,),
         )
         .commit()

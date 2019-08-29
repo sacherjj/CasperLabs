@@ -13,7 +13,6 @@ sealed trait Configuration
 final case class MakeDeploy(
     from: Option[String],
     publicKey: Option[File],
-    nonce: Long,
     sessionCode: File,
     paymentCode: File,
     gasPrice: Long,
@@ -26,7 +25,6 @@ final case class SendDeploy(
 
 final case class Deploy(
     from: Option[String],
-    nonce: Long,
     sessionCode: File,
     paymentCode: Option[File],
     publicKey: Option[File],
@@ -51,7 +49,6 @@ final case class ShowDeploy(deployHash: String) extends Configuration
 final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
-    nonce: Long,
     sessionCode: Option[File],
     paymentCode: Option[File],
     privateKey: File
@@ -59,14 +56,12 @@ final case class Bond(
 final case class Transfer(
     amount: Long,
     recipientPublicKeyBase64: String,
-    nonce: Long,
     sessionCode: Option[File],
     paymentCode: Option[File],
     privateKey: File
 ) extends Configuration
 final case class Unbond(
     amount: Option[Long],
-    nonce: Long,
     sessionCode: Option[File],
     paymentCode: Option[File],
     privateKey: File
@@ -105,7 +100,6 @@ object Configuration {
       case options.deploy =>
         Deploy(
           options.deploy.from.toOption,
-          options.deploy.nonce(),
           options.deploy.session(),
           options.deploy.payment.toOption,
           options.deploy.publicKey.toOption,
@@ -116,7 +110,6 @@ object Configuration {
         MakeDeploy(
           options.makeDeploy.from.toOption,
           options.makeDeploy.publicKey.toOption,
-          options.makeDeploy.nonce(),
           options.makeDeploy.session(),
           options.makeDeploy.payment(),
           options.makeDeploy.gasPrice(),
@@ -144,7 +137,6 @@ object Configuration {
       case options.unbond =>
         Unbond(
           options.unbond.amount.toOption,
-          options.unbond.nonce(),
           options.unbond.session.toOption,
           options.unbond.paymentPath.toOption,
           options.unbond.privateKey()
@@ -152,7 +144,6 @@ object Configuration {
       case options.bond =>
         Bond(
           options.bond.amount(),
-          options.bond.nonce(),
           options.bond.session.toOption,
           options.bond.paymentPath.toOption,
           options.bond.privateKey()
@@ -161,7 +152,6 @@ object Configuration {
         Transfer(
           options.transfer.amount(),
           options.transfer.targetAccount(),
-          options.transfer.nonce(),
           options.transfer.session.toOption,
           options.transfer.paymentPath.toOption,
           options.transfer.privateKey()

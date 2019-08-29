@@ -36,7 +36,7 @@ fn initialize() -> WasmTestBuilder {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             (SYSTEM_ADDR,),
         )
         .expect_success()
@@ -45,7 +45,7 @@ fn initialize() -> WasmTestBuilder {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            2,
+            [2u8; 32],
             (ACCOUNT_ADDR,),
         )
         .expect_success()
@@ -69,10 +69,22 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
     );
 
     assert!(builder
-        .exec_with_args(GENESIS_ADDR, FINALIZE_PAYMENT, DEFAULT_BLOCK_TIME, 3, args)
+        .exec_with_args(
+            GENESIS_ADDR,
+            FINALIZE_PAYMENT,
+            DEFAULT_BLOCK_TIME,
+            [1u8; 32],
+            args
+        )
         .is_error());
     assert!(builder
-        .exec_with_args(ACCOUNT_ADDR, FINALIZE_PAYMENT, DEFAULT_BLOCK_TIME, 1, args)
+        .exec_with_args(
+            ACCOUNT_ADDR,
+            FINALIZE_PAYMENT,
+            DEFAULT_BLOCK_TIME,
+            [2u8; 32],
+            args
+        )
         .is_error());
 }
 
@@ -97,7 +109,13 @@ fn finalize_payment_should_pay_validators_and_refund_user() {
     assert!(payment_pre_balance.is_zero()); // payment purse always starts with zero balance
 
     builder
-        .exec_with_args(SYSTEM_ADDR, FINALIZE_PAYMENT, DEFAULT_BLOCK_TIME, 1, args)
+        .exec_with_args(
+            SYSTEM_ADDR,
+            FINALIZE_PAYMENT,
+            DEFAULT_BLOCK_TIME,
+            [1u8; 32],
+            args,
+        )
         .expect_success()
         .commit();
 
@@ -143,10 +161,10 @@ fn finalize_payment_should_refund_to_specified_purse() {
 
         let deploy = DeployBuilder::new()
             .with_address(GENESIS_ADDR)
+            .with_deploy_hash([1; 32])
             .with_session_code("do_nothing.wasm", ())
             .with_payment_code(FINALIZE_PAYMENT, args)
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()

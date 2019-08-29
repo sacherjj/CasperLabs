@@ -473,8 +473,7 @@ class ValidationTest
           validator: Int
       ): F[Block] =
         for {
-          current <- Time[F].currentMillis
-          deploy  <- ProtoUtil.basicProcessedDeploy[F](current)
+          deploy <- ProtoUtil.basicProcessedDeploy[F]()
           block <- createBlock[F](
                     parents.map(_.blockHash),
                     creator = validators(validator),
@@ -865,7 +864,6 @@ class ValidationTest
           computedPostStateHash,
           bondedValidators,
           processedDeploys,
-          _,
           _,
           _
         ) = deploysCheckpoint

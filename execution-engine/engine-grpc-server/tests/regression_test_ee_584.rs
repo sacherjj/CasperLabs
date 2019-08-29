@@ -31,7 +31,7 @@ fn should_run_ee_584_no_errored_session_transforms() {
             .with_session_code("ee_584_regression.wasm", ())
             .with_payment_code("standard_payment.wasm", (U512::from(MAX_PAYMENT),))
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1u8; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()

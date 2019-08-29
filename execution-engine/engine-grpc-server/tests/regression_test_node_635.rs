@@ -44,7 +44,12 @@ fn regression_test_genesis_hash_mismatch() {
 
     // Step 2.
     builder
-        .exec(GENESIS_ADDR, "local_state.wasm", DEFAULT_BLOCK_TIME, 1)
+        .exec(
+            GENESIS_ADDR,
+            "local_state.wasm",
+            DEFAULT_BLOCK_TIME,
+            [1u8; 32],
+        )
         .commit()
         .expect_success();
 

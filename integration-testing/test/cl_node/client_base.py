@@ -14,7 +14,6 @@ class CasperLabsClient(ABC):
         from_address: str = None,
         gas_limit: int = 1000000,
         gas_price: int = 1,
-        nonce: int = None,  # nonce == None means framework should provide correct nonce
         session_contract: Optional[str] = None,
         payment_contract: Optional[str] = None,
     ) -> str:

@@ -101,8 +101,7 @@ object Genesis {
       deploy = ProtoUtil.basicDeploy(
         timestamp = 0L,
         sessionCode = ByteString.copyFrom(request.toByteArray),
-        accountPublicKey = ByteString.copyFrom(accountPublicKey),
-        nonce = 1
+        accountPublicKey = ByteString.copyFrom(accountPublicKey)
       )
     } yield deploy
 
