@@ -7,7 +7,7 @@ import org.scalacheck.{Gen, Shrink}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
-class GrpcExecutionEngineServiceTest
+class ExecutionEngineServiceTest
     extends FlatSpec
     with Matchers
     with ArbitraryIpc
