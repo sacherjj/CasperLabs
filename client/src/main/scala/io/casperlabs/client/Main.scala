@@ -52,43 +52,37 @@ object Main {
       case Unbond(
           amount,
           nonce,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey
           ) =>
         DeployRuntime.unbond(
           amount,
           nonce,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey
         )
       case Bond(
           amount,
           nonce,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey
           ) =>
         DeployRuntime.bond(
           amount,
           nonce,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey
         )
       case Transfer(
           amount,
           recipientPublicKeyBase64,
           nonce,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey
           ) =>
         DeployRuntime.transferCLI(
           nonce,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey,
           recipientPublicKeyBase64,
           amount
@@ -96,8 +90,7 @@ object Main {
       case Deploy(
           from,
           nonce,
-          sessionCode,
-          paymentCode,
+          contracts,
           maybePublicKey,
           maybePrivateKey,
           gasPrice
@@ -105,8 +98,7 @@ object Main {
         DeployRuntime.deployFileProgram(
           from,
           nonce,
-          Files.readAllBytes(sessionCode.toPath),
-          paymentCode,
+          contracts,
           maybePublicKey.map(
             file =>
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PublicKey]
@@ -121,8 +113,7 @@ object Main {
           from,
           publicKey,
           nonce,
-          sessionCode,
-          paymentCode,
+          contracts,
           gasPrice,
           deployPath
           ) =>
@@ -146,9 +137,8 @@ object Main {
             baseAccount,
             nonce,
             gasPrice,
-            Files.readAllBytes(sessionCode.toPath),
-            Array.emptyByteArray,
-            Files.readAllBytes(paymentCode.toPath)
+            contracts,
+            Array.emptyByteArray
           )
           _ <- DeployRuntime.writeDeploy(deploy, deployPath)
         } yield ()
