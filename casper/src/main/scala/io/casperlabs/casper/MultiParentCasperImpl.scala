@@ -51,7 +51,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation](
+class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -370,7 +370,7 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
         _ <- Log[F].info(
               s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
-        remaining        <- remainingDeploys(dag, parents)
+        remainingHashes  <- remainingDeploysHashes(dag, parents) // TODO: Should be streaming all the way down
         bondedValidators = bonds(parents.head).map(_.validatorPublicKey).toSet
         //We ensure that only the justifications given in the block are those
         //which are bonded validators in the chosen parent. This is safe because
@@ -381,11 +381,11 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
         justifications   = toJustification(bondedLatestMsgs)
         rank             = ProtoUtil.calculateRank(bondedLatestMsgs.values.toSeq)
         protocolVersion  = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(rank)
-        proposal <- if (remaining.nonEmpty || parents.length > 1) {
+        proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
                      createProposal(
                        parents,
                        merged,
-                       remaining,
+                       remainingHashes,
                        justifications,
                        protocolVersion
                      )
@@ -409,11 +409,11 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
     } yield block
 
   /** Get the deploys that are not present in the past of the chosen parents. */
-  private def remainingDeploys(
+  private def remainingDeploysHashes(
       dag: DagRepresentation[F],
       parents: Seq[Block]
-  ): F[Seq[Deploy]] =
-    for {
+  ): F[Set[DeployHash]] = {
+    val candidateBlockHashesF = for {
       // We have re-queued orphan deploys already, so we can just look at pending ones.
       pendingDeployHashes <- DeployBuffer[F].readPendingHashes
 
@@ -425,17 +425,19 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
       _ <- DeployBuffer[F]
             .markAsDiscardedByHashes(deploysToDiscard.toList)
             .whenA(deploysToDiscard.nonEmpty)
+    } yield candidateBlockHashes.toSet
 
-      // Only send the next nonce per account. This will change once the nonce check is removed in the EE
-      // and support for SEQ/PAR blocks is added, then we can send all deploys for the account.
-      remaining <- DeployBuffer[F]
-                    .getByHashes(candidateBlockHashes)
-                    .map {
-                      _.groupBy(_.getHeader.accountPublicKey).map {
-                        case (_, deploys) => deploys.minBy(_.getHeader.nonce)
-                      }.toSeq
-                    }
-    } yield remaining
+    (for {
+      candidateBlockHashes <- fs2.Stream.eval(candidateBlockHashesF)
+      // Only send the oldest deploy per account. This should work without nonces by sending the oldest
+      // deploy. Once we have deploy dependencies we should replace that query with more suitable one.
+      // When support for SEQ/PAR blocks is added, then we can send all deploys for the account.
+      remainingHashes <- DeployBuffer[F]
+                          .readAccountPendingOldest()
+                          .map(_.deployHash)
+                          .filter(candidateBlockHashes.contains(_))
+    } yield remainingHashes).compile.to[Set]
+  }
 
   /** If another node proposed a block which orphaned something proposed by this node,
     * and we still have these deploys in the `processedDeploys` buffer then put them
@@ -496,9 +498,9 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Time: FinalityD
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
   private def createProposal(
-      parents: Seq[Block],
+      parents: Seq[Block], // TODO: We only need their hashes
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
-      deploys: Seq[Deploy],
+      deploys: Set[DeployHash],
       justifications: Seq[Justification],
       protocolVersion: ProtocolVersion
   ): F[CreateBlockStatus] =

@@ -8,6 +8,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture, HashSetCasperTestNode}
@@ -854,9 +855,11 @@ class ValidationTest
         ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
 
       for {
+        implicit0(deployBuffer: DeployBuffer[Task]) <- MockDeployBuffer.create[Task]()
+        _                                           <- deployBuffer.addAsPending(deploys.toList)
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               ExecEngineUtil.MergeResult.empty,
-                              deploys,
+                              deploys.map(_.deployHash).toSet,
                               System.currentTimeMillis,
                               ProtocolVersion(1)
                             )
