@@ -235,7 +235,6 @@ object ExecutionEngineService {
   def batchDeploysBySize(base: ExecuteRequest, messageSizeLimit: Int)(
       deploys: Seq[DeployItem]
   ): List[ExecuteRequest] = {
-    // Using 90% of the message size just to be sure.
     val test: (List[DeployItem], DeployItem) => Boolean =
       (batch, item) =>
         base
