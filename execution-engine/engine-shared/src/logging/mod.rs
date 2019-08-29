@@ -53,8 +53,7 @@ pub fn log(log_level: LogLevel, log_message: &str) -> Option<MessageId> {
 ///
 /// * `log_level` - log level of the message to be logged
 /// * `message_format` - a message template to apply over properties by key
-/// * `properties` - a collection of machine readable key / value properties
-///   which will be logged
+/// * `properties` - a collection of machine readable key / value properties which will be logged
 #[inline]
 pub fn log_details(
     log_level: LogLevel,
