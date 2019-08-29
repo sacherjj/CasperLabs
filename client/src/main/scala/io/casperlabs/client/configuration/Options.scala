@@ -11,7 +11,7 @@ import org.rogach.scallop._
 
 object Options {
   val hexCheck: String => Boolean  = _.matches("[0-9a-fA-F]+")
-  val hashCheck: String => Boolean = x => hexCheck(x) && x.length == 32
+  val hashCheck: String => Boolean = x => hexCheck(x) && x.length == 64
 
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
