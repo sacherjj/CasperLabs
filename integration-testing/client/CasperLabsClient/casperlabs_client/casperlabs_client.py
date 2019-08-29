@@ -765,6 +765,12 @@ def main():
                 type=int,
                 help="Port used for internal gRPC API.",
             )
+            self.parser.add_argument(
+                "--certificate-file",
+                required=False,
+                type=str,
+                help="Certificate file for TLS connection",
+            )
             self.sp = self.parser.add_subparsers(help="Choose a request")
 
             self.parser.set_defaults(function=no_command)
@@ -782,7 +788,10 @@ def main():
 
             args = self.parser.parse_args()
             return args.function(
-                CasperLabsClient(args.host, args.port, args.internal_port), args
+                CasperLabsClient(
+                    args.host, args.port, args.internal_port, args.certificate_file
+                ),
+                args,
             )
 
     parser = Parser()

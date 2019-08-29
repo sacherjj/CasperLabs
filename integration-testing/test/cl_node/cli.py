@@ -2,7 +2,6 @@ import os
 import logging
 import subprocess
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
-from casperlabs_client import extract_common_name
 
 
 class CLIErrorExit(Exception):
@@ -15,7 +14,13 @@ class CLIErrorExit(Exception):
 
 
 class CLI:
-    def __init__(self, node, cli_cmd="casperlabs_client", grpc_encryption=False):
+    def __init__(
+        self,
+        node,
+        cli_cmd="casperlabs_client",
+        tls_parameter=None,
+        tls_parameter_name="--certificate-file",
+    ):
         self.node = node
         self.host = (
             os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
@@ -23,19 +28,18 @@ class CLI:
         self.port = node.grpc_external_docker_port
         self.internal_port = node.grpc_internal_docker_port
         self.cli_cmd = cli_cmd
-        self.grpc_encryption = grpc_encryption
-        self.cert_file = node.config.tls_certificate_local_path()
-        self.node_id = extract_common_name(self.cert_file)
+        self.tls_parameter = tls_parameter
+        self.tls_parameter_name = tls_parameter_name
 
     def expand_args(self, args):
         connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
-        if self.grpc_encryption:
-            connection_details += ["--node-id", self.node_id]
+        if self.tls_parameter:
+            connection_details += [self.tls_parameter_name, self.tls_parameter]
 
-        def _args(args, connection_details=connection_details):
-            return [str(a) for a in connection_details + list(args)]
+        def strings(l):
+            return [str(p) for p in l]
 
-        return "--help" in args and _args(args, []) or _args(args)
+        return "--help" in args and strings(args) or connection_details + strings(args)
 
     def parse_output(self, command, binary_output):
 
