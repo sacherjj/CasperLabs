@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.{Resource, Sync}
 import cats.implicits._
-import cats.{Applicative, Defer}
+import cats.Defer
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.crypto.Keys.PublicKey
@@ -42,7 +42,8 @@ import io.casperlabs.catscontrib.MonadThrowable
 
 class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
     addr: Path,
-    stub: Stub
+    stub: Stub,
+    messageSizeLimit: Int
 ) extends ExecutionEngineService[F] {
   import GrpcExecutionEngineService.EngineMetricsSource
 
@@ -54,7 +55,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
     ByteString.copyFrom(arr)
   }
 
-  def sendMessage[A, B, R](msg: A, rpc: Stub => A => Task[B])(f: B => R): F[R] =
+  private def sendMessage[A, B, R](msg: A, rpc: Stub => A => Task[B])(f: B => R): F[R] =
     rpc(stub)(msg).to[F].map(f(_)).recoverWith {
       case ex: io.grpc.StatusRuntimeException
           if ex.getStatus.getCode == io.grpc.Status.Code.UNAVAILABLE &&
@@ -72,26 +73,30 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       blocktime: Long,
       deploys: Seq[DeployItem],
       protocolVersion: ProtocolVersion
-  ): F[Either[Throwable, Seq[DeployResult]]] =
+  ): F[Either[Throwable, Seq[DeployResult]]] = {
+    val baseExecRequest =
+      ExecuteRequest(prestate, blocktime, protocolVersion = Some(protocolVersion))
+    // Build batches limited by the size of message sent to EE.
+    val batches =
+      ExecutionEngineService.batchDeploysBySize(baseExecRequest, messageSizeLimit)(deploys)
+
     for {
-      result <- sendMessage(
-                 ExecuteRequest(prestate, blocktime, deploys, Some(protocolVersion)),
-                 _.execute
-               ) {
-                 _.result match {
-                   case ExecuteResponse.Result.Success(ExecResult(deployResults)) =>
-                     Right(deployResults)
-                   //TODO: Capture errors better than just as a string
-                   case ExecuteResponse.Result.Empty =>
-                     Left(new SmartContractEngineError("empty response"))
-                   case ExecuteResponse.Result.MissingParent(RootNotFound(missing)) =>
-                     Left(
-                       new SmartContractEngineError(
-                         s"Missing states: ${Base16.encode(missing.toByteArray)}"
+      result <- batches.traverse { request =>
+                 sendMessage(request, _.execute) {
+                   _.result match {
+                     case ExecuteResponse.Result.Success(ExecResult(deployResults)) =>
+                       Right(deployResults) //TODO: Capture errors better than just as a string
+                     case ExecuteResponse.Result.Empty =>
+                       Left(new SmartContractEngineError("empty response"))
+                     case ExecuteResponse.Result.MissingParent(RootNotFound(missing)) =>
+                       Left(
+                         new SmartContractEngineError(
+                           s"Missing states: ${Base16.encode(missing.toByteArray)}"
+                         )
                        )
-                     )
+                   }
                  }
-               }
+               } map { _.sequence.map(_.flatten) }
       _ <- result.fold(
             _ => ().pure[F],
             deployResults => {
@@ -101,6 +106,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
             }
           )
     } yield result
+  }
 
   override def runGenesis(
       deploys: Seq[DeployItem],
@@ -210,6 +216,54 @@ object ExecutionEngineService {
 
     def apply(postStateHash: ByteString, bonds: Seq[Bond]): CommitResult =
       new CommitResult(postStateHash, bonds)
+  }
+
+  sealed trait Batch[A] {
+    def complete: CompleteBatch[A]
+    def isComplete: Boolean
+    def elements: List[A]
+  }
+
+  final case class CompleteBatch[A](batch: List[A]) extends Batch[A] {
+    override def elements: List[A]          = batch
+    override def complete: CompleteBatch[A] = this
+    override def isComplete: Boolean        = true
+  }
+
+  final case class IncompleteBatch[A](batch: List[A] = List.empty) extends Batch[A] {
+    override def elements: List[A]          = batch
+    override def complete: CompleteBatch[A] = CompleteBatch(batch)
+    override def isComplete: Boolean        = false
+  }
+
+  def batchElements[A](
+      deploys: Seq[A],
+      canAdd: (Batch[A], A) => Boolean
+  ): List[Batch[A]] =
+    deploys
+      .foldLeft(List[Batch[A]](IncompleteBatch[A]())) {
+        case (Nil, item) => IncompleteBatch(List(item)) :: Nil
+        case (hd :: tail, item) =>
+          if (canAdd(hd, item))
+            IncompleteBatch(item :: hd.elements) :: tail
+          else
+            IncompleteBatch(List(item)) :: hd.complete :: tail
+      }
+
+  def batchDeploysBySize(base: ExecuteRequest, messageSizeLimit: Int)(
+      deploys: Seq[DeployItem]
+  ): List[ExecuteRequest] = {
+    // Using 90% of the message size just to be sure.
+    val test: (Batch[DeployItem], DeployItem) => Boolean =
+      (batch, item) =>
+        if (batch.isComplete) false
+        else
+          base
+            .withDeploys(item :: batch.elements)
+            .serializedSize <= 0.9 * messageSizeLimit
+
+    batchElements(deploys, test)
+      .map(batch => base.withDeploys(batch.elements))
   }
 
 }
