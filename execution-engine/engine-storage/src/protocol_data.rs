@@ -3,7 +3,7 @@ use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 use engine_wasm_prep::wasm_costs::{WasmCosts, WASM_COSTS_SIZE_SERIALIZED};
 
 /// Represents a protocol's data. Intended to be associated with a given protocol version.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolData {
     wasm_costs: WasmCosts,
 }
@@ -36,7 +36,7 @@ impl FromBytes for ProtocolData {
 }
 
 #[cfg(test)]
-mod gens {
+pub(crate) mod gens {
     use proptest::prop_compose;
 
     use engine_wasm_prep::wasm_costs::gens;

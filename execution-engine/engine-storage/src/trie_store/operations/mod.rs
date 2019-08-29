@@ -3,7 +3,7 @@ mod tests;
 
 use std::time::Instant;
 
-use contract_ffi::bytesrepr::{self, ToBytes};
+use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 use engine_shared::logging::{log_duration, log_metric, GAUGE};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 
@@ -39,8 +39,8 @@ pub fn read<K, V, T, S, E>(
     key: &K,
 ) -> Result<ReadResult<V>, E>
 where
-    K: ToBytes + Eq + std::fmt::Debug,
-    V: ToBytes,
+    K: ToBytes + FromBytes + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes,
     T: Readable<Handle = S::Handle>,
     S: TrieStore<K, V>,
     S::Error: From<T::Error>,
@@ -217,8 +217,8 @@ fn scan<K, V, T, S, E>(
     root: &Trie<K, V>,
 ) -> Result<TrieScan<K, V>, E>
 where
-    K: ToBytes + Clone,
-    V: ToBytes + Clone,
+    K: ToBytes + FromBytes + Clone,
+    V: ToBytes + FromBytes + Clone,
     T: Readable<Handle = S::Handle>,
     S: TrieStore<K, V>,
     S::Error: From<T::Error>,
@@ -622,8 +622,8 @@ pub fn write<K, V, T, S, E>(
     value: &V,
 ) -> Result<WriteResult, E>
 where
-    K: ToBytes + Clone + Eq + std::fmt::Debug,
-    V: ToBytes + Clone + Eq,
+    K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes + Clone + Eq,
     T: Readable<Handle = S::Handle> + Writable<Handle = S::Handle>,
     S: TrieStore<K, V>,
     S::Error: From<T::Error>,
