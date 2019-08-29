@@ -1,13 +1,13 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 #[macro_use]
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api;
-use cl_std::contract_api::pointers::{ContractPointer, UPointer};
-use cl_std::key::Key;
+use contract_ffi::contract_api;
+use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::key::Key;
 
 const POS_CONTRACT_NAME: &str = "pos";
 const SET_REFUND_PURSE: &str = "set_refund_purse";

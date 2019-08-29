@@ -1,16 +1,16 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::string::String;
 
-use cl_std::contract_api::{
+use contract_ffi::contract_api::{
     add_associated_key, get_arg, remove_associated_key, revert, set_action_threshold,
     update_associated_key,
 };
-use cl_std::value::account::{
+use contract_ffi::value::account::{
     ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
     Weight,
 };

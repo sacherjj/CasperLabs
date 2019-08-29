@@ -1,14 +1,13 @@
 #![no_std]
-#![feature(alloc)]
 
 extern crate alloc;
-extern crate common;
+extern crate contract_ffi;
 
 use binascii::ConvertError;
-use common::contract_api;
-use common::contract_api::TransferResult;
-use common::value::account::PublicKey;
-use common::value::uint::U512;
+use contract_ffi::contract_api;
+use contract_ffi::contract_api::TransferResult;
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::uint::U512;
 
 fn parse_public_key(hex: &[u8]) -> Result<PublicKey, ConvertError> {
     let mut buff = [0u8; 32];

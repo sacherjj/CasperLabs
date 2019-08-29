@@ -5,6 +5,7 @@ use std::string::ToString;
 
 use protobuf::ProtobufEnum;
 
+use crate::engine_server::{ipc, state};
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
@@ -17,7 +18,6 @@ use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::op::Op;
 use engine_core::execution::Error as ExecutionError;
 use engine_core::tracking_copy::utils;
-use engine_server::{ipc, state};
 use engine_shared::logging;
 use engine_shared::logging::log_level;
 use engine_shared::newtypes::Blake2bHash;
@@ -685,7 +685,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 effect: effects,
                 cost,
             } => {
-                let mut ipc_ee = effects.into();
+                let ipc_ee = effects.into();
                 let mut deploy_result = ipc::DeployResult::new();
                 let mut execution_result = ipc::DeployResult_ExecutionResult::new();
                 execution_result.set_effects(ipc_ee);
@@ -972,6 +972,7 @@ mod tests {
 
     use proptest::prelude::*;
 
+    use crate::engine_server::mappings::CommitTransforms;
     use contract_ffi::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
     use contract_ffi::key::Key;
     use contract_ffi::uref::{AccessRights, URef};
@@ -980,7 +981,6 @@ mod tests {
     use engine_core::engine_state::execution_effect::ExecutionEffect;
     use engine_core::engine_state::execution_result::ExecutionResult;
     use engine_core::execution::Error;
-    use engine_server::mappings::CommitTransforms;
     use engine_shared::newtypes::Blake2bHash;
     use engine_shared::transform::gens::transform_arb;
     use engine_shared::transform::Transform;

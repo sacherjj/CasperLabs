@@ -24,11 +24,11 @@ use contract_ffi::value::{Account, Value, U512};
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
-use execution::Error::{KeyNotFound, URefNotFound};
-use resolvers::create_module_resolver;
-use resolvers::memory_resolver::MemoryResolver;
-use runtime_context::RuntimeContext;
-use URefAddr;
+use crate::execution::Error::{KeyNotFound, URefNotFound};
+use crate::resolvers::create_module_resolver;
+use crate::resolvers::memory_resolver::MemoryResolver;
+use crate::runtime_context::RuntimeContext;
+use crate::URefAddr;
 
 pub struct Runtime<'a, R> {
     memory: MemoryRef,

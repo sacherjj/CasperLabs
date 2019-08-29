@@ -1,19 +1,19 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 #[macro_use]
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 
-use cl_std::contract_api;
-use cl_std::contract_api::pointers::ContractPointer;
-use cl_std::contract_api::{add_uref, get_arg, new_uref};
-use cl_std::key::Key;
-use cl_std::uref::URef;
-use cl_std::value::U512;
+use contract_ffi::contract_api;
+use contract_ffi::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api::{add_uref, get_arg, new_uref};
+use contract_ffi::key::Key;
+use contract_ffi::uref::URef;
+use contract_ffi::value::U512;
 
 #[no_mangle]
 pub extern "C" fn do_nothing() {

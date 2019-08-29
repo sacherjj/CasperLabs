@@ -5,6 +5,9 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
+use crate::engine_state::utils::WasmiBytes;
+use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
+use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
@@ -14,20 +17,17 @@ use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
-use engine_state::utils::WasmiBytes;
 use engine_storage::global_state::{CommitResult, History, StateReader};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::Preprocessor;
-use execution::{self, Executor, MINT_NAME, POS_NAME};
-use tracking_copy::{TrackingCopy, TrackingCopyExt};
 
 pub use self::engine_config::EngineConfig;
 use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;
 use self::genesis::{create_genesis_effects, GenesisResult};
+use crate::engine_state::executable_deploy_item::ExecutableDeployItem;
+use crate::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
 use contract_ffi::uref::URef;
-use engine_state::executable_deploy_item::ExecutableDeployItem;
-use engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
 
 pub mod engine_config;
 pub mod error;
@@ -309,7 +309,7 @@ where
         let tracking_copy = match self.tracking_copy(prestate_hash) {
             Err(error) => return Ok(ExecutionResult::precondition_failure(error)),
             Ok(None) => return Err(RootNotFound(prestate_hash)),
-            Ok(Some(mut tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
+            Ok(Some(tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
         };
 
         // Get addr bytes from `address` (which is actually a Key)
@@ -341,7 +341,7 @@ where
         // validation_spec_3: account validity
         if authorization_keys.is_empty() || !account.can_authorize(&authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
-                ::engine_state::error::Error::AuthorizationError,
+                crate::engine_state::error::Error::AuthorizationError,
             ));
         }
 
@@ -623,6 +623,9 @@ where
             return Ok(failure);
         }
 
+        let post_payment_tc = tracking_copy.borrow();
+        let session_tc = Rc::new(RefCell::new(post_payment_tc.fork()));
+
         // session_code_spec_2: execute session code
         let session_result = {
             // payment_code_spec_3_b_i: if (balance of PoS pay purse) >= (gas spent during payment code execution) * conv_rate, yes session
@@ -640,9 +643,17 @@ where
                 session_gas_limit,
                 protocol_version,
                 correlation_id,
-                Rc::clone(&tracking_copy),
+                Rc::clone(&session_tc),
                 Phase::Session,
             )
+        };
+
+        let post_session_rc = if session_result.is_failure() {
+            // If session code fails we do not include its effects,
+            // so we start again from the post-payment state.
+            Rc::new(RefCell::new(post_payment_tc.fork()))
+        } else {
+            session_tc
         };
 
         let _session_result_cost = session_result.cost();
@@ -652,6 +663,9 @@ where
 
         // payment_code_spec_5: run finalize process
         let finalize_result = {
+            let post_session_tc = post_session_rc.borrow();
+            let finalization_tc = Rc::new(RefCell::new(post_session_tc.fork()));
+
             // validation_spec_1: valid wasm bytes
             let proof_of_stake_module =
                 match preprocessor.deserialize(&proof_of_stake_info.module_bytes()) {
@@ -671,7 +685,7 @@ where
 
             // The PoS keys may have changed because of effects during payment and/or session,
             // so we need to look them up again from the tracking copy
-            let mut proof_of_stake_keys = tracking_copy
+            let mut proof_of_stake_keys = finalization_tc
                 .borrow_mut()
                 .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
                 .expect("PoS must be found because we found it earlier")
@@ -690,7 +704,7 @@ where
                 std::u64::MAX, // <-- this execution should be unlimited but approximating
                 protocol_version,
                 correlation_id,
-                Rc::clone(&tracking_copy),
+                finalization_tc,
                 Phase::FinalizePayment,
             )
         };
