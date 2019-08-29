@@ -17,6 +17,7 @@ import time
 import argparse
 import grpc
 from grpc._channel import _Rendezvous
+import ssl
 import functools
 from pyblake2 import blake2b
 import ed25519
@@ -239,15 +240,20 @@ class InsecureGRPCService:
         return name.endswith("_stream") and g or f
 
 
+def extract_common_name(cert_file: str) -> str:
+    cert_dict = ssl._ssl._test_decode_cert(cert_file)
+    return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
+
+
 class SecureGRPCService:
-    def __init__(self, host, port, serviceStub, node_id, cert_file):
+    def __init__(self, host, port, serviceStub, cert_file):
         self.address = f"{host}:{port}"
         self.serviceStub = serviceStub
-        self.node_id = node_id
         self.cert_file = cert_file
+        self.node_id = extract_common_name(cert_file)
         with open(self.cert_file, "rb") as f:
             self.credentials = grpc.ssl_channel_credentials(f.read())
-        self.secure_channel_options = node_id and (
+        self.secure_channel_options = self.node_id and (
             ("grpc.ssl_target_name_override", self.node_id),
             ("grpc.default_authority", self.node_id),
         )
@@ -290,7 +296,6 @@ class CasperLabsClient:
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
         internal_port: int = DEFAULT_INTERNAL_PORT,
-        node_id: str = None,
         cert_file: str = None,
     ):
         """
@@ -306,15 +311,14 @@ class CasperLabsClient:
         self.host = host
         self.port = port
         self.internal_port = internal_port
-        self.node_id = node_id
         self.cert_file = cert_file
 
-        if node_id:
+        if cert_file:
             self.casperService = SecureGRPCService(
-                host, port, CasperServiceStub, node_id, cert_file
+                host, port, CasperServiceStub, cert_file
             )
             self.controlService = SecureGRPCService(
-                host, internal_port, ControlServiceStub, node_id, cert_file
+                host, internal_port, ControlServiceStub, cert_file
             )
         else:
             self.casperService = InsecureGRPCService(host, port, CasperServiceStub)

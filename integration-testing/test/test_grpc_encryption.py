@@ -14,8 +14,6 @@ def test_grpc_encryption_python(encrypted_one_node_network):
     node = encrypted_one_node_network.docker_nodes[0]
     cli = CLI(node, grpc_encryption=True)
 
-    client = CasperLabsClient(
-        cli.host, cli.port, cli.internal_port, cli.node_id, cli.cert_file
-    )
+    client = CasperLabsClient(cli.host, cli.port, cli.internal_port, cli.cert_file)
     blocks = client.showBlocks(10)
     logging.info(f"{list(blocks)}")

@@ -2,7 +2,7 @@ import os
 import logging
 import subprocess
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
-import ssl
+from casperlabs_client import extract_common_name
 
 
 class CLIErrorExit(Exception):
@@ -25,12 +25,7 @@ class CLI:
         self.cli_cmd = cli_cmd
         self.grpc_encryption = grpc_encryption
         self.cert_file = node.config.tls_certificate_local_path()
-
-        cert_dict = ssl._ssl._test_decode_cert(self.cert_file)
-        common_name = [
-            t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"
-        ][0]
-        self.node_id = common_name
+        self.node_id = extract_common_name(self.cert_file)
 
     def expand_args(self, args):
         connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
