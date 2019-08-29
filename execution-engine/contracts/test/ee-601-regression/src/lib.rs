@@ -55,16 +55,15 @@ pub extern "C" fn call() {
         }
     }
 
-    let value = {
+    let value: Option<&str> = {
         match phase {
-            contract_ffi::execution::Phase::Payment => "payment",
-            contract_ffi::execution::Phase::Session => "session",
-            contract_ffi::execution::Phase::FinalizePayment => "finalize",
+            contract_ffi::execution::Phase::Payment => Some("payment"),
+            contract_ffi::execution::Phase::Session => Some("session"),
+            _ => None,
         }
     };
-
+    let value = value.unwrap_or_else(|| contract_api::revert(999));
     let result_key = contract_api::new_uref(value.to_string()).into();
-
     let mut uref_name: String = NEW_UREF_RESULT_UREF_NAME.to_string();
     uref_name.push_str("-");
     uref_name.push_str(value);
