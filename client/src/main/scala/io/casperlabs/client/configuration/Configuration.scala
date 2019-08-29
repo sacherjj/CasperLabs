@@ -23,7 +23,9 @@ final case class ContractOptions(
     // Hash of a stored contract.
     hash: Option[String] = None,
     // Name of a stored contract.
-    name: Option[String] = None
+    name: Option[String] = None,
+    // URef of a stored contract.
+    uref: Option[String] = None
 )
 
 /** Encapsulate reading session and payment contracts from disk or resources
@@ -55,17 +57,21 @@ object Contracts {
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
       Contract.Wasm(wasm)
     } orElse {
-      opts.hash.map { h =>
-        Contract.Hash(ByteString.copyFrom(Base16.decode(h)))
+      opts.hash.map { x =>
+        Contract.Hash(ByteString.copyFrom(Base16.decode(x)))
       }
     } orElse {
-      opts.name.map { n =>
-        Contract.Name(n)
+      opts.name.map { x =>
+        Contract.Name(x)
       }
     } orElse {
-      opts.resource.map { n =>
+      opts.uref.map { x =>
+        Contract.Uref(ByteString.copyFrom(Base16.decode(x)))
+      }
+    } orElse {
+      opts.resource.map { x =>
         val wasm =
-          ByteString.copyFrom(consumeInputStream(getClass.getClassLoader.getResourceAsStream(n)))
+          ByteString.copyFrom(consumeInputStream(getClass.getClassLoader.getResourceAsStream(x)))
         Contract.Wasm(wasm)
       }
     } getOrElse {

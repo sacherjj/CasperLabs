@@ -42,6 +42,13 @@ object Options {
           "Name of the stored contract (associated with the executing account) to be called in the session."
       )
 
+    val sessionUref =
+      opt[String](
+        required = false,
+        descr = "URef of the stored contract to be called in the session; base16 encoded.",
+        validate = hashCheck
+      )
+
     val payment =
       opt[File](
         name = paymentPathName,
@@ -64,11 +71,20 @@ object Options {
           "Name of the stored contract (associated with the executing account) to be called in the payment."
       )
 
+    val paymentUref =
+      opt[String](
+        required = false,
+        descr = "URef of the stored contract to be called in the payment; base16 encoded.",
+        validate = hashCheck
+      )
+
     addValidation {
       val sessionsProvided =
-        List(session.isDefined, sessionHash.isDefined, sessionName.isDefined).count(identity)
+        List(session.isDefined, sessionHash.isDefined, sessionName.isDefined, sessionUref.isDefined)
+          .count(identity)
       val paymentsProvided =
-        List(payment.isDefined, paymentHash.isDefined, paymentName.isDefined).count(identity)
+        List(payment.isDefined, paymentHash.isDefined, paymentName.isDefined, paymentUref.isDefined)
+          .count(identity)
       if (sessionRequired && sessionsProvided == 0)
         Left("No session contract options provided; please specify exactly one.")
       else if (sessionsProvided > 1)

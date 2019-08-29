@@ -65,6 +65,8 @@ message Deploy {
             bytes hash = 3;
             // Name of a stored contract associated with the executing account (uref or hash).
             string name = 4;
+            // URef of a stored contract.
+            bytes uref = 5;
         }
         bytes args = 2; // ABI-encoded arguments
     }
