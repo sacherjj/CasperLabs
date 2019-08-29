@@ -109,11 +109,48 @@ impl FromBytes for WasmCosts {
     }
 }
 
+pub mod gens {
+    use proptest::num;
+    use proptest::prop_compose;
+
+    use crate::wasm_costs::WasmCosts;
+
+    prop_compose! {
+        pub fn wasm_costs_arb()(
+            regular in num::u32::ANY,
+            div in num::u32::ANY,
+            mul in num::u32::ANY,
+            mem in num::u32::ANY,
+            initial_mem in num::u32::ANY,
+            grow_mem in num::u32::ANY,
+            memcpy in num::u32::ANY,
+            max_stack_height in num::u32::ANY,
+            opcodes_mul in num::u32::ANY,
+            opcodes_div in num::u32::ANY,
+        ) -> WasmCosts {
+            WasmCosts {
+                regular,
+                div,
+                mul,
+                mem,
+                initial_mem,
+                grow_mem,
+                memcpy,
+                max_stack_height,
+                opcodes_mul,
+                opcodes_div,
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use proptest::proptest;
+
     use engine_shared::test_utils;
 
-    use super::WasmCosts;
+    use super::{gens, WasmCosts};
 
     #[test]
     fn should_serialize_and_deserialize() {
@@ -121,5 +158,14 @@ mod tests {
         let free = WasmCosts::free();
         assert!(test_utils::test_serialization_roundtrip(&v1));
         assert!(test_utils::test_serialization_roundtrip(&free));
+    }
+
+    proptest! {
+        #[test]
+        fn should_serialize_and_deserialize_with_arbitrary_values(
+            wasm_costs in gens::wasm_costs_arb()
+        ) {
+            assert!(test_utils::test_serialization_roundtrip(&wasm_costs));
+        }
     }
 }

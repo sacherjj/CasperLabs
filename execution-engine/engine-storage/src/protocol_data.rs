@@ -36,11 +36,28 @@ impl FromBytes for ProtocolData {
 }
 
 #[cfg(test)]
+mod gens {
+    use proptest::prop_compose;
+
+    use engine_wasm_prep::wasm_costs::gens;
+
+    use super::ProtocolData;
+
+    prop_compose! {
+        pub fn protocol_data_arb()(wasm_costs in gens::wasm_costs_arb()) -> ProtocolData {
+            ProtocolData { wasm_costs }
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
+    use proptest::proptest;
+
     use engine_shared::test_utils;
     use engine_wasm_prep::wasm_costs::WasmCosts;
 
-    use super::ProtocolData;
+    use super::{gens, ProtocolData};
 
     #[test]
     fn should_serialize_and_deserialize() {
@@ -54,5 +71,14 @@ mod tests {
         };
         assert!(test_utils::test_serialization_roundtrip(&v1));
         assert!(test_utils::test_serialization_roundtrip(&free));
+    }
+
+    proptest! {
+        #[test]
+        fn should_serialize_and_deserialize_with_arbitrary_values(
+            protocol_data in gens::protocol_data_arb()
+        ) {
+            assert!(test_utils::test_serialization_roundtrip(&protocol_data));
+        }
     }
 }
