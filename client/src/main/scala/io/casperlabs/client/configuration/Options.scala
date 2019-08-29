@@ -511,7 +511,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         name = "key",
         descr = "Base16 encoding of the base key.",
         required = true,
-        validate = hashCheck
+        validate = hexCheck
       )
 
     val path =
