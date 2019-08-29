@@ -5,7 +5,8 @@
 extern crate alloc;
 extern crate cl_std;
 
-use alloc::prelude::*;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 use cl_std::contract_api::pointers::{ContractPointer, UPointer};
 use cl_std::contract_api::{
