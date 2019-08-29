@@ -9,11 +9,12 @@ import scala.concurrent.duration._
 
 class MockDeployStorageSpec extends DeployStorageSpec {
   override protected def testFixture(
-      test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit]
+      test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit],
+      timeout: FiniteDuration = 5.seconds
   ): Unit =
     (for {
       implicit0(logNOP: Log[Task]) <- Task(new NOPLog[Task])
       mock                         <- MockDeployStorage.create[Task]()
       _                            <- test(mock, mock)
-    } yield ()).runSyncUnsafe(15.seconds)
+    } yield ()).runSyncUnsafe(timeout)
 }

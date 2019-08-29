@@ -97,7 +97,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       (d.deployHash, d.getHeader.accountPublicKey, d.getHeader.timestamp, d.toByteString)
     })
 
-    def writeToBufferedDeploysTable(currentTimeEpochSeconds: Long) =
+    def writeToBufferedDeploysTable(currentTimeEpochMillis: Long) =
       Update[(ByteString, Int, ByteString, Long, Long)](
         "INSERT OR IGNORE INTO buffered_deploys (hash, status, account, update_time_millis, receive_time_millis) VALUES (?, ?, ?, ?, ?)"
       ).updateMany(deploys.map { d =>
@@ -105,8 +105,8 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
             d.deployHash,
             status,
             d.getHeader.accountPublicKey,
-            currentTimeEpochSeconds,
-            currentTimeEpochSeconds
+            currentTimeEpochMillis,
+            currentTimeEpochMillis
           )
         })
         .void
@@ -198,13 +198,13 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     readByStatus(ProcessedStatusCode)
 
   override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
-    sql"""| SELECT data FROM (SELECT data, deploys.account, create_time_seconds FROM deploys
+    sql"""| SELECT data FROM (SELECT data, deploys.account, create_time_millis FROM deploys
           | INNER JOIN buffered_deploys bd
           | ON deploys.hash = bd.hash
           | WHERE bd.status = $PendingStatusCode) pda
           | GROUP BY pda.account
-          | HAVING MIN(pda.create_time_seconds)
-          | ORDER BY pda.create_time_seconds
+          | HAVING MIN(pda.create_time_millis)
+          | ORDER BY pda.create_time_millis
           |""".stripMargin
       .query[Deploy]
       .stream

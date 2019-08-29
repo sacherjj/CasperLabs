@@ -47,14 +47,14 @@ trait SQLiteFixture[A] extends BeforeAndAfterEach with BeforeAndAfterAll { self:
     conf.load()
   }
 
-  protected def runSQLiteTest[B](test: A => Task[B]): B = {
+  protected def runSQLiteTest[B](test: A => Task[B], timeout: FiniteDuration = 5.seconds): B = {
     val program = for {
       _ <- Task(cleanupTables())
       _ <- Task(setupTables())
       a <- createTestResource
       b <- test(a)
     } yield b
-    program.runSyncUnsafe(15.seconds)
+    program.runSyncUnsafe(timeout)
   }
 
   protected def setupTables(): Unit = flyway.migrate()

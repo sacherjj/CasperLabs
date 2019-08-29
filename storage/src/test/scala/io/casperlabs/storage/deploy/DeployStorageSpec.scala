@@ -23,7 +23,8 @@ trait DeployStorageSpec
 
   /* Implement this method in descendants substituting various DeployStorageReader and DeployStorageWriter implementations */
   protected def testFixture(
-      test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit]
+      test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit],
+      timeout: FiniteDuration = 5.seconds
   ): Unit
 
   private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
@@ -265,8 +266,8 @@ trait DeployStorageSpec
     }
 
     "cleanupDiscarded" should {
-      "delete discarded deploys only older than 'now - expirationPeriod'" in testFixture {
-        (_, writer) =>
+      "delete discarded deploys only older than 'now - expirationPeriod'" in testFixture(
+        { (_, writer) =>
           val first  = sample(arbDeploy.arbitrary)
           val second = sample(arbDeploy.arbitrary)
           for {
@@ -280,12 +281,14 @@ trait DeployStorageSpec
             _ <- Task.sleep(2.seconds)
             _ <- writer.cleanupDiscarded(expirationPeriod = 1.second).foreachL(_ shouldBe 0)
           } yield ()
-      }
+        },
+        timeout = 15.seconds
+      )
     }
 
     "markAsDiscarded(duration)" should {
-      "mark only pending deploys were added more than 'now - expirationPeriod' time ago" in testFixture {
-        (reader, writer) =>
+      "mark only pending deploys were added more than 'now - expirationPeriod' time ago" in testFixture(
+        { (reader, writer) =>
           val first  = sample(arbDeploy.arbitrary)
           val second = sample(arbDeploy.arbitrary)
           for {
@@ -301,7 +304,9 @@ trait DeployStorageSpec
             _ <- writer.markAsDiscarded(expirationPeriod = 1.second)
             _ <- reader.pendingNum.foreachL(_ shouldBe 0)
           } yield ()
-      }
+        },
+        timeout = 15.seconds
+      )
     }
 
     "addAsExecuted + addAsExecuted" should {
