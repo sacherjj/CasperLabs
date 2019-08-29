@@ -218,52 +218,32 @@ object ExecutionEngineService {
       new CommitResult(postStateHash, bonds)
   }
 
-  sealed trait Batch[A] {
-    def complete: CompleteBatch[A]
-    def isComplete: Boolean
-    def elements: List[A]
-  }
-
-  final case class CompleteBatch[A](batch: List[A]) extends Batch[A] {
-    override def elements: List[A]          = batch
-    override def complete: CompleteBatch[A] = this
-    override def isComplete: Boolean        = true
-  }
-
-  final case class IncompleteBatch[A](batch: List[A] = List.empty) extends Batch[A] {
-    override def elements: List[A]          = batch
-    override def complete: CompleteBatch[A] = CompleteBatch(batch)
-    override def isComplete: Boolean        = false
-  }
-
   def batchElements[A](
       deploys: Seq[A],
-      canAdd: (Batch[A], A) => Boolean
-  ): List[Batch[A]] =
+      canAdd: (List[A], A) => Boolean
+  ): List[List[A]] =
     deploys
-      .foldLeft(List[Batch[A]](IncompleteBatch[A]())) {
-        case (Nil, item) => IncompleteBatch(List(item)) :: Nil
+      .foldLeft(List.empty[List[A]]) {
+        case (Nil, item) => List(item) :: Nil
         case (hd :: tail, item) =>
           if (canAdd(hd, item))
-            IncompleteBatch(item :: hd.elements) :: tail
+            (item :: hd) :: tail
           else
-            IncompleteBatch(List(item)) :: hd.complete :: tail
+            (List(item)) :: hd :: tail
       }
 
   def batchDeploysBySize(base: ExecuteRequest, messageSizeLimit: Int)(
       deploys: Seq[DeployItem]
   ): List[ExecuteRequest] = {
     // Using 90% of the message size just to be sure.
-    val test: (Batch[DeployItem], DeployItem) => Boolean =
+    val test: (List[DeployItem], DeployItem) => Boolean =
       (batch, item) =>
-        if (batch.isComplete) false
-        else
-          base
-            .withDeploys(item :: batch.elements)
-            .serializedSize <= messageSizeLimit
+        base
+          .withDeploys(item :: batch)
+          .serializedSize <= messageSizeLimit
 
     batchElements(deploys, test)
-      .map(batch => base.withDeploys(batch.elements))
+      .map(batch => base.withDeploys(batch))
   }
 
 }
