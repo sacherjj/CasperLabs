@@ -133,6 +133,7 @@ fn should_run_purse_to_account_transfer() {
 
     //
     // Exec 2 - Transfer from new account back to genesis to verify TransferToExisting
+    let transform = &transforms[1];
 
     let account_1_key = Key::Account(ACCOUNT_1_ADDR);
     let account_1 = transfer_result
