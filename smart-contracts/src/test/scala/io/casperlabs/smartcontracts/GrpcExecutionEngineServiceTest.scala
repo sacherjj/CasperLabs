@@ -17,7 +17,10 @@ class GrpcExecutionEngineServiceTest
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 50)
-  // Don't shrink the message size
+
+  // Don't shrink the message size.
+  // Default shrinker doesn't respect Gen's configuration and we may end up with message size smaller
+  // than generated DeployItem.
   implicit val messageSizeShrink: Shrink[Int] = Shrink(_ => Stream.empty)
 
   "ExecutionEngineService.batchDeploysBySize" should "create execute requests in batches, limited by size" in forAll(
@@ -29,6 +32,7 @@ class GrpcExecutionEngineServiceTest
         ExecuteRequest(ByteString.EMPTY, 0L, protocolVersion = Some(ProtocolVersion(1L)))
       val batches =
         ExecutionEngineService.batchDeploysBySize(baseRequest, msgSize)(deployItems)
+      assert(batches.flatMap(_.deploys).toSet == deployItems.toSet) // Make sure we send all the deploys
       batches.foreach { request =>
         assert(request.serializedSize < msgSize)
       }
