@@ -68,7 +68,8 @@ pub trait TrackingCopyExt<R> {
         balance_key: Key,
     ) -> Result<U512, Self::Error>;
 
-    /// Gets the system contract, packaged with its outer uref key and inner uref key
+    /// Gets the system contract, packaged with its outer uref key and inner
+    /// uref key
     fn get_system_contract_info(
         &mut self,
         correlation_id: CorrelationId,

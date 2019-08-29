@@ -110,7 +110,8 @@ fn should_run_purse_to_purse_transfer() {
 #[ignore]
 #[test]
 fn should_run_purse_to_purse_transfer_with_error() {
-    // This test runs a contract that's after every call extends the same key with more data
+    // This test runs a contract that's after every call extends the same key with
+    // more data
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
 
@@ -209,7 +210,8 @@ fn should_run_purse_to_purse_transfer_with_error() {
         panic!("actual purse uref should be a Write of UInt512 type");
     };
 
-    // Final balance of the destination purse equals to 0 as this purse is created as new.
+    // Final balance of the destination purse equals to 0 as this purse is created
+    // as new.
     assert_eq!(purse_secondary_balance, &U512::from(0));
     assert_eq!(main_purse_balance, &U512::from(100_000_000_000i64));
 }

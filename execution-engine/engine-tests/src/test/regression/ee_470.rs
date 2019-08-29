@@ -23,8 +23,8 @@ fn regression_test_genesis_hash_mismatch() {
         gs.root_hash
     };
 
-    // This is trie's post state hash after committing genesis effects on top of empty trie.
-    // Step 1b)
+    // This is trie's post state hash after committing genesis effects on top of
+    // empty trie. Step 1b)
     let genesis_transforms_hash = builder
         .commit_effects(empty_root_hash.to_vec(), genesis_transforms)
         .get_poststate_hash();

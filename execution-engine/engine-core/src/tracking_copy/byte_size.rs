@@ -60,9 +60,10 @@ impl ByteSize for Value {
                 }
                 Value::String(s) => s.byte_size(),
                 Value::ListString(list) => list.iter().fold(0, |sum, el| sum + el.byte_size()),
-                // NOTE: We don't measure `key` as its size will be returned with `std::mem::size_of::<Value>()` call
-                // Similarly, we don't measure stack size of name, account and contract as they're
-                // accounted for in the `std::mem::size_of::<Self>()` call.
+                // NOTE: We don't measure `key` as its size will be returned with
+                // `std::mem::size_of::<Value>()` call Similarly, we don't measure
+                // stack size of name, account and contract as they're accounted for
+                // in the `std::mem::size_of::<Self>()` call.
                 Value::Key(_) => 0,
                 Value::NamedKey(name, _key) => name.heap_size(),
                 Value::Account(account) => account.heap_size(),

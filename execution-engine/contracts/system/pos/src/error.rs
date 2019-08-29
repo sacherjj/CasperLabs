@@ -9,7 +9,8 @@ pub enum Error {
     TooManyEventsInQueue,
     CannotUnbondLastValidator,
     SpreadTooHigh,
-    /// Returned when there is another QueueEntry in a Queue, for validator making a request.
+    /// Returned when there is another QueueEntry in a Queue, for validator
+    /// making a request.
     MultipleRequests,
     BondTooLarge,
     UnbondTooLarge,

@@ -39,9 +39,10 @@ impl GenesisURefsSource {
     fn create_genesis_rng() -> ChaChaRng {
         // We are using easy to recover address and nonce as seeds so that the addresses
         // can be recomputed by the EngineState for PoS purposes.
-        // This should never clash with the deploy's PRNG as there is no Ed25519 private key that
-        // corresponds to `000..00` public key. Even if there was, because we are using nonce=0
-        // and any valid deploy starts with nonce=1 the seed to deploy's PRNG will be different.
+        // This should never clash with the deploy's PRNG as there is no Ed25519 private
+        // key that corresponds to `000..00` public key. Even if there was,
+        // because we are using nonce=0 and any valid deploy starts with nonce=1
+        // the seed to deploy's PRNG will be different.
         execution::create_rng([0u8; 32], 0)
     }
 
@@ -53,7 +54,10 @@ impl GenesisURefsSource {
     }
 
     pub fn get_pos_address(&self) -> URef {
-        *self.0.get(POS_PRIVATE_ADDRESS).unwrap() // It's safe to unwrap as we have included it when creating `GenesisURefsSource`.
+        *self.0.get(POS_PRIVATE_ADDRESS).unwrap() // It's safe to unwrap as we
+                                                  // have included it when
+                                                  // creating
+                                                  // `GenesisURefsSource`.
     }
 }
 
@@ -123,7 +127,8 @@ fn create_mint_effects(
 
     // Create genesis_account
     let genesis_account = {
-        // All system contract public urefs MUST be added to the genesis account's known_urefs
+        // All system contract public urefs MUST be added to the genesis account's
+        // known_urefs
         let known_urefs = vec![
             (String::from(execution::MINT_NAME), Key::URef(public_uref)),
             (
@@ -241,7 +246,8 @@ fn create_pos_effects(
 
     // Add genesis validators to PoS contract object.
     // For now, we are storing validators in `known_urefs` map of the PoS contract
-    // in the form: key: "v_{validator_pk}_{validator_stake}", value: doesn't matter.
+    // in the form: key: "v_{validator_pk}_{validator_stake}", value: doesn't
+    // matter.
     let mut known_urefs: BTreeMap<String, Key> = genesis_validators
         .iter()
         .map(|(pub_key, balance)| {
@@ -506,8 +512,8 @@ mod tests {
         let mint_private_address = rng.get_uref(MINT_PRIVATE_ADDRESS);
         let pos_private_address = rng.get_uref(POS_PRIVATE_ADDRESS);
 
-        // the value under the outer mint_contract_uref should be a key value pointing at
-        // the current contract bytes
+        // the value under the outer mint_contract_uref should be a key value pointing
+        // at the current contract bytes
         assert_eq!(
             actual_mint_private_address,
             Key::URef(mint_private_address),
@@ -563,7 +569,8 @@ mod tests {
 
         let mint_contract: Contract = Contract::new(mint_code_bytes.into(), mint_known_urefs, 1);
 
-        // the value under the mint_contract_uref_key should be the current contract bytes
+        // the value under the mint_contract_uref_key should be the current contract
+        // bytes
         assert_eq!(actual, mint_contract, "invalid mint contract bytes");
     }
 
@@ -666,7 +673,8 @@ mod tests {
         let initial_genesis_account_balance = get_initial_motes(INITIAL_GENESIS_ACCOUNT_BALANCE);
         let initial_pos_validators_balance = get_initial_motes(INITIAL_POS_VALIDATORS_BALANCE);
 
-        // the value under the outer balance_uref_key should be a U512 value (the actual balance)
+        // the value under the outer balance_uref_key should be a U512 value (the actual
+        // balance)
         assert_eq!(
             actual_genesis_account_balance, initial_genesis_account_balance,
             "Invalid Genesis account balance"
