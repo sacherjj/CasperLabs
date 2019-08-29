@@ -1,6 +1,5 @@
 package io.casperlabs.casper.deploybuffer
 
-import cats.Monad
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
@@ -12,7 +11,7 @@ import io.casperlabs.shared.Log
 
 import scala.concurrent.duration.FiniteDuration
 
-class MockDeployBuffer[F[_]: Monad: Log](
+class MockDeployBuffer[F[_]: Sync: Log](
     deploysWithMetadataRef: Ref[F, Map[Deploy, Metadata]]
 ) extends DeployBuffer[F] {
 
@@ -113,6 +112,18 @@ class MockDeployBuffer[F[_]: Monad: Log](
   override def readPending: F[List[Deploy]] = readByStatus(PendingStatusCode)
 
   override def readPendingHashes: F[List[ByteString]] = readPending.map(_.map(_.deployHash))
+
+  override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
+    fs2.Stream
+      .eval(
+        readPending.map(
+          _.groupBy(_.getHeader.accountPublicKey)
+            .mapValues(_.minBy(_.getHeader.timestamp))
+            .values
+            .toList
+        )
+      )
+      .flatMap(deploys => fs2.Stream.fromIterator(deploys.toIterator))
 
   override def getByHashes(l: List[ByteString]): F[List[Deploy]] = {
     val hashesSet = l.toSet

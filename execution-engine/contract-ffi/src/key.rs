@@ -49,6 +49,15 @@ impl Key {
         let hash: [u8; LOCAL_KEY_SIZE] = hash(&bytes_to_hash);
         Key::Local(hash)
     }
+
+    pub fn type_string(&self) -> String {
+        match self {
+            Key::Account(_) => String::from("Key::Account"),
+            Key::Hash(_) => String::from("Key::Hash"),
+            Key::URef(_) => String::from("Key::URef"),
+            Key::Local(_) => String::from("Key::Local"),
+        }
+    }
 }
 
 // There is no impl LowerHex for neither [u8; 32] nor &[u8] in std.

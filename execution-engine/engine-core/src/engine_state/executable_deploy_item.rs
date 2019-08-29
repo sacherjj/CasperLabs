@@ -11,6 +11,10 @@ pub enum ExecutableDeployItem {
         name: String,
         args: Vec<u8>,
     },
+    StoredContractByURef {
+        uref: Vec<u8>,
+        args: Vec<u8>,
+    },
 }
 
 impl ExecutableDeployItem {
@@ -19,6 +23,7 @@ impl ExecutableDeployItem {
             ExecutableDeployItem::ModuleBytes { args, .. } => args,
             ExecutableDeployItem::StoredContractByHash { args, .. } => args,
             ExecutableDeployItem::StoredContractByName { args, .. } => args,
+            ExecutableDeployItem::StoredContractByURef { args, .. } => args,
         }
     }
 }
