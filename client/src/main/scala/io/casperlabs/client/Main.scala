@@ -32,8 +32,9 @@ object Main {
         maybeConf <- Task(Configuration.parse(args))
         _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) {
               case (conn, conf) =>
-                implicit val deployService: GrpcDeployService = new GrpcDeployService(conn)
-                implicit val filesAPI: FilesAPI[Task]         = FilesAPI.create[Task]
+                implicit val deployService: GrpcDeployService =
+                  new GrpcDeployService(conn, scheduler)
+                implicit val filesAPI: FilesAPI[Task] = FilesAPI.create[Task]
                 program[Task](conf).doOnFinish(_ => Task(deployService.close()))
             }
       } yield ()

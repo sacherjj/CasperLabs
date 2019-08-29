@@ -34,10 +34,16 @@ object DeployRuntime {
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
-    gracefulExit(DeployService[F].propose().map(_.map(r => s"Response: $r")), exit, ignoreOutput)
+    gracefulExit(
+      DeployService[F]
+        .propose()
+        .map(_.map(hash => s"Response: Success! Block $hash created and added.")),
+      exit,
+      ignoreOutput
+    )
 
   def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showBlock(hash))
+    gracefulExit(DeployService[F].showBlock(hash).map(_.map(Printer.printToUnicodeString)))
 
   def showDeploys[F[_]: Sync: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].showDeploys(hash))
