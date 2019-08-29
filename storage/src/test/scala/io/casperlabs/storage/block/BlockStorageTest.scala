@@ -47,7 +47,7 @@ trait BlockStorageTest
 
   def checkAllHashes(storage: BlockStorage[Task], hashes: List[BlockHash]) =
     hashes.traverse { h =>
-      storage.findBlockHash(_ == h).map(h -> _.isDefined)
+      storage.get(h).map(h -> _.isDefined)
     } map { res =>
       Inspectors.forAll(res) {
         case (_, isDefined) => isDefined shouldBe true
@@ -76,7 +76,7 @@ trait BlockStorageTest
     }
   }
 
-  it should "discover keys by predicate" in {
+  it should "discover blocks by block hash prefix" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
       withStorage { storage =>
         val items = blockStorageElements
@@ -84,12 +84,10 @@ trait BlockStorageTest
           _ <- items.traverse_(storage.put)
           _ <- items.traverse[Task, Assertion] { block =>
                 storage
-                  .findBlockHash(
-                    _ == ByteString.copyFrom(block.getBlockMessage.blockHash.toByteArray)
-                  )
+                  .get(ByteString.copyFrom(block.getBlockMessage.blockHash.toByteArray.take(25)))
                   .map { w =>
                     w should not be empty
-                    w.get shouldBe block.getBlockMessage.blockHash
+                    w.get shouldBe block
                   }
               }
         } yield ()
@@ -177,12 +175,12 @@ trait BlockStorageTest
         throw exception
 
       for {
-        _                  <- storage.findBlockHash(_ => true).map(_ shouldBe empty)
+        _                  <- storage.isEmpty.map(_ shouldBe true)
         (blockHash, block) = elem
         putAttempt         <- storage.put(blockHash, block).attempt
         _                  = putAttempt.left.value shouldBe exception
-        result             <- storage.findBlockHash(_ => true).map(_ shouldBe empty)
-      } yield result
+        _                  <- storage.isEmpty.map(_ shouldBe true)
+      } yield ()
     }
   }
 }
@@ -197,7 +195,7 @@ class InMemBlockStorageTest extends BlockStorageTest {
       metrics             = new MetricsNOP[Task]()
       storage = InMemBlockStorage
         .create[Task](Monad[Task], refTask, deployHashesRefTask, approvedBlockRef, metrics)
-      _      <- storage.findBlockHash(_ => true).map(x => assert(x.isEmpty))
+      _      <- storage.isEmpty.map(_ shouldBe true)
       result <- f(storage)
     } yield result
     test.unsafeRunSync
@@ -218,7 +216,7 @@ class LMDBBlockStorageTest extends BlockStorageTest {
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
     val storage                         = LMDBBlockStorage.create[Task](env)
     val test = for {
-      _      <- storage.findBlockHash(_ => true).map(x => assert(x.isEmpty))
+      _      <- storage.isEmpty.map(_ shouldBe true)
       result <- f(storage)
     } yield result
     try {
@@ -246,7 +244,7 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
     val env                             = Context.env(dbDir, mapSize)
     val test = for {
       storage <- FileLMDBIndexBlockStorage.create[Task](env, dbDir).map(_.right.get)
-      _       <- storage.findBlockHash(_ => true).map(x => assert(x.isEmpty))
+      _       <- storage.isEmpty.map(_ shouldBe true)
       result  <- f(storage)
     } yield result
     try {
@@ -410,12 +408,12 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   firstStorage.get(block.blockHash).map(_ shouldBe Some(b))
               }
-          _ <- firstStorage.findBlockHash(_ => true).map(_.isEmpty shouldBe blocks.isEmpty)
+          _ <- firstStorage.isEmpty.map(_ shouldBe blocks.isEmpty)
           _ = approvedBlockPath.toFile.exists() shouldBe true
           _ <- firstStorage.clear()
           _ = approvedBlockPath.toFile.exists() shouldBe false
           _ = checkpointsDir.toFile.list().size shouldBe 0
-          _ <- firstStorage.findBlockHash(_ => true).map(_ shouldBe empty)
+          _ <- firstStorage.isEmpty.map(_ shouldBe true)
           _ <- blockStorageBatches.traverse_[Task, Unit](
                 blockStorageElements =>
                   blockStorageElements

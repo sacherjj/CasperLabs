@@ -52,11 +52,11 @@ abstract class BlockStorageBench {
 
   @Benchmark
   def findRandom() =
-    blockStorage.findBlockHash(_ == randomHash).runSyncUnsafe()
+    blockStorage.get(randomHash).runSyncUnsafe()
 
   @Benchmark
   def findInserted() =
-    blockStorage.findBlockHash(_ == inserted.next()).runSyncUnsafe()
+    blockStorage.get(inserted.next()).runSyncUnsafe()
 
   @Benchmark
   def checkpoint() =

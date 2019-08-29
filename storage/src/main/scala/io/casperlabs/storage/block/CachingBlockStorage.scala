@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, MeteredBlockStorage}
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
 import scala.collection.JavaConverters._
@@ -28,11 +28,18 @@ class CachingBlockStorage[F[_]: Sync](
       case maybeHit => maybeHit.pure[F]
     }
 
-  override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
-    cacheOrUnderlying(Option(cache.getIfPresent(blockHash)), underlying.get(blockHash))
-
-  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
-    cacheOrUnderlying(cache.asMap.keySet.asScala.find(p), underlying.findBlockHash(p))
+  override def get(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
+    cacheOrUnderlying(
+      if (blockHashPrefix.size() == 32) {
+        Option(cache.getIfPresent(blockHashPrefix))
+      } else {
+        cache.asMap().asScala.collectFirst {
+          case (blockHash, blockMsg) if blockHash.startsWith(blockHashPrefix) =>
+            blockMsg
+        }
+      },
+      underlying.get(blockHashPrefix)
+    )
 
   override def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
     Sync[F]
@@ -50,16 +57,26 @@ class CachingBlockStorage[F[_]: Sync](
   override def putApprovedBlock(block: ApprovedBlock): F[Unit] =
     underlying.putApprovedBlock(block)
 
-  override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
+  override def getBlockSummary(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
     cacheOrUnderlying(
-      Option(cache.getIfPresent(blockHash)).map(_.getBlockMessage).map { x =>
-        BlockSummary(x.blockHash, x.header, x.signature)
+      if (blockHashPrefix.size() == 32) {
+        Option(cache.getIfPresent(blockHashPrefix)).map(_.getBlockMessage).map { x =>
+          BlockSummary(x.blockHash, x.header, x.signature)
+        }
+      } else {
+        cache.asMap().asScala.collectFirst {
+          case (blockHash, blockMsg) if blockHash.startsWith(blockHashPrefix) =>
+            val b = blockMsg.getBlockMessage
+            BlockSummary(b.blockHash, b.header, b.signature)
+        }
       },
-      underlying.getBlockSummary(blockHash)
+      underlying.getBlockSummary(blockHashPrefix)
     )
 
   override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
     underlying.findBlockHashesWithDeployhash(deployHash)
+
+  override def isEmpty: F[Boolean] = underlying.isEmpty
 
   override def checkpoint(): F[Unit] =
     underlying.checkpoint()

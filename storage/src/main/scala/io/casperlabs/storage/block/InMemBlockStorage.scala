@@ -8,7 +8,12 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{
+  BlockHash,
+  BlockHashPrefix,
+  DeployHash,
+  MeteredBlockStorage
+}
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
 import scala.language.higherKinds
@@ -21,11 +26,17 @@ class InMemBlockStorage[F[_]] private (
     approvedBlockRef: Ref[F, Option[ApprovedBlock]]
 ) extends BlockStorage[F] {
 
-  def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
-    refF.get.map(_.get(blockHash).map(_._1))
+  def get(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
+    if (blockHashPrefix.size() == 32) {
+      refF.get.map(_.get(blockHashPrefix).map(_._1))
+    } else {
+      refF.get.map(_.collectFirst {
+        case (blockHash, (blockMsg, _)) if blockHash.startsWith(blockHashPrefix) =>
+          blockMsg
+      })
+    }
 
-  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
-    refF.get.map(_.keys.find(p))
+  override def isEmpty: F[Boolean] = refF.get.map(_.isEmpty)
 
   def put(
       blockHash: BlockHash,
@@ -50,8 +61,15 @@ class InMemBlockStorage[F[_]] private (
   def putApprovedBlock(block: ApprovedBlock): F[Unit] =
     approvedBlockRef.set(Some(block))
 
-  override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
-    refF.get.map(_.get(blockHash).map(_._2))
+  override def getBlockSummary(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
+    if (blockHashPrefix.size() == 32) {
+      refF.get.map(_.get(blockHashPrefix).map(_._2))
+    } else {
+      refF.get.map(_.collectFirst {
+        case (blockHash, (_, blockSummary)) if blockHash.startsWith(blockHashPrefix) =>
+          blockSummary
+      })
+    }
 
   override def findBlockHashesWithDeployhash(deployHash: BlockHash): F[Seq[BlockHash]] =
     reverseIdxRefF.get.map(_.getOrElse(deployHash, Seq.empty[BlockHash]).distinct)

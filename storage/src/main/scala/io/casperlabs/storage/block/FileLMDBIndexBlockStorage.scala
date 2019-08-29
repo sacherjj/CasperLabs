@@ -20,7 +20,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared.Resources.withResource
 import io.casperlabs.storage.StorageError.StorageErr
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, MeteredBlockStorage}
 import io.casperlabs.storage.block.FileLMDBIndexBlockStorage.Checkpoint
 import io.casperlabs.storage.util.byteOps._
 import io.casperlabs.storage.util.fileIO
@@ -152,25 +152,36 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
       } yield indexEntryOpt.isDefined
     )
 
-  override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
-    lock.withPermit(
+  override def get(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
+    if (blockHashPrefix.size() == 32) {
+      lock.withPermit(
+        for {
+          indexEntryOpt <- withReadTxn { txn =>
+                            Option(index.get(txn, blockHashPrefix.toDirectByteBuffer))
+                              .map(IndexEntry.load)
+                          }
+          result <- indexEntryOpt.traverse(readBlockMsgWithTransform)
+        } yield result
+      )
+    } else {
       for {
-        indexEntryOpt <- withReadTxn { txn =>
-                          Option(index.get(txn, blockHash.toDirectByteBuffer))
-                            .map(IndexEntry.load)
-                        }
-        result <- indexEntryOpt.traverse(readBlockMsgWithTransform)
-      } yield result
-    )
+        maybeBlockHash <- lock.withPermit(
+                           withReadTxn { txn =>
+                             withResource(index.iterate(txn)) { it =>
+                               it.asScala
+                                 .map(kv => ByteString.copyFrom(kv.key))
+                                 .find(_.startsWith(blockHashPrefix))
+                             }
+                           }
+                         )
+        maybeBlockMsg <- maybeBlockHash.fold(none[BlockMsgWithTransform].pure[F])(get)
+      } yield maybeBlockMsg
+    }
 
-  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
-    lock.withPermit(
-      withReadTxn { txn =>
-        withResource(index.iterate(txn)) { it =>
-          it.asScala.map(kv => ByteString.copyFrom(kv.key)).find(p)
-        }
-      }
-    )
+  override def isEmpty: F[Boolean] =
+    lock.withPermit(withReadTxn { txn =>
+      index.stat(txn).entries == 0L
+    })
 
   override def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
     lock.withPermit(
@@ -217,10 +228,25 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
         moveFile(tmpFile, approvedBlockPath, StandardCopyOption.ATOMIC_MOVE).as(())
     }
 
-  override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
-    withReadTxn { txn =>
-      Option(blockSummaryDB.get(txn, blockHash.toDirectByteBuffer))
-        .map(r => BlockSummary.parseFrom(ByteString.copyFrom(r).newCodedInput()))
+  override def getBlockSummary(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
+    if (blockHashPrefix.size() == 32) {
+      withReadTxn { txn =>
+        Option(blockSummaryDB.get(txn, blockHashPrefix.toDirectByteBuffer))
+          .map(r => BlockSummary.parseFrom(ByteString.copyFrom(r).newCodedInput()))
+      }
+    } else {
+      for {
+        maybeBlockHash <- lock.withPermit(
+                           withReadTxn { txn =>
+                             withResource(index.iterate(txn)) { it =>
+                               it.asScala
+                                 .map(kv => ByteString.copyFrom(kv.key))
+                                 .find(_.startsWith(blockHashPrefix))
+                             }
+                           }
+                         )
+        maybeBlockSummary <- maybeBlockHash.fold(none[BlockSummary].pure[F])(getBlockSummary)
+      } yield maybeBlockSummary
     }
 
   override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
