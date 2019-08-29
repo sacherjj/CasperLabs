@@ -3,14 +3,14 @@
 
 #[macro_use]
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api;
-use cl_std::contract_api::pointers::{ContractPointer, UPointer};
-use cl_std::key::Key;
-use cl_std::uref::AccessRights;
-use cl_std::value::account::PurseId;
-use cl_std::value::U512;
+use contract_ffi::contract_api;
+use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::key::Key;
+use contract_ffi::uref::AccessRights;
+use contract_ffi::value::account::PurseId;
+use contract_ffi::value::U512;
 
 enum Error {
     GetPosOuterURef = 1000,
