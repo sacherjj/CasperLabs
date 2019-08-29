@@ -246,7 +246,8 @@ object DeployRuntime {
                     )
                   )
       _ <- transfer[F](
-            sessionCode,paymentCode,
+            sessionCode,
+            paymentCode,
             publicKey,
             privateKey,
             recipientPublicKeyBase64,
