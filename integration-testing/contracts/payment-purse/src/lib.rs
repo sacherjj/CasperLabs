@@ -21,7 +21,7 @@ pub extern "C" fn call() {
     let account: PublicKey = contract_api::get_arg(0);
     let payment_amount: U512 = U512::from(contract_api::get_arg::<u32>(1));
     let payment_purse: PurseId =
-        contract_api::call_contract(pos_pointer, &"get_payment_purse", &Vec::new());
+        contract_api::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
 
     // can deposit
     if let PurseTransferResult::TransferError =

@@ -35,11 +35,11 @@ fn set_refund_purse(pos: &ContractPointer, p: &PurseId) {
 }
 
 fn get_refund_purse(pos: &ContractPointer) -> Option<PurseId> {
-    contract_api::call_contract(pos.clone(), &"get_refund_purse", &Vec::new())
+    contract_api::call_contract(pos.clone(), &("get_refund_purse",), &Vec::new())
 }
 
 fn get_payment_purse(pos: &ContractPointer) -> PurseId {
-    contract_api::call_contract(pos.clone(), &"get_payment_purse", &Vec::new())
+    contract_api::call_contract(pos.clone(), &("get_payment_purse",), &Vec::new())
 }
 
 fn submit_payment(pos: &ContractPointer, amount: U512) {

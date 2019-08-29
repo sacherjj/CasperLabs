@@ -33,7 +33,7 @@ fn standard_payment(amount: U512) {
         .unwrap_or_else(|| contract_api::revert(Error::GetPosInnerURef as u32));
 
     let payment_purse: PurseId =
-        contract_api::call_contract(pos_contract, &(GET_PAYMENT_PURSE), &vec![]);
+        contract_api::call_contract(pos_contract, &(GET_PAYMENT_PURSE,), &vec![]);
 
     if let PurseTransferResult::TransferError =
         contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)

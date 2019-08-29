@@ -58,7 +58,14 @@ message Deploy {
     // Includes both binary instructions (wasm) and optionally, arguments
     // to those instructions encoded via our ABI
     message Code {
-        bytes code = 1; // wasm byte code
+        oneof contract {
+            // Wasm byte code.
+            bytes wasm = 1;
+            // Public hash address of an already stored contract.
+            bytes hash = 3;
+            // Name of a stored contract associated with the executing account (uref or hash).
+            string name = 4;
+        }
         bytes args = 2; // ABI-encoded arguments
     }
 }

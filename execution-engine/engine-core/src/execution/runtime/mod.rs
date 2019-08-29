@@ -711,7 +711,7 @@ where
     /// Calls the "create" method on the mint contract at the given mint contract key
     fn mint_create(&mut self, mint_contract_key: Key) -> Result<PurseId, Error> {
         let args_bytes = {
-            let args = "create";
+            let args = ("create",);
             ArgsParser::parse(&args).and_then(|args| args.to_bytes())?
         };
 

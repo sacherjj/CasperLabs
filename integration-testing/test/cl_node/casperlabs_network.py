@@ -5,10 +5,9 @@ from test.cl_node.casperlabs_node import CasperLabsNode
 from test.cl_node.common import random_string, MAX_PAYMENT_COST
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.docker_execution_engine import DockerExecutionEngine
-from test.cl_node.docker_node import DockerNode
+from test.cl_node.docker_node import DockerNode, FIRST_VALIDATOR_ACCOUNT
 from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
 from test.cl_node.nonce_registry import NonceRegistry
-from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS  # TODO: remove
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, Account
 from test.cl_node.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
@@ -39,9 +38,11 @@ class CasperLabsNetwork:
     Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
 
+    is_payment_code_enabled = False
+
     def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
         self.extra_docker_params = extra_docker_params or {}
-        self._next_key_number = 0
+        self._next_key_number = FIRST_VALIDATOR_ACCOUNT
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []
         self._created_networks: List[str] = []
@@ -103,7 +104,7 @@ class CasperLabsNetwork:
         return self.test_account(node).public_key_hex
 
     def get_key(self):
-        key_pair = PREGENERATED_KEYPAIRS[self._next_key_number]
+        key_pair = Account(self._next_key_number)
         self._next_key_number += 1
         return key_pair
 
@@ -130,7 +131,12 @@ class CasperLabsNetwork:
 
     def add_new_node_to_network(self) -> None:
         kp = self.get_key()
-        config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_account=kp,
+            is_payment_code_enabled=self.is_payment_code_enabled,
+        )
         self.add_cl_node(config)
         self.wait_method(wait_for_approved_block_received_handler_state, 1)
         self.wait_for_peers()
@@ -227,6 +233,7 @@ class OneNodeNetwork(CasperLabsNetwork):
 
     is_payment_code_enabled = False
     initial_motes = MAX_PAYMENT_COST * 100  # 10 millions * 100 = 1 billion motes
+    grpc_encryption = False
 
     def create_cl_network(self):
         kp = self.get_key()
@@ -237,6 +244,8 @@ class OneNodeNetwork(CasperLabsNetwork):
             network=self.create_docker_network(),
             is_payment_code_enabled=self.is_payment_code_enabled,
             initial_motes=self.initial_motes,
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
         )
         self.add_bootstrap(config)
 
@@ -263,12 +272,10 @@ class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
     initial_motes = 10 ** 3
 
 
-class PaymentNodForOnlyPaymentContract(OneNodeNetwork):
-    """ A single node network with payment code enabled"""
-
+class OneNodeWithGRPCEncryption(OneNodeNetwork):
     is_payment_code_enabled = True
-    # enough to run payment, but not enough to run session
-    initial_motes = 3093878
+    initial_motes = MAX_PAYMENT_COST * 100
+    grpc_encryption = True
 
 
 class TwoNodeNetwork(CasperLabsNetwork):
@@ -279,6 +286,7 @@ class TwoNodeNetwork(CasperLabsNetwork):
             node_private_key=kp.private_key,
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
+            node_account=kp,
         )
         self.add_bootstrap(config)
 
@@ -293,12 +301,15 @@ class ThreeNodeNetwork(CasperLabsNetwork):
             node_private_key=kp.private_key,
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
+            node_account=kp,
         )
         self.add_bootstrap(config)
 
         for _ in range(1, 3):
             kp = self.get_key()
-            config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
+            config = DockerConfig(
+                self.docker_client, node_private_key=kp.private_key, node_account=kp
+            )
             self.add_cl_node(config)
 
         for node_number in range(1, 3):
@@ -316,12 +327,15 @@ class MultiNodeJoinedNetwork(CasperLabsNetwork):
             node_private_key=kp.private_key,
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
+            node_account=kp,
         )
         self.add_bootstrap(config)
 
         for _ in range(1, node_count):
             kp = self.get_key()
-            config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
+            config = DockerConfig(
+                self.docker_client, node_private_key=kp.private_key, node_account=kp
+            )
             self.add_cl_node(config)
 
         for node_number in range(1, node_count):
@@ -356,6 +370,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
             node_private_key=kp.private_key,
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
+            node_account=kp,
         )
         self.add_bootstrap(config)
 
@@ -365,6 +380,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
                 self.docker_client,
                 node_private_key=kp.private_key,
                 network=self.create_docker_network(),
+                node_account=kp,
             )
             self.add_cl_node(config, network_with_bootstrap=False)
 

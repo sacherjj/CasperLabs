@@ -913,6 +913,12 @@ impl From<ipc::DeployPayload_oneof_payload> for ExecutableDeployItem {
                     args: stored_contract_name.args,
                 }
             }
+            ipc::DeployPayload_oneof_payload::stored_contract_uref(stored_contract_uref) => {
+                ExecutableDeployItem::StoredContractByURef {
+                    uref: stored_contract_uref.uref,
+                    args: stored_contract_uref.args,
+                }
+            }
         }
     }
 }

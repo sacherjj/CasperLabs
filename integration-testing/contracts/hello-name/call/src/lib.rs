@@ -21,7 +21,7 @@ pub extern "C" fn call() {
     };
 
     let arg = "World";
-    let result: String = call_contract(pointer, &arg, &Vec::new());
+    let result: String = call_contract(pointer, &(arg,), &Vec::new());
     assert_eq!("Hello, World", result);
 
     //store the result at a uref so it can be seen as an effect on the global state
