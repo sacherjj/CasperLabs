@@ -170,6 +170,7 @@ object LegacyConversions {
       )
       .withGasLimit(gasLimit) // New version doesn't have it.
       .withGasPrice(deploy.getHeader.gasPrice)
+      .withNonce(deploy.getHeader.nonce)
       .withSigAlgorithm(deploy.approvals.headOption.fold("")(_.getSignature.sigAlgorithm))
       .withSignature(deploy.approvals.headOption.fold(ByteString.EMPTY)(_.getSignature.sig))
   //.withUser() // We weren't using signing when this was in use.
@@ -196,6 +197,7 @@ object LegacyConversions {
       // If they signed the deploy, we can derive the account address from the key.
       //.withAccountPublicKey(x.getDeploy.user)
       .withAccountPublicKey(deploy.address)
+      .withNonce(deploy.nonce)
       .withTimestamp(deploy.timestamp)
       .withGasPrice(deploy.gasPrice)
       .withBodyHash(ProtoUtil.protoHash(body)) // Legacy doesn't have it.
