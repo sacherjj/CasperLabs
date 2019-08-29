@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 // modules
 pub mod error;
 pub mod global_state;
-pub mod protocol_state;
+pub mod protocol_data;
 pub mod transaction_source;
 pub mod trie;
 pub mod trie_store;
