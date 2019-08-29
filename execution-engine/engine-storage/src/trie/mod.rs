@@ -7,7 +7,7 @@ use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 use engine_shared::newtypes::Blake2bHash;
 
 #[cfg(test)]
-pub(crate) mod gens;
+pub mod gens;
 
 #[cfg(test)]
 mod tests;

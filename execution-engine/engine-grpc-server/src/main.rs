@@ -29,7 +29,8 @@ use engine_shared::logging::{log_level, log_settings};
 use engine_shared::os::get_page_size;
 use engine_shared::{logging, socket};
 use engine_storage::global_state::lmdb::LmdbGlobalState;
-use engine_storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+use engine_storage::transaction_source::lmdb::LmdbEnvironment;
+use engine_storage::trie_store::lmdb::LmdbTrieStore;
 
 use casperlabs_engine_grpc_server::engine_server;
 
