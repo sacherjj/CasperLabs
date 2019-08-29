@@ -256,12 +256,10 @@ impl ExecutionResultBuilder {
             None => return Err(ExecutionResultBuilderError::MissingFinalizeExecutionResult),
         }
 
-        Ok(ret.with_effect(Self::reduce_identity_writes(
-            ops,
-            transforms,
-            reader,
-            correlation_id,
-        )))
+        // Remove redundant writes to allow more opportunity to commute
+        let reduced_effect = Self::reduce_identity_writes(ops, transforms, reader, correlation_id);
+
+        Ok(ret.with_effect(reduced_effect))
     }
 
     fn add_effects(
