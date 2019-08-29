@@ -6,6 +6,7 @@ import time
 from test.cl_node import LoggingMixin
 from test.cl_node.nonce_registry import NonceRegistry
 from casperlabs_client import CasperLabsClient, ABI, InternalError
+from test.cl_node.common import Contract, MAX_PAYMENT_ABI
 
 
 class PythonClient(CasperLabsClient, LoggingMixin):
@@ -48,7 +49,11 @@ class PythonClient(CasperLabsClient, LoggingMixin):
     ) -> str:
 
         assert session_contract is not None
-        assert payment_contract is not None
+        if payment_contract is None:
+            payment_contract = Contract.STANDARD_PAYMENT
+
+        if payment_args is None:
+            payment_args = MAX_PAYMENT_ABI
 
         public_key = public_key or self.node.test_account.public_key_path
         private_key = private_key or self.node.test_account.private_key_path

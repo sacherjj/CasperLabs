@@ -11,6 +11,8 @@ from test.cl_node.common import (
     extract_block_hash_from_propose_output,
     MAX_PAYMENT_COST,
     CONV_RATE,
+    MAX_PAYMENT_ABI,
+    Contract,
 )
 from test.cl_node.docker_base import LoggingDockerBase
 from test.cl_node.docker_client import DockerClient
@@ -19,11 +21,6 @@ from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_accounts import is_valid_account, Account
-from test.cl_node.common import (
-    PAYMENT_CONTRACT,
-    TRANSFER_TO_ACCOUNT_CONTRACT,
-    MAX_PAYMENT_ABI,
-)
 
 
 class DockerNode(LoggingDockerBase):
@@ -271,8 +268,8 @@ class DockerNode(LoggingDockerBase):
         to_account_id: int,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
-        session_contract: str = TRANSFER_TO_ACCOUNT_CONTRACT,
-        payment_contract: str = PAYMENT_CONTRACT,
+        session_contract: str = Contract.TRANSFER_TO_ACCOUNT,
+        payment_contract: str = Contract.STANDARD_PAYMENT,
         gas_price: int = 1,
         gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
         is_deploy_error_check: bool = True,
@@ -308,18 +305,6 @@ class DockerNode(LoggingDockerBase):
         session_args = ABI.args(
             [ABI.account(to_account.public_key_binary), ABI.u32(amount)]
         )
-        # Until payment is on for all, we have to fix the default payment args
-        if not self.config.is_payment_code_enabled:
-            payment_contract = session_contract
-
-        if session_contract == payment_contract:
-            # Compatibility mode with the way things worked before execution cost era
-            payment_args = None
-        else:
-            # NOTE: this shouldn't necesserily be amount
-            # but this is temporary, anyway, eventually we want all tests
-            # running with execution cost on.
-            payment_args = MAX_PAYMENT_ABI
 
         response, deploy_hash_bytes = self.p_client.deploy(
             from_address=from_account.public_key_hex,
@@ -330,7 +315,7 @@ class DockerNode(LoggingDockerBase):
             gas_price=gas_price,
             gas_limit=gas_limit,
             session_args=session_args,
-            payment_args=payment_args,
+            payment_args=MAX_PAYMENT_ABI,
         )
 
         deploy_hash_hex = deploy_hash_bytes.hex()
@@ -382,7 +367,6 @@ class DockerNode(LoggingDockerBase):
         gas_price: int = 1,
     ) -> str:
 
-        # TODO: pass payment_args as well
         response, deploy_hash_bytes = self.p_client.deploy(
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
@@ -421,13 +405,7 @@ class DockerNode(LoggingDockerBase):
             to_addr_id, amount = avl[:2]
             from_addr_id = "genesis" if len(avl) == 2 else avl[2]
             block_hashes.append(
-                # TODO: don't pass payment_contract when execution cost on
-                self.transfer_to_account(
-                    to_addr_id,
-                    amount,
-                    from_addr_id,
-                    payment_contract="transfer_to_account.wasm",
-                )
+                self.transfer_to_account(to_addr_id, amount, from_addr_id)
             )
         return block_hashes
 

@@ -1,4 +1,4 @@
-from test.cl_node.common import HELLO_NAME_CONTRACT
+from test.cl_node.common import Contract, MAX_PAYMENT_ABI
 from test.cl_node.wait import (
     get_new_blocks_requests_total,
     wait_for_block_hashes_propagated_to_all_nodes,
@@ -15,8 +15,9 @@ def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
 
     def propose(node):
         block_hash = node.deploy_and_propose(
-            session_contract=HELLO_NAME_CONTRACT,
-            payment_contract=HELLO_NAME_CONTRACT,
+            session_contract=Contract.HELLONAME,
+            payment_contract=Contract.STANDARD_PAYMENT,
+            payment_args=MAX_PAYMENT_ABI,
             from_address=node.genesis_account.public_key_hex,
             public_key=node.genesis_account.public_key_path,
             private_key=node.genesis_account.private_key_path,

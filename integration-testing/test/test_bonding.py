@@ -1,4 +1,4 @@
-from test.cl_node.common import BONDING_CONTRACT, UNBONDING_CONTRACT
+from test.cl_node.common import Contract
 from test.cl_node.client_parser import parse_show_block
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.casperlabs_network import OneNodeNetwork
@@ -38,7 +38,7 @@ def test_bonding(one_node_network_fn):
     bonding_amount = 1
     assert_pre_state_of_network(one_node_network_fn, [bonding_amount])
     block_hash = bond_to_the_network(
-        one_node_network_fn, BONDING_CONTRACT, bonding_amount
+        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
     )
     node0, node1 = one_node_network_fn.docker_nodes
     assert block_hash is not None
@@ -68,13 +68,13 @@ def test_double_bonding(one_node_network_fn):
     stakes = [1, 2]
     assert_pre_state_of_network(one_node_network_fn, stakes)
     block_hash = bond_to_the_network(
-        one_node_network_fn, BONDING_CONTRACT, bonding_amount
+        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
     )
     assert block_hash is not None
     node1 = one_node_network_fn.docker_nodes[1]
     block_hash = node1.bond(
-        session_contract=BONDING_CONTRACT,
-        payment_contract=BONDING_CONTRACT,
+        session_contract=Contract.BONDINGCALL,
+        payment_contract=Contract.BONDINGCALL,
         amount=bonding_amount,
     )
     assert block_hash is not None
@@ -104,7 +104,7 @@ def test_invalid_bonding(one_node_network_fn):
     # 190 is current total staked amount.
     bonding_amount = (190 * 1000) + 1
     block_hash = bond_to_the_network(
-        one_node_network_fn, BONDING_CONTRACT, bonding_amount
+        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
     )
     assert block_hash is not None
     node1 = one_node_network_fn.docker_nodes[1]
@@ -134,14 +134,14 @@ def test_unbonding(one_node_network_fn):
     bonding_amount = 1
     assert_pre_state_of_network(one_node_network_fn, [bonding_amount])
     block_hash = bond_to_the_network(
-        one_node_network_fn, BONDING_CONTRACT, bonding_amount
+        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
     )
     assert block_hash is not None
     node1 = one_node_network_fn.docker_nodes[1]
     public_key = node1.genesis_account.public_key_hex
     block_hash2 = node1.unbond(
-        session_contract=UNBONDING_CONTRACT,
-        payment_contract=UNBONDING_CONTRACT,
+        session_contract=Contract.UNBONDINGCALL,
+        payment_contract=Contract.UNBONDINGCALL,
         maybe_amount=None,
     )
 
@@ -174,14 +174,14 @@ def test_partial_amount_unbonding(one_node_network_fn):
         [bonding_amount, unbond_amount, bonding_amount - unbond_amount],
     )
     block_hash = bond_to_the_network(
-        one_node_network_fn, BONDING_CONTRACT, bonding_amount
+        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
     )
     assert block_hash is not None
     node1 = one_node_network_fn.docker_nodes[1]
     public_key = node1.genesis_account.public_key_hex
     block_hash2 = node1.unbond(
-        session_contract=UNBONDING_CONTRACT,
-        payment_contract=UNBONDING_CONTRACT,
+        session_contract=Contract.UNBONDINGCALL,
+        payment_contract=Contract.UNBONDINGCALL,
         maybe_amount=unbond_amount,
     )
 
@@ -210,13 +210,13 @@ def test_invalid_unbonding(one_node_network_fn):
     bonding_amount = 2000
     assert_pre_state_of_network(one_node_network_fn, [bonding_amount])
     block_hash = bond_to_the_network(
-        one_node_network_fn, BONDING_CONTRACT, bonding_amount
+        one_node_network_fn, Contract.UNBONDINGCALL, bonding_amount
     )
     assert block_hash is not None
     node1 = one_node_network_fn.docker_nodes[1]
     block_hash2 = node1.unbond(
-        session_contract=UNBONDING_CONTRACT,
-        payment_contract=UNBONDING_CONTRACT,
+        session_contract=Contract.UNBONDINGCALL,
+        payment_contract=Contract.UNBONDINGCALL,
         maybe_amount=1985,  # 1985 > (2000+190) * 0.9
     )
 
@@ -236,8 +236,8 @@ def test_invalid_unbonding(one_node_network_fn):
     assert len(item) == 1
 
     block_hash2 = node1.unbond(
-        session_contract=UNBONDING_CONTRACT,
-        payment_contract=UNBONDING_CONTRACT,
+        session_contract=Contract.UNBONDINGCALL,
+        payment_contract=Contract.UNBONDINGCALL,
         maybe_amount=None,
     )
     assert block_hash2 is not None
@@ -270,8 +270,8 @@ def test_unbonding_without_bonding(one_node_network_fn):
     node0, node1 = one_node_network_fn.docker_nodes[:2]
     public_key = node1.genesis_account.public_key_hex
     block_hash = node1.unbond(
-        session_contract=UNBONDING_CONTRACT,
-        payment_contract=UNBONDING_CONTRACT,
+        session_contract=Contract.UNBONDINGCALL,
+        payment_contract=Contract.UNBONDINGCALL,
         maybe_amount=None,
     )
 

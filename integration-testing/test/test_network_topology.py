@@ -1,7 +1,11 @@
 import logging
 
-from .cl_node.wait import wait_for_block_contains, wait_for_new_fork_choice_tip_block
+from test.cl_node.wait import (
+    wait_for_block_contains,
+    wait_for_new_fork_choice_tip_block,
+)
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+from test.cl_node.common import Contract, MAX_PAYMENT_ABI
 
 
 def test_metrics_api_socket(two_node_network):
@@ -34,8 +38,9 @@ def test_star_network(star_network):
         from_address=GENESIS_ACCOUNT.public_key_hex,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
-        session_contract="test_helloname.wasm",
-        payment_contract="test_helloname.wasm",
+        session_contract=Contract.HELLONAME,
+        payment_contract=Contract.STANDARD_PAYMENT,
+        payment_args=MAX_PAYMENT_ABI,
     )
 
     # validate all nodes get block

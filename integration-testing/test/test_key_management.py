@@ -4,7 +4,7 @@ from casperlabs_client import ABI
 from test.cl_node.casperlabs_accounts import Account
 from test.cl_node.casperlabs_network import TrillionPaymentNodeNetwork
 from test.cl_node.nonce_registry import NonceRegistry
-from test.cl_node.common import MAX_PAYMENT_ABI, PAYMENT_CONTRACT, HELLO_NAME_CONTRACT
+from test.cl_node.common import Contract
 
 """
 Accounts have two threshold values:
@@ -38,12 +38,10 @@ def _add_update_associate_key(
     )
     return node.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=PAYMENT_CONTRACT,
         session_contract=contract,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=session_args,
-        payment_args=MAX_PAYMENT_ABI,
     )
 
 
@@ -62,12 +60,10 @@ def remove_associated_key(node, weight_key: Account, key: Account):
     args = ABI.args([ABI.account(bytes.fromhex(key.public_key_hex))])
     return node.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=PAYMENT_CONTRACT,
-        session_contract=REMOVE_KEY_CONTRACT,
+        session_contract=Contract.REMOVE_ASSOCIATED_KEY,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=args,
-        payment_args=MAX_PAYMENT_ABI,
     )
 
 
@@ -76,12 +72,10 @@ def set_key_thresholds(node, weight_key, key_mgmt_weight: int, deploy_weight: in
     args = ABI.args([ABI.u32(key_mgmt_weight), ABI.u32(deploy_weight)])
     return node.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=PAYMENT_CONTRACT,
-        session_contract=SET_THRESHOLDS_CONTRACT,
+        session_contract=Contract.SET_KEY_THRESHOLDS,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=args,
-        payment_args=MAX_PAYMENT_ABI,
     )
 
 
@@ -89,12 +83,10 @@ def hello_name_deploy(node, weight_key: Account) -> str:
     """ Simple deploy to test deploy permissions """
     return node.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=PAYMENT_CONTRACT,
-        session_contract=HELLO_NAME_CONTRACT,
+        session_contract=Contract.HELLONAME,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=None,
-        payment_args=MAX_PAYMENT_ABI,
     )
 
 

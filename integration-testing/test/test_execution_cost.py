@@ -3,7 +3,7 @@ from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.common import MAX_PAYMENT_COST, CONV_RATE
+from test.cl_node.common import MAX_PAYMENT_COST, CONV_RATE, Contract
 
 
 def account_state(_block_hash: str, account: str, node0: DockerNode):
@@ -99,8 +99,8 @@ def test_error_in_payment_contract(payment_node_network):
     ABI = node0.p_client.abi
     response, deploy_hash_bytes = node0.p_client.deploy(
         from_address=from_account.public_key_hex,
-        session_contract="transfer_to_account.wasm",
-        payment_contract="err_standard_payment.wasm",
+        session_contract=Contract.TRANSFER_TO_ACCOUNT,
+        payment_contract=Contract.ERR_STANDARD_PAYMENT,
         public_key=from_account.public_key_path,
         private_key=from_account.private_key_path,
         gas_price=1,
@@ -130,7 +130,7 @@ def test_error_in_session_contract(payment_node_network):
     assert genesis_balance == 10 ** 9
     block_hash = node0.transfer_to_account(
         1,
-        session_contract="err_transfer_to_account.wasm",
+        session_contract=Contract.ERR_STANDARD_PAYMENT,
         amount=10 ** 7,
         is_deploy_error_check=False,
     )
@@ -173,8 +173,8 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
     ABI = node0.p_client.abi
     _, _ = node0.p_client.deploy(
         from_address=account1.public_key_hex,
-        payment_contract="standard_payment.wasm",
-        session_contract="endless_loop.wasm",
+        payment_contract=Contract.STANDARD_PAYMENT,
+        session_contract=Contract.ENDLESS_LOOP,
         public_key=account1.public_key_path,
         private_key=account1.private_key_path,
         gas_price=1,
@@ -215,8 +215,8 @@ def test_refund_after_session_code_error(payment_node_network):
     ABI = node0.p_client.abi
     _, deploy_hash = node0.p_client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
-        session_contract="test_args_u512.wasm",
-        payment_contract="standard_payment.wasm",
+        session_contract=Contract.ARGS_U512,
+        payment_contract=Contract.STANDARD_PAYMENT,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
         gas_price=1,
@@ -264,8 +264,8 @@ def test_not_enough_funds_to_run_payment_code(payment_node_network):
     ABI = node0.p_client.abi
     _, deploy_hash = node0.p_client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
-        session_contract="transfer_to_account.wasm",
-        payment_contract="standard_payment.wasm",
+        session_contract=Contract.TRANSFER_TO_ACCOUNT,
+        payment_contract=Contract.STANDARD_PAYMENT,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
         gas_price=1,

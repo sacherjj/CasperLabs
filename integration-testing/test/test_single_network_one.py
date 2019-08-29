@@ -6,10 +6,15 @@ import subprocess
 from pathlib import Path
 from typing import List
 from pytest import fixture, raises
+
 from test import contract_hash
 from test.cl_node.common import testing_root_path
 from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
-from test.cl_node.common import extract_block_hash_from_propose_output
+from test.cl_node.common import (
+    extract_block_hash_from_propose_output,
+    Contract,
+    MAX_PAYMENT_ABI,
+)
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import wait_for_genesis_block
@@ -50,7 +55,8 @@ account {
 def deploy_and_propose_from_genesis(node, contract):
     return node.deploy_and_propose(
         session_contract=contract,
-        payment_contract=contract,
+        payment_contract=Contract.STANDARD_PAYMENT,
+        payments_args=MAX_PAYMENT_ABI,
         from_address=GENESIS_ACCOUNT.public_key_hex,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
@@ -89,10 +95,7 @@ def test_transfer_with_overdraft(one_node_network):
     # For compatibility with EE with no execution cost
     # payment_contract="transfer_to_account.wasm"
     block_hash = node.transfer_to_account(
-        to_account_id=1,
-        amount=1000000,
-        from_account_id="genesis",
-        payment_contract="transfer_to_account.wasm",
+        to_account_id=1, amount=1000000, from_account_id="genesis"
     )
 
     deploys = node.client.show_deploys(block_hash)
@@ -133,23 +136,18 @@ def test_transfer_with_overdraft(one_node_network):
 
 def test_transfer_to_accounts(one_node_network):
     node: DockerNode = one_node_network.docker_nodes[0]
-    # Perform multiple transfers with end result of Acct1 = 100, Acct2 = 100, Acct3 = 800
-    node.transfer_to_accounts([(1, 1000), (2, 900, 1), (3, 800, 2)])
+    node.transfer_to_accounts([(1, 1000), (2, 900, 1)])
     with raises(Exception):
         # Acct 1 has not enough funds so it should fail
         node.transfer_to_account(
-            to_account_id=4,
-            amount=100000000000,
-            from_account_id=1,
-            payment_contract="transfer_to_account.wasm",
+            to_account_id=4, amount=100000000000, from_account_id=1
         )
-    node.transfer_to_account(
-        to_account_id=4,
-        amount=100,
-        from_account_id=2,
-        payment_contract="transfer_to_account.wasm",
-    )
-    # TODO: Improve checks once balance is easy to read.
+    node.transfer_to_account(to_account_id=4, amount=700, from_account_id=2)
+    blocks = node.p_client.show_blocks(10)
+    assert blocks
+    # block = blocks[0]
+    # assert node.p_client.balance(Account(1).p)
+    assert False, "Fix this"
 
 
 def balance(node, account_address, block_hash):
