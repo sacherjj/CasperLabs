@@ -2,14 +2,14 @@
 
 #[macro_use]
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api::pointers::UPointer;
-use cl_std::contract_api::{self, PurseTransferResult};
-use cl_std::execution::Phase;
-use cl_std::key::Key;
-use cl_std::value::account::PurseId;
-use cl_std::value::U512;
+use contract_ffi::contract_api::pointers::UPointer;
+use contract_ffi::contract_api::{self, PurseTransferResult};
+use contract_ffi::execution::Phase;
+use contract_ffi::key::Key;
+use contract_ffi::value::account::PurseId;
+use contract_ffi::value::U512;
 
 const POS_CONTRACT_NAME: &str = "pos";
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";

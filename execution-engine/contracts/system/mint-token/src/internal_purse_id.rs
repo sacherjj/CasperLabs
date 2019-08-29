@@ -1,6 +1,6 @@
-use cl_std::contract_api;
-use cl_std::system_contracts::mint::purse_id::PurseIdError;
-use cl_std::uref::URef;
+use contract_ffi::contract_api;
+use contract_ffi::system_contracts::mint::purse_id::PurseIdError;
+use contract_ffi::uref::URef;
 
 pub struct WithdrawId([u8; 32]);
 

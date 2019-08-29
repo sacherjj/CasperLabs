@@ -2,10 +2,10 @@
 #![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::uref::{AccessRights, URef};
-use cl_std::value::account::PurseId;
+use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::value::account::PurseId;
 
 // This value was acquired by observing the output of an execution of this contract
 // made by ACCOUNT_1.
@@ -19,7 +19,7 @@ pub extern "C" fn call() {
     let expected_purse_id =
         PurseId::new(URef::new(EXPECTED_UREF_BYTES, AccessRights::READ_ADD_WRITE));
 
-    let actual_purse_id = cl_std::contract_api::create_purse();
+    let actual_purse_id = contract_ffi::contract_api::create_purse();
 
     assert_eq!(actual_purse_id, expected_purse_id);
 }

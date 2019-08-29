@@ -1,6 +1,6 @@
 use core::result;
 
-use cl_std::contract_api;
+use contract_ffi::contract_api;
 
 #[derive(Debug, PartialEq)]
 // TODO: Split this up into user errors vs. system errors.

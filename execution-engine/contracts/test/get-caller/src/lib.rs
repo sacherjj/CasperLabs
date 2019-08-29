@@ -2,10 +2,10 @@
 #![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api;
-use cl_std::value::account::PublicKey;
+use contract_ffi::contract_api;
+use contract_ffi::value::account::PublicKey;
 
 #[no_mangle]
 pub extern "C" fn call() {

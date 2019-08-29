@@ -2,11 +2,11 @@
 #![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api::list_known_urefs;
-use cl_std::key::Key;
-use cl_std::uref::URef;
+use contract_ffi::contract_api::list_known_urefs;
+use contract_ffi::key::Key;
+use contract_ffi::uref::URef;
 
 #[allow(clippy::redundant_closure)]
 #[no_mangle]

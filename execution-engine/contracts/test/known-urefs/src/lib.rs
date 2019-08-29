@@ -2,15 +2,15 @@
 #![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::string::String;
 
-use cl_std::contract_api::{
+use contract_ffi::contract_api::{
     add, add_uref, get_uref, has_uref, list_known_urefs, new_uref, read, remove_uref, revert, write,
 };
-use cl_std::key::Key;
-use cl_std::value::U512;
+use contract_ffi::key::Key;
+use contract_ffi::value::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {

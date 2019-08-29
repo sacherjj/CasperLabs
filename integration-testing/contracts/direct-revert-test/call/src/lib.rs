@@ -1,8 +1,8 @@
 #![no_std]
 
 extern crate alloc;
-extern crate common;
-use common::contract_api::revert;
+extern crate contract_ffi;
+use contract_ffi::contract_api::revert;
 
 #[no_mangle]
 pub extern "C" fn call() {
