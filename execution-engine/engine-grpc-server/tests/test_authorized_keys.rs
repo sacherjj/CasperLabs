@@ -138,7 +138,7 @@ fn should_raise_deploy_authorization_failure() {
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32], //deploy hash
-            PublicKey::new(key_1),
+            (PublicKey::new(key_1),),
         )
         .expect_success()
         .commit()
@@ -147,7 +147,7 @@ fn should_raise_deploy_authorization_failure() {
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
             [2u8; 32], //deploy hash
-            PublicKey::new(key_2),
+            (PublicKey::new(key_2),),
         )
         .expect_success()
         .commit()
@@ -156,7 +156,7 @@ fn should_raise_deploy_authorization_failure() {
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
             [3u8; 32], //deploy hash
-            PublicKey::new(key_3),
+            (PublicKey::new(key_3),),
         )
         .expect_success()
         .commit()
@@ -303,7 +303,7 @@ fn should_authorize_deploy_with_multiple_keys() {
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32], // deploy hash
-            PublicKey::new(key_1),
+            (PublicKey::new(key_1),),
         )
         .expect_success()
         .commit()
@@ -312,7 +312,7 @@ fn should_authorize_deploy_with_multiple_keys() {
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
             [2u8; 32], // deploy hash
-            PublicKey::new(key_2),
+            (PublicKey::new(key_2),),
         )
         .expect_success()
         .commit()
@@ -349,7 +349,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
             "add_update_associated_key.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32], // deploy hash
-            PublicKey::new(key_1),
+            (PublicKey::new(key_1),),
         )
         .expect_success()
         .commit()

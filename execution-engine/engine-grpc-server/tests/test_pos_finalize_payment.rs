@@ -37,7 +37,7 @@ fn initialize() -> WasmTestBuilder {
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
-            SYSTEM_ADDR,
+            (SYSTEM_ADDR,),
         )
         .expect_success()
         .commit()
@@ -46,7 +46,7 @@ fn initialize() -> WasmTestBuilder {
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
             [2u8; 32],
-            ACCOUNT_ADDR,
+            (ACCOUNT_ADDR,),
         )
         .expect_success()
         .commit();

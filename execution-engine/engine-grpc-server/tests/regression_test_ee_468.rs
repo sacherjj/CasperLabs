@@ -24,7 +24,7 @@ fn should_not_fail_deserializing() {
             "deserialize_error.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
-            GENESIS_ADDR,
+            (GENESIS_ADDR,),
         )
         .commit()
         .is_error();

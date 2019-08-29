@@ -61,6 +61,7 @@ object Benchmarks {
         amount: Long
     ): F[Unit] = DeployRuntime.transfer[F](
       sessionCode = None,
+      paymentCode = None,
       senderPublicKey = senderPublicKey,
       senderPrivateKey = senderPrivateKey,
       recipientPublicKeyBase64 = recipientPublicKeyBase64,

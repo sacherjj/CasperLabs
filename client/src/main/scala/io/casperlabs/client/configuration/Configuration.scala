@@ -26,7 +26,7 @@ final case class SendDeploy(
 final case class Deploy(
     from: Option[String],
     sessionCode: File,
-    paymentCode: File,
+    paymentCode: Option[File],
     publicKey: Option[File],
     privateKey: Option[File],
     gasPrice: Long
@@ -50,17 +50,20 @@ final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
     sessionCode: Option[File],
+    paymentCode: Option[File],
     privateKey: File
 ) extends Configuration
 final case class Transfer(
     amount: Long,
     recipientPublicKeyBase64: String,
     sessionCode: Option[File],
+    paymentCode: Option[File],
     privateKey: File
 ) extends Configuration
 final case class Unbond(
     amount: Option[Long],
     sessionCode: Option[File],
+    paymentCode: Option[File],
     privateKey: File
 ) extends Configuration
 final case class VisualizeDag(
@@ -98,7 +101,7 @@ object Configuration {
         Deploy(
           options.deploy.from.toOption,
           options.deploy.session(),
-          options.deploy.payment.toOption.getOrElse(options.deploy.session()),
+          options.deploy.payment.toOption,
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption,
           options.deploy.gasPrice()
@@ -135,12 +138,14 @@ object Configuration {
         Unbond(
           options.unbond.amount.toOption,
           options.unbond.session.toOption,
+          options.unbond.paymentPath.toOption,
           options.unbond.privateKey()
         )
       case options.bond =>
         Bond(
           options.bond.amount(),
           options.bond.session.toOption,
+          options.bond.paymentPath.toOption,
           options.bond.privateKey()
         )
       case options.transfer =>
@@ -148,6 +153,7 @@ object Configuration {
           options.transfer.amount(),
           options.transfer.targetAccount(),
           options.transfer.session.toOption,
+          options.transfer.paymentPath.toOption,
           options.transfer.privateKey()
         )
       case options.visualizeBlocks =>

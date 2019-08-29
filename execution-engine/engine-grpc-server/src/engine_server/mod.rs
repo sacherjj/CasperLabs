@@ -537,6 +537,21 @@ where
 
         grpc::SingleResponse::completed(genesis_response)
     }
+
+    fn run_genesis_with_chainspec(
+        &self,
+        _request_options: ::grpc::RequestOptions,
+        _genesis_config: ipc::ChainSpec_GenesisConfig,
+    ) -> ::grpc::SingleResponse<ipc::GenesisResponse> {
+        let mut genesis_response = ipc::GenesisResponse::new();
+        let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+        let err_msg = String::from("Unimplemented!");
+
+        genesis_deploy_error.set_message(err_msg);
+        genesis_response.set_failed_deploy(genesis_deploy_error);
+
+        grpc::SingleResponse::completed(genesis_response)
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

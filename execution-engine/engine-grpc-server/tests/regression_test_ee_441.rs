@@ -33,7 +33,7 @@ fn do_pass(pass: &str) -> (URef, URef) {
             "ee_441_rng_state.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
-            pass.to_string(),
+            (pass.to_string(),),
         )
         .expect_success()
         .commit()

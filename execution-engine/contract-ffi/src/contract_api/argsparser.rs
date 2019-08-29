@@ -11,16 +11,13 @@ pub trait ArgsParser {
     fn parse(&self) -> Result<Vec<Vec<u8>>, Error>;
 }
 
+impl ArgsParser for () {
+    fn parse(&self) -> Result<Vec<Vec<u8>>, Error> {
+        Ok(Vec::new())
+    }
+}
+
 macro_rules! impl_argsparser_tuple {
-    ( $name:ident ) => (
-        impl<$name: ToBytes> ArgsParser for $name {
-            #[allow(non_snake_case)]
-            fn parse(&self) -> Result<Vec<Vec<u8>>, Error> {
-                let $name = self;
-                Ok(vec![ToBytes::to_bytes($name)?])
-            }
-        }
-    );
     ( $($name:ident)+) => (
         impl<$($name: ToBytes),*> ArgsParser for ($($name,)*) {
             #[allow(non_snake_case)]

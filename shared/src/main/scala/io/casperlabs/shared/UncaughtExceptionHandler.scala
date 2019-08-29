@@ -2,8 +2,11 @@ package io.casperlabs.shared
 
 import cats.Id
 import monix.execution.UncaughtExceptionReporter
+import scala.concurrent.duration.FiniteDuration
 
-object UncaughtExceptionHandler extends UncaughtExceptionReporter {
+class UncaughtExceptionHandler(shutdownTimeout: FiniteDuration)
+    extends UncaughtExceptionReporter
+    with RuntimeOps {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val log: Log[Id]                  = Log.logId
 
@@ -13,7 +16,7 @@ object UncaughtExceptionHandler extends UncaughtExceptionReporter {
       case _: VirtualMachineError | _: LinkageError =>
         // To flush logs
         Thread.sleep(1000)
-        sys.exit(1)
+        exitOrHalt(1, shutdownTimeout)
       case _ =>
     }
   }

@@ -7,6 +7,7 @@ import io.casperlabs.client.{DeployService, GrpcDeployService}
 import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
 import monix.execution.Scheduler
+import scala.concurrent.duration._
 
 object Main {
   implicit val log: Log[Task] = Log.log
@@ -15,7 +16,7 @@ object Main {
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 4),
       "node-runner",
-      reporter = UncaughtExceptionHandler
+      reporter = new UncaughtExceptionHandler(shutdownTimeout = 5.seconds)
     )
 
     val exec =

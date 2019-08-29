@@ -54,7 +54,7 @@ fn transfer(builder: &mut WasmTestBuilder, address: [u8; 32], amount: U512) {
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, amount),
             )
-            .with_payment_code("standard_payment.wasm", U512::from(MAX_PAYMENT))
+            .with_payment_code("standard_payment.wasm", (U512::from(MAX_PAYMENT),))
             .with_authorization_keys(&[genesis_public_key])
             .build();
 
@@ -75,7 +75,7 @@ fn refund_tests(builder: &mut WasmTestBuilder, address: [u8; 32]) {
             .with_address(address)
             .with_deploy_hash([2; 32])
             .with_session_code("do_nothing.wasm", ())
-            .with_payment_code("pos_refund_purse.wasm", U512::from(MAX_PAYMENT))
+            .with_payment_code("pos_refund_purse.wasm", (U512::from(MAX_PAYMENT),))
             .with_authorization_keys(&[public_key])
             .build();
 

@@ -90,7 +90,7 @@ fn should_run_ee_572_regression() {
             CONTRACT_ESCALATE,
             DEFAULT_BLOCK_TIME,
             [4u8; 32],
-            contract,
+            (contract,),
         )
         .get_exec_response(3)
         .expect("should have a response")
