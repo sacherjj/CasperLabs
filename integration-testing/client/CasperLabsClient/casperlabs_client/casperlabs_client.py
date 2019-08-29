@@ -304,9 +304,7 @@ class CasperLabsClient:
         :param host:           Hostname or IP of node on which gRPC service is running
         :param port:           Port used for external gRPC API
         :param internal_port:  Port used for internal gRPC API
-        :param node_id:        Node ID (i.e. the Keccak256 hash of the public
-                               key the node uses for TLS) in case secure
-                               communication is needed.
+        :param cert_file:      Certificate file for TLS
         """
         self.host = host
         self.port = port
