@@ -35,7 +35,7 @@ test:
 
 .PHONY: test-contracts
 test-contracts: build-contracts
-	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-grpc-server -- --ignored --nocapture
+	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
 
 .PHONY: check-format
 check-format:
