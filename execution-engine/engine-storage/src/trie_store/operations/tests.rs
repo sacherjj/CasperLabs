@@ -5,13 +5,13 @@ use tempfile::{tempdir, TempDir};
 use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 
-use error;
-use trie::{Pointer, Trie};
-use trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
-use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use trie_store::operations::{read, write, ReadResult, WriteResult};
-use trie_store::{Readable, Transaction, TransactionSource, TrieStore};
-use TEST_MAP_SIZE;
+use crate::error;
+use crate::trie::{Pointer, Trie};
+use crate::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+use crate::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+use crate::trie_store::operations::{read, write, ReadResult, WriteResult};
+use crate::trie_store::{Readable, Transaction, TransactionSource, TrieStore};
+use crate::TEST_MAP_SIZE;
 
 const TEST_KEY_LENGTH: usize = 7;
 
@@ -583,8 +583,8 @@ mod read {
     //! [`full_tries`] modules for more info.
 
     use super::*;
+    use crate::trie_store::in_memory;
     use error;
-    use trie_store::in_memory;
 
     mod partial_tries {
         //! Here we construct 6 separate "partial" tries, increasing in size
@@ -707,9 +707,9 @@ mod scan {
     use engine_shared::newtypes::Blake2bHash;
 
     use super::*;
+    use crate::trie_store::in_memory;
+    use crate::trie_store::operations::{scan, TrieScan};
     use error;
-    use trie_store::in_memory;
-    use trie_store::operations::{scan, TrieScan};
 
     fn check_scan<'a, R, S, E>(
         correlation_id: CorrelationId,
@@ -965,7 +965,7 @@ mod write {
             for num_leaves in 1..=TEST_LEAVES_LENGTH {
                 let correlation_id = CorrelationId::new();
                 let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
-                let mut context = LmdbTestContext::new(&tries).unwrap();
+                let context = LmdbTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
 
                 writes_to_n_leaf_empty_trie_had_expected_results::<_, _, error::Error>(
@@ -984,7 +984,7 @@ mod write {
             for num_leaves in 1..=TEST_LEAVES_LENGTH {
                 let correlation_id = CorrelationId::new();
                 let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
-                let mut context = InMemoryTestContext::new(&tries).unwrap();
+                let context = InMemoryTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
 
                 writes_to_n_leaf_empty_trie_had_expected_results::<_, _, in_memory::Error>(
@@ -1124,8 +1124,8 @@ mod write {
         fn lmdb_noop_writes_to_n_leaf_partial_trie_had_expected_results() {
             for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
                 let correlation_id = CorrelationId::new();
-                let (mut root_hash, tries) = generator().unwrap();
-                let mut context = LmdbTestContext::new(&tries).unwrap();
+                let (root_hash, tries) = generator().unwrap();
+                let context = LmdbTestContext::new(&tries).unwrap();
                 let states = vec![root_hash];
 
                 noop_writes_to_n_leaf_partial_trie_had_expected_results::<_, _, error::Error>(
@@ -1143,8 +1143,8 @@ mod write {
         fn in_memory_noop_writes_to_n_leaf_partial_trie_had_expected_results() {
             for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
                 let correlation_id = CorrelationId::new();
-                let (mut root_hash, tries) = generator().unwrap();
-                let mut context = InMemoryTestContext::new(&tries).unwrap();
+                let (root_hash, tries) = generator().unwrap();
+                let context = InMemoryTestContext::new(&tries).unwrap();
                 let states = vec![root_hash];
 
                 noop_writes_to_n_leaf_partial_trie_had_expected_results::<_, _, in_memory::Error>(
@@ -1231,7 +1231,7 @@ mod write {
             for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
                 let correlation_id = CorrelationId::new();
                 let (root_hash, tries) = generator().unwrap();
-                let mut context = LmdbTestContext::new(&tries).unwrap();
+                let context = LmdbTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
 
                 update_writes_to_n_leaf_partial_trie_had_expected_results::<_, _, error::Error>(
@@ -1250,7 +1250,7 @@ mod write {
             for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
                 let correlation_id = CorrelationId::new();
                 let (root_hash, tries) = generator().unwrap();
-                let mut context = InMemoryTestContext::new(&tries).unwrap();
+                let context = InMemoryTestContext::new(&tries).unwrap();
                 let states = vec![root_hash];
 
                 update_writes_to_n_leaf_partial_trie_had_expected_results::<_, _, in_memory::Error>(

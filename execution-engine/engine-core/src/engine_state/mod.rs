@@ -5,6 +5,9 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
+use crate::engine_state::utils::WasmiBytes;
+use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
+use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
@@ -14,20 +17,17 @@ use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
-use engine_state::utils::WasmiBytes;
 use engine_storage::global_state::{CommitResult, History, StateReader};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::Preprocessor;
-use execution::{self, Executor, MINT_NAME, POS_NAME};
-use tracking_copy::{TrackingCopy, TrackingCopyExt};
 
 pub use self::engine_config::EngineConfig;
 use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;
 use self::genesis::{create_genesis_effects, GenesisResult};
+use crate::engine_state::executable_deploy_item::ExecutableDeployItem;
+use crate::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
 use contract_ffi::uref::URef;
-use engine_state::executable_deploy_item::ExecutableDeployItem;
-use engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
 
 pub mod engine_config;
 pub mod error;
@@ -309,7 +309,7 @@ where
         let tracking_copy = match self.tracking_copy(prestate_hash) {
             Err(error) => return Ok(ExecutionResult::precondition_failure(error)),
             Ok(None) => return Err(RootNotFound(prestate_hash)),
-            Ok(Some(mut tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
+            Ok(Some(tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
         };
 
         // Get addr bytes from `address` (which is actually a Key)
@@ -341,7 +341,7 @@ where
         // validation_spec_3: account validity
         if authorization_keys.is_empty() || !account.can_authorize(&authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
-                ::engine_state::error::Error::AuthorizationError,
+                crate::engine_state::error::Error::AuthorizationError,
             ));
         }
 

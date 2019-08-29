@@ -1,6 +1,6 @@
 
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
 extern crate contract_ffi;

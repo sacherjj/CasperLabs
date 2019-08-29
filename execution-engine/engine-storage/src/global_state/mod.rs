@@ -3,14 +3,14 @@ use std::fmt;
 use std::hash::BuildHasher;
 use std::time::Instant;
 
+use crate::trie::Trie;
+use crate::trie_store::operations::{read, write, ReadResult, WriteResult};
+use crate::trie_store::{Transaction, TransactionSource, TrieStore};
 use contract_ffi::key::Key;
 use contract_ffi::value::Value;
 use engine_shared::logging::{log_duration, log_metric, GAUGE};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::{self, Transform, TypeMismatch};
-use trie::Trie;
-use trie_store::operations::{read, write, ReadResult, WriteResult};
-use trie_store::{Transaction, TransactionSource, TrieStore};
 
 pub mod in_memory;
 pub mod lmdb;
