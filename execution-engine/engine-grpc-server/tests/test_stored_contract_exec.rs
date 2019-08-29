@@ -595,7 +595,8 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     let stored_payment_contract_uref = {
         // get pos contract public key
         let pos_uref = {
-            let account = builder_by_uref.get_account(genesis_account_key)
+            let account = builder_by_uref
+                .get_account(genesis_account_key)
                 .expect("genesis account should exist");
             let pos_public_key = account
                 .urefs_lookup()
