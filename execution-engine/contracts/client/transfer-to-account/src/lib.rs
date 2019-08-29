@@ -1,10 +1,10 @@
 #![no_std]
 
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api::{self, TransferResult};
-use cl_std::value::account::PublicKey;
-use cl_std::value::U512;
+use contract_ffi::contract_api::{self, TransferResult};
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::U512;
 
 /// Executes mote transfer to supplied public key.
 /// Transfers the requested amount.
