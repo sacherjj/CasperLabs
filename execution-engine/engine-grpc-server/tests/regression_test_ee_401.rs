@@ -34,7 +34,7 @@ fn should_execute_contracts_which_provide_extra_urefs() {
             "ee_401_regression_call.wasm",
             DEFAULT_BLOCK_TIME,
             [2u8; 32],
-            PublicKey::new(GENESIS_ADDR),
+            (PublicKey::new(GENESIS_ADDR),),
         )
         .expect_success()
         .commit()

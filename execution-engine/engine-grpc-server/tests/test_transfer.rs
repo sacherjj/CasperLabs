@@ -603,7 +603,22 @@ fn should_fail_when_insufficient_funds() {
 #[ignore]
 #[test]
 fn should_create_purse() {
+    let genesis_account_key = Key::Account(GENESIS_ADDR);
     let account_key = Key::Account(ACCOUNT_1_ADDR);
+    let global_state = InMemoryGlobalState::empty().unwrap();
+    let engine_state = EngineState::new(global_state, Default::default());
+
+    // Run genesis & set up an account
+
+    let (genesis_request, contracts) =
+        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
+
+    let genesis_response = engine_state
+        .run_genesis(RequestOptions::new(), genesis_request)
+        .wait_drop_metadata()
+        .unwrap();
+
+    let genesis_hash = genesis_response.get_success().get_poststate_hash();
 
     let genesis_transforms = test_support::get_genesis_transforms(&genesis_response);
 
