@@ -1,10 +1,10 @@
 #![no_std]
 #![feature(alloc)]
 
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api;
-use cl_std::execution::Phase;
+use contract_ffi::contract_api;
+use contract_ffi::execution::Phase;
 
 #[no_mangle]
 pub extern "C" fn call() {

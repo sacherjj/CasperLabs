@@ -2,10 +2,10 @@
 #![feature(alloc, cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api::{get_arg, revert, update_associated_key};
-use cl_std::value::account::{PublicKey, Weight};
+use contract_ffi::contract_api::{get_arg, revert, update_associated_key};
+use contract_ffi::value::account::{PublicKey, Weight};
 
 #[no_mangle]
 pub extern "C" fn call() {

@@ -3,10 +3,10 @@
 
 extern crate alloc;
 
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api::{add_uref, get_uref, new_uref};
-use cl_std::key::Key;
+use contract_ffi::contract_api::{add_uref, get_uref, new_uref};
+use contract_ffi::key::Key;
 
 #[no_mangle]
 pub extern "C" fn call() {
