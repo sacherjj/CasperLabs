@@ -33,7 +33,7 @@ class ExecutionEngineServiceTest
         ExecuteRequest(ByteString.EMPTY, 0L, protocolVersion = Some(ProtocolVersion(1L)))
       val batches =
         ExecutionEngineService.batchDeploysBySize(baseRequest, msgSize)(deployItems)
-      batches.flatMap(_.deploys) should contain theSameElementsAs deployItems
+      batches.flatMap(_.deploys) should contain theSameElementsInOrderAs deployItems
       batches.foreach { request =>
         assert(request.serializedSize <= msgSize)
       }

@@ -223,13 +223,13 @@ object ExecutionEngineService {
       canAdd: (List[A], A) => Boolean
   ): List[List[A]] =
     deploys
-      .foldLeft(List.empty[List[A]]) {
-        case (Nil, item) => List(item) :: Nil
-        case (hd :: tail, item) =>
+      .foldRight(List.empty[List[A]]) {
+        case (item, Nil) => List(item) :: Nil
+        case (item, hd :: tail) =>
           if (canAdd(hd, item))
             (item :: hd) :: tail
           else
-            (List(item)) :: hd :: tail
+            List(item) :: hd :: tail
       }
 
   def batchDeploysBySize(base: ExecuteRequest, messageSizeLimit: Int)(
