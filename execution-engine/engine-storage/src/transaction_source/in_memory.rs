@@ -42,11 +42,11 @@ impl Transaction for InMemoryReadTransaction {
 
 impl Readable for InMemoryReadTransaction {
     fn read(&self, handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        let view = match self.view.get(&handle) {
-            Some(view) => view.to_owned(),
-            None => Default::default(),
+        let sub_view = match self.view.get(&handle) {
+            Some(view) => view,
+            None => return Ok(None),
         };
-        Ok(view.get(&key.to_vec()).map(ToOwned::to_owned))
+        Ok(sub_view.get(&key.to_vec()).cloned())
     }
 }
 
@@ -91,7 +91,7 @@ impl<'a> Readable for InMemoryReadWriteTransaction<'a> {
             Some(view) => view,
             None => return Ok(None),
         };
-        Ok(sub_view.get(&key.to_vec()).map(ToOwned::to_owned))
+        Ok(sub_view.get(&key.to_vec()).cloned())
     }
 }
 
@@ -129,7 +129,7 @@ impl InMemoryEnvironment {
     pub fn data(&self, name: Option<&str>) -> Result<Option<BytesMap>, PoisonError> {
         let data = self.data.lock()?;
         let name = name.map(ToString::to_string);
-        let ret = data.get(&name).map(ToOwned::to_owned);
+        let ret = data.get(&name).cloned();
         Ok(ret)
     }
 }
