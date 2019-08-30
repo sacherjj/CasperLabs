@@ -9,4 +9,4 @@ name = "create_test_node_03"
 crate-type = ["cdylib"]
 
 [dependencies]
-shared = { path = "../shared" }
+create-test-node-shared = { path = "../create-test-node-shared" }
