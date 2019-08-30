@@ -1,43 +1,35 @@
 package io.casperlabs.client
 
+import java.io.Closeable
+import java.security.KeyStore
+import java.util.concurrent.{ThreadFactory, TimeUnit}
+
 import cats.Id
 import cats.data.StateT
-import cats.implicits._
 import cats.mtl.implicits._
-import java.io.Closeable
-import java.util.concurrent.TimeUnit
-import java.security.KeyStore
-
-import javax.net.ssl._
-import com.google.protobuf.ByteString
-import com.google.protobuf.empty.Empty
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.util.HostnameTrustManager
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.state.Value
-import io.casperlabs.graphz
-import io.casperlabs.node.api.casper.{
-  CasperGrpcMonix,
-  DeployRequest,
-  GetBlockInfoRequest,
-  GetBlockStateRequest,
-  GetDeployInfoRequest,
-  StateQuery,
-  StreamBlockDeploysRequest,
-  StreamBlockInfosRequest
-}
-import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
 import io.casperlabs.client.configuration.ConnectOptions
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.util.HostnameTrustManager
+import io.casperlabs.graphz
+import io.casperlabs.node.api.casper._
+import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
 import io.grpc.ManagedChannel
-import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
-import io.grpc.netty.{GrpcSslContexts, NegotiationType}
+import io.grpc.netty.{GrpcSslContexts, NegotiationType, NettyChannelBuilder}
+import io.netty.channel.DefaultEventLoopGroup
+import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.handler.ssl.util.SimpleTrustManagerFactory
+import javax.net.ssl._
 import monix.eval.Task
+import monix.execution.Scheduler
 
 import scala.util.Either
 
-class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with Closeable {
+class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
+    extends DeployService[Task]
+    with Closeable {
   private val DefaultMaxMessageSize = 256 * 1024 * 1024
 
   private var externalConnected = false
@@ -47,6 +39,8 @@ class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with C
     var builder = NettyChannelBuilder
       .forAddress(conn.host, port)
       .maxInboundMessageSize(DefaultMaxMessageSize)
+      .eventLoopGroup(new NioEventLoopGroup(0, scheduler))
+      .executor(scheduler)
 
     builder = conn.nodeId match {
       case Some(hash) =>
@@ -102,16 +96,12 @@ class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with C
   def propose(): Task[Either[Throwable, String]] =
     controlServiceStub
       .propose(ProposeRequest())
-      .map { response =>
-        val hash = Base16.encode(response.blockHash.toByteArray)
-        s"Success! Block $hash created and added."
-      }
+      .map(response => Base16.encode(response.blockHash.toByteArray))
       .attempt
 
-  def showBlock(hash: String): Task[Either[Throwable, String]] =
+  def showBlock(hash: String): Task[Either[Throwable, BlockInfo]] =
     casperServiceStub
       .getBlockInfo(GetBlockInfoRequest(hash, BlockInfo.View.FULL))
-      .map(Printer.printToUnicodeString(_))
       .attempt
 
   def showDeploy(hash: String): Task[Either[Throwable, String]] =

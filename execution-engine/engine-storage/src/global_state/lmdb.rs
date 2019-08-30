@@ -4,18 +4,21 @@ use std::sync::Arc;
 
 use lmdb;
 
-use crate::error;
-use crate::global_state::StateReader;
-use crate::global_state::{commit, CommitResult, History};
-use crate::trie::operations::create_hashed_empty_trie;
-use crate::trie::Trie;
-use crate::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use crate::trie_store::operations::{read, ReadResult};
-use crate::trie_store::{Transaction, TransactionSource, TrieStore};
 use contract_ffi::key::Key;
 use contract_ffi::value::Value;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
+
+use crate::error;
+use crate::global_state::StateReader;
+use crate::global_state::{commit, CommitResult, History};
+use crate::transaction_source::lmdb::LmdbEnvironment;
+use crate::transaction_source::{Transaction, TransactionSource};
+use crate::trie::operations::create_hashed_empty_trie;
+use crate::trie::Trie;
+use crate::trie_store::lmdb::LmdbTrieStore;
+use crate::trie_store::operations::{read, ReadResult};
+use crate::trie_store::TrieStore;
 
 /// Represents a "view" of global state at a particular root hash.
 pub struct LmdbGlobalState {

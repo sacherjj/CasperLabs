@@ -26,8 +26,8 @@ pub enum ExecutionResult {
 
 impl ExecutionResult {
     /// Constructs [ExecutionResult::Failure] that has 0 cost and no effects.
-    /// This is the case for failures that we can't (or don't want to) charge for,
-    /// like `PreprocessingError` or `InvalidNonce`.
+    /// This is the case for failures that we can't (or don't want to) charge
+    /// for, like `PreprocessingError` or `InvalidNonce`.
     pub fn precondition_failure(error: error::Error) -> ExecutionResult {
         ExecutionResult::Failure {
             error,
@@ -165,7 +165,8 @@ impl ExecutionResultBuilder {
         let payment_result_cost = payment_result.cost();
         let payment_result_is_failure = payment_result.is_failure();
 
-        // payment_code_spec_3_b_ii: if (balance of PoS pay purse) < (gas spent during payment code execution) * conv_rate, no session
+        // payment_code_spec_3_b_ii: if (balance of PoS pay purse) < (gas spent during
+        // payment code execution) * conv_rate, no session
         let insufficient_balance_to_continue =
             payment_purse_balance < (payment_result_cost * CONV_RATE).into();
 
@@ -230,7 +231,8 @@ impl ExecutionResultBuilder {
             None => return Err(ExecutionResultBuilderError::MissingPaymentExecutionResult),
         };
 
-        // session_code_spec_3: only include session exec effects if there is no session exec error
+        // session_code_spec_3: only include session exec effects if there is no session
+        // exec error
         match self.session_execution_result {
             Some(result) => {
                 if result.is_failure() {

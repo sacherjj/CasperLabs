@@ -580,7 +580,8 @@ impl From<Op> for super::ipc::Op {
     }
 }
 
-// Newtype wrapper as rustc requires because trait impl have to be defined in the crate of the type.
+// Newtype wrapper as rustc requires because trait impl have to be defined in
+// the crate of the type.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct CommitTransforms(HashMap<contract_ffi::key::Key, transform::Transform>);
 
@@ -765,8 +766,9 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             deploy_nonce,
                             expected_nonce,
                         } if deploy_nonce <= expected_nonce => {
-                            // Deploys with nonce lower than (or equal to) current account's nonce will always fail.
-                            // They won't be repeated so we treat them as precondition failures.
+                            // Deploys with nonce lower than (or equal to) current account's nonce
+                            // will always fail. They won't be repeated
+                            // so we treat them as precondition failures.
                             let error_msg = format!("Deploy nonce: {:?} was lower (or equal to) than expected nonce {:?}", deploy_nonce, expected_nonce);
                             precondition_failure(error_msg)
                         }
@@ -786,10 +788,13 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             execution_error(error_msg, cost, effect)
                         }
                         ExecutionError::Interpreter(error) => {
-                            // If the error happens during contract execution it's mapped to HostError
-                            // and wrapped in Interpreter error, so we may end up with InterpreterError(HostError(InterpreterError))).
-                            // In order to provide clear error messages we have to downcast and match on the inner error,
-                            // otherwise we end up with `Host(Trap(Trap(TrapKind:InterpreterError)))`.
+                            // If the error happens during contract execution it's mapped to
+                            // HostError and wrapped in Interpreter
+                            // error, so we may end up with
+                            // InterpreterError(HostError(InterpreterError))).
+                            // In order to provide clear error messages we have to downcast and
+                            // match on the inner error, otherwise we
+                            // end up with `Host(Trap(Trap(TrapKind:InterpreterError)))`.
                             // TODO: This really should be happening in the `Executor::exec`.
                             match error.as_host_error() {
                                 Some(host_error) => {
@@ -923,7 +928,8 @@ impl From<ipc::DeployPayload_oneof_payload> for ExecutableDeployItem {
     }
 }
 
-/// Constructs an instance of [[ipc::DeployResult]] with an error set to [[ipc::DeployError_PreconditionFailure]].
+/// Constructs an instance of [[ipc::DeployResult]] with an error set to
+/// [[ipc::DeployError_PreconditionFailure]].
 fn precondition_failure(msg: String) -> ipc::DeployResult {
     let mut deploy_result = ipc::DeployResult::new();
     let mut precondition_failure = ipc::DeployResult_PreconditionFailure::new();
@@ -932,7 +938,8 @@ fn precondition_failure(msg: String) -> ipc::DeployResult {
     deploy_result
 }
 
-/// Constructs an instance of [[ipc::DeployResult]] with error set to [[ipc::DeployError_ExecutionError]].
+/// Constructs an instance of [[ipc::DeployResult]] with error set to
+/// [[ipc::DeployError_ExecutionError]].
 fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::DeployResult {
     let mut deploy_result = ipc::DeployResult::new();
     let deploy_error = {
@@ -989,7 +996,8 @@ mod tests {
     use super::ipc;
     use super::state;
 
-    // Test that wasm_error function actually returns DeployResult with result set to WasmError
+    // Test that wasm_error function actually returns DeployResult with result set
+    // to WasmError
     #[test]
     fn wasm_error_result() {
         let error_msg = "ExecError";
