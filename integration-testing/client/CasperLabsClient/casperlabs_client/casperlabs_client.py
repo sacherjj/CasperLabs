@@ -240,18 +240,18 @@ class InsecureGRPCService:
         return name.endswith("_stream") and g or f
 
 
-def extract_common_name(cert_file: str) -> str:
-    cert_dict = ssl._ssl._test_decode_cert(cert_file)
+def extract_common_name(certificate_file: str) -> str:
+    cert_dict = ssl._ssl._test_decode_cert(certificate_file)
     return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
 
 
 class SecureGRPCService:
-    def __init__(self, host, port, serviceStub, cert_file):
+    def __init__(self, host, port, serviceStub, certificate_file):
         self.address = f"{host}:{port}"
         self.serviceStub = serviceStub
-        self.cert_file = cert_file
-        self.node_id = extract_common_name(cert_file)
-        with open(self.cert_file, "rb") as f:
+        self.certificate_file = certificate_file
+        self.node_id = extract_common_name(certificate_file)
+        with open(self.certificate_file, "rb") as f:
             self.credentials = grpc.ssl_channel_credentials(f.read())
         self.secure_channel_options = self.node_id and (
             ("grpc.ssl_target_name_override", self.node_id),
@@ -296,7 +296,7 @@ class CasperLabsClient:
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
         internal_port: int = DEFAULT_INTERNAL_PORT,
-        cert_file: str = None,
+        certificate_file: str = None,
     ):
         """
         CasperLabs client's constructor.
@@ -304,19 +304,19 @@ class CasperLabsClient:
         :param host:           Hostname or IP of node on which gRPC service is running
         :param port:           Port used for external gRPC API
         :param internal_port:  Port used for internal gRPC API
-        :param cert_file:      Certificate file for TLS
+        :param certificate_file:      Certificate file for TLS
         """
         self.host = host
         self.port = port
         self.internal_port = internal_port
-        self.cert_file = cert_file
+        self.certificate_file = certificate_file
 
-        if cert_file:
+        if certificate_file:
             self.casperService = SecureGRPCService(
-                host, port, CasperServiceStub, cert_file
+                host, port, CasperServiceStub, certificate_file
             )
             self.controlService = SecureGRPCService(
-                host, internal_port, ControlServiceStub, cert_file
+                host, internal_port, ControlServiceStub, certificate_file
             )
         else:
             self.casperService = InsecureGRPCService(host, port, CasperServiceStub)
