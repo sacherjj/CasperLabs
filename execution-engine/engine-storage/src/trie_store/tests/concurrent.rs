@@ -68,7 +68,7 @@ fn lmdb_writer_mutex_does_not_collide_with_readers() {
 #[test]
 fn in_memory_writer_mutex_does_not_collide_with_readers() {
     let env = Arc::new(InMemoryEnvironment::new());
-    let store = Arc::new(InMemoryTrieStore::new(&env));
+    let store = Arc::new(InMemoryTrieStore::new(&env, None));
     let num_threads = 10;
     let barrier = Arc::new(Barrier::new(num_threads + 1));
     let mut handles = Vec::new();

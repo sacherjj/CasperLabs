@@ -381,7 +381,12 @@ def _call_pos_bonding(
     if method == b"bond":
         session_args = ABI.args([ABI.byte_array(method), ABI.u512(amount)])
     elif method == b"unbond":
-        session_args = ABI.args([ABI.byte_array(method), ABI.option(ABI.u512(amount))])
+        session_args = ABI.args(
+            [
+                ABI.byte_array(method),
+                ABI.option(ABI.u512(amount) if amount is not None else None),
+            ]
+        )
     else:
         raise Exception(f"_call_pos_bonding: method {method} not supported")
 
@@ -509,7 +514,7 @@ def test_unbonding_then_creating_block(payment_node_network):
     unbonding_block_hash = unbond(
         nodes[0],
         bonding_account.public_key_hex,
-        300,
+        None,
         bonding_account.public_key_path,
         bonding_account.private_key_path,
     )
