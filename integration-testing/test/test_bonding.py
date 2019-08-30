@@ -381,7 +381,12 @@ def _call_pos_bonding(
     if method == b"bond":
         session_args = ABI.args([ABI.byte_array(method), ABI.u512(amount)])
     elif method == b"unbond":
-        session_args = ABI.args([ABI.byte_array(method), ABI.option(ABI.u512(amount) if amount is not None else None)])
+        session_args = ABI.args(
+            [
+                ABI.byte_array(method),
+                ABI.option(ABI.u512(amount) if amount is not None else None),
+            ]
+        )
     else:
         raise Exception(f"_call_pos_bonding: method {method} not supported")
 
