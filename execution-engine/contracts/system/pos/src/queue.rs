@@ -2,10 +2,10 @@ use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::result;
 
-use cl_std::bytesrepr::{self, FromBytes, ToBytes};
-use cl_std::contract_api;
-use cl_std::value::account::{BlockTime, PublicKey};
-use cl_std::value::{Value, U512};
+use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
+use contract_ffi::contract_api;
+use contract_ffi::value::account::{BlockTime, PublicKey};
+use contract_ffi::value::{Value, U512};
 
 use crate::error::{Error, Result};
 
@@ -71,7 +71,8 @@ pub trait QueueProvider {
     fn write_unbonding(queue: &Queue);
 }
 
-/// A `QueueProvider` that reads and writes the queue to/from the contract's local state.
+/// A `QueueProvider` that reads and writes the queue to/from the contract's
+/// local state.
 pub struct QueueLocal;
 
 impl QueueProvider for QueueLocal {
@@ -96,7 +97,8 @@ impl QueueProvider for QueueLocal {
     }
 }
 
-/// A queue of bonding or unbonding requests, sorted by timestamp in ascending order.
+/// A queue of bonding or unbonding requests, sorted by timestamp in ascending
+/// order.
 #[derive(Clone, Default)]
 pub struct Queue(pub Vec<QueueEntry>);
 
@@ -176,8 +178,8 @@ impl ToBytes for Queue {
 
 #[cfg(test)]
 mod tests {
-    use cl_std::value::account::{BlockTime, PublicKey};
-    use cl_std::value::U512;
+    use contract_ffi::value::account::{BlockTime, PublicKey};
+    use contract_ffi::value::U512;
 
     use crate::error::Error;
     use crate::queue::{Queue, QueueEntry};

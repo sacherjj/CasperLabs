@@ -1,16 +1,15 @@
 #![no_std]
-#![feature(alloc)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::vec::Vec;
-use cl_std::value::account::PublicKey;
-use cl_std::contract_api::pointers::UPointer;
-use cl_std::contract_api::{self, PurseTransferResult};
-use cl_std::key::Key;
-use cl_std::value::account::PurseId;
-use cl_std::value::uint::U512;
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::contract_api::pointers::UPointer;
+use contract_ffi::contract_api::{self, PurseTransferResult};
+use contract_ffi::key::Key;
+use contract_ffi::value::account::PurseId;
+use contract_ffi::value::uint::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {

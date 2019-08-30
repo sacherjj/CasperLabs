@@ -1,6 +1,6 @@
 use core::result;
 
-use cl_std::contract_api;
+use contract_ffi::contract_api;
 
 #[derive(Debug, PartialEq)]
 // TODO: Split this up into user errors vs. system errors.
@@ -9,7 +9,8 @@ pub enum Error {
     TooManyEventsInQueue,
     CannotUnbondLastValidator,
     SpreadTooHigh,
-    /// Returned when there is another QueueEntry in a Queue, for validator making a request.
+    /// Returned when there is another QueueEntry in a Queue, for validator
+    /// making a request.
     MultipleRequests,
     BondTooLarge,
     UnbondTooLarge,

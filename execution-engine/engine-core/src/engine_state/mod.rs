@@ -5,29 +5,29 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
+use crate::engine_state::utils::WasmiBytes;
+use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
+use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, HASH_SIZE};
-use contract_ffi::uref::AccessRights;
+use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
-use engine_state::utils::WasmiBytes;
 use engine_storage::global_state::{CommitResult, History, StateReader};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::Preprocessor;
-use execution::{self, Executor, MINT_NAME, POS_NAME};
-use tracking_copy::{TrackingCopy, TrackingCopyExt};
 
 pub use self::engine_config::EngineConfig;
 use self::error::{Error, RootNotFound};
 use self::execution_result::ExecutionResult;
 use self::genesis::{create_genesis_effects, GenesisResult};
+use crate::engine_state::executable_deploy_item::ExecutableDeployItem;
+use crate::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
 use contract_ffi::uref::URef;
-use engine_state::executable_deploy_item::ExecutableDeployItem;
-use engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
 
 pub mod engine_config;
 pub mod error;
@@ -38,8 +38,8 @@ pub mod genesis;
 pub mod op;
 pub mod utils;
 
-// TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values TBD
-// gas * CONV_RATE = motes
+// TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
+// TBD gas * CONV_RATE = motes
 pub const MAX_PAYMENT: u64 = 10_000_000;
 pub const CONV_RATE: u64 = 10;
 
@@ -236,6 +236,54 @@ where
                 let module = preprocessor.deserialize(&ret)?;
                 Ok(module)
             }
+            ExecutableDeployItem::StoredContractByURef { uref, .. } => {
+                let stored_contract_key = {
+                    let len = uref.len();
+                    if len != UREF_ADDR_SIZE {
+                        return Err(error::Error::InvalidHashLength {
+                            expected: UREF_ADDR_SIZE,
+                            actual: len,
+                        });
+                    }
+                    let read_only_uref = {
+                        let mut arr = [0u8; UREF_ADDR_SIZE];
+                        arr.copy_from_slice(&uref);
+                        URef::new(arr, AccessRights::READ)
+                    };
+                    let normalized_uref = Key::URef(read_only_uref).normalize();
+                    let maybe_known_uref = account
+                        .urefs_lookup()
+                        .values()
+                        .find(|&known_uref| known_uref.normalize() == normalized_uref);
+                    match maybe_known_uref {
+                        Some(Key::URef(known_uref)) if known_uref.is_readable() => normalized_uref,
+                        Some(Key::URef(_)) => {
+                            return Err(error::Error::ExecError(
+                                execution::Error::ForgedReference(read_only_uref),
+                            ));
+                        }
+                        Some(key) => {
+                            return Err(error::Error::ExecError(execution::Error::TypeMismatch(
+                                engine_shared::transform::TypeMismatch::new(
+                                    "Key::URef".to_string(),
+                                    key.type_string(),
+                                ),
+                            )));
+                        }
+                        None => {
+                            return Err(error::Error::ExecError(execution::Error::KeyNotFound(
+                                Key::URef(read_only_uref),
+                            )));
+                        }
+                    }
+                };
+                let contract = tracking_copy
+                    .borrow_mut()
+                    .get_contract(correlation_id, stored_contract_key)?;
+                let (ret, _, _) = contract.destructure();
+                let module = preprocessor.deserialize(&ret)?;
+                Ok(module)
+            }
         }
     }
 
@@ -261,7 +309,7 @@ where
         let tracking_copy = match self.tracking_copy(prestate_hash) {
             Err(error) => return Ok(ExecutionResult::precondition_failure(error)),
             Ok(None) => return Err(RootNotFound(prestate_hash)),
-            Ok(Some(mut tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
+            Ok(Some(tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
         };
 
         // Get addr bytes from `address` (which is actually a Key)
@@ -293,7 +341,7 @@ where
         // validation_spec_3: account validity
         if authorization_keys.is_empty() || !account.can_authorize(&authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
-                ::engine_state::error::Error::AuthorizationError,
+                crate::engine_state::error::Error::AuthorizationError,
             ));
         }
 
@@ -360,8 +408,8 @@ where
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
         let mint_inner_uref = {
-            // Get mint system contract URef from account (an account on a different network may
-            // have a mint contract other than the CLMint)
+            // Get mint system contract URef from account (an account on a different network
+            // may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
             let mint_public_uref: Key = match account.urefs_lookup().get(MINT_NAME) {
                 Some(uref) => uref.normalize(),
@@ -388,8 +436,8 @@ where
             *mint_info.inner_key().as_uref().unwrap()
         };
 
-        // Get proof of stake system contract URef from account (an account on a different
-        // network may have a pos contract other than the CLPoS)
+        // Get proof of stake system contract URef from account (an account on a
+        // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
         let proof_of_stake_public_uref: Key = match account.urefs_lookup().get(POS_NAME) {
             Some(uref) => uref.normalize(),
@@ -456,8 +504,8 @@ where
             }
         };
 
-        // Get account main purse balance to enforce precondition and in case of forced transfer
-        // validation_spec_5: account main purse minimum balance
+        // Get account main purse balance to enforce precondition and in case of forced
+        // transfer validation_spec_5: account main purse minimum balance
         let account_main_purse_balance: U512 = match tracking_copy
             .borrow_mut()
             .get_purse_balance(correlation_id, account_main_purse_balance_key)
@@ -491,7 +539,8 @@ where
 
         // Execute provided payment code
         let payment_result = {
-            // payment_code_spec_1: init pay environment w/ gas limit == (max_payment_cost / conv_rate)
+            // payment_code_spec_1: init pay environment w/ gas limit == (max_payment_cost /
+            // conv_rate)
             let pay_gas_limit = MAX_PAYMENT / CONV_RATE;
 
             // Create payment code module from bytes
@@ -527,7 +576,8 @@ where
 
         let payment_result_cost = payment_result.cost();
 
-        // payment_code_spec_3: fork based upon payment purse balance and cost of payment code execution
+        // payment_code_spec_3: fork based upon payment purse balance and cost of
+        // payment code execution
         let payment_purse_balance: U512 = {
             // Get payment purse Key from proof of stake contract
             // payment_code_spec_6: system contract validity
@@ -575,10 +625,15 @@ where
             return Ok(failure);
         }
 
+        let post_payment_tc = tracking_copy.borrow();
+        let session_tc = Rc::new(RefCell::new(post_payment_tc.fork()));
+
         // session_code_spec_2: execute session code
         let session_result = {
-            // payment_code_spec_3_b_i: if (balance of PoS pay purse) >= (gas spent during payment code execution) * conv_rate, yes session
-            // session_code_spec_1: gas limit = ((balance of PoS payment purse) / conv_rate) - (gas spent during payment execution)
+            // payment_code_spec_3_b_i: if (balance of PoS pay purse) >= (gas spent during
+            // payment code execution) * conv_rate, yes session
+            // session_code_spec_1: gas limit = ((balance of PoS payment purse) / conv_rate)
+            // - (gas spent during payment execution)
             let session_gas_limit: u64 =
                 ((payment_purse_balance / CONV_RATE) - payment_result_cost).as_u64();
 
@@ -592,18 +647,30 @@ where
                 session_gas_limit,
                 protocol_version,
                 correlation_id,
-                Rc::clone(&tracking_copy),
+                Rc::clone(&session_tc),
                 Phase::Session,
             )
         };
 
+        let post_session_rc = if session_result.is_failure() {
+            // If session code fails we do not include its effects,
+            // so we start again from the post-payment state.
+            Rc::new(RefCell::new(post_payment_tc.fork()))
+        } else {
+            session_tc
+        };
+
         let _session_result_cost = session_result.cost();
 
-        // NOTE: session_code_spec_3: (do not include session execution effects in results) is enforced in execution_result_builder.build()
+        // NOTE: session_code_spec_3: (do not include session execution effects in
+        // results) is enforced in execution_result_builder.build()
         execution_result_builder.set_session_execution_result(session_result);
 
         // payment_code_spec_5: run finalize process
         let finalize_result = {
+            let post_session_tc = post_session_rc.borrow();
+            let finalization_tc = Rc::new(RefCell::new(post_session_tc.fork()));
+
             // validation_spec_1: valid wasm bytes
             let proof_of_stake_module =
                 match preprocessor.deserialize(&proof_of_stake_info.module_bytes()) {
@@ -621,9 +688,9 @@ where
                     .expect("args should parse")
             };
 
-            // The PoS keys may have changed because of effects during payment and/or session,
-            // so we need to look them up again from the tracking copy
-            let mut proof_of_stake_keys = tracking_copy
+            // The PoS keys may have changed because of effects during payment and/or
+            // session, so we need to look them up again from the tracking copy
+            let mut proof_of_stake_keys = finalization_tc
                 .borrow_mut()
                 .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
                 .expect("PoS must be found because we found it earlier")
@@ -642,7 +709,7 @@ where
                 std::u64::MAX, // <-- this execution should be unlimited but approximating
                 protocol_version,
                 correlation_id,
-                Rc::clone(&tracking_copy),
+                finalization_tc,
                 Phase::FinalizePayment,
             )
         };
@@ -651,11 +718,12 @@ where
 
         // We panic here to indicate that the builder was not used properly.
         let ret = execution_result_builder
-            .build()
+            .build(tracking_copy.borrow().reader(), correlation_id)
             .expect("ExecutionResultBuilder not initialized properly");
 
         // NOTE: payment_code_spec_5_a is enforced in execution_result_builder.build()
-        // payment_code_spec_6: return properly combined set of transforms and appropriate error
+        // payment_code_spec_6: return properly combined set of transforms and
+        // appropriate error
         Ok(ret)
     }
 
@@ -681,7 +749,8 @@ pub enum GetBondedValidatorsError<H: History> {
 pub fn get_bonded_validators<H: History>(
     state: Arc<Mutex<H>>,
     root_hash: Blake2bHash,
-    pos_key: &Key, // Address of the PoS as currently bonded validators are stored in its known urefs map.
+    pos_key: &Key, /* Address of the PoS as currently bonded validators are stored in its known
+                    * urefs map. */
     correlation_id: CorrelationId,
 ) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<H>> {
     state
