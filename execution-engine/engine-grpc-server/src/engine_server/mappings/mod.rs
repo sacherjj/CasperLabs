@@ -5,7 +5,6 @@ use std::string::ToString;
 
 use protobuf::ProtobufEnum;
 
-use crate::engine_server::{ipc, state, transforms};
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
@@ -23,6 +22,8 @@ use engine_shared::logging::log_level;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{self, TypeMismatch};
 use engine_storage::global_state::{CommitResult, History};
+
+use crate::engine_server::{ipc, state, transforms};
 
 mod uint;
 
@@ -614,7 +615,9 @@ impl TryFrom<&[super::transforms::TransformEntry]> for CommitTransforms {
 }
 
 /// Transforms gRPC TransformEntry into domain tuple of (Key, Transform).
-impl TryFrom<&super::transforms::TransformEntry> for (contract_ffi::key::Key, transform::Transform) {
+impl TryFrom<&super::transforms::TransformEntry>
+    for (contract_ffi::key::Key, transform::Transform)
+{
     type Error = ParsingError;
     fn try_from(from: &super::transforms::TransformEntry) -> Result<Self, ParsingError> {
         if from.has_key() {
@@ -982,7 +985,6 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use crate::engine_server::mappings::CommitTransforms;
     use contract_ffi::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
     use contract_ffi::key::Key;
     use contract_ffi::uref::{AccessRights, URef};
@@ -994,6 +996,8 @@ mod tests {
     use engine_shared::newtypes::Blake2bHash;
     use engine_shared::transform::gens::transform_arb;
     use engine_shared::transform::Transform;
+
+    use crate::engine_server::mappings::CommitTransforms;
 
     use super::execution_error;
     use super::ipc;
