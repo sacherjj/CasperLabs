@@ -9,13 +9,14 @@ use contract_ffi::uref::URef;
 
 use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState};
-use engine_grpc_server::engine_server::ipc;
+use engine_grpc_server::engine_server::{ipc, transforms};
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, DeployCode, DeployItem, DeployPayload, DeployResult,
     DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
     ExecuteResponse, GenesisRequest, GenesisResponse, QueryRequest, StoredContractHash,
-    StoredContractName, StoredContractURef, TransformEntry,
+    StoredContractName, StoredContractURef,
 };
+use transforms::TransformEntry;
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{to_domain_validators, CommitTransforms};
 use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};

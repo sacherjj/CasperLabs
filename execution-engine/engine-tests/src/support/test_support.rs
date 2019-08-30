@@ -8,12 +8,13 @@ use grpc::RequestOptions;
 use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState};
 use engine_core::execution::POS_NAME;
-use engine_grpc_server::engine_server::ipc;
+use engine_grpc_server::engine_server::{ipc, transforms};
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
     DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisRequest, GenesisResponse,
-    QueryRequest, TransformEntry,
+    QueryRequest,
 };
+use transforms::TransformEntry;
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{to_domain_validators, CommitTransforms};
 use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
