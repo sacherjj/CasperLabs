@@ -1,7 +1,7 @@
-use cl_std::value::U512;
+use contract_ffi::value::U512;
 
-use capabilities::{Addable, Readable, Writable};
-use cl_std::system_contracts::mint::error::Error;
+use crate::capabilities::{Addable, Readable, Writable};
+use contract_ffi::system_contracts::mint::error::Error;
 
 pub trait Mint<A, RW>
 where
@@ -41,10 +41,10 @@ mod tests {
     use core::cell::{Cell, RefCell};
     use core::ops::Add;
 
-    use cl_std::value::U512;
+    use contract_ffi::value::U512;
 
-    use capabilities::{Addable, Readable, Writable};
-    use mint::{Error, Mint};
+    use crate::capabilities::{Addable, Readable, Writable};
+    use crate::mint::{Error, Mint};
 
     const GENESIS_PURSE_AMOUNT: u32 = 150;
     const GENESIS_PURSE: FullId = FullId(0);

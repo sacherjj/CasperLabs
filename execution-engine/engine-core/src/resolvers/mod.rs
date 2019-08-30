@@ -6,7 +6,7 @@ mod v1_resolver;
 use wasmi::ModuleImportResolver;
 
 use self::error::ResolverError;
-use resolvers::memory_resolver::MemoryResolver;
+use crate::resolvers::memory_resolver::MemoryResolver;
 
 /// Creates a module resolver for given protocol version.
 ///

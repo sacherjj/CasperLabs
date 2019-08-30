@@ -1,16 +1,16 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::string::String;
 
-use cl_std::contract_api::{
+use contract_ffi::contract_api::{
     add_associated_key, get_arg, remove_associated_key, revert, set_action_threshold,
     update_associated_key,
 };
-use cl_std::value::account::{
+use contract_ffi::value::account::{
     ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
     Weight,
 };
@@ -22,7 +22,8 @@ pub extern "C" fn call() {
         // executed with weight >= 1
         add_associated_key(PublicKey::new([42; 32]), Weight::new(100))
             .unwrap_or_else(|_| revert(100));
-        // this key will be used to test permission denied when removing keys with low total weight
+        // this key will be used to test permission denied when removing keys with low
+        // total weight
         add_associated_key(PublicKey::new([43; 32]), Weight::new(1))
             .unwrap_or_else(|_| revert(101));
         add_associated_key(PublicKey::new([1; 32]), Weight::new(1)).unwrap_or_else(|_| revert(102));

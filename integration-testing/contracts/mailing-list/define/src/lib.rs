@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(alloc)]
 
 #[macro_use]
 extern crate alloc;
@@ -7,11 +6,11 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-extern crate common;
-use common::contract_api::*;
-use common::contract_api::pointers::UPointer;
-use common::key::Key;
-use common::uref::URef;
+extern crate contract_ffi;
+use contract_ffi::contract_api::*;
+use contract_ffi::contract_api::pointers::UPointer;
+use contract_ffi::key::Key;
+use contract_ffi::uref::URef;
 
 fn get_list_key(name: &str) -> UPointer<Vec<String>> {
     get_uref(name).unwrap().to_u_ptr().unwrap()

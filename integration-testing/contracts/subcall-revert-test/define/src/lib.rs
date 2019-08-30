@@ -1,11 +1,10 @@
 #![no_std]
-#![feature(alloc)]
 
 extern crate alloc;
 use alloc::collections::BTreeMap;
 
-extern crate common;
-use common::contract_api::*;
+extern crate contract_ffi;
+use contract_ffi::contract_api::*;
 
 #[no_mangle]
 pub extern "C" fn revert_test_ext() {
