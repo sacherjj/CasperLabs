@@ -39,7 +39,7 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: MonadThrowable: BlockStorage: DeployBuffer: Log: ExecutionEngineService](
+  def computeDeploysCheckpoint[F[_]: MonadThrowable: DeployBuffer: Log: ExecutionEngineService](
       merged: MergeResult[TransformMap, Block],
       hashes: Set[DeployHash],
       blocktime: Long,
@@ -97,7 +97,7 @@ object ExecEngineUtil {
       protocolVersion
     )
 
-  private def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStorage: ExecutionEngineService](
+  private def processDeploys[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
       prestate: StateHash,
       blocktime: Long,
       deploys: Seq[Deploy],

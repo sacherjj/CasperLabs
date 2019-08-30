@@ -113,8 +113,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       deploy: Seq[consensus.Deploy],
       protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
-      implicit blockStorage: BlockStorage[Task],
-      executionEngineService: ExecutionEngineService[Task]
+      implicit executionEngineService: ExecutionEngineService[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
       blocktime                                   <- Task.delay(System.currentTimeMillis)
@@ -130,33 +129,31 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       DeploysCheckpoint(_, _, _, result, _, _, _) = computeResult
     } yield result
 
-  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
-    implicit blockStorage =>
-      _ =>
-        // reference costs
-        // deploy each Rholang program separately and record its cost
-        val deploy1 = ProtoUtil.sourceDeploy(
-          ByteString.copyFromUtf8("@1!(Nil)"),
-          System.currentTimeMillis
-        )
-        val deploy2 =
-          ProtoUtil.sourceDeploy(
-            ByteString.copyFromUtf8("@3!([1,2,3,4])"),
-            System.currentTimeMillis
-          )
-        val deploy3 =
-          ProtoUtil.sourceDeploy(
-            ByteString.copyFromUtf8("for(@x <- @0) { @4!(x.toByteArray()) }"),
-            System.currentTimeMillis
-          )
-        for {
-          proc1         <- computeSingleProcessedDeploy(Seq(deploy1))
-          proc2         <- computeSingleProcessedDeploy(Seq(deploy2))
-          proc3         <- computeSingleProcessedDeploy(Seq(deploy3))
-          singleResults = proc1 ++ proc2 ++ proc3
-          batchDeploy   = Seq(deploy1, deploy2, deploy3)
-          batchResult   <- computeSingleProcessedDeploy(batchDeploy)
-        } yield batchResult should contain theSameElementsAs singleResults
+  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in {
+    // reference costs
+    // deploy each Rholang program separately and record its cost
+    val deploy1 = ProtoUtil.sourceDeploy(
+      ByteString.copyFromUtf8("@1!(Nil)"),
+      System.currentTimeMillis
+    )
+    val deploy2 =
+      ProtoUtil.sourceDeploy(
+        ByteString.copyFromUtf8("@3!([1,2,3,4])"),
+        System.currentTimeMillis
+      )
+    val deploy3 =
+      ProtoUtil.sourceDeploy(
+        ByteString.copyFromUtf8("for(@x <- @0) { @4!(x.toByteArray()) }"),
+        System.currentTimeMillis
+      )
+    for {
+      proc1         <- computeSingleProcessedDeploy(Seq(deploy1))
+      proc2         <- computeSingleProcessedDeploy(Seq(deploy2))
+      proc3         <- computeSingleProcessedDeploy(Seq(deploy3))
+      singleResults = proc1 ++ proc2 ++ proc3
+      batchDeploy   = Seq(deploy1, deploy2, deploy3)
+      batchResult   <- computeSingleProcessedDeploy(batchDeploy)
+    } yield batchResult should contain theSameElementsAs singleResults
   }
 
   "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
