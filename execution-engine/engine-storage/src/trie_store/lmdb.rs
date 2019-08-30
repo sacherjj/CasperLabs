@@ -8,9 +8,11 @@
 //! # extern crate lmdb;
 //! # extern crate engine_shared;
 //! # extern crate tempfile;
+//! use casperlabs_engine_storage::transaction_source::{Transaction, TransactionSource};
+//! use casperlabs_engine_storage::transaction_source::lmdb::LmdbEnvironment;
 //! use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
-//! use casperlabs_engine_storage::trie_store::{Transaction, TransactionSource, TrieStore};
-//! use casperlabs_engine_storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+//! use casperlabs_engine_storage::trie_store::TrieStore;
+//! use casperlabs_engine_storage::trie_store::lmdb::LmdbTrieStore;
 //! use contract_ffi::bytesrepr::ToBytes;
 //! use lmdb::DatabaseFlags;
 //! use engine_shared::newtypes::Blake2bHash;
@@ -106,100 +108,16 @@
 //! tmp_dir.close().unwrap();
 //! ```
 
-use std::path::PathBuf;
-
-use lmdb::{self, Database, DatabaseFlags, Environment, RoTransaction, RwTransaction, WriteFlags};
+use lmdb::{Database, DatabaseFlags};
 
 use contract_ffi::bytesrepr::{deserialize, FromBytes, ToBytes};
+use engine_shared::newtypes::Blake2bHash;
 
-use super::*;
-use error;
-
-impl<'a> Transaction for RoTransaction<'a> {
-    type Error = lmdb::Error;
-
-    type Handle = Database;
-
-    fn commit(self) -> Result<(), Self::Error> {
-        lmdb::Transaction::commit(self)
-    }
-}
-
-impl<'a> Readable for RoTransaction<'a> {
-    fn read(&self, handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        match lmdb::Transaction::get(self, handle, &key) {
-            Ok(bytes) => Ok(Some(bytes.to_vec())),
-            Err(lmdb::Error::NotFound) => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl<'a> Transaction for RwTransaction<'a> {
-    type Error = lmdb::Error;
-
-    type Handle = Database;
-
-    fn commit(self) -> Result<(), Self::Error> {
-        <RwTransaction<'a> as lmdb::Transaction>::commit(self)
-    }
-}
-
-impl<'a> Readable for RwTransaction<'a> {
-    fn read(&self, handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        match lmdb::Transaction::get(self, handle, &key) {
-            Ok(bytes) => Ok(Some(bytes.to_vec())),
-            Err(lmdb::Error::NotFound) => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl<'a> Writable for RwTransaction<'a> {
-    fn write(&mut self, handle: Self::Handle, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
-        self.put(handle, &key, &value, WriteFlags::empty())
-            .map_err(Into::into)
-    }
-}
-
-/// The environment for an LMDB-backed trie store.
-///
-/// Wraps [`lmdb::Environment`].
-#[derive(Debug)]
-pub struct LmdbEnvironment {
-    path: PathBuf,
-    env: Environment,
-}
-
-impl LmdbEnvironment {
-    pub fn new(path: &PathBuf, map_size: usize) -> Result<Self, error::Error> {
-        let env = Environment::new().set_map_size(map_size).open(path)?;
-        let path = path.to_owned();
-        Ok(LmdbEnvironment { path, env })
-    }
-
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
-}
-
-impl<'a> TransactionSource<'a> for LmdbEnvironment {
-    type Error = lmdb::Error;
-
-    type Handle = Database;
-
-    type ReadTransaction = RoTransaction<'a>;
-
-    type ReadWriteTransaction = RwTransaction<'a>;
-
-    fn create_read_txn(&'a self) -> Result<RoTransaction<'a>, Self::Error> {
-        self.env.begin_ro_txn()
-    }
-
-    fn create_read_write_txn(&'a self) -> Result<RwTransaction<'a>, Self::Error> {
-        self.env.begin_rw_txn()
-    }
-}
+use crate::error;
+use crate::transaction_source::lmdb::LmdbEnvironment;
+use crate::transaction_source::{Readable, Writable};
+use crate::trie::Trie;
+use crate::trie_store::TrieStore;
 
 /// An LMDB-backed trie store.
 ///
@@ -215,12 +133,12 @@ impl LmdbTrieStore {
         name: Option<&str>,
         flags: DatabaseFlags,
     ) -> Result<Self, error::Error> {
-        let db = env.env.create_db(name, flags)?;
+        let db = env.env().create_db(name, flags)?;
         Ok(LmdbTrieStore { db })
     }
 
     pub fn open(env: &LmdbEnvironment, name: Option<&str>) -> Result<Self, error::Error> {
-        let db = env.env.open_db(name)?;
+        let db = env.env().open_db(name)?;
         Ok(LmdbTrieStore { db })
     }
 }

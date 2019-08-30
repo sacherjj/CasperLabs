@@ -2,9 +2,9 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use core::fmt::Write;
 
-use cl_std::contract_api;
-use cl_std::key::Key;
-use cl_std::value::{account::PublicKey, U512};
+use contract_ffi::contract_api;
+use contract_ffi::key::Key;
+use contract_ffi::value::{account::PublicKey, U512};
 
 use crate::error::{Error, Result};
 
@@ -15,7 +15,8 @@ pub trait StakesProvider {
     fn write(stakes: &Stakes);
 }
 
-/// A `StakesProvider` that reads and writes the stakes to/from the contract's known urefs.
+/// A `StakesProvider` that reads and writes the stakes to/from the contract's
+/// known urefs.
 pub struct ContractStakes;
 
 impl StakesProvider for ContractStakes {
@@ -78,16 +79,18 @@ impl StakesProvider for ContractStakes {
     }
 }
 
-/// The stakes map, assigning the staked amount of motes to each bonded validator.
+/// The stakes map, assigning the staked amount of motes to each bonded
+/// validator.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Stakes(pub BTreeMap<PublicKey, U512>);
 
 impl Stakes {
-    /// If `maybe_amount` is `None`, removes all the validator's stakes, otherwise subtracts the
-    /// given amount. If the stakes are lower than the specified amount, it also subtracts all the
-    /// stakes.
+    /// If `maybe_amount` is `None`, removes all the validator's stakes,
+    /// otherwise subtracts the given amount. If the stakes are lower than
+    /// the specified amount, it also subtracts all the stakes.
     ///
-    /// Returns the amount that was actually subtracted from the stakes, or an error if
+    /// Returns the amount that was actually subtracted from the stakes, or an
+    /// error if
     /// * unbonding the specified amount is not allowed,
     /// * tries to unbond last validator,
     /// * validator was not bonded.
@@ -192,7 +195,7 @@ impl Stakes {
 
 #[cfg(test)]
 mod tests {
-    use cl_std::value::{account::PublicKey, U512};
+    use contract_ffi::value::{account::PublicKey, U512};
 
     use crate::error::Error;
     use crate::stakes::Stakes;

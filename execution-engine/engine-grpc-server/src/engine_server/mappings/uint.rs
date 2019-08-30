@@ -5,7 +5,7 @@ use std::convert::TryFrom;
 use contract_ffi::value::U512;
 
 use super::{parse_error, ParsingError};
-use engine_server::state;
+use crate::engine_server::state;
 
 /// Map a result into the expected error for this module, while also
 /// converting the type into a Value. Use case: parsing U128, U256,

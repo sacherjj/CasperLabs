@@ -59,7 +59,8 @@ fn property_logger_test_helper() -> (LogLevel, String, BTreeMap<String, String>)
 
     properties.insert("stop".to_string(), format!("{:?}", utc));
 
-    // arbitrary format; any {???} brace encased elements that match a property key will get transcluded in description
+    // arbitrary format; any {???} brace encased elements that match a property key
+    // will get transcluded in description
     let mut message_format = String::new();
 
     message_format.push_str(

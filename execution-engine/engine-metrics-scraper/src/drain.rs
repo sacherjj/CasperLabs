@@ -31,9 +31,10 @@ fn handler_factory<D: Drainer<String>>(
     }
 }
 
-/// Spawns a thread which runs a web server that serves the contents of the given accumulator in the
-/// body of responses to incoming requests at the given socket and endpoint.  Each request at this
-/// endpoint (destructively) drains the accumulator.
+/// Spawns a thread which runs a web server that serves the contents of the
+/// given accumulator in the body of responses to incoming requests at the given
+/// socket and endpoint.  Each request at this endpoint (destructively) drains
+/// the accumulator.
 pub fn open_drain<D: Drainer<String> + 'static>(
     drainer: D,
     addr: &SocketAddr,

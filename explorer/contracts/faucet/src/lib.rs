@@ -1,12 +1,12 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api::{get_arg, read_local, revert, transfer_to_account, TransferResult, write_local};
-use cl_std::value::account::PublicKey;
-use cl_std::value::U512;
+use contract_ffi::contract_api::{get_arg, read_local, revert, transfer_to_account, TransferResult, write_local};
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::U512;
 
 const TRANSFER_AMOUNT: u32 = 10_000_000;
 

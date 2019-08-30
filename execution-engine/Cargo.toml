@@ -55,5 +55,6 @@ members = [
     "engine-metrics-scraper",
     "engine-shared",
     "engine-storage",
+    "engine-tests",
     "engine-wasm-prep",
 ]

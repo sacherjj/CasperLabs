@@ -1,15 +1,14 @@
 #![no_std]
-#![feature(alloc)]
 
 extern crate alloc;
-extern crate common;
+extern crate contract_ffi;
 
 use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
-use common::contract_api::{add_uref, get_uref, list_known_urefs, new_uref, store_function, revert};
-use common::key::Key;
-use common::value::Value;
+use contract_ffi::contract_api::{add_uref, get_uref, list_known_urefs, new_uref, store_function, revert};
+use contract_ffi::key::Key;
+use contract_ffi::value::Value;
 use core::iter;
 
 #[no_mangle]

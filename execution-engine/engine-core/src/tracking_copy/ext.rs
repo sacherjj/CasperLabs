@@ -3,11 +3,11 @@ use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::{Account, Contract, Value, U512};
 
+use crate::execution;
+use crate::tracking_copy::{QueryResult, TrackingCopy};
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_shared::transform::TypeMismatch;
 use engine_storage::global_state::StateReader;
-use execution;
-use tracking_copy::{QueryResult, TrackingCopy};
 
 pub struct SystemContractInfo {
     outer_key: Key,
@@ -68,7 +68,8 @@ pub trait TrackingCopyExt<R> {
         balance_key: Key,
     ) -> Result<U512, Self::Error>;
 
-    /// Gets the system contract, packaged with its outer uref key and inner uref key
+    /// Gets the system contract, packaged with its outer uref key and inner
+    /// uref key
     fn get_system_contract_info(
         &mut self,
         correlation_id: CorrelationId,
