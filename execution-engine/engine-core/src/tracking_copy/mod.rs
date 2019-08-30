@@ -115,6 +115,10 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         }
     }
 
+    pub fn reader(&self) -> &R {
+        &self.reader
+    }
+
     /// Creates a new TrackingCopy, using this one (including its mutations) as
     /// the base state to read against. The intended use case for this
     /// function is to "snapshot" the current `TrackingCopy` and produce a

@@ -718,7 +718,7 @@ where
 
         // We panic here to indicate that the builder was not used properly.
         let ret = execution_result_builder
-            .build()
+            .build(tracking_copy.borrow().reader(), correlation_id)
             .expect("ExecutionResultBuilder not initialized properly");
 
         // NOTE: payment_code_spec_5_a is enforced in execution_result_builder.build()

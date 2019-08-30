@@ -4,7 +4,9 @@ use crate::tracking_copy;
 
 use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
+use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
+use engine_storage::global_state::StateReader;
 
 use super::execution_effect::ExecutionEffect;
 use super::op::Op;
@@ -204,7 +206,11 @@ impl ExecutionResultBuilder {
         })
     }
 
-    pub fn build(self) -> Result<ExecutionResult, ExecutionResultBuilderError> {
+    pub fn build<R: StateReader<Key, Value>>(
+        self,
+        reader: &R,
+        correlation_id: CorrelationId,
+    ) -> Result<ExecutionResult, ExecutionResultBuilderError> {
         let cost = self.total_cost();
         let mut ops = HashMap::new();
         let mut transforms = HashMap::new();
@@ -252,7 +258,10 @@ impl ExecutionResultBuilder {
             None => return Err(ExecutionResultBuilderError::MissingFinalizeExecutionResult),
         }
 
-        Ok(ret.with_effect(ExecutionEffect::new(ops, transforms)))
+        // Remove redundant writes to allow more opportunity to commute
+        let reduced_effect = Self::reduce_identity_writes(ops, transforms, reader, correlation_id);
+
+        Ok(ret.with_effect(reduced_effect))
     }
 
     fn add_effects(
@@ -266,5 +275,39 @@ impl ExecutionResultBuilder {
         for (k, t) in effect.transforms.iter() {
             tracking_copy::utils::add(transforms, *k, t.clone());
         }
+    }
+
+    /// In the case we are writing the same value as was there originally,
+    /// it is equivalent to having a `Transform::Identity` and `Op::Read`.
+    /// This function makes that reduction before returning the `ExecutionEffect`.
+    fn reduce_identity_writes<R: StateReader<Key, Value>>(
+        mut ops: HashMap<Key, Op>,
+        mut transforms: HashMap<Key, Transform>,
+        reader: &R,
+        correlation_id: CorrelationId,
+    ) -> ExecutionEffect {
+        let kvs: Vec<(Key, Value)> = transforms
+            .keys()
+            .filter_map(|k| match transforms.get(k) {
+                Some(Transform::Write(_)) => reader
+                    .read(correlation_id, k)
+                    .ok()
+                    .and_then(|maybe_v| maybe_v.map(|v| (*k, v.clone()))),
+                _ => None,
+            })
+            .collect();
+
+        for (k, old_value) in kvs {
+            if let Some(Transform::Write(new_value)) = transforms.remove(&k) {
+                if new_value == old_value {
+                    transforms.insert(k, Transform::Identity);
+                    ops.insert(k, Op::Read);
+                } else {
+                    transforms.insert(k, Transform::Write(new_value));
+                }
+            }
+        }
+
+        ExecutionEffect::new(ops, transforms)
     }
 }
