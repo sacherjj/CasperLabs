@@ -304,8 +304,8 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Metrics: Time: 
   def deploy(deploy: Deploy): F[Either[Throwable, Unit]] = validatorId match {
     case Some(_) =>
       (deploy.getBody.session, deploy.getBody.payment) match {
-        case (None, _) | (_, None) | (Some(Deploy.Code(_, Deploy.Code.Contract.Empty)), _) |
-            (_, Some(Deploy.Code(_, Deploy.Code.Contract.Empty))) =>
+        case (None, _) | (_, None) | (Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty)), _) |
+            (_, Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty))) =>
           new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
             .asLeft[Unit]
             .pure[F]

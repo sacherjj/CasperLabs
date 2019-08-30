@@ -348,7 +348,7 @@ object DeployRuntime {
       .withBody(
         consensus.Deploy
           .Body()
-          .withSession(consensus.Deploy.Code(contract = session).withArgs(sessionArgs))
+          .withSession(consensus.Deploy.Code(contract = session).withAbiArgs(sessionArgs))
           .withPayment(consensus.Deploy.Code(contract = payment))
       )
       .withHashes

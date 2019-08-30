@@ -31,7 +31,7 @@ export class Contract {
 
     const code = new Deploy.Code();
     code.setWasm(this.contractWasm);
-    code.setArgs(args);
+    code.setAbiArgs(args);
 
     const body = new Deploy.Body();
     body.setSession(code);

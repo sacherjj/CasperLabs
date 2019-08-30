@@ -213,6 +213,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	rm -rf $(DIR_OUT)
 	mkdir -p $(DIR_OUT)
 	# First the pure data packages, so it doesn't create empty _pb_service.d.ts files.
+	# Then the service we'll invoke.
 	./hack/build/docker-buildenv.sh "\
 		protoc \
 				-I=$(DIR_IN) \
@@ -222,16 +223,13 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 			$(DIR_IN)/google/protobuf/empty.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/consensus.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/info.proto \
-			$(DIR_IN)/io/casperlabs/casper/consensus/state.proto \
-		"
-	# Now the service we'll invoke.
-	./hack/build/docker-buildenv.sh "\
-	protoc \
-	    -I=$(DIR_IN) \
-		--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
-		--js_out=import_style=commonjs,binary:$(DIR_OUT) \
-		--ts_out=service=true:$(DIR_OUT) \
-		$(DIR_IN)/io/casperlabs/node/api/casper.proto \
+			$(DIR_IN)/io/casperlabs/casper/consensus/state.proto ; \
+		protoc \
+				-I=$(DIR_IN) \
+			--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
+			--js_out=import_style=commonjs,binary:$(DIR_OUT) \
+			--ts_out=service=true:$(DIR_OUT) \
+			$(DIR_IN)/io/casperlabs/node/api/casper.proto \
 		"
 	# Annotations were only required for the REST gateway. Remove them from Typescript.
 	for f in $(DIR_OUT)/io/casperlabs/node/api/casper_pb* ; do \

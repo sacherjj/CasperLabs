@@ -539,13 +539,13 @@ object ProtoUtil {
   def deployCodeToDeployPayload(code: Deploy.Code): ipc.DeployPayload = {
     val payload = code.contract match {
       case Deploy.Code.Contract.Wasm(wasm) =>
-        ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, code.args))
+        ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, code.abiArgs))
       case Deploy.Code.Contract.Hash(hash) =>
-        ipc.DeployPayload.Payload.StoredContractHash(ipc.StoredContractHash(hash, code.args))
+        ipc.DeployPayload.Payload.StoredContractHash(ipc.StoredContractHash(hash, code.abiArgs))
       case Deploy.Code.Contract.Name(name) =>
-        ipc.DeployPayload.Payload.StoredContractName(ipc.StoredContractName(name, code.args))
+        ipc.DeployPayload.Payload.StoredContractName(ipc.StoredContractName(name, code.abiArgs))
       case Deploy.Code.Contract.Uref(uref) =>
-        ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, code.args))
+        ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, code.abiArgs))
       case Deploy.Code.Contract.Empty =>
         ipc.DeployPayload.Payload.Empty
     }
