@@ -6,6 +6,7 @@
 //! # extern crate casperlabs_engine_storage;
 //! # extern crate contract_ffi;
 //! # extern crate engine_shared;
+//! use casperlabs_engine_storage::store::Store;
 //! use casperlabs_engine_storage::transaction_source::{Transaction, TransactionSource};
 //! use casperlabs_engine_storage::transaction_source::in_memory::InMemoryEnvironment;
 //! use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
@@ -100,12 +101,11 @@
 //! }
 //! ```
 
-use contract_ffi::bytesrepr::{deserialize, FromBytes, ToBytes};
+use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 
 use super::*;
 use crate::error::in_memory::Error;
 use crate::transaction_source::in_memory::InMemoryEnvironment;
-use crate::transaction_source::{Readable, Writable};
 use crate::trie_store;
 
 /// An in-memory trie store.
@@ -124,33 +124,23 @@ impl InMemoryTrieStore {
     }
 }
 
-impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for InMemoryTrieStore {
+impl<K, V> Store<Blake2bHash, Trie<K, V>> for InMemoryTrieStore
+where
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
+{
     type Error = Error;
 
     type Handle = Option<String>;
 
-    fn get<T>(&self, txn: &T, key: &Blake2bHash) -> Result<Option<Trie<K, V>>, Self::Error>
-    where
-        T: Readable<Handle = Self::Handle>,
-        Self::Error: From<T::Error>,
-    {
-        let maybe_name = self.maybe_name.to_owned();
-        match txn.read(maybe_name, &key.to_bytes()?)? {
-            None => Ok(None),
-            Some(bytes) => {
-                let trie = deserialize(&bytes)?;
-                Ok(Some(trie))
-            }
-        }
+    fn handle(&self) -> Self::Handle {
+        self.maybe_name.to_owned()
     }
+}
 
-    fn put<T>(&self, txn: &mut T, key: &Blake2bHash, value: &Trie<K, V>) -> Result<(), Self::Error>
-    where
-        T: Writable<Handle = Self::Handle>,
-        Self::Error: From<T::Error>,
-    {
-        let maybe_name = self.maybe_name.to_owned();
-        txn.write(maybe_name, &key.to_bytes()?, &value.to_bytes()?)
-            .map_err(Into::into)
-    }
+impl<K, V> TrieStore<K, V> for InMemoryTrieStore
+where
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
+{
 }
