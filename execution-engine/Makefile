@@ -5,10 +5,12 @@ CARGO = $(or $(shell which cargo), $(HOME)/.cargo/bin/cargo)
 SYSTEM_CONTRACTS = $(shell find ./contracts/system -mindepth 1 -maxdepth 1 -exec basename {} \;)
 TEST_CONTRACTS   = $(shell find ./contracts/test   -mindepth 1 -maxdepth 1 -exec basename {} \;)
 CLIENT_CONTRACTS = $(shell find ./contracts/client -mindepth 1 -maxdepth 1 -exec basename {} \;)
+LONG_RUNNING_TESTS_CONTRACTS = $(shell find ./contracts/long-running-tests -mindepth 1 -maxdepth 1 -exec basename {} \;)
 
 SYSTEM_CONTRACTS := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
 TEST_CONTRACTS   := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
 CLIENT_CONTRACTS := $(patsubst %, build-contract/%, $(CLIENT_CONTRACTS))
+LONG_RUNNING_TESTS_CONTRACTS := $(patsubst %, build-contract/%, $(LONG_RUNNING_TESTS_CONTRACTS))
 
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
 PACKAGED_SYSTEM_CONTRACTS = mint_token.wasm pos.wasm
@@ -27,7 +29,8 @@ build-contract/%:
 build-contracts: \
 	$(SYSTEM_CONTRACTS) \
 	$(TEST_CONTRACTS) \
-	$(CLIENT_CONTRACTS)
+	$(CLIENT_CONTRACTS) \
+	$(LONG_RUNNING_TESTS_CONTRACTS)
 
 .PHONY: test
 test:

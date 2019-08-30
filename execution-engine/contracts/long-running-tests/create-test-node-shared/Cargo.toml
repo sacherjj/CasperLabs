@@ -1,0 +1,13 @@
+[package]
+name = "create-test-node-shared"
+version = "0.1.0"
+authors = ["Henry Till <henrytill@gmail.com>"]
+edition = "2018"
+
+[features]
+default = []
+std = ["contract-ffi/std"]
+
+[dependencies]
+binascii = "0.1.2"
+contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
