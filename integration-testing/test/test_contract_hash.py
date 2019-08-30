@@ -1,4 +1,4 @@
-from test import contract_hash
+from test.cl_node.contract_hash import contract_hash
 
 
 def test_contract_hash():

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import List
 from pytest import fixture, raises
-from test import contract_hash
+from test.cl_node.contract_hash import contract_hash
 from test.cl_node.common import testing_root_path
 from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
 from test.cl_node.common import extract_block_hash_from_propose_output
