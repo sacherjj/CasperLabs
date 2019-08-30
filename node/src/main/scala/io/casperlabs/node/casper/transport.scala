@@ -48,7 +48,8 @@ package object transport {
   def apply(
       port: Int,
       conf: Configuration,
-      grpcScheduler: Scheduler
+      ingressScheduler: Scheduler,
+      egressScheduler: Scheduler
   )(
       implicit
       log: Log[Task],
@@ -66,11 +67,11 @@ package object transport {
       finalizationHandler: LastFinalizedBlockHashContainer[Effect],
       filesApiEff: FilesAPI[Effect],
       deployBuffer: DeployBuffer[Effect],
-      validation: Validation[Effect],
-      scheduler: Scheduler
+      validation: Validation[Effect]
   ): Resource[Effect, Unit] = Resource {
     implicit val rpConfAsk = effects.rpConfAsk(rpConfState)
     implicit val timeEff   = Time[Effect]
+    implicit val scheduler = egressScheduler
     for {
       tcpConnections <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
 
@@ -87,7 +88,7 @@ package object transport {
           conf.server.maxMessageSize,
           conf.server.chunkSize,
           commTmpFolder
-        )(grpcScheduler, log, metrics, tcpConnections)
+        )(ingressScheduler, log, metrics, tcpConnections)
       }
       implicit0(transportEff: TransportLayer[Effect]) = TransportLayer
         .eitherTTransportLayer[Task]
