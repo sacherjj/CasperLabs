@@ -33,6 +33,7 @@ object Main {
               )
       } yield ()
 
+    // Create a scheduler to execute the program and block waiting on it to finish.
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
       "node-runner",
