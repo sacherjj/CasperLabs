@@ -84,7 +84,7 @@ fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
     use crate::trie_store::in_memory::InMemoryTrieStore;
 
     let env = InMemoryEnvironment::new();
-    let store = InMemoryTrieStore::new(&env);
+    let store = InMemoryTrieStore::new(&env, None);
 
     roundtrip_succeeds::<_, _, in_memory::Error>(&store, &env, inputs)
 }
