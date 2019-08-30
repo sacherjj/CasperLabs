@@ -166,9 +166,11 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Metrics: Time: 
                             // re-attempt for any status that resulted in the adding of the block into the view
                             reAttemptBuffer(updatedDag, lastFinalizedBlockHash)
                         }
-
+      hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
+      _         <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix}")
       _         <- updateLastFinalizedBlock(updatedDag)
+      _         <- Log[F].debug(s"Estimating hashes after adding ${hashPrefix}")
       tipHashes <- estimator(updatedDag)
       _ <- Log[F].debug(
             s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
@@ -178,11 +180,14 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Metrics: Time: 
 
       // Push any unfinalized deploys which are still in the buffer back to pending state
       // if the blocks they were contained have just become orphans.
+      _        <- Log[F].debug(s"Re-queueing orphaned deploys after adding ${hashPrefix}")
       requeued <- requeueOrphanedDeploys(updatedDag, tipHashes)
       _        <- Log[F].info(s"Re-queued ${requeued} orphaned deploys.").whenA(requeued > 0)
 
       // Remove any deploys from the buffer which are in finalized blocks.
+      _ <- Log[F].debug(s"Removing finalized deploys after adding ${hashPrefix}")
       _ <- removeFinalizedDeploys(updatedDag)
+      _ <- Log[F].debug(s"Finished adding ${hashPrefix}")
     } yield (block, status) :: furtherAttempts
   }
 
