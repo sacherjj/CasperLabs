@@ -38,7 +38,7 @@
 //! // LMDB-backed implementations, the environment is the source of
 //! // transactions.
 //! let env = InMemoryEnvironment::new();
-//! let store = InMemoryTrieStore::new(&env);
+//! let store = InMemoryTrieStore::new(&env, None);
 //!
 //! // First let's create a read-write transaction, persist the values, but
 //! // forget to commit the transaction.
@@ -106,27 +106,36 @@ use super::*;
 use crate::error::in_memory::Error;
 use crate::transaction_source::in_memory::InMemoryEnvironment;
 use crate::transaction_source::{Readable, Writable};
+use crate::trie_store;
 
 /// An in-memory trie store.
-pub struct InMemoryTrieStore;
+pub struct InMemoryTrieStore {
+    maybe_name: Option<String>,
+}
 
 impl InMemoryTrieStore {
-    pub fn new(_env: &InMemoryEnvironment) -> Self {
-        InMemoryTrieStore
+    pub fn new(_env: &InMemoryEnvironment, maybe_name: Option<&str>) -> Self {
+        let name = maybe_name
+            .map(|name| format!("{}-{}", trie_store::NAME, name))
+            .unwrap_or_else(|| String::from(trie_store::NAME));
+        InMemoryTrieStore {
+            maybe_name: Some(name),
+        }
     }
 }
 
 impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for InMemoryTrieStore {
     type Error = Error;
 
-    type Handle = ();
+    type Handle = Option<String>;
 
     fn get<T>(&self, txn: &T, key: &Blake2bHash) -> Result<Option<Trie<K, V>>, Self::Error>
     where
         T: Readable<Handle = Self::Handle>,
         Self::Error: From<T::Error>,
     {
-        match txn.read((), &key.to_bytes()?)? {
+        let maybe_name = self.maybe_name.to_owned();
+        match txn.read(maybe_name, &key.to_bytes()?)? {
             None => Ok(None),
             Some(bytes) => {
                 let trie = deserialize(&bytes)?;
@@ -140,7 +149,8 @@ impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for InMemor
         T: Writable<Handle = Self::Handle>,
         Self::Error: From<T::Error>,
     {
-        txn.write((), &key.to_bytes()?, &value.to_bytes()?)
+        let maybe_name = self.maybe_name.to_owned();
+        txn.write(maybe_name, &key.to_bytes()?, &value.to_bytes()?)
             .map_err(Into::into)
     }
 }

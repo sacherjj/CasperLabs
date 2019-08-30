@@ -513,7 +513,7 @@ struct InMemoryTestContext {
 impl InMemoryTestContext {
     fn new(tries: &[HashedTestTrie]) -> Result<Self, failure::Error> {
         let environment = InMemoryEnvironment::new();
-        let store = InMemoryTrieStore::new(&environment);
+        let store = InMemoryTrieStore::new(&environment, None);
         put_tries::<_, _, in_memory::Error>(&environment, &store, tries)?;
         Ok(InMemoryTestContext { environment, store })
     }
@@ -582,15 +582,16 @@ where
 }
 
 impl InMemoryEnvironment {
-    pub fn dump<K, V>(&self) -> Result<HashMap<Blake2bHash, Trie<K, V>>, in_memory::Error>
+    pub fn dump<K, V>(
+        &self,
+        name: Option<&str>,
+    ) -> Result<HashMap<Blake2bHash, Trie<K, V>>, in_memory::Error>
     where
         K: FromBytes,
         V: FromBytes,
     {
-        let data = self.data();
-        let guard = data.lock()?;
-        guard
-            .iter()
+        let data = self.data(name)?.unwrap();
+        data.iter()
             .map(|(hash_bytes, trie_bytes)| {
                 let hash: Blake2bHash = bytesrepr::deserialize(hash_bytes)?;
                 let trie: Trie<K, V> = bytesrepr::deserialize(trie_bytes)?;

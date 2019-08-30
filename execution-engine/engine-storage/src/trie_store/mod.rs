@@ -13,6 +13,8 @@ use engine_shared::newtypes::Blake2bHash;
 use crate::transaction_source::{Readable, Writable};
 use crate::trie::Trie;
 
+const NAME: &str = "TRIE_STORE";
+
 /// An entity which persists [`Trie`] values at their hashes.
 pub trait TrieStore<K, V> {
     /// An error which can occur while getting a value out of or putting a value
