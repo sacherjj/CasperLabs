@@ -15,7 +15,8 @@ pub struct WasmCosts {
     pub mul: u32,
     /// Memory (load/store) operations multiplier.
     pub mem: u32,
-    /// Memory stipend. Amount of free memory (in 64kb pages) each contract can use for stack.
+    /// Memory stipend. Amount of free memory (in 64kb pages) each contract can
+    /// use for stack.
     pub initial_mem: u32,
     /// Grow memory cost, per page (64kb)
     pub grow_mem: u32,
@@ -23,9 +24,11 @@ pub struct WasmCosts {
     pub memcpy: u32,
     /// Max stack height (native WebAssembly stack limiter)
     pub max_stack_height: u32,
-    /// Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` / `opcodes_div`
+    /// Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` /
+    /// `opcodes_div`
     pub opcodes_mul: u32,
-    /// Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` / `opcodes_div`
+    /// Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` /
+    /// `opcodes_div`
     pub opcodes_div: u32,
 }
 

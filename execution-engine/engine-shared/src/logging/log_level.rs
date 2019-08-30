@@ -1,11 +1,11 @@
 ///! Log levels are [ fatal | error | warning | info | debug ]
-///!    all emergency, alert, and critical level log events will be coalesced into
-///!        a single category, fatal
+///!    all emergency, alert, and critical level log events will be coalesced
+/// into !        a single category, fatal
 ///!    all notice and informational level log events will be coalesced into
 ///!        a single category, info
-///!    "no log" / "none" is NOT an option; the minimum allowed loglevel is fatal
-///!   internally, syslog levels will be maintained for cross compatibility, with
-///!        the following mapping:
+///!    "no log" / "none" is NOT an option; the minimum allowed loglevel is
+/// fatal !   internally, syslog levels will be maintained for cross
+/// compatibility, with !        the following mapping:
 ///!            fatal: 0
 ///!            error: 3
 ///!            warning: 4
