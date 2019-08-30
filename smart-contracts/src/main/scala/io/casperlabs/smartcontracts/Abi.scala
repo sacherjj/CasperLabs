@@ -37,11 +37,17 @@ object Abi {
   }
 
   implicit val `Bytes => ABI` = instance[Array[Byte]] { x =>
-    Abi[Int].toBytes(x.length) ++ x
+    Abi.toBytes(x.length) ++ x
   }
 
+  implicit def `Option => ABI`[T: Abi] = instance[Option[T]] { x =>
+    x.fold(Array[Byte](0))(Array[Byte](1) ++ Abi.toBytes(_))
+  }
+
+  def toBytes[T: Abi](x: T): Array[Byte] = Abi[T].toBytes(x)
+
   def args(args: Serializable[_]*): Array[Byte] = {
-    val bytes = args.flatMap(_.toBytes)
-    Abi[Int].toBytes(bytes.length) ++ bytes
+    val bytes = args.flatMap(x => Abi.toBytes(x.toBytes))
+    Abi.toBytes(args.length) ++ bytes
   }
 }
