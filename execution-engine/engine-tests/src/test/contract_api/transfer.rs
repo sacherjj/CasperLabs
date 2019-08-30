@@ -630,7 +630,7 @@ fn should_create_purse() {
     let mint_contract_uref = result.builder().get_mint_contract_uref();
     let mint_transform =
         &result.builder().get_transforms()[0][&mint_contract_uref.remove_access_rights().into()];
-    // println!("mint transforms {:?}", mint_transforms);
+
     let add_keys = if let Transform::AddKeys(keys) = mint_transform {
         keys
     } else {

@@ -24,6 +24,7 @@ enum Error {
     GetPosInnerURef = 1,
     GetPosOuterURef = 2,
     Transfer = 3,
+    InvalidPhase = 999,
 }
 
 #[no_mangle]
@@ -62,7 +63,7 @@ pub extern "C" fn call() {
             _ => None,
         }
     };
-    let value = value.unwrap_or_else(|| contract_api::revert(999));
+    let value = value.unwrap_or_else(|| contract_api::revert(Error::InvalidPhase as u32));
     let result_key = contract_api::new_uref(value.to_string()).into();
     let mut uref_name: String = NEW_UREF_RESULT_UREF_NAME.to_string();
     uref_name.push_str("-");
