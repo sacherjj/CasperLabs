@@ -63,10 +63,9 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
+  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
   - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
   - "make test test-contracts"
-  - "cd ../long-running-tests"
-  - "./build-contracts.sh"
   image: "casperlabs/buildenv:latest"
   when:
     event:
@@ -119,7 +118,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -220,7 +219,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -237,7 +236,7 @@ steps:
   - "rm -rf /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   - name: temp
     path: "/tmp"
@@ -258,7 +257,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   - name: temp
     path: "/tmp"
@@ -293,7 +292,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -309,7 +308,7 @@ steps:
   - "make docker-build/key-generator"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -325,7 +324,7 @@ steps:
   - "make docker-build/explorer"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -341,7 +340,7 @@ steps:
   - "make docker-build/grpcwebproxy"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -384,7 +383,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -487,7 +486,7 @@ steps:
     DOCKER_USERNAME:
       from_secret: docker_username
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -559,7 +558,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
 
 volumes:

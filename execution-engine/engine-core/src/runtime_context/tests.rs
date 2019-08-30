@@ -15,13 +15,13 @@ use engine_storage::global_state::in_memory::InMemoryGlobalState;
 use engine_storage::global_state::{CommitResult, History};
 
 use super::{Error, RuntimeContext, URefAddr, Validated};
+use crate::execution::{create_rng, extract_access_rights_from_keys};
+use crate::tracking_copy::TrackingCopy;
 use contract_ffi::value::account::{
     AccountActivity, ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
     RemoveKeyFailure, SetThresholdFailure, Weight,
 };
 use engine_shared::newtypes::CorrelationId;
-use execution::{create_rng, extract_access_rights_from_keys};
-use tracking_copy::TrackingCopy;
 
 fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemoryGlobalState> {
     let correlation_id = CorrelationId::new();
@@ -221,7 +221,8 @@ fn store_contract_with_uref_forged() {
 
 #[test]
 fn store_contract_under_uref_valid() {
-    // Test that storing contract under URef that is known and has WRITE access works.
+    // Test that storing contract under URef that is known and has WRITE access
+    // works.
     let mut rng = rand::thread_rng();
     let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
@@ -247,7 +248,8 @@ fn store_contract_under_uref_valid() {
 
 #[test]
 fn store_contract_under_uref_forged() {
-    // Test that storing contract under URef that is not known fails with ForgedReference error.
+    // Test that storing contract under URef that is not known fails with
+    // ForgedReference error.
     let mut rng = rand::thread_rng();
     let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
     let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
@@ -261,7 +263,8 @@ fn store_contract_under_uref_forged() {
 
 #[test]
 fn store_contract_uref_invalid_access() {
-    // Test that storing contract under URef that is known but is not writeable fails.
+    // Test that storing contract under URef that is known but is not writeable
+    // fails.
     let mut rng = rand::thread_rng();
     let contract_uref = random_uref_key(&mut rng, AccessRights::READ);
     let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
@@ -286,7 +289,8 @@ fn account_key_not_writeable() {
 
 #[test]
 fn account_key_readable_valid() {
-    // Account key is readable if it is a "base" key - current context of the execution.
+    // Account key is readable if it is a "base" key - current context of the
+    // execution.
     let query_result = test(HashMap::new(), |mut rc| {
         let base_key = rc.base_key();
 
@@ -315,7 +319,8 @@ fn account_key_readable_invalid() {
 
 #[test]
 fn account_key_addable_valid() {
-    // Account key is addable if it is a "base" key - current context of the execution.
+    // Account key is addable if it is a "base" key - current context of the
+    // execution.
     let mut rng = rand::thread_rng();
     let uref = random_uref_key(&mut rng, AccessRights::READ);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
@@ -342,7 +347,8 @@ fn account_key_addable_valid() {
 
 #[test]
 fn account_key_addable_invalid() {
-    // Account key is NOT addable if it is a "base" key - current context of the execution.
+    // Account key is NOT addable if it is a "base" key - current context of the
+    // execution.
     let mut rng = rand::thread_rng();
     let other_acc_key = random_account_key(&mut rng);
 
@@ -355,7 +361,8 @@ fn account_key_addable_invalid() {
 
 #[test]
 fn contract_key_readable_valid() {
-    // Account key is readable if it is a "base" key - current context of the execution.
+    // Account key is readable if it is a "base" key - current context of the
+    // execution.
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let query_result = test(HashMap::new(), |mut rc| rc.read_gs(&contract_key));
@@ -365,7 +372,8 @@ fn contract_key_readable_valid() {
 
 #[test]
 fn contract_key_not_writeable() {
-    // Account key is readable if it is a "base" key - current context of the execution.
+    // Account key is readable if it is a "base" key - current context of the
+    // execution.
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let query_result = test(HashMap::new(), |mut rc| {
@@ -377,7 +385,8 @@ fn contract_key_not_writeable() {
 
 #[test]
 fn contract_key_addable_valid() {
-    // Contract key is addable if it is a "base" key - current context of the execution.
+    // Contract key is addable if it is a "base" key - current context of the
+    // execution.
     let base_acc_addr = [0u8; 32];
     let (account_key, account) = mock_account(base_acc_addr);
     let mut rng = rand::thread_rng();
@@ -431,7 +440,8 @@ fn contract_key_addable_valid() {
 
 #[test]
 fn contract_key_addable_invalid() {
-    // Contract key is addable if it is a "base" key - current context of the execution.
+    // Contract key is addable if it is a "base" key - current context of the
+    // execution.
     let base_acc_addr = [0u8; 32];
     let (account_key, account) = mock_account(base_acc_addr);
     let mut rng = rand::thread_rng();
@@ -725,7 +735,8 @@ fn should_verify_ownership_before_adding_key() {
     // making sure `account_dirty` mutated
     let known_urefs = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
-        // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+        // Overwrites a `base_key` to a different one before doing any operation as
+        // account `[0; 32]`
         runtime_context.base_key = Key::Hash([1; 32]);
 
         let err = runtime_context
@@ -748,7 +759,8 @@ fn should_verify_ownership_before_removing_a_key() {
     // making sure `account_dirty` mutated
     let known_urefs = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
-        // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+        // Overwrites a `base_key` to a different one before doing any operation as
+        // account `[0; 32]`
         runtime_context.base_key = Key::Hash([1; 32]);
 
         let err = runtime_context
@@ -771,7 +783,8 @@ fn should_verify_ownership_before_setting_action_threshold() {
     // making sure `account_dirty` mutated
     let known_urefs = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
-        // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+        // Overwrites a `base_key` to a different one before doing any operation as
+        // account `[0; 32]`
         runtime_context.base_key = Key::Hash([1; 32]);
 
         let err = runtime_context
@@ -848,12 +861,13 @@ fn validate_valid_purse_id_of_an_account() {
     let runtime_context =
         mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
 
-    // URef that has the same id as purse_id of an account gets validated successfully.
+    // URef that has the same id as purse_id of an account gets validated
+    // successfully.
     let purse_id = URef::new(mock_purse_id, AccessRights::READ_ADD_WRITE);
     assert!(runtime_context.validate_uref(&purse_id).is_ok());
 
-    // URef that has the same id as purse_id of an account gets validated successfully
-    // as the passed purse has only subset of the privileges
+    // URef that has the same id as purse_id of an account gets validated
+    // successfully as the passed purse has only subset of the privileges
     let purse_id = URef::new(mock_purse_id, AccessRights::READ);
     assert!(runtime_context.validate_uref(&purse_id).is_ok());
     let purse_id = URef::new(mock_purse_id, AccessRights::ADD);
@@ -861,8 +875,8 @@ fn validate_valid_purse_id_of_an_account() {
     let purse_id = URef::new(mock_purse_id, AccessRights::WRITE);
     assert!(runtime_context.validate_uref(&purse_id).is_ok());
 
-    // Purse ID that doesn't match account's purse_id should fail as it's also not in known
-    // urefs.
+    // Purse ID that doesn't match account's purse_id should fail as it's also not
+    // in known urefs.
     let purse_id = URef::new([53; 32], AccessRights::READ_ADD_WRITE);
     assert!(runtime_context.validate_uref(&purse_id).is_err());
 }

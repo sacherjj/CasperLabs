@@ -2,6 +2,7 @@
 name = "casperlabs-engine-storage"
 version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>"]
+edition = "2018"
 
 [dependencies]
 failure = "0.1.5"
@@ -9,6 +10,7 @@ lmdb = "0.8.0"
 wasmi = "0.4.2"
 contract-ffi = { path = "../contract-ffi", features = ["std", "gens"], package = "casperlabs-contract-ffi" }
 engine-shared = { path = "../engine-shared", package = "casperlabs-engine-shared" }
+engine-wasm-prep = { path = "../engine-wasm-prep", package = "casperlabs-engine-wasm-prep" }
 parking_lot = "0.7.1"
 
 [dev-dependencies]

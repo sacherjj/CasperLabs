@@ -5,7 +5,8 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use alloc::prelude::*;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
 use contract_ffi::contract_api::{

@@ -1,11 +1,10 @@
 #![no_std]
-#![feature(alloc)]
 
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
 
-use alloc::prelude::*;
+use alloc::prelude::v1::{String, Vec};
 
 use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
 use contract_ffi::contract_api::{

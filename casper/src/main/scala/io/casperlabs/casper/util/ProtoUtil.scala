@@ -548,6 +548,8 @@ object ProtoUtil {
         ipc.DeployPayload.Payload.StoredContractHash(ipc.StoredContractHash(hash, code.args))
       case Deploy.Code.Contract.Name(name) =>
         ipc.DeployPayload.Payload.StoredContractName(ipc.StoredContractName(name, code.args))
+      case Deploy.Code.Contract.Uref(uref) =>
+        ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, code.args))
       case Deploy.Code.Contract.Empty =>
         ipc.DeployPayload.Payload.Empty
     }

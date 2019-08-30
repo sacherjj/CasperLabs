@@ -1,5 +1,4 @@
 #![cfg_attr(not(test), no_std)]
-#![feature(alloc)]
 
 #[macro_use]
 extern crate alloc;
@@ -25,21 +24,24 @@ use crate::stakes::{ContractStakes, StakesProvider};
 /// Account used to run system functions (in particular `finalize_payment`).
 const SYSTEM_ACCOUNT: [u8; 32] = [0u8; 32];
 
-/// The uref name where the PoS purse is stored. It contains all staked motes, and all unbonded
-/// motes that are yet to be paid out.
+/// The uref name where the PoS purse is stored. It contains all staked motes,
+/// and all unbonded motes that are yet to be paid out.
 const BONDING_PURSE_KEY: &str = "pos_bonding_purse";
 
-/// The uref name where the PoS accepts payment for computation on behalf of validators.
+/// The uref name where the PoS accepts payment for computation on behalf of
+/// validators.
 const PAYMENT_PURSE_KEY: &str = "pos_payment_purse";
 
-/// The uref name where the PoS holds validator earnings before distributing them.
+/// The uref name where the PoS holds validator earnings before distributing
+/// them.
 const REWARDS_PURSE_KEY: &str = "pos_rewards_purse";
 
-/// The uref name where the PoS will refund unused payment back to the user. The uref
-/// this name corresponds to is set by the user.
+/// The uref name where the PoS will refund unused payment back to the user. The
+/// uref this name corresponds to is set by the user.
 const REFUND_PURSE_KEY: &str = "pos_refund_purse";
 
-/// The time from a bonding request until the bond becomes effective and part of the stake.
+/// The time from a bonding request until the bond becomes effective and part of
+/// the stake.
 const BOND_DELAY: u64 = 0;
 /// The time from an unbonding request until the stakes are paid out.
 const UNBOND_DELAY: u64 = 0;
@@ -55,13 +57,15 @@ const MAX_SPREAD: U512 = U512::MAX;
 const MAX_INCREASE: U512 = U512::MAX;
 /// The maximum decrease of stakes in a single unbonding request.
 const MAX_DECREASE: U512 = U512::MAX;
-/// The maximum increase of stakes in millionths of the total stakes in a single bonding request.
+/// The maximum increase of stakes in millionths of the total stakes in a single
+/// bonding request.
 const MAX_REL_INCREASE: u64 = 1_000_000_000;
-/// The maximum decrease of stakes in millionths of the total stakes in a single unbonding request.
+/// The maximum decrease of stakes in millionths of the total stakes in a single
+/// unbonding request.
 const MAX_REL_DECREASE: u64 = 900_000;
 
-/// Enqueues the deploy's creator for becoming a validator. The bond `amount` is paid from the
-/// purse `source`.
+/// Enqueues the deploy's creator for becoming a validator. The bond `amount` is
+/// paid from the purse `source`.
 fn bond<Q: QueueProvider, S: StakesProvider>(
     amount: U512,
     validator: PublicKey,
@@ -84,9 +88,10 @@ fn bond<Q: QueueProvider, S: StakesProvider>(
     Ok(())
 }
 
-/// Enqueues the deploy's creator for unbonding. Their vote weight as a validator is decreased
-/// immediately, but the funds will only be released after a delay. If `maybe_amount` is `None`,
-/// all funds are enqueued for withdrawal, terminating the validator status.
+/// Enqueues the deploy's creator for unbonding. Their vote weight as a
+/// validator is decreased immediately, but the funds will only be released
+/// after a delay. If `maybe_amount` is `None`, all funds are enqueued for
+/// withdrawal, terminating the validator status.
 fn unbond<Q: QueueProvider, S: StakesProvider>(
     maybe_amount: Option<U512>,
     validator: PublicKey,
@@ -100,8 +105,8 @@ fn unbond<Q: QueueProvider, S: StakesProvider>(
     let mut stakes = S::read()?;
     let payout = stakes.unbond(&validator, maybe_amount)?;
     S::write(&stakes);
-    // TODO: Make sure the destination is valid and the amount can be paid. The actual payment will
-    // be made later, after the unbonding delay.
+    // TODO: Make sure the destination is valid and the amount can be paid. The
+    // actual payment will be made later, after the unbonding delay.
     // contract_api::transfer_dry_run(POS_PURSE, dest, amount)?;
     queue.push(validator, payout, timestamp)?;
     Q::write_unbonding(&queue);
@@ -157,9 +162,9 @@ fn get_rewards_purse() -> Result<PurseId> {
     get_purse_id(REWARDS_PURSE_KEY).map_err(PurseLookupError::rewards)
 }
 
-/// Sets the purse where refunds (excess funds not spent to pay for computation) will be sent.
-/// Note that if this function is never called, the default location is the main purse of
-/// the deployer's account.
+/// Sets the purse where refunds (excess funds not spent to pay for computation)
+/// will be sent. Note that if this function is never called, the default
+/// location is the main purse of the deployer's account.
 fn set_refund(purse_id: URef) {
     if let Phase::Payment = contract_api::get_phase() {
         contract_api::add_uref(REFUND_PURSE_KEY, &Key::URef(purse_id));
@@ -216,7 +221,8 @@ fn finalize_payment(amount_spent: U512, account: PublicKey) {
             if let contract_api::PurseTransferResult::TransferError =
                 contract_api::transfer_from_purse_to_purse(payment_purse, purse, refund_amount)
             {
-                // on case of failure to transfer to refund purse we fall back on the account's main purse
+                // on case of failure to transfer to refund purse we fall back on the account's
+                // main purse
                 refund_to_account(payment_purse, account, refund_amount)
             }
         } else {
@@ -243,11 +249,15 @@ pub extern "C" fn call() {
         // Type of this method: `fn bond(amount: U512, purse: URef)`
         "bond" => {
             let validator = contract_api::get_caller();
-            let amount = contract_api::get_arg(1);
+            let amount: U512 = contract_api::get_arg(1);
+            if amount.is_zero() {
+                contract_api::revert(Error::BondTooSmall.into());
+            }
             let source_uref: URef = contract_api::get_arg(2);
             let source = PurseId::new(source_uref);
             // Transfer `amount` from the `source` purse to PoS internal purse.
-            // POS_PURSE is a constant, it is the PurseID of the proof-of-stake contract's own purse.
+            // POS_PURSE is a constant, it is the PurseID of the proof-of-stake contract's
+            // own purse.
             if contract_api::PurseTransferResult::TransferError
                 == contract_api::transfer_from_purse_to_purse(source, pos_purse, amount)
             {
@@ -255,7 +265,8 @@ pub extern "C" fn call() {
             }
             bond::<QueueLocal, ContractStakes>(amount, validator, timestamp).unwrap_or_revert();
 
-            // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
+            // TODO: Remove this and set nonzero delays once the system calls `step` in each
+            // block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
             for entry in unbonds {
                 contract_api::transfer_from_purse_to_account(
@@ -272,7 +283,8 @@ pub extern "C" fn call() {
             unbond::<QueueLocal, ContractStakes>(maybe_amount, validator, timestamp)
                 .unwrap_or_revert();
 
-            // TODO: Remove this and set nonzero delays once the system calls `step` in each block.
+            // TODO: Remove this and set nonzero delays once the system calls `step` in each
+            // block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
             for entry in unbonds {
                 if contract_api::TransferResult::TransferError
@@ -291,11 +303,13 @@ pub extern "C" fn call() {
             // This is called by the system in every block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
 
-            // Mateusz: Moved outside of `step` function so that it [step] can be unit tested.
+            // Mateusz: Moved outside of `step` function so that it [step] can be unit
+            // tested.
             for entry in unbonds {
-                // TODO: We currently ignore `TransferResult::TransferError`s here, since we can't
-                // recover from them and we shouldn't retry indefinitely. That would mean the
-                // contract just keeps the money forever, though.
+                // TODO: We currently ignore `TransferResult::TransferError`s here, since we
+                // can't recover from them and we shouldn't retry indefinitely.
+                // That would mean the contract just keeps the money forever,
+                // though.
                 contract_api::transfer_from_purse_to_account(
                     pos_purse,
                     entry.validator,

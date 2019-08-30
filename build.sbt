@@ -553,7 +553,8 @@ lazy val benchmarks = (project in file("benchmarks"))
         ExecCmd("ENTRYPOINT", "bin/casperlabs-benchmarks"),
         ExecCmd("CMD", "run")
       )
-    }
+    },
+    libraryDependencies ++= commonDependencies
   )
   .dependsOn(client)
 

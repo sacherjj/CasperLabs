@@ -1,11 +1,9 @@
 #![no_std]
 #![feature(
-    alloc,
     allocator_api,
     core_intrinsics,
     lang_items,
     alloc_error_handler,
-    maybe_uninit,
     try_reserve
 )]
 

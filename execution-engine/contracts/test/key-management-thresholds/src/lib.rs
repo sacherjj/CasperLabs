@@ -1,5 +1,5 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
 extern crate contract_ffi;
@@ -22,7 +22,8 @@ pub extern "C" fn call() {
         // executed with weight >= 1
         add_associated_key(PublicKey::new([42; 32]), Weight::new(100))
             .unwrap_or_else(|_| revert(100));
-        // this key will be used to test permission denied when removing keys with low total weight
+        // this key will be used to test permission denied when removing keys with low
+        // total weight
         add_associated_key(PublicKey::new([43; 32]), Weight::new(1))
             .unwrap_or_else(|_| revert(101));
         add_associated_key(PublicKey::new([1; 32]), Weight::new(1)).unwrap_or_else(|_| revert(102));

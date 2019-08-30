@@ -1,5 +1,5 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 #[macro_use]
 extern crate alloc;
@@ -44,8 +44,8 @@ mod malicious_ffi {
     }
 }
 
-// This is half-baked contract_api::call_contract with changed `extra_urefs` parameter
-// with a desired payload that's supposed to bring the node down.
+// This is half-baked contract_api::call_contract with changed `extra_urefs`
+// parameter with a desired payload that's supposed to bring the node down.
 fn my_call_contract<A: ArgsParser>(c_ptr: ContractPointer, args: &A) {
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = to_ptr(&contract_key);
