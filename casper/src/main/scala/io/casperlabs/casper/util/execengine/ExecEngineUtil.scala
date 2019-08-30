@@ -49,7 +49,7 @@ object ExecEngineUtil {
       preStateHash <- computePrestate[F](merged)
       // TODO: Add Deploy selection strategy that will build a block until condition is met.
       // Example conditions: number of deploys, size of a block, gas spent in the block etc.
-      processedDeployResults <- hashes.sliding(100).toList.flatTraverse { batch =>
+      processedDeployResults <- hashes.grouped(100).toList.flatTraverse { batch =>
                                  for {
                                    deploys <- DeployBuffer[F].getByHashes(batch.toList)
                                    dr <- processDeploys[F](
