@@ -78,7 +78,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
       validate = _ > 0,
       required = false,
-      default = Some(1L)
+      default = Some(2L)
     )
 
     val session =
@@ -159,7 +159,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
       validate = _ > 1,
       required = false,
-      default = Some(1L)
+      default = Some(2L)
     )
 
     val session =
@@ -319,7 +319,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
       validate = _ > 0,
       required = false,
-      default = Some(1L)
+      default = Some(2L)
     )
 
     val privateKey =
@@ -360,7 +360,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
       validate = _ > 0,
       required = false,
-      default = Some(1L)
+      default = Some(2L)
     )
 
     val privateKey =
@@ -401,7 +401,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
       validate = _ > 0,
       required = false,
-      default = Some(1L)
+      default = Some(2L)
     )
 
     val privateKey =
