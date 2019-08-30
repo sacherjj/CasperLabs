@@ -94,7 +94,8 @@ fn should_run_successful_bond_and_unbond() {
     );
     assert!(add_keys.contains_key(&lookup_key));
 
-    // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside the test contract
+    // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside
+    // the test contract
     assert_eq!(
         get_pos_bonding_purse_balance(result.builder()),
         U512::from(GENESIS_VALIDATOR_STAKE + GENESIS_ACCOUNT_STAKE)
@@ -153,14 +154,16 @@ fn should_run_successful_bond_and_unbond() {
     );
     assert!(add_keys.contains_key(&lookup_key));
 
-    // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside the test contract
+    // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside
+    // the test contract
     assert_eq!(
         get_pos_bonding_purse_balance(result.builder()),
         U512::from(GENESIS_VALIDATOR_STAKE + GENESIS_ACCOUNT_STAKE + ACCOUNT_1_STAKE)
     );
 
     //
-    // Stage 2a - Account 1 unbonds by decreasing less than 50% (and is still in the queue)
+    // Stage 2a - Account 1 unbonds by decreasing less than 50% (and is still in the
+    // queue)
     //
 
     let result = WasmTestBuilder::from_result(result)
@@ -203,11 +206,13 @@ fn should_run_successful_bond_and_unbond() {
         base16::encode_lower(&ACCOUNT_1_ADDR),
         ACCOUNT_1_UNBOND_2
     );
-    // Account 1 is still tracked anymore in the bonding queue with different uref name
+    // Account 1 is still tracked anymore in the bonding queue with different uref
+    // name
     assert!(pos_contract.urefs_lookup().contains_key(&lookup_key));
 
     //
-    // Stage 2b - Genesis unbonds by decreasing less than 50% (and is still in the queue)
+    // Stage 2b - Genesis unbonds by decreasing less than 50% (and is still in the
+    // queue)
     //
     // Genesis account unbonds less than 50% of his stake
     let result = WasmTestBuilder::from_result(result)
@@ -265,7 +270,8 @@ fn should_run_successful_bond_and_unbond() {
         U512::from(ACCOUNT_1_SEED_AMOUNT)
     );
 
-    // POS bonding purse contains now genesis validator (50k) + genesis account (55k)
+    // POS bonding purse contains now genesis validator (50k) + genesis account
+    // (55k)
     assert_eq!(
         get_pos_bonding_purse_balance(result.builder()),
         U512::from(GENESIS_VALIDATOR_STAKE + GENESIS_ACCOUNT_UNBOND_2)
@@ -318,14 +324,16 @@ fn should_run_successful_bond_and_unbond() {
         base16::encode_lower(&GENESIS_ADDR),
         GENESIS_ACCOUNT_UNBOND_2
     );
-    // Genesis is still tracked anymore in the bonding queue with different uref name
+    // Genesis is still tracked anymore in the bonding queue with different uref
+    // name
     assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
 
     //
     // Final checks on validator queue
     //
 
-    // Account 1 is still tracked anymore in the bonding queue with any amount suffix
+    // Account 1 is still tracked anymore in the bonding queue with any amount
+    // suffix
     assert_eq!(
         pos_contract
             .urefs_lookup()

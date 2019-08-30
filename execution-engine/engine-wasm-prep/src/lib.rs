@@ -1,6 +1,10 @@
 extern crate parity_wasm;
 extern crate pwasm_utils;
 
+extern crate contract_ffi;
+#[cfg(test)]
+extern crate engine_shared;
+
 pub mod wasm_costs;
 
 use parity_wasm::elements::{Error as ParityWasmError, Module};

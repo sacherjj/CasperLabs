@@ -50,10 +50,11 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
         //
         // Gorski writes:
         //   I'm worried that this can lead to overwriting of values in the local state.
-        //   Since it accepts a raw byte array it's possible to construct one by hand. Of course,
-        //   a key can be overwritten only when that write is performed in the "owner" context
-        //   so it aligns with other semantics of write but I would prefer if were able to enforce
-        //   uniqueness somehow.
+        //   Since it accepts a raw byte array it's possible to construct one by hand.
+        // Of course,   a key can be overwritten only when that write is
+        // performed in the "owner" context   so it aligns with other semantics
+        // of write but I would prefer if were able to enforce   uniqueness
+        // somehow.
         contract_api::write_local(purse_id.raw_id(), balance_uref);
 
         purse_id

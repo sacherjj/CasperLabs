@@ -201,7 +201,8 @@ impl Executor<Module> for WasmiExecutor {
         let gas_counter = 0u64; // maybe const?
         let fn_store_id = 0u32; // maybe const?
 
-        // Snapshot of effects before execution, so in case of error only nonce update can be returned.
+        // Snapshot of effects before execution, so in case of error only nonce update
+        // can be returned.
         let effects_snapshot = state.borrow().effect();
 
         let args: Vec<Vec<u8>> = if args.is_empty() {
@@ -244,9 +245,11 @@ impl Executor<Module> for WasmiExecutor {
                     let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
                     match downcasted_error {
                         Error::Ret(ref _ret_urefs) => {
-                            // NOTE: currently, ExecutionResult does not include runtime.result or extra urefs
-                            //  and thus we cannot get back a value from the executed contract...
-                            // TODO?: add ability to include extra_urefs and runtime.result to ExecutionResult::Success
+                            // NOTE: currently, ExecutionResult does not include runtime.result or
+                            // extra urefs  and thus we cannot get back
+                            // a value from the executed contract...
+                            // TODO?: add ability to include extra_urefs and runtime.result to
+                            // ExecutionResult::Success
 
                             return ExecutionResult::Success {
                                 effect: runtime.context().effect(),

@@ -105,7 +105,8 @@ fn finalize_payment_should_pay_validators_and_refund_user() {
         account_post_balance
     );
 
-    assert!(payment_post_balance.is_zero()); // payment purse always ends with zero balance
+    assert!(payment_post_balance.is_zero()); // payment purse always ends with
+                                             // zero balance
 }
 
 #[ignore]
@@ -170,7 +171,8 @@ fn finalize_payment_should_refund_to_specified_purse() {
     );
 
     assert!(get_pos_refund_purse(&builder).is_none()); // refund_purse always ends unset
-    assert!(payment_post_balance.is_zero()); // payment purse always ends with zero balance
+    assert!(payment_post_balance.is_zero()); // payment purse always ends with
+                                             // zero balance
 }
 
 // ------------- utility functions -------------------- //

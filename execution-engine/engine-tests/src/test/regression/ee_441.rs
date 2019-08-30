@@ -16,7 +16,8 @@ fn get_uref(key: Key) -> URef {
 }
 
 fn do_pass(pass: &str) -> (URef, URef) {
-    // This test runs a contract that's after every call extends the same key with more data
+    // This test runs a contract that's after every call extends the same key with
+    // more data
     let transforms = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
@@ -57,11 +58,13 @@ fn should_properly_pass_rng_state_to_subcontracts() {
     // second pass calls new_uref, and uref2 is returned from a sub call
     let (pass3_uref1, pass3_uref2) = do_pass("pass3");
 
-    // First urefs from each pass should yield same results where pass1 is the baseline
+    // First urefs from each pass should yield same results where pass1 is the
+    // baseline
     assert_eq!(pass1_uref1.addr(), pass2_uref1.addr());
     assert_eq!(pass2_uref1.addr(), pass3_uref1.addr());
 
-    // Second urefs from each pass should yield the same result where pass1 is the baseline
+    // Second urefs from each pass should yield the same result where pass1 is the
+    // baseline
     assert_eq!(pass1_uref2.addr(), pass2_uref2.addr());
     assert_eq!(pass2_uref2.addr(), pass3_uref2.addr());
 }

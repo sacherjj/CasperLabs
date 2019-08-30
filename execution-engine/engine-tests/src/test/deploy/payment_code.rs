@@ -607,3 +607,87 @@ fn should_correctly_charge_when_session_code_succeeds() {
         "no net resources should be gained or lost post-distribution"
     );
 }
+
+#[ignore]
+#[test]
+fn independent_standard_payments_should_not_write_the_same_keys() {
+    let genesis_public_key = PublicKey::new(GENESIS_ADDR);
+    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let payment_purse_amount = 10_000_000;
+
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
+
+    let mut builder = WasmTestBuilder::new(engine_config);
+
+    let setup_exec_request = {
+        let deploy = DeployBuilder::new()
+            .with_address(GENESIS_ADDR)
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (account_1_public_key, U512::from(payment_purse_amount)),
+            )
+            .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
+            .with_authorization_keys(&[genesis_public_key])
+            .with_nonce(1)
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    // create another account via transfer
+    builder
+        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .exec_with_exec_request(setup_exec_request)
+        .expect_success()
+        .commit();
+
+    let exec_request_from_genesis = {
+        let deploy = DeployBuilder::new()
+            .with_address(GENESIS_ADDR)
+            .with_session_code("do_nothing.wasm", ())
+            .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
+            .with_authorization_keys(&[genesis_public_key])
+            .with_nonce(2)
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    let exec_request_from_account_1 = {
+        let deploy = DeployBuilder::new()
+            .with_address(ACCOUNT_1_ADDR)
+            .with_session_code("do_nothing.wasm", ())
+            .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
+            .with_authorization_keys(&[account_1_public_key])
+            .with_nonce(1)
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    // run two independent deploys
+    builder
+        .exec_with_exec_request(exec_request_from_genesis)
+        .expect_success()
+        .commit()
+        .exec_with_exec_request(exec_request_from_account_1)
+        .expect_success()
+        .commit();
+
+    let transforms = builder.get_transforms();
+    let transforms_from_genesis = &transforms[1];
+    let transforms_from_account_1 = &transforms[2];
+
+    // confirm the two deploys have no overlapping writes
+    let common_write_keys = transforms_from_genesis.keys().filter(|k| {
+        match (
+            transforms_from_genesis.get(k),
+            transforms_from_account_1.get(k),
+        ) {
+            (Some(Transform::Write(_)), Some(Transform::Write(_))) => true,
+            _ => false,
+        }
+    });
+
+    assert_eq!(common_write_keys.count(), 0);
+}

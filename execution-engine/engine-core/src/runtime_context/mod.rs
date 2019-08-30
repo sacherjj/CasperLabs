@@ -134,8 +134,9 @@ where
     }
 
     /// Remove URef from the `known_urefs` map of the current context.
-    /// It removes both from the ephemeral map (RuntimeContext::known_urefs) but also
-    /// persistable map (one that is found in the TrackingCopy/GlobalState).
+    /// It removes both from the ephemeral map (RuntimeContext::known_urefs) but
+    /// also persistable map (one that is found in the
+    /// TrackingCopy/GlobalState).
     pub fn remove_uref(&mut self, name: &str) -> Result<(), Error> {
         match self.base_key() {
             public_key @ Key::Account(_) => {
@@ -259,10 +260,11 @@ where
     }
 
     /// Generates new function address.
-    /// Function address is deterministic. It is a hash of public key, nonce and `fn_store_id`,
-    /// which is a counter that is being incremented after every function generation.
-    /// If function address was based only on account's public key and deploy's nonce,
-    /// then all function addresses generated within one deploy would have been the same.
+    /// Function address is deterministic. It is a hash of public key, nonce and
+    /// `fn_store_id`, which is a counter that is being incremented after
+    /// every function generation. If function address was based only on
+    /// account's public key and deploy's nonce, then all function addresses
+    /// generated within one deploy would have been the same.
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
         pre_hash_bytes.extend_from_slice(&self.account().pub_key());
@@ -292,8 +294,9 @@ where
 
     /// Adds `key` to the map of named keys of current context.
     pub fn add_uref(&mut self, name: String, key: Key) -> Result<(), Error> {
-        // No need to perform actual validation on the base key because an account or contract (i.e. the
-        // element stored under `base_key`) is allowed to add new named keys to itself.
+        // No need to perform actual validation on the base key because an account or
+        // contract (i.e. the element stored under `base_key`) is allowed to add
+        // new named keys to itself.
         let base_key = Validated::new(self.base_key(), Validated::valid)?;
 
         let validated_value = Validated::new(Value::NamedKey(name.clone(), key), |v| {
@@ -475,9 +478,10 @@ where
         }
     }
 
-    /// Validates whether key is not forged (whether it can be found in the `known_urefs`)
-    /// and whether the version of a key that contract wants to use, has access rights
-    /// that are less powerful than access rights' of the key in the `known_urefs`.
+    /// Validates whether key is not forged (whether it can be found in the
+    /// `known_urefs`) and whether the version of a key that contract wants
+    /// to use, has access rights that are less powerful than access rights'
+    /// of the key in the `known_urefs`.
     pub fn validate_key(&self, key: &Key) -> Result<(), Error> {
         let uref = match key {
             Key::URef(uref) => uref,
@@ -488,8 +492,8 @@ where
 
     pub fn validate_uref(&self, uref: &URef) -> Result<(), Error> {
         if self.account.purse_id().value().addr() == uref.addr() {
-            // If passed uref matches account's purse then we have to also validate their access
-            // rights.
+            // If passed uref matches account's purse then we have to also validate their
+            // access rights.
             if let Some(rights) = self.account.purse_id().value().access_rights() {
                 if let Some(uref_rights) = uref.access_rights() {
                     // Access rights of the passed uref, and the account's purse_id should match
@@ -591,10 +595,11 @@ where
         }
     }
 
-    /// Adds `value` to the `key`. The premise for being able to `add` value is that
-    /// the type of it [value] can be added (is a Monoid). If the values can't be added,
-    /// either because they're not a Monoid or if the value stored under `key` has different type,
-    /// then `TypeMismatch` errors is returned.
+    /// Adds `value` to the `key`. The premise for being able to `add` value is
+    /// that the type of it [value] can be added (is a Monoid). If the
+    /// values can't be added, either because they're not a Monoid or if the
+    /// value stored under `key` has different type, then `TypeMismatch`
+    /// errors is returned.
     pub fn add_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
         let validated_key = Validated::new(key, |k| {
             self.validate_addable(&k).and(self.validate_key(&k))

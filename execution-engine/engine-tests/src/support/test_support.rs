@@ -453,7 +453,8 @@ pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> Stri
 /// Builder for simple WASM test
 #[derive(Clone)]
 pub struct WasmTestBuilder {
-    /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for EngineState`
+    /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for
+    /// EngineState`
     engine_state: Rc<EngineState<InMemoryGlobalState>>,
     exec_responses: Vec<ExecResponse>,
     genesis_hash: Option<Vec<u8>>,
