@@ -61,7 +61,11 @@ object ExecEngineUtil {
                                    pdr = zipDeploysResults(deploys, dr).toList
                                  } yield pdr
                                }
-      invalidDeploys <- processedDeployResults.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
+      // All the deploys that do not change the global state in a way that can conflict with others:
+      // which can be only`ExecutionError` now as `InvalidNonce` and `PreconditionFailure` has been
+      // filtered out when creating block and when we're validating block it shouldn't include those either.
+      (conflictFree, effectfulDeploys) = ProcessedDeployResult.split(processedDeployResults)
+      invalidDeploys <- conflictFree.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
                          case (acc, d: InvalidNonceDeploy) =>
                            acc.copy(invalidNonceDeploys = d :: acc.invalidNonceDeploys).pure[F]
                          case (acc, d: PreconditionFailure) =>
@@ -71,10 +75,8 @@ object ExecEngineUtil {
                            ) as {
                              acc.copy(preconditionFailures = d :: acc.preconditionFailures)
                            }
-                         case (acc, _) =>
-                           acc.pure[F]
                        }
-      deployEffects                 = findCommutingEffects(processedDeployResults)
+      deployEffects                 = findCommutingEffects(effectfulDeploys)
       (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
       commitResult                  <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       //TODO: Remove this logging at some point
@@ -115,39 +117,33 @@ object ExecEngineUtil {
       .runGenesis(deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
       .rethrow
 
+  /** Chooses a set of commuting effects.
+    *
+    * Set is a FIFO one - the very first commuting effect will be chosen,
+    * meaning even if there's a larger set of commuting effect later in that list
+    * they will be rejected.
+    *
+    * @param deployEffects List of effects that deploy made on the GlobalState.
+    * @return List of deploy effects that commute.
+    */
   //TODO: Logic for picking the commuting group? Prioritize highest revenue? Try to include as many deploys as possible?
   def findCommutingEffects(
-      deployEffects: Seq[ProcessedDeployResult]
-  ): Seq[ProcessedDeployResult] = {
-    // All the deploys that do not change the global state in a way that can conflict with others:
-    // which can be only`ExecutionError` now as `InvalidNonce` and `PreconditionFailure` has been
-    // filtered out when creating block and when we're validating block it shouldn't include those either.
-    val (conflictFree, mergeCandidates) =
-      deployEffects.partition(!_.isInstanceOf[ExecutionSuccessful])
-
-    val nonConflicting = mergeCandidates match {
-      case Nil => List.empty[ProcessedDeployResult]
+      deployEffects: Seq[DeployEffects]
+  ): Seq[DeployEffects] =
+    deployEffects match {
+      case Nil => List.empty[DeployEffects]
       case list =>
         val (result, _) =
-          list.foldLeft(List.empty[ProcessedDeployResult] -> Map.empty[state.Key, Op]) {
-            case (unchanged @ (acc, totalOps), next @ ExecutionSuccessful(_, effects, _)) =>
-              val ops = Op.fromIpcEntry(effects.opMap)
+          list.foldLeft(List.empty[DeployEffects] -> Map.empty[state.Key, Op]) {
+            case (unchanged @ (acc, totalOps), next) =>
+              val ops = Op.fromIpcEntry(next.effects.opMap)
               if (totalOps ~ ops)
                 (next :: acc, totalOps + ops)
               else
                 unchanged
-            case _ => ???
           }
-
         result
     }
-
-    // We include errors because we define them as
-    // commuting with everything since we will never
-    // re-run them (this is a policy decision we have made) and
-    // they touch no keys because we rolled back the changes
-    nonConflicting ++ conflictFree
-  }
 
   def zipDeploysResults(
       deploys: Seq[Deploy],
@@ -156,9 +152,9 @@ object ExecEngineUtil {
     deploys.zip(results).map((ProcessedDeployResult.apply _).tupled)
 
   def unzipEffectsAndDeploys(
-      commutingEffects: Seq[ProcessedDeployResult]
+      commutingEffects: Seq[DeployEffects]
   ): Seq[(Block.ProcessedDeploy, Seq[TransformEntry])] =
-    commutingEffects.collect {
+    commutingEffects map {
       case ExecutionSuccessful(deploy, effects, cost) =>
         Block.ProcessedDeploy(
           Some(deploy),
@@ -205,8 +201,9 @@ object ExecEngineUtil {
                              deploys,
                              protocolVersion
                            )
-        deployEffects = zipDeploysResults(deploys, processedDeploys)
-        transformMap = (findCommutingEffects _ andThen unzipEffectsAndDeploys)(deployEffects)
+        deployEffects    = zipDeploysResults(deploys, processedDeploys)
+        effectfulDeploys = ProcessedDeployResult.split(deployEffects.toList)._2
+        transformMap = (findCommutingEffects _ andThen unzipEffectsAndDeploys)(effectfulDeploys)
           .flatMap(_._2)
       } yield transformMap
     }
