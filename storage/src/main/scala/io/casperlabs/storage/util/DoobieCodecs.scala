@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import doobie._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{BlockSummary, Deploy}
+import io.casperlabs.storage.BlockMsgWithTransform
 
 trait DoobieCodecs {
   protected implicit val metaByteString: Meta[ByteString] =
@@ -29,4 +30,7 @@ trait DoobieCodecs {
 
   protected implicit val metaBlockSummary: Meta[BlockSummary] =
     Meta[Array[Byte]].imap(BlockSummary.parseFrom)(_.toByteString.toByteArray)
+
+  protected implicit val metaBlockMsgWithTransforms: Meta[BlockMsgWithTransform] =
+    Meta[Array[Byte]].imap(BlockMsgWithTransform.parseFrom)(_.toByteString.toByteArray)
 }

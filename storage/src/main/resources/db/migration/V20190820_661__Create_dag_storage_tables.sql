@@ -31,11 +31,15 @@ CREATE TABLE validator_latest_messages
 
 CREATE TABLE block_metadata
 (
-    block_hash BLOB    NOT NULL PRIMARY KEY,
-    validator  BLOB    NOT NULL,
-    rank       INTEGER NOT NULL,
-    data       BLOB    NOT NULL
+    block_hash     BLOB    NOT NULL PRIMARY KEY,
+    block_hash_hex TEXT    NOT NULL,
+    validator      BLOB    NOT NULL,
+    rank           INTEGER NOT NULL,
+    data           BLOB    NOT NULL
 );
+
+CREATE UNIQUE INDEX idx_block_metadata_hex
+    ON block_metadata (block_hash_hex);
 
 CREATE INDEX idx_block_metadata_rank_block_hash
     ON block_metadata (rank, block_hash);
