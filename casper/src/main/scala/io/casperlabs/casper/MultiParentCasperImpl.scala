@@ -437,12 +437,10 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Metrics: Time: 
 
     (for {
       candidateBlockHashes <- fs2.Stream.eval(candidateBlockHashesF)
-      // Only send the oldest deploy per account. This should work without nonces by sending the oldest
-      // deploy. Once we have deploy dependencies we should replace that query with more suitable one.
-      // When support for SEQ/PAR blocks is added, then we can send all deploys for the account.
+      // Only send the next nonce per account. This will change once the nonce check is removed in the EE
+      // and support for SEQ/PAR blocks is added, then we can send all deploys for the account.
       remainingHashes <- DeployBuffer[F]
-                          .readAccountPendingOldest()
-                          .map(_.deployHash)
+                          .readAccountLowestNonce()
                           .filter(candidateBlockHashes.contains(_))
     } yield remainingHashes).compile.to[Set]
   }
