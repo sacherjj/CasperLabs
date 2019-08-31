@@ -82,9 +82,8 @@ class NodeRuntime private[node] (
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
 
   // intra-node gossiping port.
-  private val port             = conf.server.port
-  private val kademliaPort     = conf.server.kademliaPort
-  private val blockStoragePath = conf.server.dataDir.resolve("blockstorage")
+  private val port         = conf.server.port
+  private val kademliaPort = conf.server.kademliaPort
 
   /**
     * Main node entry. It will:
@@ -163,16 +162,13 @@ class NodeRuntime private[node] (
                                                         )
         _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
-        implicit0(blockStorage: BlockStorage[Effect]) <- FileLMDBIndexBlockStorage[Effect](
-                                                          conf.server.dataDir,
-                                                          blockStoragePath,
-                                                          100L * 1024L * 1024L * 4096L
-                                                        ) evalMap { underlying =>
-                                                          CachingBlockStorage[Effect](
-                                                            underlying,
-                                                            maxSizeBytes =
-                                                              conf.blockstorage.cacheMaxSizeBytes
-                                                          )
+        implicit0(blockStorage: BlockStorage[Effect]) <- SQLiteBlockStorage[Effect].evalMap {
+                                                          underlying =>
+                                                            CachingBlockStorage[Effect](
+                                                              underlying,
+                                                              maxSizeBytes =
+                                                                conf.blockstorage.cacheMaxSizeBytes
+                                                            )
                                                         }
 
         implicit0(dagStorage: DagStorage[Effect]) <- SQLiteDagStorage[Effect]

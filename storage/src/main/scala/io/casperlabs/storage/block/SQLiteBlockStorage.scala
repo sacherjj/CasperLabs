@@ -101,6 +101,13 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
 }
 
 object SQLiteBlockStorage {
+  def apply[F[_]](
+      implicit xa: Transactor[F],
+      metricsF: Metrics[F],
+      syncF: Sync[F],
+      fs2Compiler: Fs2Compiler[F]
+  ): Resource[F, BlockStorage[F]] = Resource.make(create[F])(_.close())
+
   def create[F[_]](
       implicit xa: Transactor[F],
       metricsF: Metrics[F],
