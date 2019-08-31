@@ -19,6 +19,7 @@ import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.casper.consensus.state.{Key, Value}
+import io.casperlabs.casper.deploybuffer.DeployBuffer
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -38,21 +39,28 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: MonadThrowable: BlockStorage: Log: ExecutionEngineService](
+  def computeDeploysCheckpoint[F[_]: MonadThrowable: BlockStorage: DeployBuffer: Log: ExecutionEngineService](
       merged: MergeResult[TransformMap, Block],
-      deploys: Seq[Deploy],
+      hashes: Set[DeployHash],
       blocktime: Long,
       protocolVersion: state.ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
       preStateHash <- computePrestate[F](merged)
-      processedDeploys <- processDeploys[F](
-                           preStateHash,
-                           blocktime,
-                           deploys,
-                           protocolVersion
-                         )
-      processedDeployResults = zipDeploysResults(deploys, processedDeploys).toList
+      // TODO: Add Deploy selection strategy that will build a block until condition is met.
+      // Example conditions: number of deploys, size of a block, gas spent in the block etc.
+      processedDeployResults <- hashes.grouped(100).toList.flatTraverse { batch =>
+                                 for {
+                                   deploys <- DeployBuffer[F].getByHashes(batch.toList)
+                                   dr <- processDeploys[F](
+                                          preStateHash,
+                                          blocktime,
+                                          deploys,
+                                          protocolVersion
+                                        )
+                                   pdr = zipDeploysResults(deploys, dr).toList
+                                 } yield pdr
+                               }
       invalidDeploys <- processedDeployResults.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
                          case (acc, d: InvalidNonceDeploy) =>
                            acc.copy(invalidNonceDeploys = d :: acc.invalidNonceDeploys).pure[F]

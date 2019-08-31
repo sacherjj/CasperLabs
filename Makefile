@@ -11,7 +11,7 @@ $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -oE 'v?[0-9]+(\.[0-9]){1,2}$$' |
 # But with comm/build.rs compiling .proto to .rs every time we build the timestamps are updated as well, so filter those and depend on .proto instead.
 RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" -o -name "*.proto" \) \
 	| grep -v target \
-	| grep -v -e ipc.*\.rs)
+	| grep -v -E '(ipc|transforms).*\.rs')
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
 TS_SRC := $(shell find explorer/ui/src explorer/server/src explorer/grpc/generated -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))

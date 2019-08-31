@@ -15,6 +15,7 @@ import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.ipc
 import io.casperlabs.casper.consensus.state._
+import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.ipc.{
   DeployResult,
   ExecutionEffect,
@@ -116,11 +117,13 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       executionEngineService: ExecutionEngineService[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
-      blocktime <- Task.delay(System.currentTimeMillis)
+      blocktime                                   <- Task.delay(System.currentTimeMillis)
+      implicit0(deployBuffer: DeployBuffer[Task]) <- MockDeployBuffer.create[Task]()
+      _                                           <- deployBuffer.addAsPending(deploy.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
-                          deploy,
+                          deploy.map(_.deployHash).toSet,
                           blocktime,
                           protocolVersion
                         )
