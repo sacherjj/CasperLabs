@@ -24,8 +24,6 @@ case class DeploysCheckpoint(
     postStateHash: StateHash,
     bondedValidators: Seq[io.casperlabs.casper.consensus.Bond],
     deploysForBlock: Seq[Block.ProcessedDeploy],
-    invalidNonceDeploys: Seq[InvalidNonceDeploy],
-    deploysToDiscard: Seq[PreconditionFailure],
     protocolVersion: state.ProtocolVersion
 )
 
@@ -59,24 +57,11 @@ object ExecEngineUtil {
                                    pdr = zipDeploysResults(deploys, dr).toList
                                  } yield pdr
                                }
-      // All the deploys that do not change the global state in a way that can conflict with others:
-      // which can be only`ExecutionError` now as `InvalidNonce` and `PreconditionFailure` has been
-      // filtered out when creating block and when we're validating block it shouldn't include those either.
-      (conflictFree, effectfulDeploys) = ProcessedDeployResult.split(processedDeployResults)
-      invalidDeploys <- conflictFree.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
-                         case (acc, d: InvalidNonceDeploy) =>
-                           acc.copy(invalidNonceDeploys = d :: acc.invalidNonceDeploys).pure[F]
-                         case (acc, d: PreconditionFailure) =>
-                           // Log precondition failures as we will be getting rid of them.
-                           Log[F].warn(
-                             s"Deploy ${PrettyPrinter.buildString(d.deploy.deployHash)} failed precondition error: ${d.errorMessage}"
-                           ) as {
-                             acc.copy(preconditionFailures = d :: acc.preconditionFailures)
-                           }
-                       }
-      deployEffects                 = findCommutingEffects(effectfulDeploys)
-      (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
-      commitResult                  <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
+      (invalidDeploys, effectfulDeploys) = ProcessedDeployResult.split(processedDeployResults)
+      _                                  <- handleInvalidDeploys[F](invalidDeploys)
+      deployEffects                      = findCommutingEffects(effectfulDeploys)
+      (deploysForBlock, transforms)      = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
+      commitResult                       <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       //TODO: Remove this logging at some point
       msgBody = transforms.flatten
         .map(t => {
@@ -92,10 +77,37 @@ object ExecEngineUtil {
       commitResult.postStateHash,
       commitResult.bondedValidators,
       deploysForBlock,
-      invalidDeploys.invalidNonceDeploys,
-      invalidDeploys.preconditionFailures,
       protocolVersion
     )
+
+  // Discard deploys that will never be included because they failed some precondition.
+  // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included
+  // in the past of the new fork, it wouldn't hit this as the nonce would be what we expect.
+  // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
+  // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
+  // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
+  private def handleInvalidDeploys[F[_]: MonadThrowable: DeployBuffer: Log](
+      invalidDeploys: List[NoEffectsFailure]
+  ): F[Unit] =
+    for {
+      invalidDeploys <- invalidDeploys.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
+                         case (acc, d: InvalidNonceDeploy) =>
+                           acc.copy(invalidNonceDeploys = d :: acc.invalidNonceDeploys).pure[F]
+                         case (acc, d: PreconditionFailure) =>
+                           // Log precondition failures as we will be getting rid of them.
+                           Log[F].warn(
+                             s"Deploy ${PrettyPrinter.buildString(d.deploy.deployHash)} failed precondition error: ${d.errorMessage}"
+                           ) as {
+                             acc.copy(preconditionFailures = d :: acc.preconditionFailures)
+                           }
+                       }
+      // We don't have to put InvalidNonce deploys back to the buffer,
+      // as by default buffer is cleared when deploy gets included in
+      // the finalized block. If that strategy ever changes, we will have to
+      // put them back into the buffer explicitly.
+      _ <- DeployBuffer[F]
+            .markAsDiscarded(invalidDeploys.preconditionFailures.map(_.deploy)) whenA invalidDeploys.preconditionFailures.nonEmpty
+    } yield ()
 
   private def processDeploys[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
       prestate: StateHash,
