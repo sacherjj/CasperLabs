@@ -1,6 +1,5 @@
 package io.casperlabs.casper.util.execengine
 
-import cats.effect.Sync
 import cats.implicits._
 import cats.kernel.Monoid
 import cats.{Foldable, Monad, MonadError}
@@ -8,7 +7,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{Block, Deploy}
-import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
@@ -124,17 +122,21 @@ object ExecEngineUtil {
     * they will be rejected.
     *
     * @param deployEffects List of effects that deploy made on the GlobalState.
+    * @param init Initial set of deploy effects with which the rest of input `deployEffects`
+    *             has to commute with.
+    *
     * @return List of deploy effects that commute.
     */
   //TODO: Logic for picking the commuting group? Prioritize highest revenue? Try to include as many deploys as possible?
   def findCommutingEffects(
-      deployEffects: Seq[DeployEffects]
-  ): Seq[DeployEffects] =
+      deployEffects: Seq[DeployEffects],
+      init: (List[DeployEffects], OpMap[state.Key]) = (List.empty, Map.empty)
+  ): List[DeployEffects] =
     deployEffects match {
-      case Nil => List.empty[DeployEffects]
+      case Nil => init._1
       case list =>
         val (result, _) =
-          list.foldLeft(List.empty[DeployEffects] -> Map.empty[state.Key, Op]) {
+          list.foldLeft(init) {
             case (unchanged @ (acc, totalOps), next) =>
               val ops = Op.fromIpcEntry(next.effects.opMap)
               if (totalOps ~ ops)
@@ -203,7 +205,7 @@ object ExecEngineUtil {
                            )
         deployEffects    = zipDeploysResults(deploys, processedDeploys)
         effectfulDeploys = ProcessedDeployResult.split(deployEffects.toList)._2
-        transformMap = (findCommutingEffects _ andThen unzipEffectsAndDeploys)(effectfulDeploys)
+        transformMap = unzipEffectsAndDeploys(findCommutingEffects(effectfulDeploys))
           .flatMap(_._2)
       } yield transformMap
     }
