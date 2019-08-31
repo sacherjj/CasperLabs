@@ -10,10 +10,10 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.helper.{
-  DagStorageTestFixture,
   HashSetCasperTestNode,
   NoOpsCasperEffect,
-  NoOpsLastFinalizedBlockHashContainer
+  NoOpsLastFinalizedBlockHashContainer,
+  StorageFixture
 }
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
 import io.casperlabs.casper.util.TestTime
@@ -45,12 +45,10 @@ import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, FilesAPI}
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage.BlockHash
-import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.{DeployStorage, MockDeployStorage}
 import monix.catnap.Semaphore
 import monix.eval.Task
-import monix.execution.schedulers.CanBlock.permit
 import monix.execution.Scheduler
 import org.scalatest.{Matchers, WordSpec}
 
@@ -59,7 +57,6 @@ import scala.concurrent.duration._
 class CasperPacketHandlerSpec extends WordSpec with Matchers {
   private def setup() = new {
     val scheduler                  = Scheduler.io("test")
-    val runtimeDir                 = DagStorageTestFixture.blockStorageDir
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = createBonds(Seq(validatorPk))
@@ -109,17 +106,14 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       })
     implicit val metrics = new MetricsNOP[Task]
     implicit val lab =
-      LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+      LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.global)
     implicit val blockMap =
       Ref.unsafe[Task, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]](Map.empty)
     implicit val deployHashMap    = Ref.unsafe[Task, Map[DeployHash, Seq[BlockHash]]](Map.empty)
     implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
-    implicit val lock             = Semaphore[Task](1).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val blockStorage     = InMemBlockStorage.create[Task]
-    implicit val dagStorage =
-      DagStorageTestFixture
-        .createDagStorage[Task](DagStorageTestFixture.dagStorageDir)
-        .runSyncUnsafe(1.second)(scheduler, permit)
+    implicit val lock             = Semaphore[Task](1).unsafeRunSync(monix.execution.Scheduler.global)
+    implicit val (blockStorage, dagStorage, deployStorage, _) =
+      StorageFixture.createStorages[Task]().unsafeRunSync(monix.execution.Scheduler.global)
     implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new FinalityDetector[Task] {
       override def normalizedFaultTolerance(

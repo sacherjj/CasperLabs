@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.DagOperations
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -13,9 +13,9 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.immutable.HashMap
 
 @silent("is never used")
-class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
+class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 2)
@@ -76,7 +76,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 2)
@@ -140,7 +140,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   "Estimator on flipping forkchoice DAG" should "return the appropriate score map and forkchoice" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -205,8 +205,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   "lmdScoring" should "propagate fixed weights on a tree" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like (|| is a main parent)
          *
          *
@@ -249,8 +249,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   it should "propagate fixed weights on a DAG" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *
@@ -301,8 +301,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   it should "stop traversing DAG when reaches the stop hash" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *          m
@@ -349,7 +349,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
                 justifications = Map(v3 -> i.blockHash)
               )
           m            <- createBlock[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
-          dag          <- blockDagStorage.getRepresentation
+          dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
           scores <- Estimator
@@ -367,8 +367,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   "lmdMainchainGhost" should "pick the correct fork choice tip" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *

@@ -1,6 +1,6 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import cats.data.EitherT
 import cats.effect.{Concurrent, ContextShift, Timer}
@@ -12,6 +12,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.TaskContrib._
@@ -22,23 +23,18 @@ import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
-import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
-import io.casperlabs.casper.validation.Validation
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.shared.Log.NOPLog
-import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.storage._
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.storage.deploy.{DeployStorage, MockDeployStorage}
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler
@@ -50,9 +46,8 @@ import scala.util.Random
 abstract class HashSetCasperTestNode[F[_]](
     val local: Node,
     sk: PrivateKey,
+    val db: Path,
     val genesis: Block,
-    val dagStorageDir: Path,
-    val blockStorageDir: Path,
     val validateNonces: Boolean,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]]
 )(
@@ -60,14 +55,13 @@ abstract class HashSetCasperTestNode[F[_]](
     concurrentF: Concurrent[F],
     val blockStorage: BlockStorage[F],
     val dagStorage: DagStorage[F],
+    val deployStorage: DeployStorage[F],
     val metricEff: Metrics[F],
     val casperState: Cell[F, CasperState]
 ) {
   implicit val logEff: LogStub[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
-  implicit val deployStorage: DeployStorage[F] =
-    MockDeployStorage.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
   implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
   implicit val safetyOracleEff: FinalityDetector[F]
@@ -91,7 +85,9 @@ abstract class HashSetCasperTestNode[F[_]](
   /** Put the genesis in the store. */
   def initialize(): F[Unit] =
     // pre-population removed from internals of Casper
-    blockStorage.put(genesis.blockHash, genesis, Seq.empty) *>
+    blockStorage.put(genesis.blockHash, genesis, Seq.empty) >>
+      dagStorage.insert(genesis) >>
+      deployStorage.addAsExecuted(genesis) >>
       dagStorage.getRepresentation.flatMap { dag =>
         ExecutionEngineServiceStub
           .validateBlockCheckpoint[F](
@@ -103,10 +99,12 @@ abstract class HashSetCasperTestNode[F[_]](
 
   /** Close and delete storage. */
   def tearDown(): F[Unit] =
-    tearDownNode().map { _ =>
-      blockStorageDir.recursivelyDelete()
-      dagStorageDir.recursivelyDelete()
-    }
+    for {
+      _ <- tearDownNode()
+      _ <- blockStorage.clear()
+      _ <- dagStorage.clear()
+      _ <- concurrentF.delay(Files.delete(db))
+    } yield ()
 
   /** Close storage. */
   def tearDownNode(): F[Unit] =
@@ -114,6 +112,8 @@ abstract class HashSetCasperTestNode[F[_]](
       _ <- blockStorage.close()
       _ <- dagStorage.close()
     } yield ()
+
+  def validateBlockStorage[A](f: BlockStorage[F] => F[A]): F[A] = f(blockStorage)
 }
 
 trait HashSetCasperTestNodeFactory {
@@ -194,19 +194,9 @@ trait HashSetCasperTestNodeFactory {
       ContextShift[Effect]
     )
 
-  protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift](
-      genesis: Block
-  ): F[(Path, Path, DagStorage[F], BlockStorage[F])] = {
-    val dagStorageDir   = DagStorageTestFixture.dagStorageDir
-    val blockStorageDir = DagStorageTestFixture.blockStorageDir
-    val env             = Context.env(blockStorageDir, DagStorageTestFixture.mapSize)
-    for {
-      implicit0(blockStorage: BlockStorage[F]) <- FileLMDBIndexBlockStorage
-                                                   .create[F](env, blockStorageDir)
-                                                   .map(_.right.get)
-      dagStorage <- DagStorageTestFixture.createDagStorage[F](dagStorageDir, genesis.some)
-    } yield (dagStorageDir, blockStorageDir, dagStorage, blockStorage)
-  }
+  protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
+      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], Path)] =
+    StorageFixture.createStorages[F]()
 }
 
 object HashSetCasperTestNode {

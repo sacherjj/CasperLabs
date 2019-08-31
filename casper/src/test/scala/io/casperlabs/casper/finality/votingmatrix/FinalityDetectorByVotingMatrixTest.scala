@@ -4,17 +4,17 @@ import cats.Monad
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.IndexedDagStorage
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.IndexedDagStorage
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -25,15 +25,15 @@ class FinalityDetectorByVotingMatrixTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with DagStorageFixture {
+    with StorageFixture {
 
   behavior of "Finality Detector of Voting Matrix"
 
   implicit val logEff = new LogStub[Task]
 
   it should "detect finality as appropriate" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *
@@ -55,7 +55,7 @@ class FinalityDetectorByVotingMatrixTest
 
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- blockDagStorage.getRepresentation
+          dag     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                       .of[Task](
                                                                         dag,
@@ -98,8 +98,8 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   it should "finalize blocks properly with only one validator" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *    b4
@@ -117,7 +117,7 @@ class FinalityDetectorByVotingMatrixTest
         val bonds  = Seq(v1Bond)
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- blockDagStorage.getRepresentation
+          dag     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                       .of[Task](
                                                                         dag,
@@ -160,8 +160,8 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   it should "increment last finalized block as appropriate in round robin" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *
@@ -190,7 +190,7 @@ class FinalityDetectorByVotingMatrixTest
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- blockDagStorage.getRepresentation
+          dag     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                       .of[Task](
                                                                         dag,
@@ -255,7 +255,7 @@ class FinalityDetectorByVotingMatrixTest
         } yield result
   }
 
-  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix](
+  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: DeployStorage: FinalityDetectorVotingMatrix](
       parentsHashList: Seq[BlockHash],
       lastFinalizedBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,

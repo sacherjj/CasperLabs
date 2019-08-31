@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
@@ -18,15 +18,15 @@ class FinalityDetectorBySingleSweepTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with DagStorageFixture {
+    with StorageFixture {
 
   behavior of "Finality Detector by Single Sweep"
 
   implicit val logEff = new LogStub[Task]
 
   it should "detect finality as appropriate" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *   b8
@@ -161,7 +161,7 @@ class FinalityDetectorBySingleSweepTest
   }
 
   it should "take into account indirect justifications by non-level-zero direct justification" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v0 = generateValidator("V0")
       val v1 = generateValidator("V1")
 
@@ -267,7 +267,7 @@ class FinalityDetectorBySingleSweepTest
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   it should "detect possible disagreements appropriately" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")

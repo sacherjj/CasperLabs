@@ -36,6 +36,7 @@ import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
+import io.casperlabs.storage.deploy.DeployStorage
 
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -46,8 +47,7 @@ class TransportLayerCasperTestNode[F[_]](
     genesis: Block,
     transforms: Seq[TransformEntry],
     sk: PrivateKey,
-    dagStorageDir: Path,
-    blockStorageDir: Path,
+    db: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     chainId: String = "casperlabs",
@@ -58,6 +58,7 @@ class TransportLayerCasperTestNode[F[_]](
     concurrentF: Concurrent[F],
     blockStorage: BlockStorage[F],
     dagStorage: DagStorage[F],
+    deployStorage: DeployStorage[F],
     val errorHandlerEff: ErrorHandler[F],
     val timeEff: Time[F],
     metricEff: Metrics[F],
@@ -65,12 +66,11 @@ class TransportLayerCasperTestNode[F[_]](
 ) extends HashSetCasperTestNode[F](
       local,
       sk,
+      db,
       genesis,
-      dagStorageDir,
-      blockStorageDir,
       validateNonces,
       maybeMakeEE
-    )(concurrentF, blockStorage, dagStorage, metricEff, casperState) {
+    )(concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
 
   implicit val logEff: LogStub[F] = new LogStub[F](local.host, printEnabled = false)
   implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
@@ -149,8 +149,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     implicit val log       = new Log.NOPLog[F]()
     implicit val metricEff = new Metrics.MetricsNOP[F]
 
-    initStorage(genesis) flatMap {
-      case (dagStorageDir, blockStorageDir, dagStorage, blockStorage) =>
+    initStorage() flatMap {
+      case (blockStorage, dagStorage, deployStorage, db) =>
         for {
           blockProcessingLock <- Semaphore[F](1)
           casperState         <- Cell.mvarCell[F, CasperState](CasperState())
@@ -160,20 +160,20 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             genesis,
             transforms,
             sk,
-            dagStorageDir,
-            blockStorageDir,
+            db,
             blockProcessingLock,
             faultToleranceThreshold
           )(
             concurrentF,
             blockStorage,
             dagStorage,
+            deployStorage,
             errorHandler,
             logicalTime,
             metricEff,
             casperState
           )
-          _ <- node.initialize
+          _ <- node.initialize()
         } yield node
     }
   }
@@ -212,8 +212,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             implicit val log       = new Log.NOPLog[F]()
             implicit val metricEff = new Metrics.MetricsNOP[F]
 
-            initStorage(genesis) flatMap {
-              case (dagStorageDir, blockStorageDir, dagStorage, blockStorage) =>
+            initStorage() flatMap {
+              case (blockStorage, dagStorage, deployStorage, db) =>
                 for {
                   semaphore <- Semaphore[F](1)
                   casperState <- Cell.mvarCell[F, CasperState](
@@ -225,8 +225,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                     genesis,
                     transforms,
                     sk,
-                    dagStorageDir,
-                    blockStorageDir,
+                    db,
                     semaphore,
                     faultToleranceThreshold,
                     validateNonces = validateNonces,
@@ -235,6 +234,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                     concurrentF,
                     blockStorage,
                     dagStorage,
+                    deployStorage,
                     errorHandler,
                     logicalTime,
                     metricEff,
@@ -254,7 +254,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         m <- nodes
         if n.local != m.local
       } yield (n, m)
-      _ <- nodes.traverse(_.initialize).void
+      _ <- nodes.traverse(_.initialize()).void
       _ <- pairs.foldLeft(().pure[F]) {
             case (f, (n, m)) =>
               f.flatMap(

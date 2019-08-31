@@ -7,7 +7,7 @@ import java.util.Base64
 import cats.effect.Sync
 import cats.implicits._
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.helper.{DagStorageFixture, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.{HashSetCasperTestNode, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
@@ -21,7 +21,7 @@ import io.casperlabs.storage.block.BlockStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
-class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
+class GenesisTest extends FlatSpec with Matchers with StorageFixture {
   import GenesisTest._
 
   it should "throw exception when bonds file does not exist" in withGenResources {
@@ -100,7 +100,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
   }
 
   it should "create a valid genesis block" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       Task.delay(
         withGenResources {
           (
@@ -131,7 +131,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
       )
   }
 
-  it should "prepare a GenesisRequest" in withStorage { _ => _ =>
+  it should "prepare a GenesisRequest" in withStorage { _ => _ => _ =>
     Task.delay(
       withGenResources {
         (

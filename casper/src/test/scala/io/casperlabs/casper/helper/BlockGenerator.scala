@@ -8,20 +8,16 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.finality.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
-import io.casperlabs.casper.finality.votingmatrix.{FinalityDetectorVotingMatrix, VotingMatrix}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
-import io.casperlabs.storage.deploy.{DeployStorage, MockDeployStorage}
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 
 import scala.collection.immutable.HashMap
@@ -30,7 +26,7 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: ExecutionEngineService: Log](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: ExecutionEngineService: Log](
       id: Int,
       genesis: Block
   ): F[Block] =
@@ -46,7 +42,7 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Sync: BlockStorage: ExecutionEngineService: Log](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStorage: DeployStorage: ExecutionEngineService: Log](
       b: Block,
       genesis: Block,
       dag: DagRepresentation[F]
@@ -76,7 +72,7 @@ object BlockGenerator {
       IndexedDagStorage[F].inject(id, updatedBlock)
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: Log: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: Log: ExecutionEngineService](
       b: Block,
       genesis: Block,
       dag: DagRepresentation[F]
@@ -90,9 +86,7 @@ object BlockGenerator {
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
       )
-      merged                                    <- ExecEngineUtil.merge[F](parents, dag)
-      implicit0(deployBuffer: DeployStorage[F]) <- MockDeployStorage.create[F]()
-      _                                         <- deployBuffer.addAsPending(deploys.toList)
+      merged <- ExecEngineUtil.merge[F](parents, dag)
       result <- computeDeploysCheckpoint[F](
                  merged,
                  deploys.map(_.deployHash).toSet,
@@ -104,7 +98,7 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+  def createBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: DeployStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -159,5 +153,6 @@ trait BlockGenerator {
       // NOTE: Block hash should be recalculated.
       modifiedBlock <- IndexedDagStorage[F].insertIndexed(block)
       _             <- BlockStorage[F].put(serializedBlockHash, modifiedBlock, Seq.empty)
+      _             <- DeployStorage[F].addAsExecuted(modifiedBlock)
     } yield modifiedBlock
 }

@@ -2,24 +2,21 @@ package io.casperlabs.casper.util
 
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
+import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.storage.dag._
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
-import io.casperlabs.casper.finality.FinalityDetectorUtil
-import io.casperlabs.storage._
-import io.casperlabs.storage.dag._
-import io.casperlabs.storage.deploy._
-import io.casperlabs.storage.block._
-import io.casperlabs.models.BlockImplicits._
 
-class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
+class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
   implicit val logEff                  = new LogStub[Task]()
   implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
@@ -39,7 +36,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   "isInMainChain and votedBranch" should "classify appropriately when using the same block" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       for {
         b      <- createBlock[Task](Seq())
         dag    <- dagStorage.getRepresentation
@@ -49,8 +46,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   it should "classify appropriately" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /**
           * The DAG looks like:
           *
@@ -78,8 +75,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   it should "classify diamond DAGs appropriately" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /**
           * The dag looks like:
           *
@@ -106,7 +103,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   it should "classify complicated chains appropriately" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1 = generateValidator("V1")
       val v2 = generateValidator("V2")
 
@@ -159,7 +156,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   "panoramaDagLevelsOfBlock" should "properly return the panorama of message B" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v0 = generateValidator("V0")
       val v1 = generateValidator("V1")
 
@@ -231,7 +228,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
                bonds,
                Map(v2 -> b6.blockHash)
              )
-        dag <- blockDagStorage.getRepresentation
+        dag <- dagStorage.getRepresentation
         // An extra new validator who hasn't proposed any block
         v4 = generateValidator("V4")
 
