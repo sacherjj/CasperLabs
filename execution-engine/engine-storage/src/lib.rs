@@ -21,3 +21,8 @@ lazy_static! {
         page_size * 2560
     };
 }
+
+/// TODO: update to reflect semantic versioning
+pub type ProtocolVersion = u64;
+
+const MAX_DBS: u32 = 2;

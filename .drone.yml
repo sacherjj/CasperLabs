@@ -66,8 +66,6 @@ steps:
   - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
   - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
   - "make test test-contracts"
-  - "cd ../long-running-tests"
-  - "./build-contracts.sh"
   image: "casperlabs/buildenv:latest"
   when:
     event:

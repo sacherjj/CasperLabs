@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use lmdb::{self, Database, Environment, RoTransaction, RwTransaction, WriteFlags};
 
-use crate::error;
 use crate::transaction_source::{Readable, Transaction, TransactionSource, Writable};
+use crate::{error, MAX_DBS};
 
 impl<'a> Transaction for RoTransaction<'a> {
     type Error = lmdb::Error;
@@ -63,7 +63,10 @@ pub struct LmdbEnvironment {
 
 impl LmdbEnvironment {
     pub fn new(path: &PathBuf, map_size: usize) -> Result<Self, error::Error> {
-        let env = Environment::new().set_map_size(map_size).open(path)?;
+        let env = Environment::new()
+            .set_max_dbs(MAX_DBS)
+            .set_map_size(map_size)
+            .open(path)?;
         let path = path.to_owned();
         Ok(LmdbEnvironment { path, env })
     }

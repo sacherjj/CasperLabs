@@ -375,6 +375,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "create-test-node-01"
+version = "0.1.0"
+dependencies = [
+ "create-test-node-shared 0.1.0",
+]
+
+[[package]]
+name = "create-test-node-02"
+version = "0.1.0"
+dependencies = [
+ "create-test-node-shared 0.1.0",
+]
+
+[[package]]
+name = "create-test-node-03"
+version = "0.1.0"
+dependencies = [
+ "create-test-node-shared 0.1.0",
+]
+
+[[package]]
+name = "create-test-node-shared"
+version = "0.1.0"
+dependencies = [
+ "binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -547,6 +576,20 @@ dependencies = [
 
 [[package]]
 name = "ee-584-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-597-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-598-regression"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.13.0",
