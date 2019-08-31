@@ -323,6 +323,28 @@ trait DeployBufferSpec
         }
       }
     }
+
+    "readAccountLowestNonce" should {
+      val existsMultipleDeploysPerAccount: List[Deploy] => Boolean =
+        _.groupBy(_.getHeader.accountPublicKey).values
+          .exists(_.map(_.getHeader.nonce).distinct.size > 1)
+      "return PENDING deploys, one per account with the lowest nonce" in forAll(
+        deploysGen().suchThat(existsMultipleDeploysPerAccount)
+      ) { deploys =>
+        testFixture { db =>
+          for {
+            _ <- db.addAsPending(deploys)
+            expected = deploys
+              .groupBy(_.getHeader.accountPublicKey)
+              .mapValues(_.minBy(_.getHeader.nonce))
+              .values
+              .toList
+              .map(_.deployHash)
+            got <- db.readAccountLowestNonce().compile.toList
+          } yield got should contain theSameElementsAs expected
+        }
+      }
+    }
   }
 
   private def chooseHash(deploys: List[Deploy]): ByteString =
