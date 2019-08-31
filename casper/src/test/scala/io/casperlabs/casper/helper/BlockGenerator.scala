@@ -21,6 +21,7 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
+import io.casperlabs.storage.deploy.{DeployStorage, MockDeployStorage}
 import monix.eval.Task
 
 import scala.collection.immutable.HashMap
@@ -89,10 +90,12 @@ object BlockGenerator {
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
       )
-      merged <- ExecEngineUtil.merge[F](parents, dag)
+      merged                                    <- ExecEngineUtil.merge[F](parents, dag)
+      implicit0(deployBuffer: DeployStorage[F]) <- MockDeployStorage.create[F]()
+      _                                         <- deployBuffer.addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
-                 deploys,
+                 deploys.map(_.deployHash).toSet,
                  b.getHeader.timestamp,
                  ProtocolVersion(1)
                )

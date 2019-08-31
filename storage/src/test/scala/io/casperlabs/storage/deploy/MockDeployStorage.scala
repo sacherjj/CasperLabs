@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.storage.deploy.MockDeployStorage.Metadata
 import io.casperlabs.crypto.codec.Base16
@@ -162,6 +162,19 @@ class MockDeployStorage[F[_]: Sync: Log](
         )
       )
       .flatMap(deploys => fs2.Stream.fromIterator(deploys.toIterator))
+
+  override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
+    fs2.Stream
+      .eval(
+        readPending.map(
+          _.groupBy(_.getHeader.accountPublicKey)
+            .mapValues(_.minBy(_.getHeader.nonce))
+            .values
+            .map(_.deployHash)
+            .toList
+        )
+      )
+      .flatMap(d => fs2.Stream.fromIterator(d.toIterator))
 
   override def getByHashes(l: List[ByteString]): F[List[Deploy]] = {
     val hashesSet = l.toSet

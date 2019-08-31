@@ -1230,9 +1230,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val invalidNonce = 1000L
 
     for {
+      validDeploy       <- ProtoUtil.basicDeploy[Effect](1L)
       invalidDeploy     <- ProtoUtil.basicDeploy[Effect](invalidNonce)
       _                 <- node.casperEff.deploy(invalidDeploy)
-      validDeploy       <- ProtoUtil.basicDeploy[Effect](1L)
       _                 <- node.casperEff.deploy(validDeploy)
       createBlockResult <- MultiParentCasper[Effect].createBlock
       Created(block)    = createBlockResult

@@ -19,6 +19,7 @@ import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
+import io.casperlabs.storage.deploy._
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -109,11 +110,13 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       executionEngineService: ExecutionEngineService[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
-      blocktime <- Task.delay(System.currentTimeMillis)
+      blocktime                                    <- Task.delay(System.currentTimeMillis)
+      implicit0(deployBuffer: DeployStorage[Task]) <- MockDeployStorage.create[Task]()
+      _                                            <- deployBuffer.addAsPending(deploy.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
-                          deploy,
+                          deploy.map(_.deployHash).toSet,
                           blocktime,
                           protocolVersion
                         )

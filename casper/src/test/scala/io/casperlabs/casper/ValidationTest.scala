@@ -30,6 +30,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
+import io.casperlabs.storage.deploy._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
@@ -855,9 +856,11 @@ class ValidationTest
         ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
 
       for {
+        implicit0(deployBuffer: DeployStorage[Task]) <- MockDeployStorage.create[Task]()
+        _                                            <- deployBuffer.addAsPending(deploys.toList)
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               ExecEngineUtil.MergeResult.empty,
-                              deploys,
+                              deploys.map(_.deployHash).toSet,
                               System.currentTimeMillis,
                               ProtocolVersion(1)
                             )

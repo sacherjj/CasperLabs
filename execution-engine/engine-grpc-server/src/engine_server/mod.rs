@@ -32,6 +32,7 @@ pub mod ipc;
 pub mod ipc_grpc;
 pub mod mappings;
 pub mod state;
+pub mod transforms;
 
 const EXPECTED_PUBLIC_KEY_LENGTH: usize = 32;
 

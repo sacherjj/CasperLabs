@@ -23,12 +23,6 @@ object Main {
 
   def main(args: Array[String]): Unit = {
 
-    implicit val scheduler: Scheduler = Scheduler.computation(
-      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
-      "node-runner",
-      reporter = uncaughtExceptionHandler
-    )
-
     val exec: Task[Unit] =
       for {
         commandAndConf <- Task(Configuration.parse(args.toArray, sys.env))
@@ -38,6 +32,13 @@ object Main {
                 { case (command, conf) => updateLoggingProps(conf) >> mainProgram(command, conf) }
               )
       } yield ()
+
+    // Create a scheduler to execute the program and block waiting on it to finish.
+    implicit val scheduler: Scheduler = Scheduler.computation(
+      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
+      "node-runner",
+      reporter = uncaughtExceptionHandler
+    )
 
     exec.runSyncUnsafe()
   }
@@ -49,9 +50,7 @@ object Main {
     sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
-  private def mainProgram(command: Configuration.Command, conf: Configuration)(
-      implicit scheduler: Scheduler
-  ): Task[Unit] = {
+  private def mainProgram(command: Configuration.Command, conf: Configuration): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
         conf.server.host.getOrElse("localhost"),
@@ -82,7 +81,7 @@ object Main {
       }
   }
 
-  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+  private def nodeProgram(conf: Configuration): Task[Unit] = {
     val node =
       for {
         _       <- log.info(api.VersionInfo.get).toEffect

@@ -1,7 +1,7 @@
 package io.casperlabs.storage.deploy
 
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import simulacrum.typeclass
@@ -85,6 +85,9 @@ import scala.concurrent.duration._
     * with the lowest `creation_time_seconds` value.
     */
   def readAccountPendingOldest(): fs2.Stream[F, Deploy]
+
+  /** Reads deploy hashes of deploys in PENDING state, lowest nonce per account. */
+  def readAccountLowestNonce(): fs2.Stream[F, DeployHash]
 }
 
 @typeclass trait DeployStorage[F[_]] extends DeployStorageWriter[F] with DeployStorageReader[F] {}
@@ -149,5 +152,8 @@ object DeployStorage {
 
     override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
       reader.readAccountPendingOldest()
+
+    override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
+      reader.readAccountLowestNonce()
   }
 }

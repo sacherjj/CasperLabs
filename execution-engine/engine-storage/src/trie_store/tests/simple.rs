@@ -1,11 +1,11 @@
 use lmdb::DatabaseFlags;
 use tempfile::tempdir;
 
-use contract_ffi::bytesrepr::ToBytes;
-use engine_shared::newtypes::Blake2bHash;
+use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 
 use super::TestData;
 use crate::error::{self, in_memory};
+use crate::store::StoreExt;
 use crate::transaction_source::in_memory::InMemoryEnvironment;
 use crate::transaction_source::lmdb::LmdbEnvironment;
 use crate::transaction_source::{Transaction, TransactionSource};
@@ -29,9 +29,10 @@ where
     E: From<S::Error> + From<X::Error>,
 {
     let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
-    let ret = super::put_many(&mut txn, store, items);
+    let items = items.iter().map(Into::into);
+    store.put_many(&mut txn, items)?;
     txn.commit()?;
-    ret
+    Ok(())
 }
 
 #[test]
@@ -61,19 +62,20 @@ fn put_get_succeeds<'a, K, V, S, X, E>(
     items: &[TestData<K, V>],
 ) -> Result<Vec<Option<Trie<K, V>>>, E>
 where
-    K: ToBytes,
-    V: ToBytes,
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
     S: TrieStore<K, V>,
     X: TransactionSource<'a, Handle = S::Handle>,
     S::Error: From<X::Error>,
     E: From<S::Error> + From<X::Error>,
 {
     let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
-    super::put_many::<_, _, _, _, E>(&mut txn, store, items)?;
-    let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
-    let ret = super::get_many::<_, _, _, _, E>(&txn, store, &keys);
+    let items = items.iter().map(Into::into);
+    store.put_many(&mut txn, items.clone())?;
+    let keys = items.map(|(k, _)| k);
+    let ret = store.get_many(&txn, keys)?;
     txn.commit()?;
-    ret
+    Ok(ret)
 }
 
 #[test]
@@ -164,8 +166,8 @@ fn uncommitted_read_write_txn_does_not_persist<'a, K, V, S, X, E>(
     items: &[TestData<K, V>],
 ) -> Result<Vec<Option<Trie<K, V>>>, E>
 where
-    K: ToBytes,
-    V: ToBytes,
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
     S: TrieStore<K, V>,
     X: TransactionSource<'a, Handle = S::Handle>,
     S::Error: From<X::Error>,
@@ -173,14 +175,15 @@ where
 {
     {
         let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
-        super::put_many::<_, _, _, _, E>(&mut txn, store, items)?;
+        let items = items.iter().map(Into::into);
+        store.put_many(&mut txn, items)?;
     }
     {
         let txn: X::ReadTransaction = transaction_source.create_read_txn()?;
-        let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
-        let ret = super::get_many::<_, _, _, _, E>(&txn, store, &keys);
+        let keys = items.iter().map(|TestData(k, _)| k);
+        let ret = store.get_many(&txn, keys)?;
         txn.commit()?;
-        ret
+        Ok(ret)
     }
 }
 
