@@ -4,7 +4,8 @@ import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
-import io.casperlabs.casper.consensus
+import io.casperlabs.casper.DeploySelection.DeploySelection
+import io.casperlabs.casper.{consensus, DeploySelection}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -118,7 +119,10 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     for {
       blocktime                                   <- Task.delay(System.currentTimeMillis)
       implicit0(deployBuffer: DeployBuffer[Task]) <- MockDeployBuffer.create[Task]()
-      _                                           <- deployBuffer.addAsPending(deploy.toList)
+      implicit0(deploySelection: DeploySelection[Task]) <- DeploySelection.create[Task](
+                                                            5 * 1024 * 1024
+                                                          )
+      _ <- deployBuffer.addAsPending(deploy.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,

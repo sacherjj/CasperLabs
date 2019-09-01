@@ -11,6 +11,7 @@ import cats.syntax.foldable._
 import cats.syntax.functor._
 import com.github.ghik.silencer.silent
 import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
@@ -91,6 +92,12 @@ package object transport {
       }
       implicit0(transportEff: TransportLayer[Effect]) = TransportLayer
         .eitherTTransportLayer[Task]
+
+      // TODO: Get from config
+      implicit0(deploySelection: DeploySelection[Effect]) <- DeploySelection
+                                                              .create[Effect](
+                                                                10 * 1024 * 1024 /* 10MB */
+                                                              )
 
       implicit0(lab: LastApprovedBlock[Task]) <- LastApprovedBlock.of[Task].toEffect
 

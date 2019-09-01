@@ -11,6 +11,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.{
   processDeploys,
   zipDeploysResults
 }
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper.util.execengine.{DeployEffects, Op, ProcessedDeployResult}
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.shared.Log
@@ -51,48 +52,58 @@ object DeploySelection {
       init
   }
 
+  def unsafeCreate[F[_]: MonadThrowable: ExecutionEngineService: DeployBuffer: Log](
+      sizeLimitMB: Long
+  ): DeploySelection[F] =
+    new DeploySelection[F] {
+      override def select(
+          in: (DeployHash, Long, ProtocolVersion, Set[DeployHash])
+      ): F[List[DeployEffects]] = {
+        val (prestate, blocktime, protocolVersion, hashes) = in
+
+        hashes
+          .grouped(50)
+          .toList
+          .foldM[F, Either[IntermediateState, IntermediateState]](
+            IntermediateState().asRight[IntermediateState]
+          ) {
+            case (stateE, batch) =>
+              val state = stateE.fold(identity, identity)
+              for {
+                deploys <- DeployBuffer[F].getByHashes(batch.toList)
+                dr <- processDeploys[F](
+                       prestate,
+                       blocktime,
+                       deploys,
+                       protocolVersion
+                     )
+                pdr                                = zipDeploysResults(deploys, dr).toList
+                (invalidDeploys, effectfulDeploys) = ProcessedDeployResult.split(pdr)
+                _                                  <- handleInvalidDeploys[F](invalidDeploys)
+              } yield {
+                effectfulDeploys.foldLeftM(state) {
+                  case (accState, element) =>
+                    // newState is either `accState` if `element` doesn't commute,
+                    // or contains `element` if it does.
+                    val newState = commutes(accState, element)
+                    // TODO: Use some base `Block` element to measure the size.
+                    // If size if accumulated deploys is over 90% of the block limit, stop consuming more deploys.
+                    if (newState.size > (0.9 * sizeLimitMB)) {
+                      // foldM will short-circuit for `Left`
+                      // and continue for `Right`
+                      accState.asLeft[IntermediateState]
+                    } else newState.asRight[IntermediateState]
+                }
+              }
+          }
+          .map(_.fold(_.chosen, _.chosen))
+      }
+    }
+
   def create[F[_]: Sync: ExecutionEngineService: DeployBuffer: Log](
       sizeLimitMB: Long
   ): F[DeploySelection[F]] =
     Sync[F].delay {
-      new DeploySelection[F] {
-        override def select(
-            in: (DeployHash, Long, ProtocolVersion, Set[DeployHash])
-        ): F[List[DeployEffects]] = {
-          val (prestate, blocktime, protocolVersion, hashes) = in
-
-          hashes
-            .grouped(50)
-            .toList
-            .foldM[F, Either[IntermediateState, IntermediateState]](
-              IntermediateState().asRight[IntermediateState]
-            ) {
-              case (stateE, batch) =>
-                val state = stateE.fold(identity, identity)
-                for {
-                  deploys <- DeployBuffer[F].getByHashes(batch.toList)
-                  dr <- processDeploys[F](
-                         prestate,
-                         blocktime,
-                         deploys,
-                         protocolVersion
-                       )
-                  pdr                                = zipDeploysResults(deploys, dr).toList
-                  (invalidDeploys, effectfulDeploys) = ProcessedDeployResult.split(pdr)
-                  _                                  <- handleInvalidDeploys[F](invalidDeploys)
-                } yield {
-                  effectfulDeploys.foldLeftM(state) {
-                    case (chosenDeploys, element) =>
-                      if ((chosenDeploys.size + element.deploy.serializedSize) > (0.9 * sizeLimitMB)) {
-                        chosenDeploys.asLeft[IntermediateState]
-                      } else {
-                        commutes(chosenDeploys, element).asRight[IntermediateState]
-                      }
-                  }
-                }
-            }
-            .map(_.fold(_.chosen, _.chosen))
-        }
-      }
+      unsafeCreate[F](sizeLimitMB)
     }
 }

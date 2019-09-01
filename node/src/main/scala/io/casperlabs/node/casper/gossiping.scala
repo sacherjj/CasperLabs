@@ -9,6 +9,7 @@ import cats.implicits._
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.DeployBuffer
@@ -90,6 +91,13 @@ package object gossiping {
       downloadManager <- makeDownloadManager(conf, connectToGossip, relaying, validatorId)
 
       genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
+
+      // TODO: Get from config
+      implicit0(deploySelection: DeploySelection[F]) <- Resource.liftF(
+                                                         DeploySelection.create[F](
+                                                           10 * 1024 * 1024 /* 10MB */
+                                                         )
+                                                       )
 
       // Make sure MultiParentCasperRef is set before the synchronizer is resumed.
       awaitApproval <- makeFiberResource {

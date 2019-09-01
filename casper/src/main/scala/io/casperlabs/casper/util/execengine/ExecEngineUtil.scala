@@ -5,6 +5,7 @@ import cats.kernel.Monoid
 import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -16,7 +17,7 @@ import io.casperlabs.casper.consensus.state
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.casper.consensus.state.{Key, Value}
+import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion, Value}
 import io.casperlabs.casper.deploybuffer.DeployBuffer
 
 case class DeploysCheckpoint(
@@ -35,33 +36,17 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: MonadThrowable: DeployBuffer: Log: ExecutionEngineService](
+  def computeDeploysCheckpoint[F[_]: MonadThrowable: DeployBuffer: Log: ExecutionEngineService: DeploySelection](
       merged: MergeResult[TransformMap, Block],
       hashes: Set[DeployHash],
       blocktime: Long,
       protocolVersion: state.ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
-      preStateHash <- computePrestate[F](merged)
-      // TODO: Add Deploy selection strategy that will build a block until condition is met.
-      // Example conditions: number of deploys, size of a block, gas spent in the block etc.
-      processedDeployResults <- hashes.grouped(100).toList.flatTraverse { batch =>
-                                 for {
-                                   deploys <- DeployBuffer[F].getByHashes(batch.toList)
-                                   dr <- processDeploys[F](
-                                          preStateHash,
-                                          blocktime,
-                                          deploys,
-                                          protocolVersion
-                                        )
-                                   pdr = zipDeploysResults(deploys, dr).toList
-                                 } yield pdr
-                               }
-      (invalidDeploys, effectfulDeploys) = ProcessedDeployResult.split(processedDeployResults)
-      _                                  <- handleInvalidDeploys[F](invalidDeploys)
-      deployEffects                      = findCommutingEffects(effectfulDeploys)
-      (deploysForBlock, transforms)      = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
-      commitResult                       <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
+      preStateHash                  <- computePrestate[F](merged)
+      deployEffects                 <- DeploySelection[F].select((preStateHash, blocktime, protocolVersion, hashes))
+      (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
+      commitResult                  <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       //TODO: Remove this logging at some point
       msgBody = transforms.flatten
         .map(t => {
@@ -86,7 +71,7 @@ object ExecEngineUtil {
   // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
   // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
   // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
-  private def handleInvalidDeploys[F[_]: MonadThrowable: DeployBuffer: Log](
+  def handleInvalidDeploys[F[_]: MonadThrowable: DeployBuffer: Log](
       invalidDeploys: List[NoEffectsFailure]
   ): F[Unit] =
     for {
@@ -109,7 +94,7 @@ object ExecEngineUtil {
             .markAsDiscarded(invalidDeploys.preconditionFailures.map(_.deploy)) whenA invalidDeploys.preconditionFailures.nonEmpty
     } yield ()
 
-  private def processDeploys[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
+  def processDeploys[F[_]: MonadThrowable: ExecutionEngineService](
       prestate: StateHash,
       blocktime: Long,
       deploys: Seq[Deploy],

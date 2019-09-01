@@ -126,7 +126,9 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     }
     implicit val raiseInvalidBlock =
       casper.validation.raiseValidateErrorThroughApplicativeError[Task]
-    implicit val validation = new ValidationImpl[Task]
+    implicit val validation      = new ValidationImpl[Task]
+    implicit val deployBuffer    = MockDeployBuffer.unsafeCreate[Task]()
+    implicit val deploySelection = DeploySelection.unsafeCreate[Task](5 * 1024 * 1024)
   }
 
   "CasperPacketHandler" when {
@@ -139,7 +141,6 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
         implicit val lastFinalizedBlockHashContainer =
           NoOpsLastFinalizedBlockHashContainer.create[Task](genesis.blockHash)
-        implicit val deployBuffer = MockDeployBuffer.unsafeCreate[Task]()
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
             new GenesisValidatorHandler[Task](validatorId, chainId, bap)

@@ -28,6 +28,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.shared.{Cell, Log, Time}
+import monix.eval.Task
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
@@ -75,6 +76,8 @@ class GossipServiceCasperTestNode[F[_]](
 
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val validation        = HashSetCasperTestNode.makeValidation[F]
+
+  implicit val deploySelection = DeploySelection.unsafeCreate[F](5 * 1024 * 1024)
 
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it

@@ -10,6 +10,8 @@ import io.casperlabs.blockstorage.{
   DagRepresentation,
   IndexedDagStorage
 }
+import io.casperlabs.casper.DeploySelection
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus._
@@ -94,7 +96,10 @@ object BlockGenerator {
       )
       merged                                   <- ExecEngineUtil.merge[F](parents, dag)
       implicit0(deployBuffer: DeployBuffer[F]) <- MockDeployBuffer.create[F]()
-      _                                        <- deployBuffer.addAsPending(deploys.toList)
+      implicit0(deploySelection: DeploySelection[F]) <- DeploySelection.create[F](
+                                                         5 * 1024 * 1024 /* 10MB */
+                                                       )
+      _ <- deployBuffer.addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
                  deploys.map(_.deployHash).toSet,
