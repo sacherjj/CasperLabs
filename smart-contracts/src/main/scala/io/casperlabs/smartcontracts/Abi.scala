@@ -2,6 +2,7 @@ package io.casperlabs.smartcontracts
 import simulacrum.typeclass
 import java.nio.{ByteBuffer, ByteOrder}
 import java.nio.charset.StandardCharsets
+import io.casperlabs.casper.consensus.state.Key
 
 @typeclass
 trait Abi[T] {
@@ -44,6 +45,17 @@ object Abi {
   implicit val `String => ABI` = instance[String] { x =>
     val bytes = x.getBytes(StandardCharsets.UTF_8)
     Abi.toBytes(bytes.length) ++ bytes
+  }
+
+  implicit val `Key => ABI` = instance[Key] { x =>
+    x.value match {
+      case Key.Value.Hash(x)    => Array[Byte](0) ++ Abi.toBytes(x.hash.toByteArray)
+      case Key.Value.Address(x) => Array[Byte](1) ++ Abi.toBytes(x.account.toByteArray)
+      case Key.Value.Uref(x)    => Array[Byte](2) ++ Abi.toBytes(x.uref.toByteArray)
+      case Key.Value.Local(x)   => Array[Byte](3) ++ Abi.toBytes(x.hash.toByteArray)
+      case Key.Value.Empty =>
+        throw new java.lang.IllegalArgumentException("Cannot serialize empty Key to ABI.")
+    }
   }
 
   implicit def `Option => ABI`[T: Abi] = instance[Option[T]] { x =>

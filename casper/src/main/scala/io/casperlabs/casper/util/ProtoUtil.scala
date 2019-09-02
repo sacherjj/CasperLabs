@@ -541,7 +541,10 @@ object ProtoUtil {
     import Deploy.Arg.Value.Value
     def toAbi(arg: Deploy.Arg): Abi.Serializable[_] =
       arg.getValue.value match {
-        case Value.Empty          => Abi.none
+        case Value.Empty | Value.Key(state.Key(state.Key.Value.Empty)) =>
+          throw new java.lang.IllegalArgumentException(
+            "Optional and empty deploy arguments are not supported yet!"
+          )
         case Value.IntValue(x)    => Abi.toBytes(x)
         case Value.LongValue(x)   => Abi.toBytes(x)
         case Value.BytesValue(x)  => Abi.toBytes(x.toByteArray)
@@ -549,7 +552,7 @@ object ProtoUtil {
         case Value.StringValue(x) => Abi.toBytes(x)
         case Value.StringList(x)  => Abi.toBytes(x.values)
         case Value.BigInt(_)      => ???
-        case Value.Key(_)         => ???
+        case Value.Key(x)         => Abi.toBytes(x)
       }
 
     val args: ByteString = if (code.args.nonEmpty) {
