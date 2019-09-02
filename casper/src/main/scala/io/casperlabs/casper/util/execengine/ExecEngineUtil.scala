@@ -49,11 +49,13 @@ object ExecEngineUtil {
         .fromIterator[F, DeployHash](hashes.toIterator)
         .chunkLimit(10) // TODO: from config?
         .flatMap(batch => fs2.Stream.eval(DeployBuffer[F].getByHashes(batch.toList)))
-      deployEffects <- DeploySelection[F].select(
-                        (preStateHash, blocktime, protocolVersion, deployStream)
-                      )
-      (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
-      commitResult                  <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
+      pdr <- DeploySelection[F].select(
+              (preStateHash, blocktime, protocolVersion, deployStream)
+            )
+      (invalidDeploys, deployEffects) = ProcessedDeployResult.split(pdr)
+      _                               <- handleInvalidDeploys[F](invalidDeploys)
+      (deploysForBlock, transforms)   = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
+      commitResult                    <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       //TODO: Remove this logging at some point
       msgBody = transforms.flatten
         .map(t => {

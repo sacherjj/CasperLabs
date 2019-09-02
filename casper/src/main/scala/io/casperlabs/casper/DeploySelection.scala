@@ -12,7 +12,12 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.{
   zipDeploysResults
 }
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
-import io.casperlabs.casper.util.execengine.{DeployEffects, Op, ProcessedDeployResult}
+import io.casperlabs.casper.util.execengine.{
+  DeployEffects,
+  NoEffectsFailure,
+  Op,
+  ProcessedDeployResult
+}
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -27,14 +32,14 @@ object DeploySelection {
 
   trait DeploySelection[F[_]] extends Select[F] {
     type A = (ByteString, Long, ProtocolVersion, fs2.Stream[F, List[Deploy]])
-    type B = List[DeployEffects]
+    type B = List[ProcessedDeployResult]
   }
 
   def apply[F[_]](implicit ev: DeploySelection[F]): DeploySelection[F] = ev
 
   private case class IntermediateState(
       accumulated: List[DeployEffects] = List.empty,
-      diff: List[DeployEffects] = List.empty,
+      diff: List[ProcessedDeployResult] = List.empty,
       accumulatedOps: OpMap[Key] = Map.empty
   ) {
     def effectsCommutativity: (List[DeployEffects], OpMap[state.Key]) =
@@ -53,19 +58,19 @@ object DeploySelection {
       init
   }
 
-  def unsafeCreate[F[_]: MonadThrowable: ExecutionEngineService: DeployBuffer: Log: Fs2Compiler](
+  def unsafeCreate[F[_]: MonadThrowable: ExecutionEngineService: Fs2Compiler](
       sizeLimitMB: Int
   ): DeploySelection[F] =
     new DeploySelection[F] {
       override def select(
           in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, List[Deploy]])
-      ): F[List[DeployEffects]] = {
+      ): F[List[ProcessedDeployResult]] = {
         val (prestate, blocktime, protocolVersion, hashes) = in
 
         def go(
             state: IntermediateState,
             stream: fs2.Stream[F, List[Deploy]]
-        ): fs2.Pull[F, List[DeployEffects], Unit] =
+        ): fs2.Pull[F, List[ProcessedDeployResult], Unit] =
           stream.pull.uncons.flatMap {
             case Some((chunk, streamTail)) =>
               // Fold over elements of the chunk, picking deploys that commute,
@@ -76,29 +81,29 @@ object DeploySelection {
                 ) {
                   case (stateE, batch) =>
                     val state = stateE.fold(identity, identity)
-                    for {
-                      dr <- processDeploys[F](
-                             prestate,
-                             blocktime,
-                             batch,
-                             protocolVersion
-                           )
-                      pdr                                = zipDeploysResults(batch, dr).toList
-                      (invalidDeploys, effectfulDeploys) = ProcessedDeployResult.split(pdr)
-                      _                                  <- handleInvalidDeploys[F](invalidDeploys)
-                    } yield {
-                      effectfulDeploys.foldLeftM(state) {
-                        case (accState, element) =>
+                    processDeploys[F](
+                      prestate,
+                      blocktime,
+                      batch,
+                      protocolVersion
+                    ) map { deployResults =>
+                      val pdr = zipDeploysResults(batch, deployResults).toList
+                      pdr.foldLeftM(state) {
+                        case (accState, element: DeployEffects) =>
                           // newState is either `accState` if `element` doesn't commute,
                           // or contains `element` if it does.
                           val newState = commutes(accState, element)
                           // TODO: Use some base `Block` element to measure the size.
-                          // If size if accumulated deploys is over 90% of the block limit, stop consuming more deploys.
+                          // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
                           if (newState.size > (0.9 * sizeLimitMB)) {
                             // foldM will short-circuit for `Left`
                             // and continue for `Right`
                             accState.asLeft[IntermediateState]
                           } else newState.asRight[IntermediateState]
+                        case (accState, element: NoEffectsFailure) =>
+                          // InvalidDeploy-s should be pushed into the stream
+                          // for later handling (like discarding invalid deploys).
+                          accState.copy(diff = element :: accState.diff).asRight[IntermediateState]
                       }
                     }
                 }

@@ -41,9 +41,6 @@ class DeploySelectionTest
 
   implicit val cc = ConsensusConfig()
 
-  implicit val logEff: Log[Task]                = new LogStub[Task]
-  implicit val deployBuffer: DeployBuffer[Task] = MockDeployBuffer.unsafeCreate[Task]()
-
   val prestate        = ByteString.EMPTY
   val blocktime       = 0L
   val protocolVersion = ProtocolVersion(1L)
