@@ -52,7 +52,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection](
+class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],

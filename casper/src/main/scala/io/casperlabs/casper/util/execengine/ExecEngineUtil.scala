@@ -1,5 +1,6 @@
 package io.casperlabs.casper.util.execengine
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.kernel.Monoid
 import cats.{Foldable, Monad, MonadError}
@@ -36,15 +37,21 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: MonadThrowable: DeployBuffer: Log: ExecutionEngineService: DeploySelection](
+  def computeDeploysCheckpoint[F[_]: Sync: DeployBuffer: Log: ExecutionEngineService: DeploySelection](
       merged: MergeResult[TransformMap, Block],
       hashes: Set[DeployHash],
       blocktime: Long,
       protocolVersion: state.ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
-      preStateHash                  <- computePrestate[F](merged)
-      deployEffects                 <- DeploySelection[F].select((preStateHash, blocktime, protocolVersion, hashes))
+      preStateHash <- computePrestate[F](merged)
+      deployStream = fs2.Stream
+        .fromIterator[F, DeployHash](hashes.toIterator)
+        .chunkLimit(10) // TODO: from config?
+        .flatMap(batch => fs2.Stream.eval(DeployBuffer[F].getByHashes(batch.toList)))
+      deployEffects <- DeploySelection[F].select(
+                        (preStateHash, blocktime, protocolVersion, deployStream)
+                      )
       (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
       commitResult                  <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       //TODO: Remove this logging at some point
