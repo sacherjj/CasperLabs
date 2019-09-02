@@ -2,7 +2,7 @@ package io.casperlabs.smartcontracts
 import simulacrum.typeclass
 import java.nio.{ByteBuffer, ByteOrder}
 import java.nio.charset.StandardCharsets
-import io.casperlabs.casper.consensus.state.Key
+import io.casperlabs.casper.consensus.state.{BigInt, Key}
 import io.casperlabs.casper.consensus.Deploy
 
 @typeclass
@@ -59,6 +59,10 @@ object Abi {
     }
   }
 
+  implicit val `BigInt => ABI` = instance[BigInt] { x =>
+    Abi.toBytes(x.value) ++ Abi.toBytes(x.bitWidth)
+  }
+
   implicit def `Option => ABI`[T: Abi] = instance[Option[T]] { x =>
     x.fold(Array[Byte](0))(Array[Byte](1) ++ Abi.toBytes(_))
   }
@@ -88,7 +92,7 @@ object Abi {
       case Value.StringValue(x) => Abi.toBytes(x)
       case Value.StringList(x)  => Abi.toBytes(x.values)
       case Value.LongValue(x)   => Abi.toBytes(x)
-      case Value.BigInt(_)      => ???
+      case Value.BigInt(x)      => Abi.toBytes(x)
       case Value.Key(x)         => Abi.toBytes(x)
     }
   }
