@@ -60,7 +60,17 @@ object Abi {
   }
 
   implicit val `BigInt => ABI` = instance[BigInt] { x =>
-    Abi.toBytes(x.value) ++ Abi.toBytes(x.bitWidth)
+    // EE expects unsigned, so only positive values.
+    // Have a look at https://github.com/JetBrains/jdk8u_jdk/blob/master/src/share/classes/java/math/BigInteger.java#L3976
+    // to see what how BigInteger can serialize itself: two-complement big-endian values.
+    val int   = new java.math.BigInteger(x.value)
+    val bytes = int.toByteArray
+    // We think if the values are positive then the leftmost value will be the sign bit and
+    // then it's hopefully the same as what Rust expects.
+    val unsignedLittleEndian = bytes.dropWhile(_ == 0.toByte).reverse
+    // For some reason the BigInt expects the length of bytes to be in a 1 sized array,
+    // instead of the usual 4.
+    Abi.toBytes(unsignedLittleEndian).take(1) ++ unsignedLittleEndian
   }
 
   implicit def `Option => ABI`[T: Abi] = instance[Option[T]] { x =>
