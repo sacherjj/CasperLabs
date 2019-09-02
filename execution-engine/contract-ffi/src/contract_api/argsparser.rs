@@ -1,6 +1,8 @@
 use crate::bytesrepr;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use bytesrepr::{Error, ToBytes};
+use core::ops::Deref;
 
 /// Parses `Self` into a byte representation that is ABI compliant.
 /// It means that each type of the tuple have to implement `ToBytes`.
@@ -14,6 +16,18 @@ pub trait ArgsParser {
 impl ArgsParser for () {
     fn parse(&self) -> Result<Vec<Vec<u8>>, Error> {
         Ok(Vec::new())
+    }
+}
+
+impl ArgsParser for Box<dyn ArgsParser> {
+    fn parse(&self) -> Result<Vec<Vec<u8>>, Error> {
+        self.deref().parse()
+    }
+}
+
+impl ArgsParser for &Box<dyn ArgsParser> {
+    fn parse(&self) -> Result<Vec<Vec<u8>>, Error> {
+        self.deref().parse()
     }
 }
 

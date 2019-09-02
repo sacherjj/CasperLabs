@@ -6,7 +6,7 @@ use std::rc::Rc;
 use grpc::RequestOptions;
 
 use engine_core::engine_state::utils::WasmiBytes;
-use engine_core::engine_state::{EngineConfig, EngineState};
+use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT};
 use engine_core::execution::POS_NAME;
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
@@ -281,6 +281,7 @@ pub fn create_query_request(
     query_request
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_exec_request(
     address: [u8; 32],
     session_contract_file_name: &str,
@@ -289,9 +290,17 @@ pub fn create_exec_request(
     nonce: u64,
     arguments: impl contract_ffi::contract_api::argsparser::ArgsParser,
     authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
+    payment_code: &PaymentCode,
 ) -> ExecRequest {
+    let (payment_code_path, payment_code_args) = {
+        let path = payment_code.get_path().expect("should get path");
+        let args = payment_code.get_args();
+        (path, args)
+    };
+
     let deploy = DeployBuilder::new()
         .with_session_code(session_contract_file_name, arguments)
+        .with_payment_code(payment_code_path, payment_code_args)
         .with_nonce(nonce)
         .with_address(address)
         .with_authorization_keys(&authorized_keys)
@@ -451,6 +460,51 @@ pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> Stri
     }
 }
 
+pub enum PaymentCode {
+    /// Uses standard payment code (default)
+    Standard(Box<dyn contract_ffi::contract_api::argsparser::ArgsParser>),
+    /// Uses custom payment code specified by path
+    Custom(
+        String,
+        Box<dyn contract_ffi::contract_api::argsparser::ArgsParser>,
+    ),
+}
+
+impl Default for PaymentCode {
+    fn default() -> PaymentCode {
+        PaymentCode::standard(contract_ffi::value::U512::from(MAX_PAYMENT))
+    }
+}
+
+const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
+
+impl PaymentCode {
+    fn standard(value: contract_ffi::value::U512) -> PaymentCode {
+        // By default it's a standard payment contract
+        PaymentCode::Standard(Box::new((value,)))
+    }
+
+    pub fn get_path(&self) -> Option<&str> {
+        match *self {
+            PaymentCode::Standard(_) => Some(STANDARD_PAYMENT_CONTRACT),
+            PaymentCode::Custom(ref path, ..) => Some(&path),
+        }
+    }
+
+    /// Gets reference to stored arguments,
+    ///
+    /// TODO: Currently disables clippy::borrowed-box check for this function, as
+    /// `with_payment_code` expects pass by value, which is tricky to handle when having `&dyn T`
+    /// but not `&Box<T>` which can implement ArgsParser trait.
+    #[allow(clippy::borrowed_box)]
+    pub fn get_args(&self) -> &Box<dyn contract_ffi::contract_api::argsparser::ArgsParser> {
+        match self {
+            PaymentCode::Standard(amount_args) => amount_args,
+            PaymentCode::Custom(_path, args) => args,
+        }
+    }
+}
+
 /// Builder for simple WASM test
 #[derive(Clone)]
 pub struct WasmTestBuilder {
@@ -473,12 +527,15 @@ pub struct WasmTestBuilder {
     mint_contract_uref: Option<contract_ffi::uref::URef>,
     /// PoS contract uref
     pos_contract_uref: Option<contract_ffi::uref::URef>,
+    /// Payment code to use for excetions
+    payment_code: Rc<PaymentCode>,
 }
 
 impl Default for WasmTestBuilder {
     fn default() -> WasmTestBuilder {
+        let engine_config = EngineConfig::new().set_use_payment_code(true);
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
-        let engine_state = EngineState::new(global_state, Default::default());
+        let engine_state = EngineState::new(global_state, engine_config);
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
@@ -490,6 +547,7 @@ impl Default for WasmTestBuilder {
             mint_contract_uref: None,
             pos_contract_uref: None,
             genesis_transforms: None,
+            payment_code: Rc::new(PaymentCode::default()),
         }
     }
 }
@@ -519,6 +577,7 @@ impl WasmTestBuilder {
             mint_contract_uref: result.0.mint_contract_uref,
             pos_contract_uref: result.0.pos_contract_uref,
             genesis_transforms: result.0.genesis_transforms,
+            payment_code: Rc::clone(&result.0.payment_code),
         }
     }
 
@@ -536,6 +595,7 @@ impl WasmTestBuilder {
             mint_contract_uref: None,
             pos_contract_uref: None,
             genesis_transforms: None,
+            payment_code: Rc::new(PaymentCode::default()),
         }
     }
 
@@ -685,6 +745,7 @@ impl WasmTestBuilder {
             nonce,
             args,
             authorized_keys,
+            &self.payment_code,
         );
         self.exec_with_exec_request(exec_request)
     }
