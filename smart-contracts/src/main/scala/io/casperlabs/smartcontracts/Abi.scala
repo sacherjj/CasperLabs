@@ -3,6 +3,7 @@ import simulacrum.typeclass
 import java.nio.{ByteBuffer, ByteOrder}
 import java.nio.charset.StandardCharsets
 import io.casperlabs.casper.consensus.state.Key
+import io.casperlabs.casper.consensus.Deploy
 
 @typeclass
 trait Abi[T] {
@@ -68,6 +69,29 @@ object Abi {
 
   // All None values are the same.
   val none = Abi.toBytes(None: Option[Int])
+
+  implicit val `Deploy.Arg.Value => ABI`: Abi[Deploy.Arg.Value] = instance { x =>
+    import Deploy.Arg.Value.Value
+    x.value match {
+      case Value.Empty =>
+        // If kwargs were supported by the EE side we could treat Value.Empty as None,
+        // but with positional arguments we can't as it would possibly lead to data corruption
+        // if the EE for example expects a Long but we send just a single byte.
+        throw new java.lang.IllegalArgumentException(
+          "Empty deploy arguments are not supported yet, use the `optional_value` variant!"
+        )
+      case Value.OptionalValue(x) =>
+        if (x.value.isEmpty) Abi.none else Abi.toBytes(Option(x))
+      case Value.BytesValue(x)  => Abi.toBytes(x.toByteArray)
+      case Value.IntValue(x)    => Abi.toBytes(x)
+      case Value.IntList(x)     => Abi.toBytes(x.values)
+      case Value.StringValue(x) => Abi.toBytes(x)
+      case Value.StringList(x)  => Abi.toBytes(x.values)
+      case Value.LongValue(x)   => Abi.toBytes(x)
+      case Value.BigInt(_)      => ???
+      case Value.Key(x)         => Abi.toBytes(x)
+    }
+  }
 
   def toBytes[T: Abi](x: T): Array[Byte] = Abi[T].toBytes(x)
 
