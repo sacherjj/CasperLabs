@@ -37,10 +37,9 @@ object DeploySelection {
       diff: List[DeployEffects] = List.empty,
       accumulatedOps: OpMap[Key] = Map.empty
   ) {
-    def chosen: List[DeployEffects] = accumulated ++ diff
     def effectsCommutativity: (List[DeployEffects], OpMap[state.Key]) =
-      (chosen, accumulatedOps)
-    def size: Int = chosen.map(_.deploy.serializedSize).sum
+      (accumulated, accumulatedOps)
+    def size: Int = accumulated.map(_.deploy.serializedSize).sum
   }
 
   // Appends new element to the intermediate state if it commutes with it.
@@ -108,10 +107,11 @@ object DeploySelection {
                 .eval(chunkResults)
                 .flatMap {
                   // Block size limit reached. Output whatever was accumulated in the chunk and stop consuming.
-                  case Left(deploys)  => fs2.Pull.output(fs2.Chunk(deploys.diff)) >> fs2.Pull.done
+                  case Left(deploys) =>
+                    fs2.Pull.output(fs2.Chunk(deploys.diff.reverse)) >> fs2.Pull.done
                   case Right(deploys) =>
                     // Output what was chosen in the chunk and continue consuming the stream.
-                    fs2.Pull.output(fs2.Chunk(deploys.diff)) >> go(
+                    fs2.Pull.output(fs2.Chunk(deploys.diff.reverse)) >> go(
                       // We're emptying whatever was accumulated in the previous chunk,
                       // but we leave the total accumulated state, so we only pick deploys
                       // that commute with whatever was already chosen.
