@@ -224,16 +224,12 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
 
   /** Reads deploys in PENDING state, lowest nonce per account. */
   override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
-    sql"""| SELECT hash FROM (
-          |   SELECT dan.hash, dan.account, dan.nonce FROM deploy_account_nonce dan
-          |   INNER JOIN buffered_deploys bd
-          |   ON bd.hash = dan.hash
-          |   WHERE bd.status = $PendingStatusCode
-          | ) dan
-          | GROUP BY dan.account
-          | HAVING MIN(dan.nonce)
-          | ORDER BY dan.nonce
-          """.stripMargin
+    sql"""|SELECT hash FROM (SELECT dan.hash hash, MIN(dan.nonce)
+          |FROM deploy_account_nonce dan 
+          |INNER JOIN buffered_deploys bd 
+          |ON bd.hash=dan.hash AND bd.status=$PendingStatusCode 
+          |GROUP BY dan.account
+          |ORDER BY dan.nonce)""".stripMargin
       .query[DeployHash]
       .stream
       .transact(xa)
