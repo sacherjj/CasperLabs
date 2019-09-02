@@ -546,8 +546,8 @@ object ProtoUtil {
         case Value.LongValue(x)   => Abi.toBytes(x)
         case Value.BytesValue(x)  => Abi.toBytes(x.toByteArray)
         case Value.IntList(x)     => Abi.toBytes(x.values)
-        case Value.StringValue(_) => ???
-        case Value.StringList(_)  => ???
+        case Value.StringValue(x) => Abi.toBytes(x)
+        case Value.StringList(x)  => Abi.toBytes(x.values)
         case Value.BigInt(_)      => ???
         case Value.Key(_)         => ???
       }

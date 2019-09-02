@@ -1,6 +1,7 @@
 package io.casperlabs.smartcontracts
 import simulacrum.typeclass
 import java.nio.{ByteBuffer, ByteOrder}
+import java.nio.charset.StandardCharsets
 
 @typeclass
 trait Abi[T] {
@@ -38,6 +39,11 @@ object Abi {
 
   implicit val `Bytes => ABI` = instance[Array[Byte]] { x =>
     Abi.toBytes(x.length) ++ x
+  }
+
+  implicit val `String => ABI` = instance[String] { x =>
+    val bytes = x.getBytes(StandardCharsets.UTF_8)
+    Abi.toBytes(bytes.length) ++ bytes
   }
 
   implicit def `Option => ABI`[T: Abi] = instance[Option[T]] { x =>
