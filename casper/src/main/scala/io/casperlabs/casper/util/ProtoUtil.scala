@@ -18,6 +18,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.shared.Time
+import io.casperlabs.smartcontracts.Abi
 import java.util.NoSuchElementException
 
 import scala.collection.immutable
@@ -537,15 +538,33 @@ object ProtoUtil {
   )
 
   def deployCodeToDeployPayload(code: Deploy.Code): ipc.DeployPayload = {
+    import Deploy.Arg.Value.Value
+    def toAbi(arg: Deploy.Arg): Abi.Serializable[_] =
+      arg.getValue.value match {
+        case Value.Empty          => Abi.none
+        case Value.IntValue(x)    => Abi.toBytes(x)
+        case Value.LongValue(x)   => Abi.toBytes(x)
+        case Value.BytesValue(x)  => Abi.toBytes(x.toByteArray)
+        case Value.IntList(x)     => Abi.toBytes(x.values)
+        case Value.StringValue(_) => ???
+        case Value.StringList(_)  => ???
+        case Value.BigInt(_)      => ???
+        case Value.Key(_)         => ???
+      }
+
+    val args: ByteString = if (code.args.nonEmpty) {
+      ByteString.copyFrom(Abi.args(code.args.map(toAbi): _*))
+    } else code.abiArgs
+
     val payload = code.contract match {
       case Deploy.Code.Contract.Wasm(wasm) =>
-        ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, code.abiArgs))
+        ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, args))
       case Deploy.Code.Contract.Hash(hash) =>
-        ipc.DeployPayload.Payload.StoredContractHash(ipc.StoredContractHash(hash, code.abiArgs))
+        ipc.DeployPayload.Payload.StoredContractHash(ipc.StoredContractHash(hash, args))
       case Deploy.Code.Contract.Name(name) =>
-        ipc.DeployPayload.Payload.StoredContractName(ipc.StoredContractName(name, code.abiArgs))
+        ipc.DeployPayload.Payload.StoredContractName(ipc.StoredContractName(name, args))
       case Deploy.Code.Contract.Uref(uref) =>
-        ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, code.abiArgs))
+        ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, args))
       case Deploy.Code.Contract.Empty =>
         ipc.DeployPayload.Payload.Empty
     }

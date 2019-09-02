@@ -79,18 +79,20 @@ message Deploy {
 
     message Arg {
         string name = 1;
-        Value value = 3;
+        Value value = 2;
 
         // Subset of cases in `state.Value` that can be used as input for contract calls.
         message Value {
-            int32 int_value = 1;
-            bytes bytes_value = 2;
-            state.IntList int_list = 3;
-            string string_value = 4;
-            state.StringList string_list = 7;
-            state.BigInt big_int = 9;
-            state.Key key = 10;
-            uint64 long_value = 12;
+            oneof value {
+                int32 int_value = 1;
+                bytes bytes_value = 2;
+                state.IntList int_list = 3;
+                string string_value = 4;
+                state.StringList string_list = 7;
+                state.BigInt big_int = 9;
+                state.Key key = 10;
+                uint64 long_value = 12;
+            }
         }
     }
 }

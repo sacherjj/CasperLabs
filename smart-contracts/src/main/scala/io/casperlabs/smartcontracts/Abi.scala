@@ -44,6 +44,13 @@ object Abi {
     x.fold(Array[Byte](0))(Array[Byte](1) ++ Abi.toBytes(_))
   }
 
+  implicit def `Seq => ABI`[T: Abi] = instance[Seq[T]] { xs =>
+    Abi.toBytes(xs.length) ++ xs.flatMap(Abi.toBytes(_))
+  }
+
+  // All None values are the same.
+  val none = Abi.toBytes(None: Option[Int])
+
   def toBytes[T: Abi](x: T): Array[Byte] = Abi[T].toBytes(x)
 
   def args(args: Serializable[_]*): Array[Byte] = {
