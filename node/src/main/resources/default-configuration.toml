@@ -261,6 +261,8 @@ auto-propose-max-interval = "5seconds"
 # Number of deploys to accumulate before proposing.
 auto-propose-max-count = 10
 
+# Maximum block size in MBs
+max-block-size = 10
 
 # io.casperlabs.node.configuration.Configuration.Kamon
 [metrics]

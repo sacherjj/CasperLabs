@@ -44,7 +44,8 @@ final case class CasperConf(
     autoProposeEnabled: Boolean,
     autoProposeCheckInterval: FiniteDuration,
     autoProposeMaxInterval: FiniteDuration,
-    autoProposeMaxCount: Int
+    autoProposeMaxCount: Int,
+    maxBlockSize: Int
 ) extends SubConfig {
   def chainId = shardId
 }

@@ -38,7 +38,7 @@ object DeploySelection {
   ) {
     def effectsCommutativity: (List[DeployEffects], OpMap[state.Key]) =
       (chosen, accumulatedOps)
-    def size: Long = chosen.map(_.deploy.serializedSize).sum.toLong
+    def size: Int = chosen.map(_.deploy.serializedSize).sum
   }
 
   // Appends new element to the intermediate state if it commutes with it.
@@ -53,7 +53,7 @@ object DeploySelection {
   }
 
   def unsafeCreate[F[_]: MonadThrowable: ExecutionEngineService: DeployBuffer: Log](
-      sizeLimitMB: Long
+      sizeLimitMB: Int
   ): DeploySelection[F] =
     new DeploySelection[F] {
       override def select(
@@ -101,7 +101,7 @@ object DeploySelection {
     }
 
   def create[F[_]: Sync: ExecutionEngineService: DeployBuffer: Log](
-      sizeLimitMB: Long
+      sizeLimitMB: Int
   ): F[DeploySelection[F]] =
     Sync[F].delay {
       unsafeCreate[F](sizeLimitMB)

@@ -95,7 +95,7 @@ package object gossiping {
       // TODO: Get from config
       implicit0(deploySelection: DeploySelection[F]) <- Resource.liftF(
                                                          DeploySelection.create[F](
-                                                           10 * 1024 * 1024 /* 10MB */
+                                                           conf.casper.maxBlockSize * 1024 * 1024 /* MB */
                                                          )
                                                        )
 
