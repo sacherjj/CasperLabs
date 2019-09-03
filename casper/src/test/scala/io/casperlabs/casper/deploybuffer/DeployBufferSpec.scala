@@ -1,6 +1,5 @@
 package io.casperlabs.casper.deploybuffer
 
-import cats.data.NonEmptyList
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
@@ -25,7 +24,8 @@ trait DeployBufferSpec
   /* Implement this method in descendants substituting various DeployBuffer implementations */
   protected def testFixture(
       test: DeployBuffer[Task] => Task[Unit],
-      timeout: FiniteDuration = 5.seconds
+      timeout: FiniteDuration = 5.seconds,
+      deployBufferChunkSize: Int = 100
   ): Unit
 
   private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
@@ -105,7 +105,7 @@ trait DeployBufferSpec
           for {
             _   <- db.addAsPending(pending)
             _   <- db.addAsProcessed(processed)
-            all <- db.getByHashes(deployHashes)
+            all <- db.getByHashes(deployHashes.toSet).compile.toList
             _   = assert(deploys.sortedByHash == all.sortedByHash)
           } yield ()
 
@@ -320,6 +320,28 @@ trait DeployBufferSpec
               .toSet
             got <- db.readAccountPendingOldest().compile.toList
           } yield got.toSet shouldBe expected
+        }
+      }
+    }
+
+    "readAccountLowestNonce" should {
+      val existsMultipleDeploysPerAccount: List[Deploy] => Boolean =
+        _.groupBy(_.getHeader.accountPublicKey).values
+          .exists(_.map(_.getHeader.nonce).distinct.size > 1)
+      "return PENDING deploys, one per account with the lowest nonce" in forAll(
+        deploysGen().suchThat(existsMultipleDeploysPerAccount)
+      ) { deploys =>
+        testFixture { db =>
+          for {
+            _ <- db.addAsPending(deploys)
+            expected = deploys
+              .groupBy(_.getHeader.accountPublicKey)
+              .mapValues(_.minBy(_.getHeader.nonce))
+              .values
+              .toList
+              .map(_.deployHash)
+            got <- db.readAccountLowestNonce().compile.toList
+          } yield got should contain theSameElementsAs expected
         }
       }
     }

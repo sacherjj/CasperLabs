@@ -180,10 +180,10 @@ object BlockApproverProtocol {
       protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
         postState.blockNumber
       )
+      eeDeploys <- EitherT.liftF(deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_)))
       genesisResult <- EitherT(
                         ExecutionEngineService[F].runGenesis(
-                          deploys
-                            .map(ProtoUtil.deployDataToEEDeploy),
+                          eeDeploys,
                           protocolVersion
                         )
                       ).leftMap(_.getMessage)

@@ -37,7 +37,7 @@ class GrpcKademliaServiceSpec extends KademliaServiceSpec[Task, GrpcEnvironment]
         def ask: Task[Node]                = Task.pure(env.peer)
       }
     CachedConnections[Task, KademliaConnTag].map { implicit cache =>
-      new GrpcKademliaService(env.port, timeout)
+      new GrpcKademliaService(env.port, timeout, scheduler, scheduler)
     }
   }
 

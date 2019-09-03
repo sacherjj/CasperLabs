@@ -5,13 +5,17 @@ mod simple;
 use contract_ffi::bytesrepr::ToBytes;
 use engine_shared::newtypes::Blake2bHash;
 
-use crate::transaction_source::{Readable, Writable};
 use crate::trie::Trie;
 use crate::trie::{Pointer, PointerBlock};
-use crate::trie_store::TrieStore;
 
 #[derive(Clone)]
 struct TestData<K, V>(Blake2bHash, Trie<K, V>);
+
+impl<'a, K, V> Into<(&'a Blake2bHash, &'a Trie<K, V>)> for &'a TestData<K, V> {
+    fn into(self) -> (&'a Blake2bHash, &'a Trie<K, V>) {
+        (&self.0, &self.1)
+    }
+}
 
 fn create_data() -> Vec<TestData<Vec<u8>, Vec<u8>>> {
     let leaf_1 = Trie::Leaf {
@@ -67,41 +71,4 @@ fn create_data() -> Vec<TestData<Vec<u8>, Vec<u8>>> {
         TestData(node_2_hash, node_2),
         TestData(ext_node_hash, ext_node),
     ]
-}
-
-fn put_many<K, V, T, S, E>(txn: &mut T, store: &S, items: &[TestData<K, V>]) -> Result<(), E>
-where
-    K: ToBytes,
-    V: ToBytes,
-    T: Writable<Handle = S::Handle>,
-    S: TrieStore<K, V>,
-    S::Error: From<T::Error>,
-    E: From<S::Error>,
-{
-    for TestData(hash, leaf) in items.iter() {
-        store.put::<T>(txn, hash, leaf)?;
-    }
-    Ok(())
-}
-
-fn get_many<K, V, T, S, E>(
-    txn: &T,
-    store: &S,
-    keys: &[&Blake2bHash],
-) -> Result<Vec<Option<Trie<K, V>>>, E>
-where
-    K: ToBytes,
-    V: ToBytes,
-    T: Readable<Handle = S::Handle>,
-    S: TrieStore<K, V>,
-    S::Error: From<T::Error>,
-    E: From<S::Error>,
-{
-    let mut ret = Vec::new();
-
-    for hash in keys.iter() {
-        let maybe_value = store.get::<T>(txn, hash)?;
-        ret.push(maybe_value);
-    }
-    Ok(ret)
 }

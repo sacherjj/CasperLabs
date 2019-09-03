@@ -1,6 +1,8 @@
 syntax = "proto3";
 package io.casperlabs.casper.consensus;
 
+import "io/casperlabs/casper/consensus/state.proto";
+
 // Signature over for example a deploy or a block. The location of the public key depends
 // on the subject; for example if it's a block then the key is actually part of the data
 // that needs to be signed over.
@@ -68,7 +70,33 @@ message Deploy {
             // URef of a stored contract.
             bytes uref = 5;
         }
-        bytes args = 2; // ABI-encoded arguments
+        // Deprecated, use `args` instead.
+        bytes abi_args = 2; // ABI-encoded arguments
+        // Keyword arguments. Note that while the execution engine works with the original
+        // positional argument passing style, the order of the arguments matters.
+        repeated Arg args = 6;
+    }
+
+    message Arg {
+        string name = 1;
+        // Note that until the EE doesn't support kwargs directly, missing an Empty values are
+        // not allowed because they would be ambiguous.
+        Value value = 2;
+        // Subset of cases in `state.Value` that can be used as input for contract calls.
+        message Value {
+            oneof value {
+                // Explicitly mark a value as Some or None in the ABI.
+                Value optional_value = 1;
+                bytes bytes_value = 2;
+                int32 int_value = 3;
+                state.IntList int_list = 4;
+                string string_value = 5;
+                state.StringList string_list = 6;
+                uint64 long_value = 7;
+                state.BigInt big_int = 8;
+                state.Key key = 9;
+            }
+        }
     }
 }
 

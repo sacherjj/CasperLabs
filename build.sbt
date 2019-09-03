@@ -132,9 +132,7 @@ lazy val casper = (project in file("casper"))
     shared         % "compile->compile;test->test",
     smartContracts % "compile->compile;test->test",
     crypto,
-    models,
-    client,
-    benchmarks
+    models
   )
 
 lazy val comm = (project in file("comm"))
@@ -209,7 +207,8 @@ lazy val models = (project in file("models"))
       protobufSubDirectoryFilter(
         "google/api",
         "io/casperlabs/casper/consensus",
-        "io/casperlabs/casper/protocol" // TODO: Eventually remove.
+        "io/casperlabs/casper/protocol", // TODO: Eventually remove.
+        "io/casperlabs/ipc"
       )
     ),
     PB.targets in Compile := Seq(
@@ -386,7 +385,7 @@ lazy val storage = (project in file("storage"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared, smartContracts, models % "compile->compile;test->test")
+  .dependsOn(shared, models % "compile->compile;test->test")
 
 // Smart contract execution.
 lazy val smartContracts = (project in file("smart-contracts"))
@@ -412,7 +411,7 @@ lazy val smartContracts = (project in file("smart-contracts"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared, models)
+  .dependsOn(storage)
 
 lazy val client = (project in file("client"))
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)

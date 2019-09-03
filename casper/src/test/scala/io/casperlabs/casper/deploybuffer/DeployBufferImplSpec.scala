@@ -46,12 +46,13 @@ class DeployBufferImplSpec extends DeployBufferSpec with BeforeAndAfterEach with
   }
   override protected def testFixture(
       test: DeployBuffer[Task] => Task[Unit],
-      timeout: FiniteDuration = 5.seconds
+      timeout: FiniteDuration = 5.seconds,
+      deployBufferChunkSize: Int = 100
   ): Unit = {
     val program = for {
       _            <- Task(cleanupTables())
       _            <- Task(setupTables())
-      deployBuffer <- DeployBufferImpl.create[Task]
+      deployBuffer <- DeployBufferImpl.create[Task](deployBufferChunkSize)
       _            <- test(deployBuffer)
     } yield ()
     program.runSyncUnsafe(timeout)

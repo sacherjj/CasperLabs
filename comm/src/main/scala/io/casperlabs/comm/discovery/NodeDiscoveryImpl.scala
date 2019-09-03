@@ -28,10 +28,12 @@ object NodeDiscoveryImpl {
       timeout: FiniteDuration,
       gossipingEnabled: Boolean,
       gossipingRelayFactor: Int,
-      gossipingRelaySaturation: Int
+      gossipingRelaySaturation: Int,
+      ingressScheduler: Scheduler,
+      egressScheduler: Scheduler
   )(
       init: Option[Node]
-  )(implicit scheduler: Scheduler): Resource[F, NodeDiscovery[F]] = {
+  ): Resource[F, NodeDiscovery[F]] = {
 
     def makeKademliaRpc: Resource[F, GrpcKademliaService[F]] =
       Resource.make(
@@ -41,7 +43,9 @@ object NodeDiscoveryImpl {
         ].map { implicit cache =>
           new GrpcKademliaService(
             port,
-            timeout
+            timeout,
+            ingressScheduler,
+            egressScheduler
           )
         }
       )(

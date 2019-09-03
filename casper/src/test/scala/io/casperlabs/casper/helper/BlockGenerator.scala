@@ -10,10 +10,13 @@ import io.casperlabs.blockstorage.{
   DagRepresentation,
   IndexedDagStorage
 }
+import io.casperlabs.casper.DeploySelection
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
 import io.casperlabs.casper.finality.votingmatrix.{FinalityDetectorVotingMatrix, VotingMatrix}
@@ -91,10 +94,15 @@ object BlockGenerator {
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
       )
-      merged <- ExecEngineUtil.merge[F](parents, dag)
+      merged                                   <- ExecEngineUtil.merge[F](parents, dag)
+      implicit0(deployBuffer: DeployBuffer[F]) <- MockDeployBuffer.create[F]()
+      implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
+        5 * 1024 * 1024
+      )
+      _ <- deployBuffer.addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
-                 deploys,
+                 deploys.map(_.deployHash).toSet,
                  b.getHeader.timestamp,
                  ProtocolVersion(1)
                )

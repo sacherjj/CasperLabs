@@ -4,7 +4,8 @@ import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
-import io.casperlabs.casper.consensus
+import io.casperlabs.casper.DeploySelection.DeploySelection
+import io.casperlabs.casper.{consensus, DeploySelection}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -15,6 +16,7 @@ import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.ipc
 import io.casperlabs.casper.consensus.state._
+import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.ipc.{
   DeployResult,
   ExecutionEffect,
@@ -112,48 +114,50 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       deploy: Seq[consensus.Deploy],
       protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
-      implicit blockStorage: BlockStorage[Task],
-      executionEngineService: ExecutionEngineService[Task]
+      implicit executionEngineService: ExecutionEngineService[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
-      blocktime <- Task.delay(System.currentTimeMillis)
+      blocktime                                   <- Task.delay(System.currentTimeMillis)
+      implicit0(deployBuffer: DeployBuffer[Task]) <- MockDeployBuffer.create[Task]()
+      implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task](
+        5 * 1024 * 1024
+      )
+      _ <- deployBuffer.addAsPending(deploy.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
-                          deploy,
+                          deploy.map(_.deployHash).toSet,
                           blocktime,
                           protocolVersion
                         )
-      DeploysCheckpoint(_, _, _, result, _, _, _) = computeResult
+      DeploysCheckpoint(_, _, _, result, _) = computeResult
     } yield result
 
-  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
-    implicit blockStorage =>
-      _ =>
-        // reference costs
-        // deploy each Rholang program separately and record its cost
-        val deploy1 = ProtoUtil.sourceDeploy(
-          ByteString.copyFromUtf8("@1!(Nil)"),
-          System.currentTimeMillis
-        )
-        val deploy2 =
-          ProtoUtil.sourceDeploy(
-            ByteString.copyFromUtf8("@3!([1,2,3,4])"),
-            System.currentTimeMillis
-          )
-        val deploy3 =
-          ProtoUtil.sourceDeploy(
-            ByteString.copyFromUtf8("for(@x <- @0) { @4!(x.toByteArray()) }"),
-            System.currentTimeMillis
-          )
-        for {
-          proc1         <- computeSingleProcessedDeploy(Seq(deploy1))
-          proc2         <- computeSingleProcessedDeploy(Seq(deploy2))
-          proc3         <- computeSingleProcessedDeploy(Seq(deploy3))
-          singleResults = proc1 ++ proc2 ++ proc3
-          batchDeploy   = Seq(deploy1, deploy2, deploy3)
-          batchResult   <- computeSingleProcessedDeploy(batchDeploy)
-        } yield batchResult should contain theSameElementsAs singleResults
+  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in {
+    // reference costs
+    // deploy each Rholang program separately and record its cost
+    val deploy1 = ProtoUtil.sourceDeploy(
+      ByteString.copyFromUtf8("@1!(Nil)"),
+      System.currentTimeMillis
+    )
+    val deploy2 =
+      ProtoUtil.sourceDeploy(
+        ByteString.copyFromUtf8("@3!([1,2,3,4])"),
+        System.currentTimeMillis
+      )
+    val deploy3 =
+      ProtoUtil.sourceDeploy(
+        ByteString.copyFromUtf8("for(@x <- @0) { @4!(x.toByteArray()) }"),
+        System.currentTimeMillis
+      )
+    for {
+      proc1         <- computeSingleProcessedDeploy(Seq(deploy1))
+      proc2         <- computeSingleProcessedDeploy(Seq(deploy2))
+      proc3         <- computeSingleProcessedDeploy(Seq(deploy3))
+      singleResults = proc1 ++ proc2 ++ proc3
+      batchDeploy   = Seq(deploy1, deploy2, deploy3)
+      batchResult   <- computeSingleProcessedDeploy(batchDeploy)
+    } yield batchResult should contain theSameElementsAs singleResults
   }
 
   "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
