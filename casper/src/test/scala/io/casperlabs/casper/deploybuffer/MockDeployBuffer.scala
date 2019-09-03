@@ -13,7 +13,6 @@ import io.casperlabs.shared.Log
 import scala.concurrent.duration.FiniteDuration
 
 class MockDeployBuffer[F[_]: Sync: Log](
-    deployBufferChunkSize: Int,
     deploysWithMetadataRef: Ref[F, Map[Deploy, Metadata]]
 ) extends DeployBuffer[F] {
 
@@ -146,8 +145,6 @@ class MockDeployBuffer[F[_]: Sync: Log](
     fs2.Stream
       .eval(deploys)
       .flatMap(all => fs2.Stream.fromIterator(all.toIterator))
-      .chunkN(deployBufferChunkSize)
-      .flatMap(fs2.Stream.chunk(_))
   }
 
   private def readByStatus(status: Int): F[List[Deploy]] =
@@ -214,11 +211,11 @@ class MockDeployBuffer[F[_]: Sync: Log](
 object MockDeployBuffer {
   case class Metadata(status: Int, updatedAt: Long, createdAt: Long)
 
-  def create[F[_]: Sync: Log](chunkSize: Int = 100): F[DeployBuffer[F]] =
+  def create[F[_]: Sync: Log](): F[DeployBuffer[F]] =
     for {
       ref <- Ref.of[F, Map[Deploy, Metadata]](Map.empty)
-    } yield new MockDeployBuffer[F](chunkSize, ref): DeployBuffer[F]
+    } yield new MockDeployBuffer[F](ref): DeployBuffer[F]
 
-  def unsafeCreate[F[_]: Sync: Log](chunkSize: Int = 100): DeployBuffer[F] =
-    new MockDeployBuffer[F](chunkSize, Ref.unsafe[F, Map[Deploy, Metadata]](Map.empty))
+  def unsafeCreate[F[_]: Sync: Log](): DeployBuffer[F] =
+    new MockDeployBuffer[F](Ref.unsafe[F, Map[Deploy, Metadata]](Map.empty))
 }

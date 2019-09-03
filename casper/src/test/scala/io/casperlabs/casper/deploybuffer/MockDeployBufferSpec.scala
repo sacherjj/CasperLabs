@@ -15,7 +15,7 @@ class MockDeployBufferSpec extends DeployBufferSpec {
   ): Unit =
     (for {
       implicit0(logNOP: Log[Task]) <- Task(new NOPLog[Task])
-      mockDeployBuffer             <- MockDeployBuffer.create[Task](deployBufferChunkSize)
+      mockDeployBuffer             <- MockDeployBuffer.create[Task]
       _                            <- test(mockDeployBuffer)
     } yield ()).runSyncUnsafe(timeout)
 }
