@@ -88,10 +88,10 @@ import scala.concurrent.duration.FiniteDuration
 
   def sizePendingOrProcessed(): F[Long]
 
-  def getByHashes(l: List[ByteString]): F[List[Deploy]]
+  def getByHashes(l: Set[ByteString], chunkSize: Int): fs2.Stream[F, Deploy]
 }
 
-class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
+class DeployBufferImpl[F[_]: Metrics: Time: Sync](
     implicit val xa: Transactor[F]
 ) extends DeployBuffer[F] {
   // Do not forget updating Flyway migration scripts at:
@@ -307,12 +307,12 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       .option
       .transact(xa)
 
-  override def getByHashes(l: List[ByteString]): F[List[Deploy]] =
+  override def getByHashes(l: Set[ByteString], chunkSize: Int): fs2.Stream[F, Deploy] =
     NonEmptyList
-      .fromList[ByteString](l)
-      .fold(List.empty[Deploy].pure[F])(nel => {
+      .fromList[ByteString](l.toList)
+      .fold(fs2.Stream.fromIterator[F, Deploy](List.empty[Deploy].toIterator))(nel => {
         val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
-        q.query.to[List].transact(xa)
+        q.query.streamWithChunkSize(chunkSize).transact(xa)
       })
 }
 

@@ -31,8 +31,8 @@ trait Select[F[_]] {
 object DeploySelection {
 
   trait DeploySelection[F[_]] extends Select[F] {
-    // prestate hash, block time, protocol version, stream of batched deploys.
-    type A = (ByteString, Long, ProtocolVersion, fs2.Stream[F, List[Deploy]])
+    // prestate hash, block time, protocol version, stream of deploys.
+    type A = (ByteString, Long, ProtocolVersion, fs2.Stream[F, Deploy])
     type B = List[ProcessedDeployResult]
   }
 
@@ -65,49 +65,44 @@ object DeploySelection {
   ): DeploySelection[F] =
     new DeploySelection[F] {
       override def select(
-          in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, List[Deploy]])
+          in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, Deploy])
       ): F[List[ProcessedDeployResult]] = {
         val (prestate, blocktime, protocolVersion, deploys) = in
 
         def go(
             state: IntermediateState,
-            stream: fs2.Stream[F, List[Deploy]]
+            stream: fs2.Stream[F, Deploy]
         ): fs2.Pull[F, List[ProcessedDeployResult], Unit] =
           stream.pull.uncons.flatMap {
             case Some((chunk, streamTail)) =>
               // Fold over elements of the chunk, picking deploys that commute,
               // stop as soon as maximum block size limit is reached.
-              val chunkResults = chunk.toList
-                .foldM[F, Either[IntermediateState, IntermediateState]](
-                  state.asRight[IntermediateState]
-                ) {
-                  case (stateE, batch) =>
-                    val state = stateE.fold(identity, identity)
-                    processDeploys[F](
-                      prestate,
-                      blocktime,
-                      batch,
-                      protocolVersion
-                    ) map { deployResults =>
-                      val pdr = zipDeploysResults(batch, deployResults).toList
-                      pdr.foldLeftM(state) {
-                        case (accState, element: DeployEffects) =>
-                          // newState is either `accState` if `element` doesn't commute,
-                          // or contains `element` if it does.
-                          val newState = accState.addCommuting(element)
-                          // TODO: Use some base `Block` element to measure the size.
-                          // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
-                          if (newState.size > (0.9 * sizeLimitBytes)) {
-                            // foldM will short-circuit for `Left`
-                            // and continue for `Right`
-                            accState.asLeft[IntermediateState]
-                          } else newState.asRight[IntermediateState]
-                        case (accState, element: NoEffectsFailure) =>
-                          // InvalidDeploy-s should be pushed into the stream
-                          // for later handling (like discarding invalid deploys).
-                          accState.copy(diff = element :: accState.diff).asRight[IntermediateState]
-                      }
-                    }
+              val batch = chunk.toList
+              val chunkResults =
+                processDeploys[F](
+                  prestate,
+                  blocktime,
+                  batch,
+                  protocolVersion
+                ) map { deployResults =>
+                  val pdr = zipDeploysResults(batch, deployResults).toList
+                  pdr.foldLeftM(state) {
+                    case (accState, element: DeployEffects) =>
+                      // newState is either `accState` if `element` doesn't commute,
+                      // or contains `element` if it does.
+                      val newState = accState.addCommuting(element)
+                      // TODO: Use some base `Block` element to measure the size.
+                      // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
+                      if (newState.size > (0.9 * sizeLimitBytes)) {
+                        // foldM will short-circuit for `Left`
+                        // and continue for `Right`
+                        accState.asLeft[IntermediateState]
+                      } else newState.asRight[IntermediateState]
+                    case (accState, element: NoEffectsFailure) =>
+                      // InvalidDeploy-s should be pushed into the stream
+                      // for later handling (like discarding invalid deploys).
+                      accState.copy(diff = element :: accState.diff).asRight[IntermediateState]
+                  }
                 }
 
               fs2.Pull

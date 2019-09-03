@@ -59,9 +59,7 @@ class DeploySelectionTest
 
       assert(deploysSize(expected) < (0.9 * smallBlockSizeBytes))
 
-      val countedStream = CountedStream(
-        toStreamChunked(deploys)
-      )
+      val countedStream = CountedStream(fs2.Stream.fromIterator(deploys.toIterator))
 
       implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
 
@@ -96,8 +94,6 @@ class DeploySelectionTest
       val stream = fs2.Stream
         .fromIterator(commuting.toIterator)
         .interleave(fs2.Stream.fromIterator(conflicting.toIterator))
-        .chunkLimit(1)
-        .map(_.toList)
 
       val cappedEffects = takeUnlessTooBig(smallBlockSizeBytes)(commuting)
 
@@ -127,7 +123,7 @@ class DeploySelectionTest
       val deploySelection: DeploySelection[Task] =
         DeploySelection.create[Task](maxBlockSizeMb)
 
-      val stream = toStreamChunked(cappedDeploys)
+      val stream = fs2.Stream.fromIterator(cappedDeploys.toIterator)
 
       val test = deploySelection
         .select((prestate, blocktime, protocolVersion, stream))
@@ -149,7 +145,7 @@ class DeploySelectionTest
 
     val cappedEffects = takeUnlessTooBig(smallBlockSizeBytes)(effects)
 
-    val stream = fs2.Stream.fromIterator(deploys.toIterator).chunkLimit(1).map(_.toList)
+    val stream = fs2.Stream.fromIterator(deploys.toIterator)
 
     val counter                                   = AtomicInt(0)
     implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherInvalidDeploy(counter) _)

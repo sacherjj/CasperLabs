@@ -45,10 +45,7 @@ object ExecEngineUtil {
   ): F[DeploysCheckpoint] =
     for {
       preStateHash <- computePrestate[F](merged)
-      deployStream = fs2.Stream
-        .fromIterator[F, DeployHash](hashes.toIterator)
-        .chunkLimit(10) // TODO: from config?
-        .flatMap(batch => fs2.Stream.eval(DeployBuffer[F].getByHashes(batch.toList)))
+      deployStream = DeployBuffer[F].getByHashes(hashes, chunkSize = 20)
       pdr <- DeploySelection[F].select(
               (preStateHash, blocktime, protocolVersion, deployStream)
             )

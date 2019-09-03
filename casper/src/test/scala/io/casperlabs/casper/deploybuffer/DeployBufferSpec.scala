@@ -105,7 +105,7 @@ trait DeployBufferSpec
           for {
             _   <- db.addAsPending(pending)
             _   <- db.addAsProcessed(processed)
-            all <- db.getByHashes(deployHashes)
+            all <- db.getByHashes(deployHashes.toSet, chunkSize = 100).compile.toList
             _   = assert(deploys.sortedByHash == all.sortedByHash)
           } yield ()
 
