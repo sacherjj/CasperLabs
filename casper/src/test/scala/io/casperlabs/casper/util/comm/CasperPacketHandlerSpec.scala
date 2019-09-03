@@ -128,7 +128,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       casper.validation.raiseValidateErrorThroughApplicativeError[Task]
     implicit val validation      = new ValidationImpl[Task]
     implicit val deployBuffer    = MockDeployBuffer.unsafeCreate[Task]()
-    implicit val deploySelection = DeploySelection.unsafeCreate[Task](5 * 1024 * 1024)
+    implicit val deploySelection = DeploySelection.create[Task](5 * 1024 * 1024)
   }
 
   "CasperPacketHandler" when {

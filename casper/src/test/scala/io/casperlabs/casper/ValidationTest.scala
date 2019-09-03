@@ -857,9 +857,9 @@ class ValidationTest
 
       for {
         implicit0(deployBuffer: DeployBuffer[Task]) <- MockDeployBuffer.create[Task]()
-        implicit0(deploySelection: DeploySelection[Task]) <- DeploySelection.create[Task](
-                                                              5 * 1024 * 1024 /* 10MB */
-                                                            )
+        implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task](
+          5 * 1024 * 1024
+        )
         _ <- deployBuffer.addAsPending(deploys.toList)
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               ExecEngineUtil.MergeResult.empty,

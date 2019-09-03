@@ -66,7 +66,7 @@ class DeploySelectionTest
       implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
 
       val deploySelection: DeploySelection[Task] =
-        DeploySelection.unsafeCreate[Task](smallBlockSizeBytes)
+        DeploySelection.create[Task](smallBlockSizeBytes)
 
       val test = for {
         selected <- deploySelection
@@ -104,7 +104,7 @@ class DeploySelectionTest
       val counter                                   = AtomicInt(0)
       implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
       val deploySelection: DeploySelection[Task] =
-        DeploySelection.unsafeCreate[Task](smallBlockSizeBytes)
+        DeploySelection.create[Task](smallBlockSizeBytes)
 
       val test = deploySelection
         .select((prestate, blocktime, protocolVersion, stream))
@@ -125,7 +125,7 @@ class DeploySelectionTest
       implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
 
       val deploySelection: DeploySelection[Task] =
-        DeploySelection.unsafeCreate[Task](maxBlockSizeMb)
+        DeploySelection.create[Task](maxBlockSizeMb)
 
       val stream = toStreamChunked(cappedDeploys)
 
@@ -154,7 +154,7 @@ class DeploySelectionTest
     val counter                                   = AtomicInt(0)
     implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherInvalidDeploy(counter) _)
     val deploySelection: DeploySelection[Task] =
-      DeploySelection.unsafeCreate[Task](smallBlockSizeBytes)
+      DeploySelection.create[Task](smallBlockSizeBytes)
 
     val test = deploySelection
       .select((prestate, blocktime, protocolVersion, stream))

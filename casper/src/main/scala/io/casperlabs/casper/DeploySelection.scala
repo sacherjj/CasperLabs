@@ -59,7 +59,7 @@ object DeploySelection {
     }
   }
 
-  def unsafeCreate[F[_]: MonadThrowable: ExecutionEngineService: Fs2Compiler](
+  def create[F[_]: MonadThrowable: ExecutionEngineService: Fs2Compiler](
       sizeLimitBytes: Int
   ): DeploySelection[F] =
     new DeploySelection[F] {
@@ -130,12 +130,5 @@ object DeploySelection {
 
         go(IntermediateState(), hashes).stream.compile.toList.map(_.flatten)
       }
-    }
-
-  def create[F[_]: Sync: ExecutionEngineService: DeployBuffer: Log](
-      sizeLimitMB: Int
-  ): F[DeploySelection[F]] =
-    Sync[F].delay {
-      unsafeCreate[F](sizeLimitMB)
     }
 }

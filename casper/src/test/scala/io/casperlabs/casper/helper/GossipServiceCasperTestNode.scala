@@ -77,7 +77,7 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
-  implicit val deploySelection = DeploySelection.unsafeCreate[F](5 * 1024 * 1024)
+  implicit val deploySelection = DeploySelection.create[F](5 * 1024 * 1024)
 
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it

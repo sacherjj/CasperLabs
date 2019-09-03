@@ -119,9 +119,9 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     for {
       blocktime                                   <- Task.delay(System.currentTimeMillis)
       implicit0(deployBuffer: DeployBuffer[Task]) <- MockDeployBuffer.create[Task]()
-      implicit0(deploySelection: DeploySelection[Task]) <- DeploySelection.create[Task](
-                                                            5 * 1024 * 1024
-                                                          )
+      implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task](
+        5 * 1024 * 1024
+      )
       _ <- deployBuffer.addAsPending(deploy.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](

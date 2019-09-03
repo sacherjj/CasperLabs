@@ -94,7 +94,7 @@ class TransportLayerCasperTestNode[F[_]](
 
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val validation        = HashSetCasperTestNode.makeValidation[F]
-  implicit val deploySelection   = DeploySelection.unsafeCreate[F](5 * 1024 * 1024)
+  implicit val deploySelection   = DeploySelection.create[F](5 * 1024 * 1024)
 
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](

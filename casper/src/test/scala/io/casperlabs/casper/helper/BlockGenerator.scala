@@ -96,9 +96,9 @@ object BlockGenerator {
       )
       merged                                   <- ExecEngineUtil.merge[F](parents, dag)
       implicit0(deployBuffer: DeployBuffer[F]) <- MockDeployBuffer.create[F]()
-      implicit0(deploySelection: DeploySelection[F]) <- DeploySelection.create[F](
-                                                         5 * 1024 * 1024 /* 10MB */
-                                                       )
+      implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
+        5 * 1024 * 1024
+      )
       _ <- deployBuffer.addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,

@@ -92,7 +92,7 @@ package object gossiping {
 
       genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
 
-      implicit0(deploySelection: DeploySelection[F]) <- Resource.liftF(
+      implicit0(deploySelection: DeploySelection[F]) <- Resource.pure[F, DeploySelection[F]](
                                                          DeploySelection.create[F](
                                                            conf.casper.maxBlockSizeBytes
                                                          )
