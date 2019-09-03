@@ -39,11 +39,12 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
                     |FROM deploy_process_results dpr
                     |INNER JOIN deploys d
                     |ON dpr.deploy_hash=d.hash
-                    |WHERE dpr.block_hash=$blockHash""".stripMargin
+                    |WHERE dpr.block_hash=$blockHash
+                    |ORDER BY dpr.deploy_position""".stripMargin
                .query[(Deploy, Int, Long, Option[String])]
                .to[List]
                .map { blockBodyData =>
-                 val processedDeploys = blockBodyData.sortBy(_._2).map {
+                 val processedDeploys = blockBodyData.map {
                    case (deploy, _, cost, maybeError) =>
                      ProcessedDeploy(
                        deploy.some,
