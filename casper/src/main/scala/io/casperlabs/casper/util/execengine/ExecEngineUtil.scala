@@ -125,21 +125,18 @@ object ExecEngineUtil {
     * they will be rejected.
     *
     * @param deployEffects List of effects that deploy made on the GlobalState.
-    * @param init Initial set of deploy effects with which the rest of input `deployEffects`
-    *             has to commute with.
     *
     * @return List of deploy effects that commute.
     */
   //TODO: Logic for picking the commuting group? Prioritize highest revenue? Try to include as many deploys as possible?
   def findCommutingEffects(
-      deployEffects: Seq[DeployEffects],
-      init: (List[DeployEffects], OpMap[state.Key]) = (List.empty, Map.empty)
+      deployEffects: Seq[DeployEffects]
   ): List[DeployEffects] =
     deployEffects match {
-      case Nil => init._1
+      case Nil => Nil
       case list =>
         val (result, _) =
-          list.foldLeft(init) {
+          list.foldLeft((List.empty[DeployEffects] -> Map.empty[state.Key, Op])) {
             case (unchanged @ (acc, totalOps), next) =>
               val ops = Op.fromIpcEntry(next.effects.opMap)
               if (totalOps ~ ops)
