@@ -1,6 +1,8 @@
 import os
 import logging
 import subprocess
+from operator import add
+from functools import reduce
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
 
 
@@ -14,13 +16,7 @@ class CLIErrorExit(Exception):
 
 
 class CLI:
-    def __init__(
-        self,
-        node,
-        cli_cmd="casperlabs_client",
-        tls_parameter=None,
-        tls_parameter_name="--certificate-file",
-    ):
+    def __init__(self, node, cli_cmd="casperlabs_client", tls_parameters=None):
         self.node = node
         self.host = (
             os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
@@ -28,14 +24,17 @@ class CLI:
         self.port = node.grpc_external_docker_port
         self.internal_port = node.grpc_internal_docker_port
         self.cli_cmd = cli_cmd
-        self.tls_parameter = tls_parameter
-        self.tls_parameter_name = tls_parameter_name
+        self.tls_parameters = tls_parameters or {}
 
     def expand_args(self, args):
-        connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
-        if self.tls_parameter:
-            connection_details += [self.tls_parameter_name, self.tls_parameter]
-
+        connection_details = [
+            "--host",
+            f"{self.host}",
+            "--port",
+            f"{self.port}",
+        ] + reduce(
+            add, [[str(p), str(self.tls_parameters[p])] for p in self.tls_parameters]
+        )
         string_args = [str(a) for a in args]
 
         return "--help" in args and string_args or connection_details + string_args

@@ -8,8 +8,9 @@ def test_grpc_encryption_scala_cli(encrypted_one_node_network):
     node = encrypted_one_node_network.docker_nodes[0]
     cli = DockerCLI(
         node,
-        tls_parameter=extract_common_name(node.config.tls_certificate_local_path()),
-        tls_parameter_name="--node-id",
+        tls_parameters={
+            "--node-id": extract_common_name(node.config.tls_certificate_local_path())
+        },
     )
     blocks = cli("show-blocks", "--depth", 1)
     logging.debug(f"{blocks}")
@@ -22,6 +23,7 @@ def test_grpc_encryption_python_lib(encrypted_one_node_network):
         host,
         node.grpc_external_docker_port,
         node.grpc_internal_docker_port,
+        extract_common_name(node.config.tls_certificate_local_path()),
         node.config.tls_certificate_local_path(),
     )
     blocks = list(client.showBlocks(1))
@@ -31,7 +33,13 @@ def test_grpc_encryption_python_lib(encrypted_one_node_network):
 
 def test_grpc_encryption_python_cli(encrypted_one_node_network):
     node = encrypted_one_node_network.docker_nodes[0]
-    cli = CLI(node, tls_parameter=node.config.tls_certificate_local_path())
+    cli = CLI(
+        node,
+        tls_parameters={
+            "--certificate-file": node.config.tls_certificate_local_path(),
+            "--node-id": extract_common_name(node.config.tls_certificate_local_path()),
+        },
+    )
     blocks = cli("show-blocks", "--depth", 1)
     assert len(blocks)
     logging.debug(f"{blocks}")

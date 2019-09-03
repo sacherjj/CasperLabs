@@ -246,11 +246,11 @@ def extract_common_name(certificate_file: str) -> str:
 
 
 class SecureGRPCService:
-    def __init__(self, host, port, serviceStub, certificate_file):
+    def __init__(self, host, port, serviceStub, node_id, certificate_file):
         self.address = f"{host}:{port}"
         self.serviceStub = serviceStub
+        self.node_id = node_id or extract_common_name(certificate_file)
         self.certificate_file = certificate_file
-        self.node_id = extract_common_name(certificate_file)
         with open(self.certificate_file, "rb") as f:
             self.credentials = grpc.ssl_channel_credentials(f.read())
         self.secure_channel_options = self.node_id and (
@@ -296,27 +296,40 @@ class CasperLabsClient:
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
         internal_port: int = DEFAULT_INTERNAL_PORT,
+        node_id: str = None,
         certificate_file: str = None,
     ):
         """
         CasperLabs client's constructor.
 
-        :param host:           Hostname or IP of node on which gRPC service is running
-        :param port:           Port used for external gRPC API
-        :param internal_port:  Port used for internal gRPC API
+        :param host:            Hostname or IP of node on which gRPC service is running
+        :param port:            Port used for external gRPC API
+        :param internal_port:   Port used for internal gRPC API
         :param certificate_file:      Certificate file for TLS
+        :param node_id:         node_id of the node, for gRPC encryption
         """
         self.host = host
         self.port = port
         self.internal_port = internal_port
+        self.node_id = node_id
         self.certificate_file = certificate_file
 
-        if certificate_file:
+        if node_id:
             self.casperService = SecureGRPCService(
-                host, port, CasperServiceStub, certificate_file
+                host, port, CasperServiceStub, node_id, certificate_file
             )
             self.controlService = SecureGRPCService(
-                host, internal_port, ControlServiceStub, certificate_file
+                # We currently assume that if node_id is given then
+                # we get certificate_file too. This is unlike in the Scala client
+                # where node_id is all that's needed for configuring secure connection.
+                # The reason for this is that currently it doesn't seem to be possible
+                # to open a secure grpc connection in Python without supplying any
+                # certificate on the client side.
+                host,
+                internal_port,
+                ControlServiceStub,
+                node_id,
+                certificate_file,
             )
         else:
             self.casperService = InsecureGRPCService(host, port, CasperServiceStub)
@@ -764,6 +777,12 @@ def main():
                 help="Port used for internal gRPC API.",
             )
             self.parser.add_argument(
+                "--node-id",
+                required=False,
+                type=str,
+                help="node_id parameter for TLS connection",
+            )
+            self.parser.add_argument(
                 "--certificate-file",
                 required=False,
                 type=str,
@@ -787,7 +806,11 @@ def main():
             args = self.parser.parse_args()
             return args.function(
                 CasperLabsClient(
-                    args.host, args.port, args.internal_port, args.certificate_file
+                    args.host,
+                    args.port,
+                    args.internal_port,
+                    args.node_id,
+                    args.certificate_file,
                 ),
                 args,
             )
