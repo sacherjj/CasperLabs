@@ -107,7 +107,8 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
   override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
     sql"""|SELECT block_hash
           |FROM deploy_process_results
-          |WHERE deploy_hash=$deployHash""".stripMargin.query[BlockHash].to[Seq].transact(xa)
+          |WHERE deploy_hash=$deployHash
+          |ORDER BY create_time_millis""".stripMargin.query[BlockHash].to[Seq].transact(xa)
 
   override def checkpoint(): F[Unit] = ().pure[F]
 
