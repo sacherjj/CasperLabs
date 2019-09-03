@@ -31,6 +31,7 @@ trait Select[F[_]] {
 object DeploySelection {
 
   trait DeploySelection[F[_]] extends Select[F] {
+    // prestate hash, block time, protocol version, stream of batched deploys.
     type A = (ByteString, Long, ProtocolVersion, fs2.Stream[F, List[Deploy]])
     type B = List[ProcessedDeployResult]
   }
@@ -66,7 +67,7 @@ object DeploySelection {
       override def select(
           in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, List[Deploy]])
       ): F[List[ProcessedDeployResult]] = {
-        val (prestate, blocktime, protocolVersion, hashes) = in
+        val (prestate, blocktime, protocolVersion, deploys) = in
 
         def go(
             state: IntermediateState,
@@ -128,7 +129,7 @@ object DeploySelection {
             case None => fs2.Pull.done
           }
 
-        go(IntermediateState(), hashes).stream.compile.toList.map(_.flatten)
+        go(IntermediateState(), deploys).stream.compile.toList.map(_.flatten)
       }
     }
 }
