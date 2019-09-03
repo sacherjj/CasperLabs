@@ -21,7 +21,7 @@ use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
-use engine_storage::global_state::{CommitResult, History, StateReader};
+use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::Preprocessor;
 
@@ -44,24 +44,24 @@ pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 
 const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
 
-pub enum GetBondedValidatorsError<H: History> {
-    StorageErrors(H::Error),
+pub enum GetBondedValidatorsError<S: StateProvider> {
+    StorageErrors(S::Error),
     PostStateHashNotFound(Blake2bHash),
     PoSNotFound(Key),
 }
 
 #[derive(Debug)]
-pub struct EngineState<H> {
+pub struct EngineState<S> {
     config: EngineConfig,
-    state: H,
+    state: S,
 }
 
-impl<H> EngineState<H>
+impl<S> EngineState<S>
 where
-    H: History,
-    H::Error: Into<execution::Error>,
+    S: StateProvider,
+    S::Error: Into<execution::Error>,
 {
-    pub fn new(state: H, config: EngineConfig) -> EngineState<H> {
+    pub fn new(state: S, config: EngineConfig) -> EngineState<S> {
         EngineState { config, state }
     }
 
@@ -105,7 +105,7 @@ where
     pub fn tracking_copy(
         &self,
         hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
+    ) -> Result<Option<TrackingCopy<S::Reader>>, Error> {
         match self.state.checkout(hash).map_err(Into::into)? {
             Some(tc) => Ok(Some(TrackingCopy::new(tc))),
             None => Ok(None),
@@ -185,7 +185,7 @@ where
 
     fn get_module<A, P: Preprocessor<A>>(
         &self,
-        tracking_copy: Rc<RefCell<TrackingCopy<<H as History>::Reader>>>,
+        tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
         deploy_item: &ExecutableDeployItem,
         account: &Account,
         correlation_id: CorrelationId,
@@ -730,7 +730,7 @@ where
         correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, H::Error> {
+    ) -> Result<CommitResult, S::Error> {
         self.state.commit(correlation_id, prestate_hash, effects)
     }
 
@@ -741,7 +741,7 @@ where
         pos_key: &Key, /* Address of the PoS as currently bonded validators are stored in its
                         * known urefs map. */
         correlation_id: CorrelationId,
-    ) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<H>> {
+    ) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<S>> {
         self.state
             .checkout(root_hash)
             .map_err(GetBondedValidatorsError::StorageErrors)

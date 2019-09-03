@@ -19,7 +19,7 @@ use engine_core::tracking_copy::QueryResult;
 use engine_shared::logging;
 use engine_shared::logging::{log_duration, log_info};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
-use engine_storage::global_state::{CommitResult, History};
+use engine_storage::global_state::{CommitResult, StateProvider};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
 
@@ -51,11 +51,11 @@ const TAG_RESPONSE_GENESIS: &str = "genesis_response";
 // Proto definitions should be translated into domain objects when Engine's API
 // is invoked. This way core won't depend on casperlabs-engine-grpc-server
 // (outer layer) leading to cleaner design.
-impl<H> ipc_grpc::ExecutionEngineService for EngineState<H>
+impl<S> ipc_grpc::ExecutionEngineService for EngineState<S>
 where
-    H: History,
-    EngineError: From<H::Error>,
-    H::Error: Into<engine_core::execution::Error> + Debug,
+    S: StateProvider,
+    EngineError: From<S::Error>,
+    S::Error: Into<engine_core::execution::Error> + Debug,
 {
     fn query(
         &self,
@@ -310,7 +310,7 @@ where
                     )
                 } else {
                     // Commit unsuccessful.
-                    grpc_response_from_commit_result::<H>(prestate_hash, commit_result)
+                    grpc_response_from_commit_result::<S>(prestate_hash, commit_result)
                 }
             }
         };
@@ -551,8 +551,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_deploys<A, H, E, P>(
-    engine_state: &EngineState<H>,
+fn run_deploys<A, S, E, P>(
+    engine_state: &EngineState<S>,
     executor: &E,
     preprocessor: &P,
     prestate_hash: Blake2bHash,
@@ -562,11 +562,11 @@ fn run_deploys<A, H, E, P>(
     correlation_id: CorrelationId,
 ) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
 where
-    H: History,
+    S: StateProvider,
     E: Executor<A>,
     P: Preprocessor<A>,
-    EngineError: From<H::Error>,
-    H::Error: Into<engine_core::execution::Error>,
+    EngineError: From<S::Error>,
+    S::Error: Into<engine_core::execution::Error>,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
     // the execution of ALL deploys within the block. This is because all of them
@@ -647,8 +647,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn execute_deploys<A, H, E, P>(
-    engine_state: &EngineState<H>,
+fn execute_deploys<A, S, E, P>(
+    engine_state: &EngineState<S>,
     executor: &E,
     preprocessor: &P,
     prestate_hash: Blake2bHash,
@@ -658,11 +658,11 @@ fn execute_deploys<A, H, E, P>(
     correlation_id: CorrelationId,
 ) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
 where
-    H: History,
+    S: StateProvider,
     E: Executor<A>,
     P: Preprocessor<A>,
-    EngineError: From<H::Error>,
-    H::Error: Into<engine_core::execution::Error>,
+    EngineError: From<S::Error>,
+    S::Error: Into<engine_core::execution::Error>,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
     // the execution of ALL deploys within the block. This is because all of them
@@ -752,20 +752,20 @@ where
 
 // TODO: Refactor.
 #[allow(clippy::implicit_hasher)]
-pub fn bonded_validators_and_commit_result<H>(
+pub fn bonded_validators_and_commit_result<S>(
     prestate_hash: Blake2bHash,
     poststate_hash: Blake2bHash,
-    commit_result: Result<CommitResult, H::Error>,
-    bonded_validators: Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<H>>,
+    commit_result: Result<CommitResult, S::Error>,
+    bonded_validators: Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<S>>,
 ) -> CommitResponse
 where
-    H: History,
-    H::Error: Into<EngineError> + std::fmt::Debug,
+    S: StateProvider,
+    S::Error: Into<EngineError> + std::fmt::Debug,
 {
     match bonded_validators {
         Ok(bonded_validators) => {
             let mut grpc_response =
-                grpc_response_from_commit_result::<H>(prestate_hash, commit_result);
+                grpc_response_from_commit_result::<S>(prestate_hash, commit_result);
             let grpc_bonded_validators = bonded_validators
                 .iter()
                 .map(|(pk, bond)| {
@@ -782,7 +782,7 @@ where
             grpc_response
         }
         Err(GetBondedValidatorsError::StorageErrors(error)) => {
-            grpc_response_from_commit_result::<H>(poststate_hash, Err(error))
+            grpc_response_from_commit_result::<S>(poststate_hash, Err(error))
         }
         Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)) => {
             // I am not sure how to parse this error. It would mean that most probably
@@ -801,7 +801,7 @@ where
             commit_response.set_failed_transform(err);
             commit_response
         }
-        Err(GetBondedValidatorsError::PoSNotFound(key)) => grpc_response_from_commit_result::<H>(
+        Err(GetBondedValidatorsError::PoSNotFound(key)) => grpc_response_from_commit_result::<S>(
             poststate_hash,
             Ok(CommitResult::KeyNotFound(key)),
         ),

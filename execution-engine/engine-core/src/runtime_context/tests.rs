@@ -12,7 +12,7 @@ use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::{self, Account, Contract, Value};
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::{InMemoryGlobalState, InMemoryGlobalStateView};
-use engine_storage::global_state::{CommitResult, History};
+use engine_storage::global_state::{CommitResult, StateProvider};
 
 use super::{Error, RuntimeContext, URefAddr, Validated};
 use crate::execution::{create_rng, extract_access_rights_from_keys};
