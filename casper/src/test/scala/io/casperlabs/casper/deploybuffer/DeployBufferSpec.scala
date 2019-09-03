@@ -1,6 +1,5 @@
 package io.casperlabs.casper.deploybuffer
 
-import cats.data.NonEmptyList
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
@@ -25,7 +24,8 @@ trait DeployBufferSpec
   /* Implement this method in descendants substituting various DeployBuffer implementations */
   protected def testFixture(
       test: DeployBuffer[Task] => Task[Unit],
-      timeout: FiniteDuration = 5.seconds
+      timeout: FiniteDuration = 5.seconds,
+      deployBufferChunkSize: Int = 100
   ): Unit
 
   private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
@@ -105,7 +105,7 @@ trait DeployBufferSpec
           for {
             _   <- db.addAsPending(pending)
             _   <- db.addAsProcessed(processed)
-            all <- db.getByHashes(deployHashes)
+            all <- db.getByHashes(deployHashes.toSet).compile.toList
             _   = assert(deploys.sortedByHash == all.sortedByHash)
           } yield ()
 

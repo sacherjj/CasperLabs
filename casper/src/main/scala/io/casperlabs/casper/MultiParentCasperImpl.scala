@@ -8,6 +8,7 @@ import cats.mtl.FunctorRaise
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, DagStorage}
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
@@ -51,7 +52,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler](
+class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -530,12 +531,6 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Metrics: Time: 
         postStateHash,
         bondedValidators,
         deploysForBlock,
-        // We don't have to put InvalidNonce deploys back to the buffer,
-        // as by default buffer is cleared when deploy gets included in
-        // the finalized block. If that strategy ever changes, we will have to
-        // put them back into the buffer explicitly.
-        invalidNonceDeploys,
-        deploysToDiscard,
         protocolVersion
       )                 = result
       dag               <- dag
@@ -569,15 +564,6 @@ class MultiParentCasperImpl[F[_]: Bracket[?[_], Throwable]: Log: Metrics: Time: 
 
         CreateBlockStatus.created(block)
       }
-      // Discard deploys that will never be included because they failed some precondition.
-      // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included
-      // in the past of the new fork, it wouldn't hit this as the nonce would be what we expect.
-      // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
-      // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
-      // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
-
-      _ <- DeployBuffer[F]
-            .markAsDiscarded(deploysToDiscard.toList.map(_.deploy)) whenA deploysToDiscard.nonEmpty
     } yield status)
       .handleErrorWith {
         case ex @ SmartContractEngineError(error_msg) =>
@@ -689,7 +675,7 @@ object MultiParentCasperImpl {
   def create[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: Cell[
     ?[_],
     CasperState
-  ]](
+  ]: DeploySelection](
       statelessExecutor: StatelessExecutor[F],
       broadcaster: Broadcaster[F],
       validatorId: Option[ValidatorIdentity],

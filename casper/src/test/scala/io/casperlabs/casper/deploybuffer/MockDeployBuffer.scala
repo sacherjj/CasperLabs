@@ -139,9 +139,12 @@ class MockDeployBuffer[F[_]: Sync: Log](
       )
       .flatMap(d => fs2.Stream.fromIterator(d.toIterator))
 
-  override def getByHashes(l: List[ByteString]): F[List[Deploy]] = {
-    val hashesSet = l.toSet
-    (readPending, readProcessed).mapN(_ ++ _).map(_.filter(d => hashesSet.contains(d.deployHash)))
+  override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] = {
+    val deploys =
+      (readPending, readProcessed).mapN(_ ++ _).map(_.filter(d => l.contains(d.deployHash)))
+    fs2.Stream
+      .eval(deploys)
+      .flatMap(all => fs2.Stream.fromIterator(all.toIterator))
   }
 
   private def readByStatus(status: Int): F[List[Deploy]] =
