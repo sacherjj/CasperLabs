@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use grpc::RequestOptions;
 
-use crate::support::test_support::{self, WasmTestBuilder, DEFAULT_BLOCK_TIME};
-use contract_ffi::base16;
+use crate::support::test_support::{self, DEFAULT_BLOCK_TIME};
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
@@ -593,85 +592,6 @@ fn should_fail_when_insufficient_funds() {
             .get_exec_error()
             .get_message()
     )
-}
-
-#[ignore]
-#[test]
-fn should_create_purse() {
-    let account_key = Key::Account(ACCOUNT_1_ADDR);
-
-    // This test runs a contract that's after every call extends the same key with more data
-    let result = WasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec_with_args(
-            GENESIS_ADDR,
-            "transfer_to_account_01.wasm",
-            DEFAULT_BLOCK_TIME,
-            1,
-            (ACCOUNT_1_ADDR,),
-        )
-        .expect_success()
-        .commit()
-        .finish();
-
-    // Create purse
-
-    let result = WasmTestBuilder::from_result(result)
-        .exec(
-            ACCOUNT_1_ADDR,
-            "create_purse_01.wasm",
-            DEFAULT_BLOCK_TIME,
-            1,
-        )
-        .expect_success()
-        .commit()
-        .finish();
-
-    let mint_contract_uref = result.builder().get_mint_contract_uref();
-    let mint_transform =
-        &result.builder().get_transforms()[0][&mint_contract_uref.remove_access_rights().into()];
-
-    let add_keys = if let Transform::AddKeys(keys) = mint_transform {
-        keys
-    } else {
-        panic!(
-            "Mint transform is expected to be an AddKeys variant instead got {:?}",
-            mint_transform
-        );
-    };
-    // Exactly one new key which is the new purse created
-    assert_eq!(add_keys.len(), 1);
-    let (key, _value) = add_keys.iter().nth(0).unwrap();
-
-    // Decode uref name
-    assert!(
-        key.starts_with("uref-"),
-        format!(
-            "expected uref to start with uref- but the map contains {:?}",
-            add_keys
-        )
-    );
-    let decoded_purse_id = base16::decode_lower(&key[5..69]).expect("should decode base16");
-    assert_eq!(decoded_purse_id.len(), 32);
-
-    let account_1 = result
-        .builder()
-        .get_account(account_key)
-        .expect("should have account 1");
-    assert!(account_1.urefs_lookup().contains_key("actual_purse_id"));
-    let actual_purse_id = account_1.urefs_lookup()["actual_purse_id"];
-    let actual_purse_id_uref = actual_purse_id.as_uref().expect("should be uref");
-
-    // Purse created by mint matches purse stored by the contract
-    assert_eq!(decoded_purse_id, actual_purse_id_uref.addr());
-
-    // Newly created purse has 0 balance
-    assert_eq!(
-        result
-            .builder()
-            .get_purse_balance(PurseId::new(*actual_purse_id_uref)),
-        U512::from(0)
-    );
 }
 
 #[ignore]
