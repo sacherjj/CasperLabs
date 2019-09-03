@@ -65,6 +65,11 @@ object BlockStorage {
     ): F[Option[BlockMsgWithTransform]] =
       incAndMeasure("get", super.get(blockHash))
 
+    abstract override def findBlockHash(
+        p: BlockHash => Boolean
+    ): F[Option[BlockHash]] =
+      incAndMeasure("findBlockHash", super.findBlockHash(p))
+
     abstract override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
       incAndMeasure("getBlockSummary", super.getBlockSummary(blockHash))
 
