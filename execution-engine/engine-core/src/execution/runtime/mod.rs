@@ -8,6 +8,7 @@ use std::iter::IntoIterator;
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 use itertools::Itertools;
+use num_traits::ToPrimitive;
 use parity_wasm::elements::Module;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -16,6 +17,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
+
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
@@ -124,12 +126,17 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
-pub fn create_rng(account_addr: [u8; 32], nonce: u64) -> ChaChaRng {
+pub fn create_rng(
+    account_addr: [u8; 32],
+    nonce: u64,
+    phase: contract_ffi::execution::Phase,
+) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let mut hasher = VarBlake2b::new(32).unwrap();
     data.extend(&account_addr);
     data.extend_from_slice(&nonce.to_le_bytes());
+    data.extend_from_slice(&[phase.to_u8().expect("Phase is represented as a u8")]);
     hasher.input(data);
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
     ChaChaRng::from_seed(seed)

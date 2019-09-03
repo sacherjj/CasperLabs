@@ -596,6 +596,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ee-601-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
 name = "either"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1042,6 +1049,13 @@ dependencies = [
  "net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "ws2_32-sys 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "named-purse-payment"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -2003,6 +2017,13 @@ dependencies = [
  "tokio-codec 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-reactor 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "transfer-main-purse-to-new-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
