@@ -120,11 +120,12 @@ object Genesis {
       blessedTerms: List[Deploy]
   ): F[BlockMsgWithTransform] =
     for {
-      _ <- Log[F].debug(s"Processing ${blessedTerms.size} blessed contracts...")
+      _         <- Log[F].debug(s"Processing ${blessedTerms.size} blessed contracts...")
+      eeDeploys <- blessedTerms.traverse(deployDataToEEDeploy[F](_))
       genesisResult <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F]
                           .runGenesis(
-                            blessedTerms.map(deployDataToEEDeploy),
+                            eeDeploys,
                             CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(
                               initial
                             )

@@ -103,17 +103,23 @@ object ExecEngineUtil {
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
   ): F[Seq[DeployResult]] =
-    ExecutionEngineService[F]
-      .exec(prestate, blocktime, deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
-      .rethrow
+    for {
+      eeDeploys <- deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
+      results <- ExecutionEngineService[F]
+                  .exec(prestate, blocktime, eeDeploys, protocolVersion)
+                  .rethrow
+    } yield results
 
   private def processGenesisDeploys[F[_]: MonadError[?[_], Throwable]: BlockStorage: ExecutionEngineService](
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
   ): F[GenesisResult] =
-    ExecutionEngineService[F]
-      .runGenesis(deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
-      .rethrow
+    for {
+      eeDeploys <- deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
+      results <- ExecutionEngineService[F]
+                  .runGenesis(eeDeploys, protocolVersion)
+                  .rethrow
+    } yield results
 
   //TODO: Logic for picking the commuting group? Prioritize highest revenue? Try to include as many deploys as possible?
   def findCommutingEffects(
