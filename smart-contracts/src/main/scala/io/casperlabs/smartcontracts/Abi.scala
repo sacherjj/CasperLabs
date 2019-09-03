@@ -50,8 +50,8 @@ object Abi {
 
   implicit val `Key => ABI` = instance[Key] { x =>
     x.value match {
-      case Key.Value.Hash(x)    => Array[Byte](0) ++ Abi.toBytes(x.hash.toByteArray)
-      case Key.Value.Address(x) => Array[Byte](1) ++ Abi.toBytes(x.account.toByteArray)
+      case Key.Value.Address(x) => Array[Byte](0) ++ Abi.toBytes(x.account.toByteArray)
+      case Key.Value.Hash(x)    => Array[Byte](1) ++ Abi.toBytes(x.hash.toByteArray)
       case Key.Value.Uref(x)    => Array[Byte](2) ++ Abi.toBytes(x.uref.toByteArray)
       case Key.Value.Local(x)   => Array[Byte](3) ++ Abi.toBytes(x.hash.toByteArray)
       case Key.Value.Empty =>
