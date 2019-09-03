@@ -8,18 +8,17 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.state.{Key, Value}
+import io.casperlabs.casper.consensus.{Block, Deploy, state}
+import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
-import io.casperlabs.casper.consensus.state
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion, Value}
-import io.casperlabs.casper.deploybuffer.DeployBuffer
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -45,7 +44,7 @@ object ExecEngineUtil {
   ): F[DeploysCheckpoint] =
     for {
       preStateHash <- computePrestate[F](merged)
-      deployStream = DeployBuffer[F].getByHashes(hashes, chunkSize = 20)
+      deployStream = DeployBuffer[F].getByHashes(hashes)
       pdr <- DeploySelection[F].select(
               (preStateHash, blocktime, protocolVersion, deployStream)
             )

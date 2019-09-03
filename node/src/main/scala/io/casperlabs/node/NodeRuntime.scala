@@ -17,20 +17,11 @@ import com.olegpy.meow.effects._
 import doobie.util.transactor.Transactor
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.{
-  BlockStorage,
-  CachingBlockStorage,
-  DagStorage,
-  FileDagStorage,
-  FileLMDBIndexBlockStorage
-}
+import io.casperlabs.blockstorage.{BlockStorage, CachingBlockStorage, DagStorage, FileDagStorage, FileLMDBIndexBlockStorage}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, DeployBufferImpl}
-import io.casperlabs.casper.finality.singlesweep.{
-  FinalityDetector,
-  FinalityDetectorBySingleSweepImpl
-}
+import io.casperlabs.casper.finality.singlesweep.{FinalityDetector, FinalityDetectorBySingleSweepImpl}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -137,8 +128,12 @@ class NodeRuntime private[node] (
                                                             transactEC = dbIOScheduler,
                                                             conf.server.dataDir
                                                           )
+        deployBufferChunkSize = 20 //TODO: Move to config
         implicit0(deployBuffer: DeployBuffer[Effect]) <- Resource
-                                                          .liftF(DeployBufferImpl.create[Effect])
+                                                          .liftF(
+                                                            DeployBufferImpl
+                                                              .create[Effect](deployBufferChunkSize)
+                                                          )
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
         implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
