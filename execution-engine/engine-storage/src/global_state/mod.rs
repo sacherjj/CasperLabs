@@ -62,18 +62,16 @@ pub trait History {
     type Reader: StateReader<Key, Value, Error = Self::Error>;
 
     /// Checkouts to the post state of a specific block.
-    fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error>;
+    fn checkout(&self, state_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error>;
 
     /// Applies changes and returns a new post state hash.
     /// block_hash is used for computing a deterministic and unique keys.
     fn commit(
-        &mut self,
+        &self,
         correlation_id: CorrelationId,
-        prestate_hash: Blake2bHash,
+        state_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error>;
-
-    fn current_root(&self) -> Blake2bHash;
 
     fn empty_root(&self) -> Blake2bHash;
 }
