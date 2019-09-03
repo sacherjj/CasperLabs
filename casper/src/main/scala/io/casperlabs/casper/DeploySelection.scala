@@ -44,18 +44,19 @@ object DeploySelection {
   ) {
     def effectsCommutativity: (List[DeployEffects], OpMap[state.Key]) =
       (accumulated, accumulatedOps)
-    def size: Int = accumulated.map(_.deploy.serializedSize).sum
-  }
 
-  // Appends new element to the intermediate state if it commutes with it.
-  // Otherwise returns initial state.
-  private def commutes(init: IntermediateState, el: DeployEffects): IntermediateState = {
-    val ops                  = Op.fromIpcEntry(el.effects.opMap)
-    val (accEffects, accOps) = init.effectsCommutativity
-    if (accOps ~ ops)
-      IntermediateState(el :: accEffects, el :: init.diff, accOps + ops)
-    else
-      init
+    def size: Int = accumulated.map(_.deploy.serializedSize).sum
+
+    // Appends new element to the intermediate state if it commutes with it.
+    // Otherwise returns initial state.
+    def addCommuting(deploysEffects: DeployEffects): IntermediateState = {
+      val ops                  = Op.fromIpcEntry(deploysEffects.effects.opMap)
+      val (accEffects, accOps) = effectsCommutativity
+      if (accOps ~ ops)
+        IntermediateState(deploysEffects :: accEffects, deploysEffects :: diff, accOps + ops)
+      else
+        this
+    }
   }
 
   def unsafeCreate[F[_]: MonadThrowable: ExecutionEngineService: Fs2Compiler](
@@ -92,7 +93,7 @@ object DeploySelection {
                         case (accState, element: DeployEffects) =>
                           // newState is either `accState` if `element` doesn't commute,
                           // or contains `element` if it does.
-                          val newState = commutes(accState, element)
+                          val newState = accState.addCommuting(element)
                           // TODO: Use some base `Block` element to measure the size.
                           // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
                           if (newState.size > (0.9 * sizeLimitMB)) {
