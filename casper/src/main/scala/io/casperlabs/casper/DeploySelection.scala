@@ -60,7 +60,7 @@ object DeploySelection {
   }
 
   def unsafeCreate[F[_]: MonadThrowable: ExecutionEngineService: Fs2Compiler](
-      sizeLimitMB: Int
+      sizeLimitBytes: Int
   ): DeploySelection[F] =
     new DeploySelection[F] {
       override def select(
@@ -96,7 +96,7 @@ object DeploySelection {
                           val newState = accState.addCommuting(element)
                           // TODO: Use some base `Block` element to measure the size.
                           // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
-                          if (newState.size > (0.9 * sizeLimitMB)) {
+                          if (newState.size > (0.9 * sizeLimitBytes)) {
                             // foldM will short-circuit for `Left`
                             // and continue for `Right`
                             accState.asLeft[IntermediateState]

@@ -45,19 +45,19 @@ class DeploySelectionTest
   val blocktime       = 0L
   val protocolVersion = ProtocolVersion(1L)
 
-  val smallBlockSizeMb = 5 * 1024
+  val smallBlockSizeBytes = 5 * 1024
 
   val sampleDeploy        = sample(arbDeploy.arbitrary)
-  val deploysInSmallBlock = smallBlockSizeMb / sampleDeploy.serializedSize
+  val deploysInSmallBlock = smallBlockSizeBytes / sampleDeploy.serializedSize
 
   it should "stop consuming the stream when block size limit is reached" in forAll(
     Gen.listOfN(deploysInSmallBlock * 2, arbDeploy.arbitrary)
   ) { deploys =>
     {
-      val expected = takeUnlessTooBig(smallBlockSizeMb)(deploys)
+      val expected = takeUnlessTooBig(smallBlockSizeBytes)(deploys)
       assert(expected.size < deploys.size)
 
-      assert(deploysSize(expected) < (0.9 * smallBlockSizeMb))
+      assert(deploysSize(expected) < (0.9 * smallBlockSizeBytes))
 
       val countedStream = CountedStream(
         toStreamChunked(deploys)
@@ -66,7 +66,7 @@ class DeploySelectionTest
       implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
 
       val deploySelection: DeploySelection[Task] =
-        DeploySelection.unsafeCreate[Task](smallBlockSizeMb)
+        DeploySelection.unsafeCreate[Task](smallBlockSizeBytes)
 
       val test = for {
         selected <- deploySelection
@@ -99,12 +99,12 @@ class DeploySelectionTest
         .chunkLimit(1)
         .map(_.toList)
 
-      val cappedEffects = takeUnlessTooBig(smallBlockSizeMb)(commuting)
+      val cappedEffects = takeUnlessTooBig(smallBlockSizeBytes)(commuting)
 
       val counter                                   = AtomicInt(0)
       implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
       val deploySelection: DeploySelection[Task] =
-        DeploySelection.unsafeCreate[Task](smallBlockSizeMb)
+        DeploySelection.unsafeCreate[Task](smallBlockSizeBytes)
 
       val test = deploySelection
         .select((prestate, blocktime, protocolVersion, stream))
@@ -147,14 +147,14 @@ class DeploySelectionTest
       (invalidIdx.map(_._1.deployHash).toSet, effectsIdx.map(_._1).toList)
     }
 
-    val cappedEffects = takeUnlessTooBig(smallBlockSizeMb)(effects)
+    val cappedEffects = takeUnlessTooBig(smallBlockSizeBytes)(effects)
 
     val stream = fs2.Stream.fromIterator(deploys.toIterator).chunkLimit(1).map(_.toList)
 
     val counter                                   = AtomicInt(0)
     implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherInvalidDeploy(counter) _)
     val deploySelection: DeploySelection[Task] =
-      DeploySelection.unsafeCreate[Task](smallBlockSizeMb)
+      DeploySelection.unsafeCreate[Task](smallBlockSizeBytes)
 
     val test = deploySelection
       .select((prestate, blocktime, protocolVersion, stream))

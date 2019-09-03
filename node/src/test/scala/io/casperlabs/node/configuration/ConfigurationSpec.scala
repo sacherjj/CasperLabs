@@ -118,7 +118,7 @@ class ConfigurationSpec
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeMaxInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeMaxCount = 1,
-      maxBlockSize = 10
+      maxBlockSizeBytes = 1
     )
     val tls = Tls(
       certificate = Paths.get("/tmp/test"),

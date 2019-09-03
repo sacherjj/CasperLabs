@@ -308,8 +308,8 @@ private[configuration] final case class Options private (
       gen[Int]("Number of deploys to accumulate before proposing.")
 
     @scallop
-    val casperMaxBlockSize =
-      gen[Int]("Maximum block size [in MBs].")
+    val casperMaxBlockSizeBytes =
+      gen[Int]("Maximum block size [in bytes].")
 
     @scallop
     val serverBootstrap =
