@@ -327,7 +327,7 @@ class CasperLabsClient:
 
         def read_code(file_name: str, abi_encoded_args: bytes = None):
             return consensus.Deploy.Code(
-                wasm=read_binary(file_name), args=abi_encoded_args
+                wasm=read_binary(file_name), abi_args=abi_encoded_args
             )
 
         def sign(data: bytes):
