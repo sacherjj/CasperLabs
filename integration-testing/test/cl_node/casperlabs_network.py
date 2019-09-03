@@ -14,6 +14,7 @@ from test.cl_node.wait import (
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
     wait_for_peers_count_at_least,
+    wait_for_genesis_block,
 )
 from typing import Callable, Dict, List
 from docker import DockerClient
@@ -147,6 +148,7 @@ class CasperLabsNetwork:
         config.is_bootstrap = True
         self._add_cl_node(config)
         self.wait_method(wait_for_node_started, 0)
+        wait_for_genesis_block(self.docker_nodes[0])
 
     def add_cl_node(
         self, config: DockerConfig, network_with_bootstrap: bool = True

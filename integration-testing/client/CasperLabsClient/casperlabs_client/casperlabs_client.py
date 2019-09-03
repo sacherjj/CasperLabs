@@ -12,7 +12,6 @@ parent, root = file.parent, file.parents[1]
 sys.path.append(str(root))
 
 # end of hack #
-
 import time
 import argparse
 import grpc
@@ -210,7 +209,7 @@ def api(function):
     def wrapper(*args, **kwargs):
         try:
             return function(*args, **kwargs)
-        except (SyntaxError, InternalError):
+        except (SyntaxError, TypeError, InternalError):
             raise
         except _Rendezvous as e:
             raise InternalError(str(e.code()), e.details())
@@ -218,6 +217,32 @@ def api(function):
             raise InternalError(details=str(e)) from e
 
     return wrapper
+
+
+def _hash(data: bytes) -> bytes:
+    h = blake2b(digest_size=32)
+    h.update(data)
+    return h.digest()
+
+
+def _read_binary(file_name: str):
+    with open(file_name, "rb") as f:
+        return f.read()
+
+
+def _read_code(file_name: str, abi_encoded_args: bytes = None):
+    return consensus.Deploy.Code(wasm=_read_binary(file_name), args=abi_encoded_args)
+
+
+def _sign(private_key, data: bytes):
+    return private_key and consensus.Signature(
+        sig_algorithm="ed25519",
+        sig=ed25519.SigningKey(read_pem_key(private_key)).sign(data),
+    )
+
+
+def _serialize(o) -> bytes:
+    return o.SerializeToString()
 
 
 class CasperLabsClient:
@@ -290,6 +315,12 @@ class CasperLabsClient:
         private_key: str = None,
         session_args: bytes = None,
         payment_args: bytes = None,
+        payment_hash: str = None,
+        payment_name: str = None,
+        payment_uref: str = None,
+        session_hash: str = None,
+        session_name: str = None,
+        session_uref: str = None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -314,37 +345,35 @@ class CasperLabsClient:
         if from_addr and len(from_addr) != 32:
             raise Exception(f"from_addr must be 32 bytes")
 
+        # Compatibility mode, should be removed when payment is obligatory
+        # if len(list(filter(None, (payment, payment_hash, payment_name, payment_uref)))) == 0:
+        #    import logging
+        #    logging.info("No payment contract provided, using session as payment")
+        #    payment = session
         payment = payment or session
 
-        def hash(data: bytes) -> bytes:
-            h = blake2b(digest_size=32)
-            h.update(data)
-            return h.digest()
-
-        def read_binary(file_name: str):
-            with open(file_name, "rb") as f:
-                return f.read()
-
-        def read_code(file_name: str, abi_encoded_args: bytes = None):
-            return consensus.Deploy.Code(
-                wasm=read_binary(file_name), args=abi_encoded_args
+        if (
+            len(list(filter(None, (session, session_hash, session_name, session_uref))))
+            != 1
+        ):
+            raise TypeError(
+                "deploy: only one of session, session_hash, session_name, session_uref must be provided"
             )
 
-        def sign(data: bytes):
-            return private_key and consensus.Signature(
-                sig_algorithm="ed25519",
-                sig=ed25519.SigningKey(read_pem_key(private_key)).sign(data),
+        if (
+            len(list(filter(None, (payment, payment_hash, payment_name, payment_uref))))
+            != 1
+        ):
+            raise TypeError(
+                "deploy: only one of payment, payment_hash, payment_name, payment_uref must be provided"
             )
-
-        def serialize(o) -> bytes:
-            return o.SerializeToString()
 
         # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,
         # if payment is same as session:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
         body = consensus.Deploy.Body(
-            session=read_code(session, session_args),
-            payment=read_code(
+            session=_read_code(session, session_args),
+            payment=_read_code(
                 payment, payment == session and session_args or payment_args
             ),
         )
@@ -357,21 +386,22 @@ class CasperLabsClient:
             nonce=nonce,
             timestamp=int(time.time()),
             gas_price=gas_price,
-            body_hash=hash(serialize(body)),
+            body_hash=_hash(_serialize(body)),
         )
 
-        deploy_hash = hash(serialize(header))
-        d = consensus.Deploy(
-            deploy_hash=deploy_hash,
-            approvals=[
+        deploy_hash = _hash(_serialize(header))
+        approvals = (
+            []
+            if not account_public_key
+            else [
                 consensus.Approval(
-                    approver_public_key=approval_public_key, signature=sign(deploy_hash)
+                    approver_public_key=approval_public_key,
+                    signature=_sign(private_key, deploy_hash),
                 )
             ]
-            if account_public_key
-            else [],
-            header=header,
-            body=body,
+        )
+        d = consensus.Deploy(
+            deploy_hash=deploy_hash, approvals=approvals, header=header, body=body
         )
 
         # TODO: Deploy returns Empty, error handing via exceptions, apparently,
@@ -404,9 +434,9 @@ class CasperLabsClient:
         """
         Returns object describing a block known by Casper on an existing running node.
 
-        :param hash:      hash of the block to be retrieved
-        :param full_view: full view if True, otherwise basic
-        :return:          object representing the retrieved block
+        :param block_hash_base16: hash of the block to be retrieved
+        :param full_view:         full view if True, otherwise basic
+        :return:                  object representing the retrieved block
         """
         return self.casperService.GetBlockInfo(
             casper.GetBlockInfoRequest(
@@ -744,7 +774,13 @@ def main():
                        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
                        [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
-                       [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
+                       [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
+                       [('--payment-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the payment')],
+                       [('--payment-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the payment; base16 encoded')],
+                       [('-s', '--session'), dict(required=False, type=str, default=None, help='Path to the file with session code')],
+                       [('--session-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the session; base16 encoded')],
+                       [('--session-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the session')],
+                       [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
                        [('--session-args',), dict(required=False, type=str, help='JSON encoded list of session args, e.g.: [{"u32":1024},{"u64":12}]')],
                        [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: [{"u512":100000}]""")],
                        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
