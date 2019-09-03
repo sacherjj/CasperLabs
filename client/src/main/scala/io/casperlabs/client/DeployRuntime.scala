@@ -54,17 +54,52 @@ object DeployRuntime {
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(depth))
 
+  private def optionalArg[T](name: String, maybeValue: Option[T])(
+      f: T => Deploy.Arg.Value.Value
+  ) = {
+    val value: Deploy.Arg.Value.Value = maybeValue match {
+      case None    => Deploy.Arg.Value.Value.Empty
+      case Some(x) => f(x)
+    }
+    Deploy
+      .Arg(name)
+      .withValue(
+        Deploy.Arg.Value().withOptionalValue(Deploy.Arg.Value(value))
+      )
+  }
+
+  private def arg[T](name: String, value: Deploy.Arg.Value.Value) =
+    Deploy
+      .Arg(name)
+      .withValue(Deploy.Arg.Value(value))
+
+  private def longArg(name: String, value: Long) =
+    arg(name, Deploy.Arg.Value.Value.LongValue(value))
+
+  private def bytesArg(name: String, value: Array[Byte]) =
+    arg(name, Deploy.Arg.Value.Value.BytesValue(ByteString.copyFrom(value)))
+
+  // This is true for any array but I didn't want to go as far as writing type classes.
+  // Binary format of an array is constructed from:
+  // length (u64/integer in binary) ++ bytes
+  private def serializeArray(ba: Array[Byte]): Array[Byte] = {
+    val serLen = serializeInt(ba.length)
+    serLen ++ ba
+  }
+
+  private def serializeInt(i: Int): Array[Byte] =
+    java.nio.ByteBuffer
+      .allocate(4)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .putInt(i)
+      .array()
+
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
       nonce: Long,
       contracts: Contracts,
       privateKeyFile: File
-  ): F[Unit] = {
-    val args: Array[Array[Byte]] = Array(
-      serializeOption(maybeAmount, serializeLong)
-    )
-    val argsSer = serializeArgs(args)
-
+  ): F[Unit] =
     for {
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
@@ -74,20 +109,17 @@ object DeployRuntime {
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
-            sessionArgs = argsSer
+            sessionArgs =
+              List(optionalArg("amount", maybeAmount)(Deploy.Arg.Value.Value.LongValue(_)))
           )
     } yield ()
-  }
 
   def bond[F[_]: Sync: DeployService](
       amount: Long,
       nonce: Long,
       contracts: Contracts,
       privateKeyFile: File
-  ): F[Unit] = {
-    val args: Array[Array[Byte]] = Array(serializeLong(amount))
-    val argsSer: Array[Byte]     = serializeArgs(args)
-
+  ): F[Unit] =
     for {
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
@@ -97,10 +129,9 @@ object DeployRuntime {
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
-            sessionArgs = argsSer
+            sessionArgs = List(longArg("amount", amount))
           )
     } yield ()
-  }
 
   def queryState[F[_]: Sync: DeployService](
       blockHash: String,
@@ -276,7 +307,6 @@ object DeployRuntime {
                     s"Failed to parse base64 encoded account: $recipientPublicKeyBase64"
                   )
                 )
-      args = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
@@ -284,7 +314,10 @@ object DeployRuntime {
             maybeEitherPublicKey = senderPublicKey.asRight[String].some,
             maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
             gasPrice = 10L,
-            args,
+            List(
+              bytesArg("account", account),
+              longArg("amount", amount)
+            ),
             exit,
             ignoreOutput
           )
@@ -326,14 +359,13 @@ object DeployRuntime {
       nonce: Long,
       gasPrice: Long,
       contracts: Contracts,
-      sessionArguments: Array[Byte]
+      sessionArgs: Seq[Deploy.Arg]
   ): Deploy = {
     // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
     // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
     // to not fail the session code execution even when EE will use hardcoded limit.
-    val session     = contracts.session
-    val payment     = if (contracts.payment.isEmpty) contracts.session else contracts.payment
-    val sessionArgs = ByteString.copyFrom(sessionArguments)
+    val session = contracts.session
+    val payment = if (contracts.payment.isEmpty) contracts.session else contracts.payment
 
     consensus
       .Deploy()
@@ -348,7 +380,7 @@ object DeployRuntime {
       .withBody(
         consensus.Deploy
           .Body()
-          .withSession(consensus.Deploy.Code(contract = session).withAbiArgs(sessionArgs))
+          .withSession(consensus.Deploy.Code(contract = session).withArgs(sessionArgs))
           .withPayment(consensus.Deploy.Code(contract = payment))
       )
       .withHashes
@@ -381,7 +413,7 @@ object DeployRuntime {
       maybeEitherPublicKey: Option[Either[String, PublicKey]],
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
       gasPrice: Long,
-      sessionArgs: Array[Byte] = Array.emptyByteArray,
+      sessionArgs: Seq[Deploy.Arg] = Seq.empty,
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] = {
@@ -452,40 +484,6 @@ object DeployRuntime {
 
   def readFileAsString[F[_]: Sync](file: File): F[String] = Sync[F].delay {
     new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8)
-  }
-
-  private def serializeLong(l: Long): Array[Byte] =
-    java.nio.ByteBuffer
-      .allocate(8)
-      .order(ByteOrder.LITTLE_ENDIAN)
-      .putLong(l)
-      .array()
-
-  private def serializeInt(i: Int): Array[Byte] =
-    java.nio.ByteBuffer
-      .allocate(4)
-      .order(ByteOrder.LITTLE_ENDIAN)
-      .putInt(i)
-      .array()
-
-  // Option serializes as follows:
-  // None:        [0]
-  // Some(value): [1] ++ serialized value
-  private def serializeOption[T](in: Option[T], fSer: T => Array[Byte]): Array[Byte] =
-    in.map(value => Array[Byte](1) ++ fSer(value)).getOrElse(Array[Byte](0))
-
-  // This is true for any array but I didn't want to go as far as writing type classes.
-  // Binary format of an array is constructed from:
-  // length (u64/integer in binary) ++ bytes
-  private def serializeArray(ba: Array[Byte]): Array[Byte] = {
-    val serLen = serializeInt(ba.length)
-    serLen ++ ba
-  }
-
-  private def serializeArgs(args: Array[Array[Byte]]): Array[Byte] = {
-    val argsBytes    = args.flatMap(serializeArray)
-    val argsBytesLen = serializeInt(args.length)
-    argsBytesLen ++ argsBytes
   }
 
   implicit val ordering: Ordering[ByteString] =
