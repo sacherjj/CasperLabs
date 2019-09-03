@@ -8,7 +8,6 @@ import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.BlockMsgWithTransform
-import io.casperlabs.storage.block.BlockStorage.BlockHashPrefix
 
 import scala.language.higherKinds
 
@@ -29,9 +28,9 @@ trait BlockStorage[F[_]] {
   ): F[Unit] =
     put(blockHash, BlockMsgWithTransform(Some(blockMessage), transforms))
 
-  def get(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]]
+  def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]
 
-  def isEmpty: F[Boolean]
+  def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]]
 
   def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit]
 
@@ -45,7 +44,7 @@ trait BlockStorage[F[_]] {
 
   def putApprovedBlock(block: ApprovedBlock): F[Unit]
 
-  def getBlockSummary(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]]
+  def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]]
 
   def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]]
 
@@ -97,8 +96,6 @@ object BlockStorage {
   }
   def apply[F[_]](implicit ev: BlockStorage[F]): BlockStorage[F] = ev
 
-  type BlockHash       = ByteString
-  type BlockHashPrefix = ByteString
-  type DeployHash      = ByteString
-
+  type BlockHash  = ByteString
+  type DeployHash = ByteString
 }

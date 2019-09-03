@@ -1,7 +1,5 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.Path
-
 import cats.Monad
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, ContextShift, Timer}
@@ -47,7 +45,6 @@ class TransportLayerCasperTestNode[F[_]](
     genesis: Block,
     transforms: Seq[TransformEntry],
     sk: PrivateKey,
-    db: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     chainId: String = "casperlabs",
@@ -66,7 +63,6 @@ class TransportLayerCasperTestNode[F[_]](
 ) extends HashSetCasperTestNode[F](
       local,
       sk,
-      db,
       genesis,
       validateNonces,
       maybeMakeEE
@@ -150,7 +146,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     implicit val metricEff = new Metrics.MetricsNOP[F]
 
     initStorage() flatMap {
-      case (blockStorage, dagStorage, deployStorage, db) =>
+      case (blockStorage, dagStorage, deployStorage) =>
         for {
           blockProcessingLock <- Semaphore[F](1)
           casperState         <- Cell.mvarCell[F, CasperState](CasperState())
@@ -160,7 +156,6 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             genesis,
             transforms,
             sk,
-            db,
             blockProcessingLock,
             faultToleranceThreshold
           )(
@@ -213,7 +208,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             implicit val metricEff = new Metrics.MetricsNOP[F]
 
             initStorage() flatMap {
-              case (blockStorage, dagStorage, deployStorage, db) =>
+              case (blockStorage, dagStorage, deployStorage) =>
                 for {
                   semaphore <- Semaphore[F](1)
                   casperState <- Cell.mvarCell[F, CasperState](
@@ -225,7 +220,6 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                     genesis,
                     transforms,
                     sk,
-                    db,
                     semaphore,
                     faultToleranceThreshold,
                     validateNonces = validateNonces,

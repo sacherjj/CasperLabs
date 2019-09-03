@@ -98,7 +98,7 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: DeployStorage](
+  def createBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -153,6 +153,5 @@ trait BlockGenerator {
       // NOTE: Block hash should be recalculated.
       modifiedBlock <- IndexedDagStorage[F].insertIndexed(block)
       _             <- BlockStorage[F].put(serializedBlockHash, modifiedBlock, Seq.empty)
-      _             <- DeployStorage[F].addAsExecuted(modifiedBlock)
     } yield modifiedBlock
 }

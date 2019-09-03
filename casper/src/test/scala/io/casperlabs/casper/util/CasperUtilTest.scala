@@ -36,7 +36,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
   }
 
   "isInMainChain and votedBranch" should "classify appropriately when using the same block" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       for {
         b      <- createBlock[Task](Seq())
         dag    <- dagStorage.getRepresentation
@@ -47,7 +47,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
 
   it should "classify appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage =>
-      implicit deployStorage =>
+      _ =>
         /**
           * The DAG looks like:
           *
@@ -76,7 +76,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
 
   it should "classify diamond DAGs appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage =>
-      implicit deployStorage =>
+      _ =>
         /**
           * The dag looks like:
           *
@@ -103,7 +103,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
   }
 
   it should "classify complicated chains appropriately" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       val v1 = generateValidator("V1")
       val v2 = generateValidator("V2")
 
@@ -156,7 +156,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
   }
 
   "panoramaDagLevelsOfBlock" should "properly return the panorama of message B" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       val v0 = generateValidator("V0")
       val v1 = generateValidator("V1")
 

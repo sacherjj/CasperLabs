@@ -1,7 +1,5 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.{Files, Path}
-
 import cats.data.EitherT
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
@@ -23,7 +21,6 @@ import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
@@ -46,7 +43,6 @@ import scala.util.Random
 abstract class HashSetCasperTestNode[F[_]](
     val local: Node,
     sk: PrivateKey,
-    val db: Path,
     val genesis: Block,
     val validateNonces: Boolean,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]]
@@ -86,8 +82,6 @@ abstract class HashSetCasperTestNode[F[_]](
   def initialize(): F[Unit] =
     // pre-population removed from internals of Casper
     blockStorage.put(genesis.blockHash, genesis, Seq.empty) >>
-      dagStorage.insert(genesis) >>
-      deployStorage.addAsExecuted(genesis) >>
       dagStorage.getRepresentation.flatMap { dag =>
         ExecutionEngineServiceStub
           .validateBlockCheckpoint[F](
@@ -103,7 +97,7 @@ abstract class HashSetCasperTestNode[F[_]](
       _ <- tearDownNode()
       _ <- blockStorage.clear()
       _ <- dagStorage.clear()
-      _ <- concurrentF.delay(Files.delete(db))
+      _ <- deployStorage.clear()
     } yield ()
 
   /** Close storage. */
@@ -111,6 +105,7 @@ abstract class HashSetCasperTestNode[F[_]](
     for {
       _ <- blockStorage.close()
       _ <- dagStorage.close()
+      _ <- deployStorage.close()
     } yield ()
 
   def validateBlockStorage[A](f: BlockStorage[F] => F[A]): F[A] = f(blockStorage)
@@ -195,7 +190,7 @@ trait HashSetCasperTestNodeFactory {
     )
 
   protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
-      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], Path)] =
+      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F])] =
     StorageFixture.createStorages[F]()
 }
 

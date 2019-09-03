@@ -1,6 +1,6 @@
 package io.casperlabs.casper.api
 
-import cats.{Functor, Monad}
+import cats.Monad
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Bracket, Concurrent, Resource}
 import cats.implicits._
@@ -9,7 +9,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.protocol.{
@@ -27,6 +26,7 @@ import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
@@ -397,12 +397,14 @@ object BlockAPI {
       )(_.pure[F])
     )
 
-  def getBlockDeploys[F[_]: Functor: BlockStorage](
+  def getBlockDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage](
       blockHashBase16: String
   ): F[Seq[Block.ProcessedDeploy]] =
-    BlockStorage[F]
-      .get(ByteString.copyFrom(Base16.decode(blockHashBase16)))
-      .map(_.fold(Seq.empty[Block.ProcessedDeploy])(_.getBlockMessage.getBody.deploys))
+    unsafeWithCasper[F, Seq[Block.ProcessedDeploy]]("Could not show deploys.") { implicit casper =>
+      getByHashPrefix(blockHashBase16) {
+        ProtoUtil.unsafeGetBlock[F](_).map(_.some)
+      }.map(_.get.getBody.deploys)
+    }
 
   def makeBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector](
       summary: BlockSummary,
@@ -459,19 +461,19 @@ object BlockAPI {
       }
     }
 
-  def getBlockInfoOpt[F[_]: MonadThrowable: Log: BlockStorage: MultiParentCasperRef: FinalityDetector](
+  def getBlockInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
       blockHashBase16: String,
       full: Boolean = false
   ): F[Option[(BlockInfo, Option[Block])]] =
-    unsafeWithCasper[F, Option[(BlockInfo, Option[Block])]]("Could not show block") {
+    unsafeWithCasper[F, Option[(BlockInfo, Option[Block])]]("Could not show block.") {
       implicit casper =>
-        BlockStorage[F]
-          .getBlockSummary(ByteString.copyFrom(Base16.decode(blockHashBase16)))
-          .flatMap(
-            _.fold(none[(BlockInfo, Option[Block])].pure[F])(
-              makeBlockInfo[F](_, full).map(_.some)
-            )
+        getByHashPrefix[F, BlockSummary](blockHashBase16)(
+          BlockStorage[F].getBlockSummary(_)
+        ).flatMap { maybeSummary =>
+          maybeSummary.fold(none[(BlockInfo, Option[Block])].pure[F])(
+            makeBlockInfo[F](_, full).map(_.some)
           )
+        }
     }
 
   def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
@@ -536,10 +538,9 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        maybeBlock <- BlockStorage[F]
-                       .get(ByteString.copyFrom(Base16.decode(q.hash)))
-                       .map(_.map(_.getBlockMessage))
-
+        maybeBlock <- getByHashPrefix[F, Block](q.hash)(
+                       BlockStorage[F].get(_).map(_ flatMap (_.blockMessage))
+                     )
         blockQueryResponse <- maybeBlock match {
                                case Some(block) =>
                                  for {
@@ -662,4 +663,19 @@ object BlockAPI {
       parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
       sender = PrettyPrinter.buildStringNoLimit(block.getHeader.validatorPublicKey)
     ).pure[F]
+
+  private def getByHashPrefix[F[_]: Monad: MultiParentCasper: BlockStorage, A](
+      blockHashBase16: String
+  )(f: ByteString => F[Option[A]]): F[Option[A]] =
+    if (blockHashBase16.length == 64) {
+      f(ByteString.copyFrom(Base16.decode(blockHashBase16)))
+    } else {
+      for {
+        maybeHash <- BlockStorage[F].findBlockHash { h =>
+                      Base16.encode(h.toByteArray).startsWith(blockHashBase16)
+                    }
+        maybeA <- maybeHash.fold(none[A].pure[F])(f(_))
+      } yield maybeA
+    }
+
 }

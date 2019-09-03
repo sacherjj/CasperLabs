@@ -17,7 +17,7 @@ import io.casperlabs.storage.block.{BlockStorage, FileLMDBIndexBlockStorage}
 import io.casperlabs.storage.blockImplicits._
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.util.byteOps._
-import io.casperlabs.storage.{BlockMsgWithTransform, Context, SQLiteFixture}
+import io.casperlabs.storage.{BlockMsgWithTransform, Context, SQLiteFixture, SQLiteStorage}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
@@ -483,5 +483,5 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
 
   override def db: String = "/tmp/dag_storage.db"
 
-  override def createTestResource: Task[DagStorage[Task]] = SQLiteDagStorage.create[Task]
+  override def createTestResource: Task[DagStorage[Task]] = SQLiteStorage.create[Task](Task.pure)
 }

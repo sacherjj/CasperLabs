@@ -1,6 +1,6 @@
 package io.casperlabs.storage.deploy
 
-import io.casperlabs.storage.SQLiteFixture
+import io.casperlabs.storage.{SQLiteFixture, SQLiteStorage}
 import monix.eval.Task
 
 import scala.concurrent.duration._
@@ -16,5 +16,5 @@ class SQLiteDeployStorageSpec
   override def db: String = "/tmp/deploy_storage.db"
 
   override def createTestResource: Task[(DeployStorageReader[Task], DeployStorageWriter[Task])] =
-    SQLiteDeployStorage.create[Task].map(s => (s, s))
+    SQLiteStorage.create[Task](Task.pure).map(s => (s, s))
 }

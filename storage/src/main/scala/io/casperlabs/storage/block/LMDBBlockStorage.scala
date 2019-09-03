@@ -13,7 +13,7 @@ import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Resources.withResource
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 import org.lmdbjava.DbiFlags.{MDB_CREATE, MDB_DUPSORT}
 import org.lmdbjava.Txn.NotReadyException
@@ -92,28 +92,17 @@ class LMDBBlockStorage[F[_]] private (
       }
     }
 
-  def get(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
-    if (blockHashPrefix.size() == 32) {
-      withReadTxn { txn =>
-        Option(blocks.get(txn, blockHashPrefix.toDirectByteBuffer))
-          .map(r => BlockMsgWithTransform.parseFrom(ByteString.copyFrom(r).newCodedInput()))
-      }
-    } else {
-      for {
-        maybeBlockHash <- withReadTxn { txn =>
-                           withResource(blocks.iterate(txn)) { it =>
-                             it.asScala
-                               .map(kv => ByteString.copyFrom(kv.key))
-                               .find(_.startsWith(blockHashPrefix))
-                           }
-                         }
-        maybeBlockMsg <- maybeBlockHash.fold(none[BlockMsgWithTransform].pure[F])(get)
-      } yield maybeBlockMsg
+  def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
+    withReadTxn { txn =>
+      Option(blocks.get(txn, blockHash.toDirectByteBuffer))
+        .map(r => BlockMsgWithTransform.parseFrom(ByteString.copyFrom(r).newCodedInput()))
     }
 
-  override def isEmpty: F[Boolean] =
+  def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
     withReadTxn { txn =>
-      blocks.stat(txn).entries == 0L
+      withResource(blocks.iterate(txn)) { it =>
+        it.asScala.map(kv => ByteString.copyFrom(kv.key)).find(p)
+      }
     }
 
   def getApprovedBlock(): F[Option[ApprovedBlock]] =
@@ -122,23 +111,10 @@ class LMDBBlockStorage[F[_]] private (
   def putApprovedBlock(block: ApprovedBlock): F[Unit] =
     ().pure[F]
 
-  override def getBlockSummary(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
-    if (blockHashPrefix.size() == 32) {
-      withReadTxn { txn =>
-        Option(blockSummaryDB.get(txn, blockHashPrefix.toDirectByteBuffer))
-          .map(r => BlockSummary.parseFrom(ByteString.copyFrom(r).newCodedInput()))
-      }
-    } else {
-      for {
-        maybeBlockHash <- withReadTxn { txn =>
-                           withResource(blocks.iterate(txn)) { it =>
-                             it.asScala
-                               .map(kv => ByteString.copyFrom(kv.key))
-                               .find(_.startsWith(blockHashPrefix))
-                           }
-                         }
-        maybeBlockSummary <- maybeBlockHash.fold(none[BlockSummary].pure[F])(getBlockSummary)
-      } yield maybeBlockSummary
+  override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
+    withReadTxn { txn =>
+      Option(blockSummaryDB.get(txn, blockHash.toDirectByteBuffer))
+        .map(r => BlockSummary.parseFrom(ByteString.copyFrom(r).newCodedInput()))
     }
 
   def checkpoint(): F[Unit] =

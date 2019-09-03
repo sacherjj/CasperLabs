@@ -7,12 +7,12 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
-import io.casperlabs.storage.DeployStorageMetricsSource
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
+import io.casperlabs.storage.DeployStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.DeployHash
 import io.casperlabs.storage.util.DoobieCodecs
 
@@ -325,12 +325,22 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
               )
     } yield res
   }
+
+  override def clear(): F[Unit] =
+    (for {
+      _ <- sql"DELETE FROM deploys".update.run
+      _ <- sql"DELETE FROM buffered_deploys".update.run
+      _ <- sql"DELETE FROM deploy_process_results".update.run
+      _ <- sql"DELETE FROM deploy_account_nonce".update.run
+    } yield ()).transact(xa)
+
+  override def close(): F[Unit] = ().pure[F]
 }
 
 object SQLiteDeployStorage {
   private implicit val metricsSource: Source = Metrics.Source(DeployStorageMetricsSource, "sqlite")
 
-  def create[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
+  private[storage] def create[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       implicit xa: Transactor[F]
   ): F[DeployStorage[F]] =
     for {

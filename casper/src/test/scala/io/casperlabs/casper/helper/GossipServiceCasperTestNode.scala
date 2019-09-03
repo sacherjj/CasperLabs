@@ -1,7 +1,5 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.Path
-
 import cats._
 import cats.effect._
 import cats.effect.concurrent._
@@ -36,7 +34,6 @@ class GossipServiceCasperTestNode[F[_]](
     local: Node,
     genesis: consensus.Block,
     sk: PrivateKey,
-    db: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     validateNonces: Boolean = true,
@@ -57,7 +54,6 @@ class GossipServiceCasperTestNode[F[_]](
 ) extends HashSetCasperTestNode[F](
       local,
       sk,
-      db,
       genesis,
       validateNonces,
       maybeMakeEE
@@ -138,7 +134,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     )
 
     initStorage() flatMap {
-      case (blockStorage, dagStorage, deployStorage, db) =>
+      case (blockStorage, dagStorage, deployStorage) =>
         for {
           blockProcessingLock <- Semaphore[F](1)
           casperState         <- Cell.mvarCell[F, CasperState](CasperState())
@@ -146,7 +142,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             identity,
             genesis,
             sk,
-            db,
             blockProcessingLock,
             faultToleranceThreshold,
             relaying = relaying,
@@ -216,7 +211,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           )
 
           initStorage() flatMap {
-            case (blockStorage, dagStorage, deployStorage, db) =>
+            case (blockStorage, dagStorage, deployStorage) =>
               for {
                 semaphore <- Semaphore[F](1)
                 casperState <- Cell.mvarCell[F, CasperState](
@@ -226,7 +221,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   peer,
                   genesis,
                   sk,
-                  db,
                   semaphore,
                   faultToleranceThreshold,
                   relaying = relaying,

@@ -1,15 +1,15 @@
 package io.casperlabs.storage.deploy
 
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import simulacrum.typeclass
 
 import scala.concurrent.duration._
 
 @typeclass trait DeployStorageWriter[F[_]] {
-  def addAsExecuted(block: Block): F[Unit]
+  private[storage] def addAsExecuted(block: Block): F[Unit]
 
   /* Should not fail if the same deploy added twice */
   def addAsPending(deploys: List[Deploy]): F[Unit]
@@ -58,6 +58,10 @@ import scala.concurrent.duration._
   /** Deletes discarded deploys that are older than 'now - expirationPeriod'.
     * @return Number of deleted deploys */
   def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int]
+
+  def clear(): F[Unit]
+
+  def close(): F[Unit]
 }
 @typeclass trait DeployStorageReader[F[_]] {
   def readProcessed: F[List[Deploy]]
@@ -155,5 +159,9 @@ object DeployStorage {
 
     override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
       reader.readAccountLowestNonce()
+
+    override def clear(): F[Unit] = writer.clear()
+
+    override def close(): F[Unit] = writer.close()
   }
 }

@@ -112,7 +112,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val deployHashMap    = Ref.unsafe[Task, Map[DeployHash, Seq[BlockHash]]](Map.empty)
     implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
     implicit val lock             = Semaphore[Task](1).unsafeRunSync(monix.execution.Scheduler.global)
-    implicit val (blockStorage, dagStorage, deployStorage, _) =
+    implicit val (blockStorage, dagStorage, deployStorage) =
       StorageFixture.createStorages[Task]().unsafeRunSync(monix.execution.Scheduler.global)
     implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new FinalityDetector[Task] {

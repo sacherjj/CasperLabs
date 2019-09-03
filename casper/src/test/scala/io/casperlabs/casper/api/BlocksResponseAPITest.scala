@@ -32,7 +32,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
   "showMainChain" should "return only blocks in the main chain" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
@@ -93,7 +93,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
   }
 
   "showBlocks" should "return all blocks" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
@@ -155,20 +155,20 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
 
   it should "return until depth" in withStorage {
     implicit blockStorage => implicit dagStorage =>
-      implicit deployStorage =>
+      _ =>
         /**
           * The Dag looks like
           *
           *
-          * 4          b8
-          * /
-          * 3     b6 ----   b7
-          * x
-          * 2          b5  b4
-          * /    /
-          * 1     b3   b2
-          * \   |
-          * 0       genesis
+          *  4          b8
+          *           /
+          *  3     b6 ----   b7
+          *                x
+          *  2          b5  b4
+          *           /    /
+          *  1     b3   b2
+          *         \   |
+          *  0       genesis
           *
           */
         for {

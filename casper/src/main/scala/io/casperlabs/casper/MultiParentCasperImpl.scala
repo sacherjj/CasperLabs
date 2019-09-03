@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 
-import cats.data.{EitherT, NonEmptyList}
+import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Bracket, Resource, Sync}
 import cats.implicits._
@@ -925,8 +925,7 @@ object MultiParentCasperImpl {
     ): F[DagRepresentation[F]] =
       for {
         _          <- BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
-        updatedDag <- DagStorage[F].insert(block)
-        _          <- DeployStorageWriter[F].addAsExecuted(block)
+        updatedDag <- DagStorage[F].getRepresentation
       } yield updatedDag
 
     /** Check if the block has dependencies that we don't have in store.
