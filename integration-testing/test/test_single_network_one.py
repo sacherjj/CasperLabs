@@ -67,14 +67,16 @@ def test_account_state(one_node_network):
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error
 
-    _ = account_state(node, block_hash)
-    # TODO Change with better assertion.
-    # assert response.account.nonce == 1, str(response)
+    acct_state = account_state(node, block_hash)
+    known_urefs = acct_state.account[0].known_urefs
+    names = [uref.name for uref in known_urefs]
+    assert "counter" in names
 
     block_hash = deploy_and_propose_from_genesis(node, "test_countercall.wasm")
-    _ = account_state(node, block_hash)
-    # TODO Change with better assertion
-    # assert response.account.nonce == 2, str(response)
+    acct_state = account_state(node, block_hash)
+    known_urefs = acct_state.account[0].known_urefs
+    names = [uref.name for uref in known_urefs]
+    assert "counter" in names
 
 
 def test_transfer_with_overdraft(one_node_network):
@@ -172,24 +174,10 @@ def test_scala_client_balance(one_node_network):
     # Perform multiple transfers with end result of Acct1 = 200, Acct2 = 100, Acct3 = 700
     hashes = node.transfer_to_accounts([(1, 1000), (2, 800, 1), (3, 700, 2)])
 
-    assert (
-        node.d_client.get_balance(
-            account_address=accounts[0].public_key_hex, block_hash=hashes[-1]
-        )
-        == initial[0] + 200
-    )
-    assert (
-        node.d_client.get_balance(
-            account_address=accounts[1].public_key_hex, block_hash=hashes[-1]
-        )
-        == initial[1] + 100
-    )
-    assert (
-        node.d_client.get_balance(
-            account_address=accounts[2].public_key_hex, block_hash=hashes[-1]
-        )
-        == initial[2] + 700
-    )
+    for acct_num, value in ((0, 200), (1, 100), (2, 700)):
+        addr = accounts[acct_num].public_key_hex
+        bal = node.d_client.get_balance(account_address=addr, block_hash=hashes[-1])
+        assert bal == initial[acct_num] + value
 
 
 ffi_test_contracts = [
@@ -320,7 +308,7 @@ def test_revert_subcall(client, node):
 
     # Help me figure out what subcall-revert-test/call/src/lib.rs should look like
     # TODO: function_counter 0 is a bug, to be fixed in EE.
-    h = contract_hash(GENESIS_ACCOUNT.public_key_hex, 0, 0)
+    h = contract_hash(GENESIS_ACCOUNT.public_key_hex, 0)
     logging.info("The expected contract hash is %s (%s)" % (list(h), h.hex()))
 
     block_hash = deploy_and_propose_from_genesis(node, "test_subcall_revert_call.wasm")
@@ -548,11 +536,13 @@ def test_cli_show_block_not_found(cli):
     block_hash = "00" * 32
     with raises(CLIErrorExit) as ex_info:
         cli("show-block", block_hash)
-    # StatusCode.NOT_FOUND: Cannot find block matching hash 0000000000000000000000000000000000000000000000000000000000000000
+    # StatusCode.NOT_FOUND: Cannot find block matching hash
+    # 0000000000000000000000000000000000000000000000000000000000000000
     assert "NOT_FOUND" in str(ex_info.value)
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
+@pytest.mark.skip
 def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli):
     resources_path = testing_root_path() / "resources"
 

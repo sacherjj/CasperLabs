@@ -376,7 +376,6 @@ def _call_pos_bonding(
     payment_contract: str = "standard_payment.wasm",
     payment_args: bytes = ABI.args([ABI.u512(50000000)]),
     method: bytes = b"bond",
-    nonce: int = None,
 ):
     if method == b"bond":
         session_args = ABI.args([ABI.byte_array(method), ABI.u512(amount)])
@@ -387,7 +386,6 @@ def _call_pos_bonding(
 
     node.p_client.deploy(
         from_address=from_address,
-        nonce=nonce,
         session_contract=session_contract,
         payment_contract=payment_contract,
         gas_limit=gas_limit,
@@ -415,7 +413,6 @@ def bond(
     session_contract: str = "pos_bonding.wasm",
     payment_contract: str = "standard_payment.wasm",
     payment_args: bytes = ABI.args([ABI.u512(50000000)]),
-    nonce=None,
 ):
     return _call_pos_bonding(
         node,
@@ -429,7 +426,6 @@ def bond(
         payment_contract,
         payment_args,
         b"bond",
-        nonce,
     )
 
 
@@ -444,7 +440,6 @@ def unbond(
     session_contract: str = "pos_bonding.wasm",
     payment_contract: str = "standard_payment.wasm",
     payment_args: bytes = ABI.args([ABI.u512(50000000)]),
-    nonce=None,
 ):
     return _call_pos_bonding(
         node,
@@ -458,7 +453,6 @@ def unbond(
         payment_contract,
         payment_args,
         b"unbond",
-        nonce,
     )
 
 
@@ -540,7 +534,6 @@ def test_unbonding_then_creating_block(payment_node_network):
         100,
         bonding_account.public_key_path,
         bonding_account.private_key_path,
-        nonce=3,
     )
 
     info(f"BONDING block_hash={bonding_block_hash}")
@@ -555,7 +548,6 @@ def test_unbonding_then_creating_block(payment_node_network):
         session_contract=HELLO_NAME_CONTRACT,
         payment_contract=PAYMENT_CONTRACT,
         payment_args=ABI.args([ABI.u512(5000000)]),
-        nonce=3,
     )
     block_hash = nodes[1].p_client.propose().block_hash.hex()
     check_no_errors_in_deploys(nodes[1], block_hash)

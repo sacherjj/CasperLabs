@@ -67,8 +67,7 @@ response = client.deploy(from_addr="f2cbd19d054bd2b2c06ea26714275271663a5e4503d5
                          gas_limit=1000000,
                          gas_price=1,
                          payment="helloname.wasm",
-                         session="helloname.wasm",
-                         nonce=1)
+                         session="helloname.wasm")
 ```
 
 ### Return values

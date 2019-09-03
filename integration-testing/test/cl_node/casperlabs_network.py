@@ -7,7 +7,6 @@ from test.cl_node.docker_base import DockerConfig
 from test.cl_node.docker_execution_engine import DockerExecutionEngine
 from test.cl_node.docker_node import DockerNode, FIRST_VALIDATOR_ACCOUNT
 from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
-from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS  # TODO: remove
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, Account
 from test.cl_node.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
