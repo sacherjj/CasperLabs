@@ -92,7 +92,6 @@ package object gossiping {
 
       genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
 
-      // TODO: Get from config
       implicit0(deploySelection: DeploySelection[F]) <- Resource.liftF(
                                                          DeploySelection.create[F](
                                                            conf.casper.maxBlockSize * 1024 * 1024 /* MB */

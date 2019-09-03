@@ -93,10 +93,9 @@ package object transport {
       implicit0(transportEff: TransportLayer[Effect]) = TransportLayer
         .eitherTTransportLayer[Task]
 
-      // TODO: Get from config
       implicit0(deploySelection: DeploySelection[Effect]) <- DeploySelection
                                                               .create[Effect](
-                                                                conf.casper.maxBlockSize * 1024 * 1024 /* 10MB */
+                                                                conf.casper.maxBlockSize * 1024 * 1024 /* MB */
                                                               )
 
       implicit0(lab: LastApprovedBlock[Task]) <- LastApprovedBlock.of[Task].toEffect
