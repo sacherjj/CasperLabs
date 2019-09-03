@@ -9,7 +9,7 @@ import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentatio
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{Key, Value}
-import io.casperlabs.casper.consensus.{Block, Deploy, state}
+import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
