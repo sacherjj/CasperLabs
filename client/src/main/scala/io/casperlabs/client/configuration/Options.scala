@@ -126,6 +126,10 @@ object Options {
         Left("Multiple session contract options provided; please specify exactly one.")
       else if (paymentsProvided > 1)
         Left("Multiple payment contract options provided; please specify exactly one.")
+      else if (paymentsProvided == 0 && paymentAmount.isEmpty)
+        Left(
+          "No payment contract options provided; please specify --payment-amount for the standard payment."
+        )
       else Right(())
     }
   }
