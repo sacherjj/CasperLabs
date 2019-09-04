@@ -3,7 +3,7 @@ import com.google.protobuf.ByteString
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, InputStream}
 import java.nio.file.Files
 import io.casperlabs.client.configuration.Options.ContractArgs
-import io.casperlabs.casper.consensus.Deploy.Code.Contract
+import io.casperlabs.casper.consensus.Deploy.{Arg, Code}, Code.Contract
 import io.casperlabs.crypto.codec.Base16
 import org.apache.commons.io._
 
@@ -15,28 +15,33 @@ final case class ConnectOptions(
 )
 
 /** Options to capture all the possible ways of passing one of the session or payment contracts. */
-final case class ContractOptions(
+final case class CodeOptions(
     // Point at a file on disk.
     file: Option[File],
-    // Name of a pre-packaged contract in the client JAR.
-    resource: Option[String] = None,
     // Hash of a stored contract.
-    hash: Option[String] = None,
+    hash: Option[String],
     // Name of a stored contract.
-    name: Option[String] = None,
+    name: Option[String],
     // URef of a stored contract.
-    uref: Option[String] = None
+    uref: Option[String],
+    // Arguments parsed from JSON
+    args: Option[Seq[Arg]],
+    // Name of a pre-packaged contract in the client JAR.
+    resource: Option[String] = None
 )
+object CodeOptions {
+  val empty = CodeOptions(None, None, None, None, None, None)
+}
 
 /** Encapsulate reading session and payment contracts from disk or resources
   * before putting them into the the format expected by the API.
   */
 final case class Contracts(
-    sessionOptions: ContractOptions,
-    paymentOptions: ContractOptions
+    sessionOptions: CodeOptions,
+    paymentOptions: CodeOptions
 ) {
-  lazy val session = Contracts.toContract(sessionOptions)
-  lazy val payment = Contracts.toContract(paymentOptions)
+  def session(defaultArgs: Seq[Arg] = Nil) = Contracts.toCode(sessionOptions, defaultArgs)
+  def payment(defaultArgs: Seq[Arg] = Nil) = Contracts.toCode(paymentOptions, defaultArgs)
 
   def withSessionResource(resource: String) =
     copy(sessionOptions = sessionOptions.copy(resource = Some(resource)))
@@ -45,15 +50,27 @@ final case class Contracts(
 object Contracts {
   def apply(args: ContractArgs): Contracts =
     Contracts(
-      ContractOptions(args.session.toOption),
-      ContractOptions(args.payment.toOption)
+      sessionOptions = CodeOptions(
+        file = args.session.toOption,
+        hash = args.sessionHash.toOption,
+        name = args.sessionName.toOption,
+        uref = args.sessionUref.toOption,
+        args = args.sessionArgs.toOption.map(_.args)
+      ),
+      paymentOptions = CodeOptions(
+        file = args.payment.toOption,
+        hash = args.paymentHash.toOption,
+        name = args.paymentName.toOption,
+        uref = args.paymentUref.toOption,
+        args = args.paymentArgs.toOption.map(_.args)
+      )
     )
 
-  val empty = Contracts(ContractOptions(None), ContractOptions(None))
+  val empty = Contracts(CodeOptions.empty, CodeOptions.empty)
 
-  /** Produce a Deploy.Code.Contract DTO from the options. */
-  private def toContract(opts: ContractOptions): Contract =
-    opts.file.map { f =>
+  /** Produce a Deploy.Code DTO from the options. */
+  private def toCode(opts: CodeOptions, defaultArgs: Seq[Arg]): Code = {
+    val contract = opts.file.map { f =>
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
       Contract.Wasm(wasm)
     } orElse {
@@ -77,6 +94,11 @@ object Contracts {
     } getOrElse {
       Contract.Empty
     }
+
+    val args = opts.args getOrElse defaultArgs
+
+    Code(contract = contract, args = args)
+  }
 
   private def consumeInputStream(is: InputStream): Array[Byte] = {
     val baos = new ByteArrayOutputStream()

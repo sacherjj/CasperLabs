@@ -49,6 +49,13 @@ object Options {
         validate = hashCheck
       )
 
+    val sessionArgs =
+      opt[Args](
+        required = false,
+        descr =
+          "JSON encoded session contract arguments, e.g. [{'name': 'amount', 'value': {'long_value': 123456}}]"
+      )
+
     val payment =
       opt[File](
         name = paymentPathName,
@@ -76,6 +83,13 @@ object Options {
         required = false,
         descr = "URef of the stored contract to be called in the payment; base16 encoded.",
         validate = hashCheck
+      )
+
+    val paymentArgs =
+      opt[Args](
+        required = false,
+        descr =
+          "JSON encoded payment contract arguments, e.g. [{'name': 'amount', 'value': {'long_value': 123456}}]"
       )
 
     addValidation {

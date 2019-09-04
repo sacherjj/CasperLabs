@@ -361,11 +361,8 @@ object DeployRuntime {
       contracts: Contracts,
       sessionArgs: Seq[Deploy.Arg]
   ): Deploy = {
-    // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
-    // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
-    // to not fail the session code execution even when EE will use hardcoded limit.
-    val session = contracts.session
-    val payment = if (contracts.payment.isEmpty) contracts.session else contracts.payment
+    val session = contracts.session(sessionArgs)
+    val payment = contracts.payment()
 
     consensus
       .Deploy()
@@ -380,8 +377,11 @@ object DeployRuntime {
       .withBody(
         consensus.Deploy
           .Body()
-          .withSession(consensus.Deploy.Code(contract = session).withArgs(sessionArgs))
-          .withPayment(consensus.Deploy.Code(contract = payment))
+          .withSession(session)
+          // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
+          // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
+          // to not fail the session code execution even when EE will use hardcoded limit.
+          .withPayment(if (payment.contract.isEmpty) session else payment)
       )
       .withHashes
   }

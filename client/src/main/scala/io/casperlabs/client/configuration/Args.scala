@@ -17,17 +17,17 @@ import scalapb.descriptors.{FieldDescriptor, PByteString, PMessage, PValue, Scal
 import scala.util.Try
 import com.google.protobuf.descriptor.FieldDescriptorProto.Type.TYPE_BYTES
 
-case class Args(args: Seq[Arg]) {
-  // Convert from JSON string to args.
-  implicit val valueConverter = implicitly[ValueConverter[String]].flatMap { _ =>
-    ???
-  }
-}
+case class Args(args: Seq[Arg])
 
 object Args {
+  // Convert from JSON string to args.
+  implicit val valueConverter: ValueConverter[Args] =
+    implicitly[ValueConverter[String]].flatMap { json =>
+      Args.fromJson(json).map(args => Some(Args(args)))
+    }
+
   // Override the format of `bytes` to be Base16.
   // https://github.com/scalapb-json/scalapb-circe/blob/0.2.x/shared/src/main/scala/scalapb_circe/JsonFormat.scala
-
   val parser = new Parser(
     preservingProtoFieldNames = true
   ) {
