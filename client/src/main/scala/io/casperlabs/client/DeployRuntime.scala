@@ -81,7 +81,7 @@ object DeployRuntime {
 
   // This is true for any array but I didn't want to go as far as writing type classes.
   // Binary format of an array is constructed from:
-  // length (u64/integer in binary) ++ bytes
+  // length (u32/integer in binary) ++ bytes
   private def serializeArray(ba: Array[Byte]): Array[Byte] = {
     val serLen = serializeInt(ba.length)
     serLen ++ ba
