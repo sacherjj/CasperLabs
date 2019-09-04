@@ -7,6 +7,8 @@ use contract_ffi::value::U512;
 
 use engine_core::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
 use engine_core::engine_state::{EngineConfig, CONV_RATE};
+// use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT};
+use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{
     self, DeployBuilder, ExecRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME,
@@ -26,19 +28,19 @@ fn initialize() -> WasmTestBuilder {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
-            "transfer_to_account_01.wasm",
+            "transfer_purse_to_account.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            (SYSTEM_ADDR,),
+            (SYSTEM_ADDR, U512::from(MAX_PAYMENT)),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             GENESIS_ADDR,
-            "transfer_to_account_01.wasm",
+            "transfer_purse_to_account.wasm",
             DEFAULT_BLOCK_TIME,
             2,
-            (ACCOUNT_ADDR,),
+            (ACCOUNT_ADDR, U512::from(MAX_PAYMENT)),
         )
         .expect_success()
         .commit();
@@ -73,7 +75,7 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
 fn finalize_payment_should_pay_validators_and_refund_user() {
     let mut builder = initialize();
     let payment_amount = U512::from(300);
-    let spent_amount = U512::from(75);
+    let spent_amount = U512::from(75 + 6_000_000);
     let refund_purse_flag: u8 = 0;
     let args = (
         payment_amount,

@@ -2,11 +2,13 @@ use std::collections::HashMap;
 
 use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
+use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE};
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
+const PURSE_TO_PURSE_AMOUNT: u64 = 42;
 
 #[ignore]
 #[test]
@@ -21,7 +23,7 @@ fn should_run_purse_to_purse_transfer() {
             "transfer_purse_to_purse.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            (source, target, U512::from(42)),
+            (source, target, U512::from(PURSE_TO_PURSE_AMOUNT)),
         )
         .expect_success()
         .commit()
@@ -103,8 +105,11 @@ fn should_run_purse_to_purse_transfer() {
     };
 
     // Final balance of the destination purse
-    assert_eq!(purse_secondary_balance, &U512::from(42));
-    assert_eq!(main_purse_balance, &U512::from(99_999_999_958i64));
+    assert_eq!(purse_secondary_balance, &U512::from(PURSE_TO_PURSE_AMOUNT));
+    assert_eq!(
+        main_purse_balance,
+        &U512::from(GENESIS_INITIAL_BALANCE - MAX_PAYMENT - PURSE_TO_PURSE_AMOUNT)
+    );
 }
 
 #[ignore]
@@ -213,5 +218,8 @@ fn should_run_purse_to_purse_transfer_with_error() {
     // Final balance of the destination purse equals to 0 as this purse is created
     // as new.
     assert_eq!(purse_secondary_balance, &U512::from(0));
-    assert_eq!(main_purse_balance, &U512::from(100_000_000_000i64));
+    assert_eq!(
+        main_purse_balance,
+        &U512::from(100_000_000_000u64 - MAX_PAYMENT)
+    );
 }

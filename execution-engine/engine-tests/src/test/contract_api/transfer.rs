@@ -8,6 +8,7 @@ use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::EngineState;
+use engine_core::engine_state::MAX_PAYMENT;
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -22,6 +23,7 @@ const TRANSFER_2_AMOUNT: u32 = 750;
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
+const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
 
 // This value was acquired by observing the output of an execution of
 // "create_purse_01.wasm" made by ACCOUNT_1.
@@ -734,27 +736,26 @@ fn should_create_purse() {
 #[test]
 fn should_transfer_total_amount() {
     let mut builder = crate::support::test_support::WasmTestBuilder::default();
-
-    builder
+    let _result = builder
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
-            // Genesis transfers N motes to new account
-            "transfer_to_account_01.wasm",
+            "transfer_purse_to_account.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            (ACCOUNT_1_ADDR,),
+            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             ACCOUNT_1_ADDR,
             // New account transfers exactly N motes to new account (total amount)
-            "transfer_to_account_01.wasm",
+            "transfer_purse_to_account.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            (ACCOUNT_2_ADDR,),
+            (ACCOUNT_2_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
         )
         .commit()
-        .expect_success();
+        .expect_success()
+        .finish();
 }

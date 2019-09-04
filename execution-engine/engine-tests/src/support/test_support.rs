@@ -362,6 +362,15 @@ pub fn get_exec_transforms(
         .collect()
 }
 
+pub fn get_exec_costs(exec_response: &ExecResponse) -> Vec<u64> {
+    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
+
+    deploy_results
+        .iter()
+        .map(|deploy_result| deploy_result.get_execution_result().get_cost())
+        .collect()
+}
+
 #[allow(clippy::implicit_hasher)]
 pub fn get_contract_uref(
     transforms: &HashMap<contract_ffi::key::Key, Transform>,
@@ -479,7 +488,7 @@ impl Default for PaymentCode {
 const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
 
 impl PaymentCode {
-    fn standard(value: contract_ffi::value::U512) -> PaymentCode {
+    pub fn standard(value: contract_ffi::value::U512) -> PaymentCode {
         // By default it's a standard payment contract
         PaymentCode::Standard(Box::new((value,)))
     }
@@ -597,6 +606,12 @@ impl WasmTestBuilder {
             genesis_transforms: None,
             payment_code: Rc::new(PaymentCode::default()),
         }
+    }
+
+    pub fn use_payment_code(&mut self, payment_code: PaymentCode) -> &mut WasmTestBuilder {
+        // let current_payment_code = Rc::make_mut(&self.payment_code);
+        self.payment_code = Rc::new(payment_code);
+        self
     }
 
     pub fn run_genesis(
