@@ -45,6 +45,8 @@ final case class Contracts(
 
   def withSessionResource(resource: String) =
     copy(sessionOptions = sessionOptions.copy(resource = Some(resource)))
+  def withPaymentResource(resource: String) =
+    copy(paymentOptions = paymentOptions.copy(resource = Some(resource)))
 }
 
 object Contracts {

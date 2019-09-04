@@ -92,6 +92,20 @@ object Options {
           "JSON encoded list of Deploy.Arg protobuf messages for the payment, e.g. [{'name': 'amount', 'value': {'long_value': 123456}}]"
       )
 
+    val gasPrice = opt[Long](
+      descr = "The price of gas for this transaction in motes/gas. Must be positive integer.",
+      validate = _ > 0,
+      required = false,
+      default = 10L.some
+    )
+
+    val nonce = opt[Long](
+      descr =
+        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
+      validate = _ > 0,
+      required = true
+    )
+
     addValidation {
       val sessionsProvided =
         List(session.isDefined, sessionHash.isDefined, sessionName.isDefined, sessionUref.isDefined)
@@ -107,8 +121,8 @@ object Options {
         Left("Multiple payment contract options provided; please specify exactly one.")
       else Right(())
     }
-
   }
+
 }
 
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -167,19 +181,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         validate = fileCheck
       )
 
-    val gasPrice = opt[Long](
-      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
-      validate = _ > 0,
-      required = false,
-      default = 10L.some
-    )
-
-    val nonce = opt[Long](
-      descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
-      validate = _ > 0,
-      required = true
-    )
-
     val deployPath =
       opt[File](
         required = false,
@@ -236,19 +237,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         validate = _ > 0,
         required = false // Leaving it here for now so old examples don't complain about its presence.
       )
-
-    val gasPrice = opt[Long](
-      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
-      validate = _ > 0,
-      required = false,
-      default = 10L.some
-    )
-
-    val nonce = opt[Long](
-      descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
-      validate = _ > 0,
-      required = true
-    )
 
     val publicKey =
       opt[File](
@@ -385,13 +373,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made."
     )
 
-    val nonce = opt[Long](
-      descr =
-        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
-      validate = _ > 0,
-      required = true
-    )
-
     val privateKey =
       opt[File](
         descr = "Path to the file with account private key (Ed25519)",
@@ -415,13 +396,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
-    val nonce = opt[Long](
-      descr =
-        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
-      validate = _ > 0,
-      required = true
-    )
-
     val privateKey =
       opt[File](
         descr = "Path to the file with account private key (Ed25519)",
@@ -442,13 +416,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       validate = _ > 0,
       descr =
         "Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.",
-      required = true
-    )
-
-    val nonce = opt[Long](
-      descr =
-        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
-      validate = _ > 0,
       required = true
     )
 

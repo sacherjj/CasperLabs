@@ -29,6 +29,7 @@ object DeployRuntime {
   val BONDING_WASM_FILE   = "bonding.wasm"
   val UNBONDING_WASM_FILE = "unbonding.wasm"
   val TRANSFER_WASM_FILE  = "transfer_to_account.wasm"
+  val PAYMENT_WASM_FILE   = "standard_payment.wasm"
 
   def propose[F[_]: Sync: DeployService](
       exit: Boolean = true,
@@ -362,7 +363,8 @@ object DeployRuntime {
       sessionArgs: Seq[Deploy.Arg]
   ): Deploy = {
     val session = contracts.session(sessionArgs)
-    val payment = contracts.payment()
+    // It is advisable to provide payment via --payment-name or --payment-hash, if it's stored.
+    val payment = contracts.withPaymentResource(PAYMENT_WASM_FILE).payment()
 
     consensus
       .Deploy()
@@ -378,10 +380,7 @@ object DeployRuntime {
         consensus.Deploy
           .Body()
           .withSession(session)
-          // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
-          // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
-          // to not fail the session code execution even when EE will use hardcoded limit.
-          .withPayment(if (payment.contract.isEmpty) session else payment)
+          .withPayment(payment)
       )
       .withHashes
   }
