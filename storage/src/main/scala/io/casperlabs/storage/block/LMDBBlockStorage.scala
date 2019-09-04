@@ -107,16 +107,16 @@ class LMDBBlockStorage[F[_]] private (
     }
 
   override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] = {
-    val hex = ByteString.copyFrom(Base16.decode(blockHashPrefix))
-    hex.size() match {
-      case 32 => get(hex)
+    val asByteString = ByteString.copyFrom(Base16.decode(blockHashPrefix))
+    asByteString.size() match {
+      case 32 => get(asByteString)
       case x if x < 32 =>
         for {
           maybeBlockHash <- withReadTxn { txn =>
                              withResource(blocks.iterate(txn)) { it =>
                                it.asScala
                                  .map(kv => ByteString.copyFrom(kv.key))
-                                 .find(_.startsWith(hex))
+                                 .find(_.startsWith(asByteString))
                              }
                            }
           res <- maybeBlockHash.fold(none[BlockMsgWithTransform].pure[F])(get)
@@ -126,16 +126,16 @@ class LMDBBlockStorage[F[_]] private (
   }
 
   override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] = {
-    val hex = ByteString.copyFrom(Base16.decode(blockHashPrefix))
-    hex.size() match {
-      case 32 => getBlockSummary(hex)
+    val asByteString = ByteString.copyFrom(Base16.decode(blockHashPrefix))
+    asByteString.size() match {
+      case 32 => getBlockSummary(asByteString)
       case x if x < 32 =>
         for {
           maybeBlockHash <- withReadTxn { txn =>
                              withResource(blocks.iterate(txn)) { it =>
                                it.asScala
                                  .map(kv => ByteString.copyFrom(kv.key))
-                                 .find(_.startsWith(hex))
+                                 .find(_.startsWith(asByteString))
                              }
                            }
           res <- maybeBlockHash.fold(none[BlockSummary].pure[F])(getBlockSummary)

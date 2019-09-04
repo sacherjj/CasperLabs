@@ -165,9 +165,9 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
     )
 
   override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] = {
-    val hex = ByteString.copyFrom(Base16.decode(blockHashPrefix))
-    hex.size() match {
-      case 32 => get(hex)
+    val asByteString = ByteString.copyFrom(Base16.decode(blockHashPrefix))
+    asByteString.size() match {
+      case 32 => get(asByteString)
       case x if x < 32 =>
         for {
           maybeBlockHash <- lock.withPermit(
@@ -175,7 +175,7 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
                                withResource(index.iterate(txn)) { it =>
                                  it.asScala
                                    .map(kv => ByteString.copyFrom(kv.key))
-                                   .find(_.startsWith(hex))
+                                   .find(_.startsWith(asByteString))
                                }
                              }
                            )
@@ -186,9 +186,9 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
   }
 
   override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] = {
-    val hex = ByteString.copyFrom(Base16.decode(blockHashPrefix))
-    hex.size() match {
-      case 32 => getBlockSummary(hex)
+    val asByteString = ByteString.copyFrom(Base16.decode(blockHashPrefix))
+    asByteString.size() match {
+      case 32 => getBlockSummary(asByteString)
       case x if x < 32 =>
         for {
           maybeBlockHash <- lock.withPermit(
@@ -196,7 +196,7 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
                                withResource(index.iterate(txn)) { it =>
                                  it.asScala
                                    .map(kv => ByteString.copyFrom(kv.key))
-                                   .find(_.startsWith(hex))
+                                   .find(_.startsWith(asByteString))
                                }
                              }
                            )
