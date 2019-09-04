@@ -11,11 +11,11 @@ import org.scalacheck.{Arbitrary, Gen}
 
 object blockImplicits {
 
-  val blockHashGen: Gen[ByteString] = for {
+  val hashGen: Gen[ByteString] = for {
     byteArray <- listOfN(32, arbitrary[Byte])
   } yield ByteString.copyFrom(byteArray.toArray)
 
-  implicit val arbitraryHash: Arbitrary[ByteString] = Arbitrary(blockHashGen)
+  implicit val arbitraryHash: Arbitrary[ByteString] = Arbitrary(hashGen)
 
   val transform: Gen[TransformEntry] = for {
     bs        <- arbitrary[ByteString]
@@ -31,8 +31,7 @@ object blockImplicits {
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
   val deployGen: Gen[Deploy] = for {
-    n          <- Gen.choose(0, 10)
-    deployHash = ByteString.copyFromUtf8(s"$n")
+    deployHash <- arbitrary[ByteString]
   } yield Deploy().withDeployHash(deployHash)
   implicit val arbitraryDeploy: Arbitrary[Deploy] = Arbitrary(deployGen)
 
@@ -92,7 +91,7 @@ object blockImplicits {
     }
 
   def blockWithNewHashesGen(blockElements: List[Block]): Gen[List[Block]] =
-    Gen.listOfN(blockElements.size, blockHashGen).map { blockHashes =>
+    Gen.listOfN(blockElements.size, hashGen).map { blockHashes =>
       blockElements.zip(blockHashes).map {
         case (b, hash) => b.withBlockHash(hash)
       }

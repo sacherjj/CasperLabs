@@ -6,12 +6,12 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.block.BlockStorage.BlockHash

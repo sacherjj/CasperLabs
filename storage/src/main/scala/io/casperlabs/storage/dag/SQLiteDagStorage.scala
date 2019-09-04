@@ -275,7 +275,7 @@ object SQLiteDagStorage {
     private def msg(b: BlockHash): String = Base16.encode(b.toByteArray).take(10)
   }
 
-  private[dag] def create[F[_]: Sync](
+  private[storage] def create[F[_]: Sync](
       implicit xa: Transactor[F],
       met: Metrics[F]
   ): F[DagStorage[F]] =
@@ -287,7 +287,4 @@ object SQLiteDagStorage {
                      override implicit val a: Apply[F] = Sync[F]
                    })
     } yield dagStorage: DagStorage[F]
-
-  def apply[F[_]: Sync](implicit xa: Transactor[F], met: Metrics[F]): Resource[F, DagStorage[F]] =
-    Resource.make(SQLiteDagStorage.create[F])(_.close())
 }

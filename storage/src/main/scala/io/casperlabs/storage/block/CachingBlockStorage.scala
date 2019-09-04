@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, MeteredBlockStorage}
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
 import scala.collection.JavaConverters._
@@ -29,10 +29,35 @@ class CachingBlockStorage[F[_]: Sync](
     }
 
   override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
-    cacheOrUnderlying(Option(cache.getIfPresent(blockHash)), underlying.get(blockHash))
+    cacheOrUnderlying(
+      Option(cache.getIfPresent(blockHash)),
+      underlying.get(blockHash)
+    )
 
-  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
-    cacheOrUnderlying(cache.asMap.keySet.asScala.find(p), underlying.findBlockHash(p))
+  override def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
+    cacheOrUnderlying(
+      cache.asMap().asScala.collectFirst {
+        case (blockHash, blockMsg) if blockHash.startsWith(blockHashPrefix) =>
+          blockMsg
+      },
+      underlying.getByPrefix(blockHashPrefix)
+    )
+
+  override def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
+    cacheOrUnderlying(
+      cache
+        .asMap()
+        .asScala
+        .collectFirst {
+          case (blockHash, blockMsg) if blockHash.startsWith(blockHashPrefix) =>
+            blockMsg.blockMessage
+        }
+        .flatten
+        .map(b => BlockSummary(b.blockHash, b.header, b.signature)),
+      underlying.getSummaryByPrefix(blockHashPrefix)
+    )
+
+  override def isEmpty: F[Boolean] = underlying.isEmpty
 
   override def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
     Sync[F]

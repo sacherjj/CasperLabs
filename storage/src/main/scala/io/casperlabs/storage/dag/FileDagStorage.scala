@@ -10,13 +10,13 @@ import cats.mtl.MonadState
 import cats.{Apply, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{Log, LogSource}
 import io.casperlabs.storage._
 import io.casperlabs.storage.block.BlockStorage

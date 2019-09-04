@@ -1,6 +1,5 @@
 CREATE TABLE deploy_process_results
 (
-    -- May be NULL if deploy not included into block
     block_hash              BLOB    NOT NULL,
     deploy_hash             BLOB    NOT NULL,
     -- Index of deploy in block to restore block precisely

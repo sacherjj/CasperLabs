@@ -6,7 +6,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.metrics.Metrics
@@ -16,7 +16,7 @@ import io.casperlabs.shared.PathOps._
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block.InMemBlockStorage.emptyMapRef
 import io.casperlabs.storage.blockImplicits.{blockBatchesGen, blockElementsGen}
-import io.casperlabs.storage.{BlockMsgWithTransform, Context}
+import io.casperlabs.storage.{BlockMsgWithTransform, Context, SQLiteFixture, SQLiteStorage}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -25,6 +25,7 @@ import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 import scala.language.higherKinds
+import scala.util.Random
 
 @silent("match may not be exhaustive")
 trait BlockStorageTest
@@ -38,23 +39,18 @@ trait BlockStorageTest
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(100))
 
-  private[this] def toBlockMessage(bh: BlockHash, v: Long, ts: Long): Block =
-    Block()
-      .withBlockHash(bh)
-      .withHeader(Block.Header().withProtocolVersion(v).withTimestamp(ts))
-
   def withStorage[R](f: BlockStorage[Task] => Task[R]): R
 
   def checkAllHashes(storage: BlockStorage[Task], hashes: List[BlockHash]) =
     hashes.traverse { h =>
-      storage.findBlockHash(_ == h).map(h -> _.isDefined)
+      storage.getByPrefix(h).map(h -> _.isDefined)
     } map { res =>
       Inspectors.forAll(res) {
         case (_, isDefined) => isDefined shouldBe true
       }
     }
 
-  "Block Storage" should "return Some(message) on get for a published key and return Some(blockSummary) on getSummary" in {
+  it should "return Some(message) on get for a published key and return Some(blockSummary) on getSummary" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
       withStorage { storage =>
         val items = blockStorageElements
@@ -76,61 +72,34 @@ trait BlockStorageTest
     }
   }
 
-  it should "discover keys by predicate" in {
+  it should "discover blocks/summaries by block hash prefix" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
       withStorage { storage =>
         val items = blockStorageElements
         for {
           _ <- items.traverse_(storage.put)
-          _ <- items.traverse[Task, Assertion] { block =>
-                storage
-                  .findBlockHash(
-                    _ == ByteString.copyFrom(block.getBlockMessage.blockHash.toByteArray)
+          _ <- items.traverse[Task, Unit] { blockMsg =>
+                val randomPrefix =
+                  ByteString.copyFrom(
+                    blockMsg.getBlockMessage.blockHash.toByteArray.take(Random.nextInt(32) + 1)
                   )
-                  .map { w =>
-                    w should not be empty
-                    w.get shouldBe block.getBlockMessage.blockHash
-                  }
+                for {
+                  _ <- storage
+                        .getByPrefix(randomPrefix)
+                        .map { maybeBlock =>
+                          maybeBlock should not be empty
+                          assert(maybeBlock.get.getBlockMessage.blockHash.startsWith(randomPrefix))
+                        }
+                  _ <- storage.getSummaryByPrefix(randomPrefix).map { maybeSummary =>
+                        maybeSummary should not be empty
+                        assert(maybeSummary.get.blockHash.startsWith(randomPrefix))
+                      }
+                } yield ()
               }
         } yield ()
       }
     }
   }
-
-  it should "overwrite existing value" in
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
-      withStorage { storage =>
-        val items = blockStorageElements.map {
-          case BlockMsgWithTransform(Some(block), transform) =>
-            val newBlock = toBlockMessage(block.blockHash, 200L, 20000L)
-            (
-              block.blockHash,
-              BlockMsgWithTransform(Some(block), transform),
-              BlockMsgWithTransform(Some(newBlock), transform)
-            )
-        }
-        for {
-          _ <- items.traverse_[Task, Unit] { case (k, v1, _) => storage.put(k, v1) }
-          _ <- items.traverse_[Task, Assertion] {
-                case (k, v1, _) => {
-                  storage.get(k).map(_ shouldBe Some(v1))
-                  storage
-                    .getBlockSummary(k)
-                    .map(_ shouldBe Some(v1.toBlockSummary))
-                }
-              }
-          _ <- items.traverse_[Task, Unit] { case (k, _, v2) => storage.put(k, v2) }
-          _ <- items.traverse_[Task, Assertion] {
-                case (k, _, v2) =>
-                  storage.get(k).map(_ shouldBe Some(v2))
-                  storage
-                    .getBlockSummary(k)
-                    .map(_ shouldBe Some(v2.toBlockSummary))
-              }
-          _ <- checkAllHashes(storage, items.map(_._1).toList)
-        } yield ()
-      }
-    }
 
   it should "be able to get blocks containing the specific deploy" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
@@ -177,12 +146,12 @@ trait BlockStorageTest
         throw exception
 
       for {
-        _                  <- storage.findBlockHash(_ => true).map(_ shouldBe empty)
+        _                  <- storage.isEmpty.map(_ shouldBe true)
         (blockHash, block) = elem
         putAttempt         <- storage.put(blockHash, block).attempt
         _                  = putAttempt.left.value shouldBe exception
-        result             <- storage.findBlockHash(_ => true).map(_ shouldBe empty)
-      } yield result
+        _                  <- storage.isEmpty.map(_ shouldBe true)
+      } yield ()
     }
   }
 }
@@ -197,7 +166,7 @@ class InMemBlockStorageTest extends BlockStorageTest {
       metrics             = new MetricsNOP[Task]()
       storage = InMemBlockStorage
         .create[Task](Monad[Task], refTask, deployHashesRefTask, approvedBlockRef, metrics)
-      _      <- storage.findBlockHash(_ => true).map(x => assert(x.isEmpty))
+      _      <- storage.isEmpty.map(_ shouldBe true)
       result <- f(storage)
     } yield result
     test.unsafeRunSync
@@ -218,7 +187,7 @@ class LMDBBlockStorageTest extends BlockStorageTest {
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
     val storage                         = LMDBBlockStorage.create[Task](env)
     val test = for {
-      _      <- storage.findBlockHash(_ => true).map(x => assert(x.isEmpty))
+      _      <- storage.isEmpty.map(_ shouldBe true)
       result <- f(storage)
     } yield result
     try {
@@ -246,7 +215,7 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
     val env                             = Context.env(dbDir, mapSize)
     val test = for {
       storage <- FileLMDBIndexBlockStorage.create[Task](env, dbDir).map(_.right.get)
-      _       <- storage.findBlockHash(_ => true).map(x => assert(x.isEmpty))
+      _       <- storage.isEmpty.map(_ shouldBe true)
       result  <- f(storage)
     } yield result
     try {
@@ -410,12 +379,12 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   firstStorage.get(block.blockHash).map(_ shouldBe Some(b))
               }
-          _ <- firstStorage.findBlockHash(_ => true).map(_.isEmpty shouldBe blocks.isEmpty)
+          _ <- firstStorage.isEmpty.map(_ shouldBe blocks.isEmpty)
           _ = approvedBlockPath.toFile.exists() shouldBe true
           _ <- firstStorage.clear()
           _ = approvedBlockPath.toFile.exists() shouldBe false
           _ = checkpointsDir.toFile.list().size shouldBe 0
-          _ <- firstStorage.findBlockHash(_ => true).map(_ shouldBe empty)
+          _ <- firstStorage.isEmpty.map(_ shouldBe true)
           _ <- blockStorageBatches.traverse_[Task, Unit](
                 blockStorageElements =>
                   blockStorageElements
@@ -436,4 +405,12 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
       }
     }
   }
+}
+
+class SQLiteBlockStorageTest extends BlockStorageTest with SQLiteFixture[BlockStorage[Task]] {
+  override def withStorage[R](f: BlockStorage[Task] => Task[R]): R = runSQLiteTest[R](f)
+
+  override def db: String = "/tmp/block_storage.db"
+
+  override def createTestResource: Task[BlockStorage[Task]] = SQLiteStorage.create[Task](Task.pure)
 }

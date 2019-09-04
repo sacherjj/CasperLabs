@@ -8,7 +8,12 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{
+  BlockHash,
+  BlockHashPrefix,
+  DeployHash,
+  MeteredBlockStorage
+}
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
 import scala.language.higherKinds
@@ -24,7 +29,19 @@ class InMemBlockStorage[F[_]] private (
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     refF.get.map(_.get(blockHash).map(_._1))
 
-  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
+  def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
+    refF.get.map(_.collectFirst {
+      case (hash, (block, _)) if hash.startsWith(blockHashPrefix) => block
+    })
+
+  def isEmpty: F[Boolean] = refF.get.map(_.isEmpty)
+
+  def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
+    refF.get.map(_.collectFirst {
+      case (hash, (_, summary)) if hash.startsWith(blockHashPrefix) => summary
+    })
+
+  def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
     refF.get.map(_.keys.find(p))
 
   def put(

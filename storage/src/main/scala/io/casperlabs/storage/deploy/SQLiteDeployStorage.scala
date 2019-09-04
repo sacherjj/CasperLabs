@@ -7,12 +7,12 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
-import io.casperlabs.storage.DeployStorageMetricsSource
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
+import io.casperlabs.storage.DeployStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.DeployHash
 import io.casperlabs.storage.util.DoobieCodecs
 
@@ -224,16 +224,19 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
 
   /** Reads deploys in PENDING state, lowest nonce per account. */
   override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
-    sql"""| SELECT hash FROM (
-          |   SELECT dan.hash, dan.account, dan.nonce FROM deploy_account_nonce dan
-          |   INNER JOIN buffered_deploys bd
-          |   ON bd.hash = dan.hash
-          |   WHERE bd.status = $PendingStatusCode
-          | ) dan
-          | GROUP BY dan.account
-          | HAVING MIN(dan.nonce)
-          | ORDER BY dan.nonce
-          """.stripMargin
+    sql"""|WITH pending_deploys as (
+          |  SELECT n.*
+          |  FROM   buffered_deploys b
+          |    JOIN deploy_account_nonce n ON b.hash = n.hash
+          |  WHERE  b.status = $PendingStatusCode
+          |)
+          |SELECT  hash
+          |FROM    pending_deploys d
+          |WHERE NOT exists (
+          |  select 1 
+          |  FROM  pending_deploys nd
+          |  WHERE nd.account = d.account
+          |    AND nd.nonce < d.nonce )""".stripMargin
       .query[DeployHash]
       .stream
       .transact(xa)
@@ -322,12 +325,22 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
               )
     } yield res
   }
+
+  override def clear(): F[Unit] =
+    (for {
+      _ <- sql"DELETE FROM deploys".update.run
+      _ <- sql"DELETE FROM buffered_deploys".update.run
+      _ <- sql"DELETE FROM deploy_process_results".update.run
+      _ <- sql"DELETE FROM deploy_account_nonce".update.run
+    } yield ()).transact(xa)
+
+  override def close(): F[Unit] = ().pure[F]
 }
 
 object SQLiteDeployStorage {
   private implicit val metricsSource: Source = Metrics.Source(DeployStorageMetricsSource, "sqlite")
 
-  def create[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
+  private[storage] def create[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       implicit xa: Transactor[F]
   ): F[DeployStorage[F]] =
     for {

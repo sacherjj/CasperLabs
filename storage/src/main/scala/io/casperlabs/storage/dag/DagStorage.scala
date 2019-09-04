@@ -4,14 +4,14 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.metrics.Metered
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 
 trait DagStorage[F[_]] {
   def getRepresentation: F[DagRepresentation[F]]
-  def insert(block: Block): F[DagRepresentation[F]]
+  private[storage] def insert(block: Block): F[DagRepresentation[F]]
   def checkpoint(): F[Unit]
   def clear(): F[Unit]
   def close(): F[Unit]

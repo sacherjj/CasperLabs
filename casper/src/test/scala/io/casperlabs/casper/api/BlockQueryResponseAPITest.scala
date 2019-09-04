@@ -12,7 +12,7 @@ import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
   FinalityDetectorBySingleSweepImpl
 }
-import io.casperlabs.casper.helper.{DagStorageFixture, NoOpsCasperEffect}
+import io.casperlabs.casper.helper.{NoOpsCasperEffect, StorageFixture}
 import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.Fs2Compiler
@@ -27,7 +27,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.immutable.HashMap
 
 @silent("deprecated")
-class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFixture {
+class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixture {
   implicit val timeEff = new LogicalTime[Task]
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
@@ -93,7 +93,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "showBlock" should "return successful block info response" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       for {
         effects                                     <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
@@ -121,7 +121,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
   }
 
   it should "return error when no block exists" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       for {
         effects                                     <- emptyEffects(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
@@ -139,7 +139,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
   }
 
   "findBlockWithDeploy" should "return successful block info response" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       for {
         effects                                     <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
@@ -169,7 +169,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
   }
 
   it should "return error when no block matching query exists" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       for {
         effects                                     <- emptyEffects(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
@@ -193,8 +193,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
       dagStorage: DagStorage[Task]
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], FinalityDetector[Task])] =
     for {
-      _ <- dagStorage.insert(genesisBlock)
-      _ <- dagStorage.insert(secondBlock)
+      _ <- blockStorage.put(genesisBlock.blockHash, genesisBlock, Seq.empty)
+      _ <- blockStorage.put(secondBlock.blockHash, secondBlock, Seq.empty)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap[BlockHash, BlockMsgWithTransform](
                          (

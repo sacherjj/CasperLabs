@@ -109,10 +109,9 @@ class CachingBlockStorageTest extends WordSpecLike with Matchers {
         store.contains(_)
       }
     }
-    "cache `findBlockHash`" in {
-      verifyCached("findBlockHash", Option(sampleBlock.getBlockMessage.blockHash)) {
-        store => hash =>
-          store.findBlockHash(_ == hash)
+    "cache `get`" in {
+      verifyCached("get", Option(sampleBlock.getBlockMessage.blockHash)) { store => hash =>
+        store.get(hash).map(_.map(_.getBlockMessage.blockHash))
       }
     }
     "cache `getBlockSummary`" in {

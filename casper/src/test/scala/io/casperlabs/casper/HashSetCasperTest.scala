@@ -17,12 +17,9 @@ import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import io.casperlabs.shared.PathOps.RichPath
-import io.casperlabs.shared.{FilesAPI, Log}
+import io.casperlabs.shared.FilesAPI
 import io.casperlabs.storage.BlockMsgWithTransform
-import io.casperlabs.storage.block._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -220,7 +217,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _              <- MultiParentCasper[Effect].addBlock(invalidBlock) shouldBeF InvalidUnslashableBlock
       _              = logEff.warns.count(_.contains("because block signature")) should be(1)
       _              <- node.tearDownNode()
-      result <- validateBlockStorage(node) { blockStorage =>
+      result <- node.validateBlockStorage { blockStorage =>
                  blockStorage.getBlockMessage(block.blockHash) shouldBeF None
                }
     } yield result
@@ -280,7 +277,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock)
       _                    = exactly(1, logEff.warns) should include("Ignoring block")
       _                    <- node.tearDownNode()
-      result <- validateBlockStorage(node) { blockStorage =>
+      result <- node.validateBlockStorage { blockStorage =>
                  blockStorage.getBlockMessage(signedBlock.blockHash) shouldBeF None
                }
     } yield result
@@ -297,13 +294,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       result               <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
       _                    <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
-            validateBlockStorage(node) { blockStorage =>
-              blockStorage
-                .getBlockMessage(signedBlock.blockHash)
+            node.validateBlockStorage(
+              _.getBlockMessage(signedBlock.blockHash)
                 .map(_.map(_.toProtoString)) shouldBeF Some(
                 signedBlock.toProtoString
               )
-            }(nodes(0).metricEff, nodes(0).logEff)
+            )
           }
     } yield result
   }
@@ -320,11 +316,11 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       result                     = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
       _                          <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
-            validateBlockStorage(node) { blockStorage =>
-              blockStorage.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
+            node.validateBlockStorage(
+              _.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
                 signedBlock1Prime
               )
-            }(nodes(0).metricEff, nodes(0).logEff)
+            )
           }
     } yield result
   }
@@ -369,41 +365,41 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   }
 
   //todo we need some genenis Contract to pass this test
-// it should "allow bonding and distribute the joining fee" in {
-//    val nodes =
-//      HashSetCasperTestNode.network(
-//        validatorKeys :+ otherSk,
-//        genesis,
-//        storageSize = 1024L * 1024 * 10
-//      )
-//    implicit val runtimeManager = nodes(0).runtimeManager
-//    val pubKey                  = Base16.encode(ethPubKeys.head.bytes.drop(1))
-//    val secKey                  = ethPivKeys.head.bytes
-//    val ethAddress              = ethAddresses.head
-//    val bondKey                 = Base16.encode(otherPk)
-//    val walletUnlockDeploy =
-//      RevIssuanceTest.preWalletUnlockDeploy(ethAddress, pubKey, secKey, "unlockOut")
-//    val bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
-//    val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
-//      BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
-//      System.currentTimeMillis(),
-//      Integer.MAX_VALUE
-//    )
-//    val transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
-//    val bondingTransferDeploy =
-//      RevIssuanceTest.walletTransferDeploy(
-//        0,
-//        wallets.head.initRevBalance.toLong,
-//        bondingForwarderAddress,
-//        transferStatusOut,
-//        pubKey,
-//        secKey
-//      )
-//
-//    val Created(block1) = nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
-//      .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock
-//    val block1Status = nodes(0).casperEff.addBlock(block1)
-//    nodes.foreach(_.receive) //send to all peers
+  // it should "allow bonding and distribute the joining fee" in {
+  //    val nodes =
+  //      HashSetCasperTestNode.network(
+  //        validatorKeys :+ otherSk,
+  //        genesis,
+  //        storageSize = 1024L * 1024 * 10
+  //      )
+  //    implicit val runtimeManager = nodes(0).runtimeManager
+  //    val pubKey                  = Base16.encode(ethPubKeys.head.bytes.drop(1))
+  //    val secKey                  = ethPivKeys.head.bytes
+  //    val ethAddress              = ethAddresses.head
+  //    val bondKey                 = Base16.encode(otherPk)
+  //    val walletUnlockDeploy =
+  //      RevIssuanceTest.preWalletUnlockDeploy(ethAddress, pubKey, secKey, "unlockOut")
+  //    val bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
+  //    val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
+  //      BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
+  //      System.currentTimeMillis(),
+  //      Integer.MAX_VALUE
+  //    )
+  //    val transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
+  //    val bondingTransferDeploy =
+  //      RevIssuanceTest.walletTransferDeploy(
+  //        0,
+  //        wallets.head.initRevBalance.toLong,
+  //        bondingForwarderAddress,
+  //        transferStatusOut,
+  //        pubKey,
+  //        secKey
+  //      )
+  //
+  //    val Created(block1) = nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
+  //      .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock
+  //    val block1Status = nodes(0).casperEff.addBlock(block1)
+  //    nodes.foreach(_.receive) //send to all peers
 
   it should "allow bonding via the faucet" in effectTest {
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
@@ -573,7 +569,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes.map(_.tearDownNode()).toList.sequence
 
       _ = nodes.toList.traverse_[Effect, Assertion] { node =>
-        validateBlockStorage(node) { blockStorage =>
+        node.validateBlockStorage { blockStorage =>
           for {
             _ <- blockStorage.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
             _ <- blockStorage.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
@@ -581,7 +577,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                        signedBlock3
                      )
           } yield result
-        }(nodes(0).metricEff, nodes(0).logEff)
+        }
       }
     } yield result
   }
@@ -626,7 +622,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _ <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
-            validateBlockStorage(node) { blockStorage =>
+            node.validateBlockStorage { blockStorage =>
               for {
                 _ <- blockStorage.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(
                       signedBlock1
@@ -635,7 +631,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                            signedBlock2
                          )
               } yield result
-            }(nodes(0).metricEff, nodes(0).logEff)
+            }
           }
     } yield result
   }
@@ -789,12 +785,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _ <- nodes(0).tearDownNode()
       _ <- nodes(1).tearDownNode()
-      _ <- validateBlockStorage(nodes(1)) { blockStorage =>
+      _ <- nodes(1).validateBlockStorage { blockStorage =>
             for {
               _      <- blockStorage.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
               result <- blockStorage.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF None
             } yield result
-          }(nodes(0).metricEff, nodes(0).logEff)
+          }
     } yield result
   }
 
@@ -872,21 +868,21 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
             .normalizedInitialFault(ProtoUtil.weightMap(genesis)) shouldBeF 1f / (1f + 3f + 5f + 7f)
       _ <- nodes.map(_.tearDownNode()).toList.sequence
 
-      _ <- validateBlockStorage(nodes(0)) { blockStorage =>
+      _ <- nodes(0).validateBlockStorage { blockStorage =>
             for {
               _ <- blockStorage.getBlockMessage(signedBlock1.blockHash) shouldBeF None
               result <- blockStorage.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
                          signedBlock1Prime
                        )
             } yield result
-          }(nodes(0).metricEff, nodes(0).logEff)
-      _ <- validateBlockStorage(nodes(1)) { blockStorage =>
+          }
+      _ <- nodes(1).validateBlockStorage { blockStorage =>
             for {
               _      <- blockStorage.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
               result <- blockStorage.getBlockMessage(signedBlock4.blockHash) shouldBeF None
             } yield result
-          }(nodes(1).metricEff, nodes(1).logEff)
-      result <- validateBlockStorage(nodes(2)) { blockStorage =>
+          }
+      result <- nodes(2).validateBlockStorage { blockStorage =>
                  for {
                    _ <- blockStorage.getBlockMessage(signedBlock3.blockHash) shouldBeF Some(
                          signedBlock3
@@ -895,7 +891,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                               signedBlock1Prime
                             )
                  } yield result
-               }(nodes(2).metricEff, nodes(2).logEff)
+               }
     } yield result
   }
 
@@ -1067,12 +1063,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- nodes(0).receive()
       _               <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
-            validateBlockStorage(node) { blockStorage =>
+            node.validateBlockStorage { blockStorage =>
               for {
                 _      <- blockStorage.getBlockMessage(invalidBlock1.blockHash) shouldBeF None
                 result <- blockStorage.getBlockMessage(block2.blockHash) shouldBeF Some(block2)
               } yield result
-            }(nodes(0).metricEff, nodes(0).logEff)
+            }
           }
     } yield ()
   }
@@ -1552,16 +1548,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 }
 
 object HashSetCasperTest {
-  def validateBlockStorage[R](
-      node: HashSetCasperTestNode[Effect]
-  )(f: BlockStorage[Effect] => Effect[R])(implicit metrics: Metrics[Effect], log: Log[Effect]) =
-    for {
-      bs     <- DagStorageTestFixture.createBlockStorage[Effect](node.blockStorageDir)
-      result <- f(bs)
-      _      <- bs.close()
-      _      <- Sync[Effect].delay { node.blockStorageDir.recursivelyDelete() }
-    } yield result
-
   def createBonds(validators: Seq[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 

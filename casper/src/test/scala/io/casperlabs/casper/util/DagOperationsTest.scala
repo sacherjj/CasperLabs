@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.Sorting.blockSummaryOrdering
@@ -19,7 +19,7 @@ import scala.collection.immutable.BitSet
 
 @silent("deprecated")
 @silent("is never used")
-class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
+class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
   "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
     implicit val intKey = DagOperations.Key.identity[Int]
@@ -28,8 +28,8 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "bfToposortTraverseF" should "lazily breadth-first and order by rank when traverse a DAG with effectful neighbours" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /*
          * DAG Looks like this:
          *
@@ -78,8 +78,8 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "Greatest common ancestor" should "be computed properly" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /*
          * DAG Looks like this:
          *
@@ -114,7 +114,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "Latest Common Ancestor" should "be computed properly for various j-DAGs" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1 = generateValidator("One")
       val v2 = generateValidator("Two")
       val v3 = generateValidator("Three")
@@ -270,8 +270,8 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "uncommon ancestors" should "be computed properly" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /*
          *  DAG Looks like this:
          *
@@ -327,7 +327,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
 
   "anyDescendantPathExists" should
     "return whether there is a path from any of the possible ancestor blocks to any of the potential descendants" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       def anyDescendantPathExists(
           dag: DagRepresentation[Task],
           start: Set[Block],
@@ -380,7 +380,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
 
   "collectWhereDescendantPathExists" should
     "return from the possible ancestor blocks the ones which have a path to any of the potential descendants" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       def collect(
           dag: DagRepresentation[Task],
           start: Set[Block],

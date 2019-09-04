@@ -13,7 +13,7 @@ import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Resources.withResource
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, MeteredBlockStorage}
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 import org.lmdbjava.DbiFlags.{MDB_CREATE, MDB_DUPSORT}
 import org.lmdbjava.Txn.NotReadyException
@@ -98,11 +98,50 @@ class LMDBBlockStorage[F[_]] private (
         .map(r => BlockMsgWithTransform.parseFrom(ByteString.copyFrom(r).newCodedInput()))
     }
 
-  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
+  def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
     withReadTxn { txn =>
       withResource(blocks.iterate(txn)) { it =>
         it.asScala.map(kv => ByteString.copyFrom(kv.key)).find(p)
       }
+    }
+
+  override def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
+    blockHashPrefix.size() match {
+      case 32 => get(blockHashPrefix)
+      case x if x < 32 =>
+        for {
+          maybeBlockHash <- withReadTxn { txn =>
+                             withResource(blocks.iterate(txn)) { it =>
+                               it.asScala
+                                 .map(kv => ByteString.copyFrom(kv.key))
+                                 .find(_.startsWith(blockHashPrefix))
+                             }
+                           }
+          res <- maybeBlockHash.fold(none[BlockMsgWithTransform].pure[F])(get)
+        } yield res
+      case _ => none[BlockMsgWithTransform].pure[F]
+    }
+
+  override def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
+    blockHashPrefix.size() match {
+      case 32 => getBlockSummary(blockHashPrefix)
+      case x if x < 32 =>
+        for {
+          maybeBlockHash <- withReadTxn { txn =>
+                             withResource(blocks.iterate(txn)) { it =>
+                               it.asScala
+                                 .map(kv => ByteString.copyFrom(kv.key))
+                                 .find(_.startsWith(blockHashPrefix))
+                             }
+                           }
+          res <- maybeBlockHash.fold(none[BlockSummary].pure[F])(getBlockSummary)
+        } yield res
+      case _ => none[BlockSummary].pure[F]
+    }
+
+  override def isEmpty: F[Boolean] =
+    withReadTxn { txn =>
+      blocks.stat(txn).entries == 0L
     }
 
   def getApprovedBlock(): F[Option[ApprovedBlock]] =

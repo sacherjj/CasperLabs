@@ -38,9 +38,10 @@ import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
+import io.casperlabs.storage.SQLiteStorage
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter, SQLiteDeployStorage}
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.util.fileIO.IOError._
 import io.casperlabs.storage.util.fileIO._
 import io.netty.handler.ssl.ClientAuth
@@ -82,9 +83,8 @@ class NodeRuntime private[node] (
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
 
   // intra-node gossiping port.
-  private val port             = conf.server.port
-  private val kademliaPort     = conf.server.kademliaPort
-  private val blockStoragePath = conf.server.dataDir.resolve("blockstorage")
+  private val port         = conf.server.port
+  private val kademliaPort = conf.server.kademliaPort
 
   /**
     * Main node entry. It will:
@@ -122,144 +122,139 @@ class NodeRuntime private[node] (
 
       implicit val metricsEff: Metrics[Effect] =
         Metrics.eitherT[CommError, Task](Monad[Task], metrics)
-      val resources = for {
-        implicit0(executionEngineService: ExecutionEngineService[Effect]) <- GrpcExecutionEngineService[
-                                                                              Effect
-                                                                            ](
-                                                                              conf.grpc.socket,
-                                                                              conf.server.maxMessageSize
-                                                                            )
-        //TODO: We may want to adjust threading model for better performance
-        implicit0(doobieTransactor: Transactor[Effect]) <- effects.doobieTransactor(
-                                                            connectEC = dbConnScheduler,
-                                                            transactEC = dbIOScheduler,
-                                                            conf.server.dataDir
-                                                          )
-        implicit0(deployStorage: DeployStorage[Effect]) <- Resource.liftF(
-                                                            SQLiteDeployStorage.create[Effect]
-                                                          )
-        maybeBootstrap <- Resource.liftF(initPeer[Effect])
+      val resources =
+        for {
+          implicit0(executionEngineService: ExecutionEngineService[Effect]) <- GrpcExecutionEngineService[
+                                                                                Effect
+                                                                              ](
+                                                                                conf.grpc.socket,
+                                                                                conf.server.maxMessageSize
+                                                                              )
+          //TODO: We may want to adjust threading model for better performance
+          implicit0(doobieTransactor: Transactor[Effect]) <- effects.doobieTransactor(
+                                                              connectEC = dbConnScheduler,
+                                                              transactEC = dbIOScheduler,
+                                                              conf.server.dataDir
+                                                            )
+          _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
+          implicit0(
+            storage: BlockStorage[Effect] with DagStorage[Effect] with DeployStorage[Effect]
+          ) <- Resource.liftF(
+                SQLiteStorage.create[Effect](
+                  wrap = underlyingBlockStorage =>
+                    CachingBlockStorage[Effect](
+                      underlyingBlockStorage,
+                      maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
+                    )
+                )
+              )
+          maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
-        implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
-                                                                            FinalizedBlocksStream
+          implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
+                                                                              FinalizedBlocksStream
+                                                                                .of[Effect]
+                                                                            )
+
+          implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
+                                                            id,
+                                                            kademliaPort,
+                                                            conf.server.defaultTimeout,
+                                                            conf.server.useGossiping,
+                                                            conf.server.relayFactor,
+                                                            conf.server.relaySaturation,
+                                                            ingressScheduler,
+                                                            egressScheduler
+                                                          )(
+                                                            maybeBootstrap
+                                                          )(
+                                                            effects.peerNodeAsk,
+                                                            log,
+                                                            metrics
+                                                          )
+          _ <- Resource.liftF {
+                Task
+                  .delay {
+                    log.info("Cleaning block storage ...")
+                    storage.clear()
+                  }
+                  .whenA(conf.server.cleanBlockStorage)
+                  .toEffect
+              }
+
+          implicit0(raise: FunctorRaise[Effect, InvalidBlock]) = validation
+            .raiseValidateErrorThroughApplicativeError[Effect]
+          implicit0(validationEff: Validation[Effect]) = new ValidationImpl[Effect]
+
+          // TODO: Only a loop started with the TransportLayer keeps filling this up,
+          // so if we use the GossipService it's going to stay empty. The diagnostics
+          // should use NodeDiscovery instead.
+          implicit0(connectionsCell: Connect.ConnectionsCell[Task]) <- Resource.liftF(
+                                                                        effects.rpConnections.toEffect
+                                                                      )
+
+          implicit0(multiParentCasperRef: MultiParentCasperRef[Effect]) <- Resource.liftF(
+                                                                            MultiParentCasperRef
                                                                               .of[Effect]
                                                                           )
 
-        implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
-                                                          id,
-                                                          kademliaPort,
-                                                          conf.server.defaultTimeout,
-                                                          conf.server.useGossiping,
-                                                          conf.server.relayFactor,
-                                                          conf.server.relaySaturation,
-                                                          ingressScheduler,
-                                                          egressScheduler
-                                                        )(
-                                                          maybeBootstrap
-                                                        )(
-                                                          effects.peerNodeAsk,
-                                                          log,
-                                                          metrics
-                                                        )
-        _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
+          implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorBySingleSweepImpl[
+            Effect
+          ]()(
+            Monad[Effect],
+            logEff
+          )
 
-        implicit0(blockStorage: BlockStorage[Effect]) <- FileLMDBIndexBlockStorage[Effect](
-                                                          conf.server.dataDir,
-                                                          blockStoragePath,
-                                                          100L * 1024L * 1024L * 4096L
-                                                        ) evalMap { underlying =>
-                                                          CachingBlockStorage[Effect](
-                                                            underlying,
-                                                            maxSizeBytes =
-                                                              conf.blockstorage.cacheMaxSizeBytes
-                                                          )
-                                                        }
+          blockApiLock <- Resource.liftF(Semaphore[Effect](1))
 
-        implicit0(dagStorage: DagStorage[Effect]) <- SQLiteDagStorage[Effect]
-        _ <- Resource.liftF {
-              Task
-                .delay {
-                  log.info("Cleaning block storage ...")
-                  blockStorage.clear() *> dagStorage.clear()
-                }
-                .whenA(conf.server.cleanBlockStorage)
-                .toEffect
-            }
+          // For now just either starting the auto-proposer or not, but ostensibly we
+          // could pass it the flag to run or not and also wire it into the ControlService
+          // so that the operator can turn it on/off on the fly.
+          _ <- AutoProposer[Effect](
+                checkInterval = conf.casper.autoProposeCheckInterval,
+                maxInterval = conf.casper.autoProposeMaxInterval,
+                maxCount = conf.casper.autoProposeMaxCount,
+                blockApiLock = blockApiLock
+              ).whenA(conf.casper.autoProposeEnabled)
 
-        implicit0(raise: FunctorRaise[Effect, InvalidBlock]) = validation
-          .raiseValidateErrorThroughApplicativeError[Effect]
-        implicit0(validationEff: Validation[Effect]) = new ValidationImpl[Effect]
+          _ <- api.Servers
+                .internalServersR(
+                  conf.grpc.portInternal,
+                  conf.server.maxMessageSize,
+                  ingressScheduler,
+                  blockApiLock,
+                  maybeApiSslContext
+                )
 
-        // TODO: Only a loop started with the TransportLayer keeps filling this up,
-        // so if we use the GossipService it's going to stay empty. The diagnostics
-        // should use NodeDiscovery instead.
-        implicit0(connectionsCell: Connect.ConnectionsCell[Task]) <- Resource.liftF(
-                                                                      effects.rpConnections.toEffect
-                                                                    )
-
-        implicit0(multiParentCasperRef: MultiParentCasperRef[Effect]) <- Resource.liftF(
-                                                                          MultiParentCasperRef
-                                                                            .of[Effect]
-                                                                        )
-
-        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorBySingleSweepImpl[
-          Effect
-        ]()(
-          Monad[Effect],
-          logEff
-        )
-
-        blockApiLock <- Resource.liftF(Semaphore[Effect](1))
-
-        // For now just either starting the auto-proposer or not, but ostensibly we
-        // could pass it the flag to run or not and also wire it into the ControlService
-        // so that the operator can turn it on/off on the fly.
-        _ <- AutoProposer[Effect](
-              checkInterval = conf.casper.autoProposeCheckInterval,
-              maxInterval = conf.casper.autoProposeMaxInterval,
-              maxCount = conf.casper.autoProposeMaxCount,
-              blockApiLock = blockApiLock
-            ).whenA(conf.casper.autoProposeEnabled)
-
-        _ <- api.Servers
-              .internalServersR(
-                conf.grpc.portInternal,
+          _ <- api.Servers.externalServersR[Effect](
+                conf.grpc.portExternal,
                 conf.server.maxMessageSize,
                 ingressScheduler,
-                blockApiLock,
                 maybeApiSslContext
               )
 
-        _ <- api.Servers.externalServersR[Effect](
-              conf.grpc.portExternal,
-              conf.server.maxMessageSize,
-              ingressScheduler,
-              maybeApiSslContext
-            )
-
-        _ <- api.Servers.httpServerR[Effect](
-              conf.server.httpPort,
-              conf,
-              id,
-              ingressScheduler
-            )
-
-        _ <- if (conf.server.useGossiping) {
-              casper.gossiping.apply[Effect](
-                port,
+          _ <- api.Servers.httpServerR[Effect](
+                conf.server.httpPort,
                 conf,
-                ingressScheduler,
-                egressScheduler
+                id,
+                ingressScheduler
               )
-            } else {
-              casper.transport.apply(
-                port,
-                conf,
-                ingressScheduler,
-                egressScheduler
-              )
-            }
-      } yield (nodeDiscovery, multiParentCasperRef, deployStorage)
+
+          _ <- if (conf.server.useGossiping) {
+                casper.gossiping.apply[Effect](
+                  port,
+                  conf,
+                  ingressScheduler,
+                  egressScheduler
+                )
+              } else {
+                casper.transport.apply(
+                  port,
+                  conf,
+                  ingressScheduler,
+                  egressScheduler
+                )
+              }
+        } yield (nodeDiscovery, multiParentCasperRef, storage)
 
       resources.allocated flatMap {
         case ((nodeDiscovery, multiParentCasperRef, deployStorage), release) =>

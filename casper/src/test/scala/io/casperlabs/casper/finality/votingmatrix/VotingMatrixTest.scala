@@ -1,30 +1,30 @@
 package io.casperlabs.casper.finality.votingmatrix
 
 import cats.Monad
+import cats.implicits._
 import cats.mtl.MonadState
 import com.github.ghik.silencer.silent
-import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.IndexedDagStorage
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
 import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetectorUtil}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.IndexedDagStorage
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.{HashMap, Map}
 
 @silent("is never used")
-class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
+class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
   behavior of "Voting Matrix"
 
@@ -78,8 +78,8 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
     } yield result
 
   it should "detect finality as appropriate" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
+      implicit deployStorage =>
         /*
          * The Dag looks like
          *
@@ -100,7 +100,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
         val bonds  = Seq(v1Bond, v2Bond)
         for {
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- blockDagStorage.getRepresentation
+          dag     <- dagStorage.getRepresentation
           implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
                                                           .create[Task](dag, genesis.blockHash)
           _            <- checkMatrix(Map.empty)
@@ -220,7 +220,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
             CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash)
           )
 
-          updatedDag <- blockDagStorage.getRepresentation
+          updatedDag <- dagStorage.getRepresentation
           // rebuild from new finalized block b1
           newVotingMatrix <- VotingMatrix
                               .create[Task](
@@ -243,7 +243,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
         } yield result
   }
 
-  def createAndUpdateVotingMatrix[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+  def createAndUpdateVotingMatrix[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: DeployStorage](
       parentsHashList: Seq[BlockHash],
       latestFinalizedBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,

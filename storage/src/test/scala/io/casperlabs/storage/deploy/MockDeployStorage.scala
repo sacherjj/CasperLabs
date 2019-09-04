@@ -4,11 +4,11 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.casper.consensus.{Block, Deploy}
-import io.casperlabs.storage.deploy.MockDeployStorage.Metadata
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.Log
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
+import io.casperlabs.storage.deploy.MockDeployStorage.Metadata
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -195,6 +195,10 @@ class MockDeployStorage[F[_]: Sync: Log](
           if d.deployHash == hash =>
         d
     })
+
+  override def clear(): F[Unit] = ().pure[F]
+
+  override def close(): F[Unit] = ().pure[F]
 
   private def logOperation[A](opMsg: String, op: F[A]): F[A] =
     for {

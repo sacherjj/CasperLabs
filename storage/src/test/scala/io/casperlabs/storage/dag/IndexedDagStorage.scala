@@ -21,7 +21,7 @@ final class IndexedDagStorage[F[_]: Monad](
       _      <- lock.release
     } yield result
 
-  def insert(block: Block): F[DagRepresentation[F]] =
+  private[storage] def insert(block: Block): F[DagRepresentation[F]] =
     for {
       _          <- lock.acquire
       _          <- underlying.insert(block)
