@@ -37,6 +37,14 @@ name: build-bors-merge
 
 steps:
 # Below is for pull_request webhooks only
+- name: markdown-link-check
+  commands:
+  - "ci/markdown-link-check.sh"
+  image: "casperlabs/buildenv:latest"
+  when:
+    event:
+    - pull_request
+
 - name: sbt-compile-test-pr
   commands:
   - "sbt test"
