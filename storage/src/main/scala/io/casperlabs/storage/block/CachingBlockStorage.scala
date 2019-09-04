@@ -7,8 +7,9 @@ import com.google.common.cache.{Cache, CacheBuilder, Weigher}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
 import scala.collection.JavaConverters._
@@ -34,22 +35,24 @@ class CachingBlockStorage[F[_]: Sync](
       underlying.get(blockHash)
     )
 
-  override def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
+  override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] =
     cacheOrUnderlying(
       cache.asMap().asScala.collectFirst {
-        case (blockHash, blockMsg) if blockHash.startsWith(blockHashPrefix) =>
+        case (blockHash, blockMsg)
+            if Base16.encode(blockHash.toByteArray).startsWith(blockHashPrefix) =>
           blockMsg
       },
       underlying.getByPrefix(blockHashPrefix)
     )
 
-  override def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
+  override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] =
     cacheOrUnderlying(
       cache
         .asMap()
         .asScala
         .collectFirst {
-          case (blockHash, blockMsg) if blockHash.startsWith(blockHashPrefix) =>
+          case (blockHash, blockMsg)
+              if Base16.encode(blockHash.toByteArray).startsWith(blockHashPrefix) =>
             blockMsg.blockMessage
         }
         .flatten

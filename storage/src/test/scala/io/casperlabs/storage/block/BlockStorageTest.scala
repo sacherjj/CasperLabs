@@ -9,6 +9,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.Log
@@ -43,7 +44,7 @@ trait BlockStorageTest
 
   def checkAllHashes(storage: BlockStorage[Task], hashes: List[BlockHash]) =
     hashes.traverse { h =>
-      storage.getByPrefix(h).map(h -> _.isDefined)
+      storage.getByPrefix(Base16.encode(h.toByteArray)).map(h -> _.isDefined)
     } map { res =>
       Inspectors.forAll(res) {
         case (_, isDefined) => isDefined shouldBe true
@@ -80,19 +81,26 @@ trait BlockStorageTest
           _ <- items.traverse_(storage.put)
           _ <- items.traverse[Task, Unit] { blockMsg =>
                 val randomPrefix =
-                  ByteString.copyFrom(
+                  Base16.encode(
                     blockMsg.getBlockMessage.blockHash.toByteArray.take(Random.nextInt(32) + 1)
                   )
+
                 for {
                   _ <- storage
                         .getByPrefix(randomPrefix)
                         .map { maybeBlock =>
                           maybeBlock should not be empty
-                          assert(maybeBlock.get.getBlockMessage.blockHash.startsWith(randomPrefix))
+                          assert(
+                            maybeBlock.get.getBlockMessage.blockHash
+                              .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
+                          )
                         }
                   _ <- storage.getSummaryByPrefix(randomPrefix).map { maybeSummary =>
                         maybeSummary should not be empty
-                        assert(maybeSummary.get.blockHash.startsWith(randomPrefix))
+                        assert(
+                          maybeSummary.get.blockHash
+                            .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
+                        )
                       }
                 } yield ()
               }
