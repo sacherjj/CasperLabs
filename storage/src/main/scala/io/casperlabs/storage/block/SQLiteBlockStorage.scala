@@ -12,10 +12,11 @@ import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.catscontrib.Fs2Compiler
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, MeteredBlockStorage}
 import io.casperlabs.storage.util.DoobieCodecs
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
@@ -27,58 +28,107 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
 ) extends BlockStorage[F]
     with DoobieCodecs {
 
-  override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] = {
-    val transaction = for {
-      maybeBlockSummary <- sql"""|SELECT data
-                                 |FROM block_metadata
-                                 |WHERE block_hash=$blockHash""".stripMargin
-                            .query[BlockSummary]
-                            .option
+  override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
+    get(sql"""|SELECT block_hash, data
+              |FROM block_metadata
+              |WHERE block_hash=$blockHash""".stripMargin.query[(BlockHash, BlockSummary)].option)
 
-      body <- sql"""|SELECT d.data, dpr.deploy_position, dpr.cost, dpr.execution_error_message
-                    |FROM deploy_process_results dpr
-                    |INNER JOIN deploys d
-                    |ON dpr.deploy_hash=d.hash
-                    |WHERE dpr.block_hash=$blockHash
-                    |ORDER BY dpr.deploy_position""".stripMargin
-               .query[(Deploy, Int, Long, Option[String])]
-               .to[List]
-               .map { blockBodyData =>
-                 val processedDeploys = blockBodyData.map {
-                   case (deploy, _, cost, maybeError) =>
-                     ProcessedDeploy(
-                       deploy.some,
-                       cost,
-                       isError = maybeError.nonEmpty,
-                       maybeError.getOrElse("")
-                     )
+  private def get(
+      initial: ConnectionIO[Option[(BlockHash, BlockSummary)]]
+  ): F[Option[BlockMsgWithTransform]] = {
+    def createTransaction(blockHash: BlockHash, blockSummary: BlockSummary) =
+      for {
+        body <- sql"""|SELECT d.data, dpr.deploy_position, dpr.cost, dpr.execution_error_message
+                      |FROM deploy_process_results dpr
+                      |INNER JOIN deploys d
+                      |ON dpr.deploy_hash=d.hash
+                      |WHERE dpr.block_hash=$blockHash
+                      |ORDER BY dpr.deploy_position""".stripMargin
+                 .query[(Deploy, Int, Long, Option[String])]
+                 .to[List]
+                 .map { blockBodyData =>
+                   val processedDeploys = blockBodyData.map {
+                     case (deploy, _, cost, maybeError) =>
+                       ProcessedDeploy(
+                         deploy.some,
+                         cost,
+                         isError = maybeError.nonEmpty,
+                         maybeError.getOrElse("")
+                       )
+                   }
+                   Block.Body(processedDeploys)
                  }
-                 Block.Body(processedDeploys)
-               }
-      transforms <- sql"""|SELECT data
-                          |FROM transforms
-                          |WHERE block_hash=$blockHash""".stripMargin.query[TransformEntry].to[List]
-      maybeBlock = maybeBlockSummary.map(s => Block(s.blockHash, s.header, body.some, s.signature))
-      maybeBlockMsgWithTransform = maybeBlock.map(
-        b =>
-          BlockMsgWithTransform(
-            b.some,
-            transforms
-          )
-      )
-    } yield maybeBlockMsgWithTransform
+        transforms <- sql"""|SELECT data
+                            |FROM transforms
+                            |WHERE block_hash=$blockHash""".stripMargin
+                       .query[TransformEntry]
+                       .to[List]
+      } yield BlockMsgWithTransform(
+        Block(blockSummary.blockHash, blockSummary.header, body.some, blockSummary.signature).some,
+        transforms
+      ).some
+
+    val transaction = initial.flatMap(_.fold(none[BlockMsgWithTransform].pure[ConnectionIO]) {
+      case (blockHash, blockSummary) => createTransaction(blockHash, blockSummary)
+    })
     transaction.transact(xa)
   }
 
-  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
-    sql"SELECT block_hash FROM block_metadata"
-      .query[BlockHash]
-      .stream
-      .find(p)
-      .compile
-      .toList
-      .transact(xa)
-      .map(_.headOption)
+  override def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] = {
+    def query(lowerBound: Array[Byte], upperBound: Array[Byte]) =
+      get(
+        sql"""|SELECT block_hash, data
+              |FROM block_metadata
+              |WHERE block_hash>=$lowerBound AND block_hash<=$upperBound
+              |LIMIT 1""".stripMargin
+          .query[(BlockHash, BlockSummary)]
+          .option
+      )
+
+    getByPrefix[BlockMsgWithTransform](
+      blockHashPrefix,
+      get,
+      (lowerBound, upperBound) => query(lowerBound, upperBound)
+    )
+  }
+
+  override def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] = {
+    def query(lowerBound: Array[Byte], upperBound: Array[Byte]) =
+      sql"""|SELECT data
+            |FROM block_metadata
+            |WHERE block_hash>=$lowerBound AND block_hash<=$upperBound
+            |LIMIT 1""".stripMargin
+        .query[BlockSummary]
+        .option
+        .transact(xa)
+
+    getByPrefix[BlockSummary](
+      blockHashPrefix,
+      getBlockSummary,
+      (lowerBound, upperBound) => query(lowerBound, upperBound)
+    )
+  }
+
+  private def getByPrefix[A](
+      blockHashPrefix: BlockHashPrefix,
+      onFullHash: BlockHash => F[Option[A]],
+      // lower bound, upper bound
+      otherwise: (Array[Byte], Array[Byte]) => F[Option[A]]
+  ): F[Option[A]] = {
+    val length = blockHashPrefix.size()
+    32 - length match {
+      case 0 => onFullHash(blockHashPrefix)
+      case x if x > 0 =>
+        val asArray    = blockHashPrefix.toByteArray
+        val lowerBound = asArray ++ Array.fill(x)(0.toByte)
+        val upperBound = asArray ++ Base16.decode("ff" * x)
+        otherwise(lowerBound, upperBound)
+      case _ => none[A].pure[F]
+    }
+  }
+
+  override def isEmpty: F[Boolean] =
+    sql"SELECT COUNT(*) FROM blocks".query[Long].unique.map(_ == 0L).transact(xa)
 
   override def put(blockHash: BlockHash, blockMsg: BlockMsgWithTransform): F[Unit] =
     Update[(BlockHash, TransformEntry)]("""|INSERT OR IGNORE INTO transforms
@@ -97,12 +147,8 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
           |FROM block_metadata
           |WHERE block_hash=$blockHash""".stripMargin
       .query[BlockSummary]
-      .stream
-      .head
-      .compile
-      .toList
+      .option
       .transact(xa)
-      .map(_.headOption)
 
   override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
     sql"""|SELECT block_hash

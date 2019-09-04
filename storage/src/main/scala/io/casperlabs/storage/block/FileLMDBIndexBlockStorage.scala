@@ -20,7 +20,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared.Resources.withResource
 import io.casperlabs.storage.StorageError.StorageErr
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, MeteredBlockStorage}
 import io.casperlabs.storage.block.FileLMDBIndexBlockStorage.Checkpoint
 import io.casperlabs.storage.util.byteOps._
 import io.casperlabs.storage.util.fileIO
@@ -163,14 +163,48 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
       } yield result
     )
 
-  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
-    lock.withPermit(
-      withReadTxn { txn =>
-        withResource(index.iterate(txn)) { it =>
-          it.asScala.map(kv => ByteString.copyFrom(kv.key)).find(p)
-        }
-      }
-    )
+  override def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
+    blockHashPrefix.size() match {
+      case 32 => get(blockHashPrefix)
+      case x if x < 32 =>
+        for {
+          maybeBlockHash <- lock.withPermit(
+                             withReadTxn { txn =>
+                               withResource(index.iterate(txn)) { it =>
+                                 it.asScala
+                                   .map(kv => ByteString.copyFrom(kv.key))
+                                   .find(_.startsWith(blockHashPrefix))
+                               }
+                             }
+                           )
+          res <- maybeBlockHash.fold(none[BlockMsgWithTransform].pure[F])(get)
+        } yield res
+      case _ => none[BlockMsgWithTransform].pure[F]
+    }
+
+  override def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
+    blockHashPrefix.size() match {
+      case 32 => getBlockSummary(blockHashPrefix)
+      case x if x < 32 =>
+        for {
+          maybeBlockHash <- lock.withPermit(
+                             withReadTxn { txn =>
+                               withResource(index.iterate(txn)) { it =>
+                                 it.asScala
+                                   .map(kv => ByteString.copyFrom(kv.key))
+                                   .find(_.startsWith(blockHashPrefix))
+                               }
+                             }
+                           )
+          res <- maybeBlockHash.fold(none[BlockSummary].pure[F])(getBlockSummary)
+        } yield res
+      case _ => none[BlockSummary].pure[F]
+    }
+
+  override def isEmpty: F[Boolean] =
+    lock.withPermit(withReadTxn { txn =>
+      index.stat(txn).entries == 0L
+    })
 
   override def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
     lock.withPermit(

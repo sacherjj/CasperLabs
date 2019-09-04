@@ -25,6 +25,7 @@ import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 import scala.language.higherKinds
+import scala.util.Random
 
 @silent("match may not be exhaustive")
 trait BlockStorageTest
@@ -42,14 +43,14 @@ trait BlockStorageTest
 
   def checkAllHashes(storage: BlockStorage[Task], hashes: List[BlockHash]) =
     hashes.traverse { h =>
-      storage.findBlockHash(_ == h).map(h -> _.isDefined)
+      storage.getByPrefix(h).map(h -> _.isDefined)
     } map { res =>
       Inspectors.forAll(res) {
         case (_, isDefined) => isDefined shouldBe true
       }
     }
 
-  "Block Storage" should "return Some(message) on get for a published key and return Some(blockSummary) on getSummary" in {
+  it should "return Some(message) on get for a published key and return Some(blockSummary) on getSummary" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
       withStorage { storage =>
         val items = blockStorageElements
@@ -71,21 +72,29 @@ trait BlockStorageTest
     }
   }
 
-  it should "discover keys by predicate" in {
+  it should "discover blocks/summaries by block hash prefix" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
       withStorage { storage =>
         val items = blockStorageElements
         for {
           _ <- items.traverse_(storage.put)
-          _ <- items.traverse[Task, Assertion] { block =>
-                storage
-                  .findBlockHash(
-                    _ == ByteString.copyFrom(block.getBlockMessage.blockHash.toByteArray)
+          _ <- items.traverse[Task, Unit] { blockMsg =>
+                val randomPrefix =
+                  ByteString.copyFrom(
+                    blockMsg.getBlockMessage.blockHash.toByteArray.take(Random.nextInt(32) + 1)
                   )
-                  .map { w =>
-                    w should not be empty
-                    w.get shouldBe block.getBlockMessage.blockHash
-                  }
+                for {
+                  _ <- storage
+                        .getByPrefix(randomPrefix)
+                        .map { maybeBlock =>
+                          maybeBlock should not be empty
+                          assert(maybeBlock.get.getBlockMessage.blockHash.startsWith(randomPrefix))
+                        }
+                  _ <- storage.getSummaryByPrefix(randomPrefix).map { maybeSummary =>
+                        maybeSummary should not be empty
+                        assert(maybeSummary.get.blockHash.startsWith(randomPrefix))
+                      }
+                } yield ()
               }
         } yield ()
       }
@@ -137,11 +146,11 @@ trait BlockStorageTest
         throw exception
 
       for {
-        _                  <- storage.findBlockHash(_ => true).map(_ shouldBe None)
+        _                  <- storage.isEmpty.map(_ shouldBe true)
         (blockHash, block) = elem
         putAttempt         <- storage.put(blockHash, block).attempt
         _                  = putAttempt.left.value shouldBe exception
-        _                  <- storage.findBlockHash(_ => true).map(_ shouldBe None)
+        _                  <- storage.isEmpty.map(_ shouldBe true)
       } yield ()
     }
   }
@@ -157,7 +166,7 @@ class InMemBlockStorageTest extends BlockStorageTest {
       metrics             = new MetricsNOP[Task]()
       storage = InMemBlockStorage
         .create[Task](Monad[Task], refTask, deployHashesRefTask, approvedBlockRef, metrics)
-      _      <- storage.findBlockHash(_ => true).map(_ shouldBe None)
+      _      <- storage.isEmpty.map(_ shouldBe true)
       result <- f(storage)
     } yield result
     test.unsafeRunSync
@@ -178,7 +187,7 @@ class LMDBBlockStorageTest extends BlockStorageTest {
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
     val storage                         = LMDBBlockStorage.create[Task](env)
     val test = for {
-      _      <- storage.findBlockHash(_ => true).map(_ shouldBe None)
+      _      <- storage.isEmpty.map(_ shouldBe true)
       result <- f(storage)
     } yield result
     try {
@@ -206,7 +215,7 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
     val env                             = Context.env(dbDir, mapSize)
     val test = for {
       storage <- FileLMDBIndexBlockStorage.create[Task](env, dbDir).map(_.right.get)
-      _       <- storage.findBlockHash(_ => true).map(_ shouldBe None)
+      _       <- storage.isEmpty.map(_ shouldBe true)
       result  <- f(storage)
     } yield result
     try {
@@ -370,12 +379,12 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   firstStorage.get(block.blockHash).map(_ shouldBe Some(b))
               }
-          _ <- firstStorage.findBlockHash(_ => true).map(_.isEmpty shouldBe blocks.isEmpty)
+          _ <- firstStorage.isEmpty.map(_ shouldBe blocks.isEmpty)
           _ = approvedBlockPath.toFile.exists() shouldBe true
           _ <- firstStorage.clear()
           _ = approvedBlockPath.toFile.exists() shouldBe false
           _ = checkpointsDir.toFile.list().size shouldBe 0
-          _ <- firstStorage.findBlockHash(_ => true).map(_ shouldBe None)
+          _ <- firstStorage.isEmpty.map(_ shouldBe true)
           _ <- blockStorageBatches.traverse_[Task, Unit](
                 blockStorageElements =>
                   blockStorageElements

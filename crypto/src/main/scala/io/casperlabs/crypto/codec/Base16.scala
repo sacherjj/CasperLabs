@@ -11,6 +11,14 @@ object Base16 {
     hex2bytes(paddedInput)
   }
 
+  def decodeWithTruncate(input: String): Array[Byte] = {
+    val paddedInput =
+      if (input.length % 2 == 0) input
+      else input.init
+
+    hex2bytes(paddedInput)
+  }
+
   private def bytes2hex(bytes: Array[Byte], sep: Option[String]): String =
     bytes.map("%02x".format(_)).mkString(sep.getOrElse(""))
 
