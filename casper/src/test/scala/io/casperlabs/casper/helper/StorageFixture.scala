@@ -73,7 +73,7 @@ object StorageFixture {
       jdbcUrl                                = createJdbcUrl(db)
       implicit0(xa: Transactor.Aux[F, Unit]) = createTransactor(jdbcUrl)
       _                                      <- initTables(jdbcUrl)
-      storage                                <- SQLiteStorage.create[F](_.pure[F])
+      storage                                <- SQLiteStorage.create[F](wrap = _.pure[F])
       indexedDagStorage                      <- IndexedDagStorage.create[F](storage)
     } yield (storage, indexedDagStorage, storage)
   }

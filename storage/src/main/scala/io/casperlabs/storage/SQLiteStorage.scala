@@ -12,17 +12,19 @@ import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, Dep
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, SQLiteDeployStorage}
+import fs2._
 
 import scala.concurrent.duration.FiniteDuration
 
 object SQLiteStorage {
   def create[F[_]: Sync: Transactor: Metrics: Time](
+      deployStorageChunkSize: Int = 100,
       wrap: BlockStorage[F] => F[BlockStorage[F]]
   ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F]] =
     for {
       blockStorage  <- SQLiteBlockStorage.create[F] >>= wrap
       dagStorage    <- SQLiteDagStorage.create[F]
-      deployStorage <- SQLiteDeployStorage.create[F]
+      deployStorage <- SQLiteDeployStorage.create[F](deployStorageChunkSize)
     } yield new BlockStorage[F] with DagStorage[F] with DeployStorage[F] {
 
       override def addAsExecuted(block: Block): F[Unit] =
@@ -68,7 +70,7 @@ object SQLiteStorage {
 
       override def sizePendingOrProcessed(): F[Long] = deployStorage.sizePendingOrProcessed()
 
-      override def getByHashes(l: List[ByteString]): F[List[Deploy]] = deployStorage.getByHashes(l)
+      override def getByHashes(l: Set[ByteString]): Stream[F, Deploy] = deployStorage.getByHashes(l)
 
       override def getProcessingResults(
           hash: ByteString

@@ -3,6 +3,7 @@
 members = [
     "contract-ffi",
     "contracts/client/bonding",
+    "contracts/client/named-purse-payment",
     "contracts/client/standard-payment",
     "contracts/client/standard-payment-stored",
     "contracts/client/revert",
@@ -31,6 +32,7 @@ members = [
     "contracts/test/ee-572-regression-escalate",
     "contracts/test/ee-597-regression",
     "contracts/test/ee-584-regression",
+    "contracts/test/ee-601-regression",
     "contracts/test/endless-loop",
     "contracts/test/get-blocktime",
     "contracts/test/get-caller",
@@ -45,6 +47,7 @@ members = [
     "contracts/test/pos-refund-purse",
     "contracts/test/pos-bonding",
     "contracts/test/remove-associated-key",
+    "contracts/test/transfer-main-purse-to-new-purse",
     "contracts/test/transfer-purse-to-account",
     "contracts/test/transfer-purse-to-account-stored",
     "contracts/test/transfer-purse-to-purse",

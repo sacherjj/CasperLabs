@@ -412,5 +412,6 @@ class SQLiteBlockStorageTest extends BlockStorageTest with SQLiteFixture[BlockSt
 
   override def db: String = "/tmp/block_storage.db"
 
-  override def createTestResource: Task[BlockStorage[Task]] = SQLiteStorage.create[Task](Task.pure)
+  override def createTestResource: Task[BlockStorage[Task]] =
+    SQLiteStorage.create[Task](wrap = Task.pure)
 }

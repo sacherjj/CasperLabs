@@ -78,7 +78,7 @@ import scala.concurrent.duration._
 
   def sizePendingOrProcessed(): F[Long]
 
-  def getByHashes(l: List[ByteString]): F[List[Deploy]]
+  def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy]
 
   /** @return List of blockHashes and processing results in descendant order by execution time (block creation timestamp)*/
   def getProcessingResults(hash: ByteString): F[List[(BlockHash, ProcessedDeploy)]]
@@ -149,7 +149,7 @@ object DeployStorage {
     override def sizePendingOrProcessed(): F[Long] =
       reader.sizePendingOrProcessed()
 
-    override def getByHashes(l: List[BlockHash]): F[List[Deploy]] = reader.getByHashes(l)
+    override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] = reader.getByHashes(l)
 
     override def getProcessingResults(hash: BlockHash): F[List[(BlockHash, ProcessedDeploy)]] =
       reader.getProcessingResults(hash)

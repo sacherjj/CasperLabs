@@ -3,6 +3,7 @@ package io.casperlabs.casper
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
@@ -853,8 +854,11 @@ class ValidationTest
         Vector(
           ByteString.EMPTY
         ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
-
+      implicit val deploySelection: DeploySelection[Task] = DeploySelection.create[Task](
+        5 * 1024 * 1024
+      )
       for {
+        _ <- deployStorage.addAsPending(deploys.toList)
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               ExecEngineUtil.MergeResult.empty,
                               deploys.map(_.deployHash).toSet,
@@ -866,8 +870,6 @@ class ValidationTest
           computedPostStateHash,
           bondedValidators,
           processedDeploys,
-          _,
-          _,
           _
         ) = deploysCheckpoint
         block <- createBlock[Task](

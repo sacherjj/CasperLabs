@@ -483,5 +483,6 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
 
   override def db: String = "/tmp/dag_storage.db"
 
-  override def createTestResource: Task[DagStorage[Task]] = SQLiteStorage.create[Task](Task.pure)
+  override def createTestResource: Task[DagStorage[Task]] =
+    SQLiteStorage.create[Task](wrap = Task.pure)
 }

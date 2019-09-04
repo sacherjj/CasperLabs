@@ -4,6 +4,8 @@ import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.DeploySelection
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus._
@@ -87,6 +89,10 @@ object BlockGenerator {
         "Received a different genesis block."
       )
       merged <- ExecEngineUtil.merge[F](parents, dag)
+      implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
+        5 * 1024 * 1024
+      )
+      _ <- DeployStorage[F].addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
                  deploys.map(_.deployHash).toSet,

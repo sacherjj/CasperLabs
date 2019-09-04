@@ -18,7 +18,7 @@ import io.casperlabs.storage.util.DoobieCodecs
 
 import scala.concurrent.duration._
 
-class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
+class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
     implicit val xa: Transactor[F],
     metricsSource: Source
 ) extends DeployStorage[F]
@@ -289,12 +289,12 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       .option
       .transact(xa)
 
-  override def getByHashes(l: List[ByteString]): F[List[Deploy]] =
+  override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] =
     NonEmptyList
-      .fromList[ByteString](l)
-      .fold(List.empty[Deploy].pure[F])(nel => {
+      .fromList[ByteString](l.toList)
+      .fold(fs2.Stream.fromIterator[F, Deploy](List.empty[Deploy].toIterator))(nel => {
         val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
-        q.query[Deploy].to[List].transact(xa)
+        q.query[Deploy].streamWithChunkSize(chunkSize).transact(xa)
       })
 
   override def getProcessingResults(
@@ -340,12 +340,12 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
 object SQLiteDeployStorage {
   private implicit val metricsSource: Source = Metrics.Source(DeployStorageMetricsSource, "sqlite")
 
-  private[storage] def create[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
-      implicit xa: Transactor[F]
-  ): F[DeployStorage[F]] =
+  private[storage] def create[F[_]: Metrics: Time: Sync](
+      deployStorageChunkSize: Int
+  )(implicit xa: Transactor[F]): F[DeployStorage[F]] =
     for {
       _ <- establishMetrics[F]
-    } yield new SQLiteDeployStorage[F]: DeployStorage[F]
+    } yield new SQLiteDeployStorage[F](deployStorageChunkSize): DeployStorage[F]
 
   /** Export base 0 values so we have non-empty series for charts. */
   private def establishMetrics[F[_]: Monad: Metrics]: F[Unit] =

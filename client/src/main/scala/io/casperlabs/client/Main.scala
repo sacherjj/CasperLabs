@@ -139,7 +139,7 @@ object Main {
             nonce,
             gasPrice,
             contracts,
-            Array.emptyByteArray
+            sessionArgs = Nil
           )
           _ <- DeployRuntime.writeDeploy(deploy, deployPath)
         } yield ()

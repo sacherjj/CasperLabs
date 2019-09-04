@@ -3,7 +3,7 @@ package io.casperlabs.casper.util.execengine
 import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.state._
 import io.casperlabs.casper.consensus.{state, Block}
@@ -13,12 +13,12 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
+import io.casperlabs.casper.{consensus, DeploySelection}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy._
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -106,13 +106,15 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       deploy: Seq[consensus.Deploy],
       protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
-      implicit blockStorage: BlockStorage[Task],
-      executionEngineService: ExecutionEngineService[Task]
+      implicit executionEngineService: ExecutionEngineService[Task],
+      deployStorage: DeployStorage[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
-      blocktime                                    <- Task.delay(System.currentTimeMillis)
-      implicit0(deployBuffer: DeployStorage[Task]) <- MockDeployStorage.create[Task]()
-      _                                            <- deployBuffer.addAsPending(deploy.toList)
+      blocktime <- Task.delay(System.currentTimeMillis)
+      implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task](
+        5 * 1024 * 1024
+      )
+      _ <- deployStorage.addAsPending(deploy.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
@@ -120,12 +122,12 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
                           blocktime,
                           protocolVersion
                         )
-      DeploysCheckpoint(_, _, _, result, _, _, _) = computeResult
+      DeploysCheckpoint(_, _, _, result, _) = computeResult
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
-    implicit blockStorage => _ =>
-      _ =>
+    _ => _ =>
+      implicit deployStorage =>
         // reference costs
         // deploy each Rholang program separately and record its cost
         val deploy1 = ProtoUtil.sourceDeploy(

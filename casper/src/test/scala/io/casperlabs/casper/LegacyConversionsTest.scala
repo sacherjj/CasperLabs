@@ -12,7 +12,7 @@ class LegacyConversionsTest extends FlatSpec with ArbitraryConsensus with Matche
     ConsensusConfig(maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
 
   "LegacyConversions" should "convert correctly between old and new blocks" in {
-    forAll { (orig: consensus.Block) =>
+    forAll { orig: consensus.Block =>
       // Some fields are not supported by the legacy one.
       val comp =
         orig

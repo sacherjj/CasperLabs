@@ -24,7 +24,8 @@ trait DeployStorageSpec
   /* Implement this method in descendants substituting various DeployStorageReader and DeployStorageWriter implementations */
   protected def testFixture(
       test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit],
-      timeout: FiniteDuration = 5.seconds
+      timeout: FiniteDuration = 5.seconds,
+      deployBufferChunkSize: Int = 100
   ): Unit
 
   private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
@@ -111,7 +112,7 @@ trait DeployStorageSpec
           for {
             _   <- writer.addAsPending(pending)
             _   <- writer.addAsProcessed(processed)
-            all <- reader.getByHashes(deployHashes)
+            all <- reader.getByHashes(deployHashes.toSet).compile.toList
             _   = assert(deploys.sortedByHash == all.sortedByHash)
           } yield ()
 

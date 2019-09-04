@@ -426,7 +426,8 @@ lazy val client = (project in file("client"))
       scallop,
       grpcNetty,
       graphvizJava,
-      apacheCommons
+      apacheCommons,
+      scalapbCirce
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.client",
