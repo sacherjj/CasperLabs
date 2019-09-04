@@ -418,7 +418,6 @@ protobuf/google:
 	@# Installs fail if they already exist.
 	cargo install cargo-rpm || exit 0
 	cargo install cargo-deb || exit 0
-	cargo install cargo-tarball || exit 0
 	mkdir -p $(dir $@) && touch $@
 
 .make/install/rpm:
