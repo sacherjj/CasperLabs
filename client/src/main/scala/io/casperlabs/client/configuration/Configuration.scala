@@ -68,7 +68,12 @@ object Contracts {
 
   val empty = Contracts(CodeOptions.empty, CodeOptions.empty)
 
-  /** Produce a Deploy.Code DTO from the options. */
+  /** Produce a Deploy.Code DTO from the options.
+    * 'defaultArgs' can be used by specialized commands such as `transfer` and `unbond`
+    * to pass arguments they captured via dedicated CLI options, e.g. `--amount`, but
+    * if the user sends explicit arguments via `--session-args` or `--payment-args`
+    * they take precedence. This allows overriding the built-in contracts with custom ones.
+    */
   private def toCode(opts: CodeOptions, defaultArgs: Seq[Arg]): Code = {
     val contract = opts.file.map { f =>
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
