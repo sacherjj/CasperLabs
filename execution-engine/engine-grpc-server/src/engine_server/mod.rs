@@ -302,7 +302,7 @@ where
                     let pos_key = Key::URef(GenesisURefsSource::default().get_pos_address());
                     let bonded_validators_res =
                         self.get_bonded_validators(poststate_hash, &pos_key, correlation_id);
-                    bonded_validators_and_commit_result(
+                    bonded_validators_and_commit_result::<S>(
                         prestate_hash,
                         poststate_hash,
                         commit_result,
@@ -756,7 +756,7 @@ pub fn bonded_validators_and_commit_result<S>(
     prestate_hash: Blake2bHash,
     poststate_hash: Blake2bHash,
     commit_result: Result<CommitResult, S::Error>,
-    bonded_validators: Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<S>>,
+    bonded_validators: Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<S::Error>>,
 ) -> CommitResponse
 where
     S: StateProvider,
@@ -781,7 +781,7 @@ where
                 .set_bonded_validators(grpc_bonded_validators);
             grpc_response
         }
-        Err(GetBondedValidatorsError::StorageErrors(error)) => {
+        Err(GetBondedValidatorsError::StateError(error)) => {
             grpc_response_from_commit_result::<S>(poststate_hash, Err(error))
         }
         Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)) => {
@@ -801,10 +801,12 @@ where
             commit_response.set_failed_transform(err);
             commit_response
         }
-        Err(GetBondedValidatorsError::PoSNotFound(key)) => grpc_response_from_commit_result::<S>(
-            poststate_hash,
-            Ok(CommitResult::KeyNotFound(key)),
-        ),
+        Err(GetBondedValidatorsError::ProofOfStakeNotFound(key)) => {
+            grpc_response_from_commit_result::<S>(
+                poststate_hash,
+                Ok(CommitResult::KeyNotFound(key)),
+            )
+        }
     }
 }
 

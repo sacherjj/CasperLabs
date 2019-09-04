@@ -44,16 +44,16 @@ pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 
 const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
 
-pub enum GetBondedValidatorsError<S: StateProvider> {
-    StorageErrors(S::Error),
-    PostStateHashNotFound(Blake2bHash),
-    PoSNotFound(Key),
-}
-
 #[derive(Debug)]
 pub struct EngineState<S> {
     config: EngineConfig,
     state: S,
+}
+
+pub enum GetBondedValidatorsError<E> {
+    StateError(E),
+    PostStateHashNotFound(Blake2bHash),
+    ProofOfStakeNotFound(Key),
 }
 
 impl<S> EngineState<S>
@@ -741,10 +741,10 @@ where
         pos_key: &Key, /* Address of the PoS as currently bonded validators are stored in its
                         * known urefs map. */
         correlation_id: CorrelationId,
-    ) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<S>> {
+    ) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<S::Error>> {
         self.state
             .checkout(root_hash)
-            .map_err(GetBondedValidatorsError::StorageErrors)
+            .map_err(GetBondedValidatorsError::StateError)
             .and_then(|maybe_reader| match maybe_reader {
                 Some(reader) => match reader.read(correlation_id, &pos_key.normalize()) {
                     Ok(Some(Value::Contract(contract))) => {
@@ -755,8 +755,8 @@ where
                             .collect::<HashMap<PublicKey, U512>>();
                         Ok(bonded_validators)
                     }
-                    Ok(_) => Err(GetBondedValidatorsError::PoSNotFound(*pos_key)),
-                    Err(error) => Err(GetBondedValidatorsError::StorageErrors(error)),
+                    Ok(_) => Err(GetBondedValidatorsError::ProofOfStakeNotFound(*pos_key)),
+                    Err(error) => Err(GetBondedValidatorsError::StateError(error)),
                 },
                 None => Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)),
             })
