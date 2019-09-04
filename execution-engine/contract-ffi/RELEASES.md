@@ -29,7 +29,7 @@ Version 0.2.0 (2019-03-14)
 * Renamed `ext` module to `contract_api`
   [commit](https://github.com/CasperLabs/CasperLabs/commit/e158bddc2a9282ad6edcd6561d509514fd0693cd#diff-d140dd56f8d99d4f77fcdb8bc85e1238).
 * Replaced untyped pointers in the FFI with typed versions
-  [commit](https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/common/src/contract_api/pointers.rs).
+  [commit](https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/contract-ffi/src/contract_api/pointers.rs).
 * [`new_uref` method now expects initial value (of some type `T`) and
   produces typed, unforgeable reference
   (`UPointer<T>`)](https://github.com/CasperLabs/CasperLabs/blob/92c02d23c9f03ab6b816ac37c8581e5929e5da7f/execution-engine/common/src/contract_api/mod.rs#L66).
