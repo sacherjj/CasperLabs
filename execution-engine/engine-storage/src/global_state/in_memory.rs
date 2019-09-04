@@ -7,8 +7,7 @@ use contract_ffi::value::Value;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
 
-use crate::error;
-use crate::error::in_memory;
+use crate::error::{self, in_memory};
 use crate::global_state::StateReader;
 use crate::global_state::{commit, CommitResult, History};
 use crate::store::Store;
