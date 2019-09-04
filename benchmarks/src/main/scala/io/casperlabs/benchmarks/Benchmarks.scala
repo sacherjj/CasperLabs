@@ -8,7 +8,7 @@ import cats._
 import cats.effect.{Sync, Timer}
 import cats.implicits._
 import io.casperlabs.client.{DeployRuntime, DeployService}
-import io.casperlabs.client.configuration.Contracts
+import io.casperlabs.client.configuration.DeployConfig
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base64
@@ -61,7 +61,7 @@ object Benchmarks {
         senderPublicKey: PublicKey,
         amount: Long
     ): F[Unit] = DeployRuntime.transfer[F](
-      contracts = Contracts.empty.copy(nonce = nonce),
+      deployConfig = DeployConfig.empty.copy(nonce = nonce),
       senderPublicKey = senderPublicKey,
       senderPrivateKey = senderPrivateKey,
       recipientPublicKeyBase64 = recipientPublicKeyBase64,

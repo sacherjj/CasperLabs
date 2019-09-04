@@ -2,7 +2,7 @@ package io.casperlabs.client.configuration
 import com.google.protobuf.ByteString
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, InputStream}
 import java.nio.file.Files
-import io.casperlabs.client.configuration.Options.ContractArgs
+import io.casperlabs.client.configuration.Options.DeployOptions
 import io.casperlabs.casper.consensus.Deploy.{Arg, Code}, Code.Contract
 import io.casperlabs.crypto.codec.Base16
 import org.apache.commons.io._
@@ -15,7 +15,7 @@ final case class ConnectOptions(
 )
 
 /** Options to capture all the possible ways of passing one of the session or payment contracts. */
-final case class CodeOptions(
+final case class CodeConfig(
     // Point at a file on disk.
     file: Option[File],
     // Hash of a stored contract.
@@ -29,22 +29,22 @@ final case class CodeOptions(
     // Name of a pre-packaged contract in the client JAR.
     resource: Option[String] = None
 )
-object CodeOptions {
-  val empty = CodeOptions(None, None, None, None, None, None)
+object CodeConfig {
+  val empty = CodeConfig(None, None, None, None, None, None)
 }
 
 /** Encapsulate reading session and payment contracts from disk or resources
   * before putting them into the the format expected by the API.
   */
-final case class Contracts(
-    sessionOptions: CodeOptions,
-    paymentOptions: CodeOptions,
+final case class DeployConfig(
+    sessionOptions: CodeConfig,
+    paymentOptions: CodeConfig,
     nonce: Long,
     gasPrice: Long,
     paymentAmount: Option[BigInt]
 ) {
-  def session(defaultArgs: Seq[Arg] = Nil) = Contracts.toCode(sessionOptions, defaultArgs)
-  def payment(defaultArgs: Seq[Arg] = Nil) = Contracts.toCode(paymentOptions, defaultArgs)
+  def session(defaultArgs: Seq[Arg] = Nil) = DeployConfig.toCode(sessionOptions, defaultArgs)
+  def payment(defaultArgs: Seq[Arg] = Nil) = DeployConfig.toCode(paymentOptions, defaultArgs)
 
   def withSessionResource(resource: String) =
     copy(sessionOptions = sessionOptions.copy(resource = Some(resource)))
@@ -52,17 +52,17 @@ final case class Contracts(
     copy(paymentOptions = paymentOptions.copy(resource = Some(resource)))
 }
 
-object Contracts {
-  def apply(args: ContractArgs): Contracts =
-    Contracts(
-      sessionOptions = CodeOptions(
+object DeployConfig {
+  def apply(args: DeployOptions): DeployConfig =
+    DeployConfig(
+      sessionOptions = CodeConfig(
         file = args.session.toOption,
         hash = args.sessionHash.toOption,
         name = args.sessionName.toOption,
         uref = args.sessionUref.toOption,
         args = args.sessionArgs.toOption.map(_.args)
       ),
-      paymentOptions = CodeOptions(
+      paymentOptions = CodeConfig(
         file = args.payment.toOption,
         hash = args.paymentHash.toOption,
         name = args.paymentName.toOption,
@@ -74,7 +74,7 @@ object Contracts {
       paymentAmount = args.paymentAmount.toOption
     )
 
-  val empty = Contracts(CodeOptions.empty, CodeOptions.empty, 0, 0, None)
+  val empty = DeployConfig(CodeConfig.empty, CodeConfig.empty, 0, 0, None)
 
   /** Produce a Deploy.Code DTO from the options.
     * 'defaultArgs' can be used by specialized commands such as `transfer` and `unbond`
@@ -82,7 +82,7 @@ object Contracts {
     * if the user sends explicit arguments via `--session-args` or `--payment-args`
     * they take precedence. This allows overriding the built-in contracts with custom ones.
     */
-  private def toCode(opts: CodeOptions, defaultArgs: Seq[Arg]): Code = {
+  private def toCode(opts: CodeConfig, defaultArgs: Seq[Arg]): Code = {
     val contract = opts.file.map { f =>
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
       Contract.Wasm(wasm)
@@ -125,7 +125,7 @@ sealed trait Configuration
 final case class MakeDeploy(
     from: Option[String],
     publicKey: Option[File],
-    contracts: Contracts,
+    deployConfig: DeployConfig,
     deployPath: Option[File]
 ) extends Configuration
 
@@ -135,7 +135,7 @@ final case class SendDeploy(
 
 final case class Deploy(
     from: Option[String],
-    contracts: Contracts,
+    deployConfig: DeployConfig,
     publicKey: Option[File],
     privateKey: Option[File]
 ) extends Configuration
@@ -157,18 +157,18 @@ final case class ShowDeploy(deployHash: String) extends Configuration
 final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
-    contracts: Contracts,
+    deployConfig: DeployConfig,
     privateKey: File
 ) extends Configuration
 final case class Transfer(
     amount: Long,
     recipientPublicKeyBase64: String,
-    contracts: Contracts,
+    deployConfig: DeployConfig,
     privateKey: File
 ) extends Configuration
 final case class Unbond(
     amount: Option[Long],
-    contracts: Contracts,
+    deployConfig: DeployConfig,
     privateKey: File
 ) extends Configuration
 final case class VisualizeDag(
@@ -206,7 +206,7 @@ object Configuration {
       case options.deploy =>
         Deploy(
           options.deploy.from.toOption,
-          Contracts(options.deploy),
+          DeployConfig(options.deploy),
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption
         )
@@ -214,7 +214,7 @@ object Configuration {
         MakeDeploy(
           options.makeDeploy.from.toOption,
           options.makeDeploy.publicKey.toOption,
-          Contracts(options.makeDeploy),
+          DeployConfig(options.makeDeploy),
           options.makeDeploy.deployPath.toOption
         )
       case options.sendDeploy =>
@@ -239,20 +239,20 @@ object Configuration {
       case options.unbond =>
         Unbond(
           options.unbond.amount.toOption,
-          Contracts(options.unbond),
+          DeployConfig(options.unbond),
           options.unbond.privateKey()
         )
       case options.bond =>
         Bond(
           options.bond.amount(),
-          Contracts(options.bond),
+          DeployConfig(options.bond),
           options.bond.privateKey()
         )
       case options.transfer =>
         Transfer(
           options.transfer.amount(),
           options.transfer.targetAccount(),
-          Contracts(options.transfer),
+          DeployConfig(options.transfer),
           options.transfer.privateKey()
         )
       case options.visualizeBlocks =>

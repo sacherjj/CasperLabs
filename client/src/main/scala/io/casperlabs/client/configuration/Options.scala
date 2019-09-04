@@ -16,7 +16,7 @@ object Options {
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
 
-  trait ContractArgs { self: Subcommand =>
+  trait DeployOptions { self: Subcommand =>
     def sessionRequired: Boolean = true
     def paymentPathName: String  = "payment"
 
@@ -176,7 +176,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = false
     )
 
-  val makeDeploy = new Subcommand("make-deploy") with ContractArgs {
+  val makeDeploy = new Subcommand("make-deploy") with DeployOptions {
     descr("Constructs a deploy that can be signed and sent to a node.")
 
     val from = opt[String](
@@ -228,7 +228,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(sendDeploy)
 
-  val deploy = new Subcommand("deploy") with ContractArgs {
+  val deploy = new Subcommand("deploy") with DeployOptions {
     descr(
       "Constructs a Deploy and sends it to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
@@ -371,7 +371,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showBlocks)
 
-  val unbond = new Subcommand("unbond") with ContractArgs {
+  val unbond = new Subcommand("unbond") with DeployOptions {
     descr("Issues unbonding request")
 
     override def sessionRequired = false
@@ -394,7 +394,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(unbond)
 
-  val bond = new Subcommand("bond") with ContractArgs {
+  val bond = new Subcommand("bond") with DeployOptions {
     descr("Issues bonding request")
 
     override def sessionRequired = false
@@ -416,7 +416,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(bond)
 
-  val transfer = new Subcommand("transfer") with ContractArgs {
+  val transfer = new Subcommand("transfer") with DeployOptions {
     descr("Transfers funds between accounts")
 
     override def sessionRequired = false
