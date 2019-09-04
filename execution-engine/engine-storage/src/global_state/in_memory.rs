@@ -16,14 +16,20 @@ use crate::transaction_source::{Transaction, TransactionSource};
 use crate::trie::operations::create_hashed_empty_trie;
 use crate::trie::Trie;
 use crate::trie_store::in_memory::InMemoryTrieStore;
-use crate::trie_store::operations::{read, write, ReadResult, WriteResult};
+use crate::trie_store::operations;
+use crate::trie_store::operations::{read, ReadResult, WriteResult};
 
-/// Represents a "view" of global state at a particular root hash.
 pub struct InMemoryGlobalState {
     pub environment: Arc<InMemoryEnvironment>,
     pub store: Arc<InMemoryTrieStore>,
-    pub root_hash: Blake2bHash,
     pub empty_root_hash: Blake2bHash,
+}
+
+/// Represents a "view" of global state at a particular root hash.
+pub struct InMemoryGlobalStateView {
+    pub environment: Arc<InMemoryEnvironment>,
+    pub store: Arc<InMemoryTrieStore>,
+    pub root_hash: Blake2bHash,
 }
 
 impl InMemoryGlobalState {
@@ -38,12 +44,7 @@ impl InMemoryGlobalState {
             txn.commit()?;
             root_hash
         };
-        Ok(InMemoryGlobalState::new(
-            environment,
-            store,
-            root_hash,
-            root_hash,
-        ))
+        Ok(InMemoryGlobalState::new(environment, store, root_hash))
     }
 
     /// Creates a state from an existing environment, store, and root_hash.
@@ -51,13 +52,11 @@ impl InMemoryGlobalState {
     pub(crate) fn new(
         environment: Arc<InMemoryEnvironment>,
         store: Arc<InMemoryTrieStore>,
-        root_hash: Blake2bHash,
         empty_root_hash: Blake2bHash,
     ) -> Self {
         InMemoryGlobalState {
             environment,
             store,
-            root_hash,
             empty_root_hash,
         }
     }
@@ -67,17 +66,17 @@ impl InMemoryGlobalState {
     pub fn from_pairs(
         correlation_id: CorrelationId,
         pairs: &[(Key, Value)],
-    ) -> Result<Self, error::Error> {
-        let mut ret = InMemoryGlobalState::empty()?;
+    ) -> Result<(Self, Blake2bHash), error::Error> {
+        let state = InMemoryGlobalState::empty()?;
+        let mut current_root = state.empty_root_hash;
         {
-            let mut txn = ret.environment.create_read_write_txn()?;
-            let mut current_root = ret.root_hash;
+            let mut txn = state.environment.create_read_write_txn()?;
             for (key, value) in pairs {
                 let key = key.normalize();
-                match write::<_, _, _, InMemoryTrieStore, in_memory::Error>(
+                match operations::write::<_, _, _, InMemoryTrieStore, in_memory::Error>(
                     correlation_id,
                     &mut txn,
-                    &ret.store,
+                    &state.store,
                     &current_root,
                     &key,
                     value,
@@ -89,14 +88,13 @@ impl InMemoryGlobalState {
                     WriteResult::RootNotFound => panic!("InMemoryGlobalState has invalid root"),
                 }
             }
-            ret.root_hash = current_root;
             txn.commit()?;
         }
-        Ok(ret)
+        Ok((state, current_root))
     }
 }
 
-impl StateReader<Key, Value> for InMemoryGlobalState {
+impl StateReader<Key, Value> for InMemoryGlobalStateView {
     type Error = error::Error;
 
     fn read(&self, correlation_id: CorrelationId, key: &Key) -> Result<Option<Value>, Self::Error> {
@@ -120,23 +118,22 @@ impl StateReader<Key, Value> for InMemoryGlobalState {
 impl History for InMemoryGlobalState {
     type Error = error::Error;
 
-    type Reader = Self;
+    type Reader = InMemoryGlobalStateView;
 
     fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
         let maybe_root: Option<Trie<Key, Value>> = self.store.get(&txn, &prestate_hash)?;
-        let maybe_state = maybe_root.map(|_| InMemoryGlobalState {
+        let maybe_state = maybe_root.map(|_| InMemoryGlobalStateView {
             environment: Arc::clone(&self.environment),
             store: Arc::clone(&self.store),
             root_hash: prestate_hash,
-            empty_root_hash: self.empty_root_hash,
         });
         txn.commit()?;
         Ok(maybe_state)
     }
 
     fn commit(
-        &mut self,
+        &self,
         correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
@@ -148,14 +145,7 @@ impl History for InMemoryGlobalState {
             prestate_hash,
             effects,
         )?;
-        if let CommitResult::Success(root_hash) = commit_result {
-            self.root_hash = root_hash;
-        };
         Ok(commit_result)
-    }
-
-    fn current_root(&self) -> Blake2bHash {
-        self.root_hash
     }
 
     fn empty_root(&self) -> Blake2bHash {
@@ -203,7 +193,7 @@ mod tests {
         ]
     }
 
-    fn create_test_state() -> InMemoryGlobalState {
+    fn create_test_state() -> (InMemoryGlobalState, Blake2bHash) {
         InMemoryGlobalState::from_pairs(
             CorrelationId::new(),
             &TEST_PAIRS
@@ -218,8 +208,8 @@ mod tests {
     #[test]
     fn reads_from_a_checkout_return_expected_values() {
         let correlation_id = CorrelationId::new();
-        let state = create_test_state();
-        let checkout = state.checkout(state.root_hash).unwrap().unwrap();
+        let (state, root_hash) = create_test_state();
+        let checkout = state.checkout(root_hash).unwrap().unwrap();
         for TestPair { key, value } in TEST_PAIRS.iter().cloned() {
             assert_eq!(Some(value), checkout.read(correlation_id, &key).unwrap());
         }
@@ -227,7 +217,7 @@ mod tests {
 
     #[test]
     fn checkout_fails_if_unknown_hash_is_given() {
-        let state = create_test_state();
+        let (state, _) = create_test_state();
         let fake_hash: Blake2bHash = [1u8; 32].into();
         let result = state.checkout(fake_hash).unwrap();
         assert!(result.is_none());
@@ -239,8 +229,7 @@ mod tests {
 
         let test_pairs_updated = create_test_pairs_updated();
 
-        let mut state = create_test_state();
-        let root_hash = state.root_hash;
+        let (state, root_hash) = create_test_state();
 
         let effects: HashMap<Key, Transform> = test_pairs_updated
             .iter()
@@ -268,8 +257,7 @@ mod tests {
         let correlation_id = CorrelationId::new();
         let test_pairs_updated = create_test_pairs_updated();
 
-        let mut state = create_test_state();
-        let root_hash = state.root_hash;
+        let (state, root_hash) = create_test_state();
 
         let effects: HashMap<Key, Transform> = {
             let mut tmp = HashMap::new();
@@ -315,7 +303,7 @@ mod tests {
             11, 132, 57, 102, 129, 52, 188, 253, 43, 243, 67, 176, 41, 151,
         ];
         let init_state = test_utils::mocked_account([48u8; 32]);
-        let global_state = InMemoryGlobalState::from_pairs(correlation_id, &init_state).unwrap();
-        assert_eq!(expected_bytes, global_state.root_hash.to_vec())
+        let (_, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &init_state).unwrap();
+        assert_eq!(expected_bytes, root_hash.to_vec())
     }
 }

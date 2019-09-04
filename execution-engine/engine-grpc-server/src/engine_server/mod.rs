@@ -13,9 +13,7 @@ use contract_ffi::value::U512;
 use engine_core::engine_state::error::Error as EngineError;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::genesis::GenesisURefsSource;
-use engine_core::engine_state::{
-    genesis::GenesisResult, get_bonded_validators, EngineState, GetBondedValidatorsError,
-};
+use engine_core::engine_state::{genesis::GenesisResult, EngineState, GetBondedValidatorsError};
 use engine_core::execution::{Executor, WasmiExecutor};
 use engine_core::tracking_copy::QueryResult;
 use engine_shared::logging;
@@ -302,12 +300,8 @@ where
                     commit_result
                 {
                     let pos_key = Key::URef(GenesisURefsSource::default().get_pos_address());
-                    let bonded_validators_res = get_bonded_validators(
-                        self.state(),
-                        poststate_hash,
-                        &pos_key,
-                        correlation_id,
-                    );
+                    let bonded_validators_res =
+                        self.get_bonded_validators(poststate_hash, &pos_key, correlation_id);
                     bonded_validators_and_commit_result(
                         prestate_hash,
                         poststate_hash,
