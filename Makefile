@@ -350,7 +350,8 @@ client/src/main/resources/%.wasm: .make/contracts/client/%
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
 	client/src/main/resources/unbonding.wasm \
-	client/src/main/resources/transfer_to_account.wasm
+	client/src/main/resources/transfer_to_account.wasm \
+	client/src/main/resources/standard_payment.wasm
 
 # Package all system contracts that we have to make available for download.
 execution-engine/target/system-contracts.tar.gz: \
