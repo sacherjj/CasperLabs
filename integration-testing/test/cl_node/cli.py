@@ -27,14 +27,12 @@ class CLI:
         self.tls_parameters = tls_parameters or {}
 
     def expand_args(self, args):
-        connection_details = [
-            "--host",
-            f"{self.host}",
-            "--port",
-            f"{self.port}",
-        ] + reduce(
-            add, [[str(p), str(self.tls_parameters[p])] for p in self.tls_parameters]
-        )
+        connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
+        if self.tls_parameters:
+            connection_details += reduce(
+                add,
+                [[str(p), str(self.tls_parameters[p])] for p in self.tls_parameters],
+            )
         string_args = [str(a) for a in args]
 
         return "--help" in args and string_args or connection_details + string_args

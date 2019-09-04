@@ -249,7 +249,7 @@ class SecureGRPCService:
     def __init__(self, host, port, serviceStub, node_id, certificate_file):
         self.address = f"{host}:{port}"
         self.serviceStub = serviceStub
-        self.node_id = node_id or extract_common_name(certificate_file)
+        self.node_id = node_id  # or extract_common_name(certificate_file)
         self.certificate_file = certificate_file
         with open(self.certificate_file, "rb") as f:
             self.credentials = grpc.ssl_channel_credentials(f.read())
