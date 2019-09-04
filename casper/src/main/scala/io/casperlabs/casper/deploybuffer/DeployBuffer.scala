@@ -7,8 +7,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
-import io.casperlabs.casper.CasperMetricsSource
 import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.casper.{CasperMetricsSource, DeployHash}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
@@ -79,16 +79,19 @@ import scala.concurrent.duration.FiniteDuration
     */
   def readAccountPendingOldest(): fs2.Stream[F, Deploy]
 
+  /** Reads deploy hashes of deploys in PENDING state, lowest nonce per account. */
+  def readAccountLowestNonce(): fs2.Stream[F, DeployHash]
+
   def readPendingHashes: F[List[ByteString]]
 
   def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]]
 
   def sizePendingOrProcessed(): F[Long]
 
-  def getByHashes(l: List[ByteString]): F[List[Deploy]]
+  def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy]
 }
 
-class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
+class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
     implicit val xa: Transactor[F]
 ) extends DeployBuffer[F] {
   // Do not forget updating Flyway migration scripts at:
@@ -139,9 +142,18 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
         })
         .void
 
+    def writeToDeployAccountNonceTable =
+      Update[(ByteString, ByteString, Long)](
+        "INSERT OR IGNORE INTO deploy_account_nonce (hash, account, nonce) VALUES (?, ?, ?)"
+      ).updateMany(deploys.map { d =>
+          (d.deployHash, d.getHeader.accountPublicKey, d.getHeader.nonce)
+        })
+        .void
+
     for {
       t <- Time[F].currentMillis
-      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t)).transact(xa)
+      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t) >> writeToDeployAccountNonceTable)
+            .transact(xa)
       _ <- updateMetrics()
     } yield ()
   }
@@ -215,15 +227,33 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     readHashesByStatus(PendingStatusCode)
 
   override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
-    sql"""| SELECT data FROM (SELECT data, deploys.account, create_time_seconds FROM deploys
-          | INNER JOIN buffered_deploys bd
-          | ON deploys.hash = bd.hash
-          | WHERE bd.status = $PendingStatusCode) pda
+    sql"""| SELECT data FROM (
+          |   SELECT data, deploys.account, create_time_seconds FROM deploys
+          |   INNER JOIN buffered_deploys bd
+          |   ON deploys.hash = bd.hash
+          |   WHERE bd.status = $PendingStatusCode
+          | ) pda
           | GROUP BY pda.account
           | HAVING MIN(pda.create_time_seconds)
           | ORDER BY pda.create_time_seconds
           |""".stripMargin
       .query[Deploy]
+      .stream
+      .transact(xa)
+
+  /** Reads deploys in PENDING state, lowest nonce per account. */
+  override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
+    sql"""| SELECT hash FROM (
+          |   SELECT dan.hash, dan.account, dan.nonce FROM deploy_account_nonce dan
+          |   INNER JOIN buffered_deploys bd
+          |   ON bd.hash = dan.hash
+          |   WHERE bd.status = $PendingStatusCode
+          | ) dan
+          | GROUP BY dan.account
+          | HAVING MIN(dan.nonce)
+          | ORDER BY dan.nonce
+          """.stripMargin
+      .query[DeployHash]
       .stream
       .transact(xa)
 
@@ -277,22 +307,24 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       .option
       .transact(xa)
 
-  override def getByHashes(l: List[ByteString]): F[List[Deploy]] =
+  override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] =
     NonEmptyList
-      .fromList[ByteString](l)
-      .fold(List.empty[Deploy].pure[F])(nel => {
+      .fromList[ByteString](l.toList)
+      .fold(fs2.Stream.fromIterator[F, Deploy](List.empty[Deploy].toIterator))(nel => {
         val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
-        q.query.to[List].transact(xa)
+        q.query.streamWithChunkSize(chunkSize).transact(xa)
       })
 }
 
 object DeployBufferImpl {
   private implicit val metricsSource: Source = Metrics.Source(CasperMetricsSource, "DeployBuffers")
 
-  def create[F[_]: Metrics: Time: Sync](implicit xa: Transactor[F]): F[DeployBufferImpl[F]] =
+  def create[F[_]: Metrics: Time: Sync](
+      deployBufferChunkSize: Int
+  )(implicit xa: Transactor[F]): F[DeployBufferImpl[F]] =
     for {
       _            <- establishMetrics[F]
-      deployBuffer <- Sync[F].delay(new DeployBufferImpl[F])
+      deployBuffer <- Sync[F].delay(new DeployBufferImpl[F](deployBufferChunkSize))
     } yield deployBuffer
 
   /** Export base 0 values so we have non-empty series for charts. */

@@ -7,9 +7,10 @@ pub const PHASE_SIZE: usize = 1;
 #[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, ToPrimitive)]
 #[repr(u8)]
 pub enum Phase {
-    Payment = 0,
-    Session = 1,
-    FinalizePayment = 2,
+    System = 0,
+    Payment = 1,
+    Session = 2,
+    FinalizePayment = 3,
 }
 
 impl ToBytes for Phase {

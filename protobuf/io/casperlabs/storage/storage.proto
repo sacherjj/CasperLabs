@@ -3,7 +3,7 @@ syntax = "proto3";
 package io.casperlabs.storage;
 
 import "io/casperlabs/casper/consensus/consensus.proto";
-import "io/casperlabs/ipc/ipc.proto";
+import "io/casperlabs/ipc/transforms.proto";
 import "scalapb/scalapb.proto";
 
 // This is the content storing in BlockStorage, the reason why we need it is that,

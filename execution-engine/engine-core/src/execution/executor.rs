@@ -124,7 +124,7 @@ impl Executor<Module> for WasmiExecutor {
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup_local.values().cloned());
         let account_bytes = base_key.as_account().unwrap();
-        let rng = create_rng(account_bytes, account.nonce());
+        let rng = create_rng(account_bytes, account.nonce(), phase);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
@@ -195,13 +195,14 @@ impl Executor<Module> for WasmiExecutor {
 
         //let base_key = Key::Account(account.pub_key());
         let rng = {
-            let rng = create_rng(account.pub_key(), account.nonce());
+            let rng = create_rng(account.pub_key(), account.nonce(), phase);
             Rc::new(RefCell::new(rng))
         };
         let gas_counter = 0u64; // maybe const?
         let fn_store_id = 0u32; // maybe const?
 
-        // Snapshot of effects before execution, so in case of error only nonce update can be returned.
+        // Snapshot of effects before execution, so in case of error only nonce update
+        // can be returned.
         let effects_snapshot = state.borrow().effect();
 
         let args: Vec<Vec<u8>> = if args.is_empty() {
@@ -244,9 +245,11 @@ impl Executor<Module> for WasmiExecutor {
                     let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
                     match downcasted_error {
                         Error::Ret(ref _ret_urefs) => {
-                            // NOTE: currently, ExecutionResult does not include runtime.result or extra urefs
-                            //  and thus we cannot get back a value from the executed contract...
-                            // TODO?: add ability to include extra_urefs and runtime.result to ExecutionResult::Success
+                            // NOTE: currently, ExecutionResult does not include runtime.result or
+                            // extra urefs  and thus we cannot get back
+                            // a value from the executed contract...
+                            // TODO?: add ability to include extra_urefs and runtime.result to
+                            // ExecutionResult::Success
 
                             return ExecutionResult::Success {
                                 effect: runtime.context().effect(),

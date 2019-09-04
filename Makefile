@@ -11,7 +11,7 @@ $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -oE 'v?[0-9]+(\.[0-9]){1,2}$$' |
 # But with comm/build.rs compiling .proto to .rs every time we build the timestamps are updated as well, so filter those and depend on .proto instead.
 RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" -o -name "*.proto" \) \
 	| grep -v target \
-	| grep -v -e ipc.*\.rs)
+	| grep -v -E '(ipc|transforms).*\.rs')
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
 TS_SRC := $(shell find explorer/ui/src explorer/server/src explorer/grpc/generated -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
@@ -213,6 +213,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	rm -rf $(DIR_OUT)
 	mkdir -p $(DIR_OUT)
 	# First the pure data packages, so it doesn't create empty _pb_service.d.ts files.
+	# Then the service we'll invoke.
 	./hack/build/docker-buildenv.sh "\
 		protoc \
 				-I=$(DIR_IN) \
@@ -222,16 +223,13 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 			$(DIR_IN)/google/protobuf/empty.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/consensus.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/info.proto \
-			$(DIR_IN)/io/casperlabs/casper/consensus/state.proto \
-		"
-	# Now the service we'll invoke.
-	./hack/build/docker-buildenv.sh "\
-	protoc \
-	    -I=$(DIR_IN) \
-		--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
-		--js_out=import_style=commonjs,binary:$(DIR_OUT) \
-		--ts_out=service=true:$(DIR_OUT) \
-		$(DIR_IN)/io/casperlabs/node/api/casper.proto \
+			$(DIR_IN)/io/casperlabs/casper/consensus/state.proto ; \
+		protoc \
+				-I=$(DIR_IN) \
+			--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
+			--js_out=import_style=commonjs,binary:$(DIR_OUT) \
+			--ts_out=service=true:$(DIR_OUT) \
+			$(DIR_IN)/io/casperlabs/node/api/casper.proto \
 		"
 	# Annotations were only required for the REST gateway. Remove them from Typescript.
 	for f in $(DIR_OUT)/io/casperlabs/node/api/casper_pb* ; do \

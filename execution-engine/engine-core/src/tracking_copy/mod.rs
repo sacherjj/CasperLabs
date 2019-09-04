@@ -42,7 +42,8 @@ pub struct TrackingCopyCache<M> {
 impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
     /// Creates instance of `TrackingCopyCache` with specified `max_cache_size`,
     /// above which least-recently-used elements of the cache are invalidated.
-    /// Measurements of elements' "size" is done with the usage of `Meter` instance.
+    /// Measurements of elements' "size" is done with the usage of `Meter`
+    /// instance.
     pub fn new(max_cache_size: usize, meter: M) -> TrackingCopyCache<M> {
         TrackingCopyCache {
             max_cache_size,
@@ -106,21 +107,30 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
-            cache: TrackingCopyCache::new(1024 * 16, HeapSize), //TODO: Should `max_cache_size` be fraction of Wasm memory limit?
+            cache: TrackingCopyCache::new(1024 * 16, HeapSize), /* TODO: Should `max_cache_size`
+                                                                 * be fraction of Wasm memory
+                                                                 * limit? */
             ops: HashMap::new(),
             fns: HashMap::new(),
         }
     }
 
-    /// Creates a new TrackingCopy, using this one (including its mutations) as the base state to
-    /// read against. The intended use case for this function is to "snapshot" the current
-    /// `TrackingCopy` and produce a new `TrackingCopy` where further changes can be made. This
-    /// allows isolating a specific set of changes (those in the new `TrackingCopy`) from existing
-    /// changes. Note that mutations to state caused by new changes (i.e. writes and adds) only
-    /// impact the new `TrackingCopy`, not this one. Note that currently there is no `join` /
-    /// `merge` function to bring changes from a fork back to the main `TrackingCopy`. this means
-    /// the current usage requires repeated forking, however we recognize this is sub-optimal and
-    /// will revisit in the future.
+    pub fn reader(&self) -> &R {
+        &self.reader
+    }
+
+    /// Creates a new TrackingCopy, using this one (including its mutations) as
+    /// the base state to read against. The intended use case for this
+    /// function is to "snapshot" the current `TrackingCopy` and produce a
+    /// new `TrackingCopy` where further changes can be made. This
+    /// allows isolating a specific set of changes (those in the new
+    /// `TrackingCopy`) from existing changes. Note that mutations to state
+    /// caused by new changes (i.e. writes and adds) only impact the new
+    /// `TrackingCopy`, not this one. Note that currently there is no `join` /
+    /// `merge` function to bring changes from a fork back to the main
+    /// `TrackingCopy`. this means the current usage requires repeated
+    /// forking, however we recognize this is sub-optimal and will revisit
+    /// in the future.
     pub fn fork(&self) -> TrackingCopy<&TrackingCopy<R>> {
         TrackingCopy::new(self)
     }
@@ -166,7 +176,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 
     /// Ok(None) represents missing key to which we want to "add" some value.
     /// Ok(Some(unit)) represents successful operation.
-    /// Err(error) is reserved for unexpected errors when accessing global state.
+    /// Err(error) is reserved for unexpected errors when accessing global
+    /// state.
     pub fn add(
         &mut self,
         correlation_id: CorrelationId,

@@ -38,8 +38,8 @@ pub mod genesis;
 pub mod op;
 pub mod utils;
 
-// TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values TBD
-// gas * CONV_RATE = motes
+// TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
+// TBD gas * CONV_RATE = motes
 pub const MAX_PAYMENT: u64 = 10_000_000;
 pub const CONV_RATE: u64 = 10;
 
@@ -408,8 +408,8 @@ where
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
         let mint_inner_uref = {
-            // Get mint system contract URef from account (an account on a different network may
-            // have a mint contract other than the CLMint)
+            // Get mint system contract URef from account (an account on a different network
+            // may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
             let mint_public_uref: Key = match account.urefs_lookup().get(MINT_NAME) {
                 Some(uref) => uref.normalize(),
@@ -436,8 +436,8 @@ where
             *mint_info.inner_key().as_uref().unwrap()
         };
 
-        // Get proof of stake system contract URef from account (an account on a different
-        // network may have a pos contract other than the CLPoS)
+        // Get proof of stake system contract URef from account (an account on a
+        // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
         let proof_of_stake_public_uref: Key = match account.urefs_lookup().get(POS_NAME) {
             Some(uref) => uref.normalize(),
@@ -504,8 +504,8 @@ where
             }
         };
 
-        // Get account main purse balance to enforce precondition and in case of forced transfer
-        // validation_spec_5: account main purse minimum balance
+        // Get account main purse balance to enforce precondition and in case of forced
+        // transfer validation_spec_5: account main purse minimum balance
         let account_main_purse_balance: U512 = match tracking_copy
             .borrow_mut()
             .get_purse_balance(correlation_id, account_main_purse_balance_key)
@@ -539,7 +539,8 @@ where
 
         // Execute provided payment code
         let payment_result = {
-            // payment_code_spec_1: init pay environment w/ gas limit == (max_payment_cost / conv_rate)
+            // payment_code_spec_1: init pay environment w/ gas limit == (max_payment_cost /
+            // conv_rate)
             let pay_gas_limit = MAX_PAYMENT / CONV_RATE;
 
             // Create payment code module from bytes
@@ -575,7 +576,8 @@ where
 
         let payment_result_cost = payment_result.cost();
 
-        // payment_code_spec_3: fork based upon payment purse balance and cost of payment code execution
+        // payment_code_spec_3: fork based upon payment purse balance and cost of
+        // payment code execution
         let payment_purse_balance: U512 = {
             // Get payment purse Key from proof of stake contract
             // payment_code_spec_6: system contract validity
@@ -628,8 +630,10 @@ where
 
         // session_code_spec_2: execute session code
         let session_result = {
-            // payment_code_spec_3_b_i: if (balance of PoS pay purse) >= (gas spent during payment code execution) * conv_rate, yes session
-            // session_code_spec_1: gas limit = ((balance of PoS payment purse) / conv_rate) - (gas spent during payment execution)
+            // payment_code_spec_3_b_i: if (balance of PoS pay purse) >= (gas spent during
+            // payment code execution) * conv_rate, yes session
+            // session_code_spec_1: gas limit = ((balance of PoS payment purse) / conv_rate)
+            // - (gas spent during payment execution)
             let session_gas_limit: u64 =
                 ((payment_purse_balance / CONV_RATE) - payment_result_cost).as_u64();
 
@@ -658,7 +662,8 @@ where
 
         let _session_result_cost = session_result.cost();
 
-        // NOTE: session_code_spec_3: (do not include session execution effects in results) is enforced in execution_result_builder.build()
+        // NOTE: session_code_spec_3: (do not include session execution effects in
+        // results) is enforced in execution_result_builder.build()
         execution_result_builder.set_session_execution_result(session_result);
 
         // payment_code_spec_5: run finalize process
@@ -683,8 +688,8 @@ where
                     .expect("args should parse")
             };
 
-            // The PoS keys may have changed because of effects during payment and/or session,
-            // so we need to look them up again from the tracking copy
+            // The PoS keys may have changed because of effects during payment and/or
+            // session, so we need to look them up again from the tracking copy
             let mut proof_of_stake_keys = finalization_tc
                 .borrow_mut()
                 .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
@@ -713,11 +718,12 @@ where
 
         // We panic here to indicate that the builder was not used properly.
         let ret = execution_result_builder
-            .build()
+            .build(tracking_copy.borrow().reader(), correlation_id)
             .expect("ExecutionResultBuilder not initialized properly");
 
         // NOTE: payment_code_spec_5_a is enforced in execution_result_builder.build()
-        // payment_code_spec_6: return properly combined set of transforms and appropriate error
+        // payment_code_spec_6: return properly combined set of transforms and
+        // appropriate error
         Ok(ret)
     }
 
@@ -743,7 +749,8 @@ pub enum GetBondedValidatorsError<H: History> {
 pub fn get_bonded_validators<H: History>(
     state: Arc<Mutex<H>>,
     root_hash: Blake2bHash,
-    pos_key: &Key, // Address of the PoS as currently bonded validators are stored in its known urefs map.
+    pos_key: &Key, /* Address of the PoS as currently bonded validators are stored in its known
+                    * urefs map. */
     correlation_id: CorrelationId,
 ) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<H>> {
     state

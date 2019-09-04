@@ -368,84 +368,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  //todo we need some genenis Contract to pass this test
-// it should "allow bonding and distribute the joining fee" in {
-//    val nodes =
-//      HashSetCasperTestNode.network(
-//        validatorKeys :+ otherSk,
-//        genesis,
-//        storageSize = 1024L * 1024 * 10
-//      )
-//    implicit val runtimeManager = nodes(0).runtimeManager
-//    val pubKey                  = Base16.encode(ethPubKeys.head.bytes.drop(1))
-//    val secKey                  = ethPivKeys.head.bytes
-//    val ethAddress              = ethAddresses.head
-//    val bondKey                 = Base16.encode(otherPk)
-//    val walletUnlockDeploy =
-//      RevIssuanceTest.preWalletUnlockDeploy(ethAddress, pubKey, secKey, "unlockOut")
-//    val bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
-//    val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
-//      BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
-//      System.currentTimeMillis(),
-//      Integer.MAX_VALUE
-//    )
-//    val transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
-//    val bondingTransferDeploy =
-//      RevIssuanceTest.walletTransferDeploy(
-//        0,
-//        wallets.head.initRevBalance.toLong,
-//        bondingForwarderAddress,
-//        transferStatusOut,
-//        pubKey,
-//        secKey
-//      )
-//
-//    val Created(block1) = nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
-//      .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock
-//    val block1Status = nodes(0).casperEff.addBlock(block1)
-//    nodes.foreach(_.receive) //send to all peers
-
-  it should "allow bonding via the faucet" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
-    import node.{casperEff, logEff}
-
-    val (sk, pk)    = Ed25519.newKeyPair
-    val pkStr       = Base16.encode(pk)
-    val amount      = 314L
-    val forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
-    for {
-      bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
-      forwardDeploy = ProtoUtil.basicDeploy(
-        System.currentTimeMillis(),
-        ByteString.copyFromUtf8(forwardCode),
-        1
-      )
-      bondingDeploy = ProtoUtil.basicDeploy(
-        forwardDeploy.getHeader.timestamp + 1,
-        ByteString.copyFromUtf8(bondingCode),
-        2
-      )
-      createBlockResult1 <- casperEff.deploy(forwardDeploy) *> casperEff.createBlock
-      Created(block1)    = createBlockResult1
-      block1Status       <- casperEff.addBlock(block1)
-      createBlockResult2 <- casperEff.deploy(bondingDeploy) *> casperEff.createBlock
-      Created(block2)    = createBlockResult2
-      block2Status       <- casperEff.addBlock(block2)
-
-      _        = logEff.warns shouldBe empty
-      oldBonds = block1.getHeader.getState.bonds
-      newBonds = block2.getHeader.getState.bonds
-      _        = block1Status shouldBe Valid
-      _        = block2Status shouldBe Valid
-      // Need bonding to be implemented and the bonding code to actually do something.
-      _ = pendingUntilFixed {
-        (oldBonds.size + 1) shouldBe newBonds.size
-      }
-
-      _ = node.tearDown()
-    } yield ()
-  }
-
   it should "not fail if the forkchoice changes after a bonding event" in {
     val localValidators = validatorKeys.take(3)
     val localBonds =
@@ -1230,9 +1152,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val invalidNonce = 1000L
 
     for {
+      validDeploy       <- ProtoUtil.basicDeploy[Effect](1L)
       invalidDeploy     <- ProtoUtil.basicDeploy[Effect](invalidNonce)
       _                 <- node.casperEff.deploy(invalidDeploy)
-      validDeploy       <- ProtoUtil.basicDeploy[Effect](1L)
       _                 <- node.casperEff.deploy(validDeploy)
       createBlockResult <- MultiParentCasper[Effect].createBlock
       Created(block)    = createBlockResult
