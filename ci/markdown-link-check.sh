@@ -8,7 +8,7 @@ if echo $LINT_OUTPUT_MODIFIED | grep -i "warning"; then
     printf '%s\n' "${LINT_OUTPUT[@]}"
     echo ""
     echo "Please Fix the above broken links! Please ignore any localhost warnings."
-    echo "exit 1" # change to real exit in ci
+    exit 1
 else
     echo "No Issues Found!!"
 fi
