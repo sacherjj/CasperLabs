@@ -348,7 +348,8 @@ message ChainSpec {
     }
 
     message ActivationPoint {
-        uint64 block_height = 1;
+        // equal to Block.Header.rank
+        uint64 rank = 1;
     }
 }
 
