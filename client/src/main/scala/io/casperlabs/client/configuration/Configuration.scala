@@ -1,5 +1,11 @@
 package io.casperlabs.client.configuration
-import java.io.File
+import com.google.protobuf.ByteString
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, InputStream}
+import java.nio.file.Files
+import io.casperlabs.client.configuration.Options.ContractArgs
+import io.casperlabs.casper.consensus.Deploy.Code.Contract
+import io.casperlabs.crypto.codec.Base16
+import org.apache.commons.io._
 
 final case class ConnectOptions(
     host: String,
@@ -8,14 +14,84 @@ final case class ConnectOptions(
     nodeId: Option[String]
 )
 
+/** Options to capture all the possible ways of passing one of the session or payment contracts. */
+final case class ContractOptions(
+    // Point at a file on disk.
+    file: Option[File],
+    // Name of a pre-packaged contract in the client JAR.
+    resource: Option[String] = None,
+    // Hash of a stored contract.
+    hash: Option[String] = None,
+    // Name of a stored contract.
+    name: Option[String] = None,
+    // URef of a stored contract.
+    uref: Option[String] = None
+)
+
+/** Encapsulate reading session and payment contracts from disk or resources
+  * before putting them into the the format expected by the API.
+  */
+final case class Contracts(
+    sessionOptions: ContractOptions,
+    paymentOptions: ContractOptions
+) {
+  lazy val session = Contracts.toContract(sessionOptions)
+  lazy val payment = Contracts.toContract(paymentOptions)
+
+  def withSessionResource(resource: String) =
+    copy(sessionOptions = sessionOptions.copy(resource = Some(resource)))
+}
+
+object Contracts {
+  def apply(args: ContractArgs): Contracts =
+    Contracts(
+      ContractOptions(args.session.toOption),
+      ContractOptions(args.payment.toOption)
+    )
+
+  val empty = Contracts(ContractOptions(None), ContractOptions(None))
+
+  /** Produce a Deploy.Code.Contract DTO from the options. */
+  private def toContract(opts: ContractOptions): Contract =
+    opts.file.map { f =>
+      val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
+      Contract.Wasm(wasm)
+    } orElse {
+      opts.hash.map { x =>
+        Contract.Hash(ByteString.copyFrom(Base16.decode(x)))
+      }
+    } orElse {
+      opts.name.map { x =>
+        Contract.Name(x)
+      }
+    } orElse {
+      opts.uref.map { x =>
+        Contract.Uref(ByteString.copyFrom(Base16.decode(x)))
+      }
+    } orElse {
+      opts.resource.map { x =>
+        val wasm =
+          ByteString.copyFrom(consumeInputStream(getClass.getClassLoader.getResourceAsStream(x)))
+        Contract.Wasm(wasm)
+      }
+    } getOrElse {
+      Contract.Empty
+    }
+
+  private def consumeInputStream(is: InputStream): Array[Byte] = {
+    val baos = new ByteArrayOutputStream()
+    IOUtils.copy(is, baos)
+    baos.toByteArray
+  }
+}
+
 sealed trait Configuration
 
 final case class MakeDeploy(
     from: Option[String],
     publicKey: Option[File],
     nonce: Long,
-    sessionCode: File,
-    paymentCode: File,
+    contracts: Contracts,
     gasPrice: Long,
     deployPath: Option[File]
 ) extends Configuration
@@ -27,8 +103,7 @@ final case class SendDeploy(
 final case class Deploy(
     from: Option[String],
     nonce: Long,
-    sessionCode: File,
-    paymentCode: File,
+    contracts: Contracts,
     publicKey: Option[File],
     privateKey: Option[File],
     gasPrice: Long
@@ -52,22 +127,20 @@ final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
     nonce: Long,
-    sessionCode: Option[File],
-    paymentCode: Option[File],
+    contracts: Contracts,
     privateKey: File
 ) extends Configuration
 final case class Transfer(
     amount: Long,
     recipientPublicKeyBase64: String,
     nonce: Long,
-    sessionCode: Option[File],
+    contracts: Contracts,
     privateKey: File
 ) extends Configuration
 final case class Unbond(
     amount: Option[Long],
     nonce: Long,
-    sessionCode: Option[File],
-    paymentCode: Option[File],
+    contracts: Contracts,
     privateKey: File
 ) extends Configuration
 final case class VisualizeDag(
@@ -92,6 +165,7 @@ final case class Query(
 ) extends Configuration
 
 object Configuration {
+
   def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
     val options = Options(args)
     val connect = ConnectOptions(
@@ -105,8 +179,7 @@ object Configuration {
         Deploy(
           options.deploy.from.toOption,
           options.deploy.nonce(),
-          options.deploy.session(),
-          options.deploy.payment.toOption.getOrElse(options.deploy.session()),
+          Contracts(options.deploy),
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption,
           options.deploy.gasPrice()
@@ -116,8 +189,7 @@ object Configuration {
           options.makeDeploy.from.toOption,
           options.makeDeploy.publicKey.toOption,
           options.makeDeploy.nonce(),
-          options.makeDeploy.session(),
-          options.makeDeploy.payment(),
+          Contracts(options.makeDeploy),
           options.makeDeploy.gasPrice(),
           options.makeDeploy.deployPath.toOption
         )
@@ -144,16 +216,14 @@ object Configuration {
         Unbond(
           options.unbond.amount.toOption,
           options.unbond.nonce(),
-          options.unbond.session.toOption,
-          options.unbond.paymentPath.toOption,
+          Contracts(options.unbond),
           options.unbond.privateKey()
         )
       case options.bond =>
         Bond(
           options.bond.amount(),
           options.bond.nonce(),
-          options.bond.session.toOption,
-          options.bond.paymentPath.toOption,
+          Contracts(options.bond),
           options.bond.privateKey()
         )
       case options.transfer =>
@@ -161,7 +231,7 @@ object Configuration {
           options.transfer.amount(),
           options.transfer.targetAccount(),
           options.transfer.nonce(),
-          options.transfer.session.toOption,
+          Contracts(options.transfer),
           options.transfer.privateKey()
         )
       case options.visualizeBlocks =>

@@ -38,6 +38,7 @@ class Contract:
     MAILINGLISTCALL = "test_mailinglistcall.wasm"
     MAILINGLISTDEFINE = "test_mailinglistdefine.wasm"
     PAYMENT_PURSE = "test_payment_purse.wasm"
+    POS_BONDING = "pos_bonding.wasm"
     REFUND_PURSE = "test_refund_purse.wasm"
     REMOVE_ASSOCIATED_KEY = "remove_associated_key.wasm"
     SET_KEY_THRESHOLDS = "set_key_thresholds.wasm"
@@ -68,10 +69,13 @@ class Contract:
 # INVALID_UNBONDING_CONTRACT = "test_invalid_unbondingcall.wasm"
 # PAYMENT_PURSE_CONTRACT = "test_payment_purse.wasm"
 # PAYMENT_CONTRACT = "standard_payment.wasm"
+POS_BONDING_CONTRACT = "pos_bonding.wasm"
 
 MAX_PAYMENT_COST = 10000000  # ten million
 MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
 CONV_RATE = 10
+
+BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
 
 
 @dataclasses.dataclass(eq=True, frozen=True)

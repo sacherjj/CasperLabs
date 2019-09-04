@@ -1,14 +1,13 @@
 #![no_std]
-#![feature(alloc)]
 
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-extern crate common;
-use common::contract_api::pointers::*;
-use common::contract_api::*;
-use common::key::Key;
+extern crate contract_ffi;
+use contract_ffi::contract_api::pointers::*;
+use contract_ffi::contract_api::*;
+use contract_ffi::key::Key;
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -22,7 +21,7 @@ pub extern "C" fn call() {
     let method = "sub";
     let name = "CasperLabs";
     let args = (method, name);
-    match call_contract(pointer.clone(), &args, &Vec::new()){
+    match call_contract(pointer.clone(), &args, &Vec::new()) {
         Some(sub_key) => {
             let key_name = "mail_feed";
             add_uref(key_name, &sub_key);

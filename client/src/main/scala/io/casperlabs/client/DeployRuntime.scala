@@ -12,7 +12,7 @@ import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.client.configuration.Streaming
+import io.casperlabs.client.configuration.{Contracts, Streaming}
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.crypto.hash.Blake2b256
@@ -34,10 +34,16 @@ object DeployRuntime {
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
-    gracefulExit(DeployService[F].propose().map(_.map(r => s"Response: $r")), exit, ignoreOutput)
+    gracefulExit(
+      DeployService[F]
+        .propose()
+        .map(_.map(hash => s"Response: Success! Block $hash created and added.")),
+      exit,
+      ignoreOutput
+    )
 
   def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showBlock(hash))
+    gracefulExit(DeployService[F].showBlock(hash).map(_.map(Printer.printToUnicodeString)))
 
   def showDeploys[F[_]: Sync: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].showDeploys(hash))
@@ -51,8 +57,7 @@ object DeployRuntime {
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
       nonce: Long,
-      sessionCode: Option[File],
-      paymentCode: Option[File],
+      contracts: Contracts,
       privateKeyFile: File
   ): F[Unit] = {
     val args: Array[Array[Byte]] = Array(
@@ -61,17 +66,11 @@ object DeployRuntime {
     val argsSer = serializeArgs(args)
 
     for {
-      sessionCode <- readFileOrDefault[F](sessionCode, UNBONDING_WASM_FILE)
-      // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
-      // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
-      // to not fail the session code execution even when EE will use hardcoded limit.
-      payment       = paymentCode.map(f => Files.readAllBytes(f.toPath)).getOrElse(sessionCode)
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
-            sessionCode = sessionCode,
-            paymentCode = payment,
+            contracts.withSessionResource(UNBONDING_WASM_FILE),
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
@@ -83,25 +82,18 @@ object DeployRuntime {
   def bond[F[_]: Sync: DeployService](
       amount: Long,
       nonce: Long,
-      sessionCode: Option[File],
-      paymentCode: Option[File],
+      contracts: Contracts,
       privateKeyFile: File
   ): F[Unit] = {
     val args: Array[Array[Byte]] = Array(serializeLong(amount))
     val argsSer: Array[Byte]     = serializeArgs(args)
 
     for {
-      sessionCode <- readFileOrDefault[F](sessionCode, BONDING_WASM_FILE)
-      // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
-      // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
-      // to not fail the session code execution even when EE will use hardcoded limit.
-      payment       = paymentCode.map(f => Files.readAllBytes(f.toPath)).getOrElse(sessionCode)
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
-            sessionCode = sessionCode,
-            paymentCode = payment,
+            contracts.withSessionResource(BONDING_WASM_FILE),
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             gasPrice = 10L, // gas price is fixed at the moment for 10:1
@@ -238,7 +230,7 @@ object DeployRuntime {
 
   def transferCLI[F[_]: Sync: DeployService: FilesAPI](
       nonce: Long,
-      sessionCode: Option[File],
+      contracts: Contracts,
       privateKeyFile: File,
       recipientPublicKeyBase64: String,
       amount: Long
@@ -257,12 +249,19 @@ object DeployRuntime {
                       "Failed to compute Ed25519 public key from given private key."
                     )
                   )
-      _ <- transfer[F](nonce, sessionCode, publicKey, privateKey, recipientPublicKeyBase64, amount)
+      _ <- transfer[F](
+            nonce,
+            contracts,
+            publicKey,
+            privateKey,
+            recipientPublicKeyBase64,
+            amount
+          )
     } yield ()
 
   def transfer[F[_]: Sync: DeployService: FilesAPI](
       nonce: Long,
-      sessionCode: Option[File],
+      contracts: Contracts,
       senderPublicKey: PublicKey,
       senderPrivateKey: PrivateKey,
       recipientPublicKeyBase64: String,
@@ -277,15 +276,11 @@ object DeployRuntime {
                     s"Failed to parse base64 encoded account: $recipientPublicKeyBase64"
                   )
                 )
-      sessionCode <- readFileOrDefault[F](sessionCode, TRANSFER_WASM_FILE)
-      // currently, sessionCode == paymentCode in order to get some gas limit for the execution
-      paymentCode = sessionCode.toList.toArray
-      args        = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
+      args = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
       _ <- deployFileProgram[F](
             from = None,
             nonce = nonce,
-            sessionCode = sessionCode,
-            paymentCode = paymentCode,
+            contracts.withSessionResource(TRANSFER_WASM_FILE),
             maybeEitherPublicKey = senderPublicKey.asRight[String].some,
             maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
             gasPrice = 10L,
@@ -330,12 +325,14 @@ object DeployRuntime {
       from: ByteString,
       nonce: Long,
       gasPrice: Long,
-      sessionCode: Array[Byte],
-      sessionArguments: Array[Byte],
-      paymentCode: Array[Byte]
+      contracts: Contracts,
+      sessionArguments: Array[Byte]
   ): Deploy = {
-    val session     = ByteString.copyFrom(sessionCode)
-    val payment     = ByteString.copyFrom(paymentCode)
+    // EE will use hardcoded execution limit if it [EE] is run with a `--use-payment-code` flag
+    // but node will verify payment code's wasm correctness so we have to send valid wasm anyway
+    // to not fail the session code execution even when EE will use hardcoded limit.
+    val session     = contracts.session
+    val payment     = if (contracts.payment.isEmpty) contracts.session else contracts.payment
     val sessionArgs = ByteString.copyFrom(sessionArguments)
 
     consensus
@@ -351,8 +348,8 @@ object DeployRuntime {
       .withBody(
         consensus.Deploy
           .Body()
-          .withSession(consensus.Deploy.Code().withCode(session).withArgs(sessionArgs))
-          .withPayment(consensus.Deploy.Code().withCode(payment))
+          .withSession(consensus.Deploy.Code(contract = session).withAbiArgs(sessionArgs))
+          .withPayment(consensus.Deploy.Code(contract = payment))
       )
       .withHashes
   }
@@ -380,8 +377,7 @@ object DeployRuntime {
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[String],
       nonce: Long,
-      sessionCode: Array[Byte],
-      paymentCode: Array[Byte],
+      contracts: Contracts,
       maybeEitherPublicKey: Option[Either[String, PublicKey]],
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
       gasPrice: Long,
@@ -408,7 +404,7 @@ object DeployRuntime {
                          )
     } yield {
       val deploy =
-        makeDeploy(accountPublicKey, nonce, gasPrice, sessionCode, sessionArgs, paymentCode)
+        makeDeploy(accountPublicKey, nonce, gasPrice, contracts, sessionArgs)
       (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
     }
 
@@ -453,24 +449,6 @@ object DeployRuntime {
 
   private def hash[T <: scalapb.GeneratedMessage](data: T): ByteString =
     ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
-
-  // When not provided fallbacks to the contract version packaged with the client.
-  private def readFileOrDefault[F[_]: Sync](
-      file: Option[File],
-      defaultName: String
-  ): F[Array[Byte]] = {
-    def consumeInputStream(is: InputStream): Array[Byte] = {
-      val baos = new ByteArrayOutputStream()
-      IOUtils.copy(is, baos)
-      baos.toByteArray
-    }
-    Sync[F].delay {
-      file
-        .map(f => Files.readAllBytes(f.toPath))
-        .getOrElse(consumeInputStream(getClass.getClassLoader.getResourceAsStream(defaultName)))
-
-    }
-  }
 
   def readFileAsString[F[_]: Sync](file: File): F[String] = Sync[F].delay {
     new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8)

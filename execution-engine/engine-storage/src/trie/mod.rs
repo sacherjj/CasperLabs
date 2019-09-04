@@ -7,7 +7,7 @@ use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 use engine_shared::newtypes::Blake2bHash;
 
 #[cfg(test)]
-pub(crate) mod gens;
+pub mod gens;
 
 #[cfg(test)]
 mod tests;
@@ -266,9 +266,9 @@ impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
 }
 
 pub(crate) mod operations {
+    use crate::trie::Trie;
     use contract_ffi::bytesrepr::{self, ToBytes};
     use engine_shared::newtypes::Blake2bHash;
-    use trie::Trie;
 
     /// Creates a tuple containing an empty root hash and an empty root (a node
     /// with an empty pointer block)

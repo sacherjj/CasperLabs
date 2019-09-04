@@ -3,6 +3,7 @@ syntax = "proto3";
 package io.casperlabs.ipc;
 
 import "io/casperlabs/casper/consensus/state.proto";
+import "io/casperlabs/ipc/transforms.proto";
 
 message DeployCode {
   bytes code = 1; // wasm byte code
@@ -20,11 +21,17 @@ message StoredContractName{
   bytes args = 2;   // ABI-encoded arguments
 }
 
+message StoredContractURef{
+  bytes uref = 1; // uref of a stored contract
+  bytes args = 2; // ABI-encoded arguments
+}
+
 message DeployPayload {
   oneof payload {
     DeployCode deploy_code = 1;
     StoredContractHash stored_contract_hash = 2;
     StoredContractName stored_contract_name = 3;
+    StoredContractURef stored_contract_uref = 4;
   }
 }
 
@@ -129,41 +136,6 @@ message WriteOp {}
 message AddOp {}
 message NoOp {}
 
-// Final transformation to the value under the key.
-// It's the outcome of applying all `op`s
-message Transform {
-    oneof transform_instance {
-        TransformIdentity identity = 1;
-        TransformAddInt32 add_i32 = 2;
-        TransformAddUInt64 add_u64 = 3;
-        TransformWrite write = 4;
-        TransformAddKeys add_keys = 5;
-        TransformFailure failure = 6;
-        TransformAddBigInt add_big_int = 7;
-    }
-}
-
-message TransformIdentity {}
-message TransformAddInt32 {
-    int32 value = 1;
-}
-message TransformAddUInt64 {
-    uint64 value = 1;
-}
-message TransformAddBigInt {
-    io.casperlabs.casper.consensus.state.BigInt value = 1;
-}
-message TransformAddKeys {
-    repeated io.casperlabs.casper.consensus.state.NamedKey value = 1;
-}
-message TransformWrite {
-    io.casperlabs.casper.consensus.state.Value value = 1;
-}
-message TransformFailure {
-    oneof failure_instance {
-        TypeMismatch type_mismatch = 1;
-     }
-}
 
 //Errors which may occur while interacting with global state
 message StorageError {
@@ -172,10 +144,7 @@ message StorageError {
         RkvError rkv = 2;
     }
 }
-message TypeMismatch {
-    string expected = 1;
-    string found = 2;
-}
+
 message BytesReprError {
     oneof error_instance {
         EarlyEndOfStream early_end = 1;
@@ -195,11 +164,6 @@ message RkvError {
 message OpEntry {
     io.casperlabs.casper.consensus.state.Key key = 1;
     Op operation = 2;
-}
-
-message TransformEntry {
-    io.casperlabs.casper.consensus.state.Key key = 1;
-    Transform transform = 2;
 }
 
 // Returned by ExecutionEngine to consensus layer.
@@ -315,6 +279,78 @@ message GenesisResponse {
     }
 }
 
+message ChainSpec {
+    GenesisConfig genesis = 1;
+    repeated UpgradePoint upgrades = 2;
+
+    message GenesisConfig {
+        // Human readable name for convenience; the genesis_hash is the true identifier.
+        // The name influences the genesis hash by contributing to the seeding of the pseudo-
+        // random number generator used in execution engine for computing genesis post-state.
+        string name = 1;
+        // timestamp for the genesis block, also used in seeding the pseudo-random number
+        // generator used in execution engine for computing genesis post-state.
+        uint64 timestamp = 2;
+        io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
+        // path to contract for installing the mint system contract
+        string mint_path = 4;
+        // path to contract for installing the pos system contract
+        string pos_path = 5;
+        // path to csv file containing genesis account information
+        string accounts_path = 6;
+        // costs at genesis
+        CostTable costs = 7;
+    }
+
+    message CostTable {
+        WasmCosts wasm = 1;
+        HostFunctionCosts host = 2;
+
+        message WasmCosts {
+            // Default opcode cost
+            uint32 regular = 1;
+            // Div operations multiplier.
+            uint32 div = 2;
+            // Mul operations multiplier.
+            uint32 mul = 3;
+            // Memory (load/store) operations multiplier.
+            uint32 mem = 4;
+            // Amount of free memory (in 64kb pages) each contract can use for stack.
+            uint32 initial_mem = 5;
+            // Grow memory cost, per page (64kb)
+            uint32 grow_mem = 6;
+            // Memory copy cost, per byte
+            uint32 memcpy = 7;
+            // Max stack height (native WebAssembly stack limiter)
+            uint32 max_stack_height = 8;
+            // Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` / `opcodes_div`
+            uint32 opcodes_mul = 9;
+            uint32 opcodes_div = 10;
+        }
+
+        message HostFunctionCosts {
+            // Presently we don't charge for anything happening
+            // outside wasm. But we probably should be. But this requires
+            // some design work, so we will leave this empty for now
+        }
+    }
+
+    message UpgradePoint {
+        // Hiding block height behind an abstraction because I am
+        // not sure if uint64 is sufficient to express it.
+        BlockHeight activation_point = 1;
+        // The protocol version as of this upgrade
+        io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
+        // path to contract to run that applies the upgrades to system contracts
+        string upgrade_contract_path = 3;
+        // Note: this is optional; only needed when costs are changing
+        CostTable new_costs = 4;
+    }
+
+    message BlockHeight {
+        uint64 rank = 1;
+    }
+}
 
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
@@ -325,4 +361,5 @@ service ExecutionEngineService {
     rpc validate (ValidateRequest) returns (ValidateResponse) {}
     rpc run_genesis (GenesisRequest) returns (GenesisResponse) {}
     rpc execute (ExecuteRequest) returns (ExecuteResponse) {}
+    rpc run_genesis_with_chainspec (ChainSpec.GenesisConfig) returns (GenesisResponse) {}
 }

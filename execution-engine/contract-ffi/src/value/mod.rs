@@ -226,20 +226,20 @@ impl FromBytes for Value {
 impl Value {
     pub fn type_string(&self) -> String {
         match self {
-            Int32(_) => String::from("Int32"),
-            UInt128(_) => String::from("UInt128"),
-            UInt256(_) => String::from("UInt256"),
-            UInt512(_) => String::from("UInt512"),
-            ListInt32(_) => String::from("List[Int32]"),
-            String(_) => String::from("String"),
-            ByteArray(_) => String::from("ByteArray"),
-            Account(_) => String::from("Account"),
-            Contract(_) => String::from("Contract"),
-            NamedKey(_, _) => String::from("NamedKey"),
-            Key(_) => String::from("Key"),
-            ListString(_) => String::from("List[String]"),
-            Unit => String::from("Unit"),
-            UInt64(_) => String::from("UInt64"),
+            Int32(_) => String::from("Value::Int32"),
+            UInt128(_) => String::from("Value::UInt128"),
+            UInt256(_) => String::from("Value::UInt256"),
+            UInt512(_) => String::from("Value::UInt512"),
+            ListInt32(_) => String::from("Value::List[Int32]"),
+            String(_) => String::from("Value::String"),
+            ByteArray(_) => String::from("Value::ByteArray"),
+            Account(_) => String::from("Value::Account"),
+            Contract(_) => String::from("Value::Contract"),
+            NamedKey(_, _) => String::from("Value::NamedKey"),
+            Key(_) => String::from("Value::Key"),
+            ListString(_) => String::from("Value::List[String]"),
+            Unit => String::from("Value::Unit"),
+            UInt64(_) => String::from("Value::UInt64"),
         }
     }
 }

@@ -1,11 +1,11 @@
 use core::convert::TryFrom;
 use core::marker::PhantomData;
 
-use cl_std::contract_api;
-use cl_std::contract_api::pointers::UPointer;
-use cl_std::key::Key;
-use cl_std::uref::{AccessRights, URef};
-use cl_std::value::Value;
+use contract_ffi::contract_api;
+use contract_ffi::contract_api::pointers::UPointer;
+use contract_ffi::key::Key;
+use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::value::Value;
 
 /// Trait representing the ability to read a value. Use case: a key
 /// for the blockdag global state (`UPointer`) is obviously Readable,

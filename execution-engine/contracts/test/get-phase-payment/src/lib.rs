@@ -1,16 +1,15 @@
 #![no_std]
-#![feature(alloc)]
 
 #[macro_use]
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api::pointers::UPointer;
-use cl_std::contract_api::{self, PurseTransferResult};
-use cl_std::execution::Phase;
-use cl_std::key::Key;
-use cl_std::value::account::PurseId;
-use cl_std::value::U512;
+use contract_ffi::contract_api::pointers::UPointer;
+use contract_ffi::contract_api::{self, PurseTransferResult};
+use contract_ffi::execution::Phase;
+use contract_ffi::key::Key;
+use contract_ffi::value::account::PurseId;
+use contract_ffi::value::U512;
 
 const POS_CONTRACT_NAME: &str = "pos";
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
@@ -34,7 +33,7 @@ fn standard_payment(amount: U512) {
         .unwrap_or_else(|| contract_api::revert(Error::GetPosInnerURef as u32));
 
     let payment_purse: PurseId =
-        contract_api::call_contract(pos_contract, &(GET_PAYMENT_PURSE), &vec![]);
+        contract_api::call_contract(pos_contract, &(GET_PAYMENT_PURSE,), &vec![]);
 
     if let PurseTransferResult::TransferError =
         contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)

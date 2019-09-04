@@ -159,14 +159,14 @@ object LegacyConversions {
       .withSession(
         protocol
           .DeployCode()
-          .withCode(deploy.getBody.getSession.code)
-          .withArgs(deploy.getBody.getSession.args)
+          .withCode(deploy.getBody.getSession.getWasm)
+          .withArgs(deploy.getBody.getSession.abiArgs)
       )
       .withPayment(
         protocol
           .DeployCode()
-          .withCode(deploy.getBody.getPayment.code)
-          .withArgs(deploy.getBody.getPayment.args)
+          .withCode(deploy.getBody.getPayment.getWasm)
+          .withArgs(deploy.getBody.getPayment.abiArgs)
       )
       .withGasLimit(gasLimit) // New version doesn't have it.
       .withGasPrice(deploy.getHeader.gasPrice)
@@ -181,14 +181,14 @@ object LegacyConversions {
       .withSession(
         consensus.Deploy
           .Code()
-          .withCode(deploy.getSession.code)
-          .withArgs(deploy.getSession.args)
+          .withWasm(deploy.getSession.code)
+          .withAbiArgs(deploy.getSession.args)
       )
       .withPayment(
         consensus.Deploy
           .Code()
-          .withCode(deploy.getPayment.code)
-          .withArgs(deploy.getPayment.args)
+          .withWasm(deploy.getPayment.code)
+          .withAbiArgs(deploy.getPayment.args)
       )
 
     val header = consensus.Deploy

@@ -1,4 +1,4 @@
-#![feature(result_map_or_else, never_type, duration_float)]
+#![feature(result_map_or_else, never_type)]
 
 extern crate blake2;
 extern crate chrono;

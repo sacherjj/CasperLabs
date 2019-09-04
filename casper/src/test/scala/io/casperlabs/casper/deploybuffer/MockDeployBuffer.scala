@@ -1,10 +1,10 @@
 package io.casperlabs.casper.deploybuffer
 
-import cats.Monad
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.DeployHash
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.deploybuffer.MockDeployBuffer.Metadata
 import io.casperlabs.crypto.codec.Base16
@@ -12,7 +12,7 @@ import io.casperlabs.shared.Log
 
 import scala.concurrent.duration.FiniteDuration
 
-class MockDeployBuffer[F[_]: Monad: Log](
+class MockDeployBuffer[F[_]: Sync: Log](
     deploysWithMetadataRef: Ref[F, Map[Deploy, Metadata]]
 ) extends DeployBuffer[F] {
 
@@ -114,9 +114,37 @@ class MockDeployBuffer[F[_]: Monad: Log](
 
   override def readPendingHashes: F[List[ByteString]] = readPending.map(_.map(_.deployHash))
 
-  override def getByHashes(l: List[ByteString]): F[List[Deploy]] = {
-    val hashesSet = l.toSet
-    (readPending, readProcessed).mapN(_ ++ _).map(_.filter(d => hashesSet.contains(d.deployHash)))
+  override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
+    fs2.Stream
+      .eval(
+        readPending.map(
+          _.groupBy(_.getHeader.accountPublicKey)
+            .mapValues(_.minBy(_.getHeader.timestamp))
+            .values
+            .toList
+        )
+      )
+      .flatMap(deploys => fs2.Stream.fromIterator(deploys.toIterator))
+
+  override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
+    fs2.Stream
+      .eval(
+        readPending.map(
+          _.groupBy(_.getHeader.accountPublicKey)
+            .mapValues(_.minBy(_.getHeader.nonce))
+            .values
+            .map(_.deployHash)
+            .toList
+        )
+      )
+      .flatMap(d => fs2.Stream.fromIterator(d.toIterator))
+
+  override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] = {
+    val deploys =
+      (readPending, readProcessed).mapN(_ ++ _).map(_.filter(d => l.contains(d.deployHash)))
+    fs2.Stream
+      .eval(deploys)
+      .flatMap(all => fs2.Stream.fromIterator(all.toIterator))
   }
 
   private def readByStatus(status: Int): F[List[Deploy]] =

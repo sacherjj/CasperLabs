@@ -1,17 +1,16 @@
 #![no_std]
-#![feature(alloc)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::vec::Vec;
 
-use cl_std::contract_api::pointers::{ContractPointer, UPointer};
-use cl_std::contract_api::{self, PurseTransferResult};
-use cl_std::key::Key;
-use cl_std::uref::AccessRights;
-use cl_std::value::account::PurseId;
-use cl_std::value::uint::U512;
+use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::contract_api::{self, PurseTransferResult};
+use contract_ffi::key::Key;
+use contract_ffi::uref::AccessRights;
+use contract_ffi::value::account::PurseId;
+use contract_ffi::value::uint::U512;
 
 enum Error {
     GetPosOuterURef = 1,
@@ -38,7 +37,7 @@ pub extern "C" fn call() {
     let source_purse = contract_api::main_purse();
     let payment_amount: U512 = 100.into();
     let payment_purse: PurseId =
-        contract_api::call_contract(pos_pointer, &"get_payment_purse", &Vec::new());
+        contract_api::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
 
     // can deposit
     if let PurseTransferResult::TransferError =

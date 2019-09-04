@@ -7,8 +7,8 @@ use crate::bytesrepr;
 use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};
 use crate::contract_api::pointers::UPointer;
 
-const UREF_ADDR_SIZE: usize = 32;
-const ACCESS_RIGHTS_SIZE: usize = 1;
+pub const UREF_ADDR_SIZE: usize = 32;
+pub const ACCESS_RIGHTS_SIZE: usize = 1;
 pub const UREF_SIZE_SERIALIZED: usize =
     U32_SIZE + UREF_ADDR_SIZE + OPTION_SIZE + ACCESS_RIGHTS_SIZE;
 
@@ -103,8 +103,8 @@ impl URef {
         URef(id, Some(access_rights))
     }
 
-    /// Creates a [`URef`] from an id and optional access rights.  [`URef::new`] is the
-    /// preferred constructor for most common use-cases.
+    /// Creates a [`URef`] from an id and optional access rights.  [`URef::new`]
+    /// is the preferred constructor for most common use-cases.
     #[cfg(feature = "gens")]
     pub(crate) fn unsafe_new(
         id: [u8; UREF_ADDR_SIZE],
@@ -154,15 +154,14 @@ impl URef {
 
     /// Formats address and its access rights in an unique way that could be
     /// used as a name when storing given uref in a global state.
-    ///
     pub fn as_string(&self) -> String {
         // Extract bits as numerical value, with no flags marked as 0.
         let access_rights_bits = self
             .access_rights()
             .map(|value| value.bits())
             .unwrap_or_default();
-        // Access rights is represented as octal, which means that max value of u8 can be represented
-        // as maximum of 3 octal digits.
+        // Access rights is represented as octal, which means that max value of u8 can
+        // be represented as maximum of 3 octal digits.
         format!(
             "uref-{}-{:03o}",
             base16::encode_lower(&self.addr()),
@@ -289,8 +288,9 @@ mod tests {
 
     #[test]
     fn uref_as_string() {
-        // Since we are putting URefs to known_urefs map keyed by the label that `as_string()`
-        // returns, any changes to the string representation of that type cannot break the format.
+        // Since we are putting URefs to known_urefs map keyed by the label that
+        // `as_string()` returns, any changes to the string representation of
+        // that type cannot break the format.
         let addr_array = [0u8; 32];
         let uref_a = URef::new(addr_array, AccessRights::READ);
         assert_eq!(
