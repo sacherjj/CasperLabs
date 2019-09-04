@@ -38,7 +38,10 @@ object CodeOptions {
   */
 final case class Contracts(
     sessionOptions: CodeOptions,
-    paymentOptions: CodeOptions
+    paymentOptions: CodeOptions,
+    nonce: Long,
+    gasPrice: Long,
+    paymentAmount: Option[BigInt]
 ) {
   def session(defaultArgs: Seq[Arg] = Nil) = Contracts.toCode(sessionOptions, defaultArgs)
   def payment(defaultArgs: Seq[Arg] = Nil) = Contracts.toCode(paymentOptions, defaultArgs)
@@ -65,10 +68,13 @@ object Contracts {
         name = args.paymentName.toOption,
         uref = args.paymentUref.toOption,
         args = args.paymentArgs.toOption.map(_.args)
-      )
+      ),
+      nonce = args.nonce(),
+      gasPrice = args.gasPrice(),
+      paymentAmount = args.paymentAmount.toOption
     )
 
-  val empty = Contracts(CodeOptions.empty, CodeOptions.empty)
+  val empty = Contracts(CodeOptions.empty, CodeOptions.empty, 0, 0, None)
 
   /** Produce a Deploy.Code DTO from the options.
     * 'defaultArgs' can be used by specialized commands such as `transfer` and `unbond`
@@ -119,9 +125,7 @@ sealed trait Configuration
 final case class MakeDeploy(
     from: Option[String],
     publicKey: Option[File],
-    nonce: Long,
     contracts: Contracts,
-    gasPrice: Long,
     deployPath: Option[File]
 ) extends Configuration
 
@@ -131,11 +135,9 @@ final case class SendDeploy(
 
 final case class Deploy(
     from: Option[String],
-    nonce: Long,
     contracts: Contracts,
     publicKey: Option[File],
-    privateKey: Option[File],
-    gasPrice: Long
+    privateKey: Option[File]
 ) extends Configuration
 
 /** Client command to sign a deploy.
@@ -155,20 +157,17 @@ final case class ShowDeploy(deployHash: String) extends Configuration
 final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
-    nonce: Long,
     contracts: Contracts,
     privateKey: File
 ) extends Configuration
 final case class Transfer(
     amount: Long,
     recipientPublicKeyBase64: String,
-    nonce: Long,
     contracts: Contracts,
     privateKey: File
 ) extends Configuration
 final case class Unbond(
     amount: Option[Long],
-    nonce: Long,
     contracts: Contracts,
     privateKey: File
 ) extends Configuration
@@ -207,19 +206,15 @@ object Configuration {
       case options.deploy =>
         Deploy(
           options.deploy.from.toOption,
-          options.deploy.nonce(),
           Contracts(options.deploy),
           options.deploy.publicKey.toOption,
-          options.deploy.privateKey.toOption,
-          options.deploy.gasPrice()
+          options.deploy.privateKey.toOption
         )
       case options.makeDeploy =>
         MakeDeploy(
           options.makeDeploy.from.toOption,
           options.makeDeploy.publicKey.toOption,
-          options.makeDeploy.nonce(),
           Contracts(options.makeDeploy),
-          options.makeDeploy.gasPrice(),
           options.makeDeploy.deployPath.toOption
         )
       case options.sendDeploy =>
@@ -244,14 +239,12 @@ object Configuration {
       case options.unbond =>
         Unbond(
           options.unbond.amount.toOption,
-          options.unbond.nonce(),
           Contracts(options.unbond),
           options.unbond.privateKey()
         )
       case options.bond =>
         Bond(
           options.bond.amount(),
-          options.bond.nonce(),
           Contracts(options.bond),
           options.bond.privateKey()
         )
@@ -259,7 +252,6 @@ object Configuration {
         Transfer(
           options.transfer.amount(),
           options.transfer.targetAccount(),
-          options.transfer.nonce(),
           Contracts(options.transfer),
           options.transfer.privateKey()
         )

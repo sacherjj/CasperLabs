@@ -11,6 +11,7 @@ import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.client.configuration.{Contracts, Streaming}
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -77,6 +78,9 @@ object DeployRuntime {
   private def longArg(name: String, value: Long) =
     arg(name, Deploy.Arg.Value.Value.LongValue(value))
 
+  private def bigIntArg(name: String, value: BigInt) =
+    arg(name, Deploy.Arg.Value.Value.BigInt(state.BigInt(value.toString, bitWidth = 512)))
+
   private def bytesArg(name: String, value: Array[Byte]) =
     arg(name, Deploy.Arg.Value.Value.BytesValue(ByteString.copyFrom(value)))
 
@@ -97,7 +101,6 @@ object DeployRuntime {
 
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
-      nonce: Long,
       contracts: Contracts,
       privateKeyFile: File
   ): F[Unit] =
@@ -105,11 +108,9 @@ object DeployRuntime {
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
-            nonce = nonce,
             contracts.withSessionResource(UNBONDING_WASM_FILE),
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
-            gasPrice = 10L, // gas price is fixed at the moment for 10:1
             sessionArgs =
               List(optionalArg("amount", maybeAmount)(Deploy.Arg.Value.Value.LongValue(_)))
           )
@@ -117,7 +118,6 @@ object DeployRuntime {
 
   def bond[F[_]: Sync: DeployService](
       amount: Long,
-      nonce: Long,
       contracts: Contracts,
       privateKeyFile: File
   ): F[Unit] =
@@ -125,11 +125,9 @@ object DeployRuntime {
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
-            nonce = nonce,
             contracts.withSessionResource(BONDING_WASM_FILE),
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
-            gasPrice = 10L, // gas price is fixed at the moment for 10:1
             sessionArgs = List(longArg("amount", amount))
           )
     } yield ()
@@ -261,7 +259,6 @@ object DeployRuntime {
     })
 
   def transferCLI[F[_]: Sync: DeployService: FilesAPI](
-      nonce: Long,
       contracts: Contracts,
       privateKeyFile: File,
       recipientPublicKeyBase64: String,
@@ -282,7 +279,6 @@ object DeployRuntime {
                     )
                   )
       _ <- transfer[F](
-            nonce,
             contracts,
             publicKey,
             privateKey,
@@ -292,7 +288,6 @@ object DeployRuntime {
     } yield ()
 
   def transfer[F[_]: Sync: DeployService: FilesAPI](
-      nonce: Long,
       contracts: Contracts,
       senderPublicKey: PublicKey,
       senderPrivateKey: PrivateKey,
@@ -310,11 +305,9 @@ object DeployRuntime {
                 )
       _ <- deployFileProgram[F](
             from = None,
-            nonce = nonce,
             contracts.withSessionResource(TRANSFER_WASM_FILE),
             maybeEitherPublicKey = senderPublicKey.asRight[String].some,
             maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
-            gasPrice = 10L,
             List(
               bytesArg("account", account),
               longArg("amount", amount)
@@ -357,14 +350,16 @@ object DeployRuntime {
     */
   def makeDeploy[F[_]: Sync](
       from: ByteString,
-      nonce: Long,
-      gasPrice: Long,
       contracts: Contracts,
       sessionArgs: Seq[Deploy.Arg]
   ): Deploy = {
     val session = contracts.session(sessionArgs)
     // It is advisable to provide payment via --payment-name or --payment-hash, if it's stored.
-    val payment = contracts.withPaymentResource(PAYMENT_WASM_FILE).payment()
+    val payment = contracts
+      .withPaymentResource(PAYMENT_WASM_FILE)
+      .payment(
+        contracts.paymentAmount.map(bigIntArg("amount", _)).toList
+      )
 
     consensus
       .Deploy()
@@ -373,8 +368,8 @@ object DeployRuntime {
           .Header()
           .withTimestamp(System.currentTimeMillis)
           .withAccountPublicKey(from)
-          .withNonce(nonce)
-          .withGasPrice(gasPrice)
+          .withNonce(contracts.nonce)
+          .withGasPrice(contracts.gasPrice)
       )
       .withBody(
         consensus.Deploy
@@ -407,11 +402,9 @@ object DeployRuntime {
 
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[String],
-      nonce: Long,
       contracts: Contracts,
       maybeEitherPublicKey: Option[Either[String, PublicKey]],
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
-      gasPrice: Long,
       sessionArgs: Seq[Deploy.Arg] = Seq.empty,
       exit: Boolean = true,
       ignoreOutput: Boolean = false
@@ -435,7 +428,7 @@ object DeployRuntime {
                          )
     } yield {
       val deploy =
-        makeDeploy(accountPublicKey, nonce, gasPrice, contracts, sessionArgs)
+        makeDeploy(accountPublicKey, contracts, sessionArgs)
       (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
     }
 

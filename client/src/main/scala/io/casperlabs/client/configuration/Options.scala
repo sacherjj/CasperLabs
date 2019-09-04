@@ -106,6 +106,13 @@ object Options {
       required = true
     )
 
+    val paymentAmount = opt[BigInt](
+      descr =
+        "Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.",
+      validate = _ > 0,
+      required = false
+    )
+
     addValidation {
       val sessionsProvided =
         List(session.isDefined, sessionHash.isDefined, sessionName.isDefined, sessionUref.isDefined)
