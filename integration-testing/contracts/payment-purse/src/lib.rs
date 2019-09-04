@@ -4,7 +4,6 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use alloc::vec::Vec;
-use contract_ffi::value::account::PublicKey;
 use contract_ffi::contract_api::pointers::UPointer;
 use contract_ffi::contract_api::{self, PurseTransferResult};
 use contract_ffi::key::Key;
@@ -18,7 +17,6 @@ pub extern "C" fn call() {
     let pos_pointer = pos_contract.to_c_ptr().unwrap();
 
     let source_purse = contract_api::main_purse();
-    let account: PublicKey = contract_api::get_arg(0);
     let payment_amount: U512 = U512::from(contract_api::get_arg::<u32>(1));
     let payment_purse: PurseId =
         contract_api::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
