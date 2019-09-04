@@ -8,7 +8,6 @@ import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.BlockMsgWithTransform
-import io.casperlabs.storage.block.BlockStorage.BlockHashPrefix
 
 import scala.language.higherKinds
 
@@ -31,7 +30,7 @@ trait BlockStorage[F[_]] {
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]
 
-  def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]]
+  def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]]
 
   def isEmpty: F[Boolean]
 
@@ -49,7 +48,7 @@ trait BlockStorage[F[_]] {
 
   def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]]
 
-  def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]]
+  def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]]
 
   def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]]
 
@@ -71,7 +70,7 @@ object BlockStorage {
       incAndMeasure("get", super.get(blockHash))
 
     abstract override def getByPrefix(
-        blockHashPrefix: BlockHashPrefix
+        blockHashPrefix: String
     ): F[Option[BlockMsgWithTransform]] =
       incAndMeasure("getByPrefix", super.getByPrefix(blockHashPrefix))
 
@@ -82,7 +81,7 @@ object BlockStorage {
       incAndMeasure("getBlockSummary", super.getBlockSummary(blockHash))
 
     abstract override def getSummaryByPrefix(
-        blockHashPrefix: BlockHashPrefix
+        blockHashPrefix: String
     ): F[Option[BlockSummary]] =
       incAndMeasure("getSummaryByPrefix", super.getSummaryByPrefix(blockHashPrefix))
 
@@ -114,7 +113,6 @@ object BlockStorage {
   }
   def apply[F[_]](implicit ev: BlockStorage[F]): BlockStorage[F] = ev
 
-  type BlockHash       = ByteString
-  type BlockHashPrefix = ByteString
-  type DeployHash      = ByteString
+  type BlockHash  = ByteString
+  type DeployHash = ByteString
 }

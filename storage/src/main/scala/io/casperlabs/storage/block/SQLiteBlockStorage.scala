@@ -16,7 +16,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
 import io.casperlabs.storage.util.DoobieCodecs
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
@@ -74,7 +74,7 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
     transaction.transact(xa)
   }
 
-  override def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] = {
+  override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] = {
     def query(lowerBound: Array[Byte], upperBound: Array[Byte]) =
       get(
         sql"""|SELECT block_hash, data
@@ -92,7 +92,7 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
     )
   }
 
-  override def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] = {
+  override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] = {
     def query(lowerBound: Array[Byte], upperBound: Array[Byte]) =
       sql"""|SELECT data
             |FROM block_metadata
@@ -110,16 +110,16 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
   }
 
   private def getByPrefix[A](
-      blockHashPrefix: BlockHashPrefix,
+      blockHashPrefix: String,
       onFullHash: BlockHash => F[Option[A]],
       // lower bound, upper bound
       otherwise: (Array[Byte], Array[Byte]) => F[Option[A]]
   ): F[Option[A]] = {
-    val length = blockHashPrefix.size()
+    val asArray = Base16.decode(blockHashPrefix)
+    val length  = asArray.length
     32 - length match {
-      case 0 => onFullHash(blockHashPrefix)
+      case 0 => onFullHash(ByteString.copyFrom(asArray))
       case x if x > 0 =>
-        val asArray    = blockHashPrefix.toByteArray
         val lowerBound = asArray ++ Array.fill(x)(0.toByte)
         val upperBound = asArray ++ Base16.decode("ff" * x)
         otherwise(lowerBound, upperBound)

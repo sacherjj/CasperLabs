@@ -6,14 +6,10 @@ import cats.implicits._
 import cats.{Apply, Monad}
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.block.BlockStorage.{
-  BlockHash,
-  BlockHashPrefix,
-  DeployHash,
-  MeteredBlockStorage
-}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
 import scala.language.higherKinds
@@ -29,16 +25,18 @@ class InMemBlockStorage[F[_]] private (
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     refF.get.map(_.get(blockHash).map(_._1))
 
-  def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
+  def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] =
     refF.get.map(_.collectFirst {
-      case (hash, (block, _)) if hash.startsWith(blockHashPrefix) => block
+      case (hash, (block, _)) if Base16.encode(hash.toByteArray).startsWith(blockHashPrefix) =>
+        block
     })
 
   def isEmpty: F[Boolean] = refF.get.map(_.isEmpty)
 
-  def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
+  def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] =
     refF.get.map(_.collectFirst {
-      case (hash, (_, summary)) if hash.startsWith(blockHashPrefix) => summary
+      case (hash, (_, summary)) if Base16.encode(hash.toByteArray).startsWith(blockHashPrefix) =>
+        summary
     })
 
   def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =

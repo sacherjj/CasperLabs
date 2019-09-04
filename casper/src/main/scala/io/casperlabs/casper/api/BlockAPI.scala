@@ -401,7 +401,7 @@ object BlockAPI {
       blockHashBase16: String
   ): F[Seq[Block.ProcessedDeploy]] =
     BlockStorage[F]
-      .get(ByteString.copyFrom(Base16.decodeWithTruncate(blockHashBase16)))
+      .getByPrefix(blockHashBase16)
       .map(_.fold(Seq.empty[Block.ProcessedDeploy])(_.getBlockMessage.getBody.deploys))
 
   def makeBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector](
@@ -466,7 +466,7 @@ object BlockAPI {
     unsafeWithCasper[F, Option[(BlockInfo, Option[Block])]]("Could not show block") {
       implicit casper =>
         BlockStorage[F]
-          .getBlockSummary(ByteString.copyFrom(Base16.decodeWithTruncate(blockHashBase16)))
+          .getSummaryByPrefix(blockHashBase16)
           .flatMap(
             _.fold(none[(BlockInfo, Option[Block])].pure[F])(
               makeBlockInfo[F](_, full).map(_.some)
@@ -537,7 +537,7 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         maybeBlock <- BlockStorage[F]
-                       .get(ByteString.copyFrom(Base16.decodeWithTruncate(q.hash)))
+                       .getByPrefix(q.hash)
                        .map(_.map(_.getBlockMessage))
 
         blockQueryResponse <- maybeBlock match {

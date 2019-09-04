@@ -8,7 +8,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, DeployHash}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, SQLiteDeployStorage}
@@ -106,12 +106,12 @@ object SQLiteStorage {
       override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
         blockStorage.get(blockHash)
 
-      override def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
+      override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] =
         blockStorage.getByPrefix(blockHashPrefix)
 
       override def isEmpty: F[Boolean] = blockStorage.isEmpty
 
-      override def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
+      override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] =
         blockStorage.getSummaryByPrefix(blockHashPrefix)
 
       override def put(

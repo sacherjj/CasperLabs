@@ -13,6 +13,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.catscontrib.MonadStateOps._
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.ByteStringOps._
@@ -20,7 +21,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared.Resources.withResource
 import io.casperlabs.storage.StorageError.StorageErr
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, BlockHashPrefix, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
 import io.casperlabs.storage.block.FileLMDBIndexBlockStorage.Checkpoint
 import io.casperlabs.storage.util.byteOps._
 import io.casperlabs.storage.util.fileIO
@@ -163,9 +164,10 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
       } yield result
     )
 
-  override def getByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockMsgWithTransform]] =
-    blockHashPrefix.size() match {
-      case 32 => get(blockHashPrefix)
+  override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] = {
+    val asByteString = ByteString.copyFrom(Base16.decode(blockHashPrefix))
+    asByteString.size() match {
+      case 32 => get(asByteString)
       case x if x < 32 =>
         for {
           maybeBlockHash <- lock.withPermit(
@@ -173,7 +175,7 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
                                withResource(index.iterate(txn)) { it =>
                                  it.asScala
                                    .map(kv => ByteString.copyFrom(kv.key))
-                                   .find(_.startsWith(blockHashPrefix))
+                                   .find(_.startsWith(asByteString))
                                }
                              }
                            )
@@ -181,10 +183,12 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
         } yield res
       case _ => none[BlockMsgWithTransform].pure[F]
     }
+  }
 
-  override def getSummaryByPrefix(blockHashPrefix: BlockHashPrefix): F[Option[BlockSummary]] =
-    blockHashPrefix.size() match {
-      case 32 => getBlockSummary(blockHashPrefix)
+  override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] = {
+    val asByteString = ByteString.copyFrom(Base16.decode(blockHashPrefix))
+    asByteString.size() match {
+      case 32 => getBlockSummary(asByteString)
       case x if x < 32 =>
         for {
           maybeBlockHash <- lock.withPermit(
@@ -192,7 +196,7 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
                                withResource(index.iterate(txn)) { it =>
                                  it.asScala
                                    .map(kv => ByteString.copyFrom(kv.key))
-                                   .find(_.startsWith(blockHashPrefix))
+                                   .find(_.startsWith(asByteString))
                                }
                              }
                            )
@@ -200,6 +204,7 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
         } yield res
       case _ => none[BlockSummary].pure[F]
     }
+  }
 
   override def isEmpty: F[Boolean] =
     lock.withPermit(withReadTxn { txn =>
