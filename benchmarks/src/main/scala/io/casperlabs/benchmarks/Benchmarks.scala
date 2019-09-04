@@ -61,8 +61,7 @@ object Benchmarks {
         senderPublicKey: PublicKey,
         amount: Long
     ): F[Unit] = DeployRuntime.transfer[F](
-      nonce = nonce,
-      contracts = Contracts.empty,
+      contracts = Contracts.empty.copy(nonce = nonce),
       senderPublicKey = senderPublicKey,
       senderPrivateKey = senderPrivateKey,
       recipientPublicKeyBase64 = recipientPublicKeyBase64,
