@@ -44,12 +44,11 @@ class CLI:
 
         output = binary_output.decode("utf-8")
 
-        if command == "send-deploy":
-            # "Success! Deploy 0d4036bebb95de793b28de452d594531a29f8dc3c5394526094d30723fa5ff65 deployed."
+        if command in ("deploy", "send-deploy"):
             return output.split()[2]
+            # "Success! Deploy 0d4036bebb95de793b28de452d594531a29f8dc3c5394526094d30723fa5ff65 deployed."
 
-        if command in ("deploy", "propose"):
-            # "Response: Success! Deploy 0d4036bebb95de793b28de452d594531a29f8dc3c5394526094d30723fa5ff65 deployed."
+        if command in ("propose",):
             # "Response: Success! Block 47338c65992e7d5062aec2200ad8d7284ae49f6c3e7c37fa7eb46fb6fc8ae3d8 created and added."
             return output.split()[3]
 

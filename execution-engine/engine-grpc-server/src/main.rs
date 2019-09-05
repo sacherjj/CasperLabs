@@ -33,6 +33,7 @@ use engine_storage::transaction_source::lmdb::LmdbEnvironment;
 use engine_storage::trie_store::lmdb::LmdbTrieStore;
 
 use casperlabs_engine_grpc_server::engine_server;
+use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
 
 // exe / proc
 const PROC_NAME: &str = "casperlabs-engine-grpc-server";
@@ -53,6 +54,7 @@ const GET_HOME_DIR_EXPECT: &str = "Could not get home directory";
 const CREATE_DATA_DIR_EXPECT: &str = "Could not create directory";
 const LMDB_ENVIRONMENT_EXPECT: &str = "Could not create LmdbEnvironment";
 const LMDB_TRIE_STORE_EXPECT: &str = "Could not create LmdbTrieStore";
+const LMDB_PROTOCOL_DATA_STORE_EXPECT: &str = "Could not create LmdbProtocolDataStore";
 const LMDB_GLOBAL_STATE_EXPECT: &str = "Could not create LmdbGlobalState";
 
 // pages / lmdb
@@ -276,7 +278,13 @@ fn get_engine_state(
         Arc::new(ret)
     };
 
-    let global_state = LmdbGlobalState::empty(Arc::clone(&environment), Arc::clone(&trie_store))
+    let protocol_data_store = {
+        let ret = LmdbProtocolDataStore::new(&environment, None, DatabaseFlags::empty())
+            .expect(LMDB_PROTOCOL_DATA_STORE_EXPECT);
+        Arc::new(ret)
+    };
+
+    let global_state = LmdbGlobalState::empty(environment, trie_store, protocol_data_store)
         .expect(LMDB_GLOBAL_STATE_EXPECT);
 
     EngineState::new(global_state, engine_config)

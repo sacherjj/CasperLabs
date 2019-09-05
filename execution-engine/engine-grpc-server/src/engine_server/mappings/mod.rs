@@ -21,7 +21,7 @@ use engine_shared::logging;
 use engine_shared::logging::log_level;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{self, TypeMismatch};
-use engine_storage::global_state::{CommitResult, History};
+use engine_storage::global_state::{CommitResult, StateProvider};
 
 use crate::engine_server::{ipc, state, transforms};
 
@@ -839,13 +839,13 @@ impl From<ExecutionResult> for ipc::DeployResult {
     }
 }
 
-pub fn grpc_response_from_commit_result<H>(
+pub fn grpc_response_from_commit_result<S>(
     prestate_hash: Blake2bHash,
-    input: Result<CommitResult, H::Error>,
+    input: Result<CommitResult, S::Error>,
 ) -> ipc::CommitResponse
 where
-    H: History,
-    H::Error: Into<EngineError> + std::fmt::Debug,
+    S: StateProvider,
+    S::Error: Into<EngineError> + std::fmt::Debug,
 {
     match input {
         Ok(CommitResult::RootNotFound) => {

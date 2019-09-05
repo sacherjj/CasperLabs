@@ -186,7 +186,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 .make/docker-build/explorer: \
 		explorer/Dockerfile \
 		.make/npm/explorer \
-		.make/explorer/contracts
+		build-explorer-contracts
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
@@ -326,23 +326,19 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 
 # Compile contracts that need to go into the Genesis block.
-package-system-contracts: \
-	execution-engine/target/system-contracts.tar.gz
+package-system-contracts: execution-engine/target/system-contracts.tar.gz
 
-# Compile a system contract; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
-.make/contracts/system/%: $(RUST_SRC) .make/rustup-update
-	$(eval CONTRACT=$*)
-	cd execution-engine/contracts/system/$(CONTRACT) && \
-	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown --target-dir target
-	mkdir -p $(dir $@) && touch $@
+execution-engine/target/system-contracts.tar.gz: $(RUST_SRC) .make/rustup-update
+	cd execution-engine && make package-system-contracts
 
-# Compile a validator contract;
-.make/contracts/client/%: $(RUST_SRC) .make/rustup-update
+# Compile a contract under execution-engine; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
+.make/contracts/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$(subst _,-,$*))
-	cd execution-engine/contracts/client/$(CONTRACT) && \
+	cd execution-engine/contracts/$(CONTRACT) && \
 	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
 	mkdir -p $(dir $@) && touch $@
 
+# Compile a contract and put it in the CLI client resources so they get packaged with the JAR.
 client/src/main/resources/%.wasm: .make/contracts/client/%
 	$(eval CONTRACT=$*)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
@@ -350,21 +346,18 @@ client/src/main/resources/%.wasm: .make/contracts/client/%
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
 	client/src/main/resources/unbonding.wasm \
-	client/src/main/resources/transfer_to_account.wasm
+	client/src/main/resources/transfer_to_account.wasm \
+	client/src/main/resources/standard_payment.wasm
 
-# Package all system contracts that we have to make available for download.
-execution-engine/target/system-contracts.tar.gz: \
-	.make/contracts/system/mint-token \
-	.make/contracts/system/pos
-	$(eval ARCHIVE=$(shell echo $(PWD)/$@ | sed 's/.gz//'))
-	rm -rf $(ARCHIVE) $(ARCHIVE).gz
+explorer/contracts/%.wasm: .make/contracts/%
+	$(eval CONTRACT=$(shell echo $* | awk -F'/' '{print $$2}'))
 	mkdir -p $(dir $@)
-	tar -cvf $(ARCHIVE) -T /dev/null
-	find execution-engine/contracts/system -wholename *.wasm | grep -v /release/deps/ | while read file; do \
-		cd $$(dirname $$file); tar -rvf $(ARCHIVE) $$(basename $$file); cd -; \
-	done
-	gzip $(ARCHIVE)
+	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
 
+build-explorer-contracts: \
+	explorer/contracts/client/transfer_to_account.wasm \
+	explorer/contracts/client/standard_payment.wasm \
+	explorer/contracts/explorer/faucet.wasm
 
 # Build the execution engine executable. NOTE: This is not portable.
 execution-engine/target/release/casperlabs-engine-grpc-server: \
@@ -418,7 +411,6 @@ protobuf/google:
 	@# Installs fail if they already exist.
 	cargo install cargo-rpm || exit 0
 	cargo install cargo-deb || exit 0
-	cargo install cargo-tarball || exit 0
 	mkdir -p $(dir $@) && touch $@
 
 .make/install/rpm:

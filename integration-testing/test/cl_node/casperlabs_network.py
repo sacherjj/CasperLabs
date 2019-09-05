@@ -252,6 +252,7 @@ class OneNodeNetwork(CasperLabsNetwork):
             grpc_encryption=self.grpc_encryption,
         )
         self.add_bootstrap(config)
+        wait_for_genesis_block(self.docker_nodes[0])
 
 
 class PaymentNodeNetwork(OneNodeNetwork):

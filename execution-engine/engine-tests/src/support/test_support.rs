@@ -17,6 +17,7 @@ use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{to_domain_validators, CommitTransforms};
 use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_grpc_server::engine_server::{ipc, transforms};
+use engine_shared::newtypes::Blake2bHash;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -556,6 +557,12 @@ impl WasmTestBuilder {
             .wait_drop_metadata()
             .unwrap();
 
+        let state_root_hash: Blake2bHash = genesis_response
+            .get_success()
+            .get_poststate_hash()
+            .try_into()
+            .unwrap();
+
         // Cache genesis response transforms for easy access later
         let genesis_transforms = get_genesis_transforms(&genesis_response);
 
@@ -582,13 +589,6 @@ impl WasmTestBuilder {
                 )
             }),
         );
-
-        let state_handle = self.engine_state.state();
-
-        let state_root_hash = {
-            let state_handle_guard = state_handle.lock();
-            state_handle_guard.root_hash
-        };
 
         let genesis_hash = genesis_response.get_success().get_poststate_hash().to_vec();
         assert_eq!(state_root_hash.to_vec(), genesis_hash);

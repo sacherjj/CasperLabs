@@ -65,7 +65,7 @@ class ABI:
     Encode (serialize) deploy args.
 
     Currently supported ABI types:
-    - unsigned integers: u32, u64, u512,
+    - unsigned integers: u32, u64, u512
     - byte_array, an array of bytes of arbitrary length,
     - account, 32 bytes long byte_array, used for encoding of public keys.
 
@@ -83,15 +83,19 @@ class ABI:
     2. By encoding arguments in a JSON format and passing them to method
       ABI.args_from_json, for example:
 
-        ABI.args_from_json('[{"u32": 100}, {"u64": 5000}]')
+        ABI.args_from_json(json_string)
 
-      The JSON encoded list contains arguments encoded as dictionaries,
-      each with just one (key, value) pair, where key is a name of one
-      of supported ABI type, and value being the argument's value.
+      See documentation of ABI.args_from_json for details of the JSON format.
 
       This method has been developed to support passing deploy arguments
       on command line.
     """
+
+    INTEGER_TYPES = ("u32", "u64", "u512", "int_value", "long_value", "big_int")
+    BYTE_ARRAY_TYPES = ("byte_array", "account", "bytes_value")
+    OPTIONAL_TYPES = ("option", "optional_value")
+
+    ALL_TYPES = INTEGER_TYPES + BYTE_ARRAY_TYPES + OPTIONAL_TYPES
 
     @staticmethod
     def option(o: bytes) -> bytes:
@@ -100,15 +104,19 @@ class ABI:
         return bytes([1]) + o
 
     @staticmethod
-    def u32(n: int):
+    def optional_value(o: bytes) -> bytes:
+        return ABI.option(o)
+
+    @staticmethod
+    def u32(n: int) -> bytes:
         return struct.pack("<I", n)
 
     @staticmethod
-    def u64(n: int):
+    def u64(n: int) -> bytes:
         return struct.pack("<Q", n)
 
     @staticmethod
-    def u512(n: int):
+    def u512(n: int) -> bytes:
         bs = list(
             dropwhile(
                 lambda b: b == 0,
@@ -120,17 +128,36 @@ class ABI:
         )
 
     @staticmethod
-    def byte_array(a: bytes):
+    def byte_array(a: bytes) -> bytes:
         return ABI.u32(len(a)) + a
 
     @staticmethod
-    def account(a: bytes):
+    def bytes_value(a: bytes) -> bytes:
+        return ABI.byte_array(a)
+
+    @staticmethod
+    def account(a: bytes) -> bytes:
         if len(a) != 32:
             raise Exception("Account must be 32 bytes long")
         return ABI.byte_array(a)
 
     @staticmethod
-    def args(l: list):
+    def int_value(a: int) -> bytes:
+        # TODO: should be signed 32 bits
+        return ABI.u32(a)
+
+    def long_value(a: int) -> bytes:
+        # TODO: should be signed 64 bits
+        return ABI.u64(a)
+
+    def big_int(a) -> bytes:
+        try:
+            return ABI.u512(int(a["value"]))
+        except TypeError:
+            return ABI.u512(int(a))
+
+    @staticmethod
+    def args(l: list) -> bytes:
         return ABI.u32(len(l)) + reduce(add, map(ABI.byte_array, l))
 
     @staticmethod
@@ -138,39 +165,42 @@ class ABI:
         """
         Convert a string with JSON representation of deploy args to binary (ABI).
 
-        The JSON should be a list of dictionaries {'type': 'value'} that represent type and value of the args,
+        The JSON should be a list of dictionaries each representing one arg,
         for example:
 
-             [{"u32":1024}, {"account":"00000000000000000000000000000000"}, {"u64":1234567890}]
+            [
+                {"name": "amount", "value": {"long_value": 123456}},
+                {"name": "account", "value": {"bytes_value": '0000000000000000000000000000000000000000000000000000000000000000'},
+                {"name": "purse_id", "value": {"optional_value": {}}},
+            ]
+
         """
         args = json.loads(s)
 
-        for arg in args:
-            if len(arg) != 1:
-                raise Exception(
-                    f"Wrong encoding of value in {arg}. Only one pair of type and value allowed."
-                )
-
         def python_value(typ, value: str):
-            if typ in ("u32", "u64", "u512"):
+            if typ in ("big_int",):
+                try:
+                    # new style proto3 JSON
+                    return int(value["value"])
+                except TypeError:
+                    # compatibility mode
+                    return int(value)
+            if typ in ABI.INTEGER_TYPES:
                 return int(value)
-            elif typ == "account":
+            elif typ in ABI.BYTE_ARRAY_TYPES:
                 return bytearray.fromhex(value)
-            raise ValueError(
-                f"Unknown type {typ}, expected ('u32', 'u64', 'u512', 'account')"
-            )
+            elif typ in ABI.OPTIONAL_TYPES:
+                if not value:
+                    return None
+                return python_value(*list(value["value"].items())[0])
+            raise ValueError(f"Unknown type {typ}, expected one of {ABI.ALL_TYPES}")
 
-        def encode(typ: str, value: str) -> bytes:
+        def encode(arg) -> bytes:
+            typ, value = list(arg["value"].items())[0]
             v = python_value(typ, value)
             return getattr(ABI, typ)(v)
 
-        def only_one(arg):
-            items = list(arg.items())
-            if len(items) != 1:
-                raise Exception("Only one pair {'type', 'value'} allowed.")
-            return items[0]
-
-        return ABI.args([encode(*only_one(arg)) for arg in args])
+        return ABI.args([encode(arg) for arg in args])
 
 
 def read_pem_key(file_name: str):
@@ -685,7 +715,7 @@ def deploy_command(casperlabs_client, args):
         or None,
     )
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
-    print(f"Success! Deploy hash: {deploy_hash.hex()}")
+    print(f"Success! Deploy {deploy_hash.hex()} deployed")
 
 
 @guarded_command

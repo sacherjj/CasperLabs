@@ -1,23 +1,27 @@
+pub mod engine_config;
+pub mod error;
+pub mod executable_deploy_item;
+pub mod execution_effect;
+pub mod execution_result;
+pub mod genesis;
+pub mod op;
+pub mod utils;
+
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
-use std::sync::Arc;
 
-use parking_lot::Mutex;
-
-use crate::engine_state::utils::WasmiBytes;
-use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
-use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, HASH_SIZE};
+use contract_ffi::uref::URef;
 use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
-use engine_storage::global_state::{CommitResult, History, StateReader};
+use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::Preprocessor;
 
@@ -27,16 +31,9 @@ use self::execution_result::ExecutionResult;
 use self::genesis::{create_genesis_effects, GenesisResult};
 use crate::engine_state::executable_deploy_item::ExecutableDeployItem;
 use crate::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
-use contract_ffi::uref::URef;
-
-pub mod engine_config;
-pub mod error;
-pub mod executable_deploy_item;
-pub mod execution_effect;
-pub mod execution_result;
-pub mod genesis;
-pub mod op;
-pub mod utils;
+use crate::engine_state::utils::WasmiBytes;
+use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
+use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 
 // TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
 // TBD gas * CONV_RATE = motes
@@ -48,18 +45,23 @@ pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
 
 #[derive(Debug)]
-pub struct EngineState<H> {
+pub struct EngineState<S> {
     config: EngineConfig,
-    state: Arc<Mutex<H>>,
+    state: S,
 }
 
-impl<H> EngineState<H>
+pub enum GetBondedValidatorsError<E> {
+    StateError(E),
+    PostStateHashNotFound(Blake2bHash),
+    ProofOfStakeNotFound(Key),
+}
+
+impl<S> EngineState<S>
 where
-    H: History,
-    H::Error: Into<execution::Error>,
+    S: StateProvider,
+    S::Error: Into<execution::Error>,
 {
-    pub fn new(state: H, config: EngineConfig) -> EngineState<H> {
-        let state = Arc::new(Mutex::new(state));
+    pub fn new(state: S, config: EngineConfig) -> EngineState<S> {
         EngineState { config, state }
     }
 
@@ -89,9 +91,9 @@ where
             genesis_validators,
             protocol_version,
         )?;
-        let mut state_guard = self.state.lock();
-        let prestate_hash = state_guard.empty_root();
-        let commit_result = state_guard
+        let prestate_hash = self.state.empty_root();
+        let commit_result = self
+            .state
             .commit(correlation_id, prestate_hash, effects.transforms.to_owned())
             .map_err(Into::into)?;
 
@@ -100,15 +102,11 @@ where
         Ok(genesis_result)
     }
 
-    pub fn state(&self) -> Arc<Mutex<H>> {
-        Arc::clone(&self.state)
-    }
-
     pub fn tracking_copy(
         &self,
         hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
-        match self.state.lock().checkout(hash).map_err(Into::into)? {
+    ) -> Result<Option<TrackingCopy<S::Reader>>, Error> {
+        match self.state.checkout(hash).map_err(Into::into)? {
             Some(tc) => Ok(Some(TrackingCopy::new(tc))),
             None => Ok(None),
         }
@@ -187,7 +185,7 @@ where
 
     fn get_module<A, P: Preprocessor<A>>(
         &self,
-        tracking_copy: Rc<RefCell<TrackingCopy<<H as History>::Reader>>>,
+        tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
         deploy_item: &ExecutableDeployItem,
         account: &Account,
         correlation_id: CorrelationId,
@@ -732,44 +730,35 @@ where
         correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, H::Error> {
-        self.state
-            .lock()
-            .commit(correlation_id, prestate_hash, effects)
+    ) -> Result<CommitResult, S::Error> {
+        self.state.commit(correlation_id, prestate_hash, effects)
     }
-}
 
-pub enum GetBondedValidatorsError<H: History> {
-    StorageErrors(H::Error),
-    PostStateHashNotFound(Blake2bHash),
-    PoSNotFound(Key),
-}
-
-/// Calculates bonded validators at `root_hash` state.
-pub fn get_bonded_validators<H: History>(
-    state: Arc<Mutex<H>>,
-    root_hash: Blake2bHash,
-    pos_key: &Key, /* Address of the PoS as currently bonded validators are stored in its known
-                    * urefs map. */
-    correlation_id: CorrelationId,
-) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<H>> {
-    state
-        .lock()
-        .checkout(root_hash)
-        .map_err(GetBondedValidatorsError::StorageErrors)
-        .and_then(|maybe_reader| match maybe_reader {
-            Some(reader) => match reader.read(correlation_id, &pos_key.normalize()) {
-                Ok(Some(Value::Contract(contract))) => {
-                    let bonded_validators = contract
-                        .urefs_lookup()
-                        .keys()
-                        .filter_map(|entry| utils::pos_validator_to_tuple(entry))
-                        .collect::<HashMap<PublicKey, U512>>();
-                    Ok(bonded_validators)
-                }
-                Ok(_) => Err(GetBondedValidatorsError::PoSNotFound(*pos_key)),
-                Err(error) => Err(GetBondedValidatorsError::StorageErrors(error)),
-            },
-            None => Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)),
-        })
+    /// Calculates bonded validators at `root_hash` state.
+    pub fn get_bonded_validators(
+        &self,
+        root_hash: Blake2bHash,
+        pos_key: &Key, /* Address of the PoS as currently bonded validators are stored in its
+                        * known urefs map. */
+        correlation_id: CorrelationId,
+    ) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<S::Error>> {
+        self.state
+            .checkout(root_hash)
+            .map_err(GetBondedValidatorsError::StateError)
+            .and_then(|maybe_reader| match maybe_reader {
+                Some(reader) => match reader.read(correlation_id, &pos_key.normalize()) {
+                    Ok(Some(Value::Contract(contract))) => {
+                        let bonded_validators = contract
+                            .urefs_lookup()
+                            .keys()
+                            .filter_map(|entry| utils::pos_validator_to_tuple(entry))
+                            .collect::<HashMap<PublicKey, U512>>();
+                        Ok(bonded_validators)
+                    }
+                    Ok(_) => Err(GetBondedValidatorsError::ProofOfStakeNotFound(*pos_key)),
+                    Err(error) => Err(GetBondedValidatorsError::StateError(error)),
+                },
+                None => Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)),
+            })
+    }
 }
