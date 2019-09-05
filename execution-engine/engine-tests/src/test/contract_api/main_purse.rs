@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{PaymentCode, WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 use contract_ffi::key::Key;
 use contract_ffi::value::Account;
 use contract_ffi::value::U512;
