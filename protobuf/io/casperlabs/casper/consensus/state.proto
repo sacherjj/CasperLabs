@@ -87,7 +87,7 @@ message Account {
 	// Removed: nonce.
 	reserved 2;
 	bytes public_key = 1;
-  Key.URef purse_id = 3;
+	Key.URef purse_id = 3;
 	repeated NamedKey known_urefs = 4;
 	repeated AssociatedKey associated_keys = 5;
 	ActionThresholds action_thresholds = 6;
