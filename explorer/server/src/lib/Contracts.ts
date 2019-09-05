@@ -63,7 +63,7 @@ export class Contract {
     approval.setApproverPublicKey(signingKeyPair.publicKey);
     approval.setSignature(signature);
 
-    deploy.addApprovals(approval);
+    deploy.setApprovalsList([approval]);
 
     return deploy;
   }
