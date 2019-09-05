@@ -300,7 +300,6 @@ fn should_run_successful_bond_and_unbond() {
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
 
     let result = WasmTestBuilder::from_result(result)
-        // .use_payment_code(PaymentCode::standard(U512::from(ACCOUNT_1_PAYMENT_FUND)))
         .exec_with_args(
             ACCOUNT_1_ADDR,
             "pos_bonding.wasm",
@@ -322,8 +321,6 @@ fn should_run_successful_bond_and_unbond() {
         .expect("should have exec response");
     let gas_cost_b = test_support::get_exec_costs(&exec_response);
     let gas_cost_b = gas_cost_b[0] * CONV_RATE;
-
-    // assert_eq!(
 
     assert_eq!(
         account_1_bal_after,

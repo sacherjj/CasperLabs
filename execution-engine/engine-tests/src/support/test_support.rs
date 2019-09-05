@@ -537,7 +537,7 @@ pub struct WasmTestBuilder {
     mint_contract_uref: Option<contract_ffi::uref::URef>,
     /// PoS contract uref
     pos_contract_uref: Option<contract_ffi::uref::URef>,
-    /// Payment code to use for excetions
+    /// Payment code to use for executions
     payment_code: Rc<PaymentCode>,
 }
 
@@ -610,7 +610,6 @@ impl WasmTestBuilder {
     }
 
     pub fn use_payment_code(&mut self, payment_code: PaymentCode) -> &mut WasmTestBuilder {
-        // let current_payment_code = Rc::make_mut(&self.payment_code);
         self.payment_code = Rc::new(payment_code);
         self
     }
