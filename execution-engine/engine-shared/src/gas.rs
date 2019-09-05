@@ -190,6 +190,6 @@ mod tests {
         let motes = Motes::new(U512::zero());
         let conv_rate = 0;
         let maybe = Gas::from_motes(motes, conv_rate);
-        assert!(maybe.is_none(), "should be none due to overflow");
+        assert!(maybe.is_none(), "should be none due to divide by zero");
     }
 }
