@@ -729,7 +729,7 @@ def test_cli_abi_unsigned(cli, unsigned_type, test_contract):
     nonce = 0
     for number in [2, 256, 1024]:
         nonce += 1
-        args = json.dumps([{unsigned_type: number}])
+        args = json.dumps([{"name": "number", "value": {unsigned_type: number}}])
         deploy_hash = cli('deploy',
                           '--from', account.public_key_hex,
                           '--nonce', nonce,

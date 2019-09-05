@@ -94,6 +94,8 @@ class ABI:
     BYTE_ARRAY_TYPES = ("byte_array", "account", "bytes_value")
     OPTIONAL_TYPES = ("option", "optional_value")
 
+    ALL_TYPES = INTEGER_TYPES + BYTE_ARRAY_TYPES + OPTIONAL_TYPES
+
     @staticmethod
     def option(o: bytes) -> bytes:
         if o is None:
@@ -180,9 +182,7 @@ class ABI:
                 if not value:
                     return None
                 return python_value(*list(value["value"].items())[0])
-            raise ValueError(
-                f"Unknown type {typ}, expected {ABI.INTEGER_TYPES + ABI.BYTE_ARRAY_TYPES}"
-            )
+            raise ValueError(f"Unknown type {typ}, expected one of {ABI.ALL_TYPES}")
 
         def encode(arg) -> bytes:
             typ, value = list(arg["value"].items())[0]
