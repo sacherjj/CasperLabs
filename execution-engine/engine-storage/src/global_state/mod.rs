@@ -84,13 +84,13 @@ pub trait StateProvider {
 
     fn put_protocol_data(
         &self,
-        protocol_version: &ProtocolVersion,
+        protocol_version: ProtocolVersion,
         protocol_data: &ProtocolData,
     ) -> Result<(), Self::Error>;
 
     fn get_protocol_data(
         &self,
-        protocol_version: &ProtocolVersion,
+        protocol_version: ProtocolVersion,
     ) -> Result<Option<ProtocolData>, Self::Error>;
 
     fn empty_root(&self) -> Blake2bHash;

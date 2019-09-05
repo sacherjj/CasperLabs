@@ -162,18 +162,18 @@ impl StateProvider for InMemoryGlobalState {
 
     fn put_protocol_data(
         &self,
-        protocol_version: &ProtocolVersion,
+        protocol_version: ProtocolVersion,
         protocol_data: &ProtocolData,
     ) -> Result<(), Self::Error> {
         let mut txn = self.environment.create_read_write_txn()?;
         self.protocol_data_store
-            .put(&mut txn, protocol_version, protocol_data)?;
+            .put(&mut txn, &protocol_version, protocol_data)?;
         txn.commit().map_err(Into::into)
     }
 
     fn get_protocol_data(
         &self,
-        protocol_version: &ProtocolVersion,
+        protocol_version: ProtocolVersion,
     ) -> Result<Option<ProtocolData>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
         let result = self.protocol_data_store.get(&txn, &protocol_version)?;
