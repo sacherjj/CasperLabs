@@ -540,7 +540,8 @@ object ProtoUtil {
         session = session,
         payment = payment,
         gasPrice = GAS_PRICE,
-        authorizationKeys = d.approvals.map(_.approverPublicKey)
+        authorizationKeys = d.approvals.map(_.approverPublicKey),
+        deployHash = d.deployHash
       )
     }
   }
