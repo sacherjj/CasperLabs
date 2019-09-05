@@ -516,17 +516,21 @@ def resource(fn):
 
 
 def test_args_parser():
-    account_hex = "0001000200030004000500060007000800000001000200030004000500060007"
-    account_bytes = (
+    account = (
         b"\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08"
         b"\x00\x00\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07"
     )
-    u32 = 1024
-    u64 = 1234567890
-    json_str = json.dumps([{"u32": u32}, {"account": account_hex}, {"u64": u64}])
+
+    amount = 123456
+
+    args = [{"name": "amount", "value": {"long_value": amount}},
+            {"name": "account", "value": {"bytes_value": account.hex()}},
+            {"name": "purse_id", "value": {"optional_value": {}}}]
+
+    json_str = json.dumps(args)
 
     assert ABI.args_from_json(json_str) == ABI.args(
-        [ABI.u32(1024), ABI.account(account_bytes), ABI.u64(1234567890)]
+        [ABI.long_value(amount), ABI.account(account), ABI.optional_value(None)]
     )
 
 
