@@ -141,8 +141,12 @@ class NodeRuntime private[node] (
                                                             transactEC = dbIOScheduler,
                                                             conf.server.dataDir
                                                           )
+        deployBufferChunkSize = 20 //TODO: Move to config
         implicit0(deployBuffer: DeployBuffer[Effect]) <- Resource
-                                                          .liftF(DeployBufferImpl.create[Effect])
+                                                          .liftF(
+                                                            DeployBufferImpl
+                                                              .create[Effect](deployBufferChunkSize)
+                                                          )
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
         implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(

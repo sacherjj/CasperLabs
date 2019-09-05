@@ -132,9 +132,7 @@ lazy val casper = (project in file("casper"))
     shared         % "compile->compile;test->test",
     smartContracts % "compile->compile;test->test",
     crypto,
-    models,
-    client,
-    benchmarks
+    models
   )
 
 lazy val comm = (project in file("comm"))
@@ -432,7 +430,8 @@ lazy val client = (project in file("client"))
       scallop,
       grpcNetty,
       graphvizJava,
-      apacheCommons
+      apacheCommons,
+      scalapbCirce
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.client",
