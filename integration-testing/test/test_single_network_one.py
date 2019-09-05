@@ -788,12 +788,13 @@ def test_cli_abi_multiple(cli):
     number = 1000
     total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
 
-    args = json.dumps([{'account': account_hex}, {'u32': number}])
+    session_args = json.dumps([{'name': 'account', 'value': {'account': account_hex}},
+                               {'name': 'number', 'value': {'int_value': number}}])
     deploy_hash = cli('deploy',
                       '--nonce', 1,
                       '--from', account.public_key_hex,
                       '--session', resource(test_contract),
-                      '--session-args', f"{args}",
+                      '--session-args', session_args,
                       '--payment', resource(test_contract),
                       '--private-key', account.private_key_path,
                       '--public-key', account.public_key_path,)
