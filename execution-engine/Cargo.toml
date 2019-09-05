@@ -9,6 +9,7 @@ members = [
     "contracts/client/revert",
     "contracts/client/transfer-to-account",
     "contracts/client/unbonding",
+    "contracts/explorer/faucet",
     "contracts/system/mint-token",
     "contracts/system/pos",
     "contracts/system/test-mint-token",
