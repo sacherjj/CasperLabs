@@ -284,6 +284,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_session_code(
                 "endless_loop.wasm",
@@ -328,6 +329,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_session_code("endless_loop.wasm", ())
             .with_authorization_keys(&[genesis_public_key])
@@ -394,6 +396,7 @@ fn should_correctly_charge_when_session_code_fails() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(genesis_addr)
+            .with_deploy_hash([1; 32])
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_session_code(
                 "revert.wasm",
@@ -635,7 +638,7 @@ fn should_charge_non_main_purse() {
             )
             .with_payment_code(STANDARD_PAYMENT_WASM, (payment_purse_amount,))
             .with_authorization_keys(&[account_1_public_key])
-            .with_deploy_hash([1; 32])
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -697,7 +700,7 @@ fn should_charge_non_main_purse() {
                 (TEST_PURSE_NAME, payment_purse_amount),
             )
             .with_authorization_keys(&[account_1_public_key])
-            .with_deploy_hash([2; 32])
+            .with_deploy_hash([3; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
