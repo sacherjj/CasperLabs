@@ -773,7 +773,6 @@ def check_cli_abi_unsigned(cli, quote, resource_directory, unsigned_type, value,
                 '--private-key', private_key,
                 '--public-key', public_key)
         logging.info(f"EXECUTING {' '.join(cli.expand_args(args))}")
-        # import time; time.sleep(1000)
         deploy_hash = cli(*args)
 
         cli('propose')
