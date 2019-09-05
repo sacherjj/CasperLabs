@@ -540,7 +540,6 @@ object ProtoUtil {
         session = session,
         payment = payment,
         gasPrice = GAS_PRICE,
-        nonce = d.getHeader.nonce,
         authorizationKeys = d.approvals.map(_.approverPublicKey)
       )
     }

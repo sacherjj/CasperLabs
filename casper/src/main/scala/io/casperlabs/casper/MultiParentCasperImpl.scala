@@ -443,7 +443,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       // Only send the next nonce per account. This will change once the nonce check is removed in the EE
       // and support for SEQ/PAR blocks is added, then we can send all deploys for the account.
       remainingHashes <- DeployBuffer[F]
-                          .readAccountLowestNonce()
+                          .readAccountPendingOldest()
                           .filter(candidateBlockHashes.contains(_))
     } yield remainingHashes).compile.to[Set]
   }
