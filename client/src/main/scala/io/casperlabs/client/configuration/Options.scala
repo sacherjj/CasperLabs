@@ -99,13 +99,6 @@ object Options {
       default = 10L.some
     )
 
-    val nonce = opt[Long](
-      descr =
-        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
-      validate = _ > 0,
-      required = true
-    )
-
     val paymentAmount = opt[BigInt](
       descr =
         "Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.",
@@ -192,26 +185,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         validate = fileCheck
       )
 
-    <<<<<<< HEAD
-    val gasPrice = opt[Long](
-      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
-      validate = _ > 0,
-      required = false,
-      default = 10L.some
-    )
-
-    val session =
-      opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
-
-    val payment =
-      opt[File](
-        required = false,
-        descr = "Path to the file with payment code, by default fallbacks to the --session code",
-        validate = fileCheck
-      )
-
-    =======
-    >>>>>>> upstream / feature -nonce - removal
     val deployPath =
       opt[File](
         required = false,
@@ -396,29 +369,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made."
     )
 
-    <<<<<<< HEAD
-    val session =
-      opt[File](
-        descr = "Path to the file with unbonding contract.",
-        validate = fileCheck
-      )
-
-    val paymentPath =
-      opt[File](
-        descr = "Path to the file with payment code.",
-        validate = fileCheck,
-        required = false
-      )
-
-    =======
-    >>>>>>> upstream / feature -nonce - removal
     val privateKey =
       opt[File](
         descr = "Path to the file with account private key (Ed25519)",
         validate = fileCheck,
         required = true
       )
-
   }
   addSubcommand(unbond)
 
@@ -435,22 +391,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
-    <<<<<<< HEAD
-    val session =
-      opt[File](
-        descr = "Path to the file with bonding contract.",
-        validate = fileCheck
-      )
-
-    val paymentPath =
-      opt[File](
-        descr = "Path to the file with payment code.",
-        validate = fileCheck,
-        required = false
-      )
-
-    =======
-    >>>>>>> upstream / feature -nonce - removal
     val privateKey =
       opt[File](
         descr = "Path to the file with account private key (Ed25519)",
@@ -474,22 +414,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
-    <<<<<<< HEAD
-    val session =
-      opt[File](
-        descr = "Path to the file with transfer contract.",
-        validate = fileCheck
-      )
-
-    val paymentPath =
-      opt[File](
-        descr = "Path to the file with payment code.",
-        validate = fileCheck,
-        required = false
-      )
-
-    =======
-    >>>>>>> upstream / feature -nonce - removal
     val privateKey =
       opt[File](
         descr = "Path to the file with (from) account private key (Ed25519)",
