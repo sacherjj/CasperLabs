@@ -281,7 +281,6 @@ class CasperLabsClient:
     def deploy(
         self,
         from_addr: bytes = None,
-        gas_limit: int = None,
         gas_price: int = 10,
         payment: str = None,
         session: str = None,
@@ -296,8 +295,6 @@ class CasperLabsClient:
         on the configuration of the Casper instance.
 
         :param from_addr:     Purse address that will be used to pay for the deployment.
-        :param gas_limit:     [DEPRECATED and IGNORED] The amount of gas to use for the transaction
-                              (unused gas is refunded). Must be positive integer.
         :param gas_price:     The price of gas for this transaction in units dust/gas.
                               Must be positive integer.
         :param payment:       Path to the file with payment code.
@@ -606,7 +603,6 @@ def deploy_command(casperlabs_client, args):
 
     kwargs = dict(
         from_addr=from_addr,
-        gas_limit=None,
         gas_price=args.gas_price,
         payment=args.payment or args.session,
         session=args.session,
