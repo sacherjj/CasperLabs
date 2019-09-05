@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
-use contract_ffi::value::U512;
-
 use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
-use engine_grpc_server::engine_server::ipc::{DeployResult, ExecResponse_oneof_result};
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];

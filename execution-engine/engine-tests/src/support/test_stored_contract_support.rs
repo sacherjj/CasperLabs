@@ -8,6 +8,7 @@ use grpc::RequestOptions;
 use contract_ffi::uref::URef;
 use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState};
+use engine_core::execution::POS_NAME;
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, DeployCode, DeployItem, DeployPayload, DeployResult,
     DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,

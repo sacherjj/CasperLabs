@@ -73,9 +73,8 @@ fn gen_random(rng: &mut ChaChaRng) -> [u8; 32] {
 
 #[test]
 fn should_generate_different_numbers_for_different_seeds() {
-    let account_addr = [0u8; 32];
-    let mut rng_a = create_rng(account_addr, 1, contract_ffi::execution::Phase::Session);
-    let mut rng_b = create_rng(account_addr, 2, contract_ffi::execution::Phase::Session);
+    let mut rng_a = create_rng([1u8; 32], contract_ffi::execution::Phase::Session);
+    let mut rng_b = create_rng([2u8; 32], contract_ffi::execution::Phase::Session);
     let random_a = gen_random(&mut rng_a);
     let random_b = gen_random(&mut rng_b);
 
@@ -84,9 +83,8 @@ fn should_generate_different_numbers_for_different_seeds() {
 
 #[test]
 fn should_generate_same_numbers_for_same_seed() {
-    let account_addr = [0u8; 32];
-    let mut rng_a = create_rng(account_addr, 1, contract_ffi::execution::Phase::Session);
-    let mut rng_b = create_rng(account_addr, 1, contract_ffi::execution::Phase::Session);
+    let mut rng_a = create_rng([1u8; 32], contract_ffi::execution::Phase::Session);
+    let mut rng_b = create_rng([1u8; 32], contract_ffi::execution::Phase::Session);
     let random_a = gen_random(&mut rng_a);
     let random_b = gen_random(&mut rng_b);
 
@@ -95,9 +93,9 @@ fn should_generate_same_numbers_for_same_seed() {
 
 #[test]
 fn should_not_generate_same_numbers_for_different_phase() {
-    let account_addr = [0u8; 32];
-    let mut rng_a = create_rng(account_addr, 1, contract_ffi::execution::Phase::Payment);
-    let mut rng_b = create_rng(account_addr, 1, contract_ffi::execution::Phase::Session);
+    let deploy_hash = [1u8; 32];
+    let mut rng_a = create_rng(deploy_hash, contract_ffi::execution::Phase::Payment);
+    let mut rng_b = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
     let random_a = gen_random(&mut rng_a);
     let random_b = gen_random(&mut rng_b);
 
@@ -106,11 +104,7 @@ fn should_not_generate_same_numbers_for_different_phase() {
         "different phase should have different output"
     );
 
-    let mut rng_c = create_rng(
-        account_addr,
-        1,
-        contract_ffi::execution::Phase::FinalizePayment,
-    );
+    let mut rng_c = create_rng(deploy_hash, contract_ffi::execution::Phase::FinalizePayment);
     let random_c = gen_random(&mut rng_c);
 
     assert_ne!(

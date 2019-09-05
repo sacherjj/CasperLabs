@@ -19,11 +19,11 @@ fn should_run_ee_601_pay_session_new_uref_collision() {
 
     let exec_request = {
         let deploy = DeployBuilder::new()
+            .with_deploy_hash([1; 32])
             .with_address(GENESIS_ADDR)
             .with_payment_code("ee_601_regression.wasm", (U512::from(MAX_PAYMENT),))
             .with_session_code("ee_601_regression.wasm", ())
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()

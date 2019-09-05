@@ -5,7 +5,7 @@ use contract_ffi::value::{Account, Contract, Value, U512};
 
 use crate::execution;
 use crate::tracking_copy::{QueryResult, TrackingCopy};
-use engine_shared::newtypes::{CorrelationId, Validated};
+use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::TypeMismatch;
 use engine_storage::global_state::StateReader;
 

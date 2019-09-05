@@ -149,7 +149,7 @@ where
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc_addr);
     let mut uref_map = BTreeMap::new();
-    let chacha_rng = create_rng(base_acc_addr, 0, contract_ffi::execution::Phase::Session);
+    let chacha_rng = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
     let runtime_context =
         mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
     query(runtime_context)
@@ -404,7 +404,7 @@ fn contract_key_addable_valid() {
     let mut uref_map = BTreeMap::new();
     let uref = random_uref_key(&mut rng, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
-    let chacha_rng = create_rng(base_acc_addr, 0, contract_ffi::execution::Phase::Session);
+    let chacha_rng = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
 
     let mut runtime_context = RuntimeContext::new(
         Rc::clone(&tc),
@@ -462,7 +462,7 @@ fn contract_key_addable_invalid() {
     let mut uref_map = BTreeMap::new();
     let uref = random_uref_key(&mut rng, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
-    let chacha_rng = create_rng(base_acc_addr, 0, contract_ffi::execution::Phase::Session);
+    let chacha_rng = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
     let mut runtime_context = RuntimeContext::new(
         Rc::clone(&tc),
         &mut uref_map,
@@ -835,7 +835,7 @@ fn remove_uref_works() {
     let base_acc_addr = [0u8; 32];
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc_addr);
-    let mut chacha_rng = create_rng(base_acc_addr, 0, contract_ffi::execution::Phase::Session);
+    let mut chacha_rng = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
     let uref_name = "Foo".to_owned();
     let uref_key = random_uref_key(&mut chacha_rng, AccessRights::READ);
     let mut uref_map = iter::once((uref_name.clone(), uref_key)).collect();
@@ -863,7 +863,7 @@ fn validate_valid_purse_id_of_an_account() {
     let base_acc_addr = [0u8; 32];
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
-    let chacha_rng = create_rng(base_acc_addr, 0, contract_ffi::execution::Phase::Session);
+    let chacha_rng = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
     let mut uref_map = BTreeMap::new();
     let runtime_context =
         mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);

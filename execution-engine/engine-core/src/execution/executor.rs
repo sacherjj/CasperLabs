@@ -126,8 +126,7 @@ impl Executor<Module> for WasmiExecutor {
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup_local.values().cloned());
-        let account_bytes = base_key.as_account().unwrap();
-        let rng = create_rng(account_bytes, account.nonce(), phase);
+        let rng = create_rng(deploy_hash, phase);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
@@ -198,9 +197,8 @@ impl Executor<Module> for WasmiExecutor {
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup.values().cloned());
 
-        //let base_key = Key::Account(account.pub_key());
         let rng = {
-            let rng = create_rng(account.pub_key(), account.nonce(), phase);
+            let rng = create_rng(deploy_hash, phase);
             Rc::new(RefCell::new(rng))
         };
         let gas_counter = 0u64; // maybe const?

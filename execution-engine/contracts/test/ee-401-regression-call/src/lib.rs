@@ -8,6 +8,7 @@ use alloc::string::String;
 
 use contract_ffi::contract_api;
 use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 
 enum Error {

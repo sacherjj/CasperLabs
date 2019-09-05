@@ -1,15 +1,16 @@
 use std::collections::HashMap;
-
-use contract_ffi::key::Key;
-use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::{Value, U512};
+use std::convert::TryInto;
 
 use crate::support::test_support::{
     DeployBuilder, ExecRequestBuilder, WasmTestBuilder, GENESIS_INITIAL_BALANCE,
 };
+use contract_ffi::key::Key;
+use contract_ffi::value::account::{PublicKey, PurseId};
+use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::{EngineConfig, CONV_RATE, MAX_PAYMENT};
 use engine_shared::transform::Transform;
 
+use crate::contract_ffi::bytesrepr::ToBytes;
 use crate::support::test_support;
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
@@ -528,7 +529,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             )
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -547,7 +548,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             .with_session_code(DO_NOTHING_WASM, ())
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -559,7 +560,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             .with_session_code(DO_NOTHING_WASM, ())
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_authorization_keys(&[account_1_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -619,7 +620,7 @@ fn should_charge_non_main_purse() {
             )
             .with_payment_code(STANDARD_PAYMENT_WASM, (payment_purse_amount,))
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -634,7 +635,7 @@ fn should_charge_non_main_purse() {
             )
             .with_payment_code(STANDARD_PAYMENT_WASM, (payment_purse_amount,))
             .with_authorization_keys(&[account_1_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -696,7 +697,7 @@ fn should_charge_non_main_purse() {
                 (TEST_PURSE_NAME, payment_purse_amount),
             )
             .with_authorization_keys(&[account_1_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()

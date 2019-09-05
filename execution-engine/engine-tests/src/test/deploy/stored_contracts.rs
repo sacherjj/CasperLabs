@@ -8,7 +8,7 @@ use engine_core::engine_state::{EngineConfig, CONV_RATE};
 use engine_shared::transform::Transform;
 
 use crate::support::test_stored_contract_support::{
-    get_account, DeployBuilder, Diff, ExecRequestBuilder, WasmTestBuilder, WasmTestResult,
+    DeployBuilder, Diff, ExecRequestBuilder, WasmTestBuilder, WasmTestResult,
     GENESIS_INITIAL_BALANCE,
 };
 use engine_grpc_server::engine_server::ipc::ExecuteRequest;
