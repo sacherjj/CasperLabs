@@ -326,7 +326,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 
 # Compile contracts that need to go into the Genesis block.
-package-system-contracts:
+package-system-contracts: execution-engine/target/system-contracts.tar.gz
+
+execution-engine/target/system-contracts.tar.gz: $(RUST_SRC) .make/rustup-update
 	cd execution-engine && make package-system-contracts
 
 # Compile a contract under execution-engine; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
