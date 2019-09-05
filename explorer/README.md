@@ -89,7 +89,6 @@ deploy {
   deploy_hash: "7401ecbe8b2c4e4de2c1e6422fddcfd1ae9d128058e2e6dba97ba62fc51db734"
   header {
     account_public_key: "f78786150599b50a1353476f5e2f12cd13c214e512096741c48e7ec63639af56"
-    nonce: 1
     timestamp: 1562350425051
     gas_price: 0
     body_hash: "1ba3a8335e68cbfd461865876bccc9225c560db9045d862ad16d26e3bbbe0a87"
@@ -127,7 +126,6 @@ $ ./client.sh node-0 query-state \
 
 account {
   public_key: "045499d51a013e06c6cbb5734843cf3c7f08d66af312d81238ffeb54244f1800"
-  nonce: 0
   purse_id {
     uref: "e698d314cd8004ca6cdfc5b5ea94b8c930aa3cd108bb32d6a5e9f53bcc201f75"
     access_rights: READ_ADD_WRITE

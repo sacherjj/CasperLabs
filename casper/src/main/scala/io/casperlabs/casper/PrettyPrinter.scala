@@ -53,7 +53,6 @@ object PrettyPrinter {
     case Value.Value.Account(
         Account(
           pk,
-          nonce,
           urefs,
           purseId,
           associatedKeys,
@@ -61,7 +60,7 @@ object PrettyPrinter {
           accountActivity
         )
         ) =>
-      s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}}, ${purseId
+      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${purseId
         .map(buildString)}, {${associatedKeys
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}}, {${accountActivity.map(buildString)})"
