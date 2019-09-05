@@ -33,12 +33,10 @@ message Deploy {
     repeated Approval approvals = 4;
 
     message Header {
+        // Removed the nonce.
+        reserved 2;
         // Identifying the Account is the key used to sign the Deploy.
         bytes account_public_key = 1;
-        // Monotonic nonce of the Account. Only the Deploy with the expected nonce can be executed straight away;
-        // anything higher has to wait until the Account gets into the correct state, i.e. the pending Deploys get
-        // executed on whichever Node they are currently waiting.
-        uint64 nonce = 2;
         // Current time milliseconds.
         uint64 timestamp = 3;
         // Conversion rate between the cost of Wasm opcodes and the motes sent by the `payment_code`.

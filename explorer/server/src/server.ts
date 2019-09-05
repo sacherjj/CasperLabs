@@ -30,7 +30,7 @@ const contractKeys =
 // Faucet contract and deploy factory.
 const faucet = new BoundContract(
   new Contract(process.env.FAUCET_CONTRACT_PATH!),
-  contractKeys, process.env.FAUCET_NONCE_PATH!);
+  contractKeys);
 
 // gRPC client to the node.
 const deployService = new DeployService(process.env.CASPER_SERVICE_URL!);
@@ -121,7 +121,6 @@ app.post("/api/faucet", checkJwt, (req, res) => {
       res.send(response);
     })
     .catch((err) => {
-      // TODO: Rollback nonce?
       const msg = err.toString();
       // The service already logged it.
       res.status(500).send({ error: msg });

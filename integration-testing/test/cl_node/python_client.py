@@ -35,7 +35,6 @@ class PythonClient(CasperLabsClient, LoggingMixin):
     def deploy(
         self,
         from_address: str = None,
-        gas_limit: int = 1000000,
         gas_price: int = 1,
         session_contract: Optional[str] = None,
         payment_contract: Optional[str] = None,
@@ -58,7 +57,7 @@ class PythonClient(CasperLabsClient, LoggingMixin):
         payment_contract_path = str(resources_path / payment_contract)
 
         logging.info(
-            f"PY_CLIENT.deploy(from_address={address}, gas_limit={gas_limit}, gas_price={gas_price}, "
+            f"PY_CLIENT.deploy(from_address={address}, gas_price={gas_price}, "
             f"payment_contract={payment_contract_path}, session_contract={session_contract_path}, "
             f"private_key={private_key}, "
             f"public_key={public_key} "
@@ -66,7 +65,6 @@ class PythonClient(CasperLabsClient, LoggingMixin):
 
         return self.client.deploy(
             bytes.fromhex(address),
-            gas_limit,
             gas_price,
             payment_contract_path,
             session_contract_path,

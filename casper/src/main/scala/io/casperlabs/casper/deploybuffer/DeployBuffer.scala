@@ -77,10 +77,7 @@ import scala.concurrent.duration.FiniteDuration
     * NOTE: Since deploy buffer tables don't have deploy's nonce we pick entry
     * with the lowest `creation_time_seconds` value.
     */
-  def readAccountPendingOldest(): fs2.Stream[F, Deploy]
-
-  /** Reads deploy hashes of deploys in PENDING state, lowest nonce per account. */
-  def readAccountLowestNonce(): fs2.Stream[F, DeployHash]
+  def readAccountPendingOldest(): fs2.Stream[F, DeployHash]
 
   def readPendingHashes: F[List[ByteString]]
 
@@ -142,17 +139,9 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
         })
         .void
 
-    def writeToDeployAccountNonceTable =
-      Update[(ByteString, ByteString, Long)](
-        "INSERT OR IGNORE INTO deploy_account_nonce (hash, account, nonce) VALUES (?, ?, ?)"
-      ).updateMany(deploys.map { d =>
-          (d.deployHash, d.getHeader.accountPublicKey, d.getHeader.nonce)
-        })
-        .void
-
     for {
       t <- Time[F].currentMillis
-      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t) >> writeToDeployAccountNonceTable)
+      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t))
             .transact(xa)
       _ <- updateMetrics()
     } yield ()
@@ -178,7 +167,7 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
     for {
       now       <- Time[F].currentMillis
       threshold = now - expirationPeriod.toMillis
-      _ <- sql"""|UPDATE buffered_deploys 
+      _ <- sql"""|UPDATE buffered_deploys
                  |SET status=$DiscardedStatusCode, update_time_seconds=$now
                  |WHERE status=$PendingStatusCode AND receive_time_seconds<$threshold""".stripMargin.update.run
             .transact(xa)
@@ -226,33 +215,18 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
   override def readPendingHashes: F[List[ByteString]] =
     readHashesByStatus(PendingStatusCode)
 
-  override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
-    sql"""| SELECT data FROM (
-          |   SELECT data, deploys.account, create_time_seconds FROM deploys
+  override def readAccountPendingOldest(): fs2.Stream[F, DeployHash] =
+    sql"""| SELECT hash FROM (
+          |   SELECT bd.hash, bd.account, d.create_time_seconds
+          |   FROM deploys d
           |   INNER JOIN buffered_deploys bd
-          |   ON deploys.hash = bd.hash
+          |   ON d.hash = bd.hash
           |   WHERE bd.status = $PendingStatusCode
           | ) pda
           | GROUP BY pda.account
           | HAVING MIN(pda.create_time_seconds)
           | ORDER BY pda.create_time_seconds
           |""".stripMargin
-      .query[Deploy]
-      .stream
-      .transact(xa)
-
-  /** Reads deploys in PENDING state, lowest nonce per account. */
-  override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
-    sql"""| SELECT hash FROM (
-          |   SELECT dan.hash, dan.account, dan.nonce FROM deploy_account_nonce dan
-          |   INNER JOIN buffered_deploys bd
-          |   ON bd.hash = dan.hash
-          |   WHERE bd.status = $PendingStatusCode
-          | ) dan
-          | GROUP BY dan.account
-          | HAVING MIN(dan.nonce)
-          | ORDER BY dan.nonce
-          """.stripMargin
       .query[DeployHash]
       .stream
       .transact(xa)

@@ -1132,30 +1132,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield assert(!block.body.get.deploys.head.isError)
   }
 
-  it should "put deploys with invalid nonce back into the deploy buffer" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
-    import node._
-    implicit val timeEff = new LogicalTime[Effect]
-
-    // Choosing obviously invalid nonce as there's no way to extract current account's nonce from the GlobalState
-    val invalidNonce = 1000L
-
-    for {
-      validDeploy       <- ProtoUtil.basicDeploy[Effect](1L)
-      invalidDeploy     <- ProtoUtil.basicDeploy[Effect](invalidNonce)
-      _                 <- node.casperEff.deploy(invalidDeploy)
-      _                 <- node.casperEff.deploy(validDeploy)
-      createBlockResult <- MultiParentCasper[Effect].createBlock
-      Created(block)    = createBlockResult
-      containsInvalidDeploy <- node.deployBufferEff
-                                .getPendingOrProcessed(invalidDeploy.deployHash)
-                                .map(_.nonEmpty)
-    } yield {
-      assert(block.body.get.deploys.flatMap(_.deploy).contains(validDeploy))
-      assert(containsInvalidDeploy)
-    }
-  }
-
   it should "put orphaned deploys back into the pending deploy buffer" in effectTest {
     // Make a network where we don't validate nonces, I just want the merge conflict.
     for {

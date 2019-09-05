@@ -99,13 +99,6 @@ object Options {
       default = 10L.some
     )
 
-    val nonce = opt[Long](
-      descr =
-        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
-      validate = _ > 0,
-      required = true
-    )
-
     val paymentAmount = opt[BigInt](
       descr =
         "Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.",
@@ -240,14 +233,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "The public key of the account which is the context of this deployment, base16 encoded.",
       required = false
     )
-
-    val gasLimit =
-      opt[Long](
-        descr =
-          "[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
-        validate = _ > 0,
-        required = false // Leaving it here for now so old examples don't complain about its presence.
-      )
 
     val publicKey =
       opt[File](
@@ -390,7 +375,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         validate = fileCheck,
         required = true
       )
-
   }
   addSubcommand(unbond)
 

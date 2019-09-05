@@ -60,7 +60,7 @@ object Benchmarks {
         senderPublicKey: PublicKey,
         amount: Long
     ): F[Unit] = DeployRuntime.transfer[F](
-      deployConfig = DeployConfig.empty.copy(nonce = nonce),
+      deployConfig = DeployConfig.empty,
       senderPublicKey = senderPublicKey,
       senderPrivateKey = senderPrivateKey,
       recipientPublicKeyBase64 = recipientPublicKeyBase64,
@@ -84,11 +84,10 @@ object Benchmarks {
     ): F[Unit] =
       for {
         _ <- Log[F].info("Initializing accounts...")
-        _ <- (recipient :: senders).zipWithIndex.traverse {
-              case ((_, pk), i) =>
+        _ <- (recipient :: senders).traverse {
+              case (_, pk) =>
                 for {
                   _ <- send(
-                        nonce = i.toLong + 1L,
                         recipientPublicKeyBase64 = Base64.encode(pk),
                         senderPrivateKey = initialFundsPrivateKey,
                         senderPublicKey = initialFundsPublicKey,
@@ -169,12 +168,12 @@ object Benchmarks {
 
     def round(round: Long): F[Unit] =
       for {
-        _                        <- Log[F].info(s"Starting new round ${nonce - 1}")
-        (deployTime, _)          <- measure(oneRoundTransfer(nonce))
+        _                        <- Log[F].info(s"Starting new round: $round")
+        (deployTime, _)          <- measure(oneRoundTransfer())
         (proposeTime, blockHash) <- measure(propose(print = true))
         _                        <- checkSuccess(blockHash, accountsNum)
         totalTime                = deployTime + proposeTime
-        _                        <- writeResults(deployTime, proposeTime, totalTime, nonce)
+        _                        <- writeResults(deployTime, proposeTime, totalTime, round)
       } yield ()
 
     def rounds(n: Int): F[Unit] = {

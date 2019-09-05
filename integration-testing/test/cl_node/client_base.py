@@ -12,7 +12,6 @@ class CasperLabsClient(ABC):
     def deploy(
         self,
         from_address: str = None,
-        gas_limit: int = 1000000,
         gas_price: int = 1,
         session_contract: Optional[str] = None,
         payment_contract: Optional[str] = None,

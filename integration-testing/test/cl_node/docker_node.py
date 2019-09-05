@@ -280,7 +280,6 @@ class DockerNode(LoggingDockerBase):
         payment_contract: str = PAYMENT_CONTRACT,
         payment_args: bytes = None,
         gas_price: int = 1,
-        gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
         is_deploy_error_check: bool = True,
     ) -> str:
         """
@@ -292,7 +291,6 @@ class DockerNode(LoggingDockerBase):
         :param session_contract: session contract to execute.
         :param payment_contract: Payment contract to execute.
         :param gas_price: Gas price
-        :param gas_limit: Max gas price that can be expended.
         :param is_deploy_error_check: Check that amount transfer is success.
 
         :returns block_hash in hex str
@@ -333,7 +331,6 @@ class DockerNode(LoggingDockerBase):
             public_key=from_account.public_key_path,
             private_key=from_account.private_key_path,
             gas_price=gas_price,
-            gas_limit=gas_limit,
             session_args=session_args,
             payment_args=payment_args,
         )
@@ -386,7 +383,6 @@ class DockerNode(LoggingDockerBase):
         payment_contract: str,
         from_account: Account,
         json_args: str,
-        gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
         gas_price: int = 1,
         payment_args: bytes = None,
     ) -> str:
@@ -394,7 +390,6 @@ class DockerNode(LoggingDockerBase):
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
             payment_contract=payment_contract,
-            gas_limit=gas_limit,
             gas_price=gas_price,
             public_key=from_account.public_key_path,
             private_key=from_account.private_key_path,

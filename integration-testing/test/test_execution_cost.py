@@ -104,7 +104,6 @@ def test_error_in_payment_contract(payment_node_network):
         public_key=from_account.public_key_path,
         private_key=from_account.private_key_path,
         gas_price=1,
-        gas_limit=MAX_PAYMENT_COST / CONV_RATE,
         session_args=ABI.args_from_json(args_json),
         payment_args=ABI.args([ABI.u512(10 ** 6)]),
     )
@@ -178,7 +177,6 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
         public_key=account1.public_key_path,
         private_key=account1.private_key_path,
         gas_price=1,
-        gas_limit=MAX_PAYMENT_COST,
         session_args=None,
         payment_args=ABI.args([ABI.u512(MAX_PAYMENT_COST)]),
     )
@@ -220,7 +218,6 @@ def test_refund_after_session_code_error(payment_node_network):
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
         gas_price=1,
-        gas_limit=MAX_PAYMENT_COST / CONV_RATE,
         session_args=ABI.args([ABI.u512(100)]),
         payment_args=ABI.args_from_json(args_json)
         # 100 is a revert code.
@@ -269,7 +266,6 @@ def test_not_enough_funds_to_run_payment_code(payment_node_network):
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
         gas_price=1,
-        gas_limit=MAX_PAYMENT_COST / CONV_RATE,
         session_args=ABI.args_from_json(args_json),
         payment_args=ABI.args([ABI.u512(450)]),
     )

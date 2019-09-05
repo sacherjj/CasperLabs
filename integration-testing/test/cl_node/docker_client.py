@@ -119,7 +119,6 @@ class DockerClient(CasperLabsClient, LoggingMixin):
     def deploy(
         self,
         from_address: str = None,
-        gas_limit: int = 1000000,
         gas_price: int = 1,
         session_contract: str = None,
         payment_contract: str = None,
@@ -148,7 +147,6 @@ class DockerClient(CasperLabsClient, LoggingMixin):
 
         command = (
             f"deploy --from {address}"
-            f" --gas-limit {gas_limit}"
             f" --gas-price {gas_price}"
             f" --session=/data/{session_contract}"
             f" --payment=/data/{payment_contract}"

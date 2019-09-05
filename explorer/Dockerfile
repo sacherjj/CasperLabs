@@ -9,5 +9,4 @@ COPY ui/build /app/ui
 WORKDIR /app
 ENV STATIC_ROOT=/app/ui
 ENV FAUCET_CONTRACT_PATH=/app/contracts/faucet.wasm
-ENV FAUCET_NONCE_PATH=/app/nonce.txt
 ENTRYPOINT node server/server.js

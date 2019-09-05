@@ -13,9 +13,6 @@ sealed trait DeployEffects extends ProcessedDeployResult {
 
 sealed trait NoEffectsFailure extends ProcessedDeployResult
 
-final case class InvalidNonceDeploy(deploy: Deploy, deployNonce: Long, expectedNonce: Long)
-    extends NoEffectsFailure
-
 // Precondition failures don't have effects or cost.
 // They are errors that we can't charge for (like key not found, key not being an public key of the account).
 final case class PreconditionFailure(deploy: Deploy, errorMessage: String) extends NoEffectsFailure
