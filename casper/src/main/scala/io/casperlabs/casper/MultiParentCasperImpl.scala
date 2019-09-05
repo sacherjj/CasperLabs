@@ -161,7 +161,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                              )
       _ <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       furtherAttempts <- status match {
-                          case MissingBlocks | IgnorableEquivocation | InvalidUnslashableBlock =>
+                          case MissingBlocks | InvalidUnslashableBlock =>
                             List.empty[(Block, BlockStatus)].pure[F]
                           case _ =>
                             // re-attempt for any status that resulted in the adding of the block into the view
@@ -769,7 +769,7 @@ object MultiParentCasperImpl {
                 )
           _ <- Log[F].debug(s"Checking equivocation for $hashPrefix")
           _ <- EquivocationDetector
-                .checkEquivocatorWithUpdate[F](dag, block)
+                .checkEquivocationWithUpdate[F](dag, block)
           _ <- Log[F].debug(s"Block effects calculated for $hashPrefix")
         } yield blockEffects).attempt
 
@@ -824,24 +824,13 @@ object MultiParentCasperImpl {
             addMissingDependencies(block, dag) *>
             dag.pure[F]
 
-        case AdmissibleEquivocation =>
+        case EquivocatedBlock =>
           for {
             updatedDag <- addToState(block, transforms)
             _ <- Log[F].info(
-                  s"Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}"
+                  s"Added equivocated block ${PrettyPrinter.buildString(block.blockHash)}"
                 )
           } yield updatedDag
-
-        case IgnorableEquivocation =>
-          /*
-           * We don't have to include these blocks to the equivocation tracker because if any validator
-           * will build off this side of the equivocation, we will get another attempt to add this block
-           * through the admissible equivocations.
-           */
-          Log[F]
-            .info(
-              s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the DAG"
-            ) *> dag.pure[F]
 
         case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
             NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
@@ -946,17 +935,17 @@ object MultiParentCasperImpl {
         ): F[Unit] =
           status match {
             //Add successful! Send block to peers.
-            case Valid | AdmissibleEquivocation =>
+            case Valid | EquivocatedBlock =>
               CommUtil.sendBlock[F](LegacyConversions.fromBlock(block))
 
             case MissingBlocks =>
               // In the future this won't happen because the DownloadManager won't try to add blocks with missing dependencies.
               fetchMissingDependencies(block)
 
-            case IgnorableEquivocation | InvalidUnslashableBlock | InvalidBlockNumber |
-                InvalidParents | InvalidSequenceNumber | NeglectedInvalidBlock |
-                InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId |
-                InvalidBlockHash | InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
+            case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents |
+                InvalidSequenceNumber | NeglectedInvalidBlock | InvalidTransaction |
+                InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash |
+                InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
                 InvalidPreStateHash | InvalidPostStateHash | Processing | Processed =>
               Log[F].debug(
                 s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $status"
@@ -1006,7 +995,7 @@ object MultiParentCasperImpl {
           status: BlockStatus
       ): F[Unit] =
         status match {
-          case Valid | AdmissibleEquivocation =>
+          case Valid | EquivocatedBlock =>
             maybeOwnPublickKey match {
               case Some(key) if key == block.getHeader.validatorPublicKey =>
                 relaying.relay(List(block.blockHash))
@@ -1020,8 +1009,8 @@ object MultiParentCasperImpl {
               "Impossible! The DownloadManager should not tell Casper about blocks with missing dependencies!"
             )
 
-          case IgnorableEquivocation | InvalidUnslashableBlock | InvalidBlockNumber |
-              InvalidParents | InvalidSequenceNumber | NeglectedInvalidBlock | InvalidTransaction |
+          case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents |
+              InvalidSequenceNumber | NeglectedInvalidBlock | InvalidTransaction |
               InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash |
               InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
               InvalidPreStateHash | InvalidPostStateHash | Processing | Processed =>

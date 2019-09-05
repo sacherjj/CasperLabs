@@ -2,6 +2,7 @@ package io.casperlabs.casper
 
 import cats.{Applicative, Monad}
 import cats.implicits._
+import cats.mtl.FunctorRaise
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block
@@ -12,7 +13,17 @@ object EquivocationDetector {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def checkEquivocatorWithUpdate[F[_]: Monad: Log](dag: DagRepresentation[F], block: Block)(
+  /**
+    * Check whether block equivocate and if so add it to `EquivocationsTracker`.
+    *
+    * Since we have added all equivocating message to BlockDag, then once
+    * a validator has been detected as equivocated, then every message he create later
+    * has at least message equivocate with each other.
+    */
+  def checkEquivocationWithUpdate[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
+      dag: DagRepresentation[F],
+      block: Block
+  )(
       implicit state: Cell[F, CasperState]
   ): F[Unit] =
     for {
@@ -34,9 +45,35 @@ object EquivocationDetector {
               )
             }
           })
+      s <- state.read
+      _ <- if (s.equivocationsTracker.contains(block.getHeader.validatorPublicKey)) {
+            FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock)
+          } else {
+            Applicative[F].unit
+          }
     } yield ()
 
-  private def checkEquivocations[F[_]: Monad: Log](
+  /**
+    * check whether block equivocate
+    *
+    * Caution:
+    *   It may not work when receiving a block created by a validator who has equivocated.
+    *   For example:
+    *
+    *       |   v0   |
+    *       |        |
+    *       |        |
+    *       |     B4 |
+    *       |     |  |
+    *       | B2  B3 |
+    *       |  \  /  |
+    *       |   B1   |
+    *
+    *   Local node could detect that Validator v0 has equivocated after receiving B3,
+    *   then when adding B4, this method doesn't work, it return false but actually B4
+    *   equivocated with B2.
+    */
+  private[casper] def checkEquivocations[F[_]: Monad: Log](
       dag: DagRepresentation[F],
       block: Block
   ): F[Boolean] =
