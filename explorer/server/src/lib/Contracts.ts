@@ -3,7 +3,7 @@ import fs from "fs";
 import { Message } from "google-protobuf";
 import * as nacl from "tweetnacl-ts";
 import { Approval, Deploy, Signature } from "../grpc/io/casperlabs/casper/consensus/consensus_pb";
-import { Args, PublicKeyArg, UInt64Arg } from "./Serialization";
+import { Args, BytesValue, LongValue } from "./Args";
 
 // https://www.npmjs.com/package/tweetnacl-ts
 // https://github.com/dcposch/blakejs
@@ -24,14 +24,14 @@ export class Contract {
   }
 
   public deploy(
-    args: ByteArray,
+    args: Deploy.Arg[],
     nonce: number,
     accountPublicKey: ByteArray,
     signingKeyPair: nacl.SignKeyPair): Deploy {
 
     const code = new Deploy.Code();
     code.setWasm(this.contractWasm);
-    code.setAbiArgs(args);
+    code.setArgsList(args);
 
     const body = new Deploy.Body();
     body.setSession(code);
@@ -75,7 +75,7 @@ export class BoundContract {
     this.initNonce();
   }
 
-  public deploy(args: ByteArray): Deploy {
+  public deploy(args: Deploy.Arg[]): Deploy {
     return this.contract.deploy(
       args, this.nextNonce(),
       this.contractKeyPair.publicKey,
@@ -98,17 +98,18 @@ export class BoundContract {
 }
 
 export class Faucet {
-  public static args(accountPublicKey: ByteArray): ByteArray {
+  public static args(accountPublicKey: ByteArray): Deploy.Arg[] {
     return Args(
-      PublicKeyArg(accountPublicKey)
+      ["account", BytesValue(accountPublicKey)]
     );
   }
 }
 
 export class Transfer {
-  public static args(accountPublicKey: ByteArray, amount: bigint): ByteArray {
+  public static args(accountPublicKey: ByteArray, amount: bigint): Deploy.Arg[] {
     return Args(
-      PublicKeyArg(accountPublicKey),
-      UInt64Arg(amount));
+      ["account", BytesValue(accountPublicKey)],
+      ["amount", LongValue(amount)]
+    );
   }
 }
