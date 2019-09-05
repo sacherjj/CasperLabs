@@ -106,43 +106,55 @@ class LMDBBlockStorage[F[_]] private (
       }
     }
 
-  override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] = {
-    val asByteString = ByteString.copyFrom(Base16.decode(blockHashPrefix))
-    asByteString.size() match {
-      case 32 => get(asByteString)
-      case x if x < 32 =>
+  override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] =
+    blockHashPrefix.length match {
+      case 64 =>
+        val asByteString = ByteString.copyFrom(Base16.decode(blockHashPrefix))
+        if (asByteString.size() == 32) {
+          get(asByteString)
+        } else {
+          none[BlockMsgWithTransform].pure[F]
+        }
+      case x if x < 64 =>
         for {
           maybeBlockHash <- withReadTxn { txn =>
                              withResource(blocks.iterate(txn)) { it =>
                                it.asScala
                                  .map(kv => ByteString.copyFrom(kv.key))
-                                 .find(_.startsWith(asByteString))
+                                 .find(
+                                   h => Base16.encode(h.toByteArray).startsWith(blockHashPrefix)
+                                 )
                              }
                            }
           res <- maybeBlockHash.fold(none[BlockMsgWithTransform].pure[F])(get)
         } yield res
       case _ => none[BlockMsgWithTransform].pure[F]
     }
-  }
 
-  override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] = {
-    val asByteString = ByteString.copyFrom(Base16.decode(blockHashPrefix))
-    asByteString.size() match {
-      case 32 => getBlockSummary(asByteString)
-      case x if x < 32 =>
+  override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] =
+    blockHashPrefix.length match {
+      case 64 =>
+        val asByteString = ByteString.copyFrom(Base16.decode(blockHashPrefix))
+        if (asByteString.size() == 32) {
+          getBlockSummary(asByteString)
+        } else {
+          none[BlockSummary].pure[F]
+        }
+      case x if x < 64 =>
         for {
           maybeBlockHash <- withReadTxn { txn =>
                              withResource(blocks.iterate(txn)) { it =>
                                it.asScala
                                  .map(kv => ByteString.copyFrom(kv.key))
-                                 .find(_.startsWith(asByteString))
+                                 .find(
+                                   h => Base16.encode(h.toByteArray).startsWith(blockHashPrefix)
+                                 )
                              }
                            }
           res <- maybeBlockHash.fold(none[BlockSummary].pure[F])(getBlockSummary)
         } yield res
       case _ => none[BlockSummary].pure[F]
     }
-  }
 
   override def isEmpty: F[Boolean] =
     withReadTxn { txn =>

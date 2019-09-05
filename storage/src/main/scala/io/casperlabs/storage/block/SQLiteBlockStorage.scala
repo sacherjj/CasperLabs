@@ -114,18 +114,25 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
       onFullHash: BlockHash => F[Option[A]],
       // lower bound, upper bound
       otherwise: (Array[Byte], Array[Byte]) => F[Option[A]]
-  ): F[Option[A]] = {
-    val asArray = Base16.decode(blockHashPrefix)
-    val length  = asArray.length
-    32 - length match {
-      case 0 => onFullHash(ByteString.copyFrom(asArray))
+  ): F[Option[A]] =
+    64 - blockHashPrefix.length match {
+      case 0 =>
+        val decoded = ByteString.copyFrom(Base16.decode(blockHashPrefix))
+        if (decoded.size() == 32) {
+          onFullHash(decoded)
+        } else {
+          none[A].pure[F]
+        }
       case x if x > 0 =>
-        val lowerBound = asArray ++ Array.fill(x)(0.toByte)
-        val upperBound = asArray ++ Base16.decode("ff" * x)
-        otherwise(lowerBound, upperBound)
+        val lowerBound = Base16.decode(blockHashPrefix + "0" * x)
+        val upperBound = Base16.decode(blockHashPrefix + "f" * x)
+
+        (lowerBound.length, upperBound.length) match {
+          case (32, 32) => otherwise(lowerBound, upperBound)
+          case _        => none[A].pure[F]
+        }
       case _ => none[A].pure[F]
     }
-  }
 
   override def isEmpty: F[Boolean] =
     sql"SELECT COUNT(*) FROM blocks".query[Long].unique.map(_ == 0L).transact(xa)
