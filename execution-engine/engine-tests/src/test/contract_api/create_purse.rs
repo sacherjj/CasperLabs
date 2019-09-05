@@ -7,11 +7,13 @@ use contract_ffi::base16;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
+use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const TEST_PURSE_NAME: &str = "test_purse";
+const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
 
 fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
     let keys = if let Transform::AddKeys(keys) = mint_transform {
@@ -50,10 +52,10 @@ fn should_insert_mint_add_keys_transform() {
             .run_genesis(GENESIS_ADDR, HashMap::new())
             .exec_with_args(
                 GENESIS_ADDR,
-                "transfer_to_account_01.wasm",
+                "transfer_purse_to_account.wasm",
                 DEFAULT_BLOCK_TIME,
                 1,
-                (ACCOUNT_1_ADDR,),
+                (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             )
             .expect_success()
             .commit()
@@ -82,10 +84,10 @@ fn should_insert_into_account_known_urefs() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
-            "transfer_to_account_01.wasm",
+            "transfer_purse_to_account.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            (ACCOUNT_1_ADDR,),
+            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
         )
         .expect_success()
         .commit()
@@ -117,10 +119,10 @@ fn should_create_usable_purse_id() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
-            "transfer_to_account_01.wasm",
+            "transfer_purse_to_account.wasm",
             DEFAULT_BLOCK_TIME,
             1,
-            (ACCOUNT_1_ADDR,),
+            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
         )
         .expect_success()
         .commit()
