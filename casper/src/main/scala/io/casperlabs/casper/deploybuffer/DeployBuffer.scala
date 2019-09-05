@@ -217,9 +217,10 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
   override def readAccountPendingOldest(): fs2.Stream[F, DeployHash] =
     sql"""| SELECT hash FROM (
-          |   SELECT bd.hash, create_time_seconds FROM deploys
+          |   SELECT bd.hash, bd.account, d.create_time_seconds
+          |   FROM deploys d
           |   INNER JOIN buffered_deploys bd
-          |   ON deploys.hash = bd.hash
+          |   ON d.hash = bd.hash
           |   WHERE bd.status = $PendingStatusCode
           | ) pda
           | GROUP BY pda.account
