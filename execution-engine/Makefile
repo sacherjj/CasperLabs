@@ -47,6 +47,10 @@ test-contracts: build-contracts
 check-format:
 	$(CARGO) fmt --all -- --check
 
+.PHONY: format
+format:
+	$(CARGO) fmt --all
+
 .PHONY: lint
 lint:
 	$(CARGO) clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
