@@ -118,6 +118,15 @@ steps:
   - rust-compile-test-pr
 
 # This section is for bors' branches only
+- name: markdown-link-check-bors
+  commands:
+  - "ci/markdown-link-check.sh"
+  image: "casperlabs/buildenv:latest"
+  when:
+    branch:
+    - staging
+    - trying
+
 - name: sbt-test-docker-bors
   commands:
   - "sbt test"
