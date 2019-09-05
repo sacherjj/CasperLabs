@@ -1,17 +1,16 @@
 package io.casperlabs.casper.util
 
-import cats.data.OptionT
-import cats.implicits._
+import java.util.NoSuchElementException
+
 import cats.{Applicative, Monad}
-import com.google.protobuf.{ByteString, Int32Value, StringValue}
+import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
-import io.casperlabs.casper.EquivocationRecord.SequenceNumber
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._
-import Block.Justification
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
@@ -19,7 +18,6 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.Abi
-import java.util.NoSuchElementException
 
 import scala.collection.immutable
 
@@ -172,78 +170,6 @@ object ProtoUtil {
         case Justification(validator: Validator, _) =>
           validator == header.validatorPublicKey
       }
-
-  def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStorage](
-      b: Block,
-      seqNum: SequenceNumber
-  ): F[Option[Block]] =
-    if (b.getHeader.validatorBlockSeqNum == seqNum) {
-      Option[Block](b).pure[F]
-    } else {
-      DagOperations
-        .bfTraverseF(List(b)) { block =>
-          getCreatorJustificationAsList[F](block, block.getHeader.validatorPublicKey)
-        }
-        .find(_.getHeader.validatorBlockSeqNum == seqNum)
-    }
-
-  // TODO: Replace with getCreatorJustificationAsListUntilGoal
-  def getCreatorJustificationAsList[F[_]: Monad: BlockStorage](
-      block: Block,
-      validator: Validator,
-      goalFunc: Block => Boolean = _ => false
-  ): F[List[Block]] = {
-    val maybeCreatorJustificationHash =
-      block.getHeader.justifications.find(_.validatorPublicKey == validator)
-
-    maybeCreatorJustificationHash match {
-      case Some(creatorJustificationHash) =>
-        for {
-          maybeCreatorJustification <- BlockStorage[F].getBlockMessage(
-                                        creatorJustificationHash.latestBlockHash
-                                      )
-          maybeCreatorJustificationAsList = maybeCreatorJustification match {
-            case Some(creatorJustification) =>
-              if (goalFunc(creatorJustification)) {
-                List.empty[Block]
-              } else {
-                List(creatorJustification)
-              }
-            case None =>
-              List.empty[Block]
-          }
-        } yield maybeCreatorJustificationAsList
-      case None => List.empty[Block].pure[F]
-    }
-  }
-
-  /**
-    * Since the creator justification is unique
-    * we don't need to return a list. However, the bfTraverseF
-    * requires a list to be returned. When we reach the goalFunc,
-    * we return an empty list.
-    */
-  def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Monad](
-      dag: DagRepresentation[F],
-      blockHash: BlockHash,
-      goalFunc: BlockHash => Boolean = _ => false
-  ): F[List[BlockHash]] =
-    (for {
-      meta <- OptionT(dag.lookup(blockHash))
-      creatorJustificationHash <- OptionT.fromOption[F](
-                                   meta.justifications
-                                     .find(
-                                       _.validatorPublicKey == meta.validatorPublicKey
-                                     )
-                                     .map(_.latestBlockHash)
-                                 )
-      creatorJustification <- OptionT(dag.lookup(creatorJustificationHash))
-      creatorJustificationAsList = if (goalFunc(creatorJustification.blockHash)) {
-        List.empty[BlockHash]
-      } else {
-        List(creatorJustification.blockHash)
-      }
-    } yield creatorJustificationAsList).fold(List.empty[BlockHash])(id)
 
   def weightMap(block: Block): Map[ByteString, Long] =
     weightMap(block.getHeader)

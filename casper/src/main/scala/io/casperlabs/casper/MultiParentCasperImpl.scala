@@ -1,22 +1,22 @@
 package io.casperlabs.casper
 
-import cats.data.{EitherT, NonEmptyList}
+import cats.{Applicative, Monad}
+import cats.data.EitherT
+import cats.effect.{Resource, Sync}
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Bracket, Resource, Sync}
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, DagStorage}
 import io.casperlabs.casper.DeploySelection.DeploySelection
-import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
-import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
+import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.comm.CommUtil
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.casper.validation.Errors._
@@ -49,7 +49,7 @@ final case class CasperState(
     blockBuffer: Map[ByteString, Block] = Map.empty,
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
+    equivocationsTracker: Set[Validator] = Set.empty[Validator]
 )
 
 class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection](
@@ -586,7 +586,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       state   <- Cell[F, CasperState].read
       tracker = state.equivocationsTracker
     } yield tracker
-      .map(_.equivocator)
       .flatMap(weights.get)
       .sum
       .toFloat / weightMapTotal(weights)
@@ -769,7 +768,8 @@ object MultiParentCasperImpl {
                   casperState.invalidBlockTracker
                 )
           _ <- Log[F].debug(s"Checking equivocation for $hashPrefix")
-          _ <- EquivocationDetector.checkEquivocations[F](casperState.dependencyDag, block, dag)
+          _ <- EquivocationDetector
+                .checkEquivocatorWithUpdate[F](dag, block)
           _ <- Log[F].debug(s"Block effects calculated for $hashPrefix")
         } yield blockEffects).attempt
 
@@ -825,25 +825,7 @@ object MultiParentCasperImpl {
             dag.pure[F]
 
         case AdmissibleEquivocation =>
-          val baseEquivocationBlockSeqNum = block.getHeader.validatorBlockSeqNum - 1
           for {
-            _ <- Cell[F, CasperState].modify { s =>
-                  if (s.equivocationsTracker.exists {
-                        case EquivocationRecord(validator, seqNum, _) =>
-                          block.getHeader.validatorPublicKey == validator && baseEquivocationBlockSeqNum == seqNum
-                      }) {
-                    // More than 2 equivocating children from base equivocation block and base block has already been recorded
-                    s
-                  } else {
-                    val newEquivocationRecord =
-                      EquivocationRecord(
-                        block.getHeader.validatorPublicKey,
-                        baseEquivocationBlockSeqNum,
-                        Set.empty[BlockHash]
-                      )
-                    s.copy(equivocationsTracker = s.equivocationsTracker + newEquivocationRecord)
-                  }
-                }
             updatedDag <- addToState(block, transforms)
             _ <- Log[F].info(
                   s"Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}"
