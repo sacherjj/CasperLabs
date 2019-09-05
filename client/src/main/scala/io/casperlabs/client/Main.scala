@@ -32,8 +32,9 @@ object Main {
         maybeConf <- Task(Configuration.parse(args))
         _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) {
               case (conn, conf) =>
-                implicit val deployService: GrpcDeployService = new GrpcDeployService(conn)
-                implicit val filesAPI: FilesAPI[Task]         = FilesAPI.create[Task]
+                implicit val deployService: GrpcDeployService =
+                  new GrpcDeployService(conn, scheduler)
+                implicit val filesAPI: FilesAPI[Task] = FilesAPI.create[Task]
                 program[Task](conf).doOnFinish(_ => Task(deployService.close()))
             }
       } yield ()
@@ -51,54 +52,45 @@ object Main {
       case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
       case Unbond(
           amount,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey
           ) =>
         DeployRuntime.unbond(
           amount,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey
         )
       case Bond(
           amount,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey
           ) =>
         DeployRuntime.bond(
           amount,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey
         )
       case Transfer(
           amount,
           recipientPublicKeyBase64,
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey
           ) =>
         DeployRuntime.transferCLI(
-          contractCode,
-          paymentCode,
+          contracts,
           privateKey,
           recipientPublicKeyBase64,
           amount
         )
       case Deploy(
           from,
-          sessionCode,
-          paymentCode,
+          contracts,
           maybePublicKey,
-          maybePrivateKey,
-          gasPrice
+          maybePrivateKey
           ) =>
         DeployRuntime.deployFileProgram(
           from,
-          Files.readAllBytes(sessionCode.toPath),
-          paymentCode,
+          contracts,
           maybePublicKey.map(
             file =>
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PublicKey]
@@ -106,15 +98,12 @@ object Main {
           maybePrivateKey.map(
             file =>
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
-          ),
-          gasPrice
+          )
         )
       case MakeDeploy(
           from,
           publicKey,
-          sessionCode,
-          paymentCode,
-          gasPrice,
+          contracts,
           deployPath
           ) =>
         for {
@@ -135,10 +124,8 @@ object Main {
                         }
           deploy = DeployRuntime.makeDeploy(
             baseAccount,
-            gasPrice,
-            Files.readAllBytes(sessionCode.toPath),
-            Array.emptyByteArray,
-            Files.readAllBytes(paymentCode.toPath)
+            contracts,
+            sessionArgs = Nil
           )
           _ <- DeployRuntime.writeDeploy(deploy, deployPath)
         } yield ()

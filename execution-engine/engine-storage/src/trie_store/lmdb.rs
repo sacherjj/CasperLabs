@@ -8,9 +8,12 @@
 //! # extern crate lmdb;
 //! # extern crate engine_shared;
 //! # extern crate tempfile;
+//! use casperlabs_engine_storage::store::Store;
+//! use casperlabs_engine_storage::transaction_source::{Transaction, TransactionSource};
+//! use casperlabs_engine_storage::transaction_source::lmdb::LmdbEnvironment;
 //! use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
-//! use casperlabs_engine_storage::trie_store::{Transaction, TransactionSource, TrieStore};
-//! use casperlabs_engine_storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+//! use casperlabs_engine_storage::trie_store::TrieStore;
+//! use casperlabs_engine_storage::trie_store::lmdb::LmdbTrieStore;
 //! use contract_ffi::bytesrepr::ToBytes;
 //! use lmdb::DatabaseFlags;
 //! use engine_shared::newtypes::Blake2bHash;
@@ -106,100 +109,16 @@
 //! tmp_dir.close().unwrap();
 //! ```
 
-use std::path::PathBuf;
+use lmdb::{Database, DatabaseFlags};
 
-use lmdb::{self, Database, DatabaseFlags, Environment, RoTransaction, RwTransaction, WriteFlags};
+use contract_ffi::bytesrepr::{FromBytes, ToBytes};
+use engine_shared::newtypes::Blake2bHash;
 
-use contract_ffi::bytesrepr::{deserialize, FromBytes, ToBytes};
-
-use super::*;
-use error;
-
-impl<'a> Transaction for RoTransaction<'a> {
-    type Error = lmdb::Error;
-
-    type Handle = Database;
-
-    fn commit(self) -> Result<(), Self::Error> {
-        lmdb::Transaction::commit(self)
-    }
-}
-
-impl<'a> Readable for RoTransaction<'a> {
-    fn read(&self, handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        match lmdb::Transaction::get(self, handle, &key) {
-            Ok(bytes) => Ok(Some(bytes.to_vec())),
-            Err(lmdb::Error::NotFound) => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl<'a> Transaction for RwTransaction<'a> {
-    type Error = lmdb::Error;
-
-    type Handle = Database;
-
-    fn commit(self) -> Result<(), Self::Error> {
-        <RwTransaction<'a> as lmdb::Transaction>::commit(self)
-    }
-}
-
-impl<'a> Readable for RwTransaction<'a> {
-    fn read(&self, handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        match lmdb::Transaction::get(self, handle, &key) {
-            Ok(bytes) => Ok(Some(bytes.to_vec())),
-            Err(lmdb::Error::NotFound) => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl<'a> Writable for RwTransaction<'a> {
-    fn write(&mut self, handle: Self::Handle, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
-        self.put(handle, &key, &value, WriteFlags::empty())
-            .map_err(Into::into)
-    }
-}
-
-/// The environment for an LMDB-backed trie store.
-///
-/// Wraps [`lmdb::Environment`].
-#[derive(Debug)]
-pub struct LmdbEnvironment {
-    path: PathBuf,
-    env: Environment,
-}
-
-impl LmdbEnvironment {
-    pub fn new(path: &PathBuf, map_size: usize) -> Result<Self, error::Error> {
-        let env = Environment::new().set_map_size(map_size).open(path)?;
-        let path = path.to_owned();
-        Ok(LmdbEnvironment { path, env })
-    }
-
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
-}
-
-impl<'a> TransactionSource<'a> for LmdbEnvironment {
-    type Error = lmdb::Error;
-
-    type Handle = Database;
-
-    type ReadTransaction = RoTransaction<'a>;
-
-    type ReadWriteTransaction = RwTransaction<'a>;
-
-    fn create_read_txn(&'a self) -> Result<RoTransaction<'a>, Self::Error> {
-        self.env.begin_ro_txn()
-    }
-
-    fn create_read_write_txn(&'a self) -> Result<RwTransaction<'a>, Self::Error> {
-        self.env.begin_rw_txn()
-    }
-}
+use crate::store::Store;
+use crate::transaction_source::lmdb::LmdbEnvironment;
+use crate::trie::Trie;
+use crate::trie_store::TrieStore;
+use crate::{error, trie_store};
 
 /// An LMDB-backed trie store.
 ///
@@ -212,53 +131,39 @@ pub struct LmdbTrieStore {
 impl LmdbTrieStore {
     pub fn new(
         env: &LmdbEnvironment,
-        name: Option<&str>,
+        maybe_name: Option<&str>,
         flags: DatabaseFlags,
     ) -> Result<Self, error::Error> {
-        let db = env.env.create_db(name, flags)?;
+        let name = maybe_name
+            .map(|name| format!("{}-{}", trie_store::NAME, name))
+            .unwrap_or_else(|| String::from(trie_store::NAME));
+        let db = env.env().create_db(Some(&name), flags)?;
         Ok(LmdbTrieStore { db })
     }
 
     pub fn open(env: &LmdbEnvironment, name: Option<&str>) -> Result<Self, error::Error> {
-        let db = env.env.open_db(name)?;
+        let db = env.env().open_db(name)?;
         Ok(LmdbTrieStore { db })
     }
 }
 
-impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for LmdbTrieStore {
+impl<K, V> Store<Blake2bHash, Trie<K, V>> for LmdbTrieStore
+where
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
+{
     type Error = error::Error;
 
     type Handle = Database;
 
-    fn get<T: Readable>(
-        &self,
-        txn: &T,
-        key: &Blake2bHash,
-    ) -> Result<Option<Trie<K, V>>, Self::Error>
-    where
-        T: Readable<Handle = Self::Handle>,
-        Self::Error: From<T::Error>,
-    {
-        match txn.read(self.db, &key.to_bytes()?)? {
-            None => Ok(None),
-            Some(bytes) => {
-                let trie = deserialize(&bytes)?;
-                Ok(Some(trie))
-            }
-        }
+    fn handle(&self) -> Self::Handle {
+        self.db
     }
+}
 
-    fn put<T: Writable>(
-        &self,
-        txn: &mut T,
-        key: &Blake2bHash,
-        value: &Trie<K, V>,
-    ) -> Result<(), Self::Error>
-    where
-        T: Writable<Handle = Self::Handle>,
-        Self::Error: From<T::Error>,
-    {
-        txn.write(self.db, &key.to_bytes()?, &value.to_bytes()?)
-            .map_err(Into::into)
-    }
+impl<K, V> TrieStore<K, V> for LmdbTrieStore
+where
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
+{
 }

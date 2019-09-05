@@ -1,13 +1,13 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
 
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api::{get_arg, transfer_to_account, TransferResult};
-use cl_std::value::account::PublicKey;
-use cl_std::value::U512;
+use contract_ffi::contract_api::{get_arg, transfer_to_account, TransferResult};
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {

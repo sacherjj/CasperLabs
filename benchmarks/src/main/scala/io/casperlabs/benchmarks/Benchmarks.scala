@@ -7,8 +7,8 @@ import java.nio.file.StandardOpenOption
 import cats._
 import cats.effect.{Sync, Timer}
 import cats.implicits._
-import cats.temp.par._
 import io.casperlabs.client.{DeployRuntime, DeployService}
+import io.casperlabs.client.configuration.DeployConfig
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base64
@@ -19,16 +19,16 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 object Benchmarks {
 
-  /** Each round is many token transfer deploys from different accounts to single recipient
+  /** Each round consists of many token transfer deploys from different accounts to single recipient
     * TODO: Remove Sync
     *  */
-  def run[F[_]: Log: DeployService: Par: Timer: FilesAPI: Monad: Sync](
+  def run[F[_]: Log: DeployService: Timer: FilesAPI: Monad: Sync](
       outputStats: File,
       initialFundsPrivateKeyFile: File,
       initialFundsPublicKeyFile: File,
       accountsNum: Int = 250,
       roundsNum: Int = 100,
-      approximateTransferCost: Long = 100000
+      approximateTransferCost: Long = 10000000
   ): F[Unit] = {
     // TODO: Probably can cause overflow problems, for the time being it can stay as is.
     val initialFundsPerAccount = roundsNum * approximateTransferCost
@@ -60,8 +60,7 @@ object Benchmarks {
         senderPublicKey: PublicKey,
         amount: Long
     ): F[Unit] = DeployRuntime.transfer[F](
-      sessionCode = None,
-      paymentCode = None,
+      deployConfig = DeployConfig.empty.copy(nonce = nonce),
       senderPublicKey = senderPublicKey,
       senderPrivateKey = senderPrivateKey,
       recipientPublicKeyBase64 = recipientPublicKeyBase64,
@@ -86,21 +85,25 @@ object Benchmarks {
       for {
         _ <- Log[F].info("Initializing accounts...")
         _ <- (recipient :: senders).zipWithIndex.traverse {
-              case ((_, pk), _) =>
-                send(
-                  recipientPublicKeyBase64 = Base64.encode(pk),
-                  senderPrivateKey = initialFundsPrivateKey,
-                  senderPublicKey = initialFundsPublicKey,
-                  amount = initialFundsPerAccount
-                )
+              case ((_, pk), i) =>
+                for {
+                  _ <- send(
+                        nonce = i.toLong + 1L,
+                        recipientPublicKeyBase64 = Base64.encode(pk),
+                        senderPrivateKey = initialFundsPrivateKey,
+                        senderPublicKey = initialFundsPublicKey,
+                        amount = initialFundsPerAccount
+                      )
+                  blockHash <- propose(print = false)
+                  _         <- checkSuccess(blockHash, 1)
+                } yield ()
             }
-        _ <- propose
       } yield ()
 
     def oneRoundTransfer(): F[Unit] =
       for {
         _ <- Log[F].info("Sending deploys...")
-        _ <- senders.parTraverse {
+        _ <- senders.traverse {
               case (sk, pk) =>
                 send(
                   recipientPublicKeyBase64 = recipientBase64,
@@ -111,21 +114,39 @@ object Benchmarks {
             }
       } yield ()
 
-    def propose: F[Unit] =
+    def propose(print: Boolean): F[String] =
       for {
-        _ <- Log[F].info("Proposing...")
-        _ <- DeployRuntime.propose[F](
-              exit = false,
-              ignoreOutput = true
-            )
+        _         <- Log[F].info("Proposing...").whenA(print)
+        blockHash <- DeployService[F].propose().rethrow
+      } yield blockHash
+
+    def checkSuccess(blockHash: String, expectedDeployNum: Int): F[Unit] =
+      for {
+        blockInfo   <- DeployService[F].showBlock(blockHash).rethrow
+        deployCount = blockInfo.getSummary.getHeader.deployCount
+        _ <- Sync[F]
+              .raiseError(
+                new IllegalStateException(
+                  s"Proposed block $blockInfo contains $deployCount!=$expectedDeployNum"
+                )
+              )
+              .whenA(deployCount != expectedDeployNum)
+        deployErrorCount = blockInfo.getStatus.getStats.deployErrorCount
+        _ <- Sync[F]
+              .raiseError(
+                new IllegalStateException(
+                  s"Proposed block $blockInfo contains $deployErrorCount!=0 failed deploys"
+                )
+              )
+              .whenA(deployErrorCount != 0)
       } yield ()
 
-    def measure(task: F[Unit]): F[FiniteDuration] =
+    def measure[A](task: F[A]): F[(FiniteDuration, A)] =
       for {
         start <- Timer[F].clock.monotonic(MILLISECONDS)
-        _     <- task
+        a     <- task
         end   <- Timer[F].clock.monotonic(MILLISECONDS)
-      } yield FiniteDuration(end - start, MILLISECONDS)
+      } yield (FiniteDuration(end - start, MILLISECONDS), a)
 
     def writeResults(
         deployTime: FiniteDuration,
@@ -135,7 +156,8 @@ object Benchmarks {
     ): F[Unit] = {
       def format(fd: FiniteDuration): String = fd.toCoarsest.toString()
       val message =
-        s"${format(deployTime)}, ${format(proposeTime)}, ${format(total)}, ${accountsNum / proposeTime.toSeconds}"
+        s"${format(deployTime)}, ${format(proposeTime)}, ${format(total)}, ${((accountsNum * 1000.0) / proposeTime.toMillis.toDouble)
+          .formatted("%1.2f")}"
       FilesAPI[F].writeString(
         outputStats.toPath,
         message ++ "\n",
@@ -147,11 +169,12 @@ object Benchmarks {
 
     def round(round: Long): F[Unit] =
       for {
-        _           <- Log[F].info(s"Starting new round ${round - 1}")
-        deployTime  <- measure(oneRoundTransfer())
-        proposeTime <- measure(propose)
-        totalTime   = deployTime + proposeTime
-        _           <- writeResults(deployTime, proposeTime, totalTime, round)
+        _                        <- Log[F].info(s"Starting new round ${nonce - 1}")
+        (deployTime, _)          <- measure(oneRoundTransfer(nonce))
+        (proposeTime, blockHash) <- measure(propose(print = true))
+        _                        <- checkSuccess(blockHash, accountsNum)
+        totalTime                = deployTime + proposeTime
+        _                        <- writeResults(deployTime, proposeTime, totalTime, nonce)
       } yield ()
 
     def rounds(n: Int): F[Unit] = {
@@ -168,7 +191,6 @@ object Benchmarks {
         privateKey <- readPrivateKey
         publicKey  <- readPublicKey
         _          <- initializeAccounts(privateKey, publicKey)
-        _          <- propose
         _          <- loop(1)
         _          <- Log[F].info("Done")
       } yield ()

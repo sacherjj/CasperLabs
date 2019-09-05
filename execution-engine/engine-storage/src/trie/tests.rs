@@ -10,7 +10,7 @@ fn radix_is_256() {
 mod pointer_block {
     use engine_shared::newtypes::Blake2bHash;
 
-    use trie::*;
+    use crate::trie::*;
 
     /// A defense against changes to [`RADIX`](history::trie::RADIX).
     #[test]
@@ -53,7 +53,7 @@ mod proptests {
 
     use engine_shared::test_utils::test_serialization_roundtrip;
 
-    use trie::gens::*;
+    use crate::trie::gens::*;
 
     proptest! {
         #[test]

@@ -8,6 +8,7 @@ use std::iter::IntoIterator;
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 use itertools::Itertools;
+use num_traits::ToPrimitive;
 use parity_wasm::elements::Module;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -16,6 +17,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
+
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
@@ -24,11 +26,11 @@ use contract_ffi::value::{Account, Value, U512};
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
-use execution::Error::{KeyNotFound, URefNotFound};
-use resolvers::create_module_resolver;
-use resolvers::memory_resolver::MemoryResolver;
-use runtime_context::RuntimeContext;
-use URefAddr;
+use crate::execution::Error::{KeyNotFound, URefNotFound};
+use crate::resolvers::create_module_resolver;
+use crate::resolvers::memory_resolver::MemoryResolver;
+use crate::runtime_context::RuntimeContext;
+use crate::URefAddr;
 
 pub struct Runtime<'a, R> {
     memory: MemoryRef,
@@ -69,8 +71,9 @@ pub fn instance_and_memory(
 }
 
 /// Turns `key` into a `([u8; 32], AccessRights)` tuple.
-/// Returns None if `key` is not `Key::URef` as it wouldn't have `AccessRights` associated with it.
-/// Helper function for creating `known_urefs` associating addresses and corresponding `AccessRights`.
+/// Returns None if `key` is not `Key::URef` as it wouldn't have `AccessRights`
+/// associated with it. Helper function for creating `known_urefs` associating
+/// addresses and corresponding `AccessRights`.
 pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
     match key {
         Key::URef(uref) => Some((uref.addr(), uref.access_rights())),
@@ -80,7 +83,8 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
     }
 }
 
-/// Groups a collection of urefs by their addresses and accumulates access rights per key
+/// Groups a collection of urefs by their addresses and accumulates access
+/// rights per key
 pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
     input: I,
 ) -> HashMap<URefAddr, HashSet<AccessRights>> {
@@ -100,7 +104,8 @@ pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
         .collect()
 }
 
-/// Groups a collection of keys by their address and accumulates access rights per key.
+/// Groups a collection of keys by their address and accumulates access rights
+/// per key.
 pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
     input: I,
 ) -> HashMap<URefAddr, HashSet<AccessRights>> {
@@ -121,11 +126,12 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
-pub fn create_rng(deploy_bytes: [u8; 32]) -> ChaChaRng {
+pub fn create_rng(deploy_hahs: [u8; 32], phase: contract_ffi::execution::Phase) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let mut hasher = VarBlake2b::new(32).unwrap();
-    data.extend(&deploy_bytes);
+    data.extend(&deploy_hahs);
+    data.extend_from_slice(&[phase.to_u8().expect("Phase is represented as a u8")]);
     hasher.input(data);
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
     ChaChaRng::from_seed(seed)
@@ -227,7 +233,8 @@ where
     /// Charge specified amount of gas
     ///
     /// Returns false if gas limit exceeded and true if not.
-    /// Intuition about the return value sense is to aswer the question 'are we allowed to continue?'
+    /// Intuition about the return value sense is to aswer the question 'are we
+    /// allowed to continue?'
     fn charge_gas(&mut self, amount: u64) -> bool {
         let prev = self.context.gas_counter();
         match prev.checked_add(amount) {
@@ -259,7 +266,8 @@ where
         deserialize(&bytes).map_err(Into::into)
     }
 
-    /// Reads value (defined as `value_ptr` and `value_size` tuple) from Wasm memory.
+    /// Reads value (defined as `value_ptr` and `value_size` tuple) from Wasm
+    /// memory.
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
         let bytes = self.bytes_from_mem(value_ptr, value_size as usize)?;
         deserialize(&bytes).map_err(Into::into)
@@ -359,7 +367,8 @@ where
         Ok(())
     }
 
-    /// Writes caller (deploy) account public key to [dest_ptr] in the Wasm memory.
+    /// Writes caller (deploy) account public key to [dest_ptr] in the Wasm
+    /// memory.
     fn get_caller(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         let key = self.context.get_caller();
         let bytes = key.to_bytes().map_err(Error::BytesRepr)?;
@@ -395,9 +404,9 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    /// Return a some bytes from the memory and terminate the current `sub_call`.
-    /// Note that the return type is `Trap`, indicating that this function will
-    /// always kill the current Wasm instance.
+    /// Return a some bytes from the memory and terminate the current
+    /// `sub_call`. Note that the return type is `Trap`, indicating that
+    /// this function will always kill the current Wasm instance.
     pub fn ret(
         &mut self,
         value_ptr: u32,
@@ -426,7 +435,8 @@ where
         }
     }
 
-    /// Calls contract living under a `key`, with supplied `args` and extra `urefs`.
+    /// Calls contract living under a `key`, with supplied `args` and extra
+    /// `urefs`.
     pub fn call_contract(
         &mut self,
         key: Key,
@@ -488,8 +498,9 @@ where
         Ok(length)
     }
 
-    /// Tries to store a function, represented as bytes from the Wasm memory, into the GlobalState
-    /// and writes back a function's hash at `hash_ptr` in the Wasm memory.
+    /// Tries to store a function, represented as bytes from the Wasm memory,
+    /// into the GlobalState and writes back a function's hash at `hash_ptr`
+    /// in the Wasm memory.
     pub fn store_function(
         &mut self,
         fn_bytes: Vec<u8>,
@@ -504,14 +515,16 @@ where
         Ok(new_hash)
     }
 
-    /// Writes function address (`hash_bytes`) into the Wasm memory (at `dest_ptr` pointer).
+    /// Writes function address (`hash_bytes`) into the Wasm memory (at
+    /// `dest_ptr` pointer).
     fn function_address(&mut self, hash_bytes: [u8; 32], dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &hash_bytes)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    /// Generates new unforgable reference and adds it to the context's known_uref set.
+    /// Generates new unforgable reference and adds it to the context's
+    /// known_uref set.
     pub fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
         let value = self.value_from_mem(value_ptr, value_size)?; // read initial value from memory
         let key = self.context.new_uref(value)?;
@@ -533,7 +546,8 @@ where
         self.context.write_gs(key, value).map_err(Into::into)
     }
 
-    /// Writes `value` under a key derived from `key` in the "local cluster" of GlobalState
+    /// Writes `value` under a key derived from `key` in the "local cluster" of
+    /// GlobalState
     pub fn write_local(
         &mut self,
         key_ptr: u32,
@@ -559,10 +573,11 @@ where
         self.context.add_gs(key, value).map_err(Into::into)
     }
 
-    /// Reads value from the GS living under key specified by `key_ptr` and `key_size`.
-    /// Wasm and host communicate through memory that Wasm module exports.
-    /// If contract wants to pass data to the host, it has to tell it [the host]
-    /// where this data lives in the exported memory (pass its pointer and length).
+    /// Reads value from the GS living under key specified by `key_ptr` and
+    /// `key_size`. Wasm and host communicate through memory that Wasm
+    /// module exports. If contract wants to pass data to the host, it has
+    /// to tell it [the host] where this data lives in the exported memory
+    /// (pass its pointer and length).
     pub fn read(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
         let value: Option<Value> = self.context.read_gs(&key)?;
@@ -571,7 +586,8 @@ where
         Ok(self.host_buf.len())
     }
 
-    /// Similar to `read`, this function is for reading from the "local cluster" of global state
+    /// Similar to `read`, this function is for reading from the "local cluster"
+    /// of global state
     pub fn read_local(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
         let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
         let value: Option<Value> = self.context.read_ls(&key_bytes)?;
@@ -688,8 +704,9 @@ where
         }
     }
 
-    /// looks up the public mint contract key in the caller's [uref_lookup] map and then
-    /// gets the "internal" mint contract uref stored under the public mint contract key.
+    /// looks up the public mint contract key in the caller's [uref_lookup] map
+    /// and then gets the "internal" mint contract uref stored under the
+    /// public mint contract key.
     fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
         let public_mint_key = self.get_mint_contract_public_uref_key()?;
         let internal_mint_uref = match self.context.read_gs(&public_mint_key)? {
@@ -708,7 +725,8 @@ where
         Ok(internal_mint_uref)
     }
 
-    /// Calls the "create" method on the mint contract at the given mint contract key
+    /// Calls the "create" method on the mint contract at the given mint
+    /// contract key
     fn mint_create(&mut self, mint_contract_key: Key) -> Result<PurseId, Error> {
         let args_bytes = {
             let args = ("create",);
@@ -729,7 +747,8 @@ where
         self.mint_create(mint_contract_key)
     }
 
-    /// Calls the "transfer" method on the mint contract at the given mint contract key
+    /// Calls the "transfer" method on the mint contract at the given mint
+    /// contract key
     fn mint_transfer(
         &mut self,
         mint_contract_key: Key,
@@ -757,8 +776,8 @@ where
         Ok(result.map_err(system_contracts::error::Error::from)?)
     }
 
-    /// Creates a new account at a given public key, transferring a given amount of motes from
-    /// the given source purse to the new account's purse.
+    /// Creates a new account at a given public key, transferring a given amount
+    /// of motes from the given source purse to the new account's purse.
     fn transfer_to_new_account(
         &mut self,
         source: PurseId,
@@ -815,9 +834,9 @@ where
         }
     }
 
-    /// Transferring a given amount of motes from the given source purse to the new account's
-    /// purse. Requires that the [`PurseId`]s have already been created by the mint contract (or
-    /// are the genesis account's).
+    /// Transferring a given amount of motes from the given source purse to the
+    /// new account's purse. Requires that the [`PurseId`]s have already
+    /// been created by the mint contract (or are the genesis account's).
     fn transfer_to_existing_account(
         &mut self,
         source: PurseId,
@@ -835,8 +854,8 @@ where
         }
     }
 
-    /// Transfers `amount` of motes from default purse of the account to `target` account.
-    /// If that account does not exist, creates one.
+    /// Transfers `amount` of motes from default purse of the account to
+    /// `target` account. If that account does not exist, creates one.
     fn transfer_to_account(
         &mut self,
         target: PublicKey,
@@ -858,7 +877,8 @@ where
         // Look up the account at the given public key's address
         match self.context.read_account(&target_key)? {
             None => {
-                // If no account exists, create a new account and transfer the amount to its purse.
+                // If no account exists, create a new account and transfer the amount to its
+                // purse.
                 self.transfer_to_new_account(source, target, amount)
             }
             Some(Value::Account(account)) => {

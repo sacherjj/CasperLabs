@@ -6,18 +6,16 @@ use std::io::ErrorKind;
 use std::marker::{Send, Sync};
 use std::time::Instant;
 
+use crate::engine_server::ipc::CommitResponse;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::U512;
 use engine_core::engine_state::error::Error as EngineError;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::genesis::GenesisURefsSource;
-use engine_core::engine_state::{
-    genesis::GenesisResult, get_bonded_validators, EngineState, GetBondedValidatorsError,
-};
+use engine_core::engine_state::{genesis::GenesisResult, EngineState, GetBondedValidatorsError};
 use engine_core::execution::{Executor, WasmiExecutor};
 use engine_core::tracking_copy::QueryResult;
-use engine_server::ipc::CommitResponse;
 use engine_shared::logging;
 use engine_shared::logging::{log_duration, log_info};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
@@ -32,6 +30,7 @@ pub mod ipc;
 pub mod ipc_grpc;
 pub mod mappings;
 pub mod state;
+pub mod transforms;
 
 const EXPECTED_PUBLIC_KEY_LENGTH: usize = 32;
 
@@ -49,8 +48,9 @@ const TAG_RESPONSE_GENESIS: &str = "genesis_response";
 
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
-// Proto definitions should be translated into domain objects when Engine's API is invoked.
-// This way core won't depend on casperlabs-engine-grpc-server (outer layer) leading to cleaner design.
+// Proto definitions should be translated into domain objects when Engine's API
+// is invoked. This way core won't depend on casperlabs-engine-grpc-server
+// (outer layer) leading to cleaner design.
 impl<H> ipc_grpc::ExecutionEngineService for EngineState<H>
 where
     H: History,
@@ -300,12 +300,8 @@ where
                     commit_result
                 {
                     let pos_key = Key::URef(GenesisURefsSource::default().get_pos_address());
-                    let bonded_validators_res = get_bonded_validators(
-                        self.state(),
-                        poststate_hash,
-                        &pos_key,
-                        correlation_id,
-                    );
+                    let bonded_validators_res =
+                        self.get_bonded_validators(poststate_hash, &pos_key, correlation_id);
                     bonded_validators_and_commit_result(
                         prestate_hash,
                         poststate_hash,
@@ -573,8 +569,8 @@ where
     H::Error: Into<engine_core::execution::Error>,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
-    // the execution of ALL deploys within the block. This is because all of them share
-    // the same prestate and all of them would fail.
+    // the execution of ALL deploys within the block. This is because all of them
+    // share the same prestate and all of them would fail.
     // Iterator (Result<_, _> + collect()) will short circuit the execution
     // when run_deploy returns Err.
     deploys
@@ -674,8 +670,8 @@ where
     H::Error: Into<engine_core::execution::Error>,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
-    // the execution of ALL deploys within the block. This is because all of them share
-    // the same prestate and all of them would fail.
+    // the execution of ALL deploys within the block. This is because all of them
+    // share the same prestate and all of them would fail.
     // Iterator (Result<_, _> + collect()) will short circuit the execution
     // when run_deploy returns Err.
     deploys
@@ -802,8 +798,9 @@ where
         Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)) => {
             // I am not sure how to parse this error. It would mean that most probably
             // we have screwed up something in the trie store because `root_hash` was
-            // calculated by us just a moment ago. It [root_hash] is a `poststate_hash` we return to the node.
-            // There is no proper error variant in the `engine_storage::error::Error` for it though.
+            // calculated by us just a moment ago. It [root_hash] is a `poststate_hash` we
+            // return to the node. There is no proper error variant in the
+            // `engine_storage::error::Error` for it though.
             let error_message = format!(
                 "Post state hash not found {} when calculating bonded validators set.",
                 root_hash
@@ -822,7 +819,8 @@ where
     }
 }
 
-// Helper method which returns single DeployResult that is set to be a WasmError.
+// Helper method which returns single DeployResult that is set to be a
+// WasmError.
 pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     socket: &str,
     e: E,

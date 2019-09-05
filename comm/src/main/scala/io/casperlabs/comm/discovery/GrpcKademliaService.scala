@@ -21,10 +21,11 @@ import scala.concurrent.duration._
 
 class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: NodeAsk: Metrics: Par](
     port: Int,
-    timeout: FiniteDuration
+    timeout: FiniteDuration,
+    ingressScheduler: Scheduler,
+    egressScheduler: Scheduler
 )(
     implicit
-    scheduler: Scheduler,
     connectionsCache: ConnectionsCache[F, KademliaConnTag]
 ) extends KademliaService[F] {
 
@@ -87,10 +88,10 @@ class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: Node
       Sync[F].delay {
         val server = NettyServerBuilder
           .forPort(port)
-          .executor(scheduler)
+          .executor(ingressScheduler)
           .addService(
             KademliaGrpcMonix
-              .bindService(new SimpleKademliaService(pingHandler, lookupHandler), scheduler)
+              .bindService(new SimpleKademliaService(pingHandler, lookupHandler), ingressScheduler)
           )
           .build
           .start
@@ -127,7 +128,7 @@ class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: Node
       c <- Sync[F].delay {
             NettyChannelBuilder
               .forAddress(peer.host, peer.discoveryPort)
-              .executor(scheduler)
+              .executor(egressScheduler)
               .usePlaintext()
               .build()
           }

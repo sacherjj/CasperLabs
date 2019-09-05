@@ -11,7 +11,8 @@ use contract_ffi::value::account::{
     AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
 };
 use engine_shared::transform::TypeMismatch;
-use resolvers::error::ResolverError;
+
+use crate::resolvers::error::ResolverError;
 
 #[derive(Debug)]
 pub enum Error {

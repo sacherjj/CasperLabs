@@ -1,8 +1,8 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 #[no_mangle]
 pub extern "C" fn call() {

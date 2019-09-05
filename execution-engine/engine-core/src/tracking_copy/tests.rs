@@ -6,6 +6,7 @@ use std::rc::Rc;
 use proptest::collection::vec;
 use proptest::prelude::*;
 
+use crate::engine_state::op::Op;
 use contract_ffi::gens::*;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
@@ -15,9 +16,8 @@ use contract_ffi::value::account::{
 use contract_ffi::value::{Account, Contract, Value};
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
-use engine_state::op::Op;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
-use engine_storage::global_state::StateReader;
+use engine_storage::global_state::{History, StateReader};
 
 use super::meter::count_meter::Count;
 use super::{AddResult, QueryResult, Validated};
@@ -355,8 +355,9 @@ proptest! {
     #[test]
     fn query_empty_path(k in key_arb(), missing_key in key_arb(), v in value_arb()) {
         let correlation_id = CorrelationId::new();
-        let gs = InMemoryGlobalState::from_pairs(correlation_id, &[(k, v.to_owned())]).unwrap();
-        let mut tc = TrackingCopy::new(gs);
+        let (gs, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &[(k, v.to_owned())]).unwrap();
+        let view = gs.checkout(root_hash).unwrap().unwrap();
+        let mut tc = TrackingCopy::new(view);
         let empty_path = Vec::new();
         if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, k, &empty_path) {
             assert_eq!(v, result);
@@ -385,11 +386,12 @@ proptest! {
         let contract: Value = Contract::new(body, known_urefs, 1).into();
         let contract_key = Key::Hash(hash);
 
-        let gs = InMemoryGlobalState::from_pairs(
+        let (gs, root_hash) = InMemoryGlobalState::from_pairs(
             correlation_id,
             &[(k, v.to_owned()), (contract_key, contract)]
         ).unwrap();
-        let mut tc = TrackingCopy::new(gs);
+        let view = gs.checkout(root_hash).unwrap().unwrap();
+        let mut tc = TrackingCopy::new(view);
         let path = vec!(name.clone());
         if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, contract_key, &path) {
             assert_eq!(v, result);
@@ -427,11 +429,12 @@ proptest! {
         );
         let account_key = Key::Account(address);
 
-        let gs = InMemoryGlobalState::from_pairs(
+        let (gs, root_hash) = InMemoryGlobalState::from_pairs(
             correlation_id,
             &[(k, v.to_owned()), (account_key, Value::Account(account))],
         ).unwrap();
-        let mut tc = TrackingCopy::new(gs);
+        let view = gs.checkout(root_hash).unwrap().unwrap();
+        let mut tc = TrackingCopy::new(view);
         let path = vec!(name.clone());
         if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, account_key, &path) {
             assert_eq!(v, result);
@@ -478,12 +481,13 @@ proptest! {
         );
         let account_key = Key::Account(address);
 
-        let gs = InMemoryGlobalState::from_pairs(correlation_id, &[
+        let (gs, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &[
             (k, v.to_owned()),
             (contract_key, contract),
             (account_key, Value::Account(account)),
         ]).unwrap();
-        let mut tc = TrackingCopy::new(gs);
+        let view = gs.checkout(root_hash).unwrap().unwrap();
+        let mut tc = TrackingCopy::new(view);
         let path = vec!(contract_name, state_name);
         if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, account_key, &path) {
             assert_eq!(v, result);

@@ -36,10 +36,11 @@ package object effects {
       timeout: FiniteDuration,
       gossipingEnabled: Boolean,
       gossipingRelayFactor: Int,
-      gossipingRelaySaturation: Int
+      gossipingRelaySaturation: Int,
+      ingressScheduler: Scheduler,
+      egressScheduler: Scheduler
   )(init: Option[Node])(
       implicit
-      scheduler: Scheduler,
       peerNodeAsk: NodeAsk[Task],
       log: Log[Task],
       metrics: Metrics[Task]
@@ -51,7 +52,9 @@ package object effects {
         timeout,
         gossipingEnabled,
         gossipingRelayFactor,
-        gossipingRelaySaturation
+        gossipingRelaySaturation,
+        ingressScheduler,
+        egressScheduler
       )(init)
       .toEffect
 

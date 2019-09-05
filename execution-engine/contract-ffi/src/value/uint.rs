@@ -3,7 +3,10 @@ use alloc::vec::Vec;
 use num_traits::{Bounded, Num, One, Unsigned, WrappingAdd, WrappingSub, Zero};
 
 // Clippy generates a ton of warnings/errors for the code the macro generates.
-#[allow(clippy::all)]
+// As of uint v0.8.1 and using nightly-2019-08-25, this also generates the
+// following warning: "use of deprecated item 'core::mem::uninitialized': use
+// `mem::MaybeUninit` instead"
+#[allow(deprecated, clippy::all)]
 mod macro_code {
     construct_uint! {
         pub struct U512(8);
@@ -103,7 +106,8 @@ macro_rules! ser_and_num_impls {
             }
         }
 
-        // Instead of implementing arbitrary methods we can use existing traits from num crate.
+        // Instead of implementing arbitrary methods we can use existing traits from num
+        // crate.
         impl WrappingAdd for $type {
             fn wrapping_add(&self, other: &$type) -> $type {
                 self.overflowing_add(*other).0

@@ -1,16 +1,15 @@
 #![no_std]
-#![feature(alloc)]
 
 #[macro_use]
 extern crate alloc;
-//extern crate cl_std;
+//extern crate contract_ffi;
 
-extern crate common;
-use common::contract_api;
-use common::contract_api::pointers::UPointer;
-use common::key::Key;
-use common::value::uint::U512;
-use common::contract_api::{call_contract, PurseTransferResult, get_uref, transfer_from_purse_to_purse, revert};
+extern crate contract_ffi;
+use contract_ffi::contract_api;
+use contract_ffi::contract_api::pointers::UPointer;
+use contract_ffi::key::Key;
+use contract_ffi::value::uint::U512;
+use contract_ffi::contract_api::{call_contract, PurseTransferResult, get_uref, transfer_from_purse_to_purse, revert};
 
 #[no_mangle]
 pub extern "C" fn call() {
