@@ -25,7 +25,6 @@ export class Contract {
 
   public deploy(
     args: ByteArray,
-    nonce: number,
     accountPublicKey: ByteArray,
     signingKeyPair: nacl.SignKeyPair): Deploy {
 
@@ -39,7 +38,6 @@ export class Contract {
 
     const header = new Deploy.Header();
     header.setAccountPublicKey(accountPublicKey);
-    header.setNonce(nonce);
     header.setTimestamp(new Date().getTime());
     header.setBodyHash(protoHash(body));
 
@@ -62,38 +60,19 @@ export class Contract {
   }
 }
 
-/** Always use the same account for deploying and signing, and keep the nonce persisted in a file. */
+/** Always use the same account for deploying and signing. */
 export class BoundContract {
-  private noncePath: string;
-  private nonce: number;
 
   constructor(
     private contract: Contract,
-    private contractKeyPair: nacl.SignKeyPair,
-    noncePath: string) {
-    this.noncePath = noncePath;
-    this.initNonce();
+    private contractKeyPair: nacl.SignKeyPair) {
   }
 
   public deploy(args: ByteArray): Deploy {
     return this.contract.deploy(
-      args, this.nextNonce(),
+      args,
       this.contractKeyPair.publicKey,
       this.contractKeyPair);
-  }
-
-  private initNonce() {
-    if (fs.existsSync(this.noncePath)) {
-      this.nonce = Number(fs.readFileSync(this.noncePath).toString());
-    } else {
-      this.nonce = 1;
-    }
-  }
-
-  private nextNonce() {
-    const nonce = this.nonce++;
-    fs.writeFileSync(this.noncePath, this.nonce);
-    return nonce;
   }
 }
 

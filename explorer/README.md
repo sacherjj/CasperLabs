@@ -46,8 +46,7 @@ node ./server/dist/transfer.js \
   --from-private-key-path ../hack/docker/.casperlabs/genesis/system-account/account-private.pem \
   --from-public-key-path ../hack/docker/.casperlabs/genesis/system-account/account-public.pem \
   --to-public-key-path ./server/test.public.key \
-  --amount 100000000 \
-  --nonce 1
+  --amount 100000000
 ```
 
 NOTE: If you are connecting to a HTTPS endpoint which uses a self-signed certificate, which is the case in local testing, you have to relax the SSL certificate checks in Node.js like so:

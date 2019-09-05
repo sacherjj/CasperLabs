@@ -12,7 +12,6 @@ const optionDefinitions = [
   { name: "from-private-key-path", type: String },
   { name: "to-public-key-path", type: String },
   { name: "amount", type: BigInt },
-  { name: "nonce", type: Number },
 ];
 
 const options = commandLineArgs(optionDefinitions);
@@ -36,7 +35,7 @@ const accountPublicKeyBase16 = hex(accountPublicKey);
 
 const transfer = new Contract(options["transfer-contract-path"]);
 const args = Transfer.args(accountPublicKey, options.amount);
-const deploy = transfer.deploy(args, options.nonce, contractKeys.publicKey, contractKeys);
+const deploy = transfer.deploy(args, contractKeys.publicKey, contractKeys);
 
 const deployHashBase16 = hex(deploy.getDeployHash_asU8());
 
