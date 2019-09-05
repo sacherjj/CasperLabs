@@ -8,7 +8,8 @@ use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
-use crate::uref::URef;
+use crate::system_contracts::mint;
+use crate::uref::{AccessRights, URef};
 use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
@@ -552,6 +553,25 @@ pub fn transfer_from_purse_to_purse(
     }
     .try_into()
     .expect("Should parse result")
+}
+
+pub fn get_mint() -> Option<ContractPointer> {
+    let mint_public_uref = get_uref("mint")?;
+
+    if let Some(Value::Key(Key::URef(mint_private_uref))) = read_untyped(&mint_public_uref) {
+        let pointer = pointers::UPointer::new(mint_private_uref.addr(), AccessRights::READ);
+        Some(ContractPointer::URef(pointer))
+    } else {
+        None
+    }
+}
+
+pub fn mint_purse(amount: U512) -> Result<PurseId, mint::error::Error> {
+    let mint = get_mint().expect("mint contract should exist");
+
+    let result: Result<URef, mint::error::Error> = call_contract(mint, &("mint", amount), &vec![]);
+
+    result.map(PurseId::new)
 }
 
 pub fn get_phase() -> Phase {

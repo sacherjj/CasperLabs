@@ -18,6 +18,7 @@ pub enum Error {
     InvalidURef = 3,
     /// See [`PurseIdError::InvalidAccessRights`]
     InvalidAccessRights = 4,
+    IllegalNonemptyPurseCreation = 5,
 }
 
 impl From<PurseIdError> for Error {
