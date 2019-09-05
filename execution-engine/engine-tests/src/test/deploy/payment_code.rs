@@ -9,11 +9,9 @@ use contract_ffi::value::{Value, U512};
 use crate::support::test_support::{
     DeployBuilder, ExecRequestBuilder, WasmTestBuilder, GENESIS_INITIAL_BALANCE,
 };
+use engine_core::engine_state::genesis::POS_REWARDS_PURSE;
 use engine_core::engine_state::{EngineConfig, CONV_RATE, MAX_PAYMENT};
 use engine_shared::transform::Transform;
-use contract_ffi::value::account::PurseId;
-use engine_core::engine_state::genesis::POS_REWARDS_PURSE;
-
 
 use crate::support::test_support;
 
@@ -610,9 +608,11 @@ fn should_correctly_charge_when_session_code_succeeds() {
         initial_balance, tally,
         "no net resources should be gained or lost post-distribution"
     );
-    assert_eq!(initial_balance, tally, "no net resources should be gained or lost post-distribution")
+    assert_eq!(
+        initial_balance, tally,
+        "no net resources should be gained or lost post-distribution"
+    )
 }
-
 
 fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Option<PurseId> {
     let pos_contract = builder.get_pos_contract();
@@ -658,8 +658,7 @@ fn should_finalize_to_rewards_purse() {
 
     let mut builder = WasmTestBuilder::new(engine_config);
 
-    builder
-        .run_genesis(genesis_addr, HashMap::default());
+    builder.run_genesis(genesis_addr, HashMap::default());
 
     let rewards_purse_balance = get_pos_rewards_purse_balance(&builder);
     assert!(rewards_purse_balance.is_zero());

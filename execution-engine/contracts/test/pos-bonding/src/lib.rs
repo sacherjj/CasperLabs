@@ -8,7 +8,7 @@ use alloc::prelude::v1::{String, Vec};
 
 use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
 use contract_ffi::contract_api::{
-    add_uref, call_contract, create_purse, get_arg, get_uref, main_purse, read, revert,
+    call_contract, create_purse, get_arg, get_uref, main_purse, read, revert,
     transfer_from_purse_to_account, transfer_from_purse_to_purse, PurseTransferResult,
     TransferResult,
 };
