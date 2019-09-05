@@ -149,8 +149,11 @@ class ABI:
         # TODO: should be signed 64 bits
         return ABI.u64(a)
 
-    def big_int(a: bytes) -> bytes:
-        return ABI.u512(a)
+    def big_int(a) -> bytes:
+        try:
+            return ABI.u512(int(a["value"]))
+        except TypeError:
+            return ABI.u512(int(a))
 
     @staticmethod
     def args(l: list) -> bytes:
@@ -174,6 +177,13 @@ class ABI:
         args = json.loads(s)
 
         def python_value(typ, value: str):
+            if typ in ("big_int",):
+                try:
+                    # new style proto3 JSON
+                    return int(value["value"])
+                except TypeError:
+                    # compatibility mode
+                    return int(value)
             if typ in ABI.INTEGER_TYPES:
                 return int(value)
             elif typ in ABI.BYTE_ARRAY_TYPES:
@@ -645,7 +655,7 @@ def deploy_command(casperlabs_client, args):
         or None,
     )
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
-    print(f"Success! Deploy hash: {deploy_hash.hex()}")
+    print(f"Success! Deploy {deploy_hash.hex()} deployed")
 
 
 @guarded_command

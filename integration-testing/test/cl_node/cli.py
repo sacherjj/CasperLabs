@@ -47,10 +47,10 @@ class CLI:
 
         output = binary_output.decode("utf-8")
 
-        if command == "send-deploy":
+        if command in ("deploy", "send-deploy"):
             return output.split()[2]
 
-        if command in ("deploy", "propose"):
+        if command in ("propose",):
             return output.split()[3]
 
         if command == "show-blocks":
