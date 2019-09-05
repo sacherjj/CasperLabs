@@ -9,6 +9,7 @@ import cats.implicits._
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.DeployBuffer
@@ -48,8 +49,9 @@ package object gossiping {
   def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployBuffer: Validation](
       port: Int,
       conf: Configuration,
-      grpcScheduler: Scheduler
-  )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
+      ingressScheduler: Scheduler,
+      egressScheduler: Scheduler
+  )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
 
     val (cert, key) = conf.tls.readCertAndKey
 
@@ -59,19 +61,20 @@ package object gossiping {
     val serverSslContext = SslContexts.forServer(cert, key, ClientAuth.REQUIRE)
 
     // For client stub to GossipService conversions.
-    implicit val oi = ObservableIterant.default
+    implicit val oi = ObservableIterant.default(implicitly[Effect[F]], egressScheduler)
 
     for {
       cachedConnections <- makeConnectionsCache(
                             conf,
                             clientSslContext,
-                            grpcScheduler
+                            egressScheduler
                           )
 
       connectToGossip: GossipService.Connector[F] = (node: Node) => {
         cachedConnections.connection(node, enforce = true) map { chan =>
           new GossipingGrpcMonix.GossipServiceStub(chan)
         } map {
+          implicit val s = egressScheduler
           GrpcGossipService.toGossipService(
             _,
             onError = {
@@ -90,6 +93,12 @@ package object gossiping {
       downloadManager <- makeDownloadManager(conf, connectToGossip, relaying, validatorId)
 
       genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
+
+      implicit0(deploySelection: DeploySelection[F]) <- Resource.pure[F, DeploySelection[F]](
+                                                         DeploySelection.create[F](
+                                                           conf.casper.maxBlockSizeBytes
+                                                         )
+                                                       )
 
       // Make sure MultiParentCasperRef is set before the synchronizer is resumed.
       awaitApproval <- makeFiberResource {
@@ -137,7 +146,7 @@ package object gossiping {
             serverSslContext,
             conf,
             port,
-            grpcScheduler
+            ingressScheduler
           )
 
       // Start syncing with the bootstrap and/or some others in the background.
@@ -216,7 +225,7 @@ package object gossiping {
   private def makeConnectionsCache[F[_]: Concurrent: Log: Metrics](
       conf: Configuration,
       clientSslContext: SslContext,
-      grpcScheduler: Scheduler
+      egressScheduler: Scheduler
   ): Resource[F, CachedConnections[F, Unit]] = Resource {
     for {
       makeCache <- CachedConnections[F, Unit]
@@ -225,7 +234,7 @@ package object gossiping {
           _,
           conf,
           clientSslContext,
-          grpcScheduler
+          egressScheduler
         )
       }
       shutdown = cache.read.flatMap { s =>
@@ -243,14 +252,14 @@ package object gossiping {
       peer: Node,
       conf: Configuration,
       clientSslContext: SslContext,
-      grpcScheduler: Scheduler
+      egressScheduler: Scheduler
   ): F[ManagedChannel] =
     for {
       _ <- Log[F].debug(s"Creating new channel to peer ${peer.show}")
       chan <- Sync[F].delay {
                NettyChannelBuilder
                  .forAddress(peer.host, peer.protocolPort)
-                 .executor(grpcScheduler)
+                 .executor(egressScheduler)
                  .maxInboundMessageSize(conf.server.maxMessageSize)
                  .negotiationType(NegotiationType.TLS)
                  .sslContext(clientSslContext)
@@ -697,10 +706,10 @@ package object gossiping {
       serverSslContext: SslContext,
       conf: Configuration,
       port: Int,
-      grpcScheduler: Scheduler
+      ingressScheduler: Scheduler
   )(implicit m: Metrics[Id], l: Log[Id]) = {
     // Start the gRPC server.
-    implicit val s = grpcScheduler
+    implicit val s = ingressScheduler
     GrpcServer(
       port,
       services = List(

@@ -1,9 +1,9 @@
 use parity_wasm::elements::Serialize;
 
+use crate::engine_state;
 use contract_ffi::key::addr_to_hex;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
-use engine_state;
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
 

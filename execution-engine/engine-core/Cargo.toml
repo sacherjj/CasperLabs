@@ -2,6 +2,7 @@
 name = "casperlabs-engine-core"
 version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+edition = "2018"
 
 [dependencies]
 blake2 = "0.8"

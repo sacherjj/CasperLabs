@@ -14,7 +14,8 @@ fn parse_line(item: String) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-/// Runs a loop which parses metrics from stdin and pushes the parsed lines into a given accumulator
+/// Runs a loop which parses metrics from stdin and pushes the parsed lines into
+/// a given accumulator
 pub fn start_sink<P: Pusher<String>>(pusher: P) {
     let stdin = io::stdin();
     let handle = stdin.lock();

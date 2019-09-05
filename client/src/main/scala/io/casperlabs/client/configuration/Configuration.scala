@@ -1,5 +1,11 @@
 package io.casperlabs.client.configuration
-import java.io.File
+import com.google.protobuf.ByteString
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, InputStream}
+import java.nio.file.Files
+import io.casperlabs.client.configuration.Options.DeployOptions
+import io.casperlabs.casper.consensus.Deploy.{Arg, Code}, Code.Contract
+import io.casperlabs.crypto.codec.Base16
+import org.apache.commons.io._
 
 final case class ConnectOptions(
     host: String,
@@ -8,14 +14,118 @@ final case class ConnectOptions(
     nodeId: Option[String]
 )
 
+/** Options to capture all the possible ways of passing one of the session or payment contracts. */
+final case class CodeConfig(
+    // Point at a file on disk.
+    file: Option[File],
+    // Hash of a stored contract.
+    hash: Option[String],
+    // Name of a stored contract.
+    name: Option[String],
+    // URef of a stored contract.
+    uref: Option[String],
+    // Arguments parsed from JSON
+    args: Option[Seq[Arg]],
+    // Name of a pre-packaged contract in the client JAR.
+    resource: Option[String] = None
+)
+object CodeConfig {
+  val empty = CodeConfig(None, None, None, None, None, None)
+}
+
+/** Encapsulate reading session and payment contracts from disk or resources
+  * before putting them into the the format expected by the API.
+  */
+final case class DeployConfig(
+    sessionOptions: CodeConfig,
+    paymentOptions: CodeConfig,
+    nonce: Long,
+    gasPrice: Long,
+    paymentAmount: Option[BigInt]
+) {
+  def session(defaultArgs: Seq[Arg] = Nil) = DeployConfig.toCode(sessionOptions, defaultArgs)
+  def payment(defaultArgs: Seq[Arg] = Nil) = DeployConfig.toCode(paymentOptions, defaultArgs)
+
+  def withSessionResource(resource: String) =
+    copy(sessionOptions = sessionOptions.copy(resource = Some(resource)))
+  def withPaymentResource(resource: String) =
+    copy(paymentOptions = paymentOptions.copy(resource = Some(resource)))
+}
+
+object DeployConfig {
+  def apply(args: DeployOptions): DeployConfig =
+    DeployConfig(
+      sessionOptions = CodeConfig(
+        file = args.session.toOption,
+        hash = args.sessionHash.toOption,
+        name = args.sessionName.toOption,
+        uref = args.sessionUref.toOption,
+        args = args.sessionArgs.toOption.map(_.args)
+      ),
+      paymentOptions = CodeConfig(
+        file = args.payment.toOption,
+        hash = args.paymentHash.toOption,
+        name = args.paymentName.toOption,
+        uref = args.paymentUref.toOption,
+        args = args.paymentArgs.toOption.map(_.args)
+      ),
+      nonce = args.nonce(),
+      gasPrice = args.gasPrice(),
+      paymentAmount = args.paymentAmount.toOption
+    )
+
+  val empty = DeployConfig(CodeConfig.empty, CodeConfig.empty, 0, 0, None)
+
+  /** Produce a Deploy.Code DTO from the options.
+    * 'defaultArgs' can be used by specialized commands such as `transfer` and `unbond`
+    * to pass arguments they captured via dedicated CLI options, e.g. `--amount`, but
+    * if the user sends explicit arguments via `--session-args` or `--payment-args`
+    * they take precedence. This allows overriding the built-in contracts with custom ones.
+    */
+  private def toCode(opts: CodeConfig, defaultArgs: Seq[Arg]): Code = {
+    val contract = opts.file.map { f =>
+      val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
+      Contract.Wasm(wasm)
+    } orElse {
+      opts.hash.map { x =>
+        Contract.Hash(ByteString.copyFrom(Base16.decode(x)))
+      }
+    } orElse {
+      opts.name.map { x =>
+        Contract.Name(x)
+      }
+    } orElse {
+      opts.uref.map { x =>
+        Contract.Uref(ByteString.copyFrom(Base16.decode(x)))
+      }
+    } orElse {
+      opts.resource.map { x =>
+        val wasm =
+          ByteString.copyFrom(consumeInputStream(getClass.getClassLoader.getResourceAsStream(x)))
+        Contract.Wasm(wasm)
+      }
+    } getOrElse {
+      Contract.Empty
+    }
+
+    val args = opts.args getOrElse defaultArgs
+
+    Code(contract = contract, args = args)
+  }
+
+  private def consumeInputStream(is: InputStream): Array[Byte] = {
+    val baos = new ByteArrayOutputStream()
+    IOUtils.copy(is, baos)
+    baos.toByteArray
+  }
+}
+
 sealed trait Configuration
 
 final case class MakeDeploy(
     from: Option[String],
     publicKey: Option[File],
-    sessionCode: File,
-    paymentCode: File,
-    gasPrice: Long,
+    deployConfig: DeployConfig,
     deployPath: Option[File]
 ) extends Configuration
 
@@ -25,11 +135,9 @@ final case class SendDeploy(
 
 final case class Deploy(
     from: Option[String],
-    sessionCode: File,
-    paymentCode: Option[File],
+    deployConfig: DeployConfig,
     publicKey: Option[File],
-    privateKey: Option[File],
-    gasPrice: Long
+    privateKey: Option[File]
 ) extends Configuration
 
 /** Client command to sign a deploy.
@@ -49,21 +157,18 @@ final case class ShowDeploy(deployHash: String) extends Configuration
 final case class ShowBlocks(depth: Int)         extends Configuration
 final case class Bond(
     amount: Long,
-    sessionCode: Option[File],
-    paymentCode: Option[File],
+    deployConfig: DeployConfig,
     privateKey: File
 ) extends Configuration
 final case class Transfer(
     amount: Long,
     recipientPublicKeyBase64: String,
-    sessionCode: Option[File],
-    paymentCode: Option[File],
+    deployConfig: DeployConfig,
     privateKey: File
 ) extends Configuration
 final case class Unbond(
     amount: Option[Long],
-    sessionCode: Option[File],
-    paymentCode: Option[File],
+    deployConfig: DeployConfig,
     privateKey: File
 ) extends Configuration
 final case class VisualizeDag(
@@ -88,6 +193,7 @@ final case class Query(
 ) extends Configuration
 
 object Configuration {
+
   def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
     val options = Options(args)
     val connect = ConnectOptions(
@@ -100,19 +206,15 @@ object Configuration {
       case options.deploy =>
         Deploy(
           options.deploy.from.toOption,
-          options.deploy.session(),
-          options.deploy.payment.toOption,
+          DeployConfig(options.deploy),
           options.deploy.publicKey.toOption,
-          options.deploy.privateKey.toOption,
-          options.deploy.gasPrice()
+          options.deploy.privateKey.toOption
         )
       case options.makeDeploy =>
         MakeDeploy(
           options.makeDeploy.from.toOption,
           options.makeDeploy.publicKey.toOption,
-          options.makeDeploy.session(),
-          options.makeDeploy.payment(),
-          options.makeDeploy.gasPrice(),
+          DeployConfig(options.makeDeploy),
           options.makeDeploy.deployPath.toOption
         )
       case options.sendDeploy =>
@@ -137,23 +239,20 @@ object Configuration {
       case options.unbond =>
         Unbond(
           options.unbond.amount.toOption,
-          options.unbond.session.toOption,
-          options.unbond.paymentPath.toOption,
+          DeployConfig(options.unbond),
           options.unbond.privateKey()
         )
       case options.bond =>
         Bond(
           options.bond.amount(),
-          options.bond.session.toOption,
-          options.bond.paymentPath.toOption,
+          DeployConfig(options.bond),
           options.bond.privateKey()
         )
       case options.transfer =>
         Transfer(
           options.transfer.amount(),
           options.transfer.targetAccount(),
-          options.transfer.session.toOption,
-          options.transfer.paymentPath.toOption,
+          DeployConfig(options.transfer),
           options.transfer.privateKey()
         )
       case options.visualizeBlocks =>

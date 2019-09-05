@@ -2,7 +2,13 @@
 name = "casperlabs-engine-wasm-prep"
 version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+edition = "2018"
 
 [dependencies]
+contract-ffi = { path = "../contract-ffi",  package = "casperlabs-contract-ffi", features = ["std", "gens"] }
 parity-wasm = "0.31"
+proptest = "0.9.2"
 pwasm-utils = "0.6"
+
+[dev-dependencies]
+engine-shared = { path = "../engine-shared", package = "casperlabs-engine-shared" }

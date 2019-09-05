@@ -10,6 +10,8 @@ import cats.implicits._
 import io.casperlabs.catscontrib.Catscontrib._
 import simulacrum.typeclass
 
+import scala.util.Try
+
 /* FilesAPI typeclass. Use .attempt to handle errors if you care. */
 @typeclass trait FilesAPI[F[_]] {
   def readBytes(path: Path): F[Array[Byte]]
@@ -53,7 +55,8 @@ object FilesAPI {
         (for {
           _ <- Sync[F]
                 .delay(Files.createDirectories(path.getParent))
-                .whenA(!path.getParent.toFile.exists())
+                // File may not exists, so 'getParent' can fail with NullPointerException
+                .whenA(Try(path.getParent.toFile.exists()).fold(_ => false, _.unary_!))
           _ <- Sync[F]
                 .delay {
                   Files.write(path, data, options: _*)

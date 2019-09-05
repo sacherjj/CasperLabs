@@ -1,13 +1,13 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::collections::btree_map::BTreeMap;
-use alloc::prelude::Vec;
-use cl_std::contract_api;
-use cl_std::value::account::PublicKey;
+use alloc::prelude::v1::Vec;
+use contract_ffi::contract_api;
+use contract_ffi::value::account::PublicKey;
 
 #[no_mangle]
 pub extern "C" fn check_caller_ext() {

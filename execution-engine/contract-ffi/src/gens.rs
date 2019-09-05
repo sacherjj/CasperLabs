@@ -131,8 +131,8 @@ pub fn u512_arb() -> impl Strategy<Value = U512> {
 }
 
 pub fn value_arb() -> impl Strategy<Value = Value> {
-    // If compiler brings you here it most probably means you've added a variant to `Value` enum
-    // but forgot to add generator for it.
+    // If compiler brings you here it most probably means you've added a variant to
+    // `Value` enum but forgot to add generator for it.
     let stub: Option<Value> = None;
     if let Some(v) = stub {
         match v {

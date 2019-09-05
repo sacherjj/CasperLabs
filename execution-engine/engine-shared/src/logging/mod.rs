@@ -104,7 +104,7 @@ pub fn log_duration(
     duration: Duration,
 ) -> Option<MessageId> {
     initialize_terminal_logger();
-    let duration_in_seconds: f64 = duration.as_float_secs();
+    let duration_in_seconds: f64 = duration.as_secs_f64();
 
     log_metric(
         correlation_id,

@@ -1,11 +1,11 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api;
-use cl_std::value::account::{PublicKey, Weight};
+use contract_ffi::contract_api;
+use contract_ffi::value::account::{PublicKey, Weight};
 
 const INIT_WEIGHT: u8 = 1;
 const MOD_WEIGHT: u8 = 2;

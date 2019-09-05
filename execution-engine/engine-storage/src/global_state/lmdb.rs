@@ -8,21 +8,29 @@ use contract_ffi::key::Key;
 use contract_ffi::value::Value;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
-use error;
-use global_state::StateReader;
-use global_state::{commit, CommitResult, History};
-use trie::operations::create_hashed_empty_trie;
-use trie::Trie;
-use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use trie_store::operations::{read, ReadResult};
-use trie_store::{Transaction, TransactionSource, TrieStore};
 
-/// Represents a "view" of global state at a particular root hash.
+use crate::error;
+use crate::global_state::StateReader;
+use crate::global_state::{commit, CommitResult, History};
+use crate::store::Store;
+use crate::transaction_source::lmdb::LmdbEnvironment;
+use crate::transaction_source::{Transaction, TransactionSource};
+use crate::trie::operations::create_hashed_empty_trie;
+use crate::trie::Trie;
+use crate::trie_store::lmdb::LmdbTrieStore;
+use crate::trie_store::operations::{read, ReadResult};
+
 pub struct LmdbGlobalState {
     pub(super) environment: Arc<LmdbEnvironment>,
     pub(super) store: Arc<LmdbTrieStore>,
-    pub(super) root_hash: Blake2bHash,
     pub(super) empty_root_hash: Blake2bHash,
+}
+
+/// Represents a "view" of global state at a particular root hash.
+pub struct LmdbGlobalStateView {
+    pub(super) environment: Arc<LmdbEnvironment>,
+    pub(super) store: Arc<LmdbTrieStore>,
+    pub(super) root_hash: Blake2bHash,
 }
 
 impl LmdbGlobalState {
@@ -38,12 +46,7 @@ impl LmdbGlobalState {
             txn.commit()?;
             root_hash
         };
-        Ok(LmdbGlobalState::new(
-            environment,
-            store,
-            root_hash,
-            root_hash,
-        ))
+        Ok(LmdbGlobalState::new(environment, store, root_hash))
     }
 
     /// Creates a state from an existing environment, store, and root_hash.
@@ -51,19 +54,17 @@ impl LmdbGlobalState {
     pub(crate) fn new(
         environment: Arc<LmdbEnvironment>,
         store: Arc<LmdbTrieStore>,
-        root_hash: Blake2bHash,
         empty_root_hash: Blake2bHash,
     ) -> Self {
         LmdbGlobalState {
             environment,
             store,
-            root_hash,
             empty_root_hash,
         }
     }
 }
 
-impl StateReader<Key, Value> for LmdbGlobalState {
+impl StateReader<Key, Value> for LmdbGlobalStateView {
     type Error = error::Error;
 
     fn read(&self, correlation_id: CorrelationId, key: &Key) -> Result<Option<Value>, Self::Error> {
@@ -87,23 +88,22 @@ impl StateReader<Key, Value> for LmdbGlobalState {
 impl History for LmdbGlobalState {
     type Error = error::Error;
 
-    type Reader = Self;
+    type Reader = LmdbGlobalStateView;
 
-    fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {
+    fn checkout(&self, state_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
-        let maybe_root: Option<Trie<Key, Value>> = self.store.get(&txn, &prestate_hash)?;
-        let maybe_state = maybe_root.map(|_| LmdbGlobalState {
+        let maybe_root: Option<Trie<Key, Value>> = self.store.get(&txn, &state_hash)?;
+        let maybe_state = maybe_root.map(|_| LmdbGlobalStateView {
             environment: Arc::clone(&self.environment),
             store: Arc::clone(&self.store),
-            root_hash: prestate_hash,
-            empty_root_hash: self.empty_root_hash,
+            root_hash: state_hash,
         });
         txn.commit()?;
         Ok(maybe_state)
     }
 
     fn commit(
-        &mut self,
+        &self,
         correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
@@ -115,14 +115,7 @@ impl History for LmdbGlobalState {
             prestate_hash,
             effects,
         )?;
-        if let CommitResult::Success(root_hash) = commit_result {
-            self.root_hash = root_hash;
-        };
         Ok(commit_result)
-    }
-
-    fn current_root(&self) -> Blake2bHash {
-        self.root_hash
     }
 
     fn empty_root(&self) -> Blake2bHash {
@@ -135,8 +128,8 @@ mod tests {
     use lmdb::DatabaseFlags;
     use tempfile::tempdir;
 
-    use trie_store::operations::{write, WriteResult};
-    use TEST_MAP_SIZE;
+    use crate::trie_store::operations::{write, WriteResult};
+    use crate::TEST_MAP_SIZE;
 
     use super::*;
 
@@ -174,7 +167,7 @@ mod tests {
         ]
     }
 
-    fn create_test_state() -> LmdbGlobalState {
+    fn create_test_state() -> (LmdbGlobalState, Blake2bHash) {
         let correlation_id = CorrelationId::new();
         let _temp_dir = tempdir().unwrap();
         let environment = Arc::new(
@@ -182,10 +175,10 @@ mod tests {
         );
         let store =
             Arc::new(LmdbTrieStore::new(&environment, None, DatabaseFlags::empty()).unwrap());
-        let mut ret = LmdbGlobalState::empty(environment, store).unwrap();
+        let ret = LmdbGlobalState::empty(environment, store).unwrap();
+        let mut current_root = ret.empty_root_hash;
         {
             let mut txn = ret.environment.create_read_write_txn().unwrap();
-            let mut current_root = ret.root_hash;
 
             for TestPair { key, value } in &TEST_PAIRS {
                 match write::<_, _, _, LmdbTrieStore, error::Error>(
@@ -206,17 +199,16 @@ mod tests {
                 }
             }
 
-            ret.root_hash = current_root;
             txn.commit().unwrap();
         }
-        ret
+        (ret, current_root)
     }
 
     #[test]
     fn reads_from_a_checkout_return_expected_values() {
         let correlation_id = CorrelationId::new();
-        let state = create_test_state();
-        let checkout = state.checkout(state.root_hash).unwrap().unwrap();
+        let (state, root_hash) = create_test_state();
+        let checkout = state.checkout(root_hash).unwrap().unwrap();
         for TestPair { key, value } in TEST_PAIRS.iter().cloned() {
             assert_eq!(Some(value), checkout.read(correlation_id, &key).unwrap());
         }
@@ -224,7 +216,7 @@ mod tests {
 
     #[test]
     fn checkout_fails_if_unknown_hash_is_given() {
-        let state = create_test_state();
+        let (state, _) = create_test_state();
         let fake_hash: Blake2bHash = [1u8; 32].into();
         let result = state.checkout(fake_hash).unwrap();
         assert!(result.is_none());
@@ -235,8 +227,7 @@ mod tests {
         let correlation_id = CorrelationId::new();
         let test_pairs_updated = create_test_pairs_updated();
 
-        let mut state = create_test_state();
-        let root_hash = state.root_hash;
+        let (state, root_hash) = create_test_state();
 
         let effects: HashMap<Key, Transform> = {
             let mut tmp = HashMap::new();
@@ -266,8 +257,7 @@ mod tests {
         let correlation_id = CorrelationId::new();
         let test_pairs_updated = create_test_pairs_updated();
 
-        let mut state = create_test_state();
-        let root_hash = state.root_hash;
+        let (state, root_hash) = create_test_state();
 
         let effects: HashMap<Key, Transform> = {
             let mut tmp = HashMap::new();

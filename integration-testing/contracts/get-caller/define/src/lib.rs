@@ -1,12 +1,11 @@
 #![no_std]
-#![feature(alloc)]
 
 extern crate alloc;
-extern crate common;
+extern crate contract_ffi;
 
 use alloc::collections::btree_map::BTreeMap;
-use common::contract_api::{get_caller, store_function, add_uref};
-use common::value::account::PublicKey;
+use contract_ffi::contract_api::{get_caller, store_function, add_uref};
+use contract_ffi::value::account::PublicKey;
 
 fn test_get_caller() {
     // Assumes that will be called using test framework genesis account with

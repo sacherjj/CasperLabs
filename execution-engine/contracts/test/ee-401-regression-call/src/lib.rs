@@ -1,15 +1,14 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::string::String;
 
-use cl_std::contract_api;
-use cl_std::contract_api::pointers::{ContractPointer, UPointer};
-use cl_std::key::Key;
-use cl_std::uref::URef;
+use contract_ffi::contract_api;
+use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::uref::URef;
 
 enum Error {
     HelloExtNotFound = 1,
