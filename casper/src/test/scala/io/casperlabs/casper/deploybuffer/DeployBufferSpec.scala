@@ -317,9 +317,9 @@ trait DeployBufferSpec
               .groupBy(_.getHeader.accountPublicKey)
               .mapValues(_.minBy(_.getHeader.timestamp))
               .values
-              .toSet
+              .map(_.deployHash)
             got <- db.readAccountPendingOldest().compile.toList
-          } yield got.toSet shouldBe expected
+          } yield got should contain theSameElementsAs expected
         }
       }
     }
