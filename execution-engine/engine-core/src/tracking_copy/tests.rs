@@ -17,7 +17,7 @@ use contract_ffi::value::{Account, Contract, Value};
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
-use engine_storage::global_state::{History, StateReader};
+use engine_storage::global_state::{StateProvider, StateReader};
 
 use super::meter::count_meter::Count;
 use super::{AddResult, QueryResult, Validated};
