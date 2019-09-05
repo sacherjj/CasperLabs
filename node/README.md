@@ -70,7 +70,7 @@ An easy way to run CasperLabs Node is by using Docker. Use this pull command in 
 
 ```docker pull casperlabs/node```
 
-You can also [build a docker image yourself](#1.2 Building Docker image) and then run it.
+You can also [build a docker image yourself](https://github.com/CasperLabs/CasperLabs/tree/dev/node#12-building-docker-image) and then run it.
 
 ```console
 $ docker run -ti casperlabs/node run
@@ -107,7 +107,7 @@ $ docker run -ti casperlabs/node run
 
 ##### 2.1.2.2 Running Node directly from Packages
 
-This will run Node from a package that was built in [Building from source](#1. Building from source).  Select the package for your system and install.
+This will run Node from a package that was built in [Building from source](https://github.com/CasperLabs/CasperLabs/tree/dev/node#1-building-from-source). Select the package for your system and install.
 
 ```console
 $ ./node/target/universal/stage/bin/casperlabs-node run -s
