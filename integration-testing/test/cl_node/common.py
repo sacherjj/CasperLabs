@@ -3,6 +3,7 @@ import os
 import re
 import random
 import string
+import json
 import tempfile
 from pathlib import Path
 
@@ -54,25 +55,11 @@ class Contract:
     UPDATE_ASSOCIATED_KEY = "update_associated_key.wasm"
 
 
-# # Args  key: account, weight: u32
-# ADD_ASSOCIATED_KEY_CONTRACT = "add_associated_key.wasm"
-# # Args  key: account, amount: u32
-# TRANSFER_TO_ACCOUNT_CONTRACT = "transfer_to_account.wasm"
-# HELLO_NAME_CONTRACT = "test_helloname.wasm"
-# HELLO_WORLD = "test_helloworld.wasm"
-# COUNTER_CALL = "test_countercall.wasm"
-# MAILING_LIST_CALL = "test_mailinglistcall.wasm"
-# COMBINED_CONTRACT = "test_combinedcontractsdefine.wasm"
-# BONDING_CONTRACT = "test_bondingcall.wasm"
-# UNBONDING_CONTRACT = "test_unbondingcall.wasm"
-# INVALID_BONDING_CONTRACT = "test_invalid_bondingcall.wasm"
-# INVALID_UNBONDING_CONTRACT = "test_invalid_unbondingcall.wasm"
-# PAYMENT_PURSE_CONTRACT = "test_payment_purse.wasm"
-# PAYMENT_CONTRACT = "standard_payment.wasm"
 POS_BONDING_CONTRACT = "pos_bonding.wasm"
 
 MAX_PAYMENT_COST = 10000000  # ten million
 MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
+MAX_PAYMENT_JSON = json.dumps({"u512": MAX_PAYMENT_COST})
 CONV_RATE = 10
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"

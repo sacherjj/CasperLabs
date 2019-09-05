@@ -1,5 +1,5 @@
 import time
-from typing import Optional
+from typing import Optional, Union
 import docker.errors
 import os
 
@@ -8,7 +8,7 @@ from test.cl_node import LoggingMixin
 from test.cl_node.common import extract_block_count_from_show_blocks
 from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.client_base import CasperLabsClient
-from test.cl_node.common import random_string
+from test.cl_node.common import random_string, Contract, MAX_PAYMENT_JSON
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
 from test.cl_node.nonce_registry import NonceRegistry
@@ -119,23 +119,23 @@ class DockerClient(CasperLabsClient, LoggingMixin):
     def deploy(
         self,
         from_address: str = None,
-        gas_limit: int = 1000000,
-        gas_price: int = 1,
-        nonce: Optional[int] = None,
-        session_contract: str = None,
-        payment_contract: str = None,
-        private_key: Optional[str] = None,
-        public_key: Optional[str] = None,
+        gas_price: int = 10,
+        nonce: int = None,  # nonce == None means framework should provide correct nonce
+        session_contract: Optional[Union[str, Path]] = None,
+        session_args: Optional[str] = None,
+        payment_contract: Optional[Union[str, Path]] = Contract.STANDARD_PAYMENT,
+        payment_args: Optional[str] = MAX_PAYMENT_JSON,
+        public_key: Optional[Union[str, Path]] = None,
+        private_key: Optional[Union[str, Path]] = None,
     ) -> str:
 
-        assert session_contract is not None
-        assert payment_contract is not None
+        if session_contract is None:
+            raise ValueError(f"session_contract is required.")
 
         address = from_address or self.node.test_account.public_key_hex
 
         def docker_account_path(p):
             """Convert path of account key file to docker client's path in /data"""
-
             return Path(*(["/data"] + str(p).split("/")[-2:]))
 
         public_key = docker_account_path(
@@ -146,16 +146,16 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         )
 
         deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
-        payment_contract = payment_contract or session_contract
 
         command = (
             f"deploy --from {address}"
-            f" --gas-limit {gas_limit}"
             f" --gas-price {gas_price}"
             f" --session=/data/{session_contract}"
             f" --payment=/data/{payment_contract}"
             f" --private-key={private_key}"
             f" --public-key={public_key}"
+            # f" --session_args={session_args}"
+            # f" --payment_args={payment_args}"
         )
 
         # For testing CLI: option will not be passed to CLI if nonce is ''

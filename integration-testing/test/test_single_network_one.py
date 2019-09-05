@@ -71,14 +71,14 @@ def account_state(node, block_hash, account=GENESIS_ACCOUNT):
 def test_account_state(one_node_network):
     node = one_node_network.docker_nodes[0]
 
-    block_hash = deploy_and_propose_from_genesis(node, "test_counterdefine.wasm")
+    block_hash = deploy_and_propose_from_genesis(node, Contract.COUNTERDEFINE)
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error
 
     response = account_state(node, block_hash)
     assert response.account.nonce == 1, str(response)
 
-    block_hash = deploy_and_propose_from_genesis(node, "test_countercall.wasm")
+    block_hash = deploy_and_propose_from_genesis(node, Contract.COUNTERCALL)
     response = account_state(node, block_hash)
     assert response.account.nonce == 2, str(response)
 

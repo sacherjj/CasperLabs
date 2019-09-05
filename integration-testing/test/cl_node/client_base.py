@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Union
 
 
 class CasperLabsClient(ABC):
@@ -12,11 +13,14 @@ class CasperLabsClient(ABC):
     def deploy(
         self,
         from_address: str = None,
-        gas_limit: int = 1000000,
-        gas_price: int = 1,
+        gas_price: int = 10,
         nonce: int = None,  # nonce == None means framework should provide correct nonce
         session_contract: Optional[str] = None,
+        session_args: Optional[Union[str, bytes]] = None,
         payment_contract: Optional[str] = None,
+        payment_args: Optional[Union[str, bytes]] = None,
+        public_key: Optional[Union[str, Path]] = None,
+        private_key: Optional[Union[str, Path]] = None,
     ) -> str:
         pass
 

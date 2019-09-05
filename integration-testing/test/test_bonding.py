@@ -222,7 +222,7 @@ def test_invalid_unbonding(one_node_network_fn):
     node1 = one_node_network_fn.docker_nodes[1]
     block_hash2 = node1.unbond(
         session_contract=Contract.UNBONDINGCALL,
-        payment_contract=Contract.UNBONDINGCALL,
+        payment_contract=Contract.STANDARD_PAYMENT,
         maybe_amount=1985,  # 1985 > (2000+190) * 0.9
     )
 
@@ -243,7 +243,7 @@ def test_invalid_unbonding(one_node_network_fn):
 
     block_hash2 = node1.unbond(
         session_contract=Contract.UNBONDINGCALL,
-        payment_contract=Contract.UNBONDINGCALL,
+        payment_contract=Contract.STANDARD_PAYMENT,
         maybe_amount=None,
     )
     assert block_hash2 is not None
