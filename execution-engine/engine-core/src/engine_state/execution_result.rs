@@ -170,7 +170,7 @@ impl ExecutionResultBuilder {
         // payment_code_spec_3_b_ii: if (balance of PoS pay purse) < (gas spent during
         // payment code execution) * conv_rate, no session
         let insufficient_balance_to_continue =
-            payment_purse_balance < Motes::from_gas(payment_result_cost, CONV_RATE);
+            payment_purse_balance < Motes::from_gas(payment_result_cost, CONV_RATE)?;
 
         // payment_code_spec_4: insufficient payment
         if !(insufficient_balance_to_continue || payment_result_is_failure) {
@@ -199,7 +199,7 @@ impl ExecutionResultBuilder {
 
         let error = error::Error::InsufficientPaymentError;
         let effect = ExecutionEffect::new(ops, transforms);
-        let cost = Gas::from_motes(max_payment_cost, CONV_RATE);
+        let cost = Gas::from_motes(max_payment_cost, CONV_RATE).unwrap_or_default();
 
         Some(ExecutionResult::Failure {
             error,

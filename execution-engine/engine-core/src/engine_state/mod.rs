@@ -383,7 +383,7 @@ where
 
             let session_motes = Motes::from_u64(DEFAULT_SESSION_MOTES);
 
-            let gas_limit = Gas::from_motes(session_motes, CONV_RATE);
+            let gas_limit = Gas::from_motes(session_motes, CONV_RATE).unwrap_or_default();
 
             // Session code execution
             let session_result = executor.exec(
@@ -543,7 +543,7 @@ where
         let payment_result = {
             // payment_code_spec_1: init pay environment w/ gas limit == (max_payment_cost /
             // conv_rate)
-            let pay_gas_limit = Gas::from_motes(max_payment_cost, CONV_RATE);
+            let pay_gas_limit = Gas::from_motes(max_payment_cost, CONV_RATE).unwrap_or_default();
 
             // Create payment code module from bytes
             // validation_spec_1: valid wasm bytes
@@ -636,8 +636,9 @@ where
             // payment code execution) * conv_rate, yes session
             // session_code_spec_1: gas limit = ((balance of PoS payment purse) / conv_rate)
             // - (gas spent during payment execution)
-            let session_gas_limit: Gas =
-                Gas::from_motes(payment_purse_balance, CONV_RATE) - payment_result_cost;
+            let session_gas_limit: Gas = Gas::from_motes(payment_purse_balance, CONV_RATE)
+                .unwrap_or_default()
+                - payment_result_cost;
 
             executor.exec(
                 session_module,
@@ -682,7 +683,7 @@ where
 
             let proof_of_stake_args = {
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
-                let finalize_cost_motes: Motes = Motes::from_gas(execution_result_builder.total_cost(), CONV_RATE);
+                let finalize_cost_motes: Motes = Motes::from_gas(execution_result_builder.total_cost(), CONV_RATE).expect("motes overflow");
                 let args = ("finalize_payment", finalize_cost_motes.value(), account_addr);
                 ArgsParser::parse(&args)
                     .and_then(|args| args.to_bytes())

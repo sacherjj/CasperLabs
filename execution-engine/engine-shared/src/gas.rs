@@ -4,7 +4,7 @@ use contract_ffi::value::U512;
 
 use crate::motes::Motes;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Gas(U512);
 
 impl Gas {
@@ -16,8 +16,11 @@ impl Gas {
         self.0
     }
 
-    pub fn from_motes(motes: Motes, conv_rate: u64) -> Self {
-        Self::new(motes.value() / conv_rate)
+    pub fn from_motes(motes: Motes, conv_rate: u64) -> Option<Self> {
+        motes
+            .value()
+            .checked_div(U512::from(conv_rate))
+            .map(Self::new)
     }
 
     pub fn checked_add(&self, rhs: Self) -> Option<Self> {
@@ -32,12 +35,6 @@ impl Gas {
     // TODO: remove when possible; see https://casperlabs.atlassian.net/browse/EE-649
     pub fn from_u64(value: u64) -> Self {
         Gas(U512::from(value))
-    }
-}
-
-impl Default for Gas {
-    fn default() -> Self {
-        Gas(U512::zero())
     }
 }
 
@@ -155,7 +152,7 @@ mod tests {
     #[test]
     fn should_be_able_to_convert_from_mote() {
         let mote = Motes::new(U512::from(100));
-        let gas = Gas::from_motes(mote, 10);
+        let gas = Gas::from_motes(mote, 10).expect("should have gas");
         let expected_gas = Gas::new(U512::from(10));
         assert_eq!(gas, expected_gas, "should be equal")
     }
@@ -177,5 +174,22 @@ mod tests {
         assert!(left_gas <= right_gas, "should be lte");
         let left_gas = Gas::new(U512::from(10));
         assert!(left_gas < right_gas, "should be lt");
+    }
+
+    #[test]
+    fn should_default() {
+        let left_gas = Gas::new(U512::from(0));
+        let right_gas = Gas::default();
+        assert_eq!(left_gas, right_gas, "should be equal");
+        let u512 = U512::zero();
+        assert_eq!(left_gas.value(), u512, "should be equal");
+    }
+
+    #[test]
+    fn should_support_checked_div_from_motes() {
+        let motes = Motes::new(U512::zero());
+        let conv_rate = 0;
+        let maybe = Gas::from_motes(motes, conv_rate);
+        assert!(maybe.is_none(), "should be none due to overflow");
     }
 }
