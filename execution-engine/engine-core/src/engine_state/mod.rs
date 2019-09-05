@@ -19,6 +19,8 @@ use contract_ffi::uref::URef;
 use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
+use engine_shared::gas::Gas;
+use engine_shared::motes::Motes;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
 use engine_storage::global_state::{CommitResult, History, StateReader};
@@ -379,7 +381,9 @@ where
         if !(self.config.use_payment_code()) {
             // DEPLOY WITH NO PAYMENT
 
-            let gas_limit = DEFAULT_SESSION_MOTES / CONV_RATE;
+            let session_motes = Motes::from_u64(DEFAULT_SESSION_MOTES);
+
+            let gas_limit = Gas::from_motes(session_motes, CONV_RATE);
 
             // Session code execution
             let session_result = executor.exec(
@@ -401,7 +405,7 @@ where
 
         // --- REMOVE ABOVE --- //
 
-        let max_payment_cost: U512 = MAX_PAYMENT.into();
+        let max_payment_cost: Motes = Motes::from_u64(MAX_PAYMENT);
 
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
@@ -504,7 +508,7 @@ where
 
         // Get account main purse balance to enforce precondition and in case of forced
         // transfer validation_spec_5: account main purse minimum balance
-        let account_main_purse_balance: U512 = match tracking_copy
+        let account_main_purse_balance: Motes = match tracking_copy
             .borrow_mut()
             .get_purse_balance(correlation_id, account_main_purse_balance_key)
         {
@@ -539,7 +543,7 @@ where
         let payment_result = {
             // payment_code_spec_1: init pay environment w/ gas limit == (max_payment_cost /
             // conv_rate)
-            let pay_gas_limit = MAX_PAYMENT / CONV_RATE;
+            let pay_gas_limit = Gas::from_motes(max_payment_cost, CONV_RATE);
 
             // Create payment code module from bytes
             // validation_spec_1: valid wasm bytes
@@ -576,7 +580,7 @@ where
 
         // payment_code_spec_3: fork based upon payment purse balance and cost of
         // payment code execution
-        let payment_purse_balance: U512 = {
+        let payment_purse_balance: Motes = {
             // Get payment purse Key from proof of stake contract
             // payment_code_spec_6: system contract validity
             let payment_purse: Key = match proof_of_stake_info
@@ -632,8 +636,8 @@ where
             // payment code execution) * conv_rate, yes session
             // session_code_spec_1: gas limit = ((balance of PoS payment purse) / conv_rate)
             // - (gas spent during payment execution)
-            let session_gas_limit: u64 =
-                ((payment_purse_balance / CONV_RATE) - payment_result_cost).as_u64();
+            let session_gas_limit: Gas =
+                Gas::from_motes(payment_purse_balance, CONV_RATE) - payment_result_cost;
 
             executor.exec(
                 session_module,
@@ -678,9 +682,8 @@ where
 
             let proof_of_stake_args = {
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
-                let finalize_cost_motes =
-                    U512::from(execution_result_builder.total_cost() * CONV_RATE);
-                let args = ("finalize_payment", finalize_cost_motes, account_addr);
+                let finalize_cost_motes: Motes = Motes::from_gas(execution_result_builder.total_cost(), CONV_RATE);
+                let args = ("finalize_payment", finalize_cost_motes.value(), account_addr);
                 ArgsParser::parse(&args)
                     .and_then(|args| args.to_bytes())
                     .expect("args should parse")
@@ -696,15 +699,18 @@ where
                 .urefs_lookup()
                 .clone();
 
+            let base_key = proof_of_stake_info.inner_key();
+            let gas_limit = Gas::from_u64(std::u64::MAX);
+
             executor.exec_direct(
                 proof_of_stake_module,
                 &proof_of_stake_args,
                 &mut proof_of_stake_keys,
-                proof_of_stake_info.inner_key(),
+                base_key,
                 &system_account,
                 authorization_keys.clone(),
                 blocktime,
-                std::u64::MAX, // <-- this execution should be unlimited but approximating
+                gas_limit,
                 protocol_version,
                 correlation_id,
                 finalization_tc,

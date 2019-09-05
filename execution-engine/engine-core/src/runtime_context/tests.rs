@@ -9,7 +9,13 @@ use rand_chacha::ChaChaRng;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
 use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::value::account::{
+    AccountActivity, ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
+    RemoveKeyFailure, SetThresholdFailure, Weight,
+};
 use contract_ffi::value::{self, Account, Contract, Value};
+use engine_shared::gas::Gas;
+use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::{InMemoryGlobalState, InMemoryGlobalStateView};
 use engine_storage::global_state::{CommitResult, History};
@@ -17,11 +23,6 @@ use engine_storage::global_state::{CommitResult, History};
 use super::{Error, RuntimeContext, URefAddr, Validated};
 use crate::execution::{create_rng, extract_access_rights_from_keys};
 use crate::tracking_copy::TrackingCopy;
-use contract_ffi::value::account::{
-    AccountActivity, ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
-    RemoveKeyFailure, SetThresholdFailure, Weight,
-};
-use engine_shared::newtypes::CorrelationId;
 
 fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemoryGlobalStateView> {
     let correlation_id = CorrelationId::new();
@@ -112,8 +113,8 @@ fn mock_runtime_context<'a>(
         &account,
         base_key,
         BlockTime(0),
-        0,
-        0,
+        Gas::default(),
+        Gas::default(),
         0,
         Rc::new(RefCell::new(rng)),
         1,
@@ -413,8 +414,8 @@ fn contract_key_addable_valid() {
         &account,
         contract_key,
         BlockTime(0),
-        0,
-        0,
+        Gas::default(),
+        Gas::default(),
         0,
         Rc::new(RefCell::new(chacha_rng)),
         1,
@@ -468,8 +469,8 @@ fn contract_key_addable_invalid() {
         &account,
         other_contract_key,
         BlockTime(0),
-        0,
-        0,
+        Gas::default(),
+        Gas::default(),
         0,
         Rc::new(RefCell::new(chacha_rng)),
         1,

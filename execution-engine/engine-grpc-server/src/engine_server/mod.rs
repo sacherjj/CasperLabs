@@ -6,7 +6,6 @@ use std::io::ErrorKind;
 use std::marker::{Send, Sync};
 use std::time::Instant;
 
-use crate::engine_server::ipc::CommitResponse;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::U512;
@@ -25,6 +24,7 @@ use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 use self::ipc_grpc::ExecutionEngineService;
 use self::mappings::*;
+use crate::engine_server::ipc::CommitResponse;
 
 pub mod ipc;
 pub mod ipc_grpc;

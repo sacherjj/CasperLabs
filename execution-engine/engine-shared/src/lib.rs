@@ -12,7 +12,9 @@ extern crate num;
 extern crate parity_wasm;
 
 #[macro_use]
+pub mod gas;
 pub mod logging;
+pub mod motes;
 pub mod newtypes;
 pub mod os;
 pub mod semver;
