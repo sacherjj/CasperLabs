@@ -26,6 +26,7 @@ import json
 from operator import add
 from functools import reduce
 from itertools import dropwhile
+import logging
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -451,15 +452,13 @@ class CasperLabsClient:
         if from_addr and len(from_addr) != 32:
             raise Exception(f"from_addr must be 32 bytes")
 
-        # Compatibility mode, should be removed when payment is obligatory
-        # if len(list(filter(None, (payment, payment_hash, payment_name, payment_uref)))) == 0:
-        #    import logging
-        #    logging.info("No payment contract provided, using session as payment")
-        #    payment = session
-        payment = payment or session
-
         session_options = (session, session_hash, session_name, session_uref)
         payment_options = (payment, payment_hash, payment_name, payment_uref)
+
+        # Compatibility mode, should be removed when payment is obligatory
+        if len(list(filter(None, payment_options))) == 0:
+            logging.info("No payment contract provided, using session as payment")
+            payment_options = session_options
 
         if len(list(filter(None, session_options))) != 1:
             raise TypeError(
