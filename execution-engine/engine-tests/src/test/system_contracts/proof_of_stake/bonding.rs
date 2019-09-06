@@ -9,6 +9,7 @@ use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::genesis::POS_BONDING_PURSE;
 use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
+use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
@@ -91,7 +92,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    let mut genesis_gas_cost = test_support::get_exec_costs(&exec_response)[0] * CONV_RATE;
+    let mut genesis_gas_cost = test_support::get_exec_costs(&exec_response)[0];
 
     let transforms = &result.builder().get_transforms()[0];
 
@@ -160,7 +161,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    genesis_gas_cost += test_support::get_exec_costs(&exec_response)[0] * CONV_RATE;
+    genesis_gas_cost = genesis_gas_cost + test_support::get_exec_costs(&exec_response)[0];
 
     let account_1 = result
         .builder()
@@ -226,12 +227,12 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    let gas_cost_b = test_support::get_exec_costs(&exec_response);
-    let gas_cost_b = gas_cost_b[0] * CONV_RATE;
+    let gas_cost_b = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
+        .expect("should convert");
 
     assert_eq!(
         account_1_bal_after,
-        account_1_bal_before - gas_cost_b + ACCOUNT_1_UNBOND_1,
+        account_1_bal_before - gas_cost_b.value() + ACCOUNT_1_UNBOND_1,
     );
 
     // POS bonding purse is decreased
@@ -285,7 +286,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    genesis_gas_cost += test_support::get_exec_costs(&exec_response)[0] * CONV_RATE;
+    genesis_gas_cost = genesis_gas_cost + test_support::get_exec_costs(&exec_response)[0];
 
     assert_eq!(
         result
@@ -293,7 +294,10 @@ fn should_run_successful_bond_and_unbond() {
             .get_purse_balance(genesis_account.purse_id()),
         U512::from(
             test_support::GENESIS_INITIAL_BALANCE
-                - genesis_gas_cost
+                - Motes::from_gas(genesis_gas_cost, CONV_RATE)
+                    .expect("should convert")
+                    .value()
+                    .as_u64()
                 - ACCOUNT_1_SEED_AMOUNT
                 - GENESIS_ACCOUNT_UNBOND_2
         ),
@@ -332,12 +336,12 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    let gas_cost_b = test_support::get_exec_costs(&exec_response);
-    let gas_cost_b = gas_cost_b[0] * CONV_RATE;
+    let gas_cost_b = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
+        .expect("should convert");
 
     assert_eq!(
         account_1_bal_after,
-        account_1_bal_before - gas_cost_b + ACCOUNT_1_UNBOND_2,
+        account_1_bal_before - gas_cost_b.value() + ACCOUNT_1_UNBOND_2,
     );
 
     // POS bonding purse contains now genesis validator (50k) + genesis account
@@ -380,7 +384,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    genesis_gas_cost += test_support::get_exec_costs(&exec_response)[0] * CONV_RATE;
+    genesis_gas_cost = genesis_gas_cost + test_support::get_exec_costs(&exec_response)[0];
 
     // Back to original after funding account1's pursee
     assert_eq!(
@@ -388,7 +392,12 @@ fn should_run_successful_bond_and_unbond() {
             .builder()
             .get_purse_balance(genesis_account.purse_id()),
         U512::from(
-            test_support::GENESIS_INITIAL_BALANCE - genesis_gas_cost - ACCOUNT_1_SEED_AMOUNT
+            test_support::GENESIS_INITIAL_BALANCE
+                - Motes::from_gas(genesis_gas_cost, CONV_RATE)
+                    .expect("should convert")
+                    .value()
+                    .as_u64()
+                - ACCOUNT_1_SEED_AMOUNT
         )
     );
 

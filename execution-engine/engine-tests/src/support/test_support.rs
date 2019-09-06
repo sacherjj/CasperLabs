@@ -18,6 +18,7 @@ use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{to_domain_validators, CommitTransforms};
 use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_grpc_server::engine_server::{ipc, transforms};
+use engine_shared::gas::Gas;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
@@ -359,12 +360,12 @@ pub fn get_exec_transforms(
         .collect()
 }
 
-pub fn get_exec_costs(exec_response: &ExecResponse) -> Vec<u64> {
+pub fn get_exec_costs(exec_response: &ExecResponse) -> Vec<Gas> {
     let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
 
     deploy_results
         .iter()
-        .map(|deploy_result| deploy_result.get_execution_result().get_cost())
+        .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
         .collect()
 }
 
