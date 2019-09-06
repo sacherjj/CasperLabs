@@ -713,7 +713,6 @@ def test_cli_scala_direct_call_hash(scala_cli):
     public_key, private_key = account.public_key_docker_path, account.private_key_docker_path
 
     cli("deploy",
-        # '--nonce', 1,
         '--from', account.public_key_hex,
         '--session', test_contract,
         '--payment', test_contract,
@@ -725,7 +724,6 @@ def test_cli_scala_direct_call_hash(scala_cli):
     ch = contract_hash(account.public_key_hex, 0, 0).hex()
 
     deploy_hash = cli("deploy",
-                      # '--nonce', 2,
                       '--from', account.public_key_hex,
                       '--session-hash', ch,
                       '--payment-hash', ch,
@@ -743,7 +741,6 @@ def test_cli_scala_direct_call_hash(scala_cli):
         assert not deploy_info.is_error
 
     deploy_hash = cli("deploy",
-                      # '--nonce', 3,
                       '--from', account.public_key_hex,
                       '--session-name', "counter",
                       '--payment-name', "counter",
