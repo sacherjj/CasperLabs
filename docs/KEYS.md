@@ -74,7 +74,7 @@ Generate keys: Success
 
 (for DApp Developers)
 
-Currently, the recommended method for generating account keys is to use the [CasperLabs Explorer](https://explorer.casperlabs.io).
+Currently, the recommended method for generating account keys is to use the [CasperLabs Explorer](https://clarity.casperlabs.io).
 
 These instructions are provided for reference and advanced use-cases.
 

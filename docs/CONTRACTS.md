@@ -33,13 +33,13 @@ export COUNTER_DEFINE="$(pwd)/target/wasm32-unknown-unknown/release/counterdefin
 export COUNTER_CALL="$(pwd)/target/wasm32-unknown-unknown/release/countercall.wasm"
 ```
 
-##### Step 3: Create an account at [explorer.casperlabs.io](https://explorer.casperlabs.io)
+##### Step 3: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
 
 Create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine where you will deploy contracts.
 
 ##### Step 4: Add coins to this account
 
-Add coins to this account using the [faucet](https://explorer.casperlabs.io/#/faucet).
+Add coins to this account using the [faucet](https://clarity.casperlabs.io/#/faucet).
 
 ##### Step 5: Deploy `counterdefine.wasm`
 ```
