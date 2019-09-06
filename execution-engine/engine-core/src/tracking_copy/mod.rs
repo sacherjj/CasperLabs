@@ -16,11 +16,12 @@ use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_shared::transform::{self, Transform, TypeMismatch};
 use engine_storage::global_state::StateReader;
 
+use crate::engine_state::execution_effect::ExecutionEffect;
+use crate::engine_state::op::Op;
+
 pub use self::ext::TrackingCopyExt;
 use self::meter::heap_meter::HeapSize;
 use self::meter::Meter;
-use crate::engine_state::execution_effect::ExecutionEffect;
-use crate::engine_state::op::Op;
 
 #[derive(Debug)]
 pub enum QueryResult {

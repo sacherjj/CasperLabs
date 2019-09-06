@@ -4,7 +4,8 @@ import logging
 import time
 
 from test.cl_node import LoggingMixin
-from casperlabs_client import CasperLabsClient, ABI, InternalError
+from test.cl_node.nonce_registry import NonceRegistry
+from casperlabs_client import CasperLabsClient, ABI, InternalError, extract_common_name
 
 
 class PythonClient(CasperLabsClient, LoggingMixin):
@@ -17,10 +18,18 @@ class PythonClient(CasperLabsClient, LoggingMixin):
             os.environ.get("TAG_NAME", None) and self.node.container_name or "localhost"
         )
 
+        certificate_file = None
+        node_id = None
+        if self.node.config.grpc_encryption:
+            certificate_file = self.node.config.tls_certificate_local_path()
+            node_id = extract_common_name(certificate_file)
+
         self.client = CasperLabsClient(
             host=host,
             internal_port=self.node.grpc_internal_docker_port,
             port=self.node.grpc_external_docker_port,
+            node_id=node_id,
+            certificate_file=certificate_file,
         )
         logging.info(
             f"PythonClient(host={self.client.host}, "

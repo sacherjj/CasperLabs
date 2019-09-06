@@ -21,7 +21,7 @@ use engine_shared::logging;
 use engine_shared::logging::log_level;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{self, TypeMismatch};
-use engine_storage::global_state::{CommitResult, History};
+use engine_storage::global_state::{CommitResult, StateProvider};
 
 use crate::engine_server::{ipc, state, transforms};
 
@@ -694,7 +694,8 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 let mut deploy_result = ipc::DeployResult::new();
                 let mut execution_result = ipc::DeployResult_ExecutionResult::new();
                 execution_result.set_effects(ipc_ee);
-                execution_result.set_cost(cost);
+                // TODO: executionresult cost should be BIGINT; see https://casperlabs.atlassian.net/browse/EE-649
+                execution_result.set_cost(cost.as_u64());
                 deploy_result.set_execution_result(execution_result);
                 deploy_result
             }
@@ -723,25 +724,25 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         ExecutionError::DeploymentAuthorizationFailure,
                     ) => precondition_failure(error.to_string()),
                     EngineError::StorageError(storage_err) => {
-                        execution_error(storage_err.to_string(), cost, effect)
+                        execution_error(storage_err.to_string(), cost.as_u64(), effect)
                     }
                     error @ EngineError::AuthorizationError => {
                         precondition_failure(error.to_string())
                     }
                     EngineError::MissingSystemContractError(msg) => {
-                        execution_error(msg, cost, effect)
+                        execution_error(msg, cost.as_u64(), effect)
                     }
                     error @ EngineError::InsufficientPaymentError => {
                         let msg = error.to_string();
-                        execution_error(msg, cost, effect)
+                        execution_error(msg, cost.as_u64(), effect)
                     }
                     error @ EngineError::DeployError => {
                         let msg = error.to_string();
-                        execution_error(msg, cost, effect)
+                        execution_error(msg, cost.as_u64(), effect)
                     }
                     error @ EngineError::FinalizationError => {
                         let msg = error.to_string();
-                        execution_error(msg, cost, effect)
+                        execution_error(msg, cost.as_u64(), effect)
                     }
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
@@ -754,7 +755,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             let exec_result = {
                                 let mut tmp = ipc::DeployResult_ExecutionResult::new();
                                 tmp.set_error(deploy_error);
-                                tmp.set_cost(cost);
+                                tmp.set_cost(cost.as_u64());
                                 tmp.set_effects(effect.into());
                                 tmp
                             };
@@ -764,11 +765,11 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         }
                         ExecutionError::KeyNotFound(key) => {
                             let msg = format!("Key {:?} not found.", key);
-                            execution_error(msg, cost, effect)
+                            execution_error(msg, cost.as_u64(), effect)
                         }
                         ExecutionError::Revert(status) => {
                             let error_msg = format!("Exit code: {}", status);
-                            execution_error(error_msg, cost, effect)
+                            execution_error(error_msg, cost.as_u64(), effect)
                         }
                         ExecutionError::Interpreter(error) => {
                             // If the error happens during contract execution it's mapped to
@@ -786,28 +787,30 @@ impl From<ExecutionResult> for ipc::DeployResult {
                                     match downcasted_error {
                                         ExecutionError::Revert(status) => {
                                             let errors_msg = format!("Exit code: {}", status);
-                                            execution_error(errors_msg, cost, effect)
+                                            execution_error(errors_msg, cost.as_u64(), effect)
                                         }
                                         ExecutionError::KeyNotFound(key) => {
                                             let errors_msg = format!("Key {:?} not found.", key);
-                                            execution_error(errors_msg, cost, effect)
+                                            execution_error(errors_msg, cost.as_u64(), effect)
                                         }
-                                        other => {
-                                            execution_error(format!("{:?}", other), cost, effect)
-                                        }
+                                        other => execution_error(
+                                            format!("{:?}", other),
+                                            cost.as_u64(),
+                                            effect,
+                                        ),
                                     }
                                 }
 
                                 None => {
                                     let msg = format!("{:?}", error);
-                                    execution_error(msg, cost, effect)
+                                    execution_error(msg, cost.as_u64(), effect)
                                 }
                             }
                         }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
                             let msg = format!("{:?}", other);
-                            execution_error(msg, cost, effect)
+                            execution_error(msg, cost.as_u64(), effect)
                         }
                     },
                 }
@@ -816,13 +819,13 @@ impl From<ExecutionResult> for ipc::DeployResult {
     }
 }
 
-pub fn grpc_response_from_commit_result<H>(
+pub fn grpc_response_from_commit_result<S>(
     prestate_hash: Blake2bHash,
-    input: Result<CommitResult, H::Error>,
+    input: Result<CommitResult, S::Error>,
 ) -> ipc::CommitResponse
 where
-    H: History,
-    H::Error: Into<EngineError> + std::fmt::Debug,
+    S: StateProvider,
+    S::Error: Into<EngineError> + std::fmt::Debug,
 {
     match input {
         Ok(CommitResult::RootNotFound) => {
@@ -970,6 +973,7 @@ mod tests {
     use engine_core::engine_state::execution_effect::ExecutionEffect;
     use engine_core::engine_state::execution_result::ExecutionResult;
     use engine_core::execution::Error;
+    use engine_shared::gas::Gas;
     use engine_shared::newtypes::Blake2bHash;
     use engine_shared::transform::gens::transform_arb;
     use engine_shared::transform::Transform;
@@ -1017,7 +1021,7 @@ mod tests {
         };
         let execution_effect: ExecutionEffect =
             ExecutionEffect::new(HashMap::new(), input_transforms.clone());
-        let cost: u64 = 123;
+        let cost: Gas = Gas::from_u64(123);
         let execution_result: ExecutionResult = ExecutionResult::Success {
             effect: execution_effect,
             cost,
@@ -1025,7 +1029,7 @@ mod tests {
         let mut ipc_deploy_result: ipc::DeployResult = execution_result.into();
         assert!(ipc_deploy_result.has_execution_result());
         let mut success = ipc_deploy_result.take_execution_result();
-        assert_eq!(success.get_cost(), cost);
+        assert_eq!(success.get_cost(), cost.as_u64());
 
         // Extract transform map from the IPC message and parse it back to the domain
         let ipc_transforms: HashMap<Key, Transform> = {
@@ -1040,7 +1044,7 @@ mod tests {
         assert_eq!(&input_transforms, &ipc_transforms);
     }
 
-    fn into_execution_failure<E: Into<EngineError>>(error: E, cost: u64) -> ExecutionResult {
+    fn into_execution_failure<E: Into<EngineError>>(error: E, cost: Gas) -> ExecutionResult {
         ExecutionResult::Failure {
             error: error.into(),
             effect: Default::default(),
@@ -1048,18 +1052,18 @@ mod tests {
         }
     }
 
-    fn test_cost<E: Into<EngineError>>(expected_cost: u64, err: E) -> u64 {
+    fn test_cost<E: Into<EngineError>>(expected_cost: Gas, err: E) -> Gas {
         let execution_failure = into_execution_failure(err, expected_cost);
         let ipc_deploy_result: ipc::DeployResult = execution_failure.into();
         assert!(ipc_deploy_result.has_execution_result());
         let success = ipc_deploy_result.get_execution_result();
-        success.get_cost()
+        Gas::from_u64(success.get_cost())
     }
 
     #[test]
     fn storage_error_has_cost() {
         use engine_storage::error::Error::*;
-        let cost: u64 = 100;
+        let cost: Gas = Gas::from_u64(100);
         // TODO: actually create an Rkv error
         // assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
         let bytesrepr_err = contract_ffi::bytesrepr::Error::EarlyEndOfStream;
@@ -1068,7 +1072,7 @@ mod tests {
 
     #[test]
     fn exec_err_has_cost() {
-        let cost: u64 = 100;
+        let cost: Gas = Gas::from_u64(100);
         // GasLimit error is treated differently at the moment so test separately
         assert_eq!(
             test_cost(cost, engine_core::execution::Error::GasLimit),
@@ -1117,7 +1121,7 @@ mod tests {
         let exec_result = ExecutionResult::Failure {
             error: ExecError(revert_error),
             effect: Default::default(),
-            cost: 10,
+            cost: Gas::from_u64(10),
         };
         let ipc_result: ipc::DeployResult = exec_result.into();
         assert!(ipc_result.has_execution_result());

@@ -2,7 +2,7 @@ import time
 from typing import Optional
 import docker.errors
 import os
-
+from pathlib import Path
 
 from test.cl_node import LoggingMixin
 from test.cl_node.common import extract_block_count_from_show_blocks
@@ -11,7 +11,8 @@ from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
-from pathlib import Path
+from test.cl_node.nonce_registry import NonceRegistry
+from casperlabs_client import extract_common_name
 
 
 def resource(file_name):
@@ -41,6 +42,11 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         }
         if add_host:
             command = f"--host {self.node.container_name} {command}"
+            if self.node.cl_network.grpc_encryption:
+                node_id = extract_common_name(
+                    self.node.config.tls_certificate_local_path()
+                )
+                command = f"--node-id {node_id} {command}"
         self.logger.info(f"COMMAND {command}")
         container = self.docker_client.containers.run(
             image=f"casperlabs/client:{self.node.docker_tag}",

@@ -1,13 +1,14 @@
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
-use contract_ffi::value::{Account, Contract, Value, U512};
+use contract_ffi::value::{Account, Contract, Value};
+use engine_shared::motes::Motes;
+use engine_shared::newtypes::{CorrelationId, Validated};
+use engine_shared::transform::TypeMismatch;
+use engine_storage::global_state::StateReader;
 
 use crate::execution;
 use crate::tracking_copy::{QueryResult, TrackingCopy};
-use engine_shared::newtypes::CorrelationId;
-use engine_shared::transform::TypeMismatch;
-use engine_storage::global_state::StateReader;
 
 pub struct SystemContractInfo {
     outer_key: Key,
@@ -66,7 +67,7 @@ pub trait TrackingCopyExt<R> {
         &mut self,
         correlation_id: CorrelationId,
         balance_key: Key,
-    ) -> Result<U512, Self::Error>;
+    ) -> Result<Motes, Self::Error>;
 
     /// Gets the system contract, packaged with its outer uref key and inner
     /// uref key
@@ -134,13 +135,13 @@ where
         &mut self,
         correlation_id: CorrelationId,
         key: Key,
-    ) -> Result<U512, Self::Error> {
+    ) -> Result<Motes, Self::Error> {
         let query_result = match self.query(correlation_id, key, &[]) {
             Ok(query_result) => query_result,
             Err(_) => return Err(execution::Error::KeyNotFound(key)),
         };
         match query_result {
-            QueryResult::Success(Value::UInt512(balance)) => Ok(balance),
+            QueryResult::Success(Value::UInt512(balance)) => Ok(Motes::new(balance)),
             QueryResult::Success(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
                 "Value::UInt512".to_string(),
                 other.type_string(),
