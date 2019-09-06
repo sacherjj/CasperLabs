@@ -8,16 +8,21 @@ use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::EngineState;
+use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
+use engine_core::engine_state::{EngineConfig, EngineState};
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 
 const INITIAL_GENESIS_AMOUNT: u64 = 100_000_000_000;
 
-const TRANSFER_1_AMOUNT: u32 = 1000;
+const TRANSFER_1_AMOUNT: u64 = (MAX_PAYMENT * 5) + 1000;
 const TRANSFER_2_AMOUNT: u32 = 750;
+
+const TRANSFER_2_AMOUNT_WITH_ADV: u64 = MAX_PAYMENT + TRANSFER_2_AMOUNT as u64;
+const TRANSFER_TOO_MUCH: u64 = u64::max_value();
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -72,8 +77,9 @@ fn should_transfer_to_account() {
     let genesis_account_key = Key::Account(GENESIS_ADDR);
     let account_key = Key::Account(ACCOUNT_1_ADDR);
 
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, Default::default());
+    let engine_state = EngineState::new(global_state, engine_config);
 
     // Run genesis
 
@@ -149,9 +155,14 @@ fn should_transfer_to_account() {
         .lookup(&exec_transforms, genesis_account_purse_id)
         .expect("should lookup");
 
+    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
+        .expect("should convert");
+
     assert_eq!(
         genesis_balance_transform,
-        Transform::Write(Value::UInt512(initial_genesis_amount - transfer_amount))
+        Transform::Write(Value::UInt512(
+            initial_genesis_amount - gas_cost.value() - transfer_amount
+        ))
     );
 
     // Check account 1 balance
@@ -176,8 +187,9 @@ fn should_transfer_from_account_to_account() {
     let account_1_key = Key::Account(ACCOUNT_1_ADDR);
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, Default::default());
+    let engine_state = EngineState::new(global_state, engine_config);
 
     // Run genesis
 
@@ -239,9 +251,14 @@ fn should_transfer_from_account_to_account() {
         .lookup(&exec_1_transforms, genesis_account_purse_id)
         .expect("should lookup");
 
+    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_1_response)[0], CONV_RATE)
+        .expect("should convert");
+
     assert_eq!(
         genesis_balance_transform,
-        Transform::Write(Value::UInt512(initial_genesis_amount - transfer_1_amount))
+        Transform::Write(Value::UInt512(
+            initial_genesis_amount - gas_cost.value() - transfer_1_amount
+        ))
     );
 
     // Check account 1 balance
@@ -279,7 +296,7 @@ fn should_transfer_from_account_to_account() {
         STANDARD_PAYMENT_CONTRACT,
         (U512::from(MAX_PAYMENT),),
         "transfer_to_account_02.wasm",
-        (),
+        (U512::from(TRANSFER_2_AMOUNT),),
         commit_hash,
         DEFAULT_BLOCK_TIME,
         1,
@@ -306,9 +323,14 @@ fn should_transfer_from_account_to_account() {
         .lookup(&exec_2_transforms, account_1_purse_id)
         .expect("should lookup");
 
+    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_2_response)[0], CONV_RATE)
+        .expect("should convert");
+
     assert_eq!(
         account_1_balance_transform,
-        Transform::Write(Value::UInt512(transfer_1_amount - transfer_2_amount))
+        Transform::Write(Value::UInt512(
+            transfer_1_amount - gas_cost.value() - transfer_2_amount
+        ))
     );
 
     let account_2_balance_transform = test_context
@@ -331,8 +353,9 @@ fn should_transfer_to_existing_account() {
     let account_1_key = Key::Account(ACCOUNT_1_ADDR);
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, Default::default());
+    let engine_state = EngineState::new(global_state, engine_config);
 
     // Run genesis
 
@@ -405,9 +428,14 @@ fn should_transfer_to_existing_account() {
         .lookup(&exec_1_transforms, genesis_account_purse_id)
         .expect("should lookup");
 
+    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
+        .expect("should convert");
+
     assert_eq!(
         genesis_balance_transform,
-        Transform::Write(Value::UInt512(initial_genesis_amount - transfer_1_amount))
+        Transform::Write(Value::UInt512(
+            initial_genesis_amount - gas_cost.value() - transfer_1_amount
+        ))
     );
 
     // Check account 1 balance
@@ -445,7 +473,7 @@ fn should_transfer_to_existing_account() {
         STANDARD_PAYMENT_CONTRACT,
         (U512::from(MAX_PAYMENT),),
         "transfer_to_account_02.wasm",
-        (),
+        (U512::from(TRANSFER_2_AMOUNT),),
         commit_hash,
         DEFAULT_BLOCK_TIME,
         1,
@@ -472,9 +500,14 @@ fn should_transfer_to_existing_account() {
         .lookup(&exec_2_transforms, account_1_purse_id)
         .expect("should lookup");
 
+    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
+        .expect("should convert");
+
     assert_eq!(
         account_1_balance_transform,
-        Transform::Write(Value::UInt512(transfer_1_amount - transfer_2_amount))
+        Transform::Write(Value::UInt512(
+            transfer_1_amount - gas_cost.value() - transfer_2_amount
+        ))
     );
 
     // Check account 2 balance
@@ -492,8 +525,9 @@ fn should_transfer_to_existing_account() {
 #[ignore]
 #[test]
 fn should_fail_when_insufficient_funds() {
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
     let global_state = InMemoryGlobalState::empty().unwrap();
-    let engine_state = EngineState::new(global_state, Default::default());
+    let engine_state = EngineState::new(global_state, engine_config);
 
     // Run genesis
 
@@ -553,7 +587,7 @@ fn should_fail_when_insufficient_funds() {
         STANDARD_PAYMENT_CONTRACT,
         (U512::from(MAX_PAYMENT),),
         "transfer_to_account_02.wasm",
-        (),
+        (U512::from(TRANSFER_2_AMOUNT_WITH_ADV),),
         commit_hash,
         DEFAULT_BLOCK_TIME,
         1,
@@ -586,7 +620,7 @@ fn should_fail_when_insufficient_funds() {
         STANDARD_PAYMENT_CONTRACT,
         (U512::from(MAX_PAYMENT),),
         "transfer_to_account_02.wasm",
-        (),
+        (U512::from(TRANSFER_TOO_MUCH),),
         commit_hash,
         DEFAULT_BLOCK_TIME,
         2,

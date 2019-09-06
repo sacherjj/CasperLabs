@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use grpc::RequestOptions;
 
 use crate::support::test_support::WasmTestBuilder;
-use engine_core::engine_state::EngineState;
+use engine_core::engine_state::{EngineConfig, EngineState};
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 
@@ -12,8 +12,9 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 #[ignore]
 #[test]
 fn should_run_genesis() {
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
     let global_state = InMemoryGlobalState::empty().expect("should create global state");
-    let engine_state = EngineState::new(global_state, Default::default());
+    let engine_state = EngineState::new(global_state, engine_config);
 
     let (genesis_request, _) =
         crate::support::test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
