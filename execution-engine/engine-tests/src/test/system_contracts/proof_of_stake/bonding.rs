@@ -533,7 +533,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
             "pos_bonding.wasm",
             (String::from(TEST_UNBOND), Some(U512::from(42))),
             DEFAULT_BLOCK_TIME,
-            [1; 32],,
+            [1; 32],
         )
         .commit()
         .finish();

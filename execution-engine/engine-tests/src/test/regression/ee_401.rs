@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 
+use crate::support::test_support::{
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
-use engine_core::engine_state::{EngineConfig, EngineState};
-use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use engine_storage::global_state::in_memory::InMemoryGlobalState;
-
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 const GENESIS_ADDR: [u8; 32] = [0u8; 32];
 

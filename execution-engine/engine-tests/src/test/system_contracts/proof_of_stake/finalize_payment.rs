@@ -44,7 +44,7 @@ fn initialize() -> WasmTestBuilder {
             "transfer_purse_to_account.wasm",
             (ACCOUNT_ADDR, U512::from(MAX_PAYMENT)),
             DEFAULT_BLOCK_TIME,
-            [2; 32],,
+            [2; 32],
         )
         .expect_success()
         .commit();
@@ -85,7 +85,7 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
             FINALIZE_PAYMENT,
             args,
             DEFAULT_BLOCK_TIME,
-            [2;32],
+            [2; 32],
         )
         .is_error());
 }

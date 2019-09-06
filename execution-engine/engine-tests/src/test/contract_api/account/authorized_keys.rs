@@ -335,7 +335,6 @@ fn should_authorize_deploy_with_multiple_keys() {
             (PublicKey::new(key_2),),
             DEFAULT_BLOCK_TIME,
             [2u8; 32], // deploy hash
-            (PublicKey::new(key_2),),
         )
         .expect_success()
         .commit()
@@ -404,7 +403,8 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
             (Weight::new(0), Weight::new(0)), //args
-            [3u8; 32],                        // deploy hash
+            DEFAULT_BLOCK_TIME,
+            [3u8; 32], // deploy hash
             vec![
                 PublicKey::new(key_1),
                 PublicKey::new(key_1),

@@ -5,7 +5,6 @@ use crate::support::test_support::{
 };
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
-use contract_ffi::value::Value;
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;

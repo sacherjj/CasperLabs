@@ -7,6 +7,7 @@ use crate::support::test_support::{
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
+use engine_core::engine_state::genesis::POS_REWARDS_PURSE;
 use engine_core::engine_state::{EngineConfig, CONV_RATE, MAX_PAYMENT};
 use engine_shared::transform::Transform;
 
@@ -552,7 +553,7 @@ fn should_finalize_to_rewards_purse() {
             )
             .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()

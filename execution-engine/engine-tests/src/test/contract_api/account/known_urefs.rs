@@ -63,15 +63,9 @@ fn should_run_known_urefs_contract() {
 
     assert!(u512_value.is_some(), "should have write uin512");
 
-    let account = transform
-        .get(&Key::Account(GENESIS_ADDR))
-        .and_then(|transform| {
-            if let Transform::Write(Value::Account(account)) = transform {
-                Some(account)
-            } else {
-                None
-            }
-        })
+    let account = result
+        .builder()
+        .get_account(Key::Account(GENESIS_ADDR))
         .expect("Unable to get account transformation");
     // Those named URefs are created, although removed at the end of the test
     assert!(account.urefs_lookup().get("URef1").is_none());

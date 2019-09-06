@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    get_exec_costs, WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 
 use contract_ffi::base16;
@@ -9,7 +9,8 @@ use contract_ffi::base16;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
+use engine_core::engine_state::{CONV_RATE, MAX_PAYMENT};
+use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
@@ -124,8 +125,7 @@ fn should_insert_into_account_known_urefs() {
 #[ignore]
 #[test]
 fn should_create_usable_purse_id() {
-    let mut builder = WasmTestBuilder::default();
-    let purse_key = *builder
+    let result = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
@@ -149,20 +149,32 @@ fn should_create_usable_purse_id() {
         )
         .expect_success()
         .commit()
-        .finish()
+        .finish();
+
+    let exec_response = result
+        .builder()
+        .get_exec_response(1)
+        .expect("should have exec response 1");
+
+    let account_1 = result
         .builder()
         .get_account(Key::Account(ACCOUNT_1_ADDR))
-        .expect("should have account")
+        .expect("should have account");
+
+    let purse_key = account_1
         .urefs_lookup()
         .get(TEST_PURSE_NAME)
         .expect("should have known_uref");
 
     let purse_id = PurseId::new(*purse_key.as_uref().expect("should have uref"));
 
-    let purse_balance = builder.get_purse_balance(purse_id);
+    let gas_cost =
+        Motes::from_gas(get_exec_costs(&exec_response)[0], CONV_RATE).expect("should convert");
+
+    let purse_balance = result.builder().get_purse_balance(purse_id);
     assert_eq!(
         purse_balance,
-        U512::from(0),
+        U512::from(ACCOUNT_1_INITIAL_BALANCE) - gas_cost.value(),
         "when created directly a purse has 0 balance"
     );
 }
