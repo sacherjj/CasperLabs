@@ -355,6 +355,8 @@ class DockerNode(LoggingDockerBase):
         session_args: bytes = None,
         payment_args: bytes = None,
     ) -> str:
+        # NOTE: The Scala client is bundled with a bond contract that expects long_value,
+        #       but the integration test version expects int.
         json_args = json.dumps([{"name": "amount", "value": {"int_value": amount}}])
         return self._deploy_and_propose_with_abi_args(
             session_contract, payment_contract, Account(from_account_id), json_args
@@ -367,9 +369,15 @@ class DockerNode(LoggingDockerBase):
         maybe_amount: Optional[int] = None,
         from_account_id: Union[str, int] = "genesis",
     ) -> str:
-        amount = {} if maybe_amount is None else {"int_value": maybe_amount}
+        # NOTE: The Scala client is bundled with an unbond contract that expects an optional
+        #       value, but the integration tests have their own version which expects an int
+        #       and turns 0 into None inside the contract itself
+        # amount = {} if maybe_amount is None else {"int_value": maybe_amount}
+        # json_args = json.dumps(
+        #     [{"name": "amount", "value": {"optional_value": amount}}]
+        # )
         json_args = json.dumps(
-            [{"name": "amount", "value": {"optional_value": amount}}]
+            [{"name": "amount", "value": {"int_value": maybe_amount or 0}}]
         )
         return self._deploy_and_propose_with_abi_args(
             session_contract, payment_contract, Account(from_account_id), json_args
