@@ -40,7 +40,7 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     fn mint(&self, initial_balance: U512) -> Result<Self::PurseId, Error> {
         let caller = contract_api::get_caller();
         if !initial_balance.is_zero() && caller.value() != SYSTEM_ACCOUNT {
-            return Err(Error::IllegalNonemptyPurseCreation);
+            return Err(Error::InvalidNonEmptyPurseCreation);
         }
 
         let balance_uref: Key = contract_api::new_uref(initial_balance).into();
