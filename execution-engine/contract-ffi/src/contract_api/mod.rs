@@ -20,6 +20,8 @@ use alloc::vec::Vec;
 use argsparser::ArgsParser;
 use core::convert::{TryFrom, TryInto};
 
+const MINT_NAME: &str = "mint";
+
 /// Read value under the key in the global state
 pub fn read<T>(u_ptr: UPointer<T>) -> T
 where
@@ -555,7 +557,7 @@ pub fn transfer_from_purse_to_purse(
 }
 
 pub fn get_mint() -> Option<ContractPointer> {
-    let mint_public_uref = get_uref("mint")?;
+    let mint_public_uref = get_uref(MINT_NAME)?;
 
     if let Some(Value::Key(Key::URef(mint_private_uref))) = read_untyped(&mint_public_uref) {
         let pointer = pointers::UPointer::new(mint_private_uref.addr(), AccessRights::READ);
