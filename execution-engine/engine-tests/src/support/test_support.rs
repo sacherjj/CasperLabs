@@ -296,7 +296,7 @@ pub fn create_exec_request(
     authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
 ) -> ExecRequest {
     let deploy = DeployBuilder::new()
-        .with_session_code(session_contract_file_name, arguments)
+        .with_session_code(session_file, session_args)
         .with_payment_code(payment_file, payment_args)
         .with_nonce(nonce)
         .with_address(address)
