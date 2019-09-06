@@ -289,7 +289,7 @@ pub fn create_exec_request(
     payment_file: &str,
     payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     session_file: &str,
-    arguments: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     pre_state_hash: &[u8],
     block_time: u64,
     nonce: u64,
