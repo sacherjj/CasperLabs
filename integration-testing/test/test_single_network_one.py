@@ -846,6 +846,9 @@ def test_cli_scala_extended_deploy(scala_cli):
 def test_cli_scala_direct_call_hash(scala_cli):
     cli = scala_cli
     account = scala_cli.node.test_account
+    # Contract source:
+    # https://github.com/CasperLabs/CasperLabs/blob/e6023cb8a620e3e885923ff630ede53fefa0d631/integration-testing/contracts/counter/define/src/lib.rs
+
     test_contract = "/data/test_counterdefine.wasm"
     public_key, private_key = account.public_key_docker_path, account.private_key_docker_path
 
@@ -872,4 +875,25 @@ def test_cli_scala_direct_call_hash(scala_cli):
     deploys = cli("show-deploys", block_hash)
     for deploy_info in deploys:
         assert not deploy_info.deploy.deploy_hash == deploy_hash
+        assert not deploy_info.is_error
+
+    args = json.dumps([{"name": "method_name", "value": {"string_value": "inc"}}])
+
+    deploy_hash = cli("deploy",
+                      '--nonce', 3,
+                      '--from', account.public_key_hex,
+                      '--session-name', "counter",
+                      '--payment-name', "counter",
+                      '--session-args', f"'{args}'",
+                      '--payment-args', f"'{args}'",
+                      '--private-key', private_key,
+                      '--public-key', public_key)
+
+    block_hash = cli("propose")
+
+    deploys = cli("show-deploys", block_hash)
+    for deploy_info in deploys:
+        assert not deploy_info.deploy.deploy_hash == deploy_hash
+        # Fails, error message is: "Key Key::Hash(8398b7eb0cc061f91d671a005c3e7bef52868d7fa40cbc3c3672eb29709dce7e) not found."
+        assert deploy_info.error_message == ""
         assert not deploy_info.is_error
