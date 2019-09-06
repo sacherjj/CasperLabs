@@ -320,7 +320,6 @@ def transfer_to_account(
     public_key: str,
     private_key: str,
     gas_price: int = 1,
-    gas_limit: int = 5000000,
     session_contract="transfer_to_account.wasm",
     payment_contract="standard_payment.wasm",
     payment_args=ABI.args([ABI.u512(5000000)]),
@@ -335,7 +334,6 @@ def transfer_to_account(
         public_key=public_key,
         private_key=private_key,
         gas_price=gas_price,
-        gas_limit=gas_limit,
         session_args=session_args,
         payment_args=payment_args,
     )
@@ -371,12 +369,10 @@ def _call_pos_bonding(
     public_key: str,
     private_key: str,
     gas_price: int = 1,
-    gas_limit: int = 5000000,
     session_contract: str = "pos_bonding.wasm",
     payment_contract: str = "standard_payment.wasm",
     payment_args: bytes = ABI.args([ABI.u512(50000000)]),
     method: bytes = b"bond",
-    nonce: int = None,
 ):
     if method == b"bond":
         session_args = ABI.args([ABI.byte_array(method), ABI.u512(amount)])
@@ -392,10 +388,8 @@ def _call_pos_bonding(
 
     node.p_client.deploy(
         from_address=from_address,
-        nonce=nonce,
         session_contract=session_contract,
         payment_contract=payment_contract,
-        gas_limit=gas_limit,
         gas_price=gas_price,
         public_key=public_key,
         private_key=private_key,
@@ -416,11 +410,9 @@ def bond(
     public_key: str,
     private_key: str,
     gas_price: int = 1,
-    gas_limit: int = 5000000,
     session_contract: str = "pos_bonding.wasm",
     payment_contract: str = "standard_payment.wasm",
     payment_args: bytes = ABI.args([ABI.u512(50000000)]),
-    nonce=None,
 ):
     return _call_pos_bonding(
         node,
@@ -429,12 +421,10 @@ def bond(
         public_key,
         private_key,
         gas_price,
-        gas_limit,
         session_contract,
         payment_contract,
         payment_args,
         b"bond",
-        nonce,
     )
 
 
@@ -445,11 +435,9 @@ def unbond(
     public_key: str,
     private_key: str,
     gas_price: int = 1,
-    gas_limit: int = 5000000,
     session_contract: str = "pos_bonding.wasm",
     payment_contract: str = "standard_payment.wasm",
     payment_args: bytes = ABI.args([ABI.u512(50000000)]),
-    nonce=None,
 ):
     return _call_pos_bonding(
         node,
@@ -458,12 +446,10 @@ def unbond(
         public_key,
         private_key,
         gas_price,
-        gas_limit,
         session_contract,
         payment_contract,
         payment_args,
         b"unbond",
-        nonce,
     )
 
 
@@ -545,7 +531,6 @@ def test_unbonding_then_creating_block(payment_node_network):
         100,
         bonding_account.public_key_path,
         bonding_account.private_key_path,
-        nonce=3,
     )
 
     info(f"BONDING block_hash={bonding_block_hash}")
@@ -560,7 +545,6 @@ def test_unbonding_then_creating_block(payment_node_network):
         session_contract=HELLO_NAME_CONTRACT,
         payment_contract=PAYMENT_CONTRACT,
         payment_args=ABI.args([ABI.u512(5000000)]),
-        nonce=3,
     )
     block_hash = nodes[1].p_client.propose().block_hash.hex()
     check_no_errors_in_deploys(nodes[1], block_hash)

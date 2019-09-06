@@ -11,7 +11,7 @@ const BLOCK_TIME: u64 = 42;
 fn should_revert() {
     WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, REVERT_WASM, BLOCK_TIME, 1)
+        .exec(GENESIS_ADDR, REVERT_WASM, BLOCK_TIME, [1u8; 32])
         .commit()
         .is_error();
 }

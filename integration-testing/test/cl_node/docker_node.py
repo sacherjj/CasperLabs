@@ -1,4 +1,5 @@
 import logging
+import json
 import os
 import re
 import shutil
@@ -6,11 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
-from test.cl_node.common import (
-    extract_block_hash_from_propose_output,
-    MAX_PAYMENT_COST,
-    CONV_RATE,
-)
+from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.docker_base import LoggingDockerBase
 from test.cl_node.docker_client import DockerClient
 from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
@@ -22,7 +19,6 @@ from test.cl_node.common import (
     TRANSFER_TO_ACCOUNT_CONTRACT,
     MAX_PAYMENT_ABI,
 )
-from casperlabs_client import ABI
 
 
 FIRST_VALIDATOR_ACCOUNT = 100
@@ -280,7 +276,6 @@ class DockerNode(LoggingDockerBase):
         payment_contract: str = PAYMENT_CONTRACT,
         payment_args: bytes = None,
         gas_price: int = 1,
-        gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
         is_deploy_error_check: bool = True,
     ) -> str:
         """
@@ -292,7 +287,6 @@ class DockerNode(LoggingDockerBase):
         :param session_contract: session contract to execute.
         :param payment_contract: Payment contract to execute.
         :param gas_price: Gas price
-        :param gas_limit: Max gas price that can be expended.
         :param is_deploy_error_check: Check that amount transfer is success.
 
         :returns block_hash in hex str
@@ -308,6 +302,8 @@ class DockerNode(LoggingDockerBase):
 
         from_account = Account(from_account_id)
         to_account = Account(to_account_id)
+
+        ABI = self.p_client.abi
 
         session_args = ABI.args(
             [ABI.account(to_account.public_key_binary), ABI.u32(amount)]
@@ -331,7 +327,6 @@ class DockerNode(LoggingDockerBase):
             public_key=from_account.public_key_path,
             private_key=from_account.private_key_path,
             gas_price=gas_price,
-            gas_limit=gas_limit,
             session_args=session_args,
             payment_args=payment_args,
         )
@@ -360,11 +355,11 @@ class DockerNode(LoggingDockerBase):
         session_args: bytes = None,
         payment_args: bytes = None,
     ) -> str:
+        # NOTE: The Scala client is bundled with a bond contract that expects long_value,
+        #       but the integration test version expects int.
+        json_args = json.dumps([{"name": "amount", "value": {"int_value": amount}}])
         return self._deploy_and_propose_with_abi_args(
-            session_contract,
-            payment_contract,
-            Account(from_account_id),
-            ABI.args([ABI.u32(amount)]),
+            session_contract, payment_contract, Account(from_account_id), json_args
         )
 
     def unbond(
@@ -374,12 +369,18 @@ class DockerNode(LoggingDockerBase):
         maybe_amount: Optional[int] = None,
         from_account_id: Union[str, int] = "genesis",
     ) -> str:
-        amount = 0 if maybe_amount is None else maybe_amount
+        # NOTE: The Scala client is bundled with an unbond contract that expects an optional
+        #       value, but the integration tests have their own version which expects an int
+        #       and turns 0 into None inside the contract itself
+        # amount = {} if maybe_amount is None else {"int_value": maybe_amount}
+        # json_args = json.dumps(
+        #     [{"name": "amount", "value": {"optional_value": amount}}]
+        # )
+        json_args = json.dumps(
+            [{"name": "amount", "value": {"int_value": maybe_amount or 0}}]
+        )
         return self._deploy_and_propose_with_abi_args(
-            session_contract,
-            payment_contract,
-            Account(from_account_id),
-            ABI.args([ABI.u32(amount)]),
+            session_contract, payment_contract, Account(from_account_id), json_args
         )
 
     def _deploy_and_propose_with_abi_args(
@@ -387,8 +388,7 @@ class DockerNode(LoggingDockerBase):
         session_contract: str,
         payment_contract: str,
         from_account: Account,
-        session_args: str,
-        gas_limit: int = MAX_PAYMENT_COST / CONV_RATE,
+        json_args: str,
         gas_price: int = 1,
         payment_args: bytes = None,
     ) -> str:
@@ -396,11 +396,10 @@ class DockerNode(LoggingDockerBase):
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
             payment_contract=payment_contract,
-            gas_limit=gas_limit,
             gas_price=gas_price,
             public_key=from_account.public_key_path,
             private_key=from_account.private_key_path,
-            session_args=session_args,
+            session_args=self.p_client.abi.args_from_json(json_args),
             payment_args=payment_args,
         )
 

@@ -13,7 +13,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.ipc
-import io.casperlabs.ipc.DeployResult.Value.{ExecutionResult, InvalidNonce}
+import io.casperlabs.ipc.DeployResult.Value.{ExecutionResult, PreconditionFailure}
 import io.casperlabs.ipc._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
@@ -229,7 +229,7 @@ object DeploySelectionTest {
       .fill(deploys.size) {
         val counterValue = counter.getAndIncrement()
         if (counterValue % 2 == 0) {
-          DeployResult(InvalidNonce(ipc.DeployResult.InvalidNonce(0, 0)))
+          DeployResult().withPreconditionFailure(ipc.DeployResult.PreconditionFailure("Nope."))
         } else {
           val (opEntry, transformEntry) = readTransform
           val effect                    = ExecutionEffect(Seq(opEntry), Seq(transformEntry))

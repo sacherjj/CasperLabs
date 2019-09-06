@@ -94,14 +94,13 @@ def test_block_propagation(
     wait_for_block_hashes_propagated_to_all_nodes(nodes, deployed_block_hashes)
 
 
-def deploy_and_propose(node, contract, nonce=None):
+def deploy_and_propose(node, contract):
     deploy_output = node.client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
         session_contract=contract,
         payment_contract=contract,
-        nonce=nonce,
     )
     if type(deploy_output) == str:
         assert "Success" in deploy_output
@@ -201,9 +200,10 @@ def test_network_partition_and_rejoin(four_nodes_network):
     # and the 1 block proposed in its partition.
     # Using the same nonce in both partitions because otherwise one of them will
     # sit there unable to propose; should use separate accounts really.
+    # TODO Change to multiple accounts
     block_hashes = (
-        deploy_and_propose(partitions[0][0], C[0], nonce=2),
-        deploy_and_propose(partitions[1][0], C[1], nonce=2),
+        deploy_and_propose(partitions[0][0], C[0]),
+        deploy_and_propose(partitions[1][0], C[1]),
     )
 
     for partition, block_hash in zip(partitions, block_hashes):
@@ -225,7 +225,7 @@ def test_network_partition_and_rejoin(four_nodes_network):
     # however, nodes in partition[0] will still not see blocks from partition[1]
     # until they also propose a new one on top of the block the created during
     # the network outage.
-    block_hash = deploy_and_propose(nodes[0], C[2], nonce=3)
+    block_hash = deploy_and_propose(nodes[0], C[2])
 
     for partition, old_hash in zip(partitions, block_hashes):
         logging.info(f"CHECK {partition} HAS ALL BLOCKS CREATED IN BOTH PARTITIONS")

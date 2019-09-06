@@ -47,10 +47,8 @@ casperlabs-client \
     --host deploy.casperlabs.io \
     deploy \
     --private-key <path-to-private-key> \
-    --session $COUNTER_DEFINE \
-    --nonce <nonce>
+    --session $COUNTER_DEFINE
 ```
-For each account, for your first deploy, the `--nonce` argument must be 1.  See note [below](#a-note-about-nonces).
 
 You should see the following output:
 ```
@@ -68,10 +66,8 @@ casperlabs-client \
     --host deploy.casperlabs.io \
     deploy \
     --private-key <path-to-private-key> \
-    --session $COUNTER_CALL \
-    --nonce <nonce>
+    --session $COUNTER_CALL
 ```
-For each account, for your second deploy, the `--nonce` argument must be 2.  See note [below](#a-note-about-nonces).
 
 You should see the following output:
 ```
@@ -96,9 +92,8 @@ casperlabs-client \
     make-deploy \
     --session session-code.wasm \
     --payment payment-code.wasm \
-    --nonce 1 \
     --from a1130120d27f6f692545858cc5c284b1ef30fe287caef648b0c405def88f543a
-``` 
+```
 This will write a deploy in binary format to STDOUT. It's possible to write it to a file, by supplying `-o` argument:
 ```
 casperlabs-client \
@@ -106,7 +101,6 @@ casperlabs-client \
     make-deploy \
     --session session-code.wasm \
     --payment payment-code.wasm \
-    --nonce 1 \
     --from a1130120d27f6f692545858cc5c284b1ef30fe287caef648b0c405def88f543a
     -o /deploys/deploy_1
 ```
@@ -142,10 +136,6 @@ For more detailed description, use `--help` flag (`casper-client --help`).
 
 See the instructions [here](QUERYING.md).
 
-#### A note about nonces
-
-For each account you have, you must keep track of the nonces you use and increment the nonce by 1 for each subsequent deploy, bonding request, or unbonding request you make.
-
 #### Using a local standalone node
 
 If you are testing with a [local standalone node](NODE.md#running-a-single-node), you will need to change the `--host` argument:
@@ -155,8 +145,7 @@ casperlabs-client \
     --host 127.0.0.1 \
     deploy \
     --private-key <path-to-private-key> \
-    --session $COUNTER_DEFINE \
-    --nonce <nonce>
+    --session $COUNTER_DEFINE
 ```
 
 You will also need to explicitly propose after making a deploy (or several deploys), in order for your deploys to be committed:

@@ -33,7 +33,7 @@ const faucet = new BoundContract(
     process.env.FAUCET_CONTRACT_PATH!,
     process.env.PAYMENT_CONTRACT_PATH!
   ),
-  contractKeys, process.env.FAUCET_NONCE_PATH!);
+  contractKeys);
 
 // Constant payment amount.
 const paymentAmount = BigInt(process.env.PAYMENT_AMOUNT!);
@@ -127,7 +127,6 @@ app.post("/api/faucet", checkJwt, (req, res) => {
       res.send(response);
     })
     .catch((err) => {
-      // TODO: Rollback nonce?
       const msg = err.toString();
       // The service already logged it.
       res.status(500).send({ error: msg });

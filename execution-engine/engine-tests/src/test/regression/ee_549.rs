@@ -13,7 +13,7 @@ fn should_run_ee_549_set_refund_regression() {
         GENESIS_ADDR,
         "ee_549_regression.wasm",
         DEFAULT_BLOCK_TIME,
-        1,
+        [1u8; 32],
     );
 
     // Execution should encounter an error because set_refund

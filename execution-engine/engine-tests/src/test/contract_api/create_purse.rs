@@ -52,7 +52,7 @@ fn should_insert_mint_add_keys_transform() {
                 GENESIS_ADDR,
                 "transfer_to_account_01.wasm",
                 DEFAULT_BLOCK_TIME,
-                1,
+                [1; 32],
                 (ACCOUNT_1_ADDR,),
             )
             .expect_success()
@@ -61,7 +61,7 @@ fn should_insert_mint_add_keys_transform() {
                 ACCOUNT_1_ADDR,
                 "create_purse_01.wasm",
                 DEFAULT_BLOCK_TIME,
-                1,
+                [1; 32],
                 (TEST_PURSE_NAME,),
             )
             .expect_success()
@@ -84,7 +84,7 @@ fn should_insert_into_account_known_urefs() {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
             (ACCOUNT_1_ADDR,),
         )
         .expect_success()
@@ -93,7 +93,7 @@ fn should_insert_into_account_known_urefs() {
             ACCOUNT_1_ADDR,
             "create_purse_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
             (TEST_PURSE_NAME,),
         )
         .expect_success()
@@ -119,7 +119,7 @@ fn should_create_usable_purse_id() {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
             (ACCOUNT_1_ADDR,),
         )
         .expect_success()
@@ -128,7 +128,7 @@ fn should_create_usable_purse_id() {
             ACCOUNT_1_ADDR,
             "create_purse_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
             (TEST_PURSE_NAME,),
         )
         .expect_success()
