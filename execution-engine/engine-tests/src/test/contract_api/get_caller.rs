@@ -23,7 +23,7 @@ fn should_run_get_caller_contract() {
             "get_caller.wasm",
             (PublicKey::new(GENESIS_ADDR),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .commit()
         .expect_success();
@@ -37,7 +37,7 @@ fn should_run_get_caller_contract() {
             "transfer_purse_to_account.wasm",
             (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
         )
         .commit()
         .expect_success()
@@ -48,7 +48,7 @@ fn should_run_get_caller_contract() {
             "get_caller.wasm",
             (PublicKey::new(ACCOUNT_1_ADDR),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [3u8; 32],
         )
         .commit()
         .expect_success();
@@ -66,7 +66,7 @@ fn should_run_get_caller_subcall_contract() {
             "get_caller_subcall.wasm",
             (PublicKey::new(GENESIS_ADDR),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .commit()
         .expect_success();
@@ -80,7 +80,7 @@ fn should_run_get_caller_subcall_contract() {
             "transfer_purse_to_account.wasm",
             (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
         )
         .commit()
         .expect_success()
@@ -91,7 +91,7 @@ fn should_run_get_caller_subcall_contract() {
             "get_caller_subcall.wasm",
             (PublicKey::new(ACCOUNT_1_ADDR),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [3u8; 32],
         )
         .commit()
         .expect_success();

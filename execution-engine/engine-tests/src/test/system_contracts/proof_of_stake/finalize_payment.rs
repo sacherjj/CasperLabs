@@ -33,7 +33,7 @@ fn initialize() -> WasmTestBuilder {
             "transfer_purse_to_account.wasm",
             (SYSTEM_ADDR, U512::from(MAX_PAYMENT)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
         )
         .expect_success()
         .commit()
@@ -44,7 +44,7 @@ fn initialize() -> WasmTestBuilder {
             "transfer_purse_to_account.wasm",
             (ACCOUNT_ADDR, U512::from(MAX_PAYMENT)),
             DEFAULT_BLOCK_TIME,
-            2,
+            [2; 32],,
         )
         .expect_success()
         .commit();
@@ -74,7 +74,7 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
             FINALIZE_PAYMENT,
             args,
             DEFAULT_BLOCK_TIME,
-            3
+            [3; 32],
         )
         .is_error());
     assert!(builder
@@ -85,7 +85,7 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
             FINALIZE_PAYMENT,
             args,
             DEFAULT_BLOCK_TIME,
-            1
+            [2;32],
         )
         .is_error());
 }
@@ -117,10 +117,10 @@ fn finalize_payment_should_refund_to_specified_purse() {
 
         let deploy = DeployBuilder::new()
             .with_address(GENESIS_ADDR)
+            .with_deploy_hash([1; 32])
             .with_session_code("do_nothing.wasm", ())
             .with_payment_code(FINALIZE_PAYMENT, args)
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()

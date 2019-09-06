@@ -21,7 +21,7 @@ fn should_run_ee_460_no_side_effects_on_error_regression() {
             "ee_460_regression.wasm",
             (U512::max_value(),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit()

@@ -55,11 +55,7 @@ class LogsContainOneOf:
 
 class NodeStarted(LogsContainMessage):
     def __init__(self, node: DockerNode, times: int) -> None:
-        super().__init__(
-            node,
-            "com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.",
-            times,
-        )
+        super().__init__(node, "Listening for traffic on casperlabs://", times)
 
 
 class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):

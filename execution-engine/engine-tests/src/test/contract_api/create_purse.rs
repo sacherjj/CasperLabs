@@ -59,7 +59,7 @@ fn should_insert_mint_add_keys_transform() {
                 "transfer_purse_to_account.wasm",
                 (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
                 DEFAULT_BLOCK_TIME,
-                1,
+                [1; 32],
             )
             .expect_success()
             .commit()
@@ -70,7 +70,7 @@ fn should_insert_mint_add_keys_transform() {
                 "create_purse_01.wasm",
                 (TEST_PURSE_NAME,),
                 DEFAULT_BLOCK_TIME,
-                1,
+                [1; 32],
             )
             .expect_success()
             .commit()
@@ -95,7 +95,7 @@ fn should_insert_into_account_known_urefs() {
             "transfer_purse_to_account.wasm",
             (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
         )
         .expect_success()
         .commit()
@@ -106,7 +106,7 @@ fn should_insert_into_account_known_urefs() {
             "create_purse_01.wasm",
             (TEST_PURSE_NAME,),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
         )
         .expect_success()
         .commit()
@@ -134,7 +134,7 @@ fn should_create_usable_purse_id() {
             "transfer_purse_to_account.wasm",
             (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
         )
         .expect_success()
         .commit()
@@ -145,7 +145,7 @@ fn should_create_usable_purse_id() {
             "create_purse_01.wasm",
             (TEST_PURSE_NAME,),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
         )
         .expect_success()
         .commit()

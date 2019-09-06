@@ -28,7 +28,7 @@ fn should_manage_associated_key() {
             "transfer_purse_to_account.wasm",
             (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit()
@@ -39,7 +39,7 @@ fn should_manage_associated_key() {
             "add_update_associated_key.wasm",
             (GENESIS_ADDR,),
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
         )
         .expect_success()
         .commit();
@@ -69,7 +69,7 @@ fn should_manage_associated_key() {
             "remove_associated_key.wasm",
             (GENESIS_ADDR,),
             DEFAULT_BLOCK_TIME,
-            2,
+            [3u8; 32],
         )
         .expect_success()
         .commit();

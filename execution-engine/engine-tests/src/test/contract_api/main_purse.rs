@@ -35,7 +35,7 @@ fn should_run_main_purse_contract_genesis_account() {
                 U512::from(ACCOUNT_1_INITIAL_BALANCE),
             ),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit();
@@ -57,7 +57,7 @@ fn should_run_main_purse_contract_account_1() {
             "transfer_purse_to_account.wasm",
             (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit();
@@ -77,7 +77,7 @@ fn should_run_main_purse_contract_account_1() {
             "main_purse.wasm",
             (account_1.purse_id(),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit();

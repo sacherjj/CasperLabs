@@ -1,8 +1,6 @@
 use std::collections::hash_map::RandomState;
 use std::collections::{BTreeMap, HashMap};
-use std::convert::TryInto;
 
-use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
@@ -10,7 +8,7 @@ use engine_core::engine_state::{EngineConfig, CONV_RATE};
 use engine_shared::transform::Transform;
 
 use crate::support::test_stored_contract_support::{
-    get_account, DeployBuilder, Diff, ExecRequestBuilder, WasmTestBuilder, WasmTestResult,
+    DeployBuilder, Diff, ExecRequestBuilder, WasmTestBuilder, WasmTestResult,
     GENESIS_INITIAL_BALANCE,
 };
 use engine_grpc_server::engine_server::ipc::ExecuteRequest;
@@ -22,48 +20,6 @@ const GENESIS_ADDR: [u8; 32] = [12; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
 const TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME: &str = "transfer_purse_to_account";
-
-fn get_transformed_balance(
-    builder: &WasmTestBuilder,
-    transforms: &HashMap<Key, Transform, RandomState>,
-    account_key: &Key,
-) -> U512 {
-    let modified_account = {
-        let account_transforms = transforms
-            .get(account_key)
-            .expect("Unable to find transforms for account");
-
-        if let Transform::Write(Value::Account(account)) = account_transforms {
-            account
-        } else {
-            panic!(
-                "Transform {:?} is not a Transform with a Value(Account)",
-                account_transforms
-            );
-        }
-    };
-
-    let purse_bytes = modified_account
-        .purse_id()
-        .value()
-        .addr()
-        .to_bytes()
-        .expect("should be able to serialize purse bytes");
-
-    let mint = builder.get_mint_contract_uref();
-    let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
-    let balance_uref = builder
-        .query(None, balance_mapping_key, &[])
-        .and_then(|v| v.try_into().ok())
-        .expect("should find balance uref");
-
-    let balance: U512 = builder
-        .query(None, balance_uref, &[])
-        .and_then(|v| v.try_into().ok())
-        .expect("should parse balance into a U512");
-
-    balance
-}
 
 fn get_test_result(builder: &mut WasmTestBuilder, exec_request: ExecuteRequest) -> WasmTestResult {
     builder
@@ -100,7 +56,7 @@ fn should_exec_non_stored_code() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -111,10 +67,10 @@ fn should_exec_non_stored_code() {
 
     let test_result = get_test_result(&mut builder, exec_request);
 
-    let transforms = &test_result.builder().get_transforms()[0];
-
-    let modified_balance: U512 =
-        get_transformed_balance(&builder, transforms, &genesis_account_key);
+    let genesis_account = builder
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
+    let modified_balance: U512 = builder.get_purse_balance(genesis_account.purse_id());
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
@@ -162,7 +118,7 @@ fn should_exec_stored_code_by_hash() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -202,8 +158,10 @@ fn should_exec_stored_code_by_hash() {
 
     let motes_alpha = test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
 
-    let modified_balance_alpha: U512 =
-        get_transformed_balance(&builder, transforms, &genesis_account_key);
+    let genesis_account = builder
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
+    let modified_balance_alpha: U512 = builder.get_purse_balance(genesis_account.purse_id());
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = 1;
@@ -223,7 +181,7 @@ fn should_exec_stored_code_by_hash() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -231,10 +189,7 @@ fn should_exec_stored_code_by_hash() {
 
     let test_result = get_test_result(&mut builder, exec_request_stored_payment);
 
-    let transforms = &test_result.builder().get_transforms()[1];
-
-    let modified_balance_bravo: U512 =
-        get_transformed_balance(&builder, transforms, &genesis_account_key);
+    let modified_balance_bravo: U512 = builder.get_purse_balance(genesis_account.purse_id());
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
@@ -287,7 +242,7 @@ fn should_exec_stored_code_by_named_hash() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -306,10 +261,10 @@ fn should_exec_stored_code_by_named_hash() {
 
     let motes_alpha = test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
 
-    let transforms = &test_result.builder().get_transforms()[0];
-
-    let modified_balance_alpha: U512 =
-        get_transformed_balance(&builder, transforms, &genesis_account_key);
+    let genesis_account = builder
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
+    let modified_balance_alpha: U512 = builder.get_purse_balance(genesis_account.purse_id());
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = 1;
@@ -327,7 +282,7 @@ fn should_exec_stored_code_by_named_hash() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -335,10 +290,10 @@ fn should_exec_stored_code_by_named_hash() {
 
     let test_result = get_test_result(&mut builder, exec_request_stored_payment);
 
-    let transforms = &test_result.builder().get_transforms()[1];
-
-    let modified_balance_bravo: U512 =
-        get_transformed_balance(&builder, transforms, &genesis_account_key);
+    let genesis_account = builder
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
+    let modified_balance_bravo: U512 = builder.get_purse_balance(genesis_account.purse_id());
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
@@ -391,7 +346,7 @@ fn should_exec_stored_code_by_named_uref() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -410,11 +365,10 @@ fn should_exec_stored_code_by_named_uref() {
 
     let motes_alpha = test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
 
-    let transforms: &HashMap<Key, Transform, RandomState> =
-        &test_result.builder().get_transforms()[0];
-
-    let modified_balance_alpha: U512 =
-        get_transformed_balance(&builder, transforms, &genesis_account_key);
+    let genesis_account = builder
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
+    let modified_balance_alpha: U512 = builder.get_purse_balance(genesis_account.purse_id());
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = 1;
@@ -432,7 +386,7 @@ fn should_exec_stored_code_by_named_uref() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -440,10 +394,7 @@ fn should_exec_stored_code_by_named_uref() {
 
     let test_result = get_test_result(&mut builder, exec_request_stored_session);
 
-    let transforms = &test_result.builder().get_transforms()[1];
-
-    let modified_balance_bravo: U512 =
-        get_transformed_balance(&builder, transforms, &genesis_account_key);
+    let modified_balance_bravo: U512 = builder.get_purse_balance(genesis_account.purse_id());
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
@@ -496,7 +447,7 @@ fn should_exec_payment_and_session_stored_code() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -528,7 +479,7 @@ fn should_exec_payment_and_session_stored_code() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -561,7 +512,7 @@ fn should_exec_payment_and_session_stored_code() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(3)
+            .with_deploy_hash([3; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -578,10 +529,10 @@ fn should_exec_payment_and_session_stored_code() {
     let motes_charlie =
         test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
 
-    let transforms = &test_result.builder().get_transforms()[2];
-
-    let modified_balance: U512 =
-        get_transformed_balance(&builder, transforms, &genesis_account_key);
+    let genesis_account = builder
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
+    let modified_balance: U512 = builder.get_purse_balance(genesis_account.purse_id());
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
@@ -619,7 +570,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
+            .with_deploy_hash([1u8; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -636,7 +587,8 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     let stored_payment_contract_uref = {
         // get pos contract public key
         let pos_uref = {
-            let account = get_account(transforms, &genesis_account_key)
+            let account = builder_by_uref
+                .get_account(genesis_account_key)
                 .expect("genesis account should exist");
             let pos_public_key = account
                 .urefs_lookup()
@@ -689,7 +641,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2u8; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -716,7 +668,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(2)
+            .with_deploy_hash([2u8; 32])
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -760,7 +712,7 @@ fn should_produce_same_transforms_as_exec() {
                     (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(1)
+                .with_deploy_hash([1; 32])
                 .build();
 
             ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -789,7 +741,7 @@ fn should_produce_same_transforms_as_exec() {
                     (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(1)
+                .with_deploy_hash([1; 32])
                 .build();
 
             test_support::ExecRequestBuilder::new()
@@ -822,7 +774,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     let stored_transforms = {
         let config = config.clone();
 
-        let store_request = |name: &str, nonce: u64| {
+        let store_request = |name: &str, deploy_hash: [u8; 32]| {
             let store_transfer = DeployBuilder::new()
                 .with_address(genesis_addr)
                 .with_session_code(&format!("{}_stored.wasm", name), ())
@@ -831,7 +783,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(nonce)
+                .with_deploy_hash(deploy_hash)
                 .build();
 
             ExecRequestBuilder::new()
@@ -843,10 +795,13 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
 
         let store_transforms = builder
             .run_genesis(genesis_addr, HashMap::default())
-            .exec_with_exec_request(store_request(TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME, 1))
+            .exec_with_exec_request(store_request(
+                TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
+                [1; 32],
+            ))
             .expect_success()
             .commit()
-            .exec_with_exec_request(store_request(STANDARD_PAYMENT_CONTRACT_NAME, 2))
+            .exec_with_exec_request(store_request(STANDARD_PAYMENT_CONTRACT_NAME, [2; 32]))
             .expect_success()
             .commit()
             .get_transforms()[1]
@@ -876,7 +831,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(3)
+                .with_deploy_hash([3; 32])
                 .build();
 
             ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -893,7 +848,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     let provided_transforms = {
         let config = config.clone();
 
-        let do_nothing_request = |nonce: u64| {
+        let do_nothing_request = |deploy_hash: [u8; 32]| {
             let deploy = DeployBuilder::new()
                 .with_address(genesis_addr)
                 .with_session_code("do_nothing.wasm", ())
@@ -902,7 +857,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(nonce)
+                .with_deploy_hash(deploy_hash)
                 .build();
 
             ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -920,7 +875,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[genesis_public_key])
-                .with_nonce(3)
+                .with_deploy_hash([3; 32])
                 .build();
 
             ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -928,10 +883,10 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
 
         WasmTestBuilder::new(config)
             .run_genesis(genesis_addr, HashMap::default())
-            .exec_with_exec_request(do_nothing_request(1))
+            .exec_with_exec_request(do_nothing_request([1; 32]))
             .expect_success()
             .commit()
-            .exec_with_exec_request(do_nothing_request(2))
+            .exec_with_exec_request(do_nothing_request([2; 32]))
             .expect_success()
             .commit()
             .exec_with_exec_request(provided_request)
@@ -956,7 +911,6 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
             }
             (Transform::Write(Value::Account(la)), Transform::Write(Value::Account(ra))) => {
                 assert_eq!(la.pub_key(), ra.pub_key());
-                assert_eq!(la.nonce(), ra.nonce());
                 assert_eq!(la.purse_id(), ra.purse_id());
                 assert_eq!(la.action_thresholds(), ra.action_thresholds());
                 assert_eq!(la.account_activity(), ra.account_activity());

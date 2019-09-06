@@ -23,7 +23,7 @@ fn should_run_get_payment_purse_contract_genesis_account() {
             // Default funding amount for standard payment
             (U512::from(MAX_PAYMENT),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit();
@@ -41,7 +41,7 @@ fn should_run_get_payment_purse_contract_account_1() {
             "transfer_purse_to_account.wasm",
             (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
         )
         .expect_success()
         .commit()
@@ -52,7 +52,7 @@ fn should_run_get_payment_purse_contract_account_1() {
             "pos_get_payment_purse.wasm",
             (U512::from(MAX_PAYMENT),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
         )
         .expect_success()
         .commit();

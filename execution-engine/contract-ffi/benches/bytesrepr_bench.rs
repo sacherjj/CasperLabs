@@ -370,7 +370,6 @@ fn make_account() -> Account {
     let account_activity = AccountActivity::new(BlockTime(0), BlockTime(100));
     Account::new(
         [0u8; 32],
-        2_635_333_365_164_409_670u64,
         known_urefs,
         purse_id,
         associated_keys,

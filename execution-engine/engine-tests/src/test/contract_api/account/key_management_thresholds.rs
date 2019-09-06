@@ -22,7 +22,7 @@ fn should_verify_key_management_permission_with_low_weight() {
             "key_management_thresholds.wasm",
             (String::from("init"),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit()
@@ -34,7 +34,7 @@ fn should_verify_key_management_permission_with_low_weight() {
             // This test verifies that any other error than PermissionDenied would revert
             (String::from("test-permission-denied"),),
             DEFAULT_BLOCK_TIME,
-            2,
+            [2u8; 32],
         )
         .expect_success()
         .commit();
@@ -52,7 +52,7 @@ fn should_verify_key_management_permission_with_sufficient_weight() {
             "key_management_thresholds.wasm",
             (String::from("init"),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit()
@@ -64,7 +64,7 @@ fn should_verify_key_management_permission_with_sufficient_weight() {
             // This test verifies that all key management operations succeed
             (String::from("test-key-mgmnt-succeed"),),
             DEFAULT_BLOCK_TIME,
-            2,
+            [2u8; 32],
             vec![
                 PublicKey::new(GENESIS_ADDR),
                 // Key [42; 32] is created in init stage

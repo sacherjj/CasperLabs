@@ -34,10 +34,6 @@ pub enum Error {
     Ret(Vec<URef>),
     Rng(rand::Error),
     ResolverError(ResolverError),
-    InvalidNonce {
-        deploy_nonce: u64,
-        expected_nonce: u64,
-    },
     /// Reverts execution with a provided status
     Revert(u32),
     AddKeyFailure(AddKeyFailure),

@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{
-    get_account, DeployBuilder, ExecRequestBuilder, WasmTestBuilder,
-};
+use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
+use engine_shared::transform::Transform;
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 
@@ -19,11 +18,11 @@ fn should_run_ee_601_pay_session_new_uref_collision() {
 
     let exec_request = {
         let deploy = DeployBuilder::new()
+            .with_deploy_hash([1; 32])
             .with_address(GENESIS_ADDR)
             .with_payment_code("ee_601_regression.wasm", (U512::from(MAX_PAYMENT),))
             .with_session_code("ee_601_regression.wasm", ())
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -36,17 +35,23 @@ fn should_run_ee_601_pay_session_new_uref_collision() {
         .exec_with_exec_request(exec_request);
 
     let transforms = builder.get_transforms();
+    let transform = &transforms[0];
 
-    let account =
-        get_account(&transforms[0], &Key::Account(GENESIS_ADDR)).expect("account expected");
+    let add_keys =
+        if let Some(Transform::AddKeys(keys)) = transform.get(&Key::Account(GENESIS_ADDR)) {
+            keys
+        } else {
+            panic!(
+                "expected AddKeys transform for given key but received {:?}",
+                transforms[0]
+            );
+        };
 
-    let pay_uref = account
-        .urefs_lookup()
+    let pay_uref = add_keys
         .get("new_uref_result-payment")
         .expect("payment uref should exist");
 
-    let session_uref = account
-        .urefs_lookup()
+    let session_uref = add_keys
         .get("new_uref_result-session")
         .expect("session uref should exist");
 

@@ -53,7 +53,6 @@ object PrettyPrinter {
     case Value.Value.Account(
         Account(
           pk,
-          nonce,
           urefs,
           purseId,
           associatedKeys,
@@ -61,7 +60,7 @@ object PrettyPrinter {
           accountActivity
         )
         ) =>
-      s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}}, ${purseId
+      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${purseId
         .map(buildString)}, {${associatedKeys
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}}, {${accountActivity.map(buildString)})"
@@ -138,7 +137,7 @@ object PrettyPrinter {
     s"Last deploy: ${ac.deploymentLastUsed}, last key management change: ${ac.keyManagementLastUsed}, inactivity period limit: ${ac.inactivityPeriodLimit}"
 
   def buildString(d: consensus.Deploy): String =
-    s"Deploy ${buildStringNoLimit(d.deployHash)} (${buildStringNoLimit(d.getHeader.accountPublicKey)} / ${d.getHeader.nonce})"
+    s"Deploy ${buildStringNoLimit(d.deployHash)} (${buildStringNoLimit(d.getHeader.accountPublicKey)})"
 
   def buildString(d: DeployData): String =
     s"Deploy #${d.timestamp}"

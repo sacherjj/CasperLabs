@@ -154,7 +154,6 @@ const deployAttrs: (deploy: DeployInfo) => Array<[string, any]> = (
   return [
     ['Deploy Hash', id],
     ['Account Public Key', encodeBase16(header.getAccountPublicKey_asU8())],
-    ['Nonce', header.getNonce()],
     ['Timestamp', new Date(header.getTimestamp()).toISOString()],
     ['Gas Price', header.getGasPrice().toLocaleString()]
   ];

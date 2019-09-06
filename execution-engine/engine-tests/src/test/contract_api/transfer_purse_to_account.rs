@@ -29,7 +29,7 @@ fn should_run_purse_to_account_transfer() {
             "transfer_purse_to_account.wasm",
             (account_1_public_key, U512::from(ACCOUNT_1_INITIAL_FUND)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit()
@@ -40,7 +40,7 @@ fn should_run_purse_to_account_transfer() {
             "transfer_purse_to_account.wasm",
             (genesis_public_key, U512::from(1)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
         )
         .expect_success()
         .commit()
@@ -54,22 +54,14 @@ fn should_run_purse_to_account_transfer() {
     let transform = &transforms[0];
 
     // Get transforms output for genesis account
-    let account_transforms = transform
-        .get(&Key::Account(GENESIS_ADDR))
-        .expect("Unable to find transforms for a genesis account");
-
-    // Inspect AddKeys for that account
-    let modified_account = if let Transform::Write(Value::Account(account)) = account_transforms {
-        account
-    } else {
-        panic!(
-            "Transform {:?} is not a Transform with a Value(Account)",
-            account_transforms
-        );
-    };
+    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let genesis_account = transfer_result
+        .builder()
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
 
     // Obtain main purse's balance
-    let final_balance = &transform[&modified_account.urefs_lookup()["final_balance"].normalize()];
+    let final_balance = &transform[&genesis_account.urefs_lookup()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
         balance
     } else {
@@ -85,7 +77,7 @@ fn should_run_purse_to_account_transfer() {
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
-        &transform[&modified_account.urefs_lookup()["transfer_result"].normalize()];
+        &transform[&genesis_account.urefs_lookup()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(Value::String(s)) = transfer_result_transform {
             s
@@ -106,7 +98,7 @@ fn should_run_purse_to_account_transfer() {
     } else {
         panic!(
             "Transform {:?} is not a Transform with a Value(Account)",
-            account_transforms
+            new_account_transforms
         );
     };
 
@@ -147,23 +139,14 @@ fn should_run_purse_to_account_transfer() {
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[1];
 
-    // Get transforms output for genesis account
-    let account_transforms = transform
-        .get(&Key::Account(ACCOUNT_1_ADDR))
-        .expect("Unable to find transforms for a new account");
-
-    // Inspect AddKeys for that account
-    let modified_account = if let Transform::Write(Value::Account(account)) = account_transforms {
-        account
-    } else {
-        panic!(
-            "Transform {:?} is not a Transform with a Value(Account)",
-            account_transforms
-        );
-    };
+    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
+    let account_1 = transfer_result
+        .builder()
+        .get_account(account_1_key)
+        .expect("should get account 1");
 
     // Obtain main purse's balance
-    let final_balance = &transform[&modified_account.urefs_lookup()["final_balance"].normalize()];
+    let final_balance = &transform[&account_1.urefs_lookup()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
         balance
     } else {
@@ -176,7 +159,7 @@ fn should_run_purse_to_account_transfer() {
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
-        &transform[&modified_account.urefs_lookup()["transfer_result"].normalize()];
+        &transform[&account_1.urefs_lookup()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(Value::String(s)) = transfer_result_transform {
             s
@@ -227,30 +210,24 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
             "transfer_purse_to_account.wasm",
             (account_1_key, U512::max_value()),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
+        .commit()
         .finish();
 
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[0];
 
     // Get transforms output for genesis account
-    let account_transforms = transform
-        .get(&Key::Account(GENESIS_ADDR))
-        .expect("Unable to find transforms for a genesis account");
+    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let genesis_account = transfer_result
+        .builder()
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
 
-    // Inspect AddKeys for that account
-    let modified_account = if let Transform::Write(Value::Account(account)) = account_transforms {
-        account
-    } else {
-        panic!(
-            "Transform {:?} is not a Transform with a Value(Account)",
-            account_transforms
-        );
-    };
     // Obtain main purse's balance
-    let final_balance = &transform[&modified_account.urefs_lookup()["final_balance"].normalize()];
+    let final_balance = &transform[&genesis_account.urefs_lookup()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
         balance
     } else {
@@ -268,7 +245,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
-        &transform[&modified_account.urefs_lookup()["transfer_result"].normalize()];
+        &transform[&genesis_account.urefs_lookup()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(Value::String(s)) = transfer_result_transform {
             s

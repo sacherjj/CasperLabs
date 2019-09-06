@@ -86,11 +86,9 @@ services:
       # NOTE: This is using the system account, so no need for giving funds to the faucet.
       - ${PWD}/.casperlabs/genesis/system-account/account-public.pem:/app/keys/public.key
       - ${PWD}/.casperlabs/genesis/system-account/account-private.pem:/app/keys/private.key
-      - ${PWD}/.casperlabs/explorer/nonce.txt:/app/nonce.txt
     environment:
       FAUCET_ACCOUNT_PUBLIC_KEY_PATH: /app/keys/public.key
       FAUCET_ACCOUNT_PRIVATE_KEY_PATH: /app/keys/private.key
-      FAUCET_NONCE_PATH: /app/nonce.txt
       CASPER_SERVICE_URL: http://grpcwebproxy:8080
       SERVER_PORT: 8080
       # Not using TLS, Nginx does it.

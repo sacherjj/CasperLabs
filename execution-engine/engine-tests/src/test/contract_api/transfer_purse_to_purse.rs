@@ -27,7 +27,7 @@ fn should_run_purse_to_purse_transfer() {
             "transfer_purse_to_purse.wasm",
             (source, target, U512::from(PURSE_TO_PURSE_AMOUNT)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit()
@@ -36,24 +36,15 @@ fn should_run_purse_to_purse_transfer() {
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[0];
 
-    // Get transforms output for genesis account
-    let account_transforms = transform
-        .get(&Key::Account(GENESIS_ADDR))
-        .expect("Unable to find transforms for a genesis account");
-
-    // Inspect AddKeys for that account
-    let modified_account = if let Transform::Write(Value::Account(account)) = account_transforms {
-        account
-    } else {
-        panic!(
-            "Transform {:?} is not a Transform with a Value(Account)",
-            account_transforms
-        );
-    };
+    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let genesis_account = transfer_result
+        .builder()
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
 
     // Get the `purse_transfer_result` for a given
     let purse_transfer_result =
-        &transform[&modified_account.urefs_lookup()["purse_transfer_result"].normalize()];
+        &transform[&genesis_account.urefs_lookup()["purse_transfer_result"].normalize()];
     let purse_transfer_result = if let Transform::Write(Value::String(s)) = purse_transfer_result {
         s
     } else {
@@ -63,7 +54,7 @@ fn should_run_purse_to_purse_transfer() {
     assert_eq!(purse_transfer_result, "TransferSuccessful");
 
     let main_purse_balance =
-        &transform[&modified_account.urefs_lookup()["main_purse_balance"].normalize()];
+        &transform[&genesis_account.urefs_lookup()["main_purse_balance"].normalize()];
     let main_purse_balance = if let Transform::Write(Value::UInt512(balance)) = main_purse_balance {
         balance
     } else {
@@ -74,8 +65,8 @@ fn should_run_purse_to_purse_transfer() {
     };
 
     // Assert secondary purse value after successful transfer
-    let purse_secondary_key = modified_account.urefs_lookup()["purse:secondary"];
-    let _purse_main_key = modified_account.urefs_lookup()["purse:main"];
+    let purse_secondary_key = genesis_account.urefs_lookup()["purse:secondary"];
+    let _purse_main_key = genesis_account.urefs_lookup()["purse:main"];
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent
@@ -138,7 +129,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
                 U512::from(999_999_999_999i64),
             ),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit()
@@ -147,24 +138,15 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[0];
 
-    // Get transforms output for genesis account
-    let account_transforms = transform
-        .get(&Key::Account(GENESIS_ADDR))
-        .expect("Unable to find transforms for a genesis account");
-
-    // Inspect AddKeys for that account
-    let modified_account = if let Transform::Write(Value::Account(account)) = account_transforms {
-        account
-    } else {
-        panic!(
-            "Transform {:?} is not a Transform with a Value of Account type",
-            account_transforms
-        );
-    };
+    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let genesis_account = transfer_result
+        .builder()
+        .get_account(genesis_account_key)
+        .expect("should get genesis account");
 
     // Get the `purse_transfer_result` for a given
     let purse_transfer_result =
-        &transform[&modified_account.urefs_lookup()["purse_transfer_result"].normalize()]; //addkeys["purse_transfer_result"].as_uref().unwrap();
+        &transform[&genesis_account.urefs_lookup()["purse_transfer_result"].normalize()]; //addkeys["purse_transfer_result"].as_uref().unwrap();
     let purse_transfer_result = if let Transform::Write(Value::String(s)) = purse_transfer_result {
         s
     } else {
@@ -175,7 +157,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Obtain main purse's balance
     let main_purse_balance =
-        &transform[&modified_account.urefs_lookup()["main_purse_balance"].normalize()];
+        &transform[&genesis_account.urefs_lookup()["main_purse_balance"].normalize()];
     let main_purse_balance = if let Transform::Write(Value::UInt512(balance)) = main_purse_balance {
         balance
     } else {
@@ -200,8 +182,8 @@ fn should_run_purse_to_purse_transfer_with_error() {
     };
 
     // Assert secondary purse value after successful transfer
-    let purse_secondary_key = modified_account.urefs_lookup()["purse:secondary"];
-    let _purse_main_key = modified_account.urefs_lookup()["purse:main"];
+    let purse_secondary_key = genesis_account.urefs_lookup()["purse:secondary"];
+    let _purse_main_key = genesis_account.urefs_lookup()["purse:main"];
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent

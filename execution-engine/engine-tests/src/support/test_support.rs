@@ -78,11 +78,6 @@ impl DeployBuilder {
         self
     }
 
-    pub fn with_nonce(mut self, nonce: u64) -> Self {
-        self.deploy.set_nonce(nonce);
-        self
-    }
-
     pub fn with_authorization_keys(
         mut self,
         authorization_keys: &[contract_ffi::value::account::PublicKey],
@@ -92,6 +87,11 @@ impl DeployBuilder {
             .map(|public_key| public_key.value().to_vec())
             .collect();
         self.deploy.set_authorization_keys(authorization_keys);
+        self
+    }
+
+    pub fn with_deploy_hash(mut self, hash: [u8; 32]) -> Self {
+        self.deploy.set_deploy_hash(hash.to_vec());
         self
     }
 
@@ -176,10 +176,10 @@ pub fn get_mock_deploy() -> Deploy {
     let mut deploy = Deploy::new();
     deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
     deploy.set_gas_price(1);
-    deploy.set_nonce(1);
     let mut deploy_code = DeployCode::new();
     deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
     deploy.set_session(deploy_code);
+    deploy.set_deploy_hash([1u8; 32].to_vec());
     deploy
 }
 
@@ -293,15 +293,15 @@ pub fn create_exec_request(
     session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     pre_state_hash: &[u8],
     block_time: u64,
-    nonce: u64,
+    deploy_hash: [u8; 32],
     authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
 ) -> ExecRequest {
     let deploy = DeployBuilder::new()
         .with_session_code(session_file, session_args)
         .with_payment_code(payment_file, payment_args)
-        .with_nonce(nonce)
         .with_address(address)
         .with_authorization_keys(&authorized_keys)
+        .with_deploy_hash(deploy_hash)
         .build();
 
     ExecRequestBuilder::new()
@@ -693,7 +693,7 @@ impl WasmTestBuilder {
         session_file: &str,
         session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         block_time: u64,
-        nonce: u64,
+        deploy_hash: [u8; 32],
         authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
     ) -> &mut WasmTestBuilder {
         let exec_request = create_exec_request(
@@ -706,7 +706,7 @@ impl WasmTestBuilder {
                 .as_ref()
                 .expect("Should have post state hash"),
             block_time,
-            nonce,
+            deploy_hash,
             authorized_keys,
         );
         self.exec_with_exec_request(exec_request)
@@ -721,7 +721,7 @@ impl WasmTestBuilder {
         session_file: &str,
         session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         block_time: u64,
-        nonce: u64,
+        deploy_hash: [u8; 32],
     ) -> &mut WasmTestBuilder {
         self.exec_with_args_and_keys(
             address,
@@ -730,7 +730,7 @@ impl WasmTestBuilder {
             session_file,
             session_args,
             block_time,
-            nonce,
+            deploy_hash,
             // Exec with different account also implies the authorized keys should default to
             // the calling account.
             vec![contract_ffi::value::account::PublicKey::new(address)],
@@ -742,7 +742,7 @@ impl WasmTestBuilder {
         address: [u8; 32],
         session_file: &str,
         block_time: u64,
-        nonce: u64,
+        deploy_hash: [u8; 32],
     ) -> &mut WasmTestBuilder {
         let payment_file = STANDARD_PAYMENT_CONTRACT;
         let payment_args = (U512::from(MAX_PAYMENT),);
@@ -753,7 +753,7 @@ impl WasmTestBuilder {
             session_file,
             (), // no arguments passed to session contract by default
             block_time,
-            nonce,
+            deploy_hash,
         )
     }
 

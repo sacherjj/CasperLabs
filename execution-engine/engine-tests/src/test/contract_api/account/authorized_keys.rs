@@ -23,7 +23,7 @@ fn should_deploy_with_authorized_identity_key() {
             "authorized_keys.wasm",
             (Weight::new(1), Weight::new(1)), //args
             1,                                // blocktime
-            1,                                // nonce
+            [1u8; 32],                        //deploy hash
             vec![PublicKey::new(GENESIS_ADDR)],
         )
         .commit()
@@ -47,7 +47,7 @@ fn should_raise_auth_failure_with_invalid_key() {
             "authorized_keys.wasm",
             (Weight::new(1), Weight::new(1)), //args
             1,                                // blocktime
-            1,                                // nonce
+            [1u8; 32],                        //deploy hash
             vec![PublicKey::new(key_1)],
         )
         .commit()
@@ -92,7 +92,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
             "authorized_keys.wasm",
             (Weight::new(1), Weight::new(1)), //args
             1,                                // blocktime
-            1,                                // nonce
+            [1u8; 32],                        //deploy hash
             vec![
                 PublicKey::new(key_2),
                 PublicKey::new(key_1),
@@ -141,7 +141,7 @@ fn should_raise_deploy_authorization_failure() {
             "add_update_associated_key.wasm",
             (PublicKey::new(key_1),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32], //deploy hash
         )
         .expect_success()
         .commit()
@@ -152,7 +152,7 @@ fn should_raise_deploy_authorization_failure() {
             "add_update_associated_key.wasm",
             (PublicKey::new(key_2),),
             DEFAULT_BLOCK_TIME,
-            2,
+            [2u8; 32], //deploy hash
         )
         .expect_success()
         .commit()
@@ -163,7 +163,7 @@ fn should_raise_deploy_authorization_failure() {
             "add_update_associated_key.wasm",
             (PublicKey::new(key_3),),
             DEFAULT_BLOCK_TIME,
-            3,
+            [3u8; 32], //deploy hash
         )
         .expect_success()
         .commit()
@@ -181,7 +181,7 @@ fn should_raise_deploy_authorization_failure() {
             // a key with weight=2.
             (Weight::new(4), Weight::new(3)), //args
             DEFAULT_BLOCK_TIME,
-            4, // nonce
+            [4u8; 32], //deploy hash
             vec![PublicKey::new(GENESIS_ADDR)],
         )
         .expect_success()
@@ -199,7 +199,7 @@ fn should_raise_deploy_authorization_failure() {
             // Next deploy will see deploy threshold == 4, keymgmnt == 5
             (Weight::new(5), Weight::new(4)), //args
             DEFAULT_BLOCK_TIME,
-            5, // nonce
+            [5u8; 32], //deploy hash
             vec![PublicKey::new(key_1)],
         )
         .commit()
@@ -233,7 +233,7 @@ fn should_raise_deploy_authorization_failure() {
             // change deployment threshold to 4
             (Weight::new(6), Weight::new(5)), //args
             DEFAULT_BLOCK_TIME,
-            5, // nonce
+            [6u8; 32], //deploy hash
             vec![
                 PublicKey::new(GENESIS_ADDR),
                 PublicKey::new(key_1),
@@ -255,7 +255,7 @@ fn should_raise_deploy_authorization_failure() {
             "authorized_keys.wasm",
             (Weight::new(0), Weight::new(0)), //args
             DEFAULT_BLOCK_TIME,
-            6, // nonce
+            [7u8; 32],
             vec![PublicKey::new(key_2), PublicKey::new(key_1)],
         )
         .commit()
@@ -289,7 +289,7 @@ fn should_raise_deploy_authorization_failure() {
             "authorized_keys.wasm",
             (Weight::new(0), Weight::new(0)), //args
             DEFAULT_BLOCK_TIME,
-            6, // nonce
+            [8u8; 32],
             vec![
                 PublicKey::new(GENESIS_ADDR),
                 PublicKey::new(key_1),
@@ -323,7 +323,7 @@ fn should_authorize_deploy_with_multiple_keys() {
             "add_update_associated_key.wasm",
             (PublicKey::new(key_1),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32], // deploy hash
         )
         .expect_success()
         .commit()
@@ -334,7 +334,8 @@ fn should_authorize_deploy_with_multiple_keys() {
             "add_update_associated_key.wasm",
             (PublicKey::new(key_2),),
             DEFAULT_BLOCK_TIME,
-            2,
+            [2u8; 32], // deploy hash
+            (PublicKey::new(key_2),),
         )
         .expect_success()
         .commit()
@@ -349,7 +350,7 @@ fn should_authorize_deploy_with_multiple_keys() {
             "authorized_keys.wasm",
             (Weight::new(0), Weight::new(0)), //args
             DEFAULT_BLOCK_TIME,
-            3, // nonce
+            [3u8; 32], // deploy hash
             // change deployment threshold to 4
             vec![PublicKey::new(key_2), PublicKey::new(key_1)],
         )
@@ -375,7 +376,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
             "add_update_associated_key.wasm",
             (PublicKey::new(key_1),),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32], // deploy hash
         )
         .expect_success()
         .commit()
@@ -387,7 +388,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
             // change deployment threshold to 3
             (Weight::new(4), Weight::new(3)), //args
             DEFAULT_BLOCK_TIME,
-            2, // nonce
+            [2u8; 32], // deploy hash
             vec![PublicKey::new(GENESIS_ADDR)],
         )
         .expect_success()
@@ -403,8 +404,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
             (Weight::new(0), Weight::new(0)), //args
-            DEFAULT_BLOCK_TIME,
-            3, // nonce
+            [3u8; 32],                        // deploy hash
             vec![
                 PublicKey::new(key_1),
                 PublicKey::new(key_1),

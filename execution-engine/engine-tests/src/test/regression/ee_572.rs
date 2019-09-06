@@ -43,7 +43,7 @@ fn should_run_ee_572_regression() {
             CONTRACT_TRANSFER,
             account_1_creation_args,
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit()
@@ -54,14 +54,19 @@ fn should_run_ee_572_regression() {
             CONTRACT_TRANSFER,
             account_2_creation_args,
             DEFAULT_BLOCK_TIME,
-            2,
+            [2u8; 32],
         )
         .expect_success()
         .commit();
 
     // Store the creation contract
     builder
-        .exec(ACCOUNT_1_ADDR, CONTRACT_CREATE, DEFAULT_BLOCK_TIME, 1)
+        .exec(
+            ACCOUNT_1_ADDR,
+            CONTRACT_CREATE,
+            DEFAULT_BLOCK_TIME,
+            [3u8; 32],
+        )
         .expect_success()
         .commit();
 
@@ -85,7 +90,7 @@ fn should_run_ee_572_regression() {
             CONTRACT_ESCALATE,
             (contract,),
             DEFAULT_BLOCK_TIME,
-            1,
+            [4u8; 32],
         )
         .get_exec_response(3)
         .expect("should have a response")

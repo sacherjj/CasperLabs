@@ -82,7 +82,7 @@ fn should_run_successful_bond_and_unbond() {
             "pos_bonding.wasm",
             (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .expect_success()
         .commit()
@@ -135,7 +135,7 @@ fn should_run_successful_bond_and_unbond() {
                 U512::from(ACCOUNT_1_SEED_AMOUNT),
             ),
             DEFAULT_BLOCK_TIME,
-            2,
+            [2u8; 32],
         )
         .expect_success()
         .commit()
@@ -149,7 +149,7 @@ fn should_run_successful_bond_and_unbond() {
                 U512::from(ACCOUNT_1_STAKE),
             ),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
         )
         .expect_success()
         .commit()
@@ -216,7 +216,7 @@ fn should_run_successful_bond_and_unbond() {
                 Some(U512::from(ACCOUNT_1_UNBOND_1)),
             ),
             DEFAULT_BLOCK_TIME,
-            2,
+            [2; 32],
         )
         .expect_success()
         .commit()
@@ -276,7 +276,7 @@ fn should_run_successful_bond_and_unbond() {
                 Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
             ),
             DEFAULT_BLOCK_TIME,
-            3,
+            [3; 32],
         )
         .expect_success()
         .commit()
@@ -325,7 +325,7 @@ fn should_run_successful_bond_and_unbond() {
                 Some(U512::from(ACCOUNT_1_UNBOND_2)),
             ), // <-- rest of accont1's funds
             DEFAULT_BLOCK_TIME,
-            3,
+            [3; 32],
         )
         .expect_success()
         .commit()
@@ -374,7 +374,7 @@ fn should_run_successful_bond_and_unbond() {
             "pos_bonding.wasm",
             (String::from(TEST_UNBOND), None as Option<U512>), // <-- va banque
             DEFAULT_BLOCK_TIME,
-            4,
+            [4; 32],
         )
         .expect_success()
         .commit()
@@ -479,7 +479,7 @@ fn should_fail_bonding_with_insufficient_funds() {
                 U512::from(MAX_PAYMENT + GENESIS_ACCOUNT_STAKE),
             ),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
         )
         .commit()
         .exec_with_args(
@@ -493,7 +493,7 @@ fn should_fail_bonding_with_insufficient_funds() {
                 U512::from(MAX_PAYMENT + GENESIS_ACCOUNT_STAKE),
             ),
             DEFAULT_BLOCK_TIME,
-            1,
+            [2; 32],
         )
         .commit()
         .finish();
@@ -533,7 +533,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
             "pos_bonding.wasm",
             (String::from(TEST_UNBOND), Some(U512::from(42))),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],,
         )
         .commit()
         .finish();

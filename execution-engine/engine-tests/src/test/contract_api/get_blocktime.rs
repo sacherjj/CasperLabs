@@ -20,7 +20,7 @@ fn should_run_get_blocktime_contract() {
             "get_blocktime.wasm",
             (block_time,), // passing this to contract to test assertion
             block_time,
-            1,
+            [1u8; 32],
         )
         .commit()
         .expect_success();

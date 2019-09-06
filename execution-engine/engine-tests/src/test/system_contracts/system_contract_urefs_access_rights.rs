@@ -25,14 +25,14 @@ fn should_have_read_only_access_to_system_contract_urefs() {
             "transfer_purse_to_account.wasm",
             (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .commit()
         .exec(
             ACCOUNT_1_ADDR,
             "check_system_contract_urefs_access_rights.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
         )
         .commit()
         .expect_success();
