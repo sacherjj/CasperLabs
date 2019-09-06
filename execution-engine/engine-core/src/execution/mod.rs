@@ -8,7 +8,8 @@ mod tests;
 pub use self::error::Error;
 pub use self::executor::{Executor, WasmiExecutor};
 pub use self::runtime::{
-    create_rng, extract_access_rights_from_keys, instance_and_memory, Runtime,
+    create_rng, extract_access_rights_from_keys, extract_access_rights_from_urefs,
+    instance_and_memory, Runtime,
 };
 
 pub const MINT_NAME: &str = "mint";
