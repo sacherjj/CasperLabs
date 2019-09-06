@@ -860,6 +860,8 @@ def test_cli_scala_direct_call_hash(scala_cli):
         '--private-key', private_key,
         '--public-key', public_key)
 
+    args = json.dumps([{"name": "method_name", "value": {"string_value": "inc"}}])
+
     ch = contract_hash(account.public_key_hex, 0, 0).hex()
 
     deploy_hash = cli("deploy",
@@ -867,17 +869,18 @@ def test_cli_scala_direct_call_hash(scala_cli):
                       '--from', account.public_key_hex,
                       '--session-hash', ch,
                       '--payment-hash', ch,
+                      '--session-args', f"'{args}'",
+                      '--payment-args', f"'{args}'",
                       '--private-key', private_key,
                       '--public-key', public_key)
 
     block_hash = cli("propose")
 
     deploys = cli("show-deploys", block_hash)
+    assert len(list(deploys)) == 1
     for deploy_info in deploys:
         assert not deploy_info.deploy.deploy_hash == deploy_hash
         assert not deploy_info.is_error
-
-    args = json.dumps([{"name": "method_name", "value": {"string_value": "inc"}}])
 
     deploy_hash = cli("deploy",
                       '--nonce', 3,
