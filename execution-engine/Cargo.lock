@@ -1022,6 +1022,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "mint-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
 name = "mint-token"
 version = "0.1.0"
 dependencies = [

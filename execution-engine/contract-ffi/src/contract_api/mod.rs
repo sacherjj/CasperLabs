@@ -8,7 +8,7 @@ use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
-use crate::uref::URef;
+use crate::uref::{AccessRights, URef};
 use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
@@ -19,6 +19,8 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
 use core::convert::{TryFrom, TryInto};
+
+const MINT_NAME: &str = "mint";
 
 /// Read value under the key in the global state
 pub fn read<T>(u_ptr: UPointer<T>) -> T
@@ -552,6 +554,17 @@ pub fn transfer_from_purse_to_purse(
     }
     .try_into()
     .expect("Should parse result")
+}
+
+pub fn get_mint() -> Option<ContractPointer> {
+    let mint_public_uref = get_uref(MINT_NAME)?;
+
+    if let Some(Value::Key(Key::URef(mint_private_uref))) = read_untyped(&mint_public_uref) {
+        let pointer = pointers::UPointer::new(mint_private_uref.addr(), AccessRights::READ);
+        Some(ContractPointer::URef(pointer))
+    } else {
+        None
+    }
 }
 
 pub fn get_phase() -> Phase {
