@@ -21,7 +21,7 @@ object GrpcGossipService {
   import ObservableIterant.syntax._
 
   /** Create Monix specific instance from the internal interface,
-	  * to be used as the "server side", i.e. to return data to another peer. */
+    * to be used as the "server side", i.e. to return data to another peer. */
   def fromGossipService[F[_]: Sync: TaskLike: ObservableIterant](
       service: GossipService[F],
       blockChunkConsumerTimeout: FiniteDuration

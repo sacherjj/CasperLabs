@@ -6,26 +6,27 @@ use std::rc::Rc;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;
 
+use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::{self, Account, Contract, Value};
 use engine_shared::transform::Transform;
-use engine_storage::global_state::in_memory::InMemoryGlobalState;
-use engine_storage::global_state::{CommitResult, History};
+use engine_storage::global_state::in_memory::{InMemoryGlobalState, InMemoryGlobalStateView};
+use engine_storage::global_state::{CommitResult, StateProvider};
 
 use super::{Error, RuntimeContext, URefAddr, Validated};
+use crate::execution::{create_rng, extract_access_rights_from_keys};
+use crate::tracking_copy::TrackingCopy;
 use contract_ffi::value::account::{
     AccountActivity, ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
     RemoveKeyFailure, SetThresholdFailure, Weight,
 };
 use engine_shared::newtypes::CorrelationId;
-use execution::{create_rng, extract_access_rights_from_keys};
-use tracking_copy::TrackingCopy;
 
-fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemoryGlobalState> {
+fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemoryGlobalStateView> {
     let correlation_id = CorrelationId::new();
-    let mut hist = InMemoryGlobalState::empty().unwrap();
-    let root_hash = hist.root_hash;
+    let hist = InMemoryGlobalState::empty().unwrap();
+    let root_hash = hist.empty_root_hash;
     let transform = Transform::Write(value::Value::Account(init_account.clone()));
 
     let mut m = HashMap::new();
@@ -100,7 +101,7 @@ fn mock_runtime_context<'a>(
     uref_map: &'a mut BTreeMap<String, Key>,
     known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
     rng: ChaChaRng,
-) -> RuntimeContext<'a, InMemoryGlobalState> {
+) -> RuntimeContext<'a, InMemoryGlobalStateView> {
     let tc = mock_tc(base_key, account.clone());
     RuntimeContext::new(
         Rc::new(RefCell::new(tc)),
@@ -117,6 +118,7 @@ fn mock_runtime_context<'a>(
         Rc::new(RefCell::new(rng)),
         1,
         CorrelationId::new(),
+        Phase::Session,
     )
 }
 
@@ -141,12 +143,12 @@ fn assert_invalid_access<T: std::fmt::Debug>(result: Result<T, Error>, expecting
 
 fn test<T, F>(known_urefs: HashMap<URefAddr, HashSet<AccessRights>>, query: F) -> Result<T, Error>
 where
-    F: Fn(RuntimeContext<InMemoryGlobalState>) -> Result<T, Error>,
+    F: Fn(RuntimeContext<InMemoryGlobalStateView>) -> Result<T, Error>,
 {
     let base_acc_addr = [0u8; 32];
     let (key, account) = mock_account(base_acc_addr);
     let mut uref_map = BTreeMap::new();
-    let chacha_rng = create_rng(base_acc_addr, 0);
+    let chacha_rng = create_rng(base_acc_addr, 0, contract_ffi::execution::Phase::Session);
     let runtime_context =
         mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
     query(runtime_context)
@@ -219,7 +221,8 @@ fn store_contract_with_uref_forged() {
 
 #[test]
 fn store_contract_under_uref_valid() {
-    // Test that storing contract under URef that is known and has WRITE access works.
+    // Test that storing contract under URef that is known and has WRITE access
+    // works.
     let mut rng = rand::thread_rng();
     let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
@@ -245,7 +248,8 @@ fn store_contract_under_uref_valid() {
 
 #[test]
 fn store_contract_under_uref_forged() {
-    // Test that storing contract under URef that is not known fails with ForgedReference error.
+    // Test that storing contract under URef that is not known fails with
+    // ForgedReference error.
     let mut rng = rand::thread_rng();
     let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
     let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
@@ -259,7 +263,8 @@ fn store_contract_under_uref_forged() {
 
 #[test]
 fn store_contract_uref_invalid_access() {
-    // Test that storing contract under URef that is known but is not writeable fails.
+    // Test that storing contract under URef that is known but is not writeable
+    // fails.
     let mut rng = rand::thread_rng();
     let contract_uref = random_uref_key(&mut rng, AccessRights::READ);
     let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
@@ -284,7 +289,8 @@ fn account_key_not_writeable() {
 
 #[test]
 fn account_key_readable_valid() {
-    // Account key is readable if it is a "base" key - current context of the execution.
+    // Account key is readable if it is a "base" key - current context of the
+    // execution.
     let query_result = test(HashMap::new(), |mut rc| {
         let base_key = rc.base_key();
 
@@ -313,7 +319,8 @@ fn account_key_readable_invalid() {
 
 #[test]
 fn account_key_addable_valid() {
-    // Account key is addable if it is a "base" key - current context of the execution.
+    // Account key is addable if it is a "base" key - current context of the
+    // execution.
     let mut rng = rand::thread_rng();
     let uref = random_uref_key(&mut rng, AccessRights::READ);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
@@ -340,7 +347,8 @@ fn account_key_addable_valid() {
 
 #[test]
 fn account_key_addable_invalid() {
-    // Account key is NOT addable if it is a "base" key - current context of the execution.
+    // Account key is NOT addable if it is a "base" key - current context of the
+    // execution.
     let mut rng = rand::thread_rng();
     let other_acc_key = random_account_key(&mut rng);
 
@@ -353,7 +361,8 @@ fn account_key_addable_invalid() {
 
 #[test]
 fn contract_key_readable_valid() {
-    // Account key is readable if it is a "base" key - current context of the execution.
+    // Account key is readable if it is a "base" key - current context of the
+    // execution.
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let query_result = test(HashMap::new(), |mut rc| rc.read_gs(&contract_key));
@@ -363,7 +372,8 @@ fn contract_key_readable_valid() {
 
 #[test]
 fn contract_key_not_writeable() {
-    // Account key is readable if it is a "base" key - current context of the execution.
+    // Account key is readable if it is a "base" key - current context of the
+    // execution.
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let query_result = test(HashMap::new(), |mut rc| {
@@ -375,7 +385,8 @@ fn contract_key_not_writeable() {
 
 #[test]
 fn contract_key_addable_valid() {
-    // Contract key is addable if it is a "base" key - current context of the execution.
+    // Contract key is addable if it is a "base" key - current context of the
+    // execution.
     let base_acc_addr = [0u8; 32];
     let (account_key, account) = mock_account(base_acc_addr);
     let mut rng = rand::thread_rng();
@@ -391,7 +402,7 @@ fn contract_key_addable_valid() {
     let mut uref_map = BTreeMap::new();
     let uref = random_uref_key(&mut rng, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
-    let chacha_rng = create_rng(base_acc_addr, 0);
+    let chacha_rng = create_rng(base_acc_addr, 0, contract_ffi::execution::Phase::Session);
 
     let mut runtime_context = RuntimeContext::new(
         Rc::clone(&tc),
@@ -408,6 +419,7 @@ fn contract_key_addable_valid() {
         Rc::new(RefCell::new(chacha_rng)),
         1,
         CorrelationId::new(),
+        Phase::Session,
     );
 
     let uref_name = "NewURef".to_owned();
@@ -428,7 +440,8 @@ fn contract_key_addable_valid() {
 
 #[test]
 fn contract_key_addable_invalid() {
-    // Contract key is addable if it is a "base" key - current context of the execution.
+    // Contract key is addable if it is a "base" key - current context of the
+    // execution.
     let base_acc_addr = [0u8; 32];
     let (account_key, account) = mock_account(base_acc_addr);
     let mut rng = rand::thread_rng();
@@ -445,7 +458,7 @@ fn contract_key_addable_invalid() {
     let mut uref_map = BTreeMap::new();
     let uref = random_uref_key(&mut rng, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
-    let chacha_rng = create_rng(base_acc_addr, 0);
+    let chacha_rng = create_rng(base_acc_addr, 0, contract_ffi::execution::Phase::Session);
     let mut runtime_context = RuntimeContext::new(
         Rc::clone(&tc),
         &mut uref_map,
@@ -461,6 +474,7 @@ fn contract_key_addable_invalid() {
         Rc::new(RefCell::new(chacha_rng)),
         1,
         CorrelationId::new(),
+        Phase::Session,
     );
 
     let uref_name = "NewURef".to_owned();
@@ -532,7 +546,7 @@ fn uref_key_addable_invalid() {
 #[test]
 fn local_key_writeable_valid() {
     let known_urefs = HashMap::new();
-    let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+    let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = runtime_context.seed();
         let key = random_local_key(&mut rng, seed);
@@ -545,7 +559,7 @@ fn local_key_writeable_valid() {
 #[test]
 fn local_key_writeable_invalid() {
     let known_urefs = HashMap::new();
-    let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+    let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = [1u8; LOCAL_SEED_SIZE];
         let key = random_local_key(&mut rng, seed);
@@ -558,7 +572,7 @@ fn local_key_writeable_invalid() {
 #[test]
 fn local_key_readable_valid() {
     let known_urefs = HashMap::new();
-    let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+    let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = runtime_context.seed();
         let key = random_local_key(&mut rng, seed);
@@ -571,7 +585,7 @@ fn local_key_readable_valid() {
 #[test]
 fn local_key_readable_invalid() {
     let known_urefs = HashMap::new();
-    let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+    let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = [1u8; LOCAL_SEED_SIZE];
         let key = random_local_key(&mut rng, seed);
@@ -584,7 +598,7 @@ fn local_key_readable_invalid() {
 #[test]
 fn local_key_addable_valid() {
     let known_urefs = HashMap::new();
-    let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+    let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = runtime_context.seed();
         let key = random_local_key(&mut rng, seed);
@@ -597,7 +611,7 @@ fn local_key_addable_valid() {
 #[test]
 fn local_key_addable_invalid() {
     let known_urefs = HashMap::new();
-    let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+    let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = [1u8; LOCAL_SEED_SIZE];
         let key = random_local_key(&mut rng, seed);
@@ -612,7 +626,7 @@ fn manage_associated_keys() {
     // Testing a valid case only - successfuly added a key, and successfuly removed,
     // making sure `account_dirty` mutated
     let known_urefs = HashMap::new();
-    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let public_key = PublicKey::new([42; 32]);
         let weight = Weight::new(155);
 
@@ -679,7 +693,7 @@ fn action_thresholds_management() {
     // Testing a valid case only - successfuly added a key, and successfuly removed,
     // making sure `account_dirty` mutated
     let known_urefs = HashMap::new();
-    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         runtime_context
             .add_associated_key(PublicKey::new([42; 32]), Weight::new(254))
             .expect("Unable to add associated key with maximum weight");
@@ -720,8 +734,9 @@ fn should_verify_ownership_before_adding_key() {
     // Testing a valid case only - successfuly added a key, and successfuly removed,
     // making sure `account_dirty` mutated
     let known_urefs = HashMap::new();
-    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
-        // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
+        // Overwrites a `base_key` to a different one before doing any operation as
+        // account `[0; 32]`
         runtime_context.base_key = Key::Hash([1; 32]);
 
         let err = runtime_context
@@ -743,8 +758,9 @@ fn should_verify_ownership_before_removing_a_key() {
     // Testing a valid case only - successfuly added a key, and successfuly removed,
     // making sure `account_dirty` mutated
     let known_urefs = HashMap::new();
-    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
-        // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
+        // Overwrites a `base_key` to a different one before doing any operation as
+        // account `[0; 32]`
         runtime_context.base_key = Key::Hash([1; 32]);
 
         let err = runtime_context
@@ -766,8 +782,9 @@ fn should_verify_ownership_before_setting_action_threshold() {
     // Testing a valid case only - successfuly added a key, and successfuly removed,
     // making sure `account_dirty` mutated
     let known_urefs = HashMap::new();
-    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
-        // Overwrites a `base_key` to a different one before doing any operation as account `[0; 32]`
+    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
+        // Overwrites a `base_key` to a different one before doing any operation as
+        // account `[0; 32]`
         runtime_context.base_key = Key::Hash([1; 32]);
 
         let err = runtime_context
@@ -787,7 +804,7 @@ fn should_verify_ownership_before_setting_action_threshold() {
 #[test]
 fn can_roundtrip_key_value_pairs_into_local_state() {
     let known_urefs = HashMap::new();
-    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalState>| {
+    let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let test_key = b"test_key";
         let test_value = Value::String("test_value".to_string());
 
@@ -812,7 +829,7 @@ fn remove_uref_works() {
     let known_urefs = HashMap::new();
     let base_acc_addr = [0u8; 32];
     let (key, account) = mock_account(base_acc_addr);
-    let mut chacha_rng = create_rng(base_acc_addr, 0);
+    let mut chacha_rng = create_rng(base_acc_addr, 0, contract_ffi::execution::Phase::Session);
     let uref_name = "Foo".to_owned();
     let uref_key = random_uref_key(&mut chacha_rng, AccessRights::READ);
     let mut uref_map = iter::once((uref_name.clone(), uref_key)).collect();
@@ -839,17 +856,18 @@ fn validate_valid_purse_id_of_an_account() {
     let known_urefs = HashMap::new();
     let base_acc_addr = [0u8; 32];
     let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
-    let chacha_rng = create_rng(base_acc_addr, 0);
+    let chacha_rng = create_rng(base_acc_addr, 0, contract_ffi::execution::Phase::Session);
     let mut uref_map = BTreeMap::new();
     let runtime_context =
         mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
 
-    // URef that has the same id as purse_id of an account gets validated successfully.
+    // URef that has the same id as purse_id of an account gets validated
+    // successfully.
     let purse_id = URef::new(mock_purse_id, AccessRights::READ_ADD_WRITE);
     assert!(runtime_context.validate_uref(&purse_id).is_ok());
 
-    // URef that has the same id as purse_id of an account gets validated successfully
-    // as the passed purse has only subset of the privileges
+    // URef that has the same id as purse_id of an account gets validated
+    // successfully as the passed purse has only subset of the privileges
     let purse_id = URef::new(mock_purse_id, AccessRights::READ);
     assert!(runtime_context.validate_uref(&purse_id).is_ok());
     let purse_id = URef::new(mock_purse_id, AccessRights::ADD);
@@ -857,8 +875,8 @@ fn validate_valid_purse_id_of_an_account() {
     let purse_id = URef::new(mock_purse_id, AccessRights::WRITE);
     assert!(runtime_context.validate_uref(&purse_id).is_ok());
 
-    // Purse ID that doesn't match account's purse_id should fail as it's also not in known
-    // urefs.
+    // Purse ID that doesn't match account's purse_id should fail as it's also not
+    // in known urefs.
     let purse_id = URef::new([53; 32], AccessRights::READ_ADD_WRITE);
     assert!(runtime_context.validate_uref(&purse_id).is_err());
 }

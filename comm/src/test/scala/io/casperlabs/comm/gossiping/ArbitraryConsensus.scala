@@ -82,7 +82,7 @@ trait ArbitraryConsensus {
   def numValidators: Int = 10
 
   protected lazy val randomAccounts   = sample(Gen.listOfN(numAccounts, genAccountKeys))
-  protected lazy val randomValidators = sample(Gen.listOfN(numAccounts, genAccountKeys))
+  protected lazy val randomValidators = sample(Gen.listOfN(numValidators, genKey))
 
   implicit val arbNode: Arbitrary[Node] = Arbitrary {
     for {
@@ -131,7 +131,7 @@ trait ArbitraryConsensus {
       bodyHash           <- genHash
       preStateHash       <- genHash
       postStateHash      <- genHash
-      validatorPublicKey <- genKey
+      validatorPublicKey <- Gen.oneOf(randomValidators)
     } yield {
       Block
         .Header()
@@ -159,15 +159,15 @@ trait ArbitraryConsensus {
   implicit def arbDeploy(implicit c: ConsensusConfig): Arbitrary[Deploy] = Arbitrary {
     for {
       accountKeys <- Gen.oneOf(randomAccounts)
-      nonce       <- arbitrary[Long]
-      timestamp   <- arbitrary[Long]
+      nonce       <- Gen.choose(0L, Long.MaxValue)
+      timestamp   <- Gen.choose(0L, Long.MaxValue)
       gasPrice    <- arbitrary[Long]
       sessionCode <- Gen.choose(0, c.maxSessionCodeBytes).flatMap(genBytes(_))
       paymentCode <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
       body = Deploy
         .Body()
-        .withSession(Deploy.Code().withCode(sessionCode))
-        .withPayment(Deploy.Code().withCode(paymentCode))
+        .withSession(Deploy.Code().withWasm(sessionCode))
+        .withPayment(Deploy.Code().withWasm(paymentCode))
       bodyHash = protoHash(body)
       header = Deploy
         .Header()

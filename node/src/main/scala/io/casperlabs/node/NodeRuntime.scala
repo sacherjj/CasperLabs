@@ -27,6 +27,10 @@ import io.casperlabs.blockstorage.{
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, DeployBufferImpl}
+import io.casperlabs.casper.finality.singlesweep.{
+  FinalityDetector,
+  FinalityDetectorBySingleSweepImpl
+}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -55,15 +59,29 @@ import scala.concurrent.duration._
 class NodeRuntime private[node] (
     conf: Configuration,
     id: NodeIdentifier
-)(implicit log: Log[Task], scheduler: Scheduler) {
+)(
+    implicit log: Log[Task],
+    uncaughtExceptionHandler: UncaughtExceptionHandler
+) {
 
   private[this] val loopScheduler =
-    Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionHandler)
-  private[this] val blockingScheduler =
-    Scheduler.cached("blocking-io", 4, 64, reporter = UncaughtExceptionHandler)
+    Scheduler.fixedPool("loop", 4, reporter = uncaughtExceptionHandler)
+
+  // Bounded thread pool for incoming traffic. Limited thread pool size so loads of request cannot exhaust all resources.
+  private[this] val ingressScheduler =
+    Scheduler.cached("ingress-io", 4, 64, reporter = uncaughtExceptionHandler)
+  // Unbounded thread pool for outgoing, blocking IO. It is recommended to have unlimited thread pools for waiting on IO.
+  private[this] val egressScheduler =
+    Scheduler.cached("egress-io", 4, Int.MaxValue, reporter = uncaughtExceptionHandler)
+
+  private[this] val dbConnScheduler =
+    Scheduler.cached("db-conn", 1, 64, reporter = uncaughtExceptionHandler)
+  private[this] val dbIOScheduler =
+    Scheduler.cached("db-io", 1, Int.MaxValue, reporter = uncaughtExceptionHandler)
+
   private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
     catsConcurrentEffectForEffect(
-      scheduler
+      egressScheduler
     )
 
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
@@ -119,12 +137,16 @@ class NodeRuntime private[node] (
                                                                             )
         //TODO: We may want to adjust threading model for better performance
         implicit0(doobieTransactor: Transactor[Effect]) <- effects.doobieTransactor(
-                                                            blockingScheduler,
-                                                            blockingScheduler,
+                                                            connectEC = dbConnScheduler,
+                                                            transactEC = dbIOScheduler,
                                                             conf.server.dataDir
                                                           )
+        deployBufferChunkSize = 20 //TODO: Move to config
         implicit0(deployBuffer: DeployBuffer[Effect]) <- Resource
-                                                          .liftF(DeployBufferImpl.create[Effect])
+                                                          .liftF(
+                                                            DeployBufferImpl
+                                                              .create[Effect](deployBufferChunkSize)
+                                                          )
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
         implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
@@ -138,11 +160,12 @@ class NodeRuntime private[node] (
                                                           conf.server.defaultTimeout,
                                                           conf.server.useGossiping,
                                                           conf.server.relayFactor,
-                                                          conf.server.relaySaturation
+                                                          conf.server.relaySaturation,
+                                                          ingressScheduler,
+                                                          egressScheduler
                                                         )(
                                                           maybeBootstrap
                                                         )(
-                                                          blockingScheduler,
                                                           effects.peerNodeAsk,
                                                           log,
                                                           metrics
@@ -206,7 +229,7 @@ class NodeRuntime private[node] (
                                                                             .of[Effect]
                                                                         )
 
-        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorInstancesImpl[
+        implicit0(safetyOracle: FinalityDetector[Effect]) = new FinalityDetectorBySingleSweepImpl[
           Effect
         ]()(
           Monad[Effect],
@@ -229,7 +252,7 @@ class NodeRuntime private[node] (
               .internalServersR(
                 conf.grpc.portInternal,
                 conf.server.maxMessageSize,
-                blockingScheduler,
+                ingressScheduler,
                 blockApiLock,
                 maybeApiSslContext
               )
@@ -237,7 +260,7 @@ class NodeRuntime private[node] (
         _ <- api.Servers.externalServersR[Effect](
               conf.grpc.portExternal,
               conf.server.maxMessageSize,
-              blockingScheduler,
+              ingressScheduler,
               maybeApiSslContext
             )
 
@@ -245,20 +268,22 @@ class NodeRuntime private[node] (
               conf.server.httpPort,
               conf,
               id,
-              blockingScheduler
+              ingressScheduler
             )
 
         _ <- if (conf.server.useGossiping) {
               casper.gossiping.apply[Effect](
                 port,
                 conf,
-                blockingScheduler
+                ingressScheduler,
+                egressScheduler
               )
             } else {
               casper.transport.apply(
                 port,
                 conf,
-                blockingScheduler
+                ingressScheduler,
+                egressScheduler
               )
             }
       } yield (nodeDiscovery, multiParentCasperRef, deployBuffer)
@@ -345,6 +370,7 @@ class NodeRuntime private[node] (
   }
 
   private def shutdown(release: Effect[Unit]): Unit = {
+    implicit val s = egressScheduler
     // Everything has been moved to Resources.
     val task = for {
       _ <- log.info("Shutting down...")
@@ -352,7 +378,7 @@ class NodeRuntime private[node] (
       _ <- log.info("Goodbye.")
     } yield ()
     // Run the release synchronously so that we can see the final message.
-    task.unsafeRunSync(scheduler)
+    task.runSyncUnsafe(1.minute)
   }
 
   private def addShutdownHook(release: Effect[Unit]): Task[Unit] =
@@ -415,7 +441,11 @@ class NodeRuntime private[node] (
 object NodeRuntime {
   def apply(
       conf: Configuration
-  )(implicit scheduler: Scheduler, log: Log[Task]): Effect[NodeRuntime] =
+  )(
+      implicit
+      log: Log[Task],
+      uncaughtExceptionHandler: UncaughtExceptionHandler
+  ): Effect[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
       runtime <- Task.delay(new NodeRuntime(conf, id)).toEffect

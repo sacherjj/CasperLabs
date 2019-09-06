@@ -1,6 +1,6 @@
 use core::result;
 
-use cl_std::contract_api;
+use contract_ffi::contract_api;
 
 #[derive(Debug, PartialEq)]
 // TODO: Split this up into user errors vs. system errors.
@@ -9,8 +9,10 @@ pub enum Error {
     TooManyEventsInQueue,
     CannotUnbondLastValidator,
     SpreadTooHigh,
-    /// Returned when there is another QueueEntry in a Queue, for validator making a request.
+    /// Returned when there is another QueueEntry in a Queue, for validator
+    /// making a request.
     MultipleRequests,
+    BondTooSmall,
     BondTooLarge,
     UnbondTooLarge,
     BondTransferFailed,
@@ -37,6 +39,7 @@ pub enum Error {
     InsufficientPaymentForAmountSpent,
     FailedTransferToRewardsPurse,
     FailedTransferToAccountPurse,
+    SetRefundPurseCalledOutsidePayment,
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -53,6 +56,7 @@ impl Into<u32> for Error {
             Error::UnbondTooLarge => 6,
             Error::BondTransferFailed => 7,
             Error::UnbondTransferFailed => 8,
+            Error::BondTooSmall => 9,
             // System errors
             Error::TimeWentBackwards => 256, // 0x100
             Error::StakesNotFound => 257,
@@ -73,6 +77,7 @@ impl Into<u32> for Error {
             Error::InsufficientPaymentForAmountSpent => 1025,
             Error::FailedTransferToRewardsPurse => 1026,
             Error::FailedTransferToAccountPurse => 1027,
+            Error::SetRefundPurseCalledOutsidePayment => 1028,
         }
     }
 }

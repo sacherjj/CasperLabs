@@ -8,7 +8,7 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.Block.Justification
-import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus.{BlockSummary, Bond, GenesisCandidate}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
@@ -36,6 +36,8 @@ class SynchronizerSpec
 
   override implicit val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 25, workers = 1)
+
+  override def numValidators = 3
 
   implicit val consensusConfig: ConsensusConfig = ConsensusConfig(dagDepth = 5, dagWidth = 5)
 
@@ -121,6 +123,46 @@ class SynchronizerSpec
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
             dagOrError.isLeft shouldBe true
             dagOrError.left.get shouldBe an[SyncError.TooWide]
+          }
+        }
+      }
+    }
+    "streamed DAG is not abnormally wide but has justifications on different ranks" should {
+      "not return SyncError.TooWide" in forAll(
+        genSummaryDagFromGenesis(
+          ConsensusConfig(dagSize = 20)
+        )
+      ) { dag =>
+        val summaryMap = dag.groupBy(_.blockHash).mapValues(_.head)
+        def collectAncestors(acc: Set[ByteString], blockHash: ByteString): Set[ByteString] = {
+          val summary = summaryMap(blockHash)
+          val deps = summary.getHeader.justifications
+            .map(_.latestBlockHash) ++ summary.getHeader.parentHashes
+          deps.foldLeft(acc) {
+            case (acc, dep) if !acc(dep) =>
+              collectAncestors(acc + dep, dep)
+            case (acc, _) =>
+              acc
+          }
+        }
+        val target    = dag.last.blockHash
+        val ancestors = collectAncestors(Set(target), target)
+        val bonds     = dag.map(_.getHeader.validatorPublicKey).distinct.map(Bond(_, 1))
+        val subdag = dag.filter(x => ancestors(x.blockHash)).map { summary =>
+          summary
+            .withHeader(summary.getHeader.withState(summary.getHeader.getState.withBonds(bonds)))
+        }
+        log.reset()
+        TestFixture(subdag.reverse)(
+          maxBondingRate = 1.0,
+          minBlockCountToCheckWidth = 0,
+          maxDepthAncestorsRequest = 20
+        ) { (synchronizer, _) =>
+          synchronizer.syncDag(Node(), Set(target)).map {
+            _ match {
+              case Right(dag) => dag should contain theSameElementsAs subdag
+              case Left(ex)   => throw ex
+            }
           }
         }
       }

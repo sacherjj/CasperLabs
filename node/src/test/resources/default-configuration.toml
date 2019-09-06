@@ -13,7 +13,6 @@ default-timeout = "1second"
 standalone = false
 map-size = 1
 bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1"
-store-type = "lmdb"
 data-dir = "/tmp"
 max-num-of-connections = 1
 max-message-size = 1
@@ -85,6 +84,7 @@ auto-propose-enabled = false
 auto-propose-check-interval = "1second"
 auto-propose-max-interval = "1second"
 auto-propose-max-count = 1
+max-block-size-bytes = 1
 
 [blockstorage]
 latest-messages-log-max-size-factor = 1

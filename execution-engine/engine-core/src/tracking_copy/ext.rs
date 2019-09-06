@@ -3,11 +3,11 @@ use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::{Account, Contract, Value, U512};
 
+use crate::execution;
+use crate::tracking_copy::{QueryResult, TrackingCopy};
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_shared::transform::TypeMismatch;
 use engine_storage::global_state::StateReader;
-use execution;
-use tracking_copy::{QueryResult, TrackingCopy};
 
 pub struct SystemContractInfo {
     outer_key: Key,
@@ -68,13 +68,22 @@ pub trait TrackingCopyExt<R> {
         balance_key: Key,
     ) -> Result<U512, Self::Error>;
 
-    /// Gets the system contract, packaged with its outer uref key and inner uref key
+    /// Gets the system contract, packaged with its outer uref key and inner
+    /// uref key
     fn get_system_contract_info(
         &mut self,
         correlation_id: CorrelationId,
         outer_key: Key,
     ) -> Result<SystemContractInfo, Self::Error>;
 
+    /// Gets a contract by Key
+    fn get_contract(
+        &mut self,
+        correlation_id: CorrelationId,
+        key: Key,
+    ) -> Result<Contract, Self::Error>;
+
+    /// Checks nonce delta; if valid increments the tracking_copy's nonce
     fn handle_nonce(&mut self, account: &mut Account, nonce: u64) -> Result<(), Self::Error>;
 }
 
@@ -143,7 +152,6 @@ where
         }
     }
 
-    // get urefs, pointer, and bytes for a system contract
     fn get_system_contract_info(
         &mut self,
         correlation_id: CorrelationId,
@@ -160,10 +168,16 @@ where
             }
             None => return Err(execution::Error::KeyNotFound(outer_key)),
         };
-        let contract = match self
-            .get(correlation_id, &inner_uref_key)
-            .map_err(Into::into)?
-        {
+        let contract = self.get_contract(correlation_id, inner_uref_key)?;
+        Ok(SystemContractInfo::new(outer_key, inner_uref_key, contract))
+    }
+
+    fn get_contract(
+        &mut self,
+        correlation_id: CorrelationId,
+        key: Key,
+    ) -> Result<Contract, Self::Error> {
+        let contract = match self.get(correlation_id, &key).map_err(Into::into)? {
             Some(Value::Contract(contract)) => contract,
             Some(other) => {
                 return Err(execution::Error::TypeMismatch(TypeMismatch::new(
@@ -171,9 +185,9 @@ where
                     other.type_string(),
                 )))
             }
-            None => return Err(execution::Error::KeyNotFound(inner_uref_key)),
+            None => return Err(execution::Error::KeyNotFound(key)),
         };
-        Ok(SystemContractInfo::new(outer_key, inner_uref_key, contract))
+        Ok(contract)
     }
 
     fn handle_nonce(&mut self, account: &mut Account, nonce: u64) -> Result<(), Self::Error> {

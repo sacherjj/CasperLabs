@@ -4,7 +4,7 @@
 name = "add-update-associated-key"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -45,7 +45,7 @@ dependencies = [
 name = "authorized-keys"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -134,7 +134,7 @@ dependencies = [
 name = "bonding"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -168,13 +168,14 @@ dependencies = [
 
 [[package]]
 name = "casperlabs-contract-ffi"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "num 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "proptest 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "siphasher 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -186,7 +187,7 @@ name = "casperlabs-engine-core"
 version = "0.1.0"
 dependencies = [
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
  "casperlabs-engine-shared 0.2.0",
  "casperlabs-engine-storage 0.1.0",
  "casperlabs-engine-wasm-prep 0.1.0",
@@ -210,7 +211,7 @@ dependencies = [
 name = "casperlabs-engine-grpc-server"
 version = "0.6.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
  "casperlabs-engine-core 0.1.0",
  "casperlabs-engine-shared 0.2.0",
  "casperlabs-engine-storage 0.1.0",
@@ -225,7 +226,7 @@ dependencies = [
  "lmdb 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "proptest 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "protobuf 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "protoc-rust-grpc 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wabt 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -247,7 +248,7 @@ version = "0.2.0"
 dependencies = [
  "base16 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
  "chrono 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "hostname 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -265,8 +266,9 @@ dependencies = [
 name = "casperlabs-engine-storage"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
  "casperlabs-engine-shared 0.2.0",
+ "casperlabs-engine-wasm-prep 0.1.0",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lmdb 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -277,10 +279,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "casperlabs-engine-tests"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+ "casperlabs-engine-core 0.1.0",
+ "casperlabs-engine-grpc-server 0.6.0",
+ "casperlabs-engine-shared 0.2.0",
+ "casperlabs-engine-storage 0.1.0",
+ "casperlabs-engine-wasm-prep 0.1.0",
+ "grpc 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "casperlabs-engine-wasm-prep"
 version = "0.1.0"
 dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+ "casperlabs-engine-shared 0.2.0",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proptest 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "pwasm-utils 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -298,7 +318,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "check-system-contract-urefs-access-rights"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -351,7 +371,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "create-purse-01"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "create-test-node-01"
+version = "0.1.0"
+dependencies = [
+ "create-test-node-shared 0.1.0",
+]
+
+[[package]]
+name = "create-test-node-02"
+version = "0.1.0"
+dependencies = [
+ "create-test-node-shared 0.1.0",
+]
+
+[[package]]
+name = "create-test-node-03"
+version = "0.1.0"
+dependencies = [
+ "create-test-node-shared 0.1.0",
+]
+
+[[package]]
+name = "create-test-node-shared"
+version = "0.1.0"
+dependencies = [
+ "binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -420,7 +469,7 @@ dependencies = [
 name = "deserialize-error"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -442,52 +491,115 @@ dependencies = [
 ]
 
 [[package]]
+name = "do-nothing"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
 name = "ee-221-regression"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "ee-401-regression"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "ee-401-regression-call"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "ee-441-rng-state"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-460-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "ee-532-regression"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "ee-536-regression"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "ee-539-regression"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-549-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-572-regression-create"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-572-regression-escalate"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-584-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-597-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-598-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-601-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -499,7 +611,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "endless-loop"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -520,6 +632,13 @@ dependencies = [
  "quote 0.6.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 0.15.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "synstructure 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "faucet"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -572,21 +691,35 @@ dependencies = [
 name = "get-blocktime"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "get-caller"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "get-caller-subcall"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "get-phase"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "get-phase-payment"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -614,7 +747,7 @@ dependencies = [
  "futures-cpupool 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "httpbis 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "protobuf 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tls-api 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "tls-api-stub 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-core 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -627,8 +760,8 @@ name = "grpc-compiler"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "protobuf 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "protobuf-codegen 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf-codegen 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -773,14 +906,14 @@ dependencies = [
 name = "key-management-thresholds"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "known-urefs"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -825,7 +958,7 @@ dependencies = [
 name = "local-state"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -857,7 +990,7 @@ dependencies = [
 name = "main-purse"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -884,7 +1017,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "mint-token"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -923,6 +1056,13 @@ dependencies = [
  "net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "ws2_32-sys 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "named-purse-payment"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -1079,28 +1219,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "pos"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "pos-bonding"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "pos-finalize-payment"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "pos-get-payment-purse"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "pos-refund-purse"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -1137,7 +1284,7 @@ dependencies = [
 
 [[package]]
 name = "protobuf"
-version = "2.7.0"
+version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1145,10 +1292,10 @@ dependencies = [
 
 [[package]]
 name = "protobuf-codegen"
-version = "2.7.0"
+version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "protobuf 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1161,13 +1308,13 @@ dependencies = [
 
 [[package]]
 name = "protoc-rust"
-version = "2.7.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "protobuf 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "protobuf-codegen 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf-codegen 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "protoc 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1176,9 +1323,9 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "grpc-compiler 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "protobuf 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "protoc 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "protoc-rust 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protoc-rust 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1387,7 +1534,7 @@ dependencies = [
 name = "remove-associated-key"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -1402,7 +1549,7 @@ dependencies = [
 name = "revert"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -1534,7 +1681,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "standard-payment"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "standard-payment-stored"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -1602,7 +1756,7 @@ dependencies = [
 name = "test-mint-token"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -1873,38 +2027,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "transfer-main-purse-to-new-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
 name = "transfer-purse-to-account"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "transfer-purse-to-account-stored"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "transfer-purse-to-purse"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "transfer-to-account"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "transfer-to-account-01"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
 name = "transfer-to-account-02"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -1936,7 +2104,7 @@ dependencies = [
 name = "unbonding"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.12.0",
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -2197,10 +2365,10 @@ dependencies = [
 "checksum ppv-lite86 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)" = "e3cbf9f658cdb5000fcf6f362b8ea2ba154b9f146a61c7a20d647034c6b6561b"
 "checksum proc-macro2 0.4.30 (registry+https://github.com/rust-lang/crates.io-index)" = "cf3d2011ab5c909338f7887f4fc896d35932e29146c12c8d01da6b22a80ba759"
 "checksum proptest 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)" = "cf147e022eacf0c8a054ab864914a7602618adba841d800a9a9868a5237a529f"
-"checksum protobuf 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5f00e4a3cb64ecfeac2c0a73c74c68ae3439d7a6bead3870be56ad5dd2620a6f"
-"checksum protobuf-codegen 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d2c6e555166cdb646306f599da020e01548e9f4d6ec2fd39802c6db2347cbd3e"
+"checksum protobuf 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8aefcec9f142b524d98fc81d07827743be89dd6586a1ba6ab21fa66a500b3fa5"
+"checksum protobuf-codegen 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "31539be8028d6b9e8e1b3b7c74e2fa3555302e27b2cc20dbaee6ffba648f75e2"
 "checksum protoc 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f26e88abedb402073b87981faecc3b973dd5b19b7002821ed47c457bc5b367a4"
-"checksum protoc-rust 2.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "94ce06ff9a4fbc3a695f8e8ed0b2455744d79108110ac70cb8a091f25d3d3c09"
+"checksum protoc-rust 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "451bac6bc50c1f0a5f5298a369a1d7b3c243a6ae15cbb299a6b0ad9a88b35e96"
 "checksum protoc-rust-grpc 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "89b0b611e3a7fda302581288521d0b1f4662b4fdf285c5ef5f8deb38f99f96ff"
 "checksum pwasm-utils 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "efb0dcbddbb600f47a7098d33762a00552c671992171637f5bb310b37fe1f0e4"
 "checksum quick-error 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "9274b940887ce9addde99c4eee6b5c44cc494b182b97e73dc8ffdcb3397fd3f0"

@@ -4,20 +4,21 @@ use std::rc::Rc;
 
 use parity_wasm::elements::Module;
 
+use crate::engine_state::execution_result::ExecutionResult;
 use contract_ffi::bytesrepr::deserialize;
+use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::{Account, Value};
 use engine_shared::newtypes::CorrelationId;
-use engine_state::execution_result::ExecutionResult;
 use engine_storage::global_state::StateReader;
 
 use super::Error;
 use super::{create_rng, extract_access_rights_from_keys, instance_and_memory, Runtime};
-use runtime_context::RuntimeContext;
-use tracking_copy::TrackingCopy;
-use URefAddr;
+use crate::runtime_context::RuntimeContext;
+use crate::tracking_copy::TrackingCopy;
+use crate::URefAddr;
 
 pub trait Executor<A> {
     #[allow(clippy::too_many_arguments)]
@@ -33,6 +34,7 @@ pub trait Executor<A> {
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -51,6 +53,7 @@ pub trait Executor<A> {
         protocol_version: u64,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -63,7 +66,7 @@ macro_rules! on_fail_charge {
         match $fn {
             Ok(res) => res,
             Err(e) => {
-                let exec_err: ::execution::Error = e.into();
+                let exec_err: crate::execution::Error = e.into();
                 return ExecutionResult::precondition_failure(exec_err.into());
             }
         }
@@ -72,7 +75,7 @@ macro_rules! on_fail_charge {
         match $fn {
             Ok(res) => res,
             Err(e) => {
-                let exec_err: ::execution::Error = e.into();
+                let exec_err: crate::execution::Error = e.into();
                 return ExecutionResult::Failure {
                     error: exec_err.into(),
                     effect: Default::default(),
@@ -85,7 +88,7 @@ macro_rules! on_fail_charge {
         match $fn {
             Ok(res) => res,
             Err(e) => {
-                let exec_err: ::execution::Error = e.into();
+                let exec_err: crate::execution::Error = e.into();
                 return ExecutionResult::Failure {
                     error: exec_err.into(),
                     effect: $effect,
@@ -109,6 +112,7 @@ impl Executor<Module> for WasmiExecutor {
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
@@ -120,7 +124,7 @@ impl Executor<Module> for WasmiExecutor {
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup_local.values().cloned());
         let account_bytes = base_key.as_account().unwrap();
-        let rng = create_rng(account_bytes, account.nonce());
+        let rng = create_rng(account_bytes, account.nonce(), phase);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
@@ -151,6 +155,7 @@ impl Executor<Module> for WasmiExecutor {
             Rc::new(RefCell::new(rng)),
             protocol_version,
             correlation_id,
+            phase,
         );
 
         let mut runtime = Runtime::new(memory, parity_module, context);
@@ -179,6 +184,7 @@ impl Executor<Module> for WasmiExecutor {
         protocol_version: u64,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
@@ -189,13 +195,14 @@ impl Executor<Module> for WasmiExecutor {
 
         //let base_key = Key::Account(account.pub_key());
         let rng = {
-            let rng = create_rng(account.pub_key(), account.nonce());
+            let rng = create_rng(account.pub_key(), account.nonce(), phase);
             Rc::new(RefCell::new(rng))
         };
         let gas_counter = 0u64; // maybe const?
         let fn_store_id = 0u32; // maybe const?
 
-        // Snapshot of effects before execution, so in case of error only nonce update can be returned.
+        // Snapshot of effects before execution, so in case of error only nonce update
+        // can be returned.
         let effects_snapshot = state.borrow().effect();
 
         let args: Vec<Vec<u8>> = if args.is_empty() {
@@ -219,6 +226,7 @@ impl Executor<Module> for WasmiExecutor {
             rng,
             protocol_version,
             correlation_id,
+            phase,
         );
 
         let (instance, memory) =
@@ -237,9 +245,11 @@ impl Executor<Module> for WasmiExecutor {
                     let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
                     match downcasted_error {
                         Error::Ret(ref _ret_urefs) => {
-                            // NOTE: currently, ExecutionResult does not include runtime.result or extra urefs
-                            //  and thus we cannot get back a value from the executed contract...
-                            // TODO?: add ability to include extra_urefs and runtime.result to ExecutionResult::Success
+                            // NOTE: currently, ExecutionResult does not include runtime.result or
+                            // extra urefs  and thus we cannot get back
+                            // a value from the executed contract...
+                            // TODO?: add ability to include extra_urefs and runtime.result to
+                            // ExecutionResult::Success
 
                             return ExecutionResult::Success {
                                 effect: runtime.context().effect(),

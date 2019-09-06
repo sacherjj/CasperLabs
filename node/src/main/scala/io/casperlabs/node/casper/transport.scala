@@ -11,10 +11,12 @@ import cats.syntax.foldable._
 import cats.syntax.functor._
 import com.github.ghik.silencer.silent
 import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Catscontrib._
@@ -47,7 +49,8 @@ package object transport {
   def apply(
       port: Int,
       conf: Configuration,
-      grpcScheduler: Scheduler
+      ingressScheduler: Scheduler,
+      egressScheduler: Scheduler
   )(
       implicit
       log: Log[Task],
@@ -65,11 +68,11 @@ package object transport {
       finalizationHandler: LastFinalizedBlockHashContainer[Effect],
       filesApiEff: FilesAPI[Effect],
       deployBuffer: DeployBuffer[Effect],
-      validation: Validation[Effect],
-      scheduler: Scheduler
+      validation: Validation[Effect]
   ): Resource[Effect, Unit] = Resource {
     implicit val rpConfAsk = effects.rpConfAsk(rpConfState)
     implicit val timeEff   = Time[Effect]
+    implicit val scheduler = egressScheduler
     for {
       tcpConnections <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
 
@@ -86,10 +89,15 @@ package object transport {
           conf.server.maxMessageSize,
           conf.server.chunkSize,
           commTmpFolder
-        )(grpcScheduler, log, metrics, tcpConnections)
+        )(ingressScheduler, log, metrics, tcpConnections)
       }
       implicit0(transportEff: TransportLayer[Effect]) = TransportLayer
         .eitherTTransportLayer[Task]
+
+      implicit0(deploySelection: DeploySelection[Effect]) = DeploySelection
+        .create[Effect](
+          conf.casper.maxBlockSizeBytes
+        )
 
       implicit0(lab: LastApprovedBlock[Task]) <- LastApprovedBlock.of[Task].toEffect
 

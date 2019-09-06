@@ -1,3 +1,4 @@
+use crate::execution::Phase;
 use crate::key::*;
 use crate::uref::{AccessRights, URef};
 use crate::value::account::{
@@ -32,6 +33,14 @@ pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
         Just(AccessRights::READ_WRITE),
         Just(AccessRights::ADD_WRITE),
         Just(AccessRights::READ_ADD_WRITE),
+    ]
+}
+
+pub fn phase_arb() -> impl Strategy<Value = Phase> {
+    prop_oneof![
+        Just(Phase::Payment),
+        Just(Phase::Session),
+        Just(Phase::FinalizePayment),
     ]
 }
 
@@ -124,8 +133,8 @@ pub fn u512_arb() -> impl Strategy<Value = U512> {
 }
 
 pub fn value_arb() -> impl Strategy<Value = Value> {
-    // If compiler brings you here it most probably means you've added a variant to `Value` enum
-    // but forgot to add generator for it.
+    // If compiler brings you here it most probably means you've added a variant to
+    // `Value` enum but forgot to add generator for it.
     let stub: Option<Value> = None;
     if let Some(v) = stub {
         match v {

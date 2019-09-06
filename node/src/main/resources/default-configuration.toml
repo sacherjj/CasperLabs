@@ -29,9 +29,6 @@ default-timeout = "5second"
 # Bootstrap casperlabs node address for initial seed.
 # bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
 
-# Type of Casperlabs space backing store. Valid values are: lmdb, inmem, mixed.
-store-type = "lmdb"
-
 # Path to data directory.
 data-dir = "$HOME/.casperlabs"
 
@@ -264,6 +261,8 @@ auto-propose-max-interval = "5seconds"
 # Number of deploys to accumulate before proposing.
 auto-propose-max-count = 10
 
+# Maximum block size in bytes
+max-block-size-bytes = 10485760
 
 # io.casperlabs.node.configuration.Configuration.Kamon
 [metrics]

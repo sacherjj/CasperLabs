@@ -1,5 +1,5 @@
 use super::alloc::collections::BTreeMap;
-use super::alloc::collections::CollectionAllocErr;
+use super::alloc::collections::TryReserveError;
 use super::alloc::string::{String, ToString};
 use super::alloc::vec::Vec;
 
@@ -46,8 +46,8 @@ pub enum Error {
     CustomError(String),
 }
 
-impl From<CollectionAllocErr> for Error {
-    fn from(_: CollectionAllocErr) -> Error {
+impl From<TryReserveError> for Error {
+    fn from(_: TryReserveError) -> Error {
         Error::OutOfMemoryError
     }
 }
@@ -352,7 +352,7 @@ impl<T: FromBytes> FromBytes for [T; N256] {
         if size != N256 as u32 {
             return Err(Error::FormattingError);
         }
-        let mut result: MaybeUninit<[T; N256]> = MaybeUninit::uninitialized();
+        let mut result: MaybeUninit<[T; N256]> = MaybeUninit::uninit();
         let result_ptr = result.as_mut_ptr() as *mut T;
         unsafe {
             for i in 0..N256 {
@@ -360,7 +360,7 @@ impl<T: FromBytes> FromBytes for [T; N256] {
                 result_ptr.add(i).write(t);
                 stream = rem;
             }
-            Ok((result.into_initialized(), stream))
+            Ok((result.assume_init(), stream))
         }
     }
 }
@@ -609,6 +609,10 @@ mod proptests {
         fn test_result(result in result_arb()) {
             assert!(test_serialization_roundtrip(&result))
         }
-    }
 
+        #[test]
+        fn test_phase_serialization(phase in phase_arb()) {
+            assert!(test_serialization_roundtrip(&phase));
+        }
+    }
 }

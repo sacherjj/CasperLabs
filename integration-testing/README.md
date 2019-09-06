@@ -55,8 +55,7 @@ These are created on Drone CI in order to use have image per build. If the
 variable is undefined, `casperlabs/node:latest` is used.
 
 When the tests are run against the current source code one should build the
-docker image and publish it locally. For details see [the developer
-information](https://github.com/CasperLabs/CasperLabs/blob/dev/DEVELOPER.md)
+docker image and publish it locally. For details see [build-docker-images](https://github.com/CasperLabs/CasperLabs/tree/master/hack/docker#build-docker-images)
 
 # Running the tests
 

@@ -35,4 +35,5 @@ members = [
     "transfer_to_account",
     "err-transfer-to-account",
     "endless-loop",
+    "pos-bonding",
 ]

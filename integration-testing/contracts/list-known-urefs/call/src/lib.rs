@@ -1,13 +1,12 @@
 #![no_std]
-#![feature(alloc)]
 
 extern crate alloc;
-extern crate common;
+extern crate contract_ffi;
 
 use alloc::vec::Vec;
-use common::contract_api::pointers::ContractPointer;
-use common::contract_api::{call_contract, get_uref, revert};
-use common::key::Key;
+use contract_ffi::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api::{call_contract, get_uref, revert};
+use contract_ffi::key::Key;
 
 #[no_mangle]
 pub extern "C" fn call() {

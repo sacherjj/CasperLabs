@@ -8,9 +8,9 @@ use engine_storage::global_state::StateReader;
 
 use super::args::Args;
 use super::{Error, Runtime};
+use crate::resolvers::v1_function_index::FunctionIndex;
 use contract_ffi::bytesrepr::{self, ToBytes};
 use contract_ffi::value::account::{PublicKey, PurseId};
-use resolvers::v1_function_index::FunctionIndex;
 
 impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
 where
@@ -146,7 +146,8 @@ where
                 let (key_ptr, key_size, args_ptr, args_size, extra_urefs_ptr, extra_urefs_size) =
                     Args::parse(args)?;
 
-                // We have to explicitly tell rustc what type we expect as it cannot infer it otherwise.
+                // We have to explicitly tell rustc what type we expect as it cannot infer it
+                // otherwise.
                 let _args_size_u32: u32 = args_size;
                 let _extra_urefs_size_u32: u32 = extra_urefs_size;
 
@@ -406,6 +407,13 @@ where
                 };
 
                 Ok(Some(RuntimeValue::I32(ret)))
+            }
+
+            FunctionIndex::GetPhaseIndex => {
+                // args(0) = pointer to Wasm memory where to write.
+                let dest_ptr = Args::parse(args)?;
+                self.get_phase(dest_ptr)?;
+                Ok(None)
             }
         }
     }

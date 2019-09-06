@@ -11,13 +11,14 @@ sealed trait DeployEffects extends ProcessedDeployResult {
   val effects: ipc.ExecutionEffect
 }
 
+sealed trait NoEffectsFailure extends ProcessedDeployResult
+
 final case class InvalidNonceDeploy(deploy: Deploy, deployNonce: Long, expectedNonce: Long)
-    extends ProcessedDeployResult
+    extends NoEffectsFailure
 
 // Precondition failures don't have effects or cost.
 // They are errors that we can't charge for (like key not found, key not being an public key of the account).
-final case class PreconditionFailure(deploy: Deploy, errorMessage: String)
-    extends ProcessedDeployResult
+final case class PreconditionFailure(deploy: Deploy, errorMessage: String) extends NoEffectsFailure
 
 // Represents errors during execution of the program.
 // These errors do have effects in the form of increasing account's nonce and execution of payment code.
@@ -52,5 +53,18 @@ object ProcessedDeployResult {
           case ipc.DeployResult.ExecutionResult(None, None, _) => ???
         }
       case ipc.DeployResult(ipc.DeployResult.Value.Empty) => ???
+    }
+
+  // All the deploys that do not change the global state in a way that can conflict with others:
+  // which can be only`ExecutionError` now as `InvalidNonce` and `PreconditionFailure` has been
+  // filtered out when creating block and when we're validating block it shouldn't include those either.
+  def split(l: List[ProcessedDeployResult]): (List[NoEffectsFailure], List[DeployEffects]) =
+    l.foldRight(
+      (List.empty[NoEffectsFailure], List.empty[DeployEffects])
+    ) {
+      case (pdr: DeployEffects, (noEffects, effectful)) =>
+        (noEffects, pdr :: effectful)
+      case (pdr: NoEffectsFailure, (noEffects, effectful)) =>
+        (pdr :: noEffects, effectful)
     }
 }

@@ -1,22 +1,23 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::string::String;
 
-use cl_std::contract_api::{
+use contract_ffi::contract_api::{
     add, add_uref, get_uref, has_uref, list_known_urefs, new_uref, read, remove_uref, revert, write,
 };
-use cl_std::key::Key;
-use cl_std::value::U512;
+use contract_ffi::key::Key;
+use contract_ffi::value::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {
     let initi_uref_num = 4; // TODO: this is very brittle as it breaks whenever we add another default uref
 
-    // Account starts with FOUR known urefs: genesis_acct, mint public uref, mint private uref, pos public uref & pos private uref.
+    // Account starts with FOUR known urefs: genesis_acct, mint public uref, mint
+    // private uref, pos public uref & pos private uref.
     if list_known_urefs().len() != initi_uref_num {
         revert(201);
     }

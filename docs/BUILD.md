@@ -2,7 +2,7 @@
 
 ### Prerequisites
 
-* Java Development Kit (JDK), version 11 
+* Java Development Kit (JDK), version 11
   * We recommend using the [OpenJDK](https://openjdk.java.net)
 * [protoc](https://github.com/protocolbuffers/protobuf/releases), version 3.6.1 or greater
 * [sbt](https://www.scala-sbt.org/download.html)

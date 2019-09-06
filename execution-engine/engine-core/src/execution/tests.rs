@@ -2,8 +2,8 @@ use rand::RngCore;
 use rand_chacha::ChaChaRng;
 
 use super::Error;
-use engine_state::execution_result::ExecutionResult;
-use execution::create_rng;
+use crate::engine_state::execution_result::ExecutionResult;
+use crate::execution::create_rng;
 
 fn on_fail_charge_test_helper<T>(
     f: impl Fn() -> Result<T, Error>,
@@ -33,10 +33,10 @@ fn on_fail_charge_err_laziness_test() {
 }
 #[test]
 fn on_fail_charge_with_action() {
+    use crate::engine_state::execution_effect::ExecutionEffect;
+    use crate::engine_state::op::Op;
     use contract_ffi::key::Key;
     use engine_shared::transform::Transform;
-    use engine_state::execution_effect::ExecutionEffect;
-    use engine_state::op::Op;
     let f = || {
         let input: Result<(), Error> = Err(Error::GasLimit);
         on_fail_charge!(input, 456, {
@@ -74,8 +74,8 @@ fn gen_random(rng: &mut ChaChaRng) -> [u8; 32] {
 #[test]
 fn should_generate_different_numbers_for_different_seeds() {
     let account_addr = [0u8; 32];
-    let mut rng_a = create_rng(account_addr, 1);
-    let mut rng_b = create_rng(account_addr, 2);
+    let mut rng_a = create_rng(account_addr, 1, contract_ffi::execution::Phase::Session);
+    let mut rng_b = create_rng(account_addr, 2, contract_ffi::execution::Phase::Session);
     let random_a = gen_random(&mut rng_a);
     let random_b = gen_random(&mut rng_b);
 
@@ -85,10 +85,36 @@ fn should_generate_different_numbers_for_different_seeds() {
 #[test]
 fn should_generate_same_numbers_for_same_seed() {
     let account_addr = [0u8; 32];
-    let mut rng_a = create_rng(account_addr, 1);
-    let mut rng_b = create_rng(account_addr, 1);
+    let mut rng_a = create_rng(account_addr, 1, contract_ffi::execution::Phase::Session);
+    let mut rng_b = create_rng(account_addr, 1, contract_ffi::execution::Phase::Session);
     let random_a = gen_random(&mut rng_a);
     let random_b = gen_random(&mut rng_b);
 
     assert_eq!(random_a, random_b)
+}
+
+#[test]
+fn should_not_generate_same_numbers_for_different_phase() {
+    let account_addr = [0u8; 32];
+    let mut rng_a = create_rng(account_addr, 1, contract_ffi::execution::Phase::Payment);
+    let mut rng_b = create_rng(account_addr, 1, contract_ffi::execution::Phase::Session);
+    let random_a = gen_random(&mut rng_a);
+    let random_b = gen_random(&mut rng_b);
+
+    assert_ne!(
+        random_a, random_b,
+        "different phase should have different output"
+    );
+
+    let mut rng_c = create_rng(
+        account_addr,
+        1,
+        contract_ffi::execution::Phase::FinalizePayment,
+    );
+    let random_c = gen_random(&mut rng_c);
+
+    assert_ne!(
+        random_a, random_c,
+        "different phase should have different output"
+    );
 }

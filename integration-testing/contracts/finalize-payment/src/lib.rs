@@ -1,17 +1,16 @@
 #![no_std]
-#![feature(alloc)]
 
 #[macro_use]
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::vec::Vec;
 
-use cl_std::contract_api::pointers::{ContractPointer, UPointer};
-use cl_std::contract_api::{self, PurseTransferResult};
-use cl_std::key::Key;
-use cl_std::value::account::{PublicKey, PurseId};
-use cl_std::value::U512;
+use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::contract_api::{self, PurseTransferResult};
+use contract_ffi::key::Key;
+use contract_ffi::value::account::{PublicKey, PurseId};
+use contract_ffi::value::U512;
 
 fn purse_to_key(p: &PurseId) -> Key {
     Key::URef(p.value())
@@ -26,7 +25,7 @@ fn set_refund_purse(pos: &ContractPointer, p: &PurseId) {
 }
 
 fn get_payment_purse(pos: &ContractPointer) -> PurseId {
-    contract_api::call_contract(pos.clone(), &"get_payment_purse", &Vec::new())
+    contract_api::call_contract(pos.clone(), &("get_payment_purse",), &Vec::new())
 }
 
 fn submit_payment(pos: &ContractPointer, amount: U512) {

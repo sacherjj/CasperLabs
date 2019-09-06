@@ -5,6 +5,7 @@ from typing import Union, List
 from pathlib import Path
 import base64
 import os
+from casperlabs_client import read_pem_key
 
 
 def is_valid_account(account_id: Union[int, str]) -> bool:
@@ -36,6 +37,14 @@ class Account:
         return self.account_path / self.private_key_filename
 
     @property
+    def public_key_docker_path(self) -> Path:
+        return f"/data/accounts/{self.public_key_filename}"
+
+    @property
+    def private_key_docker_path(self) -> Path:
+        return f"/data/accounts/{self.private_key_filename}"
+
+    @property
     def private_key_filename(self) -> str:
         return f"account-private-{self.file_id}.pem"
 
@@ -47,6 +56,10 @@ class Account:
     def public_key(self) -> str:
         with open(self.account_path / f"account-id-{self.file_id}") as f:
             return f.read().strip()
+
+    @property
+    def private_key(self) -> str:
+        return base64.b64encode(read_pem_key(self.private_key_path)).decode("utf-8")
 
     @property
     def public_key_hex(self) -> str:

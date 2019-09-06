@@ -19,12 +19,9 @@ object Main {
 
   implicit val log: Log[Task] = effects.log
 
+  implicit val uncaughtExceptionHandler = new UncaughtExceptionHandler(shutdownTimeout = 1.minute)
+
   def main(args: Array[String]): Unit = {
-    implicit val scheduler: Scheduler = Scheduler.computation(
-      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
-      "node-runner",
-      reporter = UncaughtExceptionHandler
-    )
 
     val exec: Task[Unit] =
       for {
@@ -36,6 +33,13 @@ object Main {
               )
       } yield ()
 
+    // Create a scheduler to execute the program and block waiting on it to finish.
+    implicit val scheduler: Scheduler = Scheduler.computation(
+      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
+      "node-runner",
+      reporter = uncaughtExceptionHandler
+    )
+
     exec.runSyncUnsafe()
   }
 
@@ -46,9 +50,7 @@ object Main {
     sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
-  private def mainProgram(command: Configuration.Command, conf: Configuration)(
-      implicit scheduler: Scheduler
-  ): Task[Unit] = {
+  private def mainProgram(command: Configuration.Command, conf: Configuration): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
         conf.server.host.getOrElse("localhost"),
@@ -79,7 +81,7 @@ object Main {
       }
   }
 
-  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+  private def nodeProgram(conf: Configuration): Task[Unit] = {
     val node =
       for {
         _       <- log.info(api.VersionInfo.get).toEffect

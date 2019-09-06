@@ -5,6 +5,7 @@ pub mod pointers;
 use self::alloc_util::*;
 use self::pointers::*;
 use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
+use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
@@ -47,7 +48,8 @@ fn read_untyped(key: &Key) -> Option<Value> {
     deserialize(&value_bytes).unwrap()
 }
 
-/// Reads the value at the given key in the context-local partition of global state
+/// Reads the value at the given key in the context-local partition of global
+/// state
 pub fn read_local<K, V>(key: K) -> Option<V>
 where
     K: ToBytes,
@@ -91,7 +93,8 @@ fn write_untyped(key: &Key, value: &Value) {
     }
 }
 
-/// Writes the given value at the given key in the context-local partition of global state
+/// Writes the given value at the given key in the context-local partition of
+/// global state
 pub fn write_local<K, V>(key: K, value: V)
 where
     K: ToBytes,
@@ -170,14 +173,15 @@ pub fn list_known_urefs() -> BTreeMap<String, Key> {
     deserialize(&bytes).unwrap()
 }
 
-// TODO: fn_by_name, fn_bytes_by_name and ext_ffi::serialize_function should be removed.
-// Functions shouldn't be serialized and returned back to the contract because they're never used there.
-// Host should read the function pointer (and correct number of bytes) and persist it on the host side.
+// TODO: fn_by_name, fn_bytes_by_name and ext_ffi::serialize_function should be
+// removed. Functions shouldn't be serialized and returned back to the contract
+// because they're never used there. Host should read the function pointer (and
+// correct number of bytes) and persist it on the host side.
 
-/// Returns the serialized bytes of a function which is exported in the current module.
-/// Note that the function is wrapped up in a new module and re-exported under the name
-/// "call". `fn_bytes_by_name` is meant to be used when storing a contract on-chain at
-/// an unforgable reference.
+/// Returns the serialized bytes of a function which is exported in the current
+/// module. Note that the function is wrapped up in a new module and re-exported
+/// under the name "call". `fn_bytes_by_name` is meant to be used when storing a
+/// contract on-chain at an unforgable reference.
 pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
     let bytes = fn_bytes_by_name(name);
     let protocol_version = unsafe { ext_ffi::protocol_version() };
@@ -185,8 +189,8 @@ pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
 }
 
 /// Gets the serialized bytes of an exported function (see `fn_by_name`), then
-/// computes gets the address from the host to produce a key where the contract is then
-/// stored in the global state. This key is returned.
+/// computes gets the address from the host to produce a key where the contract
+/// is then stored in the global state. This key is returned.
 pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> ContractPointer {
     let (fn_ptr, fn_size, _bytes1) = str_ref_to_ptr(name);
     let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&known_urefs);
@@ -218,8 +222,8 @@ pub fn get_arg<T: FromBytes>(i: u32) -> T {
     deserialize(&arg_bytes).unwrap()
 }
 
-/// Return the unforgable reference known by the current module under the given name.
-/// This either comes from the known_urefs of the account or contract,
+/// Return the unforgable reference known by the current module under the given
+/// name. This either comes from the known_urefs of the account or contract,
 /// depending on whether the current module is a sub-call or not.
 pub fn get_uref(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
@@ -257,7 +261,8 @@ pub fn remove_uref(name: &str) {
 
 /// Returns caller of current context.
 /// When in root context (not in the sub call) - returns None.
-/// When in the sub call - returns public key of the account that made the deploy.
+/// When in the sub call - returns public key of the account that made the
+/// deploy.
 pub fn get_caller() -> PublicKey {
     //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
     let dest_ptr = alloc_bytes(36);
@@ -464,8 +469,8 @@ impl From<TransferResult> for i32 {
     }
 }
 
-/// Transfers `amount` of tokens from default purse of the account to `target` account.
-/// If `target` does not exist it will create it.
+/// Transfers `amount` of motes from default purse of the account to `target`
+/// account. If `target` does not exist it will create it.
 pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
@@ -474,7 +479,7 @@ pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
         .expect("should parse result")
 }
 
-/// Transfers `amount` of tokens from `source` purse to `target` account.
+/// Transfers `amount` of motes from `source` purse to `target` account.
 /// If `target` does not exist it will create it.
 pub fn transfer_from_purse_to_account(
     source: PurseId,
@@ -526,7 +531,7 @@ impl From<PurseTransferResult> for i32 {
     }
 }
 
-/// Transfers `amount` of tokens from `source` purse to `target` purse.
+/// Transfers `amount` of motes from `source` purse to `target` purse.
 pub fn transfer_from_purse_to_purse(
     source: PurseId,
     target: PurseId,
@@ -547,4 +552,11 @@ pub fn transfer_from_purse_to_purse(
     }
     .try_into()
     .expect("Should parse result")
+}
+
+pub fn get_phase() -> Phase {
+    let dest_ptr = alloc_bytes(PHASE_SIZE);
+    unsafe { ext_ffi::get_phase(dest_ptr) };
+    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SIZE, PHASE_SIZE) };
+    deserialize(&bytes).unwrap()
 }

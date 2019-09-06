@@ -44,15 +44,18 @@ class DeployBufferImplSpec extends DeployBufferSpec with BeforeAndAfterEach with
         .locations(new Location("classpath:db/migration"))
     conf.load()
   }
-
-  override protected def testFixture(test: DeployBuffer[Task] => Task[Unit]): Unit = {
+  override protected def testFixture(
+      test: DeployBuffer[Task] => Task[Unit],
+      timeout: FiniteDuration = 5.seconds,
+      deployBufferChunkSize: Int = 100
+  ): Unit = {
     val program = for {
       _            <- Task(cleanupTables())
       _            <- Task(setupTables())
-      deployBuffer <- DeployBufferImpl.create[Task]
+      deployBuffer <- DeployBufferImpl.create[Task](deployBufferChunkSize)
       _            <- test(deployBuffer)
     } yield ()
-    program.runSyncUnsafe(5.seconds)
+    program.runSyncUnsafe(timeout)
   }
 
   private def setupTables(): Unit = flyway.migrate()

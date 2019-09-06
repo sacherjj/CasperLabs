@@ -4,13 +4,16 @@ import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
+import cats.Show
 import cats.effect.{Sync, Timer}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.client.configuration.Streaming
+import io.casperlabs.client.configuration.{DeployConfig, Streaming}
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.crypto.hash.Blake2b256
@@ -20,21 +23,29 @@ import org.apache.commons.io._
 
 import scala.concurrent.duration._
 import scala.language.higherKinds
+import scala.util.Try
 
 object DeployRuntime {
 
   val BONDING_WASM_FILE   = "bonding.wasm"
   val UNBONDING_WASM_FILE = "unbonding.wasm"
   val TRANSFER_WASM_FILE  = "transfer_to_account.wasm"
+  val PAYMENT_WASM_FILE   = "standard_payment.wasm"
 
   def propose[F[_]: Sync: DeployService](
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
-    gracefulExit(DeployService[F].propose().map(_.map(r => s"Response: $r")), exit, ignoreOutput)
+    gracefulExit(
+      DeployService[F]
+        .propose()
+        .map(_.map(hash => s"Response: Success! Block $hash created and added.")),
+      exit,
+      ignoreOutput
+    )
 
   def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showBlock(hash))
+    gracefulExit(DeployService[F].showBlock(hash).map(_.map(Printer.printToUnicodeString)))
 
   def showDeploys[F[_]: Sync: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].showDeploys(hash))
@@ -45,61 +56,81 @@ object DeployRuntime {
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(depth))
 
+  private def optionalArg[T](name: String, maybeValue: Option[T])(
+      f: T => Deploy.Arg.Value.Value
+  ) = {
+    val value: Deploy.Arg.Value.Value = maybeValue match {
+      case None    => Deploy.Arg.Value.Value.Empty
+      case Some(x) => f(x)
+    }
+    Deploy
+      .Arg(name)
+      .withValue(
+        Deploy.Arg.Value().withOptionalValue(Deploy.Arg.Value(value))
+      )
+  }
+
+  private def arg[T](name: String, value: Deploy.Arg.Value.Value) =
+    Deploy
+      .Arg(name)
+      .withValue(Deploy.Arg.Value(value))
+
+  private def longArg(name: String, value: Long) =
+    arg(name, Deploy.Arg.Value.Value.LongValue(value))
+
+  private def bigIntArg(name: String, value: BigInt) =
+    arg(name, Deploy.Arg.Value.Value.BigInt(state.BigInt(value.toString, bitWidth = 512)))
+
+  private def bytesArg(name: String, value: Array[Byte]) =
+    arg(name, Deploy.Arg.Value.Value.BytesValue(ByteString.copyFrom(value)))
+
+  // This is true for any array but I didn't want to go as far as writing type classes.
+  // Binary format of an array is constructed from:
+  // length (u32/integer in binary) ++ bytes
+  private def serializeArray(ba: Array[Byte]): Array[Byte] = {
+    val serLen = serializeInt(ba.length)
+    serLen ++ ba
+  }
+
+  private def serializeInt(i: Int): Array[Byte] =
+    java.nio.ByteBuffer
+      .allocate(4)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .putInt(i)
+      .array()
+
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
-      nonce: Long,
-      sessionCode: Option[File],
+      deployConfig: DeployConfig,
       privateKeyFile: File
-  ): F[Unit] = {
-    val args: Array[Array[Byte]] = Array(
-      serializeOption(maybeAmount, serializeLong)
-    )
-    val argsSer = serializeArgs(args)
-
+  ): F[Unit] =
     for {
-      sessionCode <- readFileOrDefault[F](sessionCode, UNBONDING_WASM_FILE)
-      // currently, sessionCode == paymentCode in order to get some gas limit for the execution
-      paymentCode   = sessionCode.toList.toArray
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
-            nonce = nonce,
-            sessionCode = sessionCode,
-            paymentCode = paymentCode,
+            deployConfig.withSessionResource(UNBONDING_WASM_FILE),
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
-            gasPrice = 10L, // gas price is fixed at the moment for 10:1
-            sessionArgs = ByteString.copyFrom(argsSer)
+            sessionArgs =
+              List(optionalArg("amount", maybeAmount)(Deploy.Arg.Value.Value.LongValue(_)))
           )
     } yield ()
-  }
 
   def bond[F[_]: Sync: DeployService](
       amount: Long,
-      nonce: Long,
-      sessionCode: Option[File],
+      deployConfig: DeployConfig,
       privateKeyFile: File
-  ): F[Unit] = {
-    val args: Array[Array[Byte]] = Array(serializeLong(amount))
-    val argsSer: Array[Byte]     = serializeArgs(args)
-
+  ): F[Unit] =
     for {
-      sessionCode <- readFileOrDefault[F](sessionCode, BONDING_WASM_FILE)
-      // currently, sessionCode == paymentCode in order to get some gas limit for the execution
-      paymentCode   = sessionCode.toList.toArray
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
       _ <- deployFileProgram[F](
             from = None,
-            nonce = nonce,
-            sessionCode = sessionCode,
-            paymentCode = paymentCode,
+            deployConfig.withSessionResource(BONDING_WASM_FILE),
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
-            gasPrice = 10L, // gas price is fixed at the moment for 10:1
-            sessionArgs = ByteString.copyFrom(argsSer)
+            sessionArgs = List(longArg("amount", amount))
           )
     } yield ()
-  }
 
   def queryState[F[_]: Sync: DeployService](
       blockHash: String,
@@ -228,8 +259,7 @@ object DeployRuntime {
     })
 
   def transferCLI[F[_]: Sync: DeployService: FilesAPI](
-      nonce: Long,
-      sessionCode: Option[File],
+      deployConfig: DeployConfig,
       privateKeyFile: File,
       recipientPublicKeyBase64: String,
       amount: Long
@@ -248,12 +278,17 @@ object DeployRuntime {
                       "Failed to compute Ed25519 public key from given private key."
                     )
                   )
-      _ <- transfer[F](nonce, sessionCode, publicKey, privateKey, recipientPublicKeyBase64, amount)
+      _ <- transfer[F](
+            deployConfig,
+            publicKey,
+            privateKey,
+            recipientPublicKeyBase64,
+            amount
+          )
     } yield ()
 
   def transfer[F[_]: Sync: DeployService: FilesAPI](
-      nonce: Long,
-      sessionCode: Option[File],
+      deployConfig: DeployConfig,
       senderPublicKey: PublicKey,
       senderPrivateKey: PrivateKey,
       recipientPublicKeyBase64: String,
@@ -268,33 +303,109 @@ object DeployRuntime {
                     s"Failed to parse base64 encoded account: $recipientPublicKeyBase64"
                   )
                 )
-      sessionCode <- readFileOrDefault[F](sessionCode, TRANSFER_WASM_FILE)
-      // currently, sessionCode == paymentCode in order to get some gas limit for the execution
-      paymentCode = sessionCode.toList.toArray
-      args        = serializeArgs(Array(serializeArray(account), serializeLong(amount)))
       _ <- deployFileProgram[F](
             from = None,
-            nonce = nonce,
-            sessionCode = sessionCode,
-            paymentCode = paymentCode,
+            deployConfig.withSessionResource(TRANSFER_WASM_FILE),
             maybeEitherPublicKey = senderPublicKey.asRight[String].some,
             maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
-            gasPrice = 10L,
-            ByteString.copyFrom(args),
+            List(
+              bytesArg("account", account),
+              longArg("amount", amount)
+            ),
             exit,
             ignoreOutput
           )
     } yield ()
 
+  private def readKey[F[_]: Sync, A](keyFile: File, keyType: String, f: String => Option[A]): F[A] =
+    readFileAsString[F](keyFile) >>= { key =>
+      Sync[F].fromOption[A](
+        f(key),
+        new IllegalArgumentException(s"$keyFile was not valid Ed25519 $keyType key.")
+      )
+    }
+
+  /** Signs a deploy with provided private key and writes it to the file (if provided),
+    * or prints to STDOUT.
+    */
+  def sign[F[_]: Sync](
+      deployBA: Array[Byte],
+      output: Option[File],
+      publicKeyFile: File,
+      privateKeyFile: File
+  ): F[Unit] = {
+
+    val program = for {
+      publicKey    <- readKey[F, PublicKey](publicKeyFile, "public", Ed25519.tryParsePublicKey _)
+      privateKey   <- readKey[F, PrivateKey](privateKeyFile, "private", Ed25519.tryParsePrivateKey _)
+      deploy       <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
+      signedDeploy = deploy.sign(privateKey, publicKey)
+      _            <- writeDeploy(signedDeploy, output)
+    } yield ()
+
+    gracefulExit(program.attempt)
+  }
+
+  /** Constructs a [[Deploy]] from the provided arguments and writes it to a file (or STDOUT).
+    */
+  def makeDeploy[F[_]: Sync](
+      from: ByteString,
+      deployConfig: DeployConfig,
+      sessionArgs: Seq[Deploy.Arg]
+  ): Deploy = {
+    val session = deployConfig.session(sessionArgs)
+    // It is advisable to provide payment via --payment-name or --payment-hash, if it's stored.
+    val payment = deployConfig
+      .withPaymentResource(PAYMENT_WASM_FILE)
+      .payment(
+        deployConfig.paymentAmount.map(bigIntArg("amount", _)).toList
+      )
+
+    consensus
+      .Deploy()
+      .withHeader(
+        consensus.Deploy
+          .Header()
+          .withTimestamp(System.currentTimeMillis)
+          .withAccountPublicKey(from)
+          .withNonce(deployConfig.nonce)
+          .withGasPrice(deployConfig.gasPrice)
+      )
+      .withBody(
+        consensus.Deploy
+          .Body()
+          .withSession(session)
+          .withPayment(payment)
+      )
+      .withHashes
+  }
+
+  /** Writes deploy to either a file (if `deployPath` is defined) or STDOUT.
+    */
+  def writeDeploy[F[_]: Sync](deploy: Deploy, deployPath: Option[File]): F[Unit] =
+    gracefulExit(
+      deployPath.fold {
+        Sync[F].delay(deploy.writeTo(System.out)).attempt
+      } { file =>
+        Sync[F].delay(Files.write(file.toPath, deploy.toByteArray)).void.attempt
+      },
+      ignoreOutput = true
+    )
+
+  def sendDeploy[F[_]: Sync: DeployService](deployBA: Array[Byte]): F[Unit] =
+    gracefulExit {
+      for {
+        deploy <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
+        result <- DeployService[F].deploy(deploy)
+      } yield result
+    }
+
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[String],
-      nonce: Long,
-      sessionCode: Array[Byte],
-      paymentCode: Array[Byte],
+      deployConfig: DeployConfig,
       maybeEitherPublicKey: Option[Either[String, PublicKey]],
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
-      gasPrice: Long,
-      sessionArgs: ByteString = ByteString.EMPTY,
+      sessionArgs: Seq[Deploy.Arg] = Seq.empty,
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] = {
@@ -308,9 +419,6 @@ object DeployRuntime {
       either.fold(Ed25519.tryParsePublicKey, _.some)
     } orElse maybePrivateKey.flatMap(Ed25519.tryToPublic)
 
-    val session = ByteString.copyFrom(sessionCode)
-    val payment = ByteString.copyFrom(paymentCode)
-
     val deploy = for {
       accountPublicKey <- Sync[F].fromOption(
                            from
@@ -319,24 +427,8 @@ object DeployRuntime {
                            new IllegalArgumentException("--from or --public-key must be presented")
                          )
     } yield {
-      val deploy = consensus
-        .Deploy()
-        .withHeader(
-          consensus.Deploy
-            .Header()
-            .withTimestamp(System.currentTimeMillis)
-            .withAccountPublicKey(accountPublicKey)
-            .withNonce(nonce)
-            .withGasPrice(gasPrice)
-        )
-        .withBody(
-          consensus.Deploy
-            .Body()
-            .withSession(consensus.Deploy.Code().withCode(session).withArgs(sessionArgs))
-            .withPayment(consensus.Deploy.Code().withCode(payment))
-        )
-        .withHashes
-
+      val deploy =
+        makeDeploy(accountPublicKey, deployConfig, sessionArgs)
       (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
     }
 
@@ -351,8 +443,8 @@ object DeployRuntime {
     )
   }
 
-  private[client] def gracefulExit[F[_]: Sync](
-      program: F[Either[Throwable, String]],
+  private[client] def gracefulExit[F[_]: Sync, A: Show](
+      program: F[Either[Throwable, A]],
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
@@ -367,7 +459,7 @@ object DeployRuntime {
             case Right(msg) =>
               Sync[F].delay {
                 if (!ignoreOutput) {
-                  println(msg)
+                  println(Show[A].show(msg))
                 }
                 if (exit) {
                   System.exit(0)
@@ -382,61 +474,12 @@ object DeployRuntime {
   private def hash[T <: scalapb.GeneratedMessage](data: T): ByteString =
     ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
 
-  // When not provided fallbacks to the contract version packaged with the client.
-  private def readFileOrDefault[F[_]: Sync](
-      file: Option[File],
-      defaultName: String
-  ): F[Array[Byte]] = {
-    def consumeInputStream(is: InputStream): Array[Byte] = {
-      val baos = new ByteArrayOutputStream()
-      IOUtils.copy(is, baos)
-      baos.toByteArray
-    }
-    Sync[F].delay {
-      file
-        .map(f => Files.readAllBytes(f.toPath))
-        .getOrElse(consumeInputStream(getClass.getClassLoader.getResourceAsStream(defaultName)))
-
-    }
-  }
-
-  private def readFileAsString[F[_]: Sync](file: File): F[String] = Sync[F].delay {
+  def readFileAsString[F[_]: Sync](file: File): F[String] = Sync[F].delay {
     new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8)
   }
 
-  private def serializeLong(l: Long): Array[Byte] =
-    java.nio.ByteBuffer
-      .allocate(8)
-      .order(ByteOrder.LITTLE_ENDIAN)
-      .putLong(l)
-      .array()
-
-  private def serializeInt(i: Int): Array[Byte] =
-    java.nio.ByteBuffer
-      .allocate(4)
-      .order(ByteOrder.LITTLE_ENDIAN)
-      .putInt(i)
-      .array()
-
-  // Option serializes as follows:
-  // None:        [0]
-  // Some(value): [1] ++ serialized value
-  private def serializeOption[T](in: Option[T], fSer: T => Array[Byte]): Array[Byte] =
-    in.map(value => Array[Byte](1) ++ fSer(value)).getOrElse(Array[Byte](0))
-
-  // This is true for any array but I didn't want to go as far as writing type classes.
-  // Binary format of an array is constructed from:
-  // length (u64/integer in binary) ++ bytes
-  private def serializeArray(ba: Array[Byte]): Array[Byte] = {
-    val serLen = serializeInt(ba.length)
-    serLen ++ ba
-  }
-
-  private def serializeArgs(args: Array[Array[Byte]]): Array[Byte] = {
-    val argsBytes    = args.flatMap(serializeArray)
-    val argsBytesLen = serializeInt(args.length)
-    argsBytesLen ++ argsBytes
-  }
+  implicit val ordering: Ordering[ByteString] =
+    Ordering.by[ByteString, String](bs => Base16.encode(bs.toByteArray))
 
   implicit class DeployOps(d: consensus.Deploy) {
     def withHashes = {
@@ -444,21 +487,16 @@ object DeployRuntime {
       d.withHeader(h).withDeployHash(hash(h))
     }
 
-    def sign(privateKey: PrivateKey, publicKey: PublicKey) = {
+    def sign(privateKey: PrivateKey, publicKey: PublicKey): Deploy = {
       val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
-      d.withApprovals(
-        List(
-          consensus
-            .Approval()
-            .withApproverPublicKey(ByteString.copyFrom(publicKey))
-            .withSignature(
-              consensus
-                .Signature()
-                .withSigAlgorithm(Ed25519.name)
-                .withSig(ByteString.copyFrom(sig))
-            )
+      val approval = consensus
+        .Approval()
+        .withApproverPublicKey(ByteString.copyFrom(publicKey))
+        .withSignature(
+          consensus.Signature().withSigAlgorithm(Ed25519.name).withSig(ByteString.copyFrom(sig))
         )
-      )
+      val approvals = d.approvals.toList :+ approval
+      d.withApprovals(approvals.distinct.sortBy(_.approverPublicKey))
     }
   }
 }

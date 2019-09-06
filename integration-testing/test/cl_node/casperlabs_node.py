@@ -13,11 +13,9 @@ class CasperLabsNode:
 
     def __init__(self, network, config):
         self.config = config
-        self.socket_volume = self.create_socket_volume()
-        self.execution_engine = DockerExecutionEngine(
-            config, socket_volume=self.socket_volume
-        )
-        self.node = DockerNode(network, config, socket_volume=self.socket_volume)
+        self.config.socket_volume = self.create_socket_volume()
+        self.execution_engine = DockerExecutionEngine(config)
+        self.node = DockerNode(network, config)
         self.name = f"cl_node-{self.config.number}"
 
     def create_socket_volume(self) -> str:
@@ -29,6 +27,8 @@ class CasperLabsNode:
         self.node.cleanup()
         self.execution_engine.cleanup()
         try:
-            self.config.docker_client.volumes.get(self.socket_volume).remove(force=True)
+            self.config.docker_client.volumes.get(self.config.socket_volume).remove(
+                force=True
+            )
         except docker.errors.NotFound:
             pass

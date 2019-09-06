@@ -78,6 +78,66 @@ You should see the following output:
 Success!
 ```
 
+###### Alternative way of creating, signing and deploying contracts
+
+Every account can associate multiple keys with it and give each a weight. Collective weight of signing keys decides whether an action of certain type can be made. In order to collect weight of different associated keys a deploy has to be signed by corresponding private keys. `deploy` command does it all (creates a deploy, signs it and deploys to the node) but doesn't allow for signing with multiple keys. Therefore we split `deploy` into three separate commands:
+* `make-deploy` - creates a deploy from input parameters
+* `sign-deploy` - signs a deploy with given private key
+* `send-deploy` - sends a deploy to CasperLabs node
+
+Commands read input deploy from both a file (`-i` flag) and STDIN. They can also write to both file and STDOUT.
+
+Example usage:
+
+**Creating a deploy**
+```
+casperlabs-client \
+    --host localhost \
+    make-deploy \
+    --session session-code.wasm \
+    --payment payment-code.wasm \
+    --nonce 1 \
+    --from a1130120d27f6f692545858cc5c284b1ef30fe287caef648b0c405def88f543a
+``` 
+This will write a deploy in binary format to STDOUT. It's possible to write it to a file, by supplying `-o` argument:
+```
+casperlabs-client \
+    --host localhost \
+    make-deploy \
+    --session session-code.wasm \
+    --payment payment-code.wasm \
+    --nonce 1 \
+    --from a1130120d27f6f692545858cc5c284b1ef30fe287caef648b0c405def88f543a
+    -o /deploys/deploy_1
+```
+
+**Signing a deploy**
+```
+casperlabs-client \
+    --host localhost \
+    sign-deploy \
+    --public-key public-key.pem \
+    --private-key private-key.pem
+```
+This will read a deploy to sign from STDIN and output signed deploy to STDOUT. There are `-i` and `-o` flags for, respectively, reading a deploy from a file and writing signed deploy to a file.
+
+**Sending deploy to the node**
+```
+casperlabs-client \
+    --host localhost \
+    send-deploy
+```
+In the example above there is no `-i` argument, meaning that signed deploy will be read from STDIN.
+
+Reading from STDIN and writing to STDOUT allows for piping output from one command to the input of another one (commands are incomplete for better readability):
+```
+casperlabs-client make-deploy [arguments] | \
+casperlabs-client sign-deploy --private-key [private_key] --public-key [public_key] | \
+casperlabs-client send-deploy
+```
+
+For more detailed description, use `--help` flag (`casper-client --help`).
+
 ##### Step 8: Observe
 
 See the instructions [here](QUERYING.md).

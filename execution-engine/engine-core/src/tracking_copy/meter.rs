@@ -4,7 +4,7 @@ pub trait Meter<K, V> {
 }
 
 pub mod heap_meter {
-    use tracking_copy::byte_size::ByteSize;
+    use crate::tracking_copy::byte_size::ByteSize;
 
     pub struct HeapSize;
 

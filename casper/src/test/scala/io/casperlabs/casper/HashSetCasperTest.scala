@@ -368,84 +368,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  //todo we need some genenis Contract to pass this test
-// it should "allow bonding and distribute the joining fee" in {
-//    val nodes =
-//      HashSetCasperTestNode.network(
-//        validatorKeys :+ otherSk,
-//        genesis,
-//        storageSize = 1024L * 1024 * 10
-//      )
-//    implicit val runtimeManager = nodes(0).runtimeManager
-//    val pubKey                  = Base16.encode(ethPubKeys.head.bytes.drop(1))
-//    val secKey                  = ethPivKeys.head.bytes
-//    val ethAddress              = ethAddresses.head
-//    val bondKey                 = Base16.encode(otherPk)
-//    val walletUnlockDeploy =
-//      RevIssuanceTest.preWalletUnlockDeploy(ethAddress, pubKey, secKey, "unlockOut")
-//    val bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
-//    val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
-//      BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
-//      System.currentTimeMillis(),
-//      Integer.MAX_VALUE
-//    )
-//    val transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
-//    val bondingTransferDeploy =
-//      RevIssuanceTest.walletTransferDeploy(
-//        0,
-//        wallets.head.initRevBalance.toLong,
-//        bondingForwarderAddress,
-//        transferStatusOut,
-//        pubKey,
-//        secKey
-//      )
-//
-//    val Created(block1) = nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
-//      .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock
-//    val block1Status = nodes(0).casperEff.addBlock(block1)
-//    nodes.foreach(_.receive) //send to all peers
-
-  it should "allow bonding via the faucet" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
-    import node.{casperEff, logEff}
-
-    val (sk, pk)    = Ed25519.newKeyPair
-    val pkStr       = Base16.encode(pk)
-    val amount      = 314L
-    val forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
-    for {
-      bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
-      forwardDeploy = ProtoUtil.basicDeploy(
-        System.currentTimeMillis(),
-        ByteString.copyFromUtf8(forwardCode),
-        1
-      )
-      bondingDeploy = ProtoUtil.basicDeploy(
-        forwardDeploy.getHeader.timestamp + 1,
-        ByteString.copyFromUtf8(bondingCode),
-        2
-      )
-      createBlockResult1 <- casperEff.deploy(forwardDeploy) *> casperEff.createBlock
-      Created(block1)    = createBlockResult1
-      block1Status       <- casperEff.addBlock(block1)
-      createBlockResult2 <- casperEff.deploy(bondingDeploy) *> casperEff.createBlock
-      Created(block2)    = createBlockResult2
-      block2Status       <- casperEff.addBlock(block2)
-
-      _        = logEff.warns shouldBe empty
-      oldBonds = block1.getHeader.getState.bonds
-      newBonds = block2.getHeader.getState.bonds
-      _        = block1Status shouldBe Valid
-      _        = block2Status shouldBe Valid
-      // Need bonding to be implemented and the bonding code to actually do something.
-      _ = pendingUntilFixed {
-        (oldBonds.size + 1) shouldBe newBonds.size
-      }
-
-      _ = node.tearDown()
-    } yield ()
-  }
-
   it should "not fail if the forkchoice changes after a bonding event" in {
     val localValidators = validatorKeys.take(3)
     val localBonds =
@@ -1194,7 +1116,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       deploy <- ProtoUtil.basicDeploy[Effect](1L).map { d =>
                  d.withBody(
                    d.getBody.withPayment(
-                     Deploy.Code().withCode(ByteString.copyFromUtf8("some payment code"))
+                     Deploy.Code().withWasm(ByteString.copyFromUtf8("some payment code"))
                    )
                  )
                }
@@ -1230,9 +1152,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val invalidNonce = 1000L
 
     for {
+      validDeploy       <- ProtoUtil.basicDeploy[Effect](1L)
       invalidDeploy     <- ProtoUtil.basicDeploy[Effect](invalidNonce)
       _                 <- node.casperEff.deploy(invalidDeploy)
-      validDeploy       <- ProtoUtil.basicDeploy[Effect](1L)
       _                 <- node.casperEff.deploy(validDeploy)
       createBlockResult <- MultiParentCasper[Effect].createBlock
       Created(block)    = createBlockResult
@@ -1274,6 +1196,74 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       pendingDeploys <- nodes(0).deployBufferEff.readPending
       _              = pendingDeploys should contain(deployA)
       _              <- nodes.map(_.tearDown()).toList.sequence
+    } yield ()
+  }
+
+  it should "not execute deploys which are already in the past" in effectTest {
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+    for {
+      deploy          <- ProtoUtil.basicDeploy[Effect](1L)
+      _               <- node.casperEff.deploy(deploy)
+      create1         <- node.casperEff.createBlock
+      Created(block1) = create1
+      _               <- node.casperEff.addBlock(block1) shouldBeF Valid
+
+      // Should be finalized, so not stop it appearing again as pending.
+      processedDeploys <- node.deployBufferEff.readProcessed
+      _                = processedDeploys shouldBe empty
+
+      // Should be able to enquee the deploy again.
+      _               <- node.casperEff.deploy(deploy)
+      pendingDeploys1 <- node.deployBufferEff.readPending
+      _               = pendingDeploys1 should not be empty
+
+      // Should not put it in a block.
+      createB <- node.casperEff.createBlock
+      _       = createB shouldBe CreateBlockStatus.noNewDeploys
+
+      // Should discard the deploy.
+      pendingDeploys2 <- node.deployBufferEff.readPending
+      _               = pendingDeploys2 shouldBe empty
+
+      _ <- node.tearDown()
+    } yield ()
+  }
+
+  it should "not merge blocks which have the same deploy in their history" in effectTest {
+    // Make a network where we don't validate nonces, I just want the merge conflict.
+    for {
+      nodes <- networkEff(
+                validatorKeys.take(2),
+                genesis,
+                transforms
+              )
+
+      deployA          <- ProtoUtil.basicDeploy[Effect](1L)
+      _                <- nodes(0).casperEff.deploy(deployA)
+      createA0         <- nodes(0).casperEff.createBlock
+      Created(blockA0) = createA0
+      _                <- nodes(0).casperEff.addBlock(blockA0) shouldBeF Valid
+
+      _                <- nodes(1).casperEff.deploy(deployA)
+      createA1         <- nodes(1).casperEff.createBlock
+      Created(blockA1) = createA1
+      _                <- nodes(1).casperEff.addBlock(blockA1) shouldBeF Valid
+
+      // Tell nodes(1) about the block from nodes(0) which has the same deploy.
+      _ <- nodes(1).casperEff.addBlock(blockA0) shouldBeF Valid
+
+      // Try to build a new block on top of both, they shouldn't merge.
+      deployB          <- ProtoUtil.basicDeploy[Effect](2L)
+      _                <- nodes(1).casperEff.deploy(deployB)
+      createB1         <- nodes(1).casperEff.createBlock
+      Created(blockB1) = createB1
+
+      // nodes(1) has more weight then nodes(0)
+      _ = blockB1.getHeader.parentHashes should have size 1
+      _ = blockB1.getHeader.parentHashes.head shouldBe blockA1.blockHash
+
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
 
