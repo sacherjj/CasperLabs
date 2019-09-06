@@ -262,7 +262,9 @@ def _read_binary(file_name: str):
 
 
 def _read_code(file_name: str, abi_encoded_args: bytes = None):
-    return consensus.Deploy.Code(wasm=_read_binary(file_name), args=abi_encoded_args)
+    return consensus.Deploy.Code(
+        wasm=_read_binary(file_name), abi_args=abi_encoded_args
+    )
 
 
 def _sign(private_key, data: bytes):
