@@ -12,6 +12,7 @@ from test.cl_node.casperlabs_network import (
     PaymentNodeNetworkWithNoMinBalance,
     TrillionPaymentNodeNetwork,
     OneNodeWithGRPCEncryption,
+    EncryptedTwoNodeNetwork,
 )
 from docker.client import DockerClient
 
@@ -71,6 +72,13 @@ def encrypted_one_node_network(docker_client_fixture):
 @pytest.fixture()
 def two_node_network(docker_client_fixture):
     with TwoNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture()
+def encrypted_two_node_network(docker_client_fixture):
+    with EncryptedTwoNodeNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
 

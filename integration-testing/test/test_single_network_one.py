@@ -404,17 +404,22 @@ def resource(fn):
 
 
 def test_args_parser():
-    account_hex = "0001000200030004000500060007000800000001000200030004000500060007"
-    account_bytes = (
+    account = (
         b"\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08"
         b"\x00\x00\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07"
     )
-    u32 = 1024
-    u64 = 1234567890
-    json_str = json.dumps([{"u32": u32}, {"account": account_hex}, {"u64": u64}])
+
+    amount = 123456
+
+    args = [{"name": "amount", "value": {"long_value": amount}},
+            {"name": "account", "value": {"bytes_value": account.hex()}},
+            {"name": "purse_id", "value": {"optional_value": {}}},
+            {"name": "number", "value": {"big_int": {"value": "2", "bit_width": 512}}}]
+
+    json_str = json.dumps(args)
 
     assert ABI.args_from_json(json_str) == ABI.args(
-        [ABI.u32(1024), ABI.account(account_bytes), ABI.u64(1234567890)]
+        [ABI.long_value(amount), ABI.account(account), ABI.optional_value(None), ABI.big_int(2)]
     )
 
 
@@ -580,22 +585,57 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli
 # CLI ABI
 
 
+def int_value(x):
+    return x
+
+
+def big_int_value(x):
+    return {'value': str(x), 'bit_width': 512}
+
+
 abi_unsigned_test_data = [
-    ("u32", 'test_args_u32.wasm'),
-    ("u512", 'test_args_u512.wasm'),
+    ("int_value", 'test_args_u32.wasm', int_value),
+    ("big_int", 'test_args_u512.wasm', big_int_value),
 ]
-@pytest.mark.parametrize("unsigned_type, test_contract", abi_unsigned_test_data)
-def test_cli_abi_unsigned(cli, unsigned_type, test_contract):
+
+
+@pytest.mark.parametrize("unsigned_type, test_contract, value", abi_unsigned_test_data)
+def test_cli_abi_unsigned_scala(node, unsigned_type, test_contract, value):
+    check_cli_abi_unsigned(DockerCLI(node),
+                           lambda s: f"'{s}'",
+                           '/data',
+                           unsigned_type,
+                           value,
+                           test_contract,
+                           lambda a: (a.private_key_docker_path, a.public_key_docker_path))
+
+
+@pytest.mark.parametrize("unsigned_type, test_contract, value", abi_unsigned_test_data)
+def test_cli_abi_unsigned_python(node, unsigned_type, test_contract, value):
+    check_cli_abi_unsigned(CLI(node),
+                           lambda s: s,
+                           'resources',
+                           unsigned_type,
+                           value,
+                           test_contract,
+                           lambda a: (a.private_key_path, a.public_key_path))
+
+
+def check_cli_abi_unsigned(cli, quote, resource_directory, unsigned_type, value, test_contract, keys):
     account = GENESIS_ACCOUNT
+    private_key, public_key = keys(account)
     for number in [2, 256, 1024]:
-        args = json.dumps([{unsigned_type: number}])
-        deploy_hash = cli('deploy',
-                          '--from', account.public_key_hex,
-                          '--session', resource(test_contract),
-                          '--session-args', f"{args}",
-                          '--payment', resource(test_contract),
-                          '--private-key', account.private_key_path,
-                          '--public-key', account.public_key_path,)
+        test_contract_path = '/'.join((resource_directory, test_contract))
+        session_args = json.dumps([{"name": "number", "value": {unsigned_type: value(number)}}])
+        args = ('deploy',
+                '--from', account.public_key_hex,
+                '--session', test_contract_path,
+                '--session-args', quote(session_args),
+                '--payment', test_contract_path,
+                '--private-key', private_key,
+                '--public-key', public_key)
+        logging.info(f"EXECUTING {' '.join(cli.expand_args(args))}")
+        deploy_hash = cli(*args)
 
         cli('propose')
         deploy_info = cli("show-deploy", deploy_hash)
@@ -610,11 +650,12 @@ def test_cli_abi_multiple(cli):
     number = 1000
     total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
 
-    args = json.dumps([{'account': account_hex}, {'u32': number}])
+    session_args = json.dumps([{'name': 'account', 'value': {'account': account_hex}},
+                               {'name': 'number', 'value': {'int_value': number}}])
     deploy_hash = cli('deploy',
                       '--from', account.public_key_hex,
                       '--session', resource(test_contract),
-                      '--session-args', f"{args}",
+                      '--session-args', session_args,
                       '--payment', resource(test_contract),
                       '--private-key', account.private_key_path,
                       '--public-key', account.public_key_path,)
