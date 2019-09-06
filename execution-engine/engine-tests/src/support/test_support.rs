@@ -744,12 +744,14 @@ impl WasmTestBuilder {
         block_time: u64,
         nonce: u64,
     ) -> &mut WasmTestBuilder {
+        let payment_file = STANDARD_PAYMENT_CONTRACT;
+        let payment_args = (U512::from(MAX_PAYMENT),);
         self.exec_with_args(
             address,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            payment_file,
+            payment_args,
             session_file,
-            (),
+            (), // no arguments passed to session contract by default
             block_time,
             nonce,
         )
