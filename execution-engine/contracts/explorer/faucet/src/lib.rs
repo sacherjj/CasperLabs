@@ -4,18 +4,20 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{get_arg, read_local, revert, transfer_to_account, TransferResult, write_local};
+use contract_ffi::contract_api::{
+    get_arg, read_local, revert, transfer_to_account, write_local, TransferResult,
+};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
 const TRANSFER_AMOUNT: u32 = 10_000_000;
 
 /// Executes token transfer to supplied public key.
-/// Transfers 100_000 tokens every time.
+/// Transfers 10_000_000 motes every time.
 ///
 /// Revert status codes:
 /// 1 - requested transfer to already funded public key.
-/// 2 - transfer error. (In the future it will have more granular statuses).
+/// 2 - transfer error.
 #[no_mangle]
 pub extern "C" fn call() {
     let public_key: PublicKey = get_arg(0);
@@ -25,7 +27,7 @@ pub extern "C" fn call() {
         revert(1);
     } else {
         let u512_tokens = U512::from(TRANSFER_AMOUNT);
-        match transfer_to_account(public_key, U512::from(u512_tokens)) {
+        match transfer_to_account(public_key, u512_tokens) {
             TransferResult::TransferError => revert(2),
             _ => {
                 // Transfer successful; Store the fact of funding in the local state.

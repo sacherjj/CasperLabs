@@ -131,9 +131,6 @@ openssl s_client -showcerts -connect localhost:40401 </dev/null 2>/dev/null \
   > node.crt
 ```
 
-You can run the code snippet that [generated](VALIDATOR.md#secp256r1) the `NODE_ID` on that file to compute the hash.
-
-
 ### Configure auto-proposal
 
 It is possible to call the `propose` command to manually trigger block creation but this is best reserved for demonstrational purposes. The recommended way to run a node at the moment is to turn on the simple auto-proposal feature that will try to create a block if a certain number of deploys have accumulated or the oldest has been sitting in the buffer for longer than a threshold:

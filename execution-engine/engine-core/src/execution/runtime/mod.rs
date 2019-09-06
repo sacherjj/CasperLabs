@@ -17,12 +17,12 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
-
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE};
 use contract_ffi::value::{Account, Value, U512};
+use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
@@ -239,7 +239,7 @@ where
     /// Returns false if gas limit exceeded and true if not.
     /// Intuition about the return value sense is to aswer the question 'are we
     /// allowed to continue?'
-    fn charge_gas(&mut self, amount: u64) -> bool {
+    fn charge_gas(&mut self, amount: Gas) -> bool {
         let prev = self.context.gas_counter();
         match prev.checked_add(amount) {
             // gas charge overflow protection
@@ -252,7 +252,7 @@ where
         }
     }
 
-    fn gas(&mut self, amount: u64) -> Result<(), Trap> {
+    fn gas(&mut self, amount: Gas) -> Result<(), Trap> {
         if self.charge_gas(amount) {
             Ok(())
         } else {
