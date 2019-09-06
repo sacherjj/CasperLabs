@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 use contract_ffi::value::account::{PublicKey, Weight};
-use engine_core::engine_state;
+use contract_ffi::value::U512;
+use engine_core::engine_state::{self, MAX_PAYMENT};
 use engine_core::execution;
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
@@ -15,10 +18,12 @@ fn should_deploy_with_authorized_identity_key() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
+            (Weight::new(1), Weight::new(1)), //args
             1,                                // blocktime
             1,                                // nonce
-            (Weight::new(1), Weight::new(1)), //args
             vec![PublicKey::new(GENESIS_ADDR)],
         )
         .commit()
@@ -37,10 +42,12 @@ fn should_raise_auth_failure_with_invalid_key() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
+            (Weight::new(1), Weight::new(1)), //args
             1,                                // blocktime
             1,                                // nonce
-            (Weight::new(1), Weight::new(1)), //args
             vec![PublicKey::new(key_1)],
         )
         .commit()
@@ -80,10 +87,12 @@ fn should_raise_auth_failure_with_invalid_keys() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
+            (Weight::new(1), Weight::new(1)), //args
             1,                                // blocktime
             1,                                // nonce
-            (Weight::new(1), Weight::new(1)), //args
             vec![
                 PublicKey::new(key_2),
                 PublicKey::new(key_1),
@@ -127,28 +136,34 @@ fn should_raise_deploy_authorization_failure() {
         // Reusing a test contract that would add new key
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
+            (PublicKey::new(key_1),),
             DEFAULT_BLOCK_TIME,
             1,
-            (PublicKey::new(key_1),),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
+            (PublicKey::new(key_2),),
             DEFAULT_BLOCK_TIME,
             2,
-            (PublicKey::new(key_2),),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
+            (PublicKey::new(key_3),),
             DEFAULT_BLOCK_TIME,
             3,
-            (PublicKey::new(key_3),),
         )
         .expect_success()
         .commit()
@@ -156,15 +171,17 @@ fn should_raise_deploy_authorization_failure() {
         // thresholds.
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
-            DEFAULT_BLOCK_TIME,
-            4, // nonce
             // Deploy threshold is equal to 3, keymgmnt is still 1.
             // Even after verifying weights and thresholds to not
             // lock out the account, those values should work as
             // account now has 1. identity key with weight=1 and
             // a key with weight=2.
             (Weight::new(4), Weight::new(3)), //args
+            DEFAULT_BLOCK_TIME,
+            4, // nonce
             vec![PublicKey::new(GENESIS_ADDR)],
         )
         .expect_success()
@@ -176,11 +193,13 @@ fn should_raise_deploy_authorization_failure() {
     let result2 = WasmTestBuilder::from_result(result1)
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
-            DEFAULT_BLOCK_TIME,
-            5, // nonce
             // Next deploy will see deploy threshold == 4, keymgmnt == 5
             (Weight::new(5), Weight::new(4)), //args
+            DEFAULT_BLOCK_TIME,
+            5, // nonce
             vec![PublicKey::new(key_1)],
         )
         .commit()
@@ -208,11 +227,13 @@ fn should_raise_deploy_authorization_failure() {
     let result3 = WasmTestBuilder::from_result(result2)
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
-            DEFAULT_BLOCK_TIME,
-            5, // nonce
             // change deployment threshold to 4
             (Weight::new(6), Weight::new(5)), //args
+            DEFAULT_BLOCK_TIME,
+            5, // nonce
             vec![
                 PublicKey::new(GENESIS_ADDR),
                 PublicKey::new(key_1),
@@ -229,10 +250,12 @@ fn should_raise_deploy_authorization_failure() {
     let result4 = WasmTestBuilder::from_result(result3)
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
-            DEFAULT_BLOCK_TIME,
-            6,                                // nonce
             (Weight::new(0), Weight::new(0)), //args
+            DEFAULT_BLOCK_TIME,
+            6, // nonce
             vec![PublicKey::new(key_2), PublicKey::new(key_1)],
         )
         .commit()
@@ -261,10 +284,12 @@ fn should_raise_deploy_authorization_failure() {
     WasmTestBuilder::from_result(result4)
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
-            DEFAULT_BLOCK_TIME,
-            6,                                // nonce
             (Weight::new(0), Weight::new(0)), //args
+            DEFAULT_BLOCK_TIME,
+            6, // nonce
             vec![
                 PublicKey::new(GENESIS_ADDR),
                 PublicKey::new(key_1),
@@ -293,19 +318,23 @@ fn should_authorize_deploy_with_multiple_keys() {
         // Reusing a test contract that would add new key
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
+            (PublicKey::new(key_1),),
             DEFAULT_BLOCK_TIME,
             1,
-            (PublicKey::new(key_1),),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
+            (PublicKey::new(key_2),),
             DEFAULT_BLOCK_TIME,
             2,
-            (PublicKey::new(key_2),),
         )
         .expect_success()
         .commit()
@@ -315,11 +344,13 @@ fn should_authorize_deploy_with_multiple_keys() {
     WasmTestBuilder::from_result(result1)
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
+            (Weight::new(0), Weight::new(0)), //args
             DEFAULT_BLOCK_TIME,
             3, // nonce
             // change deployment threshold to 4
-            (Weight::new(0), Weight::new(0)), //args
             vec![PublicKey::new(key_2), PublicKey::new(key_1)],
         )
         .expect_success()
@@ -339,20 +370,24 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         // Reusing a test contract that would add new key
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
+            (PublicKey::new(key_1),),
             DEFAULT_BLOCK_TIME,
             1,
-            (PublicKey::new(key_1),),
         )
         .expect_success()
         .commit()
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
-            DEFAULT_BLOCK_TIME,
-            2, // nonce
             // change deployment threshold to 3
             (Weight::new(4), Weight::new(3)), //args
+            DEFAULT_BLOCK_TIME,
+            2, // nonce
             vec![PublicKey::new(GENESIS_ADDR)],
         )
         .expect_success()
@@ -364,10 +399,12 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
     let final_result = WasmTestBuilder::from_result(result1)
         .exec_with_args_and_keys(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
-            DEFAULT_BLOCK_TIME,
-            3,                                // nonce
             (Weight::new(0), Weight::new(0)), //args
+            DEFAULT_BLOCK_TIME,
+            3, // nonce
             vec![
                 PublicKey::new(key_1),
                 PublicKey::new(key_1),

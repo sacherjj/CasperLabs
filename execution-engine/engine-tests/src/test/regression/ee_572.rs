@@ -3,8 +3,11 @@ use std::collections::HashMap;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
+use engine_core::engine_state::MAX_PAYMENT;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 
 const CREATE: &str = "create";
 
@@ -35,19 +38,23 @@ fn should_run_ee_572_regression() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             CONTRACT_TRANSFER,
+            account_1_creation_args,
             DEFAULT_BLOCK_TIME,
             1,
-            account_1_creation_args,
         )
         .expect_success()
         .commit()
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             CONTRACT_TRANSFER,
+            account_2_creation_args,
             DEFAULT_BLOCK_TIME,
             2,
-            account_2_creation_args,
         )
         .expect_success()
         .commit();
@@ -73,10 +80,12 @@ fn should_run_ee_572_regression() {
     let response = builder
         .exec_with_args(
             ACCOUNT_2_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             CONTRACT_ESCALATE,
+            (contract,),
             DEFAULT_BLOCK_TIME,
             1,
-            (contract,),
         )
         .get_exec_response(3)
         .expect("should have a response")

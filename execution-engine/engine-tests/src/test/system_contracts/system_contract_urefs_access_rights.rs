@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 
@@ -18,10 +20,12 @@ fn should_have_read_only_access_to_system_contract_urefs() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
+            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
             1,
-            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
         )
         .commit()
         .exec(

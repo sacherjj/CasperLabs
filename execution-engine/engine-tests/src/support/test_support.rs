@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use grpc::RequestOptions;
 
+use contract_ffi::value::U512;
 use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT};
 use engine_core::execution::POS_NAME;
@@ -285,19 +286,18 @@ pub fn create_query_request(
 #[allow(clippy::too_many_arguments)]
 pub fn create_exec_request(
     address: [u8; 32],
+    payment_file: &str,
+    payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     session_contract_file_name: &str,
+    arguments: impl contract_ffi::contract_api::argsparser::ArgsParser,
     pre_state_hash: &[u8],
     block_time: u64,
     nonce: u64,
-    arguments: impl contract_ffi::contract_api::argsparser::ArgsParser,
     authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
 ) -> ExecRequest {
     let deploy = DeployBuilder::new()
         .with_session_code(session_contract_file_name, arguments)
-        .with_payment_code(
-            STANDARD_PAYMENT_CONTRACT,
-            (contract_ffi::value::U512::from(MAX_PAYMENT),),
-        )
+        .with_payment_code(payment_file, payment_args)
         .with_nonce(nonce)
         .with_address(address)
         .with_authorization_keys(&authorized_keys)
@@ -683,43 +683,53 @@ impl WasmTestBuilder {
 
     /// Runs a contract and after that runs actual WASM contract and expects
     /// transformations to happen at the end of execution.
+    #[allow(clippy::too_many_arguments)]
     pub fn exec_with_args_and_keys(
         &mut self,
         address: [u8; 32],
-        wasm_file: &str,
+        payment_file: &str,
+        payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+        session_file: &str,
+        session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         block_time: u64,
         nonce: u64,
-        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
     ) -> &mut WasmTestBuilder {
         let exec_request = create_exec_request(
             address,
-            &wasm_file,
+            payment_file,
+            payment_args,
+            session_file,
+            session_args,
             self.post_state_hash
                 .as_ref()
                 .expect("Should have post state hash"),
             block_time,
             nonce,
-            args,
             authorized_keys,
         );
         self.exec_with_exec_request(exec_request)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn exec_with_args(
         &mut self,
         address: [u8; 32],
-        wasm_file: &str,
+        payment_file: &str,
+        payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+        session_file: &str,
+        session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         block_time: u64,
         nonce: u64,
-        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     ) -> &mut WasmTestBuilder {
         self.exec_with_args_and_keys(
             address,
-            wasm_file,
+            payment_file,
+            payment_args,
+            session_file,
+            session_args,
             block_time,
             nonce,
-            args,
             // Exec with different account also implies the authorized keys should default to
             // the calling account.
             vec![contract_ffi::value::account::PublicKey::new(address)],
@@ -729,11 +739,19 @@ impl WasmTestBuilder {
     pub fn exec(
         &mut self,
         address: [u8; 32],
-        wasm_file: &str,
+        session_file: &str,
         block_time: u64,
         nonce: u64,
     ) -> &mut WasmTestBuilder {
-        self.exec_with_args(address, wasm_file, block_time, nonce, ())
+        self.exec_with_args(
+            address,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
+            session_file,
+            (),
+            block_time,
+            nonce,
+        )
     }
 
     /// Commit effects of previous exec call on the latest post-state hash.

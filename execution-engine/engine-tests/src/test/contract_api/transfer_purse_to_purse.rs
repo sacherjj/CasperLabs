@@ -5,7 +5,9 @@ use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE};
+use crate::support::test_support::{
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
+};
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
 const PURSE_TO_PURSE_AMOUNT: u64 = 42;
@@ -20,10 +22,12 @@ fn should_run_purse_to_purse_transfer() {
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_purse.wasm",
+            (source, target, U512::from(PURSE_TO_PURSE_AMOUNT)),
             DEFAULT_BLOCK_TIME,
             1,
-            (source, target, U512::from(PURSE_TO_PURSE_AMOUNT)),
         )
         .expect_success()
         .commit()
@@ -124,15 +128,17 @@ fn should_run_purse_to_purse_transfer_with_error() {
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_purse.wasm",
-            DEFAULT_BLOCK_TIME,
-            1,
             (
                 source,
                 target,
                 // amount
                 U512::from(999_999_999_999i64),
             ),
+            DEFAULT_BLOCK_TIME,
+            1,
         )
         .expect_success()
         .commit()

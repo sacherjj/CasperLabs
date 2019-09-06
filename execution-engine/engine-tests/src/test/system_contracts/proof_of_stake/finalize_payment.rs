@@ -6,12 +6,12 @@ use contract_ffi::value::account::{Account, PublicKey, PurseId};
 use contract_ffi::value::U512;
 
 use engine_core::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
-use engine_core::engine_state::{EngineConfig, CONV_RATE};
-// use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT};
 use engine_core::engine_state::MAX_PAYMENT;
+use engine_core::engine_state::{EngineConfig, CONV_RATE};
 
 use crate::support::test_support::{
     self, DeployBuilder, ExecRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME,
+    STANDARD_PAYMENT_CONTRACT,
 };
 
 const FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
@@ -28,19 +28,23 @@ fn initialize() -> WasmTestBuilder {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
+            (SYSTEM_ADDR, U512::from(MAX_PAYMENT)),
             DEFAULT_BLOCK_TIME,
             1,
-            (SYSTEM_ADDR, U512::from(MAX_PAYMENT)),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
+            (ACCOUNT_ADDR, U512::from(MAX_PAYMENT)),
             DEFAULT_BLOCK_TIME,
             2,
-            (ACCOUNT_ADDR, U512::from(MAX_PAYMENT)),
         )
         .expect_success()
         .commit();
@@ -63,10 +67,26 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
     );
 
     assert!(builder
-        .exec_with_args(GENESIS_ADDR, FINALIZE_PAYMENT, DEFAULT_BLOCK_TIME, 3, args)
+        .exec_with_args(
+            GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
+            FINALIZE_PAYMENT,
+            args,
+            DEFAULT_BLOCK_TIME,
+            3
+        )
         .is_error());
     assert!(builder
-        .exec_with_args(ACCOUNT_ADDR, FINALIZE_PAYMENT, DEFAULT_BLOCK_TIME, 1, args)
+        .exec_with_args(
+            ACCOUNT_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
+            FINALIZE_PAYMENT,
+            args,
+            DEFAULT_BLOCK_TIME,
+            1
+        )
         .is_error());
 }
 

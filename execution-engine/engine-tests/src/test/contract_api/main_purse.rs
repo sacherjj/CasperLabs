@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 use contract_ffi::key::Key;
 use contract_ffi::value::Account;
 use contract_ffi::value::U512;
@@ -25,13 +27,15 @@ fn should_run_main_purse_contract_genesis_account() {
     builder
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "main_purse.wasm",
-            DEFAULT_BLOCK_TIME,
-            1,
             (
                 genesis_account.purse_id(),
                 U512::from(ACCOUNT_1_INITIAL_BALANCE),
             ),
+            DEFAULT_BLOCK_TIME,
+            1,
         )
         .expect_success()
         .commit();
@@ -48,10 +52,12 @@ fn should_run_main_purse_contract_account_1() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
+            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
             1,
-            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
         )
         .expect_success()
         .commit();
@@ -66,10 +72,12 @@ fn should_run_main_purse_contract_account_1() {
     builder
         .exec_with_args(
             ACCOUNT_1_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "main_purse.wasm",
+            (account_1.purse_id(),),
             DEFAULT_BLOCK_TIME,
             1,
-            (account_1.purse_id(),),
         )
         .expect_success()
         .commit();

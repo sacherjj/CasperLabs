@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use grpc::RequestOptions;
 
-use crate::support::test_support::{self, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{self, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT};
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
@@ -119,11 +119,13 @@ fn should_transfer_to_account() {
 
     let exec_request = crate::support::test_support::create_exec_request(
         GENESIS_ADDR,
+        STANDARD_PAYMENT_CONTRACT,
+        (U512::from(MAX_PAYMENT),),
         "transfer_to_account_01.wasm",
+        (ACCOUNT_1_ADDR,),
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -207,11 +209,13 @@ fn should_transfer_from_account_to_account() {
 
     let exec_request = test_support::create_exec_request(
         GENESIS_ADDR,
+        STANDARD_PAYMENT_CONTRACT,
+        (U512::from(MAX_PAYMENT),),
         "transfer_to_account_01.wasm",
+        (ACCOUNT_1_ADDR,),
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -272,11 +276,13 @@ fn should_transfer_from_account_to_account() {
 
     let exec_request = test_support::create_exec_request(
         ACCOUNT_1_ADDR,
+        STANDARD_PAYMENT_CONTRACT,
+        (U512::from(MAX_PAYMENT),),
         "transfer_to_account_02.wasm",
+        (),
         commit_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
 
@@ -369,11 +375,13 @@ fn should_transfer_to_existing_account() {
 
     let exec_request = test_support::create_exec_request(
         GENESIS_ADDR,
+        STANDARD_PAYMENT_CONTRACT,
+        (U512::from(MAX_PAYMENT),),
         "transfer_to_account_01.wasm",
+        (ACCOUNT_1_ADDR,),
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -434,11 +442,13 @@ fn should_transfer_to_existing_account() {
 
     let exec_request = test_support::create_exec_request(
         ACCOUNT_1_ADDR,
+        STANDARD_PAYMENT_CONTRACT,
+        (U512::from(MAX_PAYMENT),),
         "transfer_to_account_02.wasm",
+        (),
         commit_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
 
@@ -501,11 +511,13 @@ fn should_fail_when_insufficient_funds() {
 
     let exec_request = crate::support::test_support::create_exec_request(
         GENESIS_ADDR,
+        STANDARD_PAYMENT_CONTRACT,
+        (U512::from(MAX_PAYMENT),),
         "transfer_to_account_01.wasm",
+        (ACCOUNT_1_ADDR,),
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -538,11 +550,13 @@ fn should_fail_when_insufficient_funds() {
 
     let exec_request = crate::support::test_support::create_exec_request(
         ACCOUNT_1_ADDR,
+        STANDARD_PAYMENT_CONTRACT,
+        (U512::from(MAX_PAYMENT),),
         "transfer_to_account_02.wasm",
+        (),
         commit_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
 
@@ -569,11 +583,13 @@ fn should_fail_when_insufficient_funds() {
 
     let exec_request = crate::support::test_support::create_exec_request(
         ACCOUNT_1_ADDR,
+        STANDARD_PAYMENT_CONTRACT,
+        (U512::from(MAX_PAYMENT),),
         "transfer_to_account_02.wasm",
+        (),
         commit_hash,
         DEFAULT_BLOCK_TIME,
         2,
-        (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
     );
 
@@ -605,20 +621,24 @@ fn should_transfer_total_amount() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
+            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
             1,
-            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             ACCOUNT_1_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             // New account transfers exactly N motes to new account (total amount)
             "transfer_purse_to_account.wasm",
+            (ACCOUNT_2_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
             1,
-            (ACCOUNT_2_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
         )
         .commit()
         .expect_success()

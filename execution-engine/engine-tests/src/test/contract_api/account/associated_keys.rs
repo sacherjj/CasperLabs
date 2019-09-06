@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, Weight};
 use contract_ffi::value::{Account, U512};
@@ -21,19 +23,23 @@ fn should_manage_associated_key() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
+            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
             1,
-            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             ACCOUNT_1_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
+            (GENESIS_ADDR,),
             DEFAULT_BLOCK_TIME,
             1,
-            (GENESIS_ADDR,),
         )
         .expect_success()
         .commit();
@@ -58,10 +64,12 @@ fn should_manage_associated_key() {
     builder
         .exec_with_args(
             ACCOUNT_1_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "remove_associated_key.wasm",
+            (GENESIS_ADDR,),
             DEFAULT_BLOCK_TIME,
             2,
-            (GENESIS_ADDR,),
         )
         .expect_success()
         .commit();

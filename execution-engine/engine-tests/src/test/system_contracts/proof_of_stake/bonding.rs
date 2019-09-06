@@ -11,7 +11,9 @@ use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{self, WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{
+    self, WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -74,10 +76,12 @@ fn should_run_successful_bond_and_unbond() {
     let result = WasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
+            (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
             DEFAULT_BLOCK_TIME,
             1,
-            (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
         )
         .expect_success()
         .commit()
@@ -121,26 +125,30 @@ fn should_run_successful_bond_and_unbond() {
     let result = WasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
-            DEFAULT_BLOCK_TIME,
-            2,
             (
                 String::from(TEST_SEED_NEW_ACCOUNT),
                 PublicKey::new(ACCOUNT_1_ADDR),
                 U512::from(ACCOUNT_1_SEED_AMOUNT),
             ),
+            DEFAULT_BLOCK_TIME,
+            2,
         )
         .expect_success()
         .commit()
         .exec_with_args(
             ACCOUNT_1_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
-            DEFAULT_BLOCK_TIME,
-            1,
             (
                 String::from(TEST_BOND_FROM_MAIN_PURSE),
                 U512::from(ACCOUNT_1_STAKE),
             ),
+            DEFAULT_BLOCK_TIME,
+            1,
         )
         .expect_success()
         .commit()
@@ -199,13 +207,15 @@ fn should_run_successful_bond_and_unbond() {
     let result = WasmTestBuilder::from_result(result)
         .exec_with_args(
             ACCOUNT_1_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
-            DEFAULT_BLOCK_TIME,
-            2,
             (
                 String::from(TEST_UNBOND),
                 Some(U512::from(ACCOUNT_1_UNBOND_1)),
             ),
+            DEFAULT_BLOCK_TIME,
+            2,
         )
         .expect_success()
         .commit()
@@ -257,13 +267,15 @@ fn should_run_successful_bond_and_unbond() {
     let result = WasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
-            DEFAULT_BLOCK_TIME,
-            3,
             (
                 String::from(TEST_UNBOND),
                 Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
             ),
+            DEFAULT_BLOCK_TIME,
+            3,
         )
         .expect_success()
         .commit()
@@ -301,13 +313,15 @@ fn should_run_successful_bond_and_unbond() {
     let result = WasmTestBuilder::from_result(result)
         .exec_with_args(
             ACCOUNT_1_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
-            DEFAULT_BLOCK_TIME,
-            3,
             (
                 String::from(TEST_UNBOND),
                 Some(U512::from(ACCOUNT_1_UNBOND_2)),
             ), // <-- rest of accont1's funds
+            DEFAULT_BLOCK_TIME,
+            3,
         )
         .expect_success()
         .commit()
@@ -351,10 +365,12 @@ fn should_run_successful_bond_and_unbond() {
     let result = WasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
+            (String::from(TEST_UNBOND), None as Option<U512>), // <-- va banque
             DEFAULT_BLOCK_TIME,
             4,
-            (String::from(TEST_UNBOND), None as Option<U512>), // <-- va banque
         )
         .expect_success()
         .commit()
@@ -445,26 +461,30 @@ fn should_fail_bonding_with_insufficient_funds() {
         .run_genesis(GENESIS_ADDR, genesis_validators)
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
-            DEFAULT_BLOCK_TIME,
-            1,
             (
                 String::from(TEST_SEED_NEW_ACCOUNT),
                 PublicKey::new(ACCOUNT_1_ADDR),
                 U512::from(MAX_PAYMENT + GENESIS_ACCOUNT_STAKE),
             ),
+            DEFAULT_BLOCK_TIME,
+            1,
         )
         .commit()
         .exec_with_args(
             ACCOUNT_1_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
-            DEFAULT_BLOCK_TIME,
-            1,
             (
                 String::from(TEST_BOND_FROM_MAIN_PURSE),
                 // That's already too much assuming non-zero costs of wasm execution
                 U512::from(MAX_PAYMENT + GENESIS_ACCOUNT_STAKE),
             ),
+            DEFAULT_BLOCK_TIME,
+            1,
         )
         .commit()
         .finish();
@@ -499,10 +519,12 @@ fn should_fail_unbonding_validator_without_bonding_first() {
         .run_genesis(GENESIS_ADDR, genesis_validators)
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
+            (String::from(TEST_UNBOND), Some(U512::from(42))),
             DEFAULT_BLOCK_TIME,
             1,
-            (String::from(TEST_UNBOND), Some(U512::from(42))),
         )
         .commit()
         .finish();

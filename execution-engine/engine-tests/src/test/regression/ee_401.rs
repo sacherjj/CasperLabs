@@ -3,11 +3,13 @@ use std::collections::HashMap;
 use grpc::RequestOptions;
 
 use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::U512;
 use engine_core::engine_state::EngineState;
+use engine_core::engine_state::MAX_PAYMENT;
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 
-use crate::support::test_support::DEFAULT_BLOCK_TIME;
+use crate::support::test_support::{DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT};
 
 const GENESIS_ADDR: [u8; 32] = [0u8; 32];
 
@@ -33,11 +35,13 @@ fn should_execute_contracts_which_provide_extra_urefs() {
 
     let exec_request = crate::support::test_support::create_exec_request(
         GENESIS_ADDR,
+        STANDARD_PAYMENT_CONTRACT,
+        (U512::from(MAX_PAYMENT),),
         "ee_401_regression.wasm",
+        (),
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
@@ -64,11 +68,13 @@ fn should_execute_contracts_which_provide_extra_urefs() {
 
     let exec_request = crate::support::test_support::create_exec_request(
         GENESIS_ADDR,
+        STANDARD_PAYMENT_CONTRACT,
+        (U512::from(MAX_PAYMENT),),
         "ee_401_regression_call.wasm",
+        (),
         commit_hash,
         DEFAULT_BLOCK_TIME,
         1,
-        (),
         vec![PublicKey::new(GENESIS_ADDR)],
     );
 
