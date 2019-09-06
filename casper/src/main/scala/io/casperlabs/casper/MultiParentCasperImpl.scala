@@ -50,7 +50,7 @@ final case class CasperState(
     blockBuffer: Map[ByteString, Block] = Map.empty,
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationsTracker: Set[Validator] = Set.empty[Validator]
+    equivocationsTracker: Map[Validator, Long] = Map.empty
 )
 
 class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection](
@@ -583,7 +583,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     for {
       state   <- Cell[F, CasperState].read
       tracker = state.equivocationsTracker
-    } yield tracker
+    } yield tracker.keys
       .flatMap(weights.get)
       .sum
       .toFloat / weightMapTotal(weights)

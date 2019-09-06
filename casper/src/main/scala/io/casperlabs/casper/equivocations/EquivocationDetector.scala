@@ -8,14 +8,14 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.{CasperState, EquivocatedBlock, InvalidBlock, PrettyPrinter}
-import io.casperlabs.shared.{Cell, Log, LogSource}
+import io.casperlabs.shared.{Cell, Log, LogSource, StreamT}
 
 object EquivocationDetector {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   /**
-    * Check whether block create equivocations and if so add it to `EquivocationsTracker`.
+    * Check whether block create equivocations and if so add it and rank of lowest base block to `EquivocationsTracker`.
     *
     * Since we had added all equivocating messages to the BlockDag, then once
     * a validator has been detected as equivocating, then for every message M1 he creates later,
@@ -28,24 +28,49 @@ object EquivocationDetector {
       implicit state: Cell[F, CasperState]
   ): F[Unit] =
     for {
-      s       <- state.read
-      creator = block.getHeader.validatorPublicKey
-      equivocated <- if (s.equivocationsTracker.contains(creator)) {
-                      Log[F].debug(
+      _ <- state.flatModify(s => {
+            val creator = block.getHeader.validatorPublicKey
+            s.equivocationsTracker.get(creator) match {
+              case Some(lowestBaseSeqNum) =>
+                for {
+                  earlierRank <- rankOfEarlierMessageFromCreator(dag, block)
+                  newState = if (earlierRank < lowestBaseSeqNum) {
+                    s.copy(
+                      equivocationsTracker = s.equivocationsTracker.updated(
+                        creator,
+                        earlierRank
+                      )
+                    )
+                  } else {
+                    s
+                  }
+                  _ <- Log[F].debug(
                         s"The creator of Block ${PrettyPrinter.buildString(block)} has equivocated before}"
-                      ) *> true.pure[F]
+                      )
+                } yield newState
+
+              case None =>
+                checkEquivocations(dag, block).flatMap(
+                  equivocated =>
+                    if (equivocated) {
+                      rankOfEarlierMessageFromCreator(dag, block).map(
+                        earlierRank =>
+                          s.copy(
+                            equivocationsTracker = s.equivocationsTracker + (creator -> earlierRank)
+                          )
+                      )
                     } else {
-                      checkEquivocations(dag, block)
+                      s.pure[F]
                     }
-      _ <- state
-            .modify(
-              s =>
-                s.copy(
-                  equivocationsTracker = s.equivocationsTracker + creator
                 )
-            )
-            .whenA(equivocated)
-      _ <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
+            }
+          })
+      s <- state.read
+      _ <- if (s.equivocationsTracker.contains(block.getHeader.validatorPublicKey)) {
+            FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock)
+          } else {
+            Applicative[F].unit
+          }
     } yield ()
 
   /**
@@ -89,15 +114,7 @@ object EquivocationDetector {
                             latestMessageOfCreator <- dag
                                                        .lookup(latestMessageHashOfCreator)
                                                        .map(_.get)
-                            implicit0(blockTopoOrdering: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingDesc
-                            stream = DagOperations.bfToposortTraverseF(
-                              List(BlockMetadata.fromBlock(block))
-                            )(
-                              b =>
-                                b.justifications
-                                  .traverse(j => dag.lookup(j.latestBlockHash))
-                                  .map(_.flatten)
-                            )
+                            stream = toposortJDagFromBlock(dag, block)
                             // Find whether the block cite latestMessageOfCreator
                             decisionPointBlock <- stream.find(
                                                    b =>
@@ -117,4 +134,27 @@ object EquivocationDetector {
 
   private def creatorJustificationHash(block: Block): Option[BlockHash] =
     ProtoUtil.creatorJustification(block.getHeader).map(_.latestBlockHash)
+
+  private def toposortJDagFromBlock[F[_]: Monad: Log](
+      dag: DagRepresentation[F],
+      block: Block
+  ): StreamT[F, BlockMetadata] = {
+    implicit val blockTopoOrdering: Ordering[BlockMetadata] = DagOperations.blockTopoOrderingDesc
+    DagOperations.bfToposortTraverseF(
+      List(BlockMetadata.fromBlock(block))
+    )(
+      b =>
+        b.justifications
+          .traverse(j => dag.lookup(j.latestBlockHash))
+          .map(_.flatten)
+    )
+  }
+
+  private def rankOfEarlierMessageFromCreator[F[_]: Monad: Log](
+      dag: DagRepresentation[F],
+      block: Block
+  ): F[Long] =
+    toposortJDagFromBlock(dag, block)
+      .find(b => b.validatorPublicKey == block.getHeader.validatorPublicKey)
+      .map(_.map(_.rank).getOrElse(0L))
 }
