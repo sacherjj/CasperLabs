@@ -5,7 +5,6 @@ use std::string::ToString;
 
 use protobuf::ProtobufEnum;
 
-use crate::engine_server::{ipc, state};
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
@@ -22,7 +21,9 @@ use engine_shared::logging;
 use engine_shared::logging::log_level;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{self, TypeMismatch};
-use engine_storage::global_state::{CommitResult, History};
+use engine_storage::global_state::{CommitResult, StateProvider};
+
+use crate::engine_server::{ipc, state, transforms};
 
 mod uint;
 
@@ -92,9 +93,9 @@ impl From<URef> for super::state::Key_URef {
     }
 }
 
-impl TryFrom<&super::ipc::Transform> for transform::Transform {
+impl TryFrom<&super::transforms::Transform> for transform::Transform {
     type Error = ParsingError;
-    fn try_from(tr: &super::ipc::Transform) -> Result<transform::Transform, ParsingError> {
+    fn try_from(tr: &super::transforms::Transform) -> Result<transform::Transform, ParsingError> {
         if tr.has_identity() {
             Ok(transform::Transform::Identity)
         } else if tr.has_add_keys() {
@@ -371,31 +372,34 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
     }
 }
 
-fn add_big_int_transform<U: Into<super::state::BigInt>>(t: &mut super::ipc::Transform, u: U) {
-    let mut add = super::ipc::TransformAddBigInt::new();
+fn add_big_int_transform<U: Into<super::state::BigInt>>(
+    t: &mut super::transforms::Transform,
+    u: U,
+) {
+    let mut add = super::transforms::TransformAddBigInt::new();
     add.set_value(u.into());
     t.set_add_big_int(add);
 }
 
-impl From<transform::Transform> for super::ipc::Transform {
+impl From<transform::Transform> for super::transforms::Transform {
     fn from(tr: transform::Transform) -> Self {
-        let mut t = super::ipc::Transform::new();
+        let mut t = super::transforms::Transform::new();
         match tr {
             transform::Transform::Identity => {
-                t.set_identity(super::ipc::TransformIdentity::new());
+                t.set_identity(super::transforms::TransformIdentity::new());
             }
             transform::Transform::Write(v) => {
-                let mut tw = super::ipc::TransformWrite::new();
+                let mut tw = super::transforms::TransformWrite::new();
                 tw.set_value(v.into());
                 t.set_write(tw)
             }
             transform::Transform::AddInt32(i) => {
-                let mut add = super::ipc::TransformAddInt32::new();
+                let mut add = super::transforms::TransformAddInt32::new();
                 add.set_value(i);
                 t.set_add_i32(add);
             }
             transform::Transform::AddUInt64(i) => {
-                let mut add = super::ipc::TransformAddUInt64::new();
+                let mut add = super::transforms::TransformAddUInt64::new();
                 add.set_value(i);
                 t.set_add_u64(add);
             }
@@ -409,7 +413,7 @@ impl From<transform::Transform> for super::ipc::Transform {
                 add_big_int_transform(&mut t, u);
             }
             transform::Transform::AddKeys(keys_map) => {
-                let mut add = super::ipc::TransformAddKeys::new();
+                let mut add = super::transforms::TransformAddKeys::new();
                 let keys = URefMap(keys_map).into();
                 add.set_value(protobuf::RepeatedField::from_vec(keys));
                 t.set_add_keys(add);
@@ -417,8 +421,8 @@ impl From<transform::Transform> for super::ipc::Transform {
             transform::Transform::Failure(transform::Error::TypeMismatch(
                 transform::TypeMismatch { expected, found },
             )) => {
-                let mut fail = super::ipc::TransformFailure::new();
-                let mut typemismatch_err = super::ipc::TypeMismatch::new();
+                let mut fail = super::transforms::TransformFailure::new();
+                let mut typemismatch_err = super::transforms::TypeMismatch::new();
                 typemismatch_err.set_expected(expected.to_owned());
                 typemismatch_err.set_found(found.to_owned());
                 fail.set_type_mismatch(typemismatch_err);
@@ -595,10 +599,10 @@ impl CommitTransforms {
     }
 }
 
-impl TryFrom<&[super::ipc::TransformEntry]> for CommitTransforms {
+impl TryFrom<&[super::transforms::TransformEntry]> for CommitTransforms {
     type Error = ParsingError;
 
-    fn try_from(value: &[super::ipc::TransformEntry]) -> Result<Self, Self::Error> {
+    fn try_from(value: &[super::transforms::TransformEntry]) -> Result<Self, Self::Error> {
         let mut transforms_merged: HashMap<contract_ffi::key::Key, transform::Transform> =
             HashMap::new();
         for named_key in value.iter() {
@@ -611,9 +615,11 @@ impl TryFrom<&[super::ipc::TransformEntry]> for CommitTransforms {
 }
 
 /// Transforms gRPC TransformEntry into domain tuple of (Key, Transform).
-impl TryFrom<&super::ipc::TransformEntry> for (contract_ffi::key::Key, transform::Transform) {
+impl TryFrom<&super::transforms::TransformEntry>
+    for (contract_ffi::key::Key, transform::Transform)
+{
     type Error = ParsingError;
-    fn try_from(from: &super::ipc::TransformEntry) -> Result<Self, ParsingError> {
+    fn try_from(from: &super::transforms::TransformEntry) -> Result<Self, ParsingError> {
         if from.has_key() {
             if from.has_transform() {
                 let t: transform::Transform = from.get_transform().try_into()?;
@@ -628,9 +634,9 @@ impl TryFrom<&super::ipc::TransformEntry> for (contract_ffi::key::Key, transform
     }
 }
 
-impl From<(contract_ffi::key::Key, transform::Transform)> for super::ipc::TransformEntry {
+impl From<(contract_ffi::key::Key, transform::Transform)> for super::transforms::TransformEntry {
     fn from((k, t): (contract_ffi::key::Key, transform::Transform)) -> Self {
-        let mut tr_entry = super::ipc::TransformEntry::new();
+        let mut tr_entry = super::transforms::TransformEntry::new();
         tr_entry.set_key((&k).into());
         tr_entry.set_transform(t.into());
         tr_entry
@@ -652,7 +658,7 @@ impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
                 op_entry
             })
             .collect();
-        let ipc_tran: Vec<super::ipc::TransformEntry> =
+        let ipc_tran: Vec<super::transforms::TransformEntry> =
             ee.transforms.into_iter().map(Into::into).collect();
         eff.set_op_map(protobuf::RepeatedField::from_vec(ipc_ops));
         eff.set_transform_map(protobuf::RepeatedField::from_vec(ipc_tran));
@@ -669,10 +675,10 @@ impl From<RootNotFound> for ipc::RootNotFound {
     }
 }
 
-impl From<TypeMismatch> for ipc::TypeMismatch {
-    fn from(type_mismatch: TypeMismatch) -> ipc::TypeMismatch {
+impl From<TypeMismatch> for transforms::TypeMismatch {
+    fn from(type_mismatch: TypeMismatch) -> transforms::TypeMismatch {
         let TypeMismatch { expected, found } = type_mismatch;
-        let mut tm = ipc::TypeMismatch::new();
+        let mut tm = transforms::TypeMismatch::new();
         tm.set_expected(expected);
         tm.set_found(found);
         tm
@@ -690,7 +696,8 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 let mut deploy_result = ipc::DeployResult::new();
                 let mut execution_result = ipc::DeployResult_ExecutionResult::new();
                 execution_result.set_effects(ipc_ee);
-                execution_result.set_cost(cost);
+                // TODO: executionresult cost should be BIGINT; see https://casperlabs.atlassian.net/browse/EE-649
+                execution_result.set_cost(cost.as_u64());
                 deploy_result.set_execution_result(execution_result);
                 deploy_result
             }
@@ -719,25 +726,25 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         ExecutionError::DeploymentAuthorizationFailure,
                     ) => precondition_failure(error.to_string()),
                     EngineError::StorageError(storage_err) => {
-                        execution_error(storage_err.to_string(), cost, effect)
+                        execution_error(storage_err.to_string(), cost.as_u64(), effect)
                     }
                     error @ EngineError::AuthorizationError => {
                         precondition_failure(error.to_string())
                     }
                     EngineError::MissingSystemContractError(msg) => {
-                        execution_error(msg, cost, effect)
+                        execution_error(msg, cost.as_u64(), effect)
                     }
                     error @ EngineError::InsufficientPaymentError => {
                         let msg = error.to_string();
-                        execution_error(msg, cost, effect)
+                        execution_error(msg, cost.as_u64(), effect)
                     }
                     error @ EngineError::DeployError => {
                         let msg = error.to_string();
-                        execution_error(msg, cost, effect)
+                        execution_error(msg, cost.as_u64(), effect)
                     }
                     error @ EngineError::FinalizationError => {
                         let msg = error.to_string();
-                        execution_error(msg, cost, effect)
+                        execution_error(msg, cost.as_u64(), effect)
                     }
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
@@ -750,7 +757,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             let exec_result = {
                                 let mut tmp = ipc::DeployResult_ExecutionResult::new();
                                 tmp.set_error(deploy_error);
-                                tmp.set_cost(cost);
+                                tmp.set_cost(cost.as_u64());
                                 tmp.set_effects(effect.into());
                                 tmp
                             };
@@ -760,7 +767,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         }
                         ExecutionError::KeyNotFound(key) => {
                             let msg = format!("Key {:?} not found.", key);
-                            execution_error(msg, cost, effect)
+                            execution_error(msg, cost.as_u64(), effect)
                         }
                         ExecutionError::InvalidNonce {
                             deploy_nonce,
@@ -785,7 +792,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         }
                         ExecutionError::Revert(status) => {
                             let error_msg = format!("Exit code: {}", status);
-                            execution_error(error_msg, cost, effect)
+                            execution_error(error_msg, cost.as_u64(), effect)
                         }
                         ExecutionError::Interpreter(error) => {
                             // If the error happens during contract execution it's mapped to
@@ -803,28 +810,30 @@ impl From<ExecutionResult> for ipc::DeployResult {
                                     match downcasted_error {
                                         ExecutionError::Revert(status) => {
                                             let errors_msg = format!("Exit code: {}", status);
-                                            execution_error(errors_msg, cost, effect)
+                                            execution_error(errors_msg, cost.as_u64(), effect)
                                         }
                                         ExecutionError::KeyNotFound(key) => {
                                             let errors_msg = format!("Key {:?} not found.", key);
-                                            execution_error(errors_msg, cost, effect)
+                                            execution_error(errors_msg, cost.as_u64(), effect)
                                         }
-                                        other => {
-                                            execution_error(format!("{:?}", other), cost, effect)
-                                        }
+                                        other => execution_error(
+                                            format!("{:?}", other),
+                                            cost.as_u64(),
+                                            effect,
+                                        ),
                                     }
                                 }
 
                                 None => {
                                     let msg = format!("{:?}", error);
-                                    execution_error(msg, cost, effect)
+                                    execution_error(msg, cost.as_u64(), effect)
                                 }
                             }
                         }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
                             let msg = format!("{:?}", other);
-                            execution_error(msg, cost, effect)
+                            execution_error(msg, cost.as_u64(), effect)
                         }
                     },
                 }
@@ -833,13 +842,13 @@ impl From<ExecutionResult> for ipc::DeployResult {
     }
 }
 
-pub fn grpc_response_from_commit_result<H>(
+pub fn grpc_response_from_commit_result<S>(
     prestate_hash: Blake2bHash,
-    input: Result<CommitResult, H::Error>,
+    input: Result<CommitResult, S::Error>,
 ) -> ipc::CommitResponse
 where
-    H: History,
-    H::Error: Into<EngineError> + std::fmt::Debug,
+    S: StateProvider,
+    S::Error: Into<EngineError> + std::fmt::Debug,
 {
     match input {
         Ok(CommitResult::RootNotFound) => {
@@ -979,7 +988,6 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use crate::engine_server::mappings::CommitTransforms;
     use contract_ffi::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
     use contract_ffi::key::Key;
     use contract_ffi::uref::{AccessRights, URef};
@@ -988,13 +996,17 @@ mod tests {
     use engine_core::engine_state::execution_effect::ExecutionEffect;
     use engine_core::engine_state::execution_result::ExecutionResult;
     use engine_core::execution::Error;
+    use engine_shared::gas::Gas;
     use engine_shared::newtypes::Blake2bHash;
     use engine_shared::transform::gens::transform_arb;
     use engine_shared::transform::Transform;
 
+    use crate::engine_server::mappings::CommitTransforms;
+
     use super::execution_error;
     use super::ipc;
     use super::state;
+    use super::transforms;
 
     // Test that wasm_error function actually returns DeployResult with result set
     // to WasmError
@@ -1032,7 +1044,7 @@ mod tests {
         };
         let execution_effect: ExecutionEffect =
             ExecutionEffect::new(HashMap::new(), input_transforms.clone());
-        let cost: u64 = 123;
+        let cost: Gas = Gas::from_u64(123);
         let execution_result: ExecutionResult = ExecutionResult::Success {
             effect: execution_effect,
             cost,
@@ -1040,7 +1052,7 @@ mod tests {
         let mut ipc_deploy_result: ipc::DeployResult = execution_result.into();
         assert!(ipc_deploy_result.has_execution_result());
         let mut success = ipc_deploy_result.take_execution_result();
-        assert_eq!(success.get_cost(), cost);
+        assert_eq!(success.get_cost(), cost.as_u64());
 
         // Extract transform map from the IPC message and parse it back to the domain
         let ipc_transforms: HashMap<Key, Transform> = {
@@ -1055,7 +1067,7 @@ mod tests {
         assert_eq!(&input_transforms, &ipc_transforms);
     }
 
-    fn into_execution_failure<E: Into<EngineError>>(error: E, cost: u64) -> ExecutionResult {
+    fn into_execution_failure<E: Into<EngineError>>(error: E, cost: Gas) -> ExecutionResult {
         ExecutionResult::Failure {
             error: error.into(),
             effect: Default::default(),
@@ -1063,18 +1075,18 @@ mod tests {
         }
     }
 
-    fn test_cost<E: Into<EngineError>>(expected_cost: u64, err: E) -> u64 {
+    fn test_cost<E: Into<EngineError>>(expected_cost: Gas, err: E) -> Gas {
         let execution_failure = into_execution_failure(err, expected_cost);
         let ipc_deploy_result: ipc::DeployResult = execution_failure.into();
         assert!(ipc_deploy_result.has_execution_result());
         let success = ipc_deploy_result.get_execution_result();
-        success.get_cost()
+        Gas::from_u64(success.get_cost())
     }
 
     #[test]
     fn storage_error_has_cost() {
         use engine_storage::error::Error::*;
-        let cost: u64 = 100;
+        let cost: Gas = Gas::from_u64(100);
         // TODO: actually create an Rkv error
         // assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
         let bytesrepr_err = contract_ffi::bytesrepr::Error::EarlyEndOfStream;
@@ -1083,7 +1095,7 @@ mod tests {
 
     #[test]
     fn exec_err_has_cost() {
-        let cost: u64 = 100;
+        let cost: Gas = Gas::from_u64(100);
         // GasLimit error is treated differently at the moment so test separately
         assert_eq!(
             test_cost(cost, engine_core::execution::Error::GasLimit),
@@ -1101,22 +1113,22 @@ mod tests {
     fn commit_effects_merges_transforms() {
         // Tests that transforms made to the same key are merged instead of lost.
         let key = Key::Hash([1u8; 32]);
-        let setup: Vec<ipc::TransformEntry> = {
+        let setup: Vec<transforms::TransformEntry> = {
             let transform_entry_first = {
-                let mut tmp = ipc::TransformEntry::new();
+                let mut tmp = transforms::TransformEntry::new();
                 tmp.set_key((&key).into());
                 tmp.set_transform(Transform::Write(contract_ffi::value::Value::Int32(12)).into());
                 tmp
             };
             let transform_entry_second = {
-                let mut tmp = ipc::TransformEntry::new();
+                let mut tmp = transforms::TransformEntry::new();
                 tmp.set_key((&key).into());
                 tmp.set_transform(Transform::AddInt32(10).into());
                 tmp
             };
             vec![transform_entry_first, transform_entry_second]
         };
-        let setup_slice: &[ipc::TransformEntry] = &setup;
+        let setup_slice: &[transforms::TransformEntry] = &setup;
         let commit: CommitTransforms = setup_slice
             .try_into()
             .expect("Transforming [state::TransformEntry] into CommitTransforms should work.");
@@ -1132,7 +1144,7 @@ mod tests {
         let exec_result = ExecutionResult::Failure {
             error: ExecError(revert_error),
             effect: Default::default(),
-            cost: 10,
+            cost: Gas::from_u64(10),
         };
         let ipc_result: ipc::DeployResult = exec_result.into();
         assert!(ipc_result.has_execution_result());
@@ -1188,7 +1200,7 @@ mod tests {
 
         #[test]
         fn transform_entry_roundtrip(key in key_arb(), transform in transform_arb()) {
-            let transform_entry: ipc::TransformEntry = (key, transform.clone()).into();
+            let transform_entry: transforms::TransformEntry = (key, transform.clone()).into();
             let tuple: (Key, Transform) = (&transform_entry).try_into()
                 .expect("Transforming TransformEntry into (Key, Transform) tuple should work.");
             assert_eq!(tuple, (key, transform))

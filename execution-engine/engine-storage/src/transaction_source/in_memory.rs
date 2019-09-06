@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{self, Arc, Mutex, MutexGuard};
 
 use crate::error::in_memory::Error;
 use crate::transaction_source::{Readable, Transaction, TransactionSource, Writable};
@@ -12,17 +12,19 @@ type WriteLock<'a> = MutexGuard<'a, WriteCapability>;
 
 type BytesMap = HashMap<Vec<u8>, Vec<u8>>;
 
+type PoisonError<'a> = sync::PoisonError<MutexGuard<'a, HashMap<Option<String>, BytesMap>>>;
+
 /// A read transaction for the in-memory trie store.
 pub struct InMemoryReadTransaction {
-    view: BytesMap,
+    view: HashMap<Option<String>, BytesMap>,
 }
 
 impl InMemoryReadTransaction {
     pub fn new(store: &InMemoryEnvironment) -> Result<InMemoryReadTransaction, Error> {
         let view = {
-            let arc = store.data.clone();
-            let lock = arc.lock()?;
-            lock.to_owned()
+            let db_ref = Arc::clone(&store.data);
+            let view_lock = db_ref.lock()?;
+            view_lock.to_owned()
         };
         Ok(InMemoryReadTransaction { view })
     }
@@ -31,7 +33,7 @@ impl InMemoryReadTransaction {
 impl Transaction for InMemoryReadTransaction {
     type Error = Error;
 
-    type Handle = ();
+    type Handle = Option<String>;
 
     fn commit(self) -> Result<(), Self::Error> {
         Ok(())
@@ -39,30 +41,34 @@ impl Transaction for InMemoryReadTransaction {
 }
 
 impl Readable for InMemoryReadTransaction {
-    fn read(&self, _handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self.view.get(&key.to_vec()).map(ToOwned::to_owned))
+    fn read(&self, handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        let sub_view = match self.view.get(&handle) {
+            Some(view) => view,
+            None => return Ok(None),
+        };
+        Ok(sub_view.get(&key.to_vec()).cloned())
     }
 }
 
 /// A read-write transaction for the in-memory trie store.
 pub struct InMemoryReadWriteTransaction<'a> {
-    view: BytesMap,
-    store_ref: Arc<Mutex<BytesMap>>,
+    view: HashMap<Option<String>, BytesMap>,
+    store_ref: Arc<Mutex<HashMap<Option<String>, BytesMap>>>,
     _write_lock: WriteLock<'a>,
 }
 
 impl<'a> InMemoryReadWriteTransaction<'a> {
     pub fn new(store: &'a InMemoryEnvironment) -> Result<InMemoryReadWriteTransaction<'a>, Error> {
-        let _write_lock = store.write_mutex.lock()?;
-        let store_ref = store.data.clone();
+        let store_ref = Arc::clone(&store.data);
         let view = {
             let view_lock = store_ref.lock()?;
             view_lock.to_owned()
         };
+        let _write_lock = store.write_mutex.lock()?;
         Ok(InMemoryReadWriteTransaction {
-            _write_lock,
-            store_ref,
             view,
+            store_ref,
+            _write_lock,
         })
     }
 }
@@ -70,7 +76,7 @@ impl<'a> InMemoryReadWriteTransaction<'a> {
 impl<'a> Transaction for InMemoryReadWriteTransaction<'a> {
     type Error = Error;
 
-    type Handle = ();
+    type Handle = Option<String>;
 
     fn commit(self) -> Result<(), Self::Error> {
         let mut store_ref_lock = self.store_ref.lock()?;
@@ -80,32 +86,36 @@ impl<'a> Transaction for InMemoryReadWriteTransaction<'a> {
 }
 
 impl<'a> Readable for InMemoryReadWriteTransaction<'a> {
-    fn read(&self, _handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self.view.get(&key.to_vec()).map(ToOwned::to_owned))
+    fn read(&self, handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        let sub_view = match self.view.get(&handle) {
+            Some(view) => view,
+            None => return Ok(None),
+        };
+        Ok(sub_view.get(&key.to_vec()).cloned())
     }
 }
 
 impl<'a> Writable for InMemoryReadWriteTransaction<'a> {
-    fn write(
-        &mut self,
-        _handle: Self::Handle,
-        key: &[u8],
-        value: &[u8],
-    ) -> Result<(), Self::Error> {
-        self.view.insert(key.to_vec(), value.to_vec());
+    fn write(&mut self, handle: Self::Handle, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
+        let sub_view = self.view.entry(handle).or_default();
+        sub_view.insert(key.to_vec(), value.to_vec());
         Ok(())
     }
 }
 
 /// An environment for the in-memory trie store.
 pub struct InMemoryEnvironment {
-    data: Arc<Mutex<BytesMap>>,
+    data: Arc<Mutex<HashMap<Option<String>, BytesMap>>>,
     write_mutex: Arc<Mutex<WriteCapability>>,
 }
 
 impl Default for InMemoryEnvironment {
     fn default() -> Self {
-        let data = Arc::new(Mutex::new(HashMap::new()));
+        let data = {
+            let mut initial_map = HashMap::new();
+            initial_map.insert(None, Default::default());
+            Arc::new(Mutex::new(initial_map))
+        };
         let write_mutex = Arc::new(Mutex::new(WriteCapability));
         InMemoryEnvironment { data, write_mutex }
     }
@@ -116,15 +126,18 @@ impl InMemoryEnvironment {
         Default::default()
     }
 
-    pub fn data(&self) -> Arc<Mutex<BytesMap>> {
-        Arc::clone(&self.data)
+    pub fn data(&self, name: Option<&str>) -> Result<Option<BytesMap>, PoisonError> {
+        let data = self.data.lock()?;
+        let name = name.map(ToString::to_string);
+        let ret = data.get(&name).cloned();
+        Ok(ret)
     }
 }
 
 impl<'a> TransactionSource<'a> for InMemoryEnvironment {
     type Error = Error;
 
-    type Handle = ();
+    type Handle = Option<String>;
 
     type ReadTransaction = InMemoryReadTransaction;
 

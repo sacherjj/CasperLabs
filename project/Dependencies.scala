@@ -10,7 +10,7 @@ object Dependencies {
   val catsVersion    = "1.6.0"
   val catsMtlVersion = "0.5.0"
   val doobieVersion  = "0.7.0"
-  val fs2Version = "1.0.4"
+  val fs2Version     = "1.0.4"
 
   val julToSlf4j          = "org.slf4j"           % "jul-to-slf4j"          % "1.7.25"
   val bitcoinjCore        = "org.bitcoinj"        % "bitcoinj-core"         % "0.14.6"
@@ -65,6 +65,7 @@ object Dependencies {
   val scalapbRuntime         = "com.thesamet.scalapb"       %% "scalapb-runtime"                % scalapb.compiler.Version.scalapbVersion % "protobuf"
   val scalapbRuntimeLib      = "com.thesamet.scalapb"       %% "scalapb-runtime"                % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntimegGrpc    = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"           % scalapb.compiler.Version.scalapbVersion
+  val scalapbCirce           = "io.github.scalapb-json"     %% "scalapb-circe"                  % "0.2.2"
   val grpcNetty              = "io.grpc"                    % "grpc-netty"                      % scalapb.compiler.Version.grpcJavaVersion
   val nettyAll               = "io.netty"                   % "netty-all"                       % "4.1.22.Final"
   val nettyTransNativeEpoll  = "io.netty"                   % "netty-transport-native-epoll"    % "4.1.22.Final" classifier "linux-x86_64"
@@ -109,7 +110,8 @@ object Dependencies {
     "org.scala-lang.modules"   %% "scala-xml"              % "1.1.0",
     "com.google.code.findbugs" % "jsr305"                  % "3.0.2",
     "com.google.errorprone"    % "error_prone_annotations" % "2.1.2",
-    "com.github.jnr"           % "jnr-ffi"                 % "2.1.7"
+    "com.github.jnr"           % "jnr-ffi"                 % "2.1.7",
+    "com.thesamet.scalapb"     %% "scalapb-runtime"        % scalapb.compiler.Version.scalapbVersion
   )
 
   private val kindProjector    = compilerPlugin("org.spire-math" %% "kind-projector"     % "0.9.8")
@@ -122,7 +124,7 @@ object Dependencies {
 
   private val logging = Seq(scalaLogging, logbackClassic, janino, julToSlf4j)
 
-  private val circeDependencies: Seq[ModuleID] =
+  val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
 
   private val http4sDependencies: Seq[ModuleID] =

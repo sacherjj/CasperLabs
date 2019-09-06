@@ -6,27 +6,25 @@ import cats.kernel.Monoid
 import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.{Block, Deploy}
-import io.casperlabs.casper.util.ProtoUtil.blockNumber
+import io.casperlabs.casper.consensus.state.{Key, Value}
+import io.casperlabs.casper.consensus.{state, Block, Deploy}
+import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
-import io.casperlabs.casper.consensus.state
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.casper.consensus.state.{Key, Value}
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
     postStateHash: StateHash,
     bondedValidators: Seq[io.casperlabs.casper.consensus.Bond],
     deploysForBlock: Seq[Block.ProcessedDeploy],
-    invalidNonceDeploys: Seq[InvalidNonceDeploy],
-    deploysToDiscard: Seq[PreconditionFailure],
     protocolVersion: state.ProtocolVersion
 )
 
@@ -38,37 +36,22 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: MonadThrowable: BlockStorage: Log: ExecutionEngineService](
+  def computeDeploysCheckpoint[F[_]: Sync: DeployBuffer: Log: ExecutionEngineService: DeploySelection](
       merged: MergeResult[TransformMap, Block],
-      deploys: Seq[Deploy],
+      hashes: Set[DeployHash],
       blocktime: Long,
       protocolVersion: state.ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
       preStateHash <- computePrestate[F](merged)
-      processedDeploys <- processDeploys[F](
-                           preStateHash,
-                           blocktime,
-                           deploys,
-                           protocolVersion
-                         )
-      processedDeployResults = zipDeploysResults(deploys, processedDeploys).toList
-      invalidDeploys <- processedDeployResults.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
-                         case (acc, d: InvalidNonceDeploy) =>
-                           acc.copy(invalidNonceDeploys = d :: acc.invalidNonceDeploys).pure[F]
-                         case (acc, d: PreconditionFailure) =>
-                           // Log precondition failures as we will be getting rid of them.
-                           Log[F].warn(
-                             s"Deploy ${PrettyPrinter.buildString(d.deploy.deployHash)} failed precondition error: ${d.errorMessage}"
-                           ) as {
-                             acc.copy(preconditionFailures = d :: acc.preconditionFailures)
-                           }
-                         case (acc, _) =>
-                           acc.pure[F]
-                       }
-      deployEffects                 = findCommutingEffects(processedDeployResults)
-      (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
-      commitResult                  <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
+      deployStream = DeployBuffer[F].getByHashes(hashes)
+      pdr <- DeploySelection[F].select(
+              (preStateHash, blocktime, protocolVersion, deployStream)
+            )
+      (invalidDeploys, deployEffects) = ProcessedDeployResult.split(pdr)
+      _                               <- handleInvalidDeploys[F](invalidDeploys)
+      (deploysForBlock, transforms)   = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
+      commitResult                    <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       //TODO: Remove this logging at some point
       msgBody = transforms.flatten
         .map(t => {
@@ -84,62 +67,90 @@ object ExecEngineUtil {
       commitResult.postStateHash,
       commitResult.bondedValidators,
       deploysForBlock,
-      invalidDeploys.invalidNonceDeploys,
-      invalidDeploys.preconditionFailures,
       protocolVersion
     )
 
-  private def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStorage: ExecutionEngineService](
+  // Discard deploys that will never be included because they failed some precondition.
+  // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included
+  // in the past of the new fork, it wouldn't hit this as the nonce would be what we expect.
+  // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
+  // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
+  // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
+  def handleInvalidDeploys[F[_]: MonadThrowable: DeployBuffer: Log](
+      invalidDeploys: List[NoEffectsFailure]
+  ): F[Unit] =
+    for {
+      invalidDeploys <- invalidDeploys.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
+                         case (acc, d: InvalidNonceDeploy) =>
+                           acc.copy(invalidNonceDeploys = d :: acc.invalidNonceDeploys).pure[F]
+                         case (acc, d: PreconditionFailure) =>
+                           // Log precondition failures as we will be getting rid of them.
+                           Log[F].warn(
+                             s"Deploy ${PrettyPrinter.buildString(d.deploy.deployHash)} failed precondition error: ${d.errorMessage}"
+                           ) as {
+                             acc.copy(preconditionFailures = d :: acc.preconditionFailures)
+                           }
+                       }
+      // We don't have to put InvalidNonce deploys back to the buffer,
+      // as by default buffer is cleared when deploy gets included in
+      // the finalized block. If that strategy ever changes, we will have to
+      // put them back into the buffer explicitly.
+      _ <- DeployBuffer[F]
+            .markAsDiscarded(invalidDeploys.preconditionFailures.map(_.deploy)) whenA invalidDeploys.preconditionFailures.nonEmpty
+    } yield ()
+
+  def processDeploys[F[_]: MonadThrowable: ExecutionEngineService](
       prestate: StateHash,
       blocktime: Long,
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
   ): F[Seq[DeployResult]] =
-    ExecutionEngineService[F]
-      .exec(prestate, blocktime, deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
-      .rethrow
+    for {
+      eeDeploys <- deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
+      results <- ExecutionEngineService[F]
+                  .exec(prestate, blocktime, eeDeploys, protocolVersion)
+                  .rethrow
+    } yield results
 
   private def processGenesisDeploys[F[_]: MonadError[?[_], Throwable]: BlockStorage: ExecutionEngineService](
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
   ): F[GenesisResult] =
-    ExecutionEngineService[F]
-      .runGenesis(deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
-      .rethrow
+    for {
+      eeDeploys <- deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
+      results <- ExecutionEngineService[F]
+                  .runGenesis(eeDeploys, protocolVersion)
+                  .rethrow
+    } yield results
 
+  /** Chooses a set of commuting effects.
+    *
+    * Set is a FIFO one - the very first commuting effect will be chosen,
+    * meaning even if there's a larger set of commuting effect later in that list
+    * they will be rejected.
+    *
+    * @param deployEffects List of effects that deploy made on the GlobalState.
+    *
+    * @return List of deploy effects that commute.
+    */
   //TODO: Logic for picking the commuting group? Prioritize highest revenue? Try to include as many deploys as possible?
   def findCommutingEffects(
-      deployEffects: Seq[ProcessedDeployResult]
-  ): Seq[ProcessedDeployResult] = {
-    // All the deploys that do not change the global state in a way that can conflict with others:
-    // which can be only`ExecutionError` now as `InvalidNonce` and `PreconditionFailure` has been
-    // filtered out when creating block and when we're validating block it shouldn't include those either.
-    val (conflictFree, mergeCandidates) =
-      deployEffects.partition(!_.isInstanceOf[ExecutionSuccessful])
-
-    val nonConflicting = mergeCandidates match {
-      case Nil => List.empty[ProcessedDeployResult]
+      deployEffects: Seq[DeployEffects]
+  ): List[DeployEffects] =
+    deployEffects match {
+      case Nil => Nil
       case list =>
         val (result, _) =
-          list.foldLeft(List.empty[ProcessedDeployResult] -> Map.empty[state.Key, Op]) {
-            case (unchanged @ (acc, totalOps), next @ ExecutionSuccessful(_, effects, _)) =>
-              val ops = Op.fromIpcEntry(effects.opMap)
+          list.foldLeft((List.empty[DeployEffects] -> Map.empty[state.Key, Op])) {
+            case (unchanged @ (acc, totalOps), next) =>
+              val ops = Op.fromIpcEntry(next.effects.opMap)
               if (totalOps ~ ops)
                 (next :: acc, totalOps + ops)
               else
                 unchanged
-            case _ => ???
           }
-
         result
     }
-
-    // We include errors because we define them as
-    // commuting with everything since we will never
-    // re-run them (this is a policy decision we have made) and
-    // they touch no keys because we rolled back the changes
-    nonConflicting ++ conflictFree
-  }
 
   def zipDeploysResults(
       deploys: Seq[Deploy],
@@ -148,9 +159,9 @@ object ExecEngineUtil {
     deploys.zip(results).map((ProcessedDeployResult.apply _).tupled)
 
   def unzipEffectsAndDeploys(
-      commutingEffects: Seq[ProcessedDeployResult]
+      commutingEffects: Seq[DeployEffects]
   ): Seq[(Block.ProcessedDeploy, Seq[TransformEntry])] =
-    commutingEffects.collect {
+    commutingEffects map {
       case ExecutionSuccessful(deploy, effects, cost) =>
         Block.ProcessedDeploy(
           Some(deploy),
@@ -197,8 +208,9 @@ object ExecEngineUtil {
                              deploys,
                              protocolVersion
                            )
-        deployEffects = zipDeploysResults(deploys, processedDeploys)
-        transformMap = (findCommutingEffects _ andThen unzipEffectsAndDeploys)(deployEffects)
+        deployEffects    = zipDeploysResults(deploys, processedDeploys)
+        effectfulDeploys = ProcessedDeployResult.split(deployEffects.toList)._2
+        transformMap = unzipEffectsAndDeploys(findCommutingEffects(effectfulDeploys))
           .flatMap(_._2)
       } yield transformMap
     }

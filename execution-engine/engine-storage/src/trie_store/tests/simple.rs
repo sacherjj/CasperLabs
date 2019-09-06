@@ -1,11 +1,11 @@
 use lmdb::DatabaseFlags;
 use tempfile::tempdir;
 
-use contract_ffi::bytesrepr::ToBytes;
-use engine_shared::newtypes::Blake2bHash;
+use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 
 use super::TestData;
 use crate::error::{self, in_memory};
+use crate::store::StoreExt;
 use crate::transaction_source::in_memory::InMemoryEnvironment;
 use crate::transaction_source::lmdb::LmdbEnvironment;
 use crate::transaction_source::{Transaction, TransactionSource};
@@ -29,15 +29,16 @@ where
     E: From<S::Error> + From<X::Error>,
 {
     let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
-    let ret = super::put_many(&mut txn, store, items);
+    let items = items.iter().map(Into::into);
+    store.put_many(&mut txn, items)?;
     txn.commit()?;
-    ret
+    Ok(())
 }
 
 #[test]
 fn in_memory_put_succeeds() {
     let env = InMemoryEnvironment::new();
-    let store = InMemoryTrieStore::new(&env);
+    let store = InMemoryTrieStore::new(&env, None);
     let data = &super::create_data()[0..1];
 
     assert!(put_succeeds::<_, _, _, _, in_memory::Error>(&store, &env, data).is_ok());
@@ -61,25 +62,26 @@ fn put_get_succeeds<'a, K, V, S, X, E>(
     items: &[TestData<K, V>],
 ) -> Result<Vec<Option<Trie<K, V>>>, E>
 where
-    K: ToBytes,
-    V: ToBytes,
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
     S: TrieStore<K, V>,
     X: TransactionSource<'a, Handle = S::Handle>,
     S::Error: From<X::Error>,
     E: From<S::Error> + From<X::Error>,
 {
     let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
-    super::put_many::<_, _, _, _, E>(&mut txn, store, items)?;
-    let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
-    let ret = super::get_many::<_, _, _, _, E>(&txn, store, &keys);
+    let items = items.iter().map(Into::into);
+    store.put_many(&mut txn, items.clone())?;
+    let keys = items.map(|(k, _)| k);
+    let ret = store.get_many(&txn, keys)?;
     txn.commit()?;
-    ret
+    Ok(ret)
 }
 
 #[test]
 fn in_memory_put_get_succeeds() {
     let env = InMemoryEnvironment::new();
-    let store = InMemoryTrieStore::new(&env);
+    let store = InMemoryTrieStore::new(&env, None);
     let data = &super::create_data()[0..1];
 
     let expected: Vec<Trie<Vec<u8>, Vec<u8>>> =
@@ -120,7 +122,7 @@ fn lmdb_put_get_succeeds() {
 #[test]
 fn in_memory_put_get_many_succeeds() {
     let env = InMemoryEnvironment::new();
-    let store = InMemoryTrieStore::new(&env);
+    let store = InMemoryTrieStore::new(&env, None);
     let data = super::create_data();
 
     let expected: Vec<Trie<Vec<u8>, Vec<u8>>> =
@@ -164,8 +166,8 @@ fn uncommitted_read_write_txn_does_not_persist<'a, K, V, S, X, E>(
     items: &[TestData<K, V>],
 ) -> Result<Vec<Option<Trie<K, V>>>, E>
 where
-    K: ToBytes,
-    V: ToBytes,
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
     S: TrieStore<K, V>,
     X: TransactionSource<'a, Handle = S::Handle>,
     S::Error: From<X::Error>,
@@ -173,21 +175,22 @@ where
 {
     {
         let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
-        super::put_many::<_, _, _, _, E>(&mut txn, store, items)?;
+        let items = items.iter().map(Into::into);
+        store.put_many(&mut txn, items)?;
     }
     {
         let txn: X::ReadTransaction = transaction_source.create_read_txn()?;
-        let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
-        let ret = super::get_many::<_, _, _, _, E>(&txn, store, &keys);
+        let keys = items.iter().map(|TestData(k, _)| k);
+        let ret = store.get_many(&txn, keys)?;
         txn.commit()?;
-        ret
+        Ok(ret)
     }
 }
 
 #[test]
 fn in_memory_uncommitted_read_write_txn_does_not_persist() {
     let env = InMemoryEnvironment::new();
-    let store = InMemoryTrieStore::new(&env);
+    let store = InMemoryTrieStore::new(&env, None);
     let data = super::create_data();
 
     assert_eq!(
@@ -290,7 +293,7 @@ where
 #[test]
 fn in_memory_reads_are_isolated() {
     let env = InMemoryEnvironment::new();
-    let store = InMemoryTrieStore::new(&env);
+    let store = InMemoryTrieStore::new(&env, None);
 
     assert!(reads_are_isolated::<_, _, in_memory::Error>(&store, &env).is_ok())
 }
@@ -346,7 +349,7 @@ where
 #[test]
 fn in_memory_reads_are_isolated_2() {
     let env = InMemoryEnvironment::new();
-    let store = InMemoryTrieStore::new(&env);
+    let store = InMemoryTrieStore::new(&env, None);
 
     assert!(reads_are_isolated_2::<_, _, in_memory::Error>(&store, &env).is_ok())
 }
@@ -358,4 +361,192 @@ fn lmdb_reads_are_isolated_2() {
     let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 
     assert!(reads_are_isolated_2::<_, _, error::Error>(&store, &env).is_ok())
+}
+
+fn dbs_are_isolated<'a, S, X, E>(env: &'a X, store_a: &S, store_b: &S) -> Result<(), E>
+where
+    S: TrieStore<Vec<u8>, Vec<u8>>,
+    X: TransactionSource<'a, Handle = S::Handle>,
+    S::Error: From<X::Error>,
+    E: From<S::Error> + From<X::Error> + From<contract_ffi::bytesrepr::Error>,
+{
+    let data = super::create_data();
+    let TestData(ref leaf_1_hash, ref leaf_1) = data[0];
+    let TestData(ref leaf_2_hash, ref leaf_2) = data[1];
+
+    {
+        let mut write_txn = env.create_read_write_txn()?;
+        store_a.put(&mut write_txn, leaf_1_hash, leaf_1)?;
+        write_txn.commit()?;
+    }
+
+    {
+        let mut write_txn = env.create_read_write_txn()?;
+        store_b.put(&mut write_txn, leaf_2_hash, leaf_2)?;
+        write_txn.commit()?;
+    }
+
+    {
+        let read_txn = env.create_read_txn()?;
+        let result = store_a.get(&read_txn, leaf_1_hash)?;
+        assert_eq!(result, Some(leaf_1.to_owned()));
+        let result = store_a.get(&read_txn, leaf_2_hash)?;
+        assert_eq!(result, None);
+        read_txn.commit()?;
+    }
+
+    {
+        let read_txn = env.create_read_txn()?;
+        let result = store_b.get(&read_txn, leaf_1_hash)?;
+        assert_eq!(result, None);
+        let result = store_b.get(&read_txn, leaf_2_hash)?;
+        assert_eq!(result, Some(leaf_2.to_owned()));
+        read_txn.commit()?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn in_memory_dbs_are_isolated() {
+    let env = InMemoryEnvironment::new();
+    let store_a = InMemoryTrieStore::new(&env, Some("a"));
+    let store_b = InMemoryTrieStore::new(&env, Some("b"));
+
+    assert!(dbs_are_isolated::<_, _, in_memory::Error>(&env, &store_a, &store_b).is_ok())
+}
+
+#[test]
+fn lmdb_dbs_are_isolated() {
+    let dir = tempdir().unwrap();
+    let env = LmdbEnvironment::new(&dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
+    let store_a = LmdbTrieStore::new(&env, Some("a"), DatabaseFlags::empty()).unwrap();
+    let store_b = LmdbTrieStore::new(&env, Some("b"), DatabaseFlags::empty()).unwrap();
+
+    assert!(dbs_are_isolated::<_, _, error::Error>(&env, &store_a, &store_b).is_ok())
+}
+
+fn transactions_can_be_used_across_sub_databases<'a, S, X, E>(
+    env: &'a X,
+    store_a: &S,
+    store_b: &S,
+) -> Result<(), E>
+where
+    S: TrieStore<Vec<u8>, Vec<u8>>,
+    X: TransactionSource<'a, Handle = S::Handle>,
+    S::Error: From<X::Error>,
+    E: From<S::Error> + From<X::Error> + From<contract_ffi::bytesrepr::Error>,
+{
+    let data = super::create_data();
+    let TestData(ref leaf_1_hash, ref leaf_1) = data[0];
+    let TestData(ref leaf_2_hash, ref leaf_2) = data[1];
+
+    {
+        let mut write_txn = env.create_read_write_txn()?;
+        store_a.put(&mut write_txn, leaf_1_hash, leaf_1)?;
+        store_b.put(&mut write_txn, leaf_2_hash, leaf_2)?;
+        write_txn.commit()?;
+    }
+
+    {
+        let read_txn = env.create_read_txn()?;
+        let result = store_a.get(&read_txn, leaf_1_hash)?;
+        assert_eq!(result, Some(leaf_1.to_owned()));
+        let result = store_b.get(&read_txn, leaf_2_hash)?;
+        assert_eq!(result, Some(leaf_2.to_owned()));
+        read_txn.commit()?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn in_memory_transactions_can_be_used_across_sub_databases() {
+    let env = InMemoryEnvironment::new();
+    let store_a = InMemoryTrieStore::new(&env, Some("a"));
+    let store_b = InMemoryTrieStore::new(&env, Some("b"));
+
+    assert!(
+        transactions_can_be_used_across_sub_databases::<_, _, in_memory::Error>(
+            &env, &store_a, &store_b
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn lmdb_transactions_can_be_used_across_sub_databases() {
+    let dir = tempdir().unwrap();
+    let env = LmdbEnvironment::new(&dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
+    let store_a = LmdbTrieStore::new(&env, Some("a"), DatabaseFlags::empty()).unwrap();
+    let store_b = LmdbTrieStore::new(&env, Some("b"), DatabaseFlags::empty()).unwrap();
+
+    assert!(
+        transactions_can_be_used_across_sub_databases::<_, _, error::Error>(
+            &env, &store_a, &store_b
+        )
+        .is_ok()
+    )
+}
+
+fn uncommitted_transactions_across_sub_databases_do_not_persist<'a, S, X, E>(
+    env: &'a X,
+    store_a: &S,
+    store_b: &S,
+) -> Result<(), E>
+where
+    S: TrieStore<Vec<u8>, Vec<u8>>,
+    X: TransactionSource<'a, Handle = S::Handle>,
+    S::Error: From<X::Error>,
+    E: From<S::Error> + From<X::Error> + From<contract_ffi::bytesrepr::Error>,
+{
+    let data = super::create_data();
+    let TestData(ref leaf_1_hash, ref leaf_1) = data[0];
+    let TestData(ref leaf_2_hash, ref leaf_2) = data[1];
+
+    {
+        let mut write_txn = env.create_read_write_txn()?;
+        store_a.put(&mut write_txn, leaf_1_hash, leaf_1)?;
+        store_b.put(&mut write_txn, leaf_2_hash, leaf_2)?;
+    }
+
+    {
+        let read_txn = env.create_read_txn()?;
+        let result = store_a.get(&read_txn, leaf_1_hash)?;
+        assert_eq!(result, None);
+        let result = store_b.get(&read_txn, leaf_2_hash)?;
+        assert_eq!(result, None);
+        read_txn.commit()?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn in_memory_uncommitted_transactions_across_sub_databases_do_not_persist() {
+    let env = InMemoryEnvironment::new();
+    let store_a = InMemoryTrieStore::new(&env, Some("a"));
+    let store_b = InMemoryTrieStore::new(&env, Some("b"));
+
+    assert!(
+        uncommitted_transactions_across_sub_databases_do_not_persist::<_, _, in_memory::Error>(
+            &env, &store_a, &store_b
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn lmdb_uncommitted_transactions_across_sub_databases_do_not_persist() {
+    let dir = tempdir().unwrap();
+    let env = LmdbEnvironment::new(&dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
+    let store_a = LmdbTrieStore::new(&env, Some("a"), DatabaseFlags::empty()).unwrap();
+    let store_b = LmdbTrieStore::new(&env, Some("b"), DatabaseFlags::empty()).unwrap();
+
+    assert!(
+        uncommitted_transactions_across_sub_databases_do_not_persist::<_, _, error::Error>(
+            &env, &store_a, &store_b
+        )
+        .is_ok()
+    )
 }

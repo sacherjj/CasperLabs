@@ -69,5 +69,6 @@ execution-engine/system-contracts/pos/*.lock
 
 # wasms
 client/src/main/resources/*.wasm
+explorer/contracts/**/*.wasm
 
 .make

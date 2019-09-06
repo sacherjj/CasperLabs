@@ -249,7 +249,10 @@ pub extern "C" fn call() {
         // Type of this method: `fn bond(amount: U512, purse: URef)`
         "bond" => {
             let validator = contract_api::get_caller();
-            let amount = contract_api::get_arg(1);
+            let amount: U512 = contract_api::get_arg(1);
+            if amount.is_zero() {
+                contract_api::revert(Error::BondTooSmall.into());
+            }
             let source_uref: URef = contract_api::get_arg(2);
             let source = PurseId::new(source_uref);
             // Transfer `amount` from the `source` purse to PoS internal purse.

@@ -61,14 +61,18 @@ class NodeRuntime private[node] (
     id: NodeIdentifier
 )(
     implicit log: Log[Task],
-    scheduler: Scheduler,
     uncaughtExceptionHandler: UncaughtExceptionHandler
 ) {
 
   private[this] val loopScheduler =
     Scheduler.fixedPool("loop", 4, reporter = uncaughtExceptionHandler)
-  private[this] val blockingScheduler =
-    Scheduler.cached("blocking-io", 4, 64, reporter = uncaughtExceptionHandler)
+
+  // Bounded thread pool for incoming traffic. Limited thread pool size so loads of request cannot exhaust all resources.
+  private[this] val ingressScheduler =
+    Scheduler.cached("ingress-io", 4, 64, reporter = uncaughtExceptionHandler)
+  // Unbounded thread pool for outgoing, blocking IO. It is recommended to have unlimited thread pools for waiting on IO.
+  private[this] val egressScheduler =
+    Scheduler.cached("egress-io", 4, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
   private[this] val dbConnScheduler =
     Scheduler.cached("db-conn", 1, 64, reporter = uncaughtExceptionHandler)
@@ -77,7 +81,7 @@ class NodeRuntime private[node] (
 
   private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
     catsConcurrentEffectForEffect(
-      scheduler
+      egressScheduler
     )
 
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
@@ -137,8 +141,12 @@ class NodeRuntime private[node] (
                                                             transactEC = dbIOScheduler,
                                                             conf.server.dataDir
                                                           )
+        deployBufferChunkSize = 20 //TODO: Move to config
         implicit0(deployBuffer: DeployBuffer[Effect]) <- Resource
-                                                          .liftF(DeployBufferImpl.create[Effect])
+                                                          .liftF(
+                                                            DeployBufferImpl
+                                                              .create[Effect](deployBufferChunkSize)
+                                                          )
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
         implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
@@ -152,11 +160,12 @@ class NodeRuntime private[node] (
                                                           conf.server.defaultTimeout,
                                                           conf.server.useGossiping,
                                                           conf.server.relayFactor,
-                                                          conf.server.relaySaturation
+                                                          conf.server.relaySaturation,
+                                                          ingressScheduler,
+                                                          egressScheduler
                                                         )(
                                                           maybeBootstrap
                                                         )(
-                                                          blockingScheduler,
                                                           effects.peerNodeAsk,
                                                           log,
                                                           metrics
@@ -243,7 +252,7 @@ class NodeRuntime private[node] (
               .internalServersR(
                 conf.grpc.portInternal,
                 conf.server.maxMessageSize,
-                blockingScheduler,
+                ingressScheduler,
                 blockApiLock,
                 maybeApiSslContext
               )
@@ -251,7 +260,7 @@ class NodeRuntime private[node] (
         _ <- api.Servers.externalServersR[Effect](
               conf.grpc.portExternal,
               conf.server.maxMessageSize,
-              blockingScheduler,
+              ingressScheduler,
               maybeApiSslContext
             )
 
@@ -259,20 +268,22 @@ class NodeRuntime private[node] (
               conf.server.httpPort,
               conf,
               id,
-              blockingScheduler
+              ingressScheduler
             )
 
         _ <- if (conf.server.useGossiping) {
               casper.gossiping.apply[Effect](
                 port,
                 conf,
-                blockingScheduler
+                ingressScheduler,
+                egressScheduler
               )
             } else {
               casper.transport.apply(
                 port,
                 conf,
-                blockingScheduler
+                ingressScheduler,
+                egressScheduler
               )
             }
       } yield (nodeDiscovery, multiParentCasperRef, deployBuffer)
@@ -359,6 +370,7 @@ class NodeRuntime private[node] (
   }
 
   private def shutdown(release: Effect[Unit]): Unit = {
+    implicit val s = egressScheduler
     // Everything has been moved to Resources.
     val task = for {
       _ <- log.info("Shutting down...")
@@ -430,7 +442,7 @@ object NodeRuntime {
   def apply(
       conf: Configuration
   )(
-      implicit scheduler: Scheduler,
+      implicit
       log: Log[Task],
       uncaughtExceptionHandler: UncaughtExceptionHandler
   ): Effect[NodeRuntime] =

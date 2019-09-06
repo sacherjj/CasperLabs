@@ -52,37 +52,31 @@ object Main {
       case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
       case Unbond(
           amount,
-          nonce,
           contracts,
           privateKey
           ) =>
         DeployRuntime.unbond(
           amount,
-          nonce,
           contracts,
           privateKey
         )
       case Bond(
           amount,
-          nonce,
           contracts,
           privateKey
           ) =>
         DeployRuntime.bond(
           amount,
-          nonce,
           contracts,
           privateKey
         )
       case Transfer(
           amount,
           recipientPublicKeyBase64,
-          nonce,
           contracts,
           privateKey
           ) =>
         DeployRuntime.transferCLI(
-          nonce,
           contracts,
           privateKey,
           recipientPublicKeyBase64,
@@ -90,15 +84,12 @@ object Main {
         )
       case Deploy(
           from,
-          nonce,
           contracts,
           maybePublicKey,
-          maybePrivateKey,
-          gasPrice
+          maybePrivateKey
           ) =>
         DeployRuntime.deployFileProgram(
           from,
-          nonce,
           contracts,
           maybePublicKey.map(
             file =>
@@ -107,15 +98,12 @@ object Main {
           maybePrivateKey.map(
             file =>
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
-          ),
-          gasPrice
+          )
         )
       case MakeDeploy(
           from,
           publicKey,
-          nonce,
           contracts,
-          gasPrice,
           deployPath
           ) =>
         for {
@@ -136,10 +124,8 @@ object Main {
                         }
           deploy = DeployRuntime.makeDeploy(
             baseAccount,
-            nonce,
-            gasPrice,
             contracts,
-            Array.emptyByteArray
+            sessionArgs = Nil
           )
           _ <- DeployRuntime.writeDeploy(deploy, deployPath)
         } yield ()

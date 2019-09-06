@@ -8,6 +8,7 @@ use std::iter::IntoIterator;
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 use itertools::Itertools;
+use num_traits::ToPrimitive;
 use parity_wasm::elements::Module;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -21,6 +22,7 @@ use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE};
 use contract_ffi::value::{Account, Value, U512};
+use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
@@ -124,12 +126,17 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
-pub fn create_rng(account_addr: [u8; 32], nonce: u64) -> ChaChaRng {
+pub fn create_rng(
+    account_addr: [u8; 32],
+    nonce: u64,
+    phase: contract_ffi::execution::Phase,
+) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let mut hasher = VarBlake2b::new(32).unwrap();
     data.extend(&account_addr);
     data.extend_from_slice(&nonce.to_le_bytes());
+    data.extend_from_slice(&[phase.to_u8().expect("Phase is represented as a u8")]);
     hasher.input(data);
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
     ChaChaRng::from_seed(seed)
@@ -232,7 +239,7 @@ where
     /// Returns false if gas limit exceeded and true if not.
     /// Intuition about the return value sense is to aswer the question 'are we
     /// allowed to continue?'
-    fn charge_gas(&mut self, amount: u64) -> bool {
+    fn charge_gas(&mut self, amount: Gas) -> bool {
         let prev = self.context.gas_counter();
         match prev.checked_add(amount) {
             // gas charge overflow protection
@@ -245,7 +252,7 @@ where
         }
     }
 
-    fn gas(&mut self, amount: u64) -> Result<(), Trap> {
+    fn gas(&mut self, amount: Gas) -> Result<(), Trap> {
         if self.charge_gas(amount) {
             Ok(())
         } else {

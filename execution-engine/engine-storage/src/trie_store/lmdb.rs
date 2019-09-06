@@ -8,6 +8,7 @@
 //! # extern crate lmdb;
 //! # extern crate engine_shared;
 //! # extern crate tempfile;
+//! use casperlabs_engine_storage::store::Store;
 //! use casperlabs_engine_storage::transaction_source::{Transaction, TransactionSource};
 //! use casperlabs_engine_storage::transaction_source::lmdb::LmdbEnvironment;
 //! use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
@@ -110,14 +111,14 @@
 
 use lmdb::{Database, DatabaseFlags};
 
-use contract_ffi::bytesrepr::{deserialize, FromBytes, ToBytes};
+use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 use engine_shared::newtypes::Blake2bHash;
 
-use crate::error;
+use crate::store::Store;
 use crate::transaction_source::lmdb::LmdbEnvironment;
-use crate::transaction_source::{Readable, Writable};
 use crate::trie::Trie;
 use crate::trie_store::TrieStore;
+use crate::{error, trie_store};
 
 /// An LMDB-backed trie store.
 ///
@@ -130,10 +131,13 @@ pub struct LmdbTrieStore {
 impl LmdbTrieStore {
     pub fn new(
         env: &LmdbEnvironment,
-        name: Option<&str>,
+        maybe_name: Option<&str>,
         flags: DatabaseFlags,
     ) -> Result<Self, error::Error> {
-        let db = env.env().create_db(name, flags)?;
+        let name = maybe_name
+            .map(|name| format!("{}-{}", trie_store::NAME, name))
+            .unwrap_or_else(|| String::from(trie_store::NAME));
+        let db = env.env().create_db(Some(&name), flags)?;
         Ok(LmdbTrieStore { db })
     }
 
@@ -143,40 +147,23 @@ impl LmdbTrieStore {
     }
 }
 
-impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for LmdbTrieStore {
+impl<K, V> Store<Blake2bHash, Trie<K, V>> for LmdbTrieStore
+where
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
+{
     type Error = error::Error;
 
     type Handle = Database;
 
-    fn get<T: Readable>(
-        &self,
-        txn: &T,
-        key: &Blake2bHash,
-    ) -> Result<Option<Trie<K, V>>, Self::Error>
-    where
-        T: Readable<Handle = Self::Handle>,
-        Self::Error: From<T::Error>,
-    {
-        match txn.read(self.db, &key.to_bytes()?)? {
-            None => Ok(None),
-            Some(bytes) => {
-                let trie = deserialize(&bytes)?;
-                Ok(Some(trie))
-            }
-        }
+    fn handle(&self) -> Self::Handle {
+        self.db
     }
+}
 
-    fn put<T: Writable>(
-        &self,
-        txn: &mut T,
-        key: &Blake2bHash,
-        value: &Trie<K, V>,
-    ) -> Result<(), Self::Error>
-    where
-        T: Writable<Handle = Self::Handle>,
-        Self::Error: From<T::Error>,
-    {
-        txn.write(self.db, &key.to_bytes()?, &value.to_bytes()?)
-            .map_err(Into::into)
-    }
+impl<K, V> TrieStore<K, V> for LmdbTrieStore
+where
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
+{
 }

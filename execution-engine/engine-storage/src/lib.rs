@@ -1,15 +1,19 @@
 #![feature(never_type, result_map_or_else)]
 
-#[cfg(test)]
-use lazy_static::lazy_static;
-
 // modules
 pub mod error;
 pub mod global_state;
 pub mod protocol_data;
+pub mod protocol_data_store;
+pub mod store;
 pub mod transaction_source;
 pub mod trie;
 pub mod trie_store;
+
+#[cfg(test)]
+use lazy_static::lazy_static;
+
+const MAX_DBS: u32 = 2;
 
 #[cfg(test)]
 lazy_static! {

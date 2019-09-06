@@ -1,23 +1,29 @@
+pub mod engine_config;
+pub mod error;
+pub mod executable_deploy_item;
+pub mod execution_effect;
+pub mod execution_result;
+pub mod genesis;
+pub mod op;
+pub mod utils;
+
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
-use std::sync::Arc;
 
-use parking_lot::Mutex;
-
-use crate::engine_state::utils::WasmiBytes;
-use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
-use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, HASH_SIZE};
+use contract_ffi::uref::URef;
 use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
+use engine_shared::gas::Gas;
+use engine_shared::motes::Motes;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
-use engine_storage::global_state::{CommitResult, History, StateReader};
+use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::Preprocessor;
 
@@ -27,16 +33,9 @@ use self::execution_result::ExecutionResult;
 use self::genesis::{create_genesis_effects, GenesisResult};
 use crate::engine_state::executable_deploy_item::ExecutableDeployItem;
 use crate::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
-use contract_ffi::uref::URef;
-
-pub mod engine_config;
-pub mod error;
-pub mod executable_deploy_item;
-pub mod execution_effect;
-pub mod execution_result;
-pub mod genesis;
-pub mod op;
-pub mod utils;
+use crate::engine_state::utils::WasmiBytes;
+use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
+use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 
 // TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
 // TBD gas * CONV_RATE = motes
@@ -48,18 +47,23 @@ pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
 
 #[derive(Debug)]
-pub struct EngineState<H> {
+pub struct EngineState<S> {
     config: EngineConfig,
-    state: Arc<Mutex<H>>,
+    state: S,
 }
 
-impl<H> EngineState<H>
+pub enum GetBondedValidatorsError<E> {
+    StateError(E),
+    PostStateHashNotFound(Blake2bHash),
+    ProofOfStakeNotFound(Key),
+}
+
+impl<S> EngineState<S>
 where
-    H: History,
-    H::Error: Into<execution::Error>,
+    S: StateProvider,
+    S::Error: Into<execution::Error>,
 {
-    pub fn new(state: H, config: EngineConfig) -> EngineState<H> {
-        let state = Arc::new(Mutex::new(state));
+    pub fn new(state: S, config: EngineConfig) -> EngineState<S> {
         EngineState { config, state }
     }
 
@@ -89,9 +93,9 @@ where
             genesis_validators,
             protocol_version,
         )?;
-        let mut state_guard = self.state.lock();
-        let prestate_hash = state_guard.empty_root();
-        let commit_result = state_guard
+        let prestate_hash = self.state.empty_root();
+        let commit_result = self
+            .state
             .commit(correlation_id, prestate_hash, effects.transforms.to_owned())
             .map_err(Into::into)?;
 
@@ -100,15 +104,11 @@ where
         Ok(genesis_result)
     }
 
-    pub fn state(&self) -> Arc<Mutex<H>> {
-        Arc::clone(&self.state)
-    }
-
     pub fn tracking_copy(
         &self,
         hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
-        match self.state.lock().checkout(hash).map_err(Into::into)? {
+    ) -> Result<Option<TrackingCopy<S::Reader>>, Error> {
+        match self.state.checkout(hash).map_err(Into::into)? {
             Some(tc) => Ok(Some(TrackingCopy::new(tc))),
             None => Ok(None),
         }
@@ -187,7 +187,7 @@ where
 
     fn get_module<A, P: Preprocessor<A>>(
         &self,
-        tracking_copy: Rc<RefCell<TrackingCopy<<H as History>::Reader>>>,
+        tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
         deploy_item: &ExecutableDeployItem,
         account: &Account,
         correlation_id: CorrelationId,
@@ -381,7 +381,9 @@ where
         if !(self.config.use_payment_code()) {
             // DEPLOY WITH NO PAYMENT
 
-            let gas_limit = DEFAULT_SESSION_MOTES / CONV_RATE;
+            let session_motes = Motes::from_u64(DEFAULT_SESSION_MOTES);
+
+            let gas_limit = Gas::from_motes(session_motes, CONV_RATE).unwrap_or_default();
 
             // Session code execution
             let session_result = executor.exec(
@@ -403,7 +405,7 @@ where
 
         // --- REMOVE ABOVE --- //
 
-        let max_payment_cost: U512 = MAX_PAYMENT.into();
+        let max_payment_cost: Motes = Motes::from_u64(MAX_PAYMENT);
 
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
@@ -506,7 +508,7 @@ where
 
         // Get account main purse balance to enforce precondition and in case of forced
         // transfer validation_spec_5: account main purse minimum balance
-        let account_main_purse_balance: U512 = match tracking_copy
+        let account_main_purse_balance: Motes = match tracking_copy
             .borrow_mut()
             .get_purse_balance(correlation_id, account_main_purse_balance_key)
         {
@@ -541,7 +543,7 @@ where
         let payment_result = {
             // payment_code_spec_1: init pay environment w/ gas limit == (max_payment_cost /
             // conv_rate)
-            let pay_gas_limit = MAX_PAYMENT / CONV_RATE;
+            let pay_gas_limit = Gas::from_motes(max_payment_cost, CONV_RATE).unwrap_or_default();
 
             // Create payment code module from bytes
             // validation_spec_1: valid wasm bytes
@@ -578,7 +580,7 @@ where
 
         // payment_code_spec_3: fork based upon payment purse balance and cost of
         // payment code execution
-        let payment_purse_balance: U512 = {
+        let payment_purse_balance: Motes = {
             // Get payment purse Key from proof of stake contract
             // payment_code_spec_6: system contract validity
             let payment_purse: Key = match proof_of_stake_info
@@ -634,8 +636,9 @@ where
             // payment code execution) * conv_rate, yes session
             // session_code_spec_1: gas limit = ((balance of PoS payment purse) / conv_rate)
             // - (gas spent during payment execution)
-            let session_gas_limit: u64 =
-                ((payment_purse_balance / CONV_RATE) - payment_result_cost).as_u64();
+            let session_gas_limit: Gas = Gas::from_motes(payment_purse_balance, CONV_RATE)
+                .unwrap_or_default()
+                - payment_result_cost;
 
             executor.exec(
                 session_module,
@@ -680,9 +683,8 @@ where
 
             let proof_of_stake_args = {
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
-                let finalize_cost_motes =
-                    U512::from(execution_result_builder.total_cost() * CONV_RATE);
-                let args = ("finalize_payment", finalize_cost_motes, account_addr);
+                let finalize_cost_motes: Motes = Motes::from_gas(execution_result_builder.total_cost(), CONV_RATE).expect("motes overflow");
+                let args = ("finalize_payment", finalize_cost_motes.value(), account_addr);
                 ArgsParser::parse(&args)
                     .and_then(|args| args.to_bytes())
                     .expect("args should parse")
@@ -698,15 +700,18 @@ where
                 .urefs_lookup()
                 .clone();
 
+            let base_key = proof_of_stake_info.inner_key();
+            let gas_limit = Gas::from_u64(std::u64::MAX);
+
             executor.exec_direct(
                 proof_of_stake_module,
                 &proof_of_stake_args,
                 &mut proof_of_stake_keys,
-                proof_of_stake_info.inner_key(),
+                base_key,
                 &system_account,
                 authorization_keys.clone(),
                 blocktime,
-                std::u64::MAX, // <-- this execution should be unlimited but approximating
+                gas_limit,
                 protocol_version,
                 correlation_id,
                 finalization_tc,
@@ -732,44 +737,35 @@ where
         correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, H::Error> {
-        self.state
-            .lock()
-            .commit(correlation_id, prestate_hash, effects)
+    ) -> Result<CommitResult, S::Error> {
+        self.state.commit(correlation_id, prestate_hash, effects)
     }
-}
 
-pub enum GetBondedValidatorsError<H: History> {
-    StorageErrors(H::Error),
-    PostStateHashNotFound(Blake2bHash),
-    PoSNotFound(Key),
-}
-
-/// Calculates bonded validators at `root_hash` state.
-pub fn get_bonded_validators<H: History>(
-    state: Arc<Mutex<H>>,
-    root_hash: Blake2bHash,
-    pos_key: &Key, /* Address of the PoS as currently bonded validators are stored in its known
-                    * urefs map. */
-    correlation_id: CorrelationId,
-) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<H>> {
-    state
-        .lock()
-        .checkout(root_hash)
-        .map_err(GetBondedValidatorsError::StorageErrors)
-        .and_then(|maybe_reader| match maybe_reader {
-            Some(reader) => match reader.read(correlation_id, &pos_key.normalize()) {
-                Ok(Some(Value::Contract(contract))) => {
-                    let bonded_validators = contract
-                        .urefs_lookup()
-                        .keys()
-                        .filter_map(|entry| utils::pos_validator_to_tuple(entry))
-                        .collect::<HashMap<PublicKey, U512>>();
-                    Ok(bonded_validators)
-                }
-                Ok(_) => Err(GetBondedValidatorsError::PoSNotFound(*pos_key)),
-                Err(error) => Err(GetBondedValidatorsError::StorageErrors(error)),
-            },
-            None => Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)),
-        })
+    /// Calculates bonded validators at `root_hash` state.
+    pub fn get_bonded_validators(
+        &self,
+        root_hash: Blake2bHash,
+        pos_key: &Key, /* Address of the PoS as currently bonded validators are stored in its
+                        * known urefs map. */
+        correlation_id: CorrelationId,
+    ) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<S::Error>> {
+        self.state
+            .checkout(root_hash)
+            .map_err(GetBondedValidatorsError::StateError)
+            .and_then(|maybe_reader| match maybe_reader {
+                Some(reader) => match reader.read(correlation_id, &pos_key.normalize()) {
+                    Ok(Some(Value::Contract(contract))) => {
+                        let bonded_validators = contract
+                            .urefs_lookup()
+                            .keys()
+                            .filter_map(|entry| utils::pos_validator_to_tuple(entry))
+                            .collect::<HashMap<PublicKey, U512>>();
+                        Ok(bonded_validators)
+                    }
+                    Ok(_) => Err(GetBondedValidatorsError::ProofOfStakeNotFound(*pos_key)),
+                    Err(error) => Err(GetBondedValidatorsError::StateError(error)),
+                },
+                None => Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)),
+            })
+    }
 }

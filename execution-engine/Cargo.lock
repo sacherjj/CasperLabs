@@ -375,6 +375,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "create-test-node-01"
+version = "0.1.0"
+dependencies = [
+ "create-test-node-shared 0.1.0",
+]
+
+[[package]]
+name = "create-test-node-02"
+version = "0.1.0"
+dependencies = [
+ "create-test-node-shared 0.1.0",
+]
+
+[[package]]
+name = "create-test-node-03"
+version = "0.1.0"
+dependencies = [
+ "create-test-node-shared 0.1.0",
+]
+
+[[package]]
+name = "create-test-node-shared"
+version = "0.1.0"
+dependencies = [
+ "binascii 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -553,6 +582,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ee-597-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-598-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "ee-601-regression"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
 name = "either"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -582,6 +632,13 @@ dependencies = [
  "quote 0.6.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 0.15.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "synstructure 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "faucet"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -999,6 +1056,13 @@ dependencies = [
  "net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "ws2_32-sys 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "named-purse-payment"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]
@@ -1960,6 +2024,13 @@ dependencies = [
  "tokio-codec 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-reactor 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "transfer-main-purse-to-new-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
 ]
 
 [[package]]

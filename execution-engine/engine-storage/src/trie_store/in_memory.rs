@@ -6,6 +6,7 @@
 //! # extern crate casperlabs_engine_storage;
 //! # extern crate contract_ffi;
 //! # extern crate engine_shared;
+//! use casperlabs_engine_storage::store::Store;
 //! use casperlabs_engine_storage::transaction_source::{Transaction, TransactionSource};
 //! use casperlabs_engine_storage::transaction_source::in_memory::InMemoryEnvironment;
 //! use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
@@ -38,7 +39,7 @@
 //! // LMDB-backed implementations, the environment is the source of
 //! // transactions.
 //! let env = InMemoryEnvironment::new();
-//! let store = InMemoryTrieStore::new(&env);
+//! let store = InMemoryTrieStore::new(&env, None);
 //!
 //! // First let's create a read-write transaction, persist the values, but
 //! // forget to commit the transaction.
@@ -100,47 +101,46 @@
 //! }
 //! ```
 
-use contract_ffi::bytesrepr::{deserialize, FromBytes, ToBytes};
+use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 
 use super::*;
 use crate::error::in_memory::Error;
 use crate::transaction_source::in_memory::InMemoryEnvironment;
-use crate::transaction_source::{Readable, Writable};
+use crate::trie_store;
 
 /// An in-memory trie store.
-pub struct InMemoryTrieStore;
+pub struct InMemoryTrieStore {
+    maybe_name: Option<String>,
+}
 
 impl InMemoryTrieStore {
-    pub fn new(_env: &InMemoryEnvironment) -> Self {
-        InMemoryTrieStore
+    pub fn new(_env: &InMemoryEnvironment, maybe_name: Option<&str>) -> Self {
+        let name = maybe_name
+            .map(|name| format!("{}-{}", trie_store::NAME, name))
+            .unwrap_or_else(|| String::from(trie_store::NAME));
+        InMemoryTrieStore {
+            maybe_name: Some(name),
+        }
     }
 }
 
-impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for InMemoryTrieStore {
+impl<K, V> Store<Blake2bHash, Trie<K, V>> for InMemoryTrieStore
+where
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
+{
     type Error = Error;
 
-    type Handle = ();
+    type Handle = Option<String>;
 
-    fn get<T>(&self, txn: &T, key: &Blake2bHash) -> Result<Option<Trie<K, V>>, Self::Error>
-    where
-        T: Readable<Handle = Self::Handle>,
-        Self::Error: From<T::Error>,
-    {
-        match txn.read((), &key.to_bytes()?)? {
-            None => Ok(None),
-            Some(bytes) => {
-                let trie = deserialize(&bytes)?;
-                Ok(Some(trie))
-            }
-        }
+    fn handle(&self) -> Self::Handle {
+        self.maybe_name.to_owned()
     }
+}
 
-    fn put<T>(&self, txn: &mut T, key: &Blake2bHash, value: &Trie<K, V>) -> Result<(), Self::Error>
-    where
-        T: Writable<Handle = Self::Handle>,
-        Self::Error: From<T::Error>,
-    {
-        txn.write((), &key.to_bytes()?, &value.to_bytes()?)
-            .map_err(Into::into)
-    }
+impl<K, V> TrieStore<K, V> for InMemoryTrieStore
+where
+    K: ToBytes + FromBytes,
+    V: ToBytes + FromBytes,
+{
 }

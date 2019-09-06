@@ -10,15 +10,13 @@ use contract_ffi::key::Key;
 use contract_ffi::value::Value;
 use engine_shared::newtypes::Blake2bHash;
 
-use super::TestData;
-use crate::transaction_source::{Transaction, TransactionSource};
+use crate::store::tests as store_tests;
 use crate::trie::gens::trie_arb;
 use crate::trie::Trie;
-use crate::trie_store::TrieStore;
 use crate::TEST_MAP_SIZE;
+use std::collections::BTreeMap;
 
 const DEFAULT_MIN_LENGTH: usize = 1;
-
 const DEFAULT_MAX_LENGTH: usize = 4;
 
 fn get_range() -> RangeInclusive<usize> {
@@ -31,66 +29,22 @@ fn get_range() -> RangeInclusive<usize> {
     RangeInclusive::new(start, end)
 }
 
-fn roundtrip<'a, K, V, S, X, E>(
-    store: &S,
-    transaction_source: &'a X,
-    items: &[TestData<K, V>],
-) -> Result<Vec<Option<Trie<K, V>>>, E>
-where
-    K: ToBytes,
-    V: ToBytes,
-    S: TrieStore<K, V>,
-    X: TransactionSource<'a, Handle = S::Handle>,
-    S::Error: From<X::Error>,
-    E: From<S::Error> + From<X::Error>,
-{
-    let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
-    super::put_many::<_, _, _, _, E>(&mut txn, store, items)?;
-    let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
-    let result = super::get_many::<_, _, _, _, E>(&txn, store, &keys);
-    txn.commit()?;
-    result
-}
-
-fn roundtrip_succeeds<'a, S, X, E>(
-    store: &S,
-    transaction_source: &'a X,
-    inputs: Vec<Trie<Key, Value>>,
-) -> bool
-where
-    S: TrieStore<Key, Value>,
-    X: TransactionSource<'a, Handle = S::Handle>,
-    S::Error: From<X::Error>,
-    E: From<S::Error> + From<X::Error> + std::fmt::Debug,
-{
-    let outputs: Vec<Trie<Key, Value>> = {
-        let input_tuples: Vec<TestData<Key, Value>> = inputs
-            .iter()
-            .map(|trie| TestData(Blake2bHash::new(&trie.to_bytes().unwrap()), trie.to_owned()))
-            .collect();
-        roundtrip::<_, _, _, _, E>(store, transaction_source, &input_tuples)
-            .expect("roundtrip failed")
-            .into_iter()
-            .collect::<Option<Vec<Trie<Key, Value>>>>()
-            .expect("one of the outputs was empty")
-    };
-
-    outputs == inputs
-}
-
 fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
-    use crate::error::in_memory;
     use crate::transaction_source::in_memory::InMemoryEnvironment;
     use crate::trie_store::in_memory::InMemoryTrieStore;
 
     let env = InMemoryEnvironment::new();
-    let store = InMemoryTrieStore::new(&env);
+    let store = InMemoryTrieStore::new(&env, None);
 
-    roundtrip_succeeds::<_, _, in_memory::Error>(&store, &env, inputs)
+    let inputs: BTreeMap<Blake2bHash, Trie<Key, Value>> = inputs
+        .into_iter()
+        .map(|trie| (Blake2bHash::new(&trie.to_bytes().unwrap()), trie))
+        .collect();
+
+    store_tests::roundtrip_succeeds(&env, &store, inputs).unwrap()
 }
 
 fn lmdb_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
-    use crate::error;
     use crate::transaction_source::lmdb::LmdbEnvironment;
     use crate::trie_store::lmdb::LmdbTrieStore;
 
@@ -98,7 +52,12 @@ fn lmdb_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
     let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
     let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 
-    let ret = roundtrip_succeeds::<_, _, error::Error>(&store, &env, inputs);
+    let inputs: BTreeMap<Blake2bHash, Trie<Key, Value>> = inputs
+        .into_iter()
+        .map(|trie| (Blake2bHash::new(&trie.to_bytes().unwrap()), trie))
+        .collect();
+
+    let ret = store_tests::roundtrip_succeeds(&env, &store, inputs).unwrap();
     tmp_dir.close().unwrap();
     ret
 }

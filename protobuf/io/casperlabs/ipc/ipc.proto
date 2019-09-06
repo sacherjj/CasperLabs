@@ -3,6 +3,7 @@ syntax = "proto3";
 package io.casperlabs.ipc;
 
 import "io/casperlabs/casper/consensus/state.proto";
+import "io/casperlabs/ipc/transforms.proto";
 
 message DeployCode {
   bytes code = 1; // wasm byte code
@@ -135,41 +136,6 @@ message WriteOp {}
 message AddOp {}
 message NoOp {}
 
-// Final transformation to the value under the key.
-// It's the outcome of applying all `op`s
-message Transform {
-    oneof transform_instance {
-        TransformIdentity identity = 1;
-        TransformAddInt32 add_i32 = 2;
-        TransformAddUInt64 add_u64 = 3;
-        TransformWrite write = 4;
-        TransformAddKeys add_keys = 5;
-        TransformFailure failure = 6;
-        TransformAddBigInt add_big_int = 7;
-    }
-}
-
-message TransformIdentity {}
-message TransformAddInt32 {
-    int32 value = 1;
-}
-message TransformAddUInt64 {
-    uint64 value = 1;
-}
-message TransformAddBigInt {
-    io.casperlabs.casper.consensus.state.BigInt value = 1;
-}
-message TransformAddKeys {
-    repeated io.casperlabs.casper.consensus.state.NamedKey value = 1;
-}
-message TransformWrite {
-    io.casperlabs.casper.consensus.state.Value value = 1;
-}
-message TransformFailure {
-    oneof failure_instance {
-        TypeMismatch type_mismatch = 1;
-     }
-}
 
 //Errors which may occur while interacting with global state
 message StorageError {
@@ -178,10 +144,7 @@ message StorageError {
         RkvError rkv = 2;
     }
 }
-message TypeMismatch {
-    string expected = 1;
-    string found = 2;
-}
+
 message BytesReprError {
     oneof error_instance {
         EarlyEndOfStream early_end = 1;
@@ -201,11 +164,6 @@ message RkvError {
 message OpEntry {
     io.casperlabs.casper.consensus.state.Key key = 1;
     Op operation = 2;
-}
-
-message TransformEntry {
-    io.casperlabs.casper.consensus.state.Key key = 1;
-    Transform transform = 2;
 }
 
 // Returned by ExecutionEngine to consensus layer.
@@ -334,19 +292,25 @@ message ChainSpec {
         // generator used in execution engine for computing genesis post-state.
         uint64 timestamp = 2;
         io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
-        // path to contract for installing the mint system contract
-        string mint_path = 4;
-        // path to contract for installing the pos system contract
-        string pos_path = 5;
-        // path to csv file containing genesis account information
-        string accounts_path = 6;
+        // wasm bytecode for installing the mint system contract
+        bytes mint_installer = 4;
+        // wasm bytes for installing the pos system contract
+        bytes pos_installer = 5;
+        // genesis account information
+        repeated GenesisAccount accounts = 6;
         // costs at genesis
         CostTable costs = 7;
     }
 
+    message GenesisAccount {
+        bytes public_key = 1;
+        io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
+        io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
+    }
+
     message CostTable {
         WasmCosts wasm = 1;
-        HostFunctionCosts host = 2;
+        // TODO (https://casperlabs.atlassian.net/browse/EE-638): design host function costs
 
         message WasmCosts {
             // Default opcode cost
@@ -369,18 +333,12 @@ message ChainSpec {
             uint32 opcodes_mul = 9;
             uint32 opcodes_div = 10;
         }
-
-        message HostFunctionCosts {
-            // Presently we don't charge for anything happening
-            // outside wasm. But we probably should be. But this requires
-            // some design work, so we will leave this empty for now
-        }
     }
 
     message UpgradePoint {
-        // Hiding block height behind an abstraction because I am
-        // not sure if uint64 is sufficient to express it.
-        BlockHeight activation_point = 1;
+        // Hiding this behind an abstraction so we are free
+        // to change how such a point is expressed in the future.
+        ActivationPoint activation_point = 1;
         // The protocol version as of this upgrade
         io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
         // path to contract to run that applies the upgrades to system contracts
@@ -389,7 +347,8 @@ message ChainSpec {
         CostTable new_costs = 4;
     }
 
-    message BlockHeight {
+    message ActivationPoint {
+        // equal to Block.Header.rank
         uint64 rank = 1;
     }
 }

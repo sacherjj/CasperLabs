@@ -95,4 +95,4 @@ Some requests' response objects (see their definitions in
 
 
 ### Learn more about CasperLabs blockchain
-See [Usage of the CasperLabs system](https://github.com/CasperLabs/CasperLabs/blob/master/USAGE.md).
+See [Usage of the CasperLabs system](https://github.com/CasperLabs/CasperLabs/blob/master/hack/USAGE.md).

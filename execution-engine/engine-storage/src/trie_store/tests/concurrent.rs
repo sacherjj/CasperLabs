@@ -4,13 +4,13 @@ use std::thread;
 use tempfile::tempdir;
 
 use super::TestData;
+use crate::store::Store;
 use crate::transaction_source::in_memory::InMemoryEnvironment;
 use crate::transaction_source::lmdb::LmdbEnvironment;
 use crate::transaction_source::{Transaction, TransactionSource};
 use crate::trie::Trie;
 use crate::trie_store::in_memory::InMemoryTrieStore;
 use crate::trie_store::lmdb::LmdbTrieStore;
-use crate::trie_store::TrieStore;
 use crate::TEST_MAP_SIZE;
 
 #[test]
@@ -68,7 +68,7 @@ fn lmdb_writer_mutex_does_not_collide_with_readers() {
 #[test]
 fn in_memory_writer_mutex_does_not_collide_with_readers() {
     let env = Arc::new(InMemoryEnvironment::new());
-    let store = Arc::new(InMemoryTrieStore::new(&env));
+    let store = Arc::new(InMemoryTrieStore::new(&env, None));
     let num_threads = 10;
     let barrier = Arc::new(Barrier::new(num_threads + 1));
     let mut handles = Vec::new();

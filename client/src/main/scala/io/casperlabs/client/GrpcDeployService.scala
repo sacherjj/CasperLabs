@@ -39,7 +39,10 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
     var builder = NettyChannelBuilder
       .forAddress(conn.host, port)
       .maxInboundMessageSize(DefaultMaxMessageSize)
-      .eventLoopGroup(new NioEventLoopGroup(0, scheduler))
+      //.eventLoopGroup(new NioEventLoopGroup(0, scheduler))
+      // The above line is commented out on purpose; it causes
+      // a problem on some systems. The reason for this is still
+      // under investigation (see NODE-832).
       .executor(scheduler)
 
     builder = conn.nodeId match {

@@ -118,8 +118,16 @@ impl Stakes {
         if self.0.len() == 1 {
             return Err(Error::CannotUnbondLastValidator);
         }
+
         // If the the amount is greater or equal to the stake, remove the validator.
         let stake = self.0.remove(validator).ok_or(Error::NotBonded)?;
+
+        if let Some(amount) = maybe_amount {
+            if amount > stake {
+                return Err(Error::UnbondTooLarge);
+            }
+        }
+
         if stake > min.saturating_add(max_decrease) && stake > max_decrease {
             return Err(Error::UnbondTooLarge);
         }

@@ -40,6 +40,7 @@ class CasperLabsNetwork:
     """
 
     is_payment_code_enabled = False
+    grpc_encryption = False
 
     def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
         self.extra_docker_params = extra_docker_params or {}
@@ -137,6 +138,7 @@ class CasperLabsNetwork:
             node_private_key=kp.private_key,
             node_account=kp,
             is_payment_code_enabled=self.is_payment_code_enabled,
+            grpc_encryption=self.grpc_encryption,
         )
         self.add_cl_node(config)
         self.wait_method(wait_for_approved_block_received_handler_state, 1)
@@ -250,6 +252,7 @@ class OneNodeNetwork(CasperLabsNetwork):
             grpc_encryption=self.grpc_encryption,
         )
         self.add_bootstrap(config)
+        wait_for_genesis_block(self.docker_nodes[0])
 
 
 class PaymentNodeNetwork(OneNodeNetwork):
@@ -289,10 +292,18 @@ class TwoNodeNetwork(CasperLabsNetwork):
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
             node_account=kp,
+            grpc_encryption=self.grpc_encryption,
         )
         self.add_bootstrap(config)
 
         self.add_new_node_to_network()
+        wait_for_genesis_block(self.docker_nodes[1])
+
+
+class EncryptedTwoNodeNetwork(TwoNodeNetwork):
+    is_payment_code_enabled = True
+    initial_motes = MAX_PAYMENT_COST * 100
+    grpc_encryption = True
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):

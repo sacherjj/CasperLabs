@@ -20,7 +20,7 @@ fn regression_test_genesis_hash_mismatch() {
 
     let empty_root_hash = {
         let gs = InMemoryGlobalState::empty().expect("Empty GlobalState.");
-        gs.root_hash
+        gs.empty_root_hash
     };
 
     // This is trie's post state hash after committing genesis effects on top of

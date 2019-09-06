@@ -18,6 +18,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.shared.Time
+import io.casperlabs.smartcontracts.Abi
 import java.util.NoSuchElementException
 
 import scala.collection.immutable
@@ -527,29 +528,50 @@ object ProtoUtil {
   // Later, post DEV NET, conversion rate will be part of a deploy.
   val GAS_PRICE = 10L
 
-  def deployDataToEEDeploy(d: Deploy): ipc.DeployItem = ipc.DeployItem(
-    address = d.getHeader.accountPublicKey,
-    session = d.getBody.session.map(deployCodeToDeployPayload),
-    payment = d.getBody.payment.map(deployCodeToDeployPayload),
-    gasPrice = GAS_PRICE,
-    nonce = d.getHeader.nonce,
-    authorizationKeys = d.approvals.map(_.approverPublicKey)
-  )
+  def deployDataToEEDeploy[F[_]: MonadThrowable](d: Deploy): F[ipc.DeployItem] = {
+    def toPayload(maybeCode: Option[Deploy.Code]): F[Option[ipc.DeployPayload]] =
+      maybeCode match {
+        case None       => none[ipc.DeployPayload].pure[F]
+        case Some(code) => (deployCodeToDeployPayload[F](code).map(Some(_)))
+      }
 
-  def deployCodeToDeployPayload(code: Deploy.Code): ipc.DeployPayload = {
-    val payload = code.contract match {
-      case Deploy.Code.Contract.Wasm(wasm) =>
-        ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, code.args))
-      case Deploy.Code.Contract.Hash(hash) =>
-        ipc.DeployPayload.Payload.StoredContractHash(ipc.StoredContractHash(hash, code.args))
-      case Deploy.Code.Contract.Name(name) =>
-        ipc.DeployPayload.Payload.StoredContractName(ipc.StoredContractName(name, code.args))
-      case Deploy.Code.Contract.Uref(uref) =>
-        ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, code.args))
-      case Deploy.Code.Contract.Empty =>
-        ipc.DeployPayload.Payload.Empty
+    for {
+      session <- toPayload(d.getBody.session)
+      payment <- toPayload(d.getBody.payment)
+    } yield {
+      ipc.DeployItem(
+        address = d.getHeader.accountPublicKey,
+        session = session,
+        payment = payment,
+        gasPrice = GAS_PRICE,
+        nonce = d.getHeader.nonce,
+        authorizationKeys = d.approvals.map(_.approverPublicKey)
+      )
     }
-    ipc.DeployPayload(payload)
+  }
+
+  def deployCodeToDeployPayload[F[_]: MonadThrowable](code: Deploy.Code): F[ipc.DeployPayload] = {
+    val argsF: F[ByteString] = if (code.args.nonEmpty) {
+      MonadThrowable[F]
+        .fromTry(Abi.args(code.args.map(_.getValue: Abi.Serializable[_]): _*))
+        .map(ByteString.copyFrom(_))
+    } else code.abiArgs.pure[F]
+
+    argsF.map { args =>
+      val payload = code.contract match {
+        case Deploy.Code.Contract.Wasm(wasm) =>
+          ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, args))
+        case Deploy.Code.Contract.Hash(hash) =>
+          ipc.DeployPayload.Payload.StoredContractHash(ipc.StoredContractHash(hash, args))
+        case Deploy.Code.Contract.Name(name) =>
+          ipc.DeployPayload.Payload.StoredContractName(ipc.StoredContractName(name, args))
+        case Deploy.Code.Contract.Uref(uref) =>
+          ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, args))
+        case Deploy.Code.Contract.Empty =>
+          ipc.DeployPayload.Payload.Empty
+      }
+      ipc.DeployPayload(payload)
+    }
   }
 
   def dependenciesHashesOf(b: Block): List[BlockHash] = {
