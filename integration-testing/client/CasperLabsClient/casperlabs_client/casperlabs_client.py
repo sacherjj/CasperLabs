@@ -262,9 +262,23 @@ def _read_binary(file_name: str):
 
 
 def _read_code(file_name: str, abi_encoded_args: bytes = None):
-    return consensus.Deploy.Code(
-        wasm=_read_binary(file_name), abi_args=abi_encoded_args
-    )
+    return
+
+
+def _encode_contract(contract_options, contract_args):
+    """
+    """
+    file_name, hash, name, uref = contract_options
+    C = consensus.Deploy.Code
+    if file_name:
+        return C(wasm=_read_binary(file_name), abi_args=contract_args)
+    if hash:
+        return C(hash=hash, abi_args=contract_args)
+    if name:
+        return C(name=name, abi_args=contract_args)
+    if uref:
+        return C(uref=uref, abi_args=contract_args)
+    raise Exception("One of wasm, hash, name or uref is required")
 
 
 def _sign(private_key, data: bytes):
@@ -444,18 +458,15 @@ class CasperLabsClient:
         #    payment = session
         payment = payment or session
 
-        if (
-            len(list(filter(None, (session, session_hash, session_name, session_uref))))
-            != 1
-        ):
+        session_options = (session, session_hash, session_name, session_uref)
+        payment_options = (payment, payment_hash, payment_name, payment_uref)
+
+        if len(list(filter(None, session_options))) != 1:
             raise TypeError(
                 "deploy: only one of session, session_hash, session_name, session_uref must be provided"
             )
 
-        if (
-            len(list(filter(None, (payment, payment_hash, payment_name, payment_uref))))
-            != 1
-        ):
+        if len(list(filter(None, payment_options))) != 1:
             raise TypeError(
                 "deploy: only one of payment, payment_hash, payment_name, payment_uref must be provided"
             )
@@ -464,9 +475,9 @@ class CasperLabsClient:
         # if payment is same as session:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
         body = consensus.Deploy.Body(
-            session=_read_code(session, session_args),
-            payment=_read_code(
-                payment, payment == session and session_args or payment_args
+            session=_encode_contract(session_options, session_args),
+            payment=_encode_contract(
+                payment_options, payment == session and session_args or payment_args
             ),
         )
 
