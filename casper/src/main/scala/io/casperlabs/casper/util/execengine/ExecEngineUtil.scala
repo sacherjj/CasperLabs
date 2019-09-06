@@ -32,7 +32,6 @@ object ExecEngineUtil {
   type StateHash = ByteString
 
   case class InvalidDeploys(
-      invalidNonceDeploys: List[InvalidNonceDeploy],
       preconditionFailures: List[PreconditionFailure]
   )
 
@@ -80,9 +79,7 @@ object ExecEngineUtil {
       invalidDeploys: List[NoEffectsFailure]
   ): F[Unit] =
     for {
-      invalidDeploys <- invalidDeploys.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
-                         case (acc, d: InvalidNonceDeploy) =>
-                           acc.copy(invalidNonceDeploys = d :: acc.invalidNonceDeploys).pure[F]
+      invalidDeploys <- invalidDeploys.foldM[F, InvalidDeploys](InvalidDeploys(Nil)) {
                          case (acc, d: PreconditionFailure) =>
                            // Log precondition failures as we will be getting rid of them.
                            Log[F].warn(

@@ -8,7 +8,7 @@ created with phrases, it is important that these be common.
 ### "Single Node Network"
 
  - Bootstrap Node is created
- 
+
 ### "3 Node Star Network"
 
  - Networks A, B, C created
@@ -28,7 +28,7 @@ created with phrases, it is important that these be common.
                  |
  Node-2 --B-- Bootstrap --C-- Node-3
 ```
-   
+
 ### "3 Node Network"
 
  - Network A created
@@ -48,7 +48,7 @@ created with phrases, it is important that these be common.
  Node-2 --A-- Bootstrap --A-- Node-3
        \                      /
         \_________A__________/
-```  
+```
 
 ### "Mesh Network"
 
@@ -72,7 +72,7 @@ created with phrases, it is important that these be common.
  - Node-3 is created
     - with Networking B, E
 
- 
+
 ```
   Node-1 -A- Node-2 -B- Node-3
     |C         |D        |E
@@ -92,17 +92,14 @@ created with phrases, it is important that these be common.
 
     - Account is created
     - Account is funded with {X} tokens
-    - Account nonce is set as {Y}
 
 ## Deploy
 
-### "Deploy {Account} {Nonce} {Payment} {Session}"
+### "Deploy {Account} {Payment} {Session}"
 
     - Deploy using
         - {Account} for signing
-        - {Nonce} for nonce
         - {Payment} contract
         - {Session} contract
 
 ## Propose
-

@@ -48,7 +48,6 @@ casperlabs-client \
     --host deploy.casperlabs.io \
     bond \
     --amount <bond-amount> \
-    --nonce <nonce> \
     --private-key <path-to-private-key>
 ```
 
@@ -70,7 +69,7 @@ casperlabs-node run \
     --server-bootstrap "casperlabs://a605c8ddc4ed3dc9b881bfe006cc8175fb31e125@100.24.117.48?protocol=40400&discovery=40404"
 ```
 
-##### Stopping a bonded validator 
+##### Stopping a bonded validator
 
 First, you must unbond:
 ```
@@ -78,7 +77,6 @@ casperlabs-client \
     --host deploy.casperlabs.io \
     unbond \
     --amount <unbond-amount> \
-    --nonce <nonce> \
     --private-key <path-to-private-key>
 ```
 

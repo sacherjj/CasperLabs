@@ -126,16 +126,11 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
-pub fn create_rng(
-    account_addr: [u8; 32],
-    nonce: u64,
-    phase: contract_ffi::execution::Phase,
-) -> ChaChaRng {
+pub fn create_rng(deploy_hahs: [u8; 32], phase: contract_ffi::execution::Phase) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let mut hasher = VarBlake2b::new(32).unwrap();
-    data.extend(&account_addr);
-    data.extend_from_slice(&nonce.to_le_bytes());
+    data.extend(&deploy_hahs);
     data.extend_from_slice(&[phase.to_u8().expect("Phase is represented as a u8")]);
     hasher.input(data);
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
@@ -174,6 +169,7 @@ where
             &current_runtime.context.account(),
             key,
             current_runtime.context.get_blocktime(),
+            current_runtime.context.get_deployhash(),
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),

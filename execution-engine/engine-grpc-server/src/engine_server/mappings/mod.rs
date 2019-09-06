@@ -260,7 +260,6 @@ impl From<contract_ffi::value::account::Account> for super::state::Account {
     fn from(account: contract_ffi::value::account::Account) -> Self {
         let mut ipc_account = super::state::Account::new();
         ipc_account.set_public_key(account.pub_key().to_vec());
-        ipc_account.set_nonce(account.nonce());
         ipc_account.set_purse_id(account.purse_id().value().into());
         let associated_keys: Vec<super::state::Account_AssociatedKey> = account
             .get_associated_keys()
@@ -362,7 +361,6 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
         };
         Ok(contract_ffi::value::Account::new(
             pub_key,
-            value.nonce,
             uref_map.0,
             purse_id,
             associated_keys,
@@ -768,27 +766,6 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         ExecutionError::KeyNotFound(key) => {
                             let msg = format!("Key {:?} not found.", key);
                             execution_error(msg, cost.as_u64(), effect)
-                        }
-                        ExecutionError::InvalidNonce {
-                            deploy_nonce,
-                            expected_nonce,
-                        } if deploy_nonce <= expected_nonce => {
-                            // Deploys with nonce lower than (or equal to) current account's nonce
-                            // will always fail. They won't be repeated
-                            // so we treat them as precondition failures.
-                            let error_msg = format!("Deploy nonce: {:?} was lower (or equal to) than expected nonce {:?}", deploy_nonce, expected_nonce);
-                            precondition_failure(error_msg)
-                        }
-                        ExecutionError::InvalidNonce {
-                            deploy_nonce,
-                            expected_nonce,
-                        } => {
-                            let mut deploy_result = ipc::DeployResult::new();
-                            let mut invalid_nonce = ipc::DeployResult_InvalidNonce::new();
-                            invalid_nonce.set_deploy_nonce(deploy_nonce);
-                            invalid_nonce.set_expected_nonce(expected_nonce);
-                            deploy_result.set_invalid_nonce(invalid_nonce);
-                            deploy_result
                         }
                         ExecutionError::Revert(status) => {
                             let error_msg = format!("Exit code: {}", status);

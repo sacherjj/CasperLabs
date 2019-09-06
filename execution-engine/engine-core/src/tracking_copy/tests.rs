@@ -215,7 +215,6 @@ fn tracking_copy_add_named_key() {
     let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; KEY_SIZE]), Weight::new(1));
     let account = contract_ffi::value::Account::new(
         [0u8; KEY_SIZE],
-        0u64,
         BTreeMap::new(),
         PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
         associated_keys,
@@ -415,7 +414,6 @@ proptest! {
         name in "\\PC*", // human-readable name for state
         missing_name in "\\PC*",
         pk in u8_slice_32(), // account public key
-        nonce in any::<u64>(), // account nonce
         address in u8_slice_32(), // address for account key
     ) {
         let correlation_id = CorrelationId::new();
@@ -424,7 +422,6 @@ proptest! {
         let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
         let account = Account::new(
             pk,
-            nonce,
             known_urefs,
             purse_id,
             associated_keys,
@@ -459,7 +456,6 @@ proptest! {
         state_name in "\\PC*", // human-readable name for state
         contract_name in "\\PC*", // human-readable name for contract
         pk in u8_slice_32(), // account public key
-        nonce in any::<u64>(), // account nonce
         address in u8_slice_32(), // address for account key
         body in vec(any::<u8>(), 1..1000), //contract body
         hash in u8_slice_32(), // hash for contract key
@@ -478,7 +474,6 @@ proptest! {
         let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
         let account = Account::new(
             pk,
-            nonce,
             account_known_urefs,
             purse_id,
             associated_keys,

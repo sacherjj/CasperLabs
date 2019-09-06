@@ -16,10 +16,20 @@ fn should_run_local_state_contract() {
     // more data
     let result = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, "local_state.wasm", DEFAULT_BLOCK_TIME, 1)
+        .exec(
+            GENESIS_ADDR,
+            "local_state.wasm",
+            DEFAULT_BLOCK_TIME,
+            [1u8; 32],
+        )
         .expect_success()
         .commit()
-        .exec(GENESIS_ADDR, "local_state.wasm", DEFAULT_BLOCK_TIME, 2)
+        .exec(
+            GENESIS_ADDR,
+            "local_state.wasm",
+            DEFAULT_BLOCK_TIME,
+            [2u8; 32],
+        )
         .expect_success()
         .commit()
         .finish();

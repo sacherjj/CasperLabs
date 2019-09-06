@@ -4,7 +4,6 @@ import docker.errors
 import os
 from pathlib import Path
 
-
 from test.cl_node import LoggingMixin
 from test.cl_node.common import extract_block_count_from_show_blocks
 from test.cl_node.common import extract_block_hash_from_propose_output
@@ -12,7 +11,6 @@ from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
-from test.cl_node.nonce_registry import NonceRegistry
 from casperlabs_client import extract_common_name
 
 
@@ -90,6 +88,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         return self.invoke_client("propose")
 
     def propose_with_retry(self, max_attempts: int, retry_seconds: int) -> str:
+        # TODO: Is this still true with Nonces gone.
         # With many threads using the same account the nonces will be interleaved.
         # Only one node can propose at a time, the others have to wait until they
         # receive the block and then try proposing again.
@@ -125,9 +124,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
     def deploy(
         self,
         from_address: str = None,
-        gas_limit: int = 1000000,
         gas_price: int = 1,
-        nonce: Optional[int] = None,
         session_contract: str = None,
         payment_contract: str = None,
         private_key: Optional[str] = None,
@@ -151,12 +148,10 @@ class DockerClient(CasperLabsClient, LoggingMixin):
             private_key or self.node.test_account.private_key_path
         )
 
-        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
         payment_contract = payment_contract or session_contract
 
         command = (
             f"deploy --from {address}"
-            f" --gas-limit {gas_limit}"
             f" --gas-price {gas_price}"
             f" --session=/data/{session_contract}"
             f" --payment=/data/{payment_contract}"
@@ -164,17 +159,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
             f" --public-key={public_key}"
         )
 
-        # For testing CLI: option will not be passed to CLI if nonce is ''
-        if deploy_nonce != "":
-            command += f" --nonce {deploy_nonce}"
-
-        try:
-            r = self.invoke_client(command)
-            return r
-        except Exception:
-            if nonce is None:
-                NonceRegistry.revert(address)
-            raise
+        return self.invoke_client(command)
 
     def show_block(self, block_hash: str) -> str:
         return self.invoke_client(f"show-block {block_hash}")
