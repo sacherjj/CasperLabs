@@ -7,6 +7,7 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.util.DagOperations
+import io.casperlabs.casper.Estimator.Validator
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -69,7 +70,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       Map.empty[Estimator.Validator, Estimator.BlockHash]
+                       Map.empty[Estimator.Validator, Estimator.BlockHash],
+                       Map.empty[Estimator.Validator, Long]
                      )
       } yield forkchoice.head should be(genesis.blockHash)
   }
@@ -131,7 +133,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       latestBlocks
+                       latestBlocks,
+                       Map.empty[Validator, Long]
                      )
         _      = forkchoice.head should be(b6.blockHash)
         result = forkchoice(1) should be(b8.blockHash)
@@ -197,7 +200,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       latestBlocks
+                       latestBlocks,
+                       Map.empty[Validator, Long]
                      )
         _      = forkchoice.head should be(b8.blockHash)
         result = forkchoice(1) should be(b7.blockHash)
@@ -236,7 +240,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
-          scores       <- Estimator.lmdScoring(dag, lca, latestBlocks)
+          scores       <- Estimator.lmdScoring(dag, lca, latestBlocks, Set.empty)
           _ = scores shouldEqual Map(
             genesis.blockHash -> (3 + 5 + 7),
             a.blockHash       -> (3 + 7),
@@ -286,7 +290,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
-          scores       <- Estimator.lmdScoring(dag, lca, latestBlocks)
+          scores       <- Estimator.lmdScoring(dag, lca, latestBlocks, Set.empty)
           _ = scores shouldEqual Map(
             genesis.blockHash -> (3 + 5 + 7),
             a.blockHash       -> (3 + 7),
@@ -353,7 +357,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
           scores <- Estimator
-                     .lmdScoring(dag, lca, latestBlocks)
+                     .lmdScoring(dag, lca, latestBlocks, Set.empty)
           _ = scores shouldEqual Map(
             f.blockHash -> (7 + 5 + 3),
             g.blockHash -> (7 + 5),
@@ -403,7 +407,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks)
+          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, Map.empty[Validator, Long])
           _            = tips.head shouldEqual i.blockHash
         } yield ()
   }

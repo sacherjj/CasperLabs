@@ -143,10 +143,9 @@ object EquivocationDetector {
     DagOperations.bfToposortTraverseF(
       List(BlockMetadata.fromBlock(block))
     )(
-      b =>
-        b.justifications
-          .traverse(j => dag.lookup(j.latestBlockHash))
-          .map(_.flatten)
+      _.justifications
+        .traverse(j => dag.lookup(j.latestBlockHash))
+        .map(_.flatten)
     )
   }
 

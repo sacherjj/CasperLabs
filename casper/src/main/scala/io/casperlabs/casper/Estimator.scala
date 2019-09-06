@@ -8,6 +8,7 @@ import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.util.{implicits, DagOperations}
 import implicits.{eqBlockHash, showBlockHash}
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
+import io.casperlabs.casper.Estimator.Validator
 
 import scala.collection.immutable.{Map, Set}
 
@@ -19,18 +20,20 @@ object Estimator {
 
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      genesis: BlockHash
+      genesis: BlockHash,
+      equivocationTracker: Map[Validator, Long]
   ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- dag.latestMessageHashes
       result <- Estimator
-                 .tips[F](dag, genesis, latestMessageHashes)
+                 .tips[F](dag, genesis, latestMessageHashes, equivocationTracker)
     } yield result.toIndexedSeq
 
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       genesis: BlockHash,
-      latestMessagesHashes: Map[Validator, BlockHash]
+      latestMessagesHashes: Map[Validator, BlockHash],
+      equivocationTracker: Map[Validator, Long]
   ): F[List[BlockHash]] = {
 
     /** Finds children of the block b that have been scored by the LMD algorithm.
@@ -70,7 +73,12 @@ object Estimator {
       lca <- if (latestMessagesHashes.isEmpty) genesis.pure[F]
             else
               DagOperations.latestCommonAncestorsMainParent(dag, latestMessagesHashes.values.toList)
-      scores           <- lmdScoring(dag, lca, latestMessagesHashes)
+      equivocator <- equivocatorDetectFromLatestMessage(
+                      dag,
+                      latestMessagesHashes,
+                      equivocationTracker
+                    )
+      scores           <- lmdScoring(dag, lca, latestMessagesHashes, equivocator)
       newMainParent    <- forkChoiceTip(dag, lca, scores)
       parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
       secondaryParents = parents.filter(_ != newMainParent)
@@ -92,7 +100,8 @@ object Estimator {
   def lmdScoring[F[_]: Monad](
       dag: DagRepresentation[F],
       stopHash: BlockHash,
-      latestMessagesHashes: Map[Validator, BlockHash]
+      latestMessagesHashes: Map[Validator, BlockHash],
+      equivocator: Set[Validator]
   ): F[Map[BlockHash, Long]] =
     latestMessagesHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
       case (acc, (validator, latestMessageHash)) =>
@@ -104,11 +113,85 @@ object Estimator {
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
               weightFromValidatorByDag(dag, blockHash, validator).map(weight => {
+                val realWeight = if (equivocator.contains(validator)) {
+                  0L
+                } else {
+                  weight
+                }
                 val oldValue = acc2.getOrElse(blockHash, 0L)
-                acc2.updated(blockHash, weight + oldValue)
+                acc2.updated(blockHash, realWeight + oldValue)
               })
           }
     }
+
+  /**
+    * Find equivocators basing latestMessageHashes
+		*
+    * We use `bfToposortTraverseF` to traverse from `latestMessageHashes` down to minimal rank
+    * of base block of equivocationRecord. `bfToposortTraverseF` guarantee that we will only
+    * meet a specific block only once, and `validatorBlockSeqNum` is equal to 1 plus
+    * validatorBlock of creator's previous created block. So that once we find duplicated
+    * (Validator, validatorBlockSeqNum), we know the validator has equivocated.
+		*
+    * @param dag the block dag
+    * @param latestMessagesHashes generate from direct justifications
+    * @param equivocationTracker local tracker of equivocations
+    * @tparam F effect type
+    * @return equivocators that can be seen from view of latestMessages
+    */
+  private[casper] def equivocatorDetectFromLatestMessage[F[_]: Monad](
+      dag: DagRepresentation[F],
+      latestMessagesHashes: Map[Validator, BlockHash],
+      equivocationTracker: Map[Validator, Long]
+  ): F[Set[Validator]] = {
+    val equivocationRecords = equivocationTracker.filterKeys(latestMessagesHashes.contains)
+    val minRank             = equivocationRecords.values.fold(0L)(_ min _)
+    for {
+      latestMessage                                         <- latestMessagesHashes.values.toList.traverse(dag.lookup).map(_.flatten)
+      implicit0(blockTopoOrdering: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingDesc
+
+      stream = DagOperations.bfToposortTraverseF(latestMessage)(
+        _.justifications.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
+      )
+      acc <- stream
+              .foldWhileLeft(
+                (Set.empty[Validator], Set.empty[(Validator, Int)])
+              ) {
+                case (
+                    (detectedEquivocator, visitedValidatorAndBlockSeqNum),
+                    b
+                    ) =>
+                  val creator            = b.validatorPublicKey
+                  val creatorBlockSeqNam = b.validatorBlockSeqNum
+                  if (detectedEquivocator == equivocationRecords.keySet || b.rank <= minRank) {
+                    // Stop traversal if all equivocator has occurred in j-post-dag of latestMessages
+                    // or we traversal down to minimal of rank of base block of all equivocator
+                    Right(
+                      (detectedEquivocator, visitedValidatorAndBlockSeqNum)
+                    )
+                  } else if (detectedEquivocator.contains(creator)) {
+                    Left((detectedEquivocator, visitedValidatorAndBlockSeqNum))
+                  } else if (visitedValidatorAndBlockSeqNum.contains(
+                               (creator, creatorBlockSeqNam)
+                             )) {
+                    Left(
+                      (
+                        detectedEquivocator + creator,
+                        visitedValidatorAndBlockSeqNum
+                      )
+                    )
+                  } else {
+                    Left(
+                      (
+                        detectedEquivocator,
+                        visitedValidatorAndBlockSeqNum + (creator -> creatorBlockSeqNam)
+                      )
+                    )
+                  }
+              }
+      (detectedEquivocator, _) = acc
+    } yield detectedEquivocator
+  }
 
   /**
     * Computes fork choice.

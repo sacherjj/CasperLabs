@@ -4,7 +4,7 @@ import cats.effect.Sync
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper._
-import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
@@ -86,7 +86,7 @@ class BlocksResponseAPITest
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
         dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        tips <- Estimator.tips[Task](dag, genesis.blockHash, Map.empty[Validator, Long])
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
@@ -152,7 +152,7 @@ class BlocksResponseAPITest
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
         dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        tips <- Estimator.tips[Task](dag, genesis.blockHash, Map.empty[Validator, Long])
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
@@ -232,7 +232,7 @@ class BlocksResponseAPITest
             HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
           )
       dag  <- dagStorage.getRepresentation
-      tips <- Estimator.tips[Task](dag, genesis.blockHash)
+      tips <- Estimator.tips[Task](dag, genesis.blockHash, Map.empty[Validator, Long])
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips

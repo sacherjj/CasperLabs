@@ -353,7 +353,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   /** Return the list of tips. */
   def estimator(dag: DagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Metrics[F].timer("estimator") {
-      Estimator.tips[F](dag, genesis.blockHash)
+      Cell[F, CasperState].read
+        .flatMap(
+          casperState => Estimator.tips[F](dag, genesis.blockHash, casperState.equivocationsTracker)
+        )
     }
 
   /*
@@ -734,7 +737,7 @@ object MultiParentCasperImpl {
                        .pure[F]
                    ) { ctx =>
                      Validation[F]
-                       .parents(block, ctx.genesis.blockHash, dag)
+                       .parents(block, ctx.genesis.blockHash, dag, casperState.equivocationsTracker)
                    }
           _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
           preStateHash <- ExecEngineUtil.computePrestate[F](merged)
