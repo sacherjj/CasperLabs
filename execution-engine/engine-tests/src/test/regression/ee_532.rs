@@ -17,7 +17,7 @@ fn should_run_ee_532_get_uref_regression_test() {
             UNKNOWN_ADDR,
             "ee_532_regression.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
         )
         .commit()
         .finish();

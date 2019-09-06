@@ -1,8 +1,9 @@
 import os
 import logging
 import subprocess
+from operator import add
+from functools import reduce
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
-import ssl
 
 
 class CLIErrorExit(Exception):
@@ -15,30 +16,26 @@ class CLIErrorExit(Exception):
 
 
 class CLI:
-    def __init__(self, node, cli_cmd="casperlabs_client", grpc_encryption=False):
+    def __init__(self, node, cli_cmd="casperlabs_client", tls_parameters=None):
         self.node = node
         self.host = (
             os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
         )
         self.port = node.grpc_external_docker_port
+        self.internal_port = node.grpc_internal_docker_port
         self.cli_cmd = cli_cmd
-        self.grpc_encryption = grpc_encryption
-
-        cert_dict = ssl._ssl._test_decode_cert(node.config.tls_certificate_local_path())
-        common_name = [
-            t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"
-        ][0]
-        self.node_id = common_name
+        self.tls_parameters = tls_parameters or {}
 
     def expand_args(self, args):
         connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
-        if self.grpc_encryption:
-            connection_details += ["--node-id", self.node_id]
+        if self.tls_parameters:
+            connection_details += reduce(
+                add,
+                [[str(p), str(self.tls_parameters[p])] for p in self.tls_parameters],
+            )
+        string_args = [str(a) for a in args]
 
-        def _args(args, connection_details=connection_details):
-            return [str(a) for a in connection_details + list(args)]
-
-        return "--help" in args and _args(args, []) or _args(args)
+        return "--help" in args and string_args or connection_details + string_args
 
     def parse_output(self, command, binary_output):
 
@@ -47,10 +44,12 @@ class CLI:
 
         output = binary_output.decode("utf-8")
 
-        if command == "send-deploy":
+        if command in ("deploy", "send-deploy"):
             return output.split()[2]
+            # "Success! Deploy 0d4036bebb95de793b28de452d594531a29f8dc3c5394526094d30723fa5ff65 deployed."
 
-        if command in ("deploy", "propose"):
+        if command in ("propose",):
+            # "Response: Success! Block 47338c65992e7d5062aec2200ad8d7284ae49f6c3e7c37fa7eb46fb6fc8ae3d8 created and added."
             return output.split()[3]
 
         if command == "show-blocks":

@@ -409,18 +409,15 @@ object ProtoUtil {
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
-  def basicDeploy[F[_]: Monad: Time](
-      nonce: Long
-  ): F[Deploy] =
+  def basicDeploy[F[_]: Monad: Time](): F[Deploy] =
     Time[F].currentMillis.map { now =>
-      basicDeploy(now, ByteString.EMPTY, nonce)
+      basicDeploy(now, ByteString.EMPTY)
     }
 
   // This is only used for tests.
   def basicDeploy(
       timestamp: Long,
       sessionCode: ByteString = ByteString.EMPTY,
-      nonce: Long = 0,
       accountPublicKey: ByteString = ByteString.EMPTY
   ): Deploy = {
     val b = Deploy
@@ -431,7 +428,6 @@ object ProtoUtil {
       .Header()
       .withAccountPublicKey(accountPublicKey)
       .withTimestamp(timestamp)
-      .withNonce(nonce)
       .withBodyHash(protoHash(b))
     Deploy()
       .withDeployHash(protoHash(h))
@@ -439,8 +435,8 @@ object ProtoUtil {
       .withBody(b)
   }
 
-  def basicProcessedDeploy[F[_]: Monad: Time](id: Long): F[Block.ProcessedDeploy] =
-    basicDeploy[F](id).map(deploy => Block.ProcessedDeploy(deploy = Some(deploy)))
+  def basicProcessedDeploy[F[_]: Monad: Time](): F[Block.ProcessedDeploy] =
+    basicDeploy[F]().map(deploy => Block.ProcessedDeploy(deploy = Some(deploy)))
 
   def sourceDeploy(source: String, timestamp: Long): Deploy =
     sourceDeploy(ByteString.copyFromUtf8(source), timestamp)
@@ -470,8 +466,8 @@ object ProtoUtil {
         session = session,
         payment = payment,
         gasPrice = GAS_PRICE,
-        nonce = d.getHeader.nonce,
-        authorizationKeys = d.approvals.map(_.approverPublicKey)
+        authorizationKeys = d.approvals.map(_.approverPublicKey),
+        deployHash = d.deployHash
       )
     }
   }
@@ -510,14 +506,6 @@ object ProtoUtil {
 
   def createdBy(validatorId: ValidatorIdentity, block: Block): Boolean =
     block.getHeader.validatorPublicKey == ByteString.copyFrom(validatorId.publicKey)
-
-  implicit class DeployOps(d: Deploy) {
-    def incrementNonce(): Deploy =
-      this.withNonce(d.header.get.nonce + 1)
-
-    def withNonce(newNonce: Long): Deploy =
-      d.withHeader(d.header.get.withNonce(newNonce))
-  }
 
   def randomAccountAddress(): ByteString =
     ByteString.copyFrom(scala.util.Random.nextString(32), "UTF-8")

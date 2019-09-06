@@ -8,7 +8,6 @@ use core::convert::TryFrom;
 use core::fmt::{Debug, Display, Formatter};
 use failure::Fail;
 
-const DEFAULT_NONCE: u64 = 0;
 const DEFAULT_CURRENT_BLOCK_TIME: BlockTime = BlockTime(0);
 const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
 
@@ -559,7 +558,6 @@ impl AssociatedKeys {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Account {
     public_key: [u8; 32],
-    nonce: u64,
     known_urefs: BTreeMap<String, Key>,
     purse_id: PurseId,
     associated_keys: AssociatedKeys,
@@ -570,7 +568,6 @@ pub struct Account {
 impl Account {
     pub fn new(
         public_key: [u8; 32],
-        nonce: u64,
         known_urefs: BTreeMap<String, Key>,
         purse_id: PurseId,
         associated_keys: AssociatedKeys,
@@ -579,7 +576,6 @@ impl Account {
     ) -> Self {
         Account {
             public_key,
-            nonce,
             known_urefs,
             purse_id,
             associated_keys,
@@ -593,14 +589,12 @@ impl Account {
         known_urefs: BTreeMap<String, Key>,
         purse_id: PurseId,
     ) -> Self {
-        let nonce = DEFAULT_NONCE;
         let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();
         let account_activity =
             AccountActivity::new(DEFAULT_CURRENT_BLOCK_TIME, DEFAULT_INACTIVITY_PERIOD_TIME);
         Account::new(
             account_addr,
-            nonce,
             known_urefs,
             purse_id,
             associated_keys,
@@ -646,16 +640,6 @@ impl Account {
 
     pub fn account_activity(&self) -> &AccountActivity {
         &self.account_activity
-    }
-
-    pub fn nonce(&self) -> u64 {
-        self.nonce
-    }
-
-    /// Consumes instance of account and returns new one
-    /// with old contents but with nonce increased by 1.
-    pub fn increment_nonce(&mut self) {
-        self.nonce += 1;
     }
 
     pub fn add_associated_key(
@@ -904,7 +888,6 @@ impl ToBytes for Account {
         let known_urefs_size = UREF_SIZE * self.known_urefs.len() + U32_SIZE;
         let purse_id_size = UREF_SIZE;
         let serialized_account_size = KEY_SIZE // pub key
-            + U64_SIZE // nonce
             + known_urefs_size
             + purse_id_size
             + associated_keys_size
@@ -915,7 +898,6 @@ impl ToBytes for Account {
         }
         let mut result: Vec<u8> = Vec::with_capacity(serialized_account_size);
         result.extend(&self.public_key.to_bytes()?);
-        result.append(&mut self.nonce.to_bytes()?);
         result.append(&mut self.known_urefs.to_bytes()?);
         result.append(&mut self.purse_id.value().to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
@@ -928,7 +910,6 @@ impl ToBytes for Account {
 impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (public_key, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (nonce, rem): (u64, &[u8]) = FromBytes::from_bytes(rem)?;
         let (known_urefs, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
         let (purse_id, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
         let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
@@ -938,7 +919,6 @@ impl FromBytes for Account {
         Ok((
             Account {
                 public_key,
-                nonce,
                 known_urefs,
                 purse_id,
                 associated_keys,
@@ -962,22 +942,6 @@ mod tests {
     use alloc::vec::Vec;
     use core::convert::TryFrom;
     use core::iter::FromIterator;
-
-    #[test]
-    fn incremented_nonce() {
-        let mut account = Account::new(
-            [0u8; 32],
-            0,
-            BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
-            AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1)),
-            Default::default(),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
-        );
-        assert_eq!(account.nonce(), 0);
-        account.increment_nonce();
-        assert_eq!(account.nonce(), 1);
-    }
 
     #[test]
     fn associated_keys_add() {
@@ -1040,7 +1004,6 @@ mod tests {
 
         let account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             keys,
@@ -1109,7 +1072,6 @@ mod tests {
         };
         let account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -1173,7 +1135,6 @@ mod tests {
         };
         let account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -1256,7 +1217,6 @@ mod tests {
         };
         let mut account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -1298,7 +1258,6 @@ mod tests {
         };
         let mut account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -1333,7 +1292,6 @@ mod tests {
         };
         let mut account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,

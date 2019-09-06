@@ -86,7 +86,6 @@ cp .casperlabs/genesis/system-account/account-public.pem keys/system-account/
      --from "$ACCOUNT_ID" \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
-     --nonce 1 \
      --public-key /keys/system-account/account-public.pem \
      --private-key /keys/system-account/account-private.pem
 ```

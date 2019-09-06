@@ -39,7 +39,6 @@ object CodeConfig {
 final case class DeployConfig(
     sessionOptions: CodeConfig,
     paymentOptions: CodeConfig,
-    nonce: Long,
     gasPrice: Long,
     paymentAmount: Option[BigInt]
 ) {
@@ -69,12 +68,11 @@ object DeployConfig {
         uref = args.paymentUref.toOption,
         args = args.paymentArgs.toOption.map(_.args)
       ),
-      nonce = args.nonce(),
       gasPrice = args.gasPrice(),
       paymentAmount = args.paymentAmount.toOption
     )
 
-  val empty = DeployConfig(CodeConfig.empty, CodeConfig.empty, 0, 0, None)
+  val empty = DeployConfig(CodeConfig.empty, CodeConfig.empty, 0, None)
 
   /** Produce a Deploy.Code DTO from the options.
     * 'defaultArgs' can be used by specialized commands such as `transfer` and `unbond`

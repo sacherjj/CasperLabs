@@ -11,7 +11,10 @@ use engine_shared::transform::Transform;
 
 use crate::error;
 use crate::global_state::StateReader;
-use crate::global_state::{commit, CommitResult, History};
+use crate::global_state::{commit, CommitResult, StateProvider};
+use crate::protocol_data::ProtocolData;
+use crate::protocol_data_store::lmdb::LmdbProtocolDataStore;
+use crate::protocol_data_store::ProtocolVersion;
 use crate::store::Store;
 use crate::transaction_source::lmdb::LmdbEnvironment;
 use crate::transaction_source::{Transaction, TransactionSource};
@@ -21,44 +24,53 @@ use crate::trie_store::lmdb::LmdbTrieStore;
 use crate::trie_store::operations::{read, ReadResult};
 
 pub struct LmdbGlobalState {
-    pub(super) environment: Arc<LmdbEnvironment>,
-    pub(super) store: Arc<LmdbTrieStore>,
-    pub(super) empty_root_hash: Blake2bHash,
+    pub environment: Arc<LmdbEnvironment>,
+    pub trie_store: Arc<LmdbTrieStore>,
+    pub protocol_data_store: Arc<LmdbProtocolDataStore>,
+    pub empty_root_hash: Blake2bHash,
 }
 
 /// Represents a "view" of global state at a particular root hash.
 pub struct LmdbGlobalStateView {
-    pub(super) environment: Arc<LmdbEnvironment>,
-    pub(super) store: Arc<LmdbTrieStore>,
-    pub(super) root_hash: Blake2bHash,
+    pub environment: Arc<LmdbEnvironment>,
+    pub store: Arc<LmdbTrieStore>,
+    pub root_hash: Blake2bHash,
 }
 
 impl LmdbGlobalState {
-    /// Creates an empty state from an existing environment and store.
+    /// Creates an empty state from an existing environment and trie_store.
     pub fn empty(
         environment: Arc<LmdbEnvironment>,
-        store: Arc<LmdbTrieStore>,
+        trie_store: Arc<LmdbTrieStore>,
+        protocol_data_store: Arc<LmdbProtocolDataStore>,
     ) -> Result<Self, error::Error> {
         let root_hash: Blake2bHash = {
             let (root_hash, root) = create_hashed_empty_trie::<Key, Value>()?;
             let mut txn = environment.create_read_write_txn()?;
-            store.put(&mut txn, &root_hash, &root)?;
+            trie_store.put(&mut txn, &root_hash, &root)?;
             txn.commit()?;
             root_hash
         };
-        Ok(LmdbGlobalState::new(environment, store, root_hash))
+        Ok(LmdbGlobalState::new(
+            environment,
+            trie_store,
+            protocol_data_store,
+            root_hash,
+        ))
     }
 
     /// Creates a state from an existing environment, store, and root_hash.
     /// Intended to be used for testing.
     pub(crate) fn new(
         environment: Arc<LmdbEnvironment>,
-        store: Arc<LmdbTrieStore>,
+        trie_store: Arc<LmdbTrieStore>,
+        protocol_data_store: Arc<LmdbProtocolDataStore>,
         empty_root_hash: Blake2bHash,
     ) -> Self {
         LmdbGlobalState {
             environment,
-            store,
+            trie_store,
+            protocol_data_store,
             empty_root_hash,
         }
     }
@@ -85,17 +97,17 @@ impl StateReader<Key, Value> for LmdbGlobalStateView {
     }
 }
 
-impl History for LmdbGlobalState {
+impl StateProvider for LmdbGlobalState {
     type Error = error::Error;
 
     type Reader = LmdbGlobalStateView;
 
     fn checkout(&self, state_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
-        let maybe_root: Option<Trie<Key, Value>> = self.store.get(&txn, &state_hash)?;
+        let maybe_root: Option<Trie<Key, Value>> = self.trie_store.get(&txn, &state_hash)?;
         let maybe_state = maybe_root.map(|_| LmdbGlobalStateView {
             environment: Arc::clone(&self.environment),
-            store: Arc::clone(&self.store),
+            store: Arc::clone(&self.trie_store),
             root_hash: state_hash,
         });
         txn.commit()?;
@@ -110,12 +122,33 @@ impl History for LmdbGlobalState {
     ) -> Result<CommitResult, Self::Error> {
         let commit_result = commit::<LmdbEnvironment, LmdbTrieStore, _, Self::Error>(
             &self.environment,
-            &self.store,
+            &self.trie_store,
             correlation_id,
             prestate_hash,
             effects,
         )?;
         Ok(commit_result)
+    }
+
+    fn put_protocol_data(
+        &self,
+        protocol_version: ProtocolVersion,
+        protocol_data: &ProtocolData,
+    ) -> Result<(), Self::Error> {
+        let mut txn = self.environment.create_read_write_txn()?;
+        self.protocol_data_store
+            .put(&mut txn, &protocol_version, protocol_data)?;
+        txn.commit().map_err(Into::into)
+    }
+
+    fn get_protocol_data(
+        &self,
+        protocol_version: ProtocolVersion,
+    ) -> Result<Option<ProtocolData>, Self::Error> {
+        let txn = self.environment.create_read_txn()?;
+        let result = self.protocol_data_store.get(&txn, &protocol_version)?;
+        txn.commit()?;
+        Ok(result)
     }
 
     fn empty_root(&self) -> Blake2bHash {
@@ -173,9 +206,12 @@ mod tests {
         let environment = Arc::new(
             LmdbEnvironment::new(&_temp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap(),
         );
-        let store =
+        let trie_store =
             Arc::new(LmdbTrieStore::new(&environment, None, DatabaseFlags::empty()).unwrap());
-        let ret = LmdbGlobalState::empty(environment, store).unwrap();
+        let protocol_data_store = Arc::new(
+            LmdbProtocolDataStore::new(&environment, None, DatabaseFlags::empty()).unwrap(),
+        );
+        let ret = LmdbGlobalState::empty(environment, trie_store, protocol_data_store).unwrap();
         let mut current_root = ret.empty_root_hash;
         {
             let mut txn = ret.environment.create_read_write_txn().unwrap();
@@ -184,7 +220,7 @@ mod tests {
                 match write::<_, _, _, LmdbTrieStore, error::Error>(
                     correlation_id,
                     &mut txn,
-                    &ret.store,
+                    &ret.trie_store,
                     &current_root,
                     key,
                     value,

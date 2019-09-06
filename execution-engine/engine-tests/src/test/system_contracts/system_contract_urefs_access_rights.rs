@@ -16,7 +16,7 @@ fn should_have_read_only_access_to_system_contract_urefs() {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             (ACCOUNT_1_ADDR,),
         )
         .commit()
@@ -24,7 +24,7 @@ fn should_have_read_only_access_to_system_contract_urefs() {
             ACCOUNT_1_ADDR,
             "check_system_contract_urefs_access_rights.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [2u8; 32],
         )
         .commit()
         .expect_success();

@@ -339,10 +339,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     (for {
       processedDeploys <- DeployBuffer[F].readProcessedByAccount(deploy.getHeader.accountPublicKey)
       _ <- processedDeploys
-            .find { d =>
-              d.getHeader.nonce >= deploy.getHeader.nonce &&
-              d.deployHash != deploy.deployHash
-            }
+            .find(_.deployHash == deploy.deployHash)
             .map { d =>
               new IllegalArgumentException(s"${show(d)} supersedes ${show(deploy)}.")
                 .raiseError[F, Unit]
@@ -446,7 +443,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       // Only send the next nonce per account. This will change once the nonce check is removed in the EE
       // and support for SEQ/PAR blocks is added, then we can send all deploys for the account.
       remainingHashes <- DeployBuffer[F]
-                          .readAccountLowestNonce()
+                          .readAccountPendingOldest()
                           .filter(candidateBlockHashes.contains(_))
     } yield remainingHashes).compile.to[Set]
   }

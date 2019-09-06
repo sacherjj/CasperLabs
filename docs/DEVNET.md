@@ -32,14 +32,12 @@ casperlabs-client \
 * [Install the CasperLabs client](INSTALL.md)
 * [Compile a contract written in rust](CONTRACTS.md)
 * Use the CasperLabs client `deploy` sub-command (example below)
-  - `--nonce` begins at 1 and must increase by 1 with each deploy (i.e. sequence is 1, 2, 3, ...)
   - `--session` is the path to the compiled contract
   - `--private-key` is the path to the private key file downloaded from [explorer.casperlabs.io](https://explorer.casperlabs.io/) during account creation
 ```
 casperlabs-client \
         --host deploy.casperlabs.io \
         deploy \
-        --nonce 1 \
         --session my_contract.wasm \
         --private-key account.private.key
 ```
@@ -53,7 +51,6 @@ casperlabs-client \
 casperlabs-client \
         --host localhost \
         deploy \
-        --nonce <nonce> \
         --session <path-to-wasm> \
         --private-key <path-to-account-private-key>
 

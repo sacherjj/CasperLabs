@@ -17,6 +17,7 @@ import time
 import argparse
 import grpc
 from grpc._channel import _Rendezvous
+import ssl
 import functools
 from pyblake2 import blake2b
 import ed25519
@@ -64,7 +65,7 @@ class ABI:
     Encode (serialize) deploy args.
 
     Currently supported ABI types:
-    - unsigned integers: u32, u64, u512,
+    - unsigned integers: u32, u64, u512
     - byte_array, an array of bytes of arbitrary length,
     - account, 32 bytes long byte_array, used for encoding of public keys.
 
@@ -82,15 +83,19 @@ class ABI:
     2. By encoding arguments in a JSON format and passing them to method
       ABI.args_from_json, for example:
 
-        ABI.args_from_json('[{"u32": 100}, {"u64": 5000}]')
+        ABI.args_from_json(json_string)
 
-      The JSON encoded list contains arguments encoded as dictionaries,
-      each with just one (key, value) pair, where key is a name of one
-      of supported ABI type, and value being the argument's value.
+      See documentation of ABI.args_from_json for details of the JSON format.
 
       This method has been developed to support passing deploy arguments
       on command line.
     """
+
+    INTEGER_TYPES = ("u32", "u64", "u512", "int_value", "long_value", "big_int")
+    BYTE_ARRAY_TYPES = ("byte_array", "account", "bytes_value")
+    OPTIONAL_TYPES = ("option", "optional_value")
+
+    ALL_TYPES = INTEGER_TYPES + BYTE_ARRAY_TYPES + OPTIONAL_TYPES
 
     @staticmethod
     def option(o: bytes) -> bytes:
@@ -99,15 +104,19 @@ class ABI:
         return bytes([1]) + o
 
     @staticmethod
-    def u32(n: int):
+    def optional_value(o: bytes) -> bytes:
+        return ABI.option(o)
+
+    @staticmethod
+    def u32(n: int) -> bytes:
         return struct.pack("<I", n)
 
     @staticmethod
-    def u64(n: int):
+    def u64(n: int) -> bytes:
         return struct.pack("<Q", n)
 
     @staticmethod
-    def u512(n: int):
+    def u512(n: int) -> bytes:
         bs = list(
             dropwhile(
                 lambda b: b == 0,
@@ -119,17 +128,36 @@ class ABI:
         )
 
     @staticmethod
-    def byte_array(a: bytes):
+    def byte_array(a: bytes) -> bytes:
         return ABI.u32(len(a)) + a
 
     @staticmethod
-    def account(a: bytes):
+    def bytes_value(a: bytes) -> bytes:
+        return ABI.byte_array(a)
+
+    @staticmethod
+    def account(a: bytes) -> bytes:
         if len(a) != 32:
             raise Exception("Account must be 32 bytes long")
         return ABI.byte_array(a)
 
     @staticmethod
-    def args(l: list):
+    def int_value(a: int) -> bytes:
+        # TODO: should be signed 32 bits
+        return ABI.u32(a)
+
+    def long_value(a: int) -> bytes:
+        # TODO: should be signed 64 bits
+        return ABI.u64(a)
+
+    def big_int(a) -> bytes:
+        try:
+            return ABI.u512(int(a["value"]))
+        except TypeError:
+            return ABI.u512(int(a))
+
+    @staticmethod
+    def args(l: list) -> bytes:
         return ABI.u32(len(l)) + reduce(add, map(ABI.byte_array, l))
 
     @staticmethod
@@ -137,39 +165,42 @@ class ABI:
         """
         Convert a string with JSON representation of deploy args to binary (ABI).
 
-        The JSON should be a list of dictionaries {'type': 'value'} that represent type and value of the args,
+        The JSON should be a list of dictionaries each representing one arg,
         for example:
 
-             [{"u32":1024}, {"account":"00000000000000000000000000000000"}, {"u64":1234567890}]
+            [
+                {"name": "amount", "value": {"long_value": 123456}},
+                {"name": "account", "value": {"bytes_value": '0000000000000000000000000000000000000000000000000000000000000000'},
+                {"name": "purse_id", "value": {"optional_value": {}}},
+            ]
+
         """
         args = json.loads(s)
 
-        for arg in args:
-            if len(arg) != 1:
-                raise Exception(
-                    f"Wrong encoding of value in {arg}. Only one pair of type and value allowed."
-                )
-
-        def python_value(typ, value: str):
-            if typ in ("u32", "u64", "u512"):
+        def python_value(typ, value):
+            if typ in ("big_int",):
+                try:
+                    # new style proto3 JSON
+                    return int(value["value"])
+                except TypeError:
+                    # compatibility mode
+                    return int(value)
+            if typ in ABI.INTEGER_TYPES:
                 return int(value)
-            elif typ == "account":
+            elif typ in ABI.BYTE_ARRAY_TYPES:
                 return bytearray.fromhex(value)
-            raise ValueError(
-                f"Unknown type {typ}, expected ('u32', 'u64', 'u512', 'account')"
-            )
+            elif typ in ABI.OPTIONAL_TYPES:
+                if not value:
+                    return None
+                return encode({"value": value})
+            raise ValueError(f"Unknown type {typ}, expected one of {ABI.ALL_TYPES}")
 
-        def encode(typ: str, value: str) -> bytes:
+        def encode(arg) -> bytes:
+            typ, value = list(arg["value"].items())[0]
             v = python_value(typ, value)
             return getattr(ABI, typ)(v)
 
-        def only_one(arg):
-            items = list(arg.items())
-            if len(items) != 1:
-                raise Exception("Only one pair {'type', 'value'} allowed.")
-            return items[0]
-
-        return ABI.args([encode(*only_one(arg)) for arg in args])
+        return ABI.args([encode(arg) for arg in args])
 
 
 def read_pem_key(file_name: str):
@@ -220,6 +251,61 @@ def api(function):
     return wrapper
 
 
+class InsecureGRPCService:
+    def __init__(self, host, port, serviceStub):
+        self.address = f"{host}:{port}"
+        self.serviceStub = serviceStub
+
+    def __getattr__(self, name):
+        def f(*args):
+            with grpc.insecure_channel(self.address) as channel:
+                return getattr(self.serviceStub(channel), name)(*args)
+
+        def g(*args):
+            with grpc.insecure_channel(self.address) as channel:
+                yield from getattr(self.serviceStub(channel), name[: -len("_stream")])(
+                    *args
+                )
+
+        return name.endswith("_stream") and g or f
+
+
+def extract_common_name(certificate_file: str) -> str:
+    cert_dict = ssl._ssl._test_decode_cert(certificate_file)
+    return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
+
+
+class SecureGRPCService:
+    def __init__(self, host, port, serviceStub, node_id, certificate_file):
+        self.address = f"{host}:{port}"
+        self.serviceStub = serviceStub
+        self.node_id = node_id  # or extract_common_name(certificate_file)
+        self.certificate_file = certificate_file
+        with open(self.certificate_file, "rb") as f:
+            self.credentials = grpc.ssl_channel_credentials(f.read())
+        self.secure_channel_options = self.node_id and (
+            ("grpc.ssl_target_name_override", self.node_id),
+            ("grpc.default_authority", self.node_id),
+        )
+
+    def __getattr__(self, name):
+        def f(*args):
+            with grpc.secure_channel(
+                self.address, self.credentials, options=self.secure_channel_options
+            ) as channel:
+                return getattr(self.serviceStub(channel), name)(*args)
+
+        def g(*args):
+            with grpc.secure_channel(
+                self.address, self.credentials, options=self.secure_channel_options
+            ) as channel:
+                yield from getattr(self.serviceStub(channel), name[: -len("_stream")])(
+                    *args
+                )
+
+        return name.endswith("_stream") and g or f
+
+
 class CasperLabsClient:
     """
     gRPC CasperLabs client.
@@ -240,52 +326,54 @@ class CasperLabsClient:
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
         internal_port: int = DEFAULT_INTERNAL_PORT,
+        node_id: str = None,
+        certificate_file: str = None,
     ):
         """
         CasperLabs client's constructor.
 
-        :param host:           Hostname or IP of node on which gRPC service is running
-        :param port:           Port used for external gRPC API
-        :param internal_port:  Port used for internal gRPC API
+        :param host:            Hostname or IP of node on which gRPC service is running
+        :param port:            Port used for external gRPC API
+        :param internal_port:   Port used for internal gRPC API
+        :param certificate_file:      Certificate file for TLS
+        :param node_id:         node_id of the node, for gRPC encryption
         """
         self.host = host
         self.port = port
         self.internal_port = internal_port
+        self.node_id = node_id
+        self.certificate_file = certificate_file
 
-        client = self
-
-        class GRPCService:
-            def __init__(self, port, serviceStub):
-                self.port = port
-                self.serviceStub = serviceStub
-
-            def __getattr__(self, name):
-                address = client.host + ":" + str(self.port)
-
-                def f(*args):
-                    with grpc.insecure_channel(address) as channel:
-                        return getattr(self.serviceStub(channel), name)(*args)
-
-                def g(*args):
-                    with grpc.insecure_channel(address) as channel:
-                        yield from getattr(
-                            self.serviceStub(channel), name[: -len("_stream")]
-                        )(*args)
-
-                return name.endswith("_stream") and g or f
-
-        self.casperService = GRPCService(self.port, CasperServiceStub)
-        self.controlService = GRPCService(self.internal_port, ControlServiceStub)
+        if node_id:
+            self.casperService = SecureGRPCService(
+                host, port, CasperServiceStub, node_id, certificate_file
+            )
+            self.controlService = SecureGRPCService(
+                # We currently assume that if node_id is given then
+                # we get certificate_file too. This is unlike in the Scala client
+                # where node_id is all that's needed for configuring secure connection.
+                # The reason for this is that currently it doesn't seem to be possible
+                # to open a secure grpc connection in Python without supplying any
+                # certificate on the client side.
+                host,
+                internal_port,
+                ControlServiceStub,
+                node_id,
+                certificate_file,
+            )
+        else:
+            self.casperService = InsecureGRPCService(host, port, CasperServiceStub)
+            self.controlService = InsecureGRPCService(
+                host, internal_port, ControlServiceStub
+            )
 
     @api
     def deploy(
         self,
         from_addr: bytes = None,
-        gas_limit: int = None,
         gas_price: int = 10,
         payment: str = None,
         session: str = None,
-        nonce: int = 0,
         public_key: str = None,
         private_key: str = None,
         session_args: bytes = None,
@@ -297,14 +385,10 @@ class CasperLabsClient:
         on the configuration of the Casper instance.
 
         :param from_addr:     Purse address that will be used to pay for the deployment.
-        :param gas_limit:     [DEPRECATED and IGNORED] The amount of gas to use for the transaction
-                              (unused gas is refunded). Must be positive integer.
         :param gas_price:     The price of gas for this transaction in units dust/gas.
                               Must be positive integer.
         :param payment:       Path to the file with payment code.
         :param session:       Path to the file with session code.
-        :param nonce:         This allows you to overwrite your own pending
-                              transactions that use the same nonce.
         :param public_key:    Path to a file with public key (Ed25519)
         :param private_key:   Path to a file with private key (Ed25519)
         :param session_args:  List of ABI encoded arguments of session contract
@@ -354,7 +438,6 @@ class CasperLabsClient:
 
         header = consensus.Deploy.Header(
             account_public_key=account_public_key,
-            nonce=nonce,
             timestamp=int(time.time()),
             gas_price=gas_price,
             body_hash=hash(serialize(body)),
@@ -610,11 +693,9 @@ def deploy_command(casperlabs_client, args):
 
     kwargs = dict(
         from_addr=from_addr,
-        gas_limit=None,
         gas_price=args.gas_price,
         payment=args.payment or args.session,
         session=args.session,
-        nonce=args.nonce,
         public_key=args.public_key or None,
         private_key=args.private_key or None,
         session_args=args.session_args
@@ -625,7 +706,7 @@ def deploy_command(casperlabs_client, args):
         or None,
     )
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
-    print(f"Success! Deploy hash: {deploy_hash.hex()}")
+    print(f"Success! Deploy {deploy_hash.hex()} deployed")
 
 
 @guarded_command
@@ -716,6 +797,18 @@ def main():
                 type=int,
                 help="Port used for internal gRPC API.",
             )
+            self.parser.add_argument(
+                "--node-id",
+                required=False,
+                type=str,
+                help="node_id parameter for TLS connection",
+            )
+            self.parser.add_argument(
+                "--certificate-file",
+                required=False,
+                type=str,
+                help="Certificate file for TLS connection",
+            )
             self.sp = self.parser.add_subparsers(help="Choose a request")
 
             self.parser.set_defaults(function=no_command)
@@ -733,7 +826,14 @@ def main():
 
             args = self.parser.parse_args()
             return args.function(
-                CasperLabsClient(args.host, args.port, args.internal_port), args
+                CasperLabsClient(
+                    args.host,
+                    args.port,
+                    args.internal_port,
+                    args.node_id,
+                    args.certificate_file,
+                ),
+                args,
             )
 
     parser = Parser()
@@ -742,7 +842,6 @@ def main():
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
                       [[('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
                        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
-                       [('-n', '--nonce'), dict(required=True, type=int, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
                        [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
                        [('--session-args',), dict(required=False, type=str, help='JSON encoded list of session args, e.g.: [{"u32":1024},{"u64":12}]')],

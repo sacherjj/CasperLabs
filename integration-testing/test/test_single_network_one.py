@@ -3,10 +3,9 @@ import logging
 import pytest
 import json
 from pathlib import Path
-from typing import List
 from pytest import fixture, raises
 from test import contract_hash
-from test.cl_node.common import testing_root_path
+from test.cl_node.common import testing_root_path, HELLO_NAME_CONTRACT
 from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
 from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.docker_node import DockerNode
@@ -23,7 +22,6 @@ Example output of the Scala client:
 
 account {
   public_key: "3030303030303030303030303030303030303030303030303030303030303030"
-  nonce: 1
   purse_id {
     uref: "0000000000000000000000000000000000000000000000000000000000000000"
     access_rights: READ_ADD_WRITE
@@ -69,12 +67,16 @@ def test_account_state(one_node_network):
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error
 
-    response = account_state(node, block_hash)
-    assert response.account.nonce == 1, str(response)
+    acct_state = account_state(node, block_hash)
+    known_urefs = acct_state.account[0].known_urefs
+    names = [uref.name for uref in known_urefs]
+    assert "counter" in names
 
     block_hash = deploy_and_propose_from_genesis(node, "test_countercall.wasm")
-    response = account_state(node, block_hash)
-    assert response.account.nonce == 2, str(response)
+    acct_state = account_state(node, block_hash)
+    known_urefs = acct_state.account[0].known_urefs
+    names = [uref.name for uref in known_urefs]
+    assert "counter" in names
 
 
 def test_transfer_with_overdraft(one_node_network):
@@ -172,24 +174,10 @@ def test_scala_client_balance(one_node_network):
     # Perform multiple transfers with end result of Acct1 = 200, Acct2 = 100, Acct3 = 700
     hashes = node.transfer_to_accounts([(1, 1000), (2, 800, 1), (3, 700, 2)])
 
-    assert (
-        node.d_client.get_balance(
-            account_address=accounts[0].public_key_hex, block_hash=hashes[-1]
-        )
-        == initial[0] + 200
-    )
-    assert (
-        node.d_client.get_balance(
-            account_address=accounts[1].public_key_hex, block_hash=hashes[-1]
-        )
-        == initial[1] + 100
-    )
-    assert (
-        node.d_client.get_balance(
-            account_address=accounts[2].public_key_hex, block_hash=hashes[-1]
-        )
-        == initial[2] + 700
-    )
+    for acct_num, value in ((0, 200), (1, 100), (2, 700)):
+        addr = accounts[acct_num].public_key_hex
+        bal = node.d_client.get_balance(account_address=addr, block_hash=hashes[-1])
+        assert bal == initial[acct_num] + value
 
 
 ffi_test_contracts = [
@@ -218,9 +206,7 @@ def test_get_caller(one_node_network, define_contract, call_contract):
     deploy_and_propose_expect_no_errors(node, call_contract)
 
 
-@pytest.mark.parametrize(
-    "wasm", ["test_helloname.wasm", "old_wasm/test_helloname.wasm"]
-)
+@pytest.mark.parametrize("wasm", [HELLO_NAME_CONTRACT, "old_wasm/test_helloname.wasm"])
 def test_multiple_propose(one_node_network, wasm):
     """
     Feature file: propose.feature
@@ -322,7 +308,7 @@ def test_revert_subcall(client, node):
 
     # Help me figure out what subcall-revert-test/call/src/lib.rs should look like
     # TODO: function_counter 0 is a bug, to be fixed in EE.
-    h = contract_hash(GENESIS_ACCOUNT.public_key_hex, 0, 0)
+    h = contract_hash(GENESIS_ACCOUNT.public_key_hex, 0)
     logging.info("The expected contract hash is %s (%s)" % (list(h), h.hex()))
 
     block_hash = deploy_and_propose_from_genesis(node, "test_subcall_revert_call.wasm")
@@ -374,11 +360,10 @@ Feature file: ~/CasperLabs/integration-testing/features/deploy.feature
 """
 
 
-def deploy_and_propose(node, contract, nonce=None):
+def deploy_and_propose(node, contract):
     node.client.deploy(
         session_contract=contract,
         payment_contract=contract,
-        nonce=nonce,
         from_address=GENESIS_ACCOUNT.public_key_hex,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
@@ -386,14 +371,13 @@ def deploy_and_propose(node, contract, nonce=None):
     return extract_block_hash_from_propose_output(node.client.propose())
 
 
-def deploy(node, contract, nonce):
+def deploy(node, contract):
     message = node.client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
         session_contract=contract,
         payment_contract=contract,
-        nonce=nonce,
     )
     assert "Success!" in message
     return message.split()[2]
@@ -405,102 +389,6 @@ def propose(node):
 
 def deploy_hashes(node, block_hash):
     return set(d.deploy.deploy_hash for d in node.client.show_deploys(block_hash))
-
-
-@pytest.mark.parametrize("contract", ["test_helloname.wasm"])
-def test_deploy_without_nonce(node, contract: str):
-    """
-    Feature file: deploy.feature
-    Scenario: Deploy without nonce
-    """
-    with pytest.raises(NonZeroExitCodeError):
-        deploy_and_propose(node, contract, "")
-
-
-@pytest.mark.parametrize(
-    "contracts",
-    [["test_helloname.wasm", "test_helloworld.wasm", "test_counterdefine.wasm"]],
-)
-def test_deploy_with_lower_nonce(node, contracts: List[str]):
-    """
-    Feature file: deploy.feature
-    Scenario: Deploy with lower nonce
-    """
-    for contract in contracts:
-        deploy_and_propose(node, contract)
-
-    with pytest.raises(NonZeroExitCodeError):
-        deploy_and_propose(node, contract, 2)
-
-
-@pytest.mark.parametrize(
-    "contracts",
-    [["test_helloname.wasm", "test_helloworld.wasm", "test_counterdefine.wasm"]],
-)
-def test_deploy_with_higher_nonce(node, contracts: List[str]):
-    """
-    Feature file: deploy.feature
-
-    Scenario: Deploy with higher nonce
-    """
-    # Deploy successfully with nonce 1 => Nonce is 1 for account.
-    deploy_and_propose(node, contracts[0], 1)
-
-    deploy_hash = deploy(node, contracts[2], 3)
-
-    with pytest.raises(NonZeroExitCodeError):
-        node.client.propose()
-
-    deploy_and_propose(node, contracts[1], 2)
-
-    # The deploy with nonce 3 can be proposed now.
-    block_hash = propose(node)
-    assert deploy_hash in deploy_hashes(node, block_hash)
-
-
-@pytest.mark.parametrize(
-    "contracts",
-    [
-        [
-            "test_helloname.wasm",
-            "test_helloworld.wasm",
-            "test_counterdefine.wasm",
-            "test_countercall.wasm",
-        ]
-    ],
-)
-def test_deploy_with_higher_nonce_does_not_include_previous_deploy(
-    node, contracts: List[str]
-):
-    """
-    Feature file: deploy.feature
-
-    Scenario: Deploy with higher nonce and created block does not include previously deployed contract.
-    """
-    # Deploy successfully with nonce 1 => Nonce is 1 for account.
-    deploy_hash = deploy(node, contracts[0], 1)
-    block_hash = propose(node)
-    assert deploy_hash in deploy_hashes(node, block_hash)
-
-    deploy_hash4 = deploy(node, contracts[1], 4)
-
-    with pytest.raises(NonZeroExitCodeError):
-        propose(node)
-
-    deploy_hash2 = deploy(node, contracts[2], 2)
-    # The deploy with nonce 4 cannot be proposed now. It will be in the deploy buffer but does not include
-    # in the new block created now.
-    block_hash = propose(node)
-    deploys = deploy_hashes(node, block_hash)
-    assert deploy_hash4 not in deploys
-    assert deploy_hash2 in deploys
-
-    deploy_hash3 = deploy(node, contracts[3], 3)
-    block_hash = propose(node)
-    assert deploy_hash3 in deploy_hashes(node, block_hash)
-
-    block_hash = propose(node)
-    assert deploy_hash4 in deploy_hashes(node, block_hash)
 
 
 # Python Client (library)
@@ -516,17 +404,22 @@ def resource(fn):
 
 
 def test_args_parser():
-    account_hex = "0001000200030004000500060007000800000001000200030004000500060007"
-    account_bytes = (
+    account = (
         b"\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08"
         b"\x00\x00\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07"
     )
-    u32 = 1024
-    u64 = 1234567890
-    json_str = json.dumps([{"u32": u32}, {"account": account_hex}, {"u64": u64}])
+
+    amount = 123456
+
+    args = [{"name": "amount", "value": {"long_value": amount}},
+            {"name": "account", "value": {"bytes_value": account.hex()}},
+            {"name": "purse_id", "value": {"optional_value": {}}},
+            {"name": "number", "value": {"big_int": {"value": "2", "bit_width": 512}}}]
+
+    json_str = json.dumps(args)
 
     assert ABI.args_from_json(json_str) == ABI.args(
-        [ABI.u32(1024), ABI.account(account_bytes), ABI.u64(1234567890)]
+        [ABI.long_value(amount), ABI.account(account), ABI.optional_value(None), ABI.big_int(2)]
     )
 
 
@@ -557,7 +450,6 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     node = one_node_network.docker_nodes[0]
     client = node.p_client.client
 
-    nonce = 1
     for wasm, encode in [
         (resource("test_args_u32.wasm"), ABI.u32),
         (resource("test_args_u512.wasm"), ABI.u512),
@@ -569,9 +461,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
                 public_key=resource("accounts/account-public-genesis.pem"),
                 private_key=resource("accounts/account-private-genesis.pem"),
                 session_args=ABI.args([encode(number)]),
-                nonce=nonce,
             )
-            nonce += 1
             logging.info(
                 f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}"
             )
@@ -583,8 +473,6 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
             for deploy_info in client.showDeploys(block_hash):
                 assert deploy_info.is_error is True
                 assert deploy_info.error_message == f"Exit code: {number}"
-
-            logging.info(f"NONCE ===================== {nonce}")
 
     wasm = resource("test_args_multi.wasm")
     account_hex = "0101010102020202030303030404040405050505060606060707070708080808"
@@ -599,7 +487,6 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
         session_args=ABI.args(
             [ABI.account(bytes.fromhex(account_hex)), ABI.u32(number)]
         ),
-        nonce=nonce,
     )
     logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
     response = client.propose()
@@ -654,42 +541,25 @@ def test_cli_show_block_not_found(cli):
     block_hash = "00" * 32
     with raises(CLIErrorExit) as ex_info:
         cli("show-block", block_hash)
-    # StatusCode.NOT_FOUND: Cannot find block matching hash 0000000000000000000000000000000000000000000000000000000000000000
+    # StatusCode.NOT_FOUND: Cannot find block matching hash
+    # 0000000000000000000000000000000000000000000000000000000000000000
     assert "NOT_FOUND" in str(ex_info.value)
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
-def account_nonce(account_public_key_base16, node):
-    client = node.p_client
-    nonces = [
-        d.deploy.header.nonce
-        for b in client.show_blocks(1000000)
-        for d in client.show_deploys(b.summary.block_hash.hex())
-        if d.deploy.header.account_public_key.hex() == account_public_key_base16
-    ]
-    return max(nonces, default=0) + 1
-
-
+@pytest.mark.skip
 def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli):
     resources_path = testing_root_path() / "resources"
 
     account = GENESIS_ACCOUNT
-    nonce = 1
 
     deploy_hash = cli(
         "deploy",
-        "--from",
-        account.public_key_hex,
-        "--nonce",
-        nonce,
-        "--payment",
-        str(resources_path / "test_helloname.wasm"),
-        "--session",
-        str(resources_path / "test_helloname.wasm"),
-        "--private-key",
-        str(account.private_key_path),
-        "--public-key",
-        str(account.public_key_path),
+        f"--from {account.public_key_hex}",
+        f"--payment {str(resources_path / 'test_helloname.wasm')}",
+        f"--session {str(resources_path / 'test_helloname.wasm')}",
+        f"--private-key {str(account.private_key_path)}",
+        f"--public-key {str(account.public_key_path)}",
     )
     block_hash = cli("propose")
     deploys = cli("show-deploys", block_hash)
@@ -709,31 +579,63 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli
     balance = int(
         cli("balance", "--address", account.public_key_hex, "--block-hash", block_hash)
     )
-    # assert balance == 1000000 # regular test account
+    # TODO Need constant for where this 1000000000 is from.
     assert balance == 1000000000  # genesis
 
 # CLI ABI
 
 
+def int_value(x):
+    return x
+
+
+def big_int_value(x):
+    return {'value': str(x), 'bit_width': 512}
+
+
 abi_unsigned_test_data = [
-    ("u32", 'test_args_u32.wasm'),
-    ("u512", 'test_args_u512.wasm'),
+    ("int_value", 'test_args_u32.wasm', int_value),
+    ("big_int", 'test_args_u512.wasm', big_int_value),
 ]
-@pytest.mark.parametrize("unsigned_type, test_contract", abi_unsigned_test_data)
-def test_cli_abi_unsigned(cli, unsigned_type, test_contract):
+
+
+@pytest.mark.parametrize("unsigned_type, test_contract, value", abi_unsigned_test_data)
+def test_cli_abi_unsigned_scala(node, unsigned_type, test_contract, value):
+    check_cli_abi_unsigned(DockerCLI(node),
+                           lambda s: f"'{s}'",
+                           '/data',
+                           unsigned_type,
+                           value,
+                           test_contract,
+                           lambda a: (a.private_key_docker_path, a.public_key_docker_path))
+
+
+@pytest.mark.parametrize("unsigned_type, test_contract, value", abi_unsigned_test_data)
+def test_cli_abi_unsigned_python(node, unsigned_type, test_contract, value):
+    check_cli_abi_unsigned(CLI(node),
+                           lambda s: s,
+                           'resources',
+                           unsigned_type,
+                           value,
+                           test_contract,
+                           lambda a: (a.private_key_path, a.public_key_path))
+
+
+def check_cli_abi_unsigned(cli, quote, resource_directory, unsigned_type, value, test_contract, keys):
     account = GENESIS_ACCOUNT
-    nonce = 0
+    private_key, public_key = keys(account)
     for number in [2, 256, 1024]:
-        nonce += 1
-        args = json.dumps([{unsigned_type: number}])
-        deploy_hash = cli('deploy',
-                          '--from', account.public_key_hex,
-                          '--nonce', nonce,
-                          '--session', resource(test_contract),
-                          '--session-args', f"{args}",
-                          '--payment', resource(test_contract),
-                          '--private-key', account.private_key_path,
-                          '--public-key', account.public_key_path,)
+        test_contract_path = '/'.join((resource_directory, test_contract))
+        session_args = json.dumps([{"name": "number", "value": {unsigned_type: value(number)}}])
+        args = ('deploy',
+                '--from', account.public_key_hex,
+                '--session', test_contract_path,
+                '--session-args', quote(session_args),
+                '--payment', test_contract_path,
+                '--private-key', private_key,
+                '--public-key', public_key)
+        logging.info(f"EXECUTING {' '.join(cli.expand_args(args))}")
+        deploy_hash = cli(*args)
 
         cli('propose')
         deploy_info = cli("show-deploy", deploy_hash)
@@ -748,12 +650,12 @@ def test_cli_abi_multiple(cli):
     number = 1000
     total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
 
-    args = json.dumps([{'account': account_hex}, {'u32': number}])
+    session_args = json.dumps([{'name': 'account', 'value': {'account': account_hex}},
+                               {'name': 'number', 'value': {'int_value': number}}])
     deploy_hash = cli('deploy',
-                      '--nonce', 1,
                       '--from', account.public_key_hex,
                       '--session', resource(test_contract),
-                      '--session-args', f"{args}",
+                      '--session-args', session_args,
                       '--payment', resource(test_contract),
                       '--private-key', account.private_key_path,
                       '--public-key', account.public_key_path,)
@@ -778,7 +680,6 @@ def test_cli_scala_extended_deploy(scala_cli):
 
     test_contract = "/data/test_helloname.wasm"
     cli('make-deploy',
-        '--nonce', 1,
         '-o', '/tmp/unsigned.deploy',
         '--from', account.public_key_hex,
         '--session', test_contract,

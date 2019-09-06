@@ -4,8 +4,7 @@ import logging
 import time
 
 from test.cl_node import LoggingMixin
-from test.cl_node.nonce_registry import NonceRegistry
-from casperlabs_client import CasperLabsClient, ABI, InternalError
+from casperlabs_client import CasperLabsClient, ABI, InternalError, extract_common_name
 
 
 class PythonClient(CasperLabsClient, LoggingMixin):
@@ -18,10 +17,18 @@ class PythonClient(CasperLabsClient, LoggingMixin):
             os.environ.get("TAG_NAME", None) and self.node.container_name or "localhost"
         )
 
+        certificate_file = None
+        node_id = None
+        if self.node.config.grpc_encryption:
+            certificate_file = self.node.config.tls_certificate_local_path()
+            node_id = extract_common_name(certificate_file)
+
         self.client = CasperLabsClient(
             host=host,
             internal_port=self.node.grpc_internal_docker_port,
             port=self.node.grpc_external_docker_port,
+            node_id=node_id,
+            certificate_file=certificate_file,
         )
         logging.info(
             f"PythonClient(host={self.client.host}, "
@@ -36,9 +43,7 @@ class PythonClient(CasperLabsClient, LoggingMixin):
     def deploy(
         self,
         from_address: str = None,
-        gas_limit: int = 1000000,
         gas_price: int = 1,
-        nonce: int = None,
         session_contract: Optional[str] = None,
         payment_contract: Optional[str] = None,
         private_key: Optional[str] = None,
@@ -54,38 +59,28 @@ class PythonClient(CasperLabsClient, LoggingMixin):
         private_key = private_key or self.node.test_account.private_key_path
 
         address = from_address or self.node.from_address
-        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(address)
 
         resources_path = self.node.resources_folder
         session_contract_path = str(resources_path / session_contract)
         payment_contract_path = str(resources_path / payment_contract)
 
         logging.info(
-            f"PY_CLIENT.deploy(from_address={address}, gas_limit={gas_limit}, gas_price={gas_price}, "
+            f"PY_CLIENT.deploy(from_address={address}, gas_price={gas_price}, "
             f"payment_contract={payment_contract_path}, session_contract={session_contract_path}, "
             f"private_key={private_key}, "
-            f"public_key={public_key}, "
-            f"nonce={deploy_nonce})"
+            f"public_key={public_key} "
         )
 
-        try:
-            r = self.client.deploy(
-                bytes.fromhex(address),
-                gas_limit,
-                gas_price,
-                payment_contract_path,
-                session_contract_path,
-                deploy_nonce,
-                public_key,
-                private_key,
-                session_args,
-                payment_args,
-            )
-            return r
-        except Exception:
-            if nonce is None:
-                NonceRegistry.revert(address)
-            raise
+        return self.client.deploy(
+            bytes.fromhex(address),
+            gas_price,
+            payment_contract_path,
+            session_contract_path,
+            public_key,
+            private_key,
+            session_args,
+            payment_args,
+        )
 
     def propose(self) -> str:
         logging.info(f"PY_CLIENT.propose() for {self.client.host}")
