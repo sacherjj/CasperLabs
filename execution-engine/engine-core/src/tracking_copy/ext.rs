@@ -3,7 +3,7 @@ use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::{Account, Contract, Value};
 use engine_shared::motes::Motes;
-use engine_shared::newtypes::{CorrelationId, Validated};
+use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::TypeMismatch;
 use engine_storage::global_state::StateReader;
 
