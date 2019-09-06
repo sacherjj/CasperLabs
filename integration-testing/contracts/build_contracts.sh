@@ -21,14 +21,3 @@ pushd $DIR
 cargo build $CARGO_FLAGS --target $ARCH --release --out-dir $DEST_DIR
 
 popd
-
-pushd ../execution-engine
-
-# TODO: build only EE test contracts required for integration testing
-make build-contracts
-REQUIRED_WASMS="standard_payment_stored.wasm"
-for f in ${REQUIRED_WASMS}; do
-    cp ${DIR}/../../execution-engine/target/${ARCH}/release/$f ${DEST_DIR}
-done
-
-popd
