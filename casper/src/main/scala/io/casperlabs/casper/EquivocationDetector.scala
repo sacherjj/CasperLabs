@@ -27,30 +27,23 @@ object EquivocationDetector {
       implicit state: Cell[F, CasperState]
   ): F[Unit] =
     for {
-      _ <- state.flatModify(s => {
-            if (s.equivocationsTracker.contains(block.getHeader.validatorPublicKey)) {
-              Log[F].debug(
-                s"The creator of Block ${PrettyPrinter.buildString(block)} has equivocated before}"
-              ) *> s.pure[F]
-            } else {
-              checkEquivocations(dag, block).map(
-                equivocated =>
-                  if (equivocated) {
-                    s.copy(
-                      equivocationsTracker = s.equivocationsTracker + block.getHeader.validatorPublicKey
-                    )
-                  } else {
-                    s
-                  }
-              )
-            }
-          })
       s <- state.read
-      _ <- if (s.equivocationsTracker.contains(block.getHeader.validatorPublicKey)) {
-            FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock)
-          } else {
-            Applicative[F].unit
-          }
+      equivocated <- if (s.equivocationsTracker.contains(block.getHeader.validatorPublicKey)) {
+                      Log[F].debug(
+                        s"The creator of Block ${PrettyPrinter.buildString(block)} has equivocated before}"
+                      ) *> true.pure[F]
+                    } else {
+                      checkEquivocations(dag, block) //.map(
+                    }
+      _ <- state
+            .modify(
+              s =>
+                s.copy(
+                  equivocationsTracker = s.equivocationsTracker + block.getHeader.validatorPublicKey
+                )
+            )
+            .whenA(equivocated)
+      _ <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
     } yield ()
 
   /**
