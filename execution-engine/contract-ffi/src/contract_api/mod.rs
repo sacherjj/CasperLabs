@@ -8,7 +8,6 @@ use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
-use crate::system_contracts::mint;
 use crate::uref::{AccessRights, URef};
 use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
@@ -564,14 +563,6 @@ pub fn get_mint() -> Option<ContractPointer> {
     } else {
         None
     }
-}
-
-pub fn mint_purse(amount: U512) -> Result<PurseId, mint::error::Error> {
-    let mint = get_mint().expect("mint contract should exist");
-
-    let result: Result<URef, mint::error::Error> = call_contract(mint, &("mint", amount), &vec![]);
-
-    result.map(PurseId::new)
 }
 
 pub fn get_phase() -> Phase {
