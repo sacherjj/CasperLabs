@@ -13,6 +13,7 @@ members = [
     "contracts/system/mint-token",
     "contracts/system/mint-install",
     "contracts/system/pos",
+    "contracts/system/pos-install",
     "contracts/system/test-mint-token",
     "contracts/test/add-update-associated-key",
     "contracts/test/authorized-keys",

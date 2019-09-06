@@ -1259,6 +1259,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pos-install"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+ "pos 0.1.0",
+]
+
+[[package]]
 name = "pos-refund-purse"
 version = "0.1.0"
 dependencies = [
