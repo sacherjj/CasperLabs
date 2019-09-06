@@ -6,7 +6,6 @@ use std::rc::Rc;
 use proptest::collection::vec;
 use proptest::prelude::*;
 
-use crate::engine_state::op::Op;
 use contract_ffi::gens::*;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
@@ -18,6 +17,8 @@ use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 use engine_storage::global_state::{StateProvider, StateReader};
+
+use crate::engine_state::op::Op;
 
 use super::meter::count_meter::Count;
 use super::{AddResult, QueryResult, Validated};
