@@ -1,6 +1,7 @@
 from test.cl_node.common import extract_deploy_hash_from_deploy_output
 from test.cl_node.common import extract_block_hash_from_propose_output
 
+
 # Disabled until be figure out the CI issue.
 def ignore_test_graphql(one_node_network):
     node = one_node_network.docker_nodes[0]
