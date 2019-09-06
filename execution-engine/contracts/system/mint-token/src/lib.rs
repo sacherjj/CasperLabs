@@ -69,8 +69,7 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn call() {
+pub fn delegate() {
     let mint = CLMint;
     let method_name: String = contract_api::get_arg(0);
 
@@ -116,4 +115,10 @@ pub extern "C" fn call() {
 
         _ => panic!("Unknown method name!"),
     }
+}
+
+#[cfg(not(feature = "lib"))]
+#[no_mangle]
+pub extern "C" fn call() {
+    delegate();
 }
