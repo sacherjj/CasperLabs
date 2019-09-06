@@ -14,11 +14,11 @@ object EquivocationDetector {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   /**
-    * Check whether block equivocate and if so add it to `EquivocationsTracker`.
+    * Check whether block create equivocations and if so add it to `EquivocationsTracker`.
     *
-    * Since we have added all equivocating message to BlockDag, then once
-    * a validator has been detected as equivocated, then every message he create later
-    * has at least a message equivocate with each other.
+    * Since we had added all equivocating messages to the BlockDag, then once
+    * a validator has been detected as equivocating, then for every message M1 he creates later,
+    * we can find least one message M2 that M1 and M2 don't cite each other.
     */
   def checkEquivocationWithUpdate[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
       dag: DagRepresentation[F],
@@ -47,7 +47,7 @@ object EquivocationDetector {
     } yield ()
 
   /**
-    * check whether block equivocate
+    * check whether block creates equivocations
     *
     * Caution:
     *   It may not work when receiving a block created by a validator who has equivocated.
