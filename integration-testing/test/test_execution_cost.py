@@ -1,9 +1,9 @@
-import json
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
 from test.cl_node.casperlabs_accounts import Account
 from test.cl_node.common import MAX_PAYMENT_COST, CONV_RATE
+from casperlabs_client import ABI
 
 
 def account_state(_block_hash: str, account: str, node0: DockerNode):
@@ -94,9 +94,12 @@ def test_error_in_payment_contract(payment_node_network):
 
     from_account = Account("genesis")
     to_account = Account(1)
-    args_json = json.dumps([{"account": to_account.public_key_hex}, {"u32": 10 ** 7}])
 
-    ABI = node0.p_client.abi
+    session_args = ABI.args(
+        [ABI.account(bytes.fromhex(to_account.public_key_hex)), ABI.u32(10 ** 7)]
+    )
+    payment_args = ABI.args([ABI.u512(10 ** 6)])
+
     response, deploy_hash_bytes = node0.p_client.deploy(
         from_address=from_account.public_key_hex,
         session_contract="transfer_to_account.wasm",
@@ -104,9 +107,8 @@ def test_error_in_payment_contract(payment_node_network):
         public_key=from_account.public_key_path,
         private_key=from_account.private_key_path,
         gas_price=1,
-        gas_limit=MAX_PAYMENT_COST / CONV_RATE,
-        session_args=ABI.args_from_json(args_json),
-        payment_args=ABI.args([ABI.u512(10 ** 6)]),
+        session_args=session_args,
+        payment_args=payment_args,
     )
     genesis_balance_after_transfer = node0.client.get_balance(
         account_address=GENESIS_ACCOUNT.public_key_hex,
@@ -170,7 +172,6 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
     )
     assert account1_starting_balance == 10 ** 8
 
-    ABI = node0.p_client.abi
     _, _ = node0.p_client.deploy(
         from_address=account1.public_key_hex,
         payment_contract="standard_payment.wasm",
@@ -178,7 +179,6 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
         public_key=account1.public_key_path,
         private_key=account1.private_key_path,
         gas_price=1,
-        gas_limit=MAX_PAYMENT_COST,
         session_args=None,
         payment_args=ABI.args([ABI.u512(MAX_PAYMENT_COST)]),
     )
@@ -211,8 +211,7 @@ def test_refund_after_session_code_error(payment_node_network):
         block_hash=blocks[0].summary.block_hash,
     )
 
-    args_json = json.dumps([{"u32": 10 ** 6}])
-    ABI = node0.p_client.abi
+    payment_args = ABI.args([ABI.u32(10 ** 6)])
     _, deploy_hash = node0.p_client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
         session_contract="test_args_u512.wasm",
@@ -220,9 +219,8 @@ def test_refund_after_session_code_error(payment_node_network):
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
         gas_price=1,
-        gas_limit=MAX_PAYMENT_COST / CONV_RATE,
         session_args=ABI.args([ABI.u512(100)]),
-        payment_args=ABI.args_from_json(args_json)
+        payment_args=payment_args
         # 100 is a revert code.
     )
     try:
@@ -254,23 +252,23 @@ def test_not_enough_funds_to_run_payment_code(payment_node_network):
     blocks = parse_show_blocks(node0.d_client.show_blocks(1000))
     genesis_hash = blocks[0].summary.block_hash
     assert len(blocks) == 1  # There should be only one block - the genesis block
+
+    test_account = GENESIS_ACCOUNT
     genesis_balance = node0.client.get_balance(
-        account_address=GENESIS_ACCOUNT.public_key_hex, block_hash=genesis_hash
+        account_address=test_account.public_key_hex, block_hash=genesis_hash
     )
     assert genesis_balance == 10 ** 9
-    args_json = json.dumps(
-        [{"account": GENESIS_ACCOUNT.public_key_hex}, {"u32": 10 ** 7}]
+    session_args = ABI.args(
+        [ABI.account(bytes.fromhex(test_account.public_key_hex)), ABI.u32(10 ** 7)]
     )
-    ABI = node0.p_client.abi
     _, deploy_hash = node0.p_client.deploy(
-        from_address=GENESIS_ACCOUNT.public_key_hex,
+        from_address=test_account.public_key_hex,
         session_contract="transfer_to_account.wasm",
         payment_contract="standard_payment.wasm",
-        public_key=GENESIS_ACCOUNT.public_key_path,
-        private_key=GENESIS_ACCOUNT.private_key_path,
+        public_key=test_account.public_key_path,
+        private_key=test_account.private_key_path,
         gas_price=1,
-        gas_limit=MAX_PAYMENT_COST / CONV_RATE,
-        session_args=ABI.args_from_json(args_json),
+        session_args=session_args,
         payment_args=ABI.args([ABI.u512(450)]),
     )
 

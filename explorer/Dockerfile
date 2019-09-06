@@ -12,5 +12,4 @@ ENV STATIC_ROOT=/app/ui
 ENV PAYMENT_AMOUNT=1000000
 ENV PAYMENT_CONTRACT_PATH=/app/contracts/payment.wasm
 ENV FAUCET_CONTRACT_PATH=/app/contracts/faucet.wasm
-ENV FAUCET_NONCE_PATH=/app/nonce.txt
 ENTRYPOINT node server/server.js

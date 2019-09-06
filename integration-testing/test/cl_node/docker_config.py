@@ -5,7 +5,7 @@ from docker import DockerClient
 
 
 from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, Account
-from test.cl_node.common import random_string, BOOTSTRAP_PATH
+from test.cl_node.common import random_string, BOOTSTRAP_PATH, testing_root_path
 
 
 DEFAULT_NODE_ENV = {
@@ -59,7 +59,13 @@ class DockerConfig:
         return f"{BOOTSTRAP_PATH}/node-{self.number}.key.pem"
 
     def tls_certificate_local_path(self):
-        return f"resources/bootstrap_certificate/node-{self.number}.certificate.pem"
+        root_path = testing_root_path()
+        return (
+            root_path
+            / "resources"
+            / "bootstrap_certificate"
+            / f"node-{self.number}.certificate.pem"
+        )
 
     def node_command_options(self, server_host: str) -> dict:
         options = {

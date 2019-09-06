@@ -9,7 +9,10 @@ use engine_shared::transform::Transform;
 
 use crate::error::{self, in_memory};
 use crate::global_state::StateReader;
-use crate::global_state::{commit, CommitResult, History};
+use crate::global_state::{commit, CommitResult, StateProvider};
+use crate::protocol_data::ProtocolData;
+use crate::protocol_data_store::in_memory::InMemoryProtocolDataStore;
+use crate::protocol_data_store::ProtocolVersion;
 use crate::store::Store;
 use crate::transaction_source::in_memory::{InMemoryEnvironment, InMemoryReadTransaction};
 use crate::transaction_source::{Transaction, TransactionSource};
@@ -21,7 +24,8 @@ use crate::trie_store::operations::{read, ReadResult, WriteResult};
 
 pub struct InMemoryGlobalState {
     pub environment: Arc<InMemoryEnvironment>,
-    pub store: Arc<InMemoryTrieStore>,
+    pub trie_store: Arc<InMemoryTrieStore>,
+    pub protocol_data_store: Arc<InMemoryProtocolDataStore>,
     pub empty_root_hash: Blake2bHash,
 }
 
@@ -36,27 +40,35 @@ impl InMemoryGlobalState {
     /// Creates an empty state.
     pub fn empty() -> Result<Self, error::Error> {
         let environment = Arc::new(InMemoryEnvironment::new());
-        let store = Arc::new(InMemoryTrieStore::new(&environment, None));
+        let trie_store = Arc::new(InMemoryTrieStore::new(&environment, None));
+        let protocol_data_store = Arc::new(InMemoryProtocolDataStore::new(&environment, None));
         let root_hash: Blake2bHash = {
             let (root_hash, root) = create_hashed_empty_trie::<Key, Value>()?;
             let mut txn = environment.create_read_write_txn()?;
-            store.put(&mut txn, &root_hash, &root)?;
+            trie_store.put(&mut txn, &root_hash, &root)?;
             txn.commit()?;
             root_hash
         };
-        Ok(InMemoryGlobalState::new(environment, store, root_hash))
+        Ok(InMemoryGlobalState::new(
+            environment,
+            trie_store,
+            protocol_data_store,
+            root_hash,
+        ))
     }
 
-    /// Creates a state from an existing environment, store, and root_hash.
+    /// Creates a state from an existing environment, trie_Store, and root_hash.
     /// Intended to be used for testing.
     pub(crate) fn new(
         environment: Arc<InMemoryEnvironment>,
-        store: Arc<InMemoryTrieStore>,
+        trie_store: Arc<InMemoryTrieStore>,
+        protocol_data_store: Arc<InMemoryProtocolDataStore>,
         empty_root_hash: Blake2bHash,
     ) -> Self {
         InMemoryGlobalState {
             environment,
-            store,
+            trie_store,
+            protocol_data_store,
             empty_root_hash,
         }
     }
@@ -76,7 +88,7 @@ impl InMemoryGlobalState {
                 match operations::write::<_, _, _, InMemoryTrieStore, in_memory::Error>(
                     correlation_id,
                     &mut txn,
-                    &state.store,
+                    &state.trie_store,
                     &current_root,
                     &key,
                     value,
@@ -115,17 +127,17 @@ impl StateReader<Key, Value> for InMemoryGlobalStateView {
     }
 }
 
-impl History for InMemoryGlobalState {
+impl StateProvider for InMemoryGlobalState {
     type Error = error::Error;
 
     type Reader = InMemoryGlobalStateView;
 
     fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
-        let maybe_root: Option<Trie<Key, Value>> = self.store.get(&txn, &prestate_hash)?;
+        let maybe_root: Option<Trie<Key, Value>> = self.trie_store.get(&txn, &prestate_hash)?;
         let maybe_state = maybe_root.map(|_| InMemoryGlobalStateView {
             environment: Arc::clone(&self.environment),
-            store: Arc::clone(&self.store),
+            store: Arc::clone(&self.trie_store),
             root_hash: prestate_hash,
         });
         txn.commit()?;
@@ -140,12 +152,33 @@ impl History for InMemoryGlobalState {
     ) -> Result<CommitResult, Self::Error> {
         let commit_result = commit::<InMemoryEnvironment, InMemoryTrieStore, _, Self::Error>(
             &self.environment,
-            &self.store,
+            &self.trie_store,
             correlation_id,
             prestate_hash,
             effects,
         )?;
         Ok(commit_result)
+    }
+
+    fn put_protocol_data(
+        &self,
+        protocol_version: ProtocolVersion,
+        protocol_data: &ProtocolData,
+    ) -> Result<(), Self::Error> {
+        let mut txn = self.environment.create_read_write_txn()?;
+        self.protocol_data_store
+            .put(&mut txn, &protocol_version, protocol_data)?;
+        txn.commit().map_err(Into::into)
+    }
+
+    fn get_protocol_data(
+        &self,
+        protocol_version: ProtocolVersion,
+    ) -> Result<Option<ProtocolData>, Self::Error> {
+        let txn = self.environment.create_read_txn()?;
+        let result = self.protocol_data_store.get(&txn, &protocol_version)?;
+        txn.commit()?;
+        Ok(result)
     }
 
     fn empty_root(&self) -> Blake2bHash {
@@ -299,8 +332,8 @@ mod tests {
     fn initial_state_has_the_expected_hash() {
         let correlation_id = CorrelationId::new();
         let expected_bytes = vec![
-            202u8, 169, 195, 180, 73, 241, 1, 207, 158, 155, 105, 130, 222, 149, 113, 83, 244, 33,
-            11, 132, 57, 102, 129, 52, 188, 253, 43, 243, 67, 176, 41, 151,
+            56u8, 92, 10, 147, 138, 170, 197, 149, 117, 180, 207, 20, 211, 210, 180, 162, 221, 248,
+            223, 184, 82, 235, 248, 63, 88, 63, 199, 231, 80, 50, 193, 34,
         ];
         let init_state = test_utils::mocked_account([48u8; 32]);
         let (_, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &init_state).unwrap();

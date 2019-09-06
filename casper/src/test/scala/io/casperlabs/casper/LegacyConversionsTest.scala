@@ -1,8 +1,7 @@
 package io.casperlabs.casper
 
-import com.google.protobuf.ByteString
-import org.scalatest._
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
+import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
 
 class LegacyConversionsTest extends FlatSpec with ArbitraryConsensus with Matchers {

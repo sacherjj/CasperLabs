@@ -57,14 +57,12 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
-    ).zipWithIndex.map {
-      case (deploy, nonce) =>
-        ProtoUtil
-          .basicDeploy(
-            System.currentTimeMillis(),
-            ByteString.copyFromUtf8(deploy),
-            nonce.toLong + 1
-          )
+    ).map { deploy =>
+      ProtoUtil
+        .basicDeploy(
+          System.currentTimeMillis(),
+          ByteString.copyFromUtf8(deploy)
+        )
     }
 
     implicit val logEff       = new LogStub[Effect]
@@ -114,7 +112,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
         implicit casperRef: MultiParentCasperRef[Effect]
     ): Effect[Unit] =
       for {
-        d <- ProtoUtil.basicDeploy[Effect](1L)
+        d <- ProtoUtil.basicDeploy[Effect]()
         _ <- BlockAPI.deploy[Effect](d)
         _ <- BlockAPI.createBlock[Effect](blockApiLock)
         _ <- BlockAPI.deploy[Effect](d)

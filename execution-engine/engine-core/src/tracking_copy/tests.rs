@@ -6,7 +6,6 @@ use std::rc::Rc;
 use proptest::collection::vec;
 use proptest::prelude::*;
 
-use crate::engine_state::op::Op;
 use contract_ffi::gens::*;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
@@ -17,7 +16,9 @@ use contract_ffi::value::{Account, Contract, Value};
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
-use engine_storage::global_state::{History, StateReader};
+use engine_storage::global_state::{StateProvider, StateReader};
+
+use crate::engine_state::op::Op;
 
 use super::meter::count_meter::Count;
 use super::{AddResult, QueryResult, Validated};
@@ -214,7 +215,6 @@ fn tracking_copy_add_named_key() {
     let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; KEY_SIZE]), Weight::new(1));
     let account = contract_ffi::value::Account::new(
         [0u8; KEY_SIZE],
-        0u64,
         BTreeMap::new(),
         PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
         associated_keys,
@@ -414,7 +414,6 @@ proptest! {
         name in "\\PC*", // human-readable name for state
         missing_name in "\\PC*",
         pk in u8_slice_32(), // account public key
-        nonce in any::<u64>(), // account nonce
         address in u8_slice_32(), // address for account key
     ) {
         let correlation_id = CorrelationId::new();
@@ -423,7 +422,6 @@ proptest! {
         let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
         let account = Account::new(
             pk,
-            nonce,
             known_urefs,
             purse_id,
             associated_keys,
@@ -458,7 +456,6 @@ proptest! {
         state_name in "\\PC*", // human-readable name for state
         contract_name in "\\PC*", // human-readable name for contract
         pk in u8_slice_32(), // account public key
-        nonce in any::<u64>(), // account nonce
         address in u8_slice_32(), // address for account key
         body in vec(any::<u8>(), 1..1000), //contract body
         hash in u8_slice_32(), // hash for contract key
@@ -477,7 +474,6 @@ proptest! {
         let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
         let account = Account::new(
             pk,
-            nonce,
             account_known_urefs,
             purse_id,
             associated_keys,

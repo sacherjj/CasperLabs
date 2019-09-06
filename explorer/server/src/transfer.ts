@@ -13,7 +13,6 @@ const optionDefinitions = [
   { name: "from-private-key-path", type: String },
   { name: "to-public-key-path", type: String },
   { name: "amount", type: BigInt },
-  { name: "nonce", type: Number },
   { name: "payment-amount", type: BigInt },
 ];
 
@@ -44,7 +43,6 @@ const args = Transfer.args(accountPublicKey, options.amount);
 
 const deploy = transfer.deploy(
   args,
-  options.nonce,
   options["payment-amount"],
   contractKeys.publicKey,
   contractKeys);

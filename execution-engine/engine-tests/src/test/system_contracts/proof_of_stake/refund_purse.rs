@@ -39,13 +39,13 @@ fn transfer(builder: &mut WasmTestBuilder, address: [u8; 32], amount: U512) {
 
         let deploy = DeployBuilder::new()
             .with_address(GENESIS_ADDR)
+            .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, amount),
             )
             .with_payment_code("standard_payment.wasm", (U512::from(MAX_PAYMENT),))
             .with_authorization_keys(&[genesis_public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()
@@ -63,10 +63,10 @@ fn refund_tests(builder: &mut WasmTestBuilder, address: [u8; 32]) {
 
         let deploy = DeployBuilder::new()
             .with_address(address)
+            .with_deploy_hash([2; 32])
             .with_session_code("do_nothing.wasm", ())
             .with_payment_code("pos_refund_purse.wasm", (U512::from(MAX_PAYMENT),))
             .with_authorization_keys(&[public_key])
-            .with_nonce(1)
             .build();
 
         ExecRequestBuilder::new().push_deploy(deploy).build()

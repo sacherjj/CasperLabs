@@ -4,15 +4,17 @@ use std::rc::Rc;
 
 use parity_wasm::elements::Module;
 
-use crate::engine_state::execution_result::ExecutionResult;
 use contract_ffi::bytesrepr::deserialize;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::{Account, Value};
+use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateReader;
+
+use crate::engine_state::execution_result::ExecutionResult;
 
 use super::Error;
 use super::{create_rng, extract_access_rights_from_keys, instance_and_memory, Runtime};
@@ -30,7 +32,8 @@ pub trait Executor<A> {
         account: &Account,
         authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
-        gas_limit: u64,
+        deploy_hash: [u8; 32],
+        gas_limit: Gas,
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
@@ -49,7 +52,8 @@ pub trait Executor<A> {
         account: &Account,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
-        gas_limit: u64,
+        deploy_hash: [u8; 32],
+        gas_limit: Gas,
         protocol_version: u64,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
@@ -108,7 +112,8 @@ impl Executor<Module> for WasmiExecutor {
         account: &Account,
         authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
-        gas_limit: u64,
+        deploy_hash: [u8; 32],
+        gas_limit: Gas,
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
@@ -123,9 +128,8 @@ impl Executor<Module> for WasmiExecutor {
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup_local.values().cloned());
-        let account_bytes = base_key.as_account().unwrap();
-        let rng = create_rng(account_bytes, account.nonce(), phase);
-        let gas_counter = 0u64;
+        let rng = create_rng(deploy_hash, phase);
+        let gas_counter: Gas = Gas::default();
         let fn_store_id = 0u32;
 
         // Snapshot of effects before execution, so in case of error
@@ -137,7 +141,11 @@ impl Executor<Module> for WasmiExecutor {
         } else {
             // TODO: figure out how this works with the cost model
             // https://casperlabs.atlassian.net/browse/EE-239
-            on_fail_charge!(deserialize(args), args.len() as u64, effects_snapshot)
+            on_fail_charge!(
+                deserialize(args),
+                Gas::from_u64(args.len() as u64),
+                effects_snapshot
+            )
         };
 
         let context = RuntimeContext::new(
@@ -149,6 +157,7 @@ impl Executor<Module> for WasmiExecutor {
             &account,
             base_key,
             blocktime,
+            deploy_hash,
             gas_limit,
             gas_counter,
             fn_store_id,
@@ -180,7 +189,8 @@ impl Executor<Module> for WasmiExecutor {
         account: &Account,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
-        gas_limit: u64,
+        deploy_hash: [u8; 32],
+        gas_limit: Gas,
         protocol_version: u64,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
@@ -193,12 +203,11 @@ impl Executor<Module> for WasmiExecutor {
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup.values().cloned());
 
-        //let base_key = Key::Account(account.pub_key());
         let rng = {
-            let rng = create_rng(account.pub_key(), account.nonce(), phase);
+            let rng = create_rng(deploy_hash, phase);
             Rc::new(RefCell::new(rng))
         };
-        let gas_counter = 0u64; // maybe const?
+        let gas_counter = Gas::default(); // maybe const?
         let fn_store_id = 0u32; // maybe const?
 
         // Snapshot of effects before execution, so in case of error only nonce update
@@ -208,7 +217,11 @@ impl Executor<Module> for WasmiExecutor {
         let args: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
         } else {
-            on_fail_charge!(deserialize(args), args.len() as u64, effects_snapshot)
+            on_fail_charge!(
+                deserialize(args),
+                Gas::from_u64(args.len() as u64),
+                effects_snapshot
+            )
         };
 
         let context = RuntimeContext::new(
@@ -220,6 +233,7 @@ impl Executor<Module> for WasmiExecutor {
             &account,
             base_key,
             blocktime,
+            deploy_hash,
             gas_limit,
             gas_counter,
             fn_store_id,

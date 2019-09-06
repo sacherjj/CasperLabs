@@ -14,12 +14,17 @@ fn should_run_mint_purse_contract() {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1u8; 32],
             (SYSTEM_ADDR,),
         )
         .commit()
         .expect_success()
-        .exec(SYSTEM_ADDR, "mint_purse.wasm", DEFAULT_BLOCK_TIME, 1)
+        .exec(
+            SYSTEM_ADDR,
+            "mint_purse.wasm",
+            DEFAULT_BLOCK_TIME,
+            [2u8; 32],
+        )
         .commit()
         .expect_success();
 }
@@ -29,7 +34,12 @@ fn should_run_mint_purse_contract() {
 fn should_not_allow_non_system_accounts_to_mint() {
     assert!(WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, "mint_purse.wasm", DEFAULT_BLOCK_TIME, 1,)
+        .exec(
+            GENESIS_ADDR,
+            "mint_purse.wasm",
+            DEFAULT_BLOCK_TIME,
+            [3u8; 32]
+        )
         .commit()
         .is_error());
 }

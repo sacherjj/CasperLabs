@@ -17,12 +17,12 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
-
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE};
 use contract_ffi::value::{Account, Value, U512};
+use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
@@ -126,16 +126,11 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
-pub fn create_rng(
-    account_addr: [u8; 32],
-    nonce: u64,
-    phase: contract_ffi::execution::Phase,
-) -> ChaChaRng {
+pub fn create_rng(deploy_hahs: [u8; 32], phase: contract_ffi::execution::Phase) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let mut hasher = VarBlake2b::new(32).unwrap();
-    data.extend(&account_addr);
-    data.extend_from_slice(&nonce.to_le_bytes());
+    data.extend(&deploy_hahs);
     data.extend_from_slice(&[phase.to_u8().expect("Phase is represented as a u8")]);
     hasher.input(data);
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
@@ -174,6 +169,7 @@ where
             &current_runtime.context.account(),
             key,
             current_runtime.context.get_blocktime(),
+            current_runtime.context.get_deployhash(),
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
@@ -239,7 +235,7 @@ where
     /// Returns false if gas limit exceeded and true if not.
     /// Intuition about the return value sense is to aswer the question 'are we
     /// allowed to continue?'
-    fn charge_gas(&mut self, amount: u64) -> bool {
+    fn charge_gas(&mut self, amount: Gas) -> bool {
         let prev = self.context.gas_counter();
         match prev.checked_add(amount) {
             // gas charge overflow protection
@@ -252,7 +248,7 @@ where
         }
     }
 
-    fn gas(&mut self, amount: u64) -> Result<(), Trap> {
+    fn gas(&mut self, amount: Gas) -> Result<(), Trap> {
         if self.charge_gas(amount) {
             Ok(())
         } else {

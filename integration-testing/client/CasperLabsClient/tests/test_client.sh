@@ -5,7 +5,7 @@ set -o xtrace
 #   -p, --port  <arg>   Port used for external gRPC API.
 #       --help          Show help message
 #   -v, --version       Show version of this program
-# 
+#
 
 CL_GRPC_PORT_EXTERNAL=40401 #3477
 CLI="$HOME/CasperLabs/client/target/universal/stage/bin/casperlabs-client -- --host localhost --port $CL_GRPC_PORT_EXTERNAL "
@@ -20,8 +20,6 @@ RESOURCES_PATH=../../../../integration-testing/resources/
 #                            gas is refunded). Must be positive integer.
 #       --gas-price  <arg>   The price of gas for this transaction in units
 #                            dust/gas. Must be positive integer.
-#   -n, --nonce  <arg>       This allows you to overwrite your own pending
-#                            transactions that use the same nonce.
 #   -p, --payment  <arg>     Path to the file with payment code
 #   -s, --session  <arg>     Path to the file with session code
 #   -h, --help               Show help message
@@ -41,7 +39,7 @@ $CLI propose
 # Subcommand: show-block - View properties of a block known by Casper on an existing running node.
 # Output includes: parent hashes, storage contents of the tuplespace.
 #   -h, --help   Show help message
-# 
+#
 #  trailing arguments:
 #   hash (required)   the hash value of the block
 
@@ -90,4 +88,3 @@ $CLI vdag --depth 10
 #sender: "9dfcf4f851c552df42d656b4bf7e90834061a5dd0a01d64bdea52cbdb76fe2dd"
 
 $CLI query-state --block-hash "6492bb74b047578629b4f4cc5ae9f6282e5a0dfaf17b2c388cdae87e79330b98" --key "9dfcf4f851c552df42d656b4bf7e90834061a5dd0a01d64bdea52cbdb76fe2dd" --path "" --type "hash"
-
