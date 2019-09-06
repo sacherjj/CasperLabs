@@ -18,7 +18,7 @@ object EquivocationDetector {
     *
     * Since we have added all equivocating message to BlockDag, then once
     * a validator has been detected as equivocated, then every message he create later
-    * has at least message equivocate with each other.
+    * has at least a message equivocate with each other.
     */
   def checkEquivocationWithUpdate[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
       dag: DagRepresentation[F],
