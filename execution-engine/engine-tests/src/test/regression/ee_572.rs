@@ -4,7 +4,7 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 
-use crate::support::test_support::{PaymentCode, WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 const CREATE: &str = "create";
 
@@ -12,7 +12,6 @@ const GENESIS_ADDR: [u8; 32] = [0u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
 const INITIAL_AMOUNT: u32 = 100_500_000;
-const PAYMENT_FUND: u32 = 100_000_000;
 
 const CONTRACT_TRANSFER: &str = "transfer_purse_to_account.wasm";
 const CONTRACT_CREATE: &str = "ee_572_regression_create.wasm";
@@ -55,7 +54,6 @@ fn should_run_ee_572_regression() {
 
     // Store the creation contract
     builder
-        .use_payment_code(PaymentCode::standard(U512::from(PAYMENT_FUND)))
         .exec(ACCOUNT_1_ADDR, CONTRACT_CREATE, DEFAULT_BLOCK_TIME, 1)
         .expect_success()
         .commit();

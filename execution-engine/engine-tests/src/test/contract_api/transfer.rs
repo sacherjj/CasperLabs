@@ -125,7 +125,6 @@ fn should_transfer_to_account() {
         1,
         (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
-        &crate::support::test_support::PaymentCode::default(),
     );
 
     let exec_response = engine_state
@@ -214,7 +213,6 @@ fn should_transfer_from_account_to_account() {
         1,
         (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
-        &crate::support::test_support::PaymentCode::default(),
     );
 
     let exec_1_response = engine_state
@@ -280,7 +278,6 @@ fn should_transfer_from_account_to_account() {
         1,
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
-        &crate::support::test_support::PaymentCode::default(),
     );
 
     let exec_2_response = engine_state
@@ -378,7 +375,6 @@ fn should_transfer_to_existing_account() {
         1,
         (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
-        &crate::support::test_support::PaymentCode::default(),
     );
 
     let exec_response = engine_state
@@ -444,7 +440,6 @@ fn should_transfer_to_existing_account() {
         1,
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
-        &crate::support::test_support::PaymentCode::default(),
     );
 
     let exec_response = engine_state
@@ -512,7 +507,6 @@ fn should_fail_when_insufficient_funds() {
         1,
         (ACCOUNT_1_ADDR,),
         vec![PublicKey::new(GENESIS_ADDR)],
-        &crate::support::test_support::PaymentCode::default(),
     );
 
     let exec_response = engine_state
@@ -550,7 +544,6 @@ fn should_fail_when_insufficient_funds() {
         1,
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
-        &crate::support::test_support::PaymentCode::default(),
     );
 
     let exec_response = engine_state
@@ -582,7 +575,6 @@ fn should_fail_when_insufficient_funds() {
         2,
         (),
         vec![PublicKey::new(ACCOUNT_1_ADDR)],
-        &crate::support::test_support::PaymentCode::default(),
     );
 
     let exec_response = engine_state

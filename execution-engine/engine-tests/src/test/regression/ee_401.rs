@@ -39,7 +39,6 @@ fn should_execute_contracts_which_provide_extra_urefs() {
         1,
         (),
         vec![PublicKey::new(GENESIS_ADDR)],
-        &crate::support::test_support::PaymentCode::default(),
     );
 
     let exec_response = engine_state
@@ -71,7 +70,6 @@ fn should_execute_contracts_which_provide_extra_urefs() {
         1,
         (),
         vec![PublicKey::new(GENESIS_ADDR)],
-        &crate::support::test_support::PaymentCode::default(),
     );
 
     let exec_response = engine_state

@@ -11,7 +11,7 @@ use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{self, PaymentCode, WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{self, WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -255,7 +255,6 @@ fn should_run_successful_bond_and_unbond() {
     // Genesis account unbonds less than 50% of his stake
 
     let result = WasmTestBuilder::from_result(result)
-        .use_payment_code(PaymentCode::default())
         .exec_with_args(
             GENESIS_ADDR,
             "pos_bonding.wasm",
@@ -350,7 +349,6 @@ fn should_run_successful_bond_and_unbond() {
 
     // Genesis account unbonds less than 50% of his stake
     let result = WasmTestBuilder::from_result(result)
-        .use_payment_code(PaymentCode::default())
         .exec_with_args(
             GENESIS_ADDR,
             "pos_bonding.wasm",
