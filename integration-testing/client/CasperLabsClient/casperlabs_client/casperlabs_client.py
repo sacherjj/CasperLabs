@@ -192,7 +192,7 @@ class ABI:
             elif typ in ABI.OPTIONAL_TYPES:
                 if not value:
                     return None
-                return python_value(*list(value.items())[0])
+                return encode(python_value(*list(value.items())[0]))
             raise ValueError(f"Unknown type {typ}, expected one of {ABI.ALL_TYPES}")
 
         def encode(arg) -> bytes:
