@@ -7,6 +7,7 @@ use engine_shared::transform::Transform;
 use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
+const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
 
 #[ignore]
 #[test]
@@ -46,7 +47,7 @@ fn should_run_known_urefs_contract() {
                 if let Key::URef(_) = k {
                     // Since payment code is enabled by default there are multiple writes of Uint512
                     // type, so we narrow it down to the expected value.
-                    if value == &U512::from(123_456_789u64) {
+                    if value == &U512::from(EXPECTED_UREF_VALUE) {
                         return Some(());
                     }
                 }
