@@ -635,6 +635,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "faucet"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

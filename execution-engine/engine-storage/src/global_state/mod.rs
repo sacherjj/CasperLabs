@@ -1,3 +1,6 @@
+pub mod in_memory;
+pub mod lmdb;
+
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::BuildHasher;
@@ -9,13 +12,19 @@ use engine_shared::logging::{log_duration, log_metric, GAUGE};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::{self, Transform, TypeMismatch};
 
+use crate::protocol_data::ProtocolData;
+use crate::protocol_data_store::ProtocolVersion;
 use crate::transaction_source::{Transaction, TransactionSource};
 use crate::trie::Trie;
 use crate::trie_store::operations::{read, write, ReadResult, WriteResult};
 use crate::trie_store::TrieStore;
 
-pub mod in_memory;
-pub mod lmdb;
+const GLOBAL_STATE_COMMIT_READS: &str = "global_state_commit_reads";
+const GLOBAL_STATE_COMMIT_WRITES: &str = "global_state_commit_writes";
+const GLOBAL_STATE_COMMIT_DURATION: &str = "global_state_commit_duration";
+const GLOBAL_STATE_COMMIT_READ_DURATION: &str = "global_state_commit_read_duration";
+const GLOBAL_STATE_COMMIT_WRITE_DURATION: &str = "global_state_commit_write_duration";
+const COMMIT: &str = "commit";
 
 /// A reader of state
 pub trait StateReader<K, V> {
@@ -57,7 +66,7 @@ impl From<transform::Error> for CommitResult {
     }
 }
 
-pub trait History {
+pub trait StateProvider {
     type Error;
     type Reader: StateReader<Key, Value, Error = Self::Error>;
 
@@ -73,15 +82,19 @@ pub trait History {
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error>;
 
+    fn put_protocol_data(
+        &self,
+        protocol_version: ProtocolVersion,
+        protocol_data: &ProtocolData,
+    ) -> Result<(), Self::Error>;
+
+    fn get_protocol_data(
+        &self,
+        protocol_version: ProtocolVersion,
+    ) -> Result<Option<ProtocolData>, Self::Error>;
+
     fn empty_root(&self) -> Blake2bHash;
 }
-
-const GLOBAL_STATE_COMMIT_READS: &str = "global_state_commit_reads";
-const GLOBAL_STATE_COMMIT_WRITES: &str = "global_state_commit_writes";
-const GLOBAL_STATE_COMMIT_DURATION: &str = "global_state_commit_duration";
-const GLOBAL_STATE_COMMIT_READ_DURATION: &str = "global_state_commit_read_duration";
-const GLOBAL_STATE_COMMIT_WRITE_DURATION: &str = "global_state_commit_write_duration";
-const COMMIT: &str = "commit";
 
 pub fn commit<'a, R, S, H, E>(
     environment: &'a R,

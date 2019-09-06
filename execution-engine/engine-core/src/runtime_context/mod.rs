@@ -21,6 +21,7 @@ use contract_ffi::value::account::{
     SetThresholdFailure, UpdateKeyFailure, Weight,
 };
 use contract_ffi::value::{Contract, Value};
+use engine_shared::gas::Gas;
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_storage::global_state::StateReader;
 
@@ -44,8 +45,8 @@ pub struct RuntimeContext<'a, R> {
     //(could point at an account or contract in the global state)
     base_key: Key,
     blocktime: BlockTime,
-    gas_limit: u64,
-    gas_counter: u64,
+    gas_limit: Gas,
+    gas_counter: Gas,
     fn_store_id: u32,
     rng: Rc<RefCell<ChaChaRng>>,
     protocol_version: u64,
@@ -67,8 +68,8 @@ where
         account: &'a Account,
         base_key: Key,
         blocktime: BlockTime,
-        gas_limit: u64,
-        gas_counter: u64,
+        gas_limit: Gas,
+        gas_counter: Gas,
         fn_store_id: u32,
         rng: Rc<RefCell<ChaChaRng>>,
         protocol_version: u64,
@@ -218,15 +219,15 @@ where
         Rc::clone(&self.state)
     }
 
-    pub fn gas_limit(&self) -> u64 {
+    pub fn gas_limit(&self) -> Gas {
         self.gas_limit
     }
 
-    pub fn gas_counter(&self) -> u64 {
+    pub fn gas_counter(&self) -> Gas {
         self.gas_counter
     }
 
-    pub fn set_gas_counter(&mut self, new_gas_counter: u64) {
+    pub fn set_gas_counter(&mut self, new_gas_counter: Gas) {
         self.gas_counter = new_gas_counter;
     }
 
