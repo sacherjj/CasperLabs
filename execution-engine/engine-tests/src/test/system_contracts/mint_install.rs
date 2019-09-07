@@ -53,7 +53,7 @@ fn should_run_mint_install_contract() {
     }
 }
 
-fn exec_with_return<T: FromBytes>(
+pub fn exec_with_return<T: FromBytes>(
     builder: &mut WasmTestBuilder,
     address: [u8; 32],
     wasm_file: &str,
