@@ -4,7 +4,7 @@ import pytest
 import json
 from pathlib import Path
 from pytest import fixture, raises
-from test.cl_node.contract_hash import contract_hash
+from test.cl_node.contract_address import contract_address
 from test.cl_node.common import testing_root_path, HELLO_NAME_CONTRACT
 from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
 from test.cl_node.common import extract_block_hash_from_propose_output
@@ -305,11 +305,6 @@ def test_revert_subcall(client, node):
 
     r = client.show_deploy(deploy_hash)
     assert r.deploy.deploy_hash == deploy_hash
-
-    # Help me figure out what subcall-revert-test/call/src/lib.rs should look like
-    # TODO: function_counter 0 is a bug, to be fixed in EE.
-    h = contract_hash(GENESIS_ACCOUNT.public_key_hex, 0)
-    logging.info("The expected contract hash is %s (%s)" % (list(h), h.hex()))
 
     block_hash = deploy_and_propose_from_genesis(node, "test_subcall_revert_call.wasm")
     r = client.show_deploys(block_hash)[0]
@@ -703,33 +698,50 @@ def test_cli_scala_extended_deploy(scala_cli):
         logging.warning(f"Could not delete temporary files: {str(e)}")
 
 
-def test_cli_scala_direct_call_by_name(scala_cli):
+def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
     cli = scala_cli
     account = scala_cli.node.test_account
     public_key, private_key = account.public_key_docker_path, account.private_key_docker_path
 
-    # This contract stores a function and saves pointer to it under UREF "revert_test".
+    # First, deploy a contract that stores a function
+    # and saves pointer to it under UREF "revert_test".
     # The stored function calls revert(2).
     test_contract = "/data/test_subcall_revert_define.wasm"
 
-    deploy_hash = cli('deploy',
-                      '--from', account.public_key_hex,
-                      '--session', test_contract,
-                      '--payment', test_contract,
-                      '--private-key', private_key,
-                      '--public-key', public_key)
+    first_deploy_hash = cli('deploy',
+                            '--from', account.public_key_hex,
+                            '--session', test_contract,
+                            '--payment', test_contract,
+                            '--private-key', private_key,
+                            '--public-key', public_key)
     block_hash = cli("propose")
 
     deploys = cli("show-deploys", block_hash)
     assert len(list(deploys)) == 1
     for deploy_info in deploys:
-        assert deploy_info.deploy.deploy_hash == deploy_hash
+        assert deploy_info.deploy.deploy_hash == first_deploy_hash
         assert not deploy_info.is_error
 
+    # Call by name
     deploy_hash = cli("deploy",
                       '--from', account.public_key_hex,
                       '--session-name', "revert_test",
                       '--payment-name', "revert_test",
+                      '--private-key', private_key,
+                      '--public-key', public_key)
+    block_hash = cli("propose")
+
+    deploys = cli("show-deploys", block_hash)
+    for deploy_info in deploys:
+        assert deploy_info.deploy.deploy_hash == deploy_hash
+        assert deploy_info.error_message == 'Exit code: 2'  # Epected: contract called revert(2)
+
+    # Call by function address
+    revert_test_addr = contract_address(first_deploy_hash, 0).hex()  # assume fn_store_id starts from 0
+    deploy_hash = cli("deploy",
+                      '--from', account.public_key_hex,
+                      '--session-hash', revert_test_addr,
+                      '--payment-hash', revert_test_addr,
                       '--private-key', private_key,
                       '--public-key', public_key)
     block_hash = cli("propose")
