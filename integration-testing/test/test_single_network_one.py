@@ -703,57 +703,38 @@ def test_cli_scala_extended_deploy(scala_cli):
         logging.warning(f"Could not delete temporary files: {str(e)}")
 
 
-def test_cli_scala_direct_call_hash(scala_cli):
+def test_cli_scala_direct_call_by_name(scala_cli):
     cli = scala_cli
     account = scala_cli.node.test_account
-    # Contract source:
-    # https://github.com/CasperLabs/CasperLabs/blob/e6023cb8a620e3e885923ff630ede53fefa0d631/integration-testing/contracts/counter/define/src/lib.rs
-
-    test_contract = "/data/test_counterdefine.wasm"
     public_key, private_key = account.public_key_docker_path, account.private_key_docker_path
 
-    cli("deploy",
-        '--from', account.public_key_hex,
-        '--session', test_contract,
-        '--payment', test_contract,
-        '--private-key', private_key,
-        '--public-key', public_key)
+    # This contract stores a function and saves pointer to it under UREF "revert_test".
+    # The stored function calls revert(2).
+    test_contract = "/data/test_subcall_revert_define.wasm"
 
-    args = json.dumps([{"name": "method_name", "value": {"string_value": "inc"}}])
-
-    ch = contract_hash(account.public_key_hex, 0, 0).hex()
-
-    deploy_hash = cli("deploy",
+    deploy_hash = cli('deploy',
                       '--from', account.public_key_hex,
-                      '--session-hash', ch,
-                      '--payment-hash', ch,
-                      '--session-args', f"'{args}'",
-                      '--payment-args', f"'{args}'",
+                      '--session', test_contract,
+                      '--payment', test_contract,
                       '--private-key', private_key,
                       '--public-key', public_key)
-
     block_hash = cli("propose")
 
     deploys = cli("show-deploys", block_hash)
     assert len(list(deploys)) == 1
     for deploy_info in deploys:
-        assert not deploy_info.deploy.deploy_hash == deploy_hash
+        assert deploy_info.deploy.deploy_hash == deploy_hash
         assert not deploy_info.is_error
 
     deploy_hash = cli("deploy",
                       '--from', account.public_key_hex,
-                      '--session-name', "counter",
-                      '--payment-name', "counter",
-                      '--session-args', f"'{args}'",
-                      '--payment-args', f"'{args}'",
+                      '--session-name', "revert_test",
+                      '--payment-name', "revert_test",
                       '--private-key', private_key,
                       '--public-key', public_key)
-
     block_hash = cli("propose")
 
     deploys = cli("show-deploys", block_hash)
     for deploy_info in deploys:
-        assert not deploy_info.deploy.deploy_hash == deploy_hash
-        # Fails, error message is: "Key Key::Hash(8398b7eb0cc061f91d671a005c3e7bef52868d7fa40cbc3c3672eb29709dce7e) not found."
-        assert deploy_info.error_message == ""
-        assert not deploy_info.is_error
+        assert deploy_info.deploy.deploy_hash == deploy_hash
+        assert deploy_info.error_message == 'Exit code: 2'
