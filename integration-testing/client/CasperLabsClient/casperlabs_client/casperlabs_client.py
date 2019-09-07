@@ -262,10 +262,6 @@ def _read_binary(file_name: str):
         return f.read()
 
 
-def _read_code(file_name: str, abi_encoded_args: bytes = None):
-    return
-
-
 def _encode_contract(contract_options, contract_args):
     """
     """
