@@ -4,10 +4,15 @@ import pytest
 import json
 from pathlib import Path
 from pytest import fixture, raises
+
 from test import contract_hash
-from test.cl_node.common import testing_root_path, HELLO_NAME_CONTRACT
 from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
-from test.cl_node.common import extract_block_hash_from_propose_output
+from test.cl_node.common import (
+    testing_root_path,
+    extract_block_hash_from_propose_output,
+    Contract,
+    INITIAL_MOTES_AMOUNT,
+)
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import wait_for_genesis_block
@@ -45,9 +50,8 @@ account {
 
 
 def deploy_and_propose_from_genesis(node, contract):
-    return node.deploy_and_propose(
+    return node.d_client.deploy_and_propose(
         session_contract=contract,
-        payment_contract=contract,
         from_address=GENESIS_ACCOUNT.public_key_hex,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
@@ -63,7 +67,7 @@ def account_state(node, block_hash, account=GENESIS_ACCOUNT):
 def test_account_state(one_node_network):
     node = one_node_network.docker_nodes[0]
 
-    block_hash = deploy_and_propose_from_genesis(node, "test_counterdefine.wasm")
+    block_hash = deploy_and_propose_from_genesis(node, Contract.COUNTERDEFINE)
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error
 
@@ -72,7 +76,7 @@ def test_account_state(one_node_network):
     names = [uref.name for uref in known_urefs]
     assert "counter" in names
 
-    block_hash = deploy_and_propose_from_genesis(node, "test_countercall.wasm")
+    block_hash = deploy_and_propose_from_genesis(node, Contract.COUNTERCALL)
     acct_state = account_state(node, block_hash)
     known_urefs = acct_state.account[0].known_urefs
     names = [uref.name for uref in known_urefs]
@@ -90,10 +94,7 @@ def test_transfer_with_overdraft(one_node_network):
     # For compatibility with EE with no execution cost
     # payment_contract="transfer_to_account.wasm"
     block_hash = node.transfer_to_account(
-        to_account_id=1,
-        amount=1000000,
-        from_account_id="genesis",
-        payment_contract="transfer_to_account.wasm",
+        to_account_id=1, amount=1000000, from_account_id="genesis"
     )
 
     deploys = node.client.show_deploys(block_hash)
@@ -134,28 +135,26 @@ def test_transfer_with_overdraft(one_node_network):
 
 def test_transfer_to_accounts(one_node_network):
     node: DockerNode = one_node_network.docker_nodes[0]
-    # Perform multiple transfers with end result of Acct1 = 100, Acct2 = 100, Acct3 = 800
-    node.transfer_to_accounts([(1, 1000), (2, 900, 1), (3, 800, 2)])
+    node.transfer_to_accounts([(1, 1000), (2, 900, 1)])
     with raises(Exception):
         # Acct 1 has not enough funds so it should fail
         node.transfer_to_account(
-            to_account_id=4,
-            amount=100000000000,
-            from_account_id=1,
-            payment_contract="transfer_to_account.wasm",
+            to_account_id=4, amount=100000000000, from_account_id=1
         )
-    node.transfer_to_account(
-        to_account_id=4,
-        amount=100,
-        from_account_id=2,
-        payment_contract="transfer_to_account.wasm",
-    )
-    # TODO: Improve checks once balance is easy to read.
+    node.transfer_to_account(to_account_id=4, amount=700, from_account_id=2)
+
+    blocks = node.p_client.show_blocks(10)
+    block = blocks.__next__()
+    block_hash = block.summary.block_hash.hex()
+
+    assert node.p_client.balance(Account(1).public_key_hex, block_hash) == 100
+    assert node.p_client.balance(Account(2).public_key_hex, block_hash) == 200
+    assert node.p_client.balance(Account(4).public_key_hex, block_hash) == 700
 
 
 def balance(node, account_address, block_hash):
     try:
-        return node.client.get_balance(account_address, block_hash)
+        return node.d_client.get_balance(account_address, block_hash)
     except Exception:
         return 0
 
@@ -188,7 +187,7 @@ ffi_test_contracts = [
 
 def deploy_and_propose_expect_no_errors(node, contract):
     client = node.d_client
-    block_hash = node.deploy_and_propose(
+    block_hash = client.deploy_and_propose(
         session_contract=contract,
         payment_contract=contract,
         from_address=node.genesis_account.public_key_hex,
@@ -206,7 +205,7 @@ def test_get_caller(one_node_network, define_contract, call_contract):
     deploy_and_propose_expect_no_errors(node, call_contract)
 
 
-@pytest.mark.parametrize("wasm", [HELLO_NAME_CONTRACT, "old_wasm/test_helloname.wasm"])
+@pytest.mark.parametrize("wasm", [Contract.HELLONAME, "old_wasm/test_helloname.wasm"])
 def test_multiple_propose(one_node_network, wasm):
     """
     Feature file: propose.feature
@@ -255,7 +254,7 @@ def client(node):
 
 @pytest.fixture()  # (scope="module")
 def block_hash(node):
-    return node.deploy_and_propose(
+    return node.d_client.deploy_and_propose(
         session_contract="test_helloname.wasm", payment_contract="test_helloname.wasm"
     )
 
@@ -579,8 +578,7 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli
     balance = int(
         cli("balance", "--address", account.public_key_hex, "--block-hash", block_hash)
     )
-    # TODO Need constant for where this 1000000000 is from.
-    assert balance == 1000000000  # genesis
+    assert balance == INITIAL_MOTES_AMOUNT  # genesis
 
 # CLI ABI
 

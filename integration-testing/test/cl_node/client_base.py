@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Union
 
 
 class CasperLabsClient(ABC):
@@ -14,7 +15,11 @@ class CasperLabsClient(ABC):
         from_address: str = None,
         gas_price: int = 1,
         session_contract: Optional[str] = None,
+        session_args: Optional[Union[str, bytes]] = None,
         payment_contract: Optional[str] = None,
+        payment_args: Optional[Union[str, bytes]] = None,
+        public_key: Optional[Union[str, Path]] = None,
+        private_key: Optional[Union[str, Path]] = None,
     ) -> str:
         pass
 

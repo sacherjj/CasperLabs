@@ -1,9 +1,11 @@
-from typing import Optional
+from typing import Optional, Union
 import os
 import logging
 import time
+from pathlib import Path  # noqa: F401
 
 from test.cl_node import LoggingMixin
+from test.cl_node.common import Contract, MAX_PAYMENT_ABI
 from casperlabs_client import CasperLabsClient, ABI, InternalError, extract_common_name
 
 
@@ -44,8 +46,8 @@ class PythonClient(CasperLabsClient, LoggingMixin):
         self,
         from_address: str = None,
         gas_price: int = 1,
-        session_contract: Optional[str] = None,
-        payment_contract: Optional[str] = None,
+        session_contract: Optional[Union[str, Path]] = None,
+        payment_contract: Optional[Union[str, Path]] = None,
         private_key: Optional[str] = None,
         public_key: Optional[str] = None,
         session_args: list = None,
@@ -53,7 +55,11 @@ class PythonClient(CasperLabsClient, LoggingMixin):
     ) -> str:
 
         assert session_contract is not None
-        assert payment_contract is not None
+        if payment_contract is None:
+            payment_contract = Contract.STANDARD_PAYMENT
+
+        if payment_args is None:
+            payment_args = MAX_PAYMENT_ABI
 
         public_key = public_key or self.node.test_account.public_key_path
         private_key = private_key or self.node.test_account.private_key_path
@@ -82,7 +88,7 @@ class PythonClient(CasperLabsClient, LoggingMixin):
             payment_args,
         )
 
-    def propose(self) -> str:
+    def propose(self):
         logging.info(f"PY_CLIENT.propose() for {self.client.host}")
         return self.client.propose()
 
@@ -117,3 +123,31 @@ class PythonClient(CasperLabsClient, LoggingMixin):
                 else:
                     self.logger.debug("Could not propose; no more retries!")
                     raise ex
+
+    def deploy_and_propose(self, **deploy_kwargs) -> str:
+        if "from_address" not in deploy_kwargs:
+            deploy_kwargs["from_address"] = self.node.from_address
+        self.deploy(**deploy_kwargs)
+
+        propose_output = self.propose()
+        block_hash = propose_output.block_hash.hex()
+
+        logging.info(
+            f"The block hash: {block_hash} generated for {self.node.container_name}"
+        )
+        return block_hash
+
+    def deploy_and_propose_with_retry(
+        self, max_attempts: int, retry_seconds: int, **deploy_kwargs
+    ) -> str:
+        self.deploy(**deploy_kwargs)
+
+        block_hash = self.propose_with_retry(max_attempts, retry_seconds)
+
+        logging.info(
+            f"The block hash: {block_hash} generated for {self.node.container_name}"
+        )
+        if block_hash is None:
+            raise Exception("No block_hash received from propose_with_retry")
+
+        return block_hash

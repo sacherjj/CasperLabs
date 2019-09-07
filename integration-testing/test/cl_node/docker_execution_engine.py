@@ -8,8 +8,7 @@ class DockerExecutionEngine(LoggingDockerBase):
 
     @property
     def command(self) -> str:
-        payment_flag = "-x" if self.config.is_payment_code_enabled else ""
-        return f".casperlabs/sockets/.casper-node.sock {payment_flag}"
+        return f".casperlabs/sockets/.casper-node.sock -x"
 
     @property
     def volumes(self) -> dict:

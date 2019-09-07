@@ -2,7 +2,7 @@ import logging
 import os
 import threading
 from test.cl_node.casperlabs_node import CasperLabsNode
-from test.cl_node.common import random_string, MAX_PAYMENT_COST
+from test.cl_node.common import random_string, MAX_PAYMENT_COST, INITIAL_MOTES_AMOUNT
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.docker_execution_engine import DockerExecutionEngine
 from test.cl_node.docker_node import DockerNode, FIRST_VALIDATOR_ACCOUNT
@@ -234,7 +234,7 @@ class OneNodeNetwork(CasperLabsNetwork):
     """ A single node network with just a bootstrap """
 
     is_payment_code_enabled = False
-    initial_motes = MAX_PAYMENT_COST * 100  # 10 millions * 100 = 1 billion motes
+    initial_motes = INITIAL_MOTES_AMOUNT
     grpc_encryption = False
 
     def create_cl_network(self):
@@ -305,6 +305,10 @@ class EncryptedTwoNodeNetwork(TwoNodeNetwork):
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):
+
+    is_payment_code_enabled = True
+    initial_motes = INITIAL_MOTES_AMOUNT
+
     def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(
@@ -331,6 +335,10 @@ class ThreeNodeNetwork(CasperLabsNetwork):
 
 
 class MultiNodeJoinedNetwork(CasperLabsNetwork):
+
+    is_payment_code_enabled = True
+    initial_motes = INITIAL_MOTES_AMOUNT
+
     def create_cl_network(self, node_count=10):
         kp = self.get_key()
         config = DockerConfig(
@@ -357,6 +365,10 @@ class MultiNodeJoinedNetwork(CasperLabsNetwork):
 
 
 class CustomConnectionNetwork(CasperLabsNetwork):
+
+    is_payment_code_enabled = True
+    initial_motes = INITIAL_MOTES_AMOUNT
+
     def create_cl_network(
         self, node_count: int = 3, network_connections: List[List[int]] = None
     ) -> None:
