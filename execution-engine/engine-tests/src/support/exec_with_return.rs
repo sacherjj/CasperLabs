@@ -17,6 +17,9 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::rc::Rc;
 
+const INIT_FN_STORE_ID: u32 = 0;
+const INIT_PROTOCOL_VERSION: u64 = 1;
+
 pub fn exec<T: FromBytes>(
     builder: &mut WasmTestBuilder,
     address: [u8; 32],
@@ -45,9 +48,9 @@ pub fn exec<T: FromBytes>(
         Rc::new(RefCell::new(rng))
     };
     let gas_counter = Gas::default();
-    let fn_store_id = 0u32;
+    let fn_store_id = INIT_FN_STORE_ID;
     let gas_limit = Gas::from_u64(std::u64::MAX);
-    let protocol_version = 1;
+    let protocol_version = INIT_PROTOCOL_VERSION;
     let correlation_id = CorrelationId::new();
     let arguments: Vec<Vec<u8>> = args.parse().expect("should be able to serialize args");
 

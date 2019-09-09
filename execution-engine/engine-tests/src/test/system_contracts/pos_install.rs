@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, HashMap};
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
+const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
+const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];
 const N_VALIDATORS: u8 = 5;
 
 const POS_BONDING_PURSE: &str = "pos_bonding_purse";
@@ -27,7 +29,7 @@ fn should_run_pos_install_contract() {
             GENESIS_ADDR,
             "transfer_to_account_01.wasm",
             DEFAULT_BLOCK_TIME,
-            [1u8; 32],
+            DEPLOY_HASH_1,
             (SYSTEM_ADDR,),
         )
         .commit()
@@ -45,7 +47,7 @@ fn should_run_pos_install_contract() {
         SYSTEM_ADDR,
         "pos_install.wasm",
         DEFAULT_BLOCK_TIME,
-        [1u8; 32],
+        DEPLOY_HASH_2,
         (mint_uref, genesis_validators),
         vec![mint_uref],
     )

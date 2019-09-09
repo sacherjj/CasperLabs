@@ -7,6 +7,7 @@ use engine_shared::transform::Transform;
 use std::collections::HashMap;
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
+const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 
 #[ignore]
 #[test]
@@ -20,7 +21,7 @@ fn should_run_mint_install_contract() {
         GENESIS_ADDR,
         "mint_install.wasm",
         DEFAULT_BLOCK_TIME,
-        [1u8; 32],
+        DEPLOY_HASH_1,
         (),
         vec![],
     )

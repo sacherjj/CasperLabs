@@ -16,6 +16,7 @@ use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
 use core::fmt::Write;
 
+const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
 const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
 const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
@@ -62,7 +63,7 @@ pub extern "C" fn call() {
                 .unwrap();
             uref
         })
-        .map(|key| (key, Key::Hash([0u8; 32])))
+        .map(|key| (key, PLACEHOLDER_KEY))
         .collect();
 
     // Include the mint contract in its known_urefs
