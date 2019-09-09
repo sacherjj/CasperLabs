@@ -699,8 +699,18 @@ def test_cli_scala_extended_deploy(scala_cli):
 
 
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
-    cli = scala_cli
-    account = scala_cli.node.test_account
+    check_cli_direct_call_by_hash_and_name(scala_cli, scala_cli)
+
+
+def test_cli_python_direct_call_by_hash_and_name(cli, scala_cli):
+    check_cli_direct_call_by_hash_and_name(cli, scala_cli)
+
+
+def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
+    # TODO: For now using scala_cli for assertions because for some
+    # strange reason Python CLI doesn't show is_error and error_message
+    # in the output of show-deploys. This has to be fixed asap.
+    account = cli.node.test_account
     cli.set_default_deploy_args('--from', account.public_key_hex,
                                 '--private-key', cli.private_key_path(account),
                                 '--public-key', cli.public_key_path(account))
@@ -715,7 +725,8 @@ def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
                             '--payment', test_contract)
     block_hash = cli("propose")
 
-    deploys = cli("show-deploys", block_hash)
+    logging.info(f"""EXECUTING {' '.join(scala_cli.expand_args(["show-deploys", block_hash]))}""")
+    deploys = scala_cli("show-deploys", block_hash)
     assert len(list(deploys)) == 1
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == first_deploy_hash
@@ -727,7 +738,7 @@ def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
                       '--payment-name', "revert_test")
     block_hash = cli("propose")
 
-    deploys = cli("show-deploys", block_hash)
+    deploys = scala_cli("show-deploys", block_hash)
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == deploy_hash
         assert deploy_info.error_message == 'Exit code: 2'  # Expected: contract called revert(2)
@@ -739,7 +750,7 @@ def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
                       '--payment-hash', revert_test_addr)
     block_hash = cli("propose")
 
-    deploys = cli("show-deploys", block_hash)
+    deploys = scala_cli("show-deploys", block_hash)
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == deploy_hash
         assert deploy_info.error_message == 'Exit code: 2'

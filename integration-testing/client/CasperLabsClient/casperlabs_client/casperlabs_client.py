@@ -36,7 +36,10 @@ CEscape = google.protobuf.text_format.text_encoding.CEscape
 
 
 def _hex(text, as_utf8):
-    return (len(text) in (32, 64)) and text.hex() or CEscape(text, as_utf8)
+    try:
+        return (len(text) in (32, 64)) and text.hex() or CEscape(text, as_utf8)
+    except TypeError:
+        return CEscape(text, as_utf8)
 
 
 google.protobuf.text_format.text_encoding.CEscape = _hex
@@ -416,12 +419,12 @@ class CasperLabsClient:
         private_key: str = None,
         session_args: bytes = None,
         payment_args: bytes = None,
-        payment_hash: str = None,
+        payment_hash: bytes = None,
         payment_name: str = None,
-        payment_uref: str = None,
-        session_hash: str = None,
+        payment_uref: bytes = None,
+        session_hash: bytes = None,
         session_name: str = None,
-        session_uref: str = None,
+        session_uref: bytes = None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -437,6 +440,18 @@ class CasperLabsClient:
         :param private_key:   Path to a file with private key (Ed25519)
         :param session_args:  List of ABI encoded arguments of session contract
         :param payment_args:  List of ABI encoded arguments of payment contract
+        :param session-hash:  Hash of the stored contract to be called in the
+                              session; base16 encoded.
+        :param session-name:  Name of the stored contract (associated with the
+                              executing account) to be called in the session.
+        :param session-uref:  URef of the stored contract to be called in the
+                              session; base16 encoded.
+        :param payment-hash:  Hash of the stored contract to be called in the
+                              payment; base16 encoded.
+        :param payment-name:  Name of the stored contract (associated with the
+                              executing account) to be called in the payment.
+        :param payment-uref:  URef of the stored contract to be called in the
+                              payment; base16 encoded.
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
         if from_addr and len(from_addr) != 32:
@@ -743,6 +758,12 @@ def deploy_command(casperlabs_client, args):
         payment_args=args.payment_args
         and ABI.args_from_json(args.payment_args)
         or None,
+        payment_hash=args.payment_hash and bytes.fromhex(args.payment_hash),
+        payment_name=args.payment_name,
+        payment_uref=args.payment_uref and bytes.fromhex(args.payment_uref),
+        session_hash=args.session_hash and bytes.fromhex(args.session_hash),
+        session_name=args.session_name,
+        session_uref=args.session_uref and bytes.fromhex(args.session_uref),
     )
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy {deploy_hash.hex()} deployed")
