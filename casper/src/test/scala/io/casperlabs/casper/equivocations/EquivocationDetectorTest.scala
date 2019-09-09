@@ -105,6 +105,85 @@ class EquivocationDetectorTest
         } yield ()
   }
 
+  it should "not report equivocation when reference a message creating an equivocation that was created by other validator" in withStorage {
+    implicit blockStorage =>
+      implicit dagStorage =>
+        /*
+         * The Dag looks like
+         *
+         *    v0    |    v1     |
+         *          |           |
+         *          |    b6     |
+         *          |  /        |
+         *         /|           |
+         *       /  |           |
+         * b5   b4  |           |
+         *   \ /    |           |
+         *    b3    |           |
+         *     | \  |           |
+         *     |   \|           |
+         *     |    | \         |
+         *    b1    |    b2     |
+         *        \ |    |
+         *          | \  |
+         *          |    b0
+         *               /
+         *         genesis
+         *
+         */
+        implicit val logEff = new LogStub[Task]()
+        val v0              = generateValidator("V0")
+        val v1              = generateValidator("V1")
+        for {
+          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
+                                                              CasperState()
+                                                            )
+          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          b0 <- createBlockAndTestEquivocateDetector(
+                 Seq(genesis.blockHash),
+                 v1,
+                 justifications = HashMap(v1 -> genesis.blockHash),
+                 result = false
+               )
+          b1 <- createBlockAndTestEquivocateDetector(
+                 Seq(b0.blockHash),
+                 v0,
+                 justifications = HashMap(v1 -> b0.blockHash),
+                 result = false
+               )
+          b2 <- createBlockAndTestEquivocateDetector(
+                 Seq(b0.blockHash),
+                 v1,
+                 justifications = HashMap(v1 -> b0.blockHash),
+                 result = false
+               )
+          b3 <- createBlockAndTestEquivocateDetector(
+                 Seq(b1.blockHash),
+                 v0,
+                 justifications = HashMap(v0 -> b1.blockHash, v1 -> b2.blockHash),
+                 result = false
+               )
+          b4 <- createBlockAndTestEquivocateDetector(
+                 Seq(b3.blockHash),
+                 v0,
+                 justifications = HashMap(v0 -> b3.blockHash),
+                 result = false
+               )
+          _ <- createBlockAndTestEquivocateDetector(
+                Seq(b3.blockHash),
+                v0,
+                justifications = HashMap(v0 -> b3.blockHash),
+                result = true
+              )
+          _ <- createBlockAndTestEquivocateDetector(
+                Seq(b4.blockHash),
+                v1,
+                justifications = HashMap(v0 -> b4.blockHash),
+                result = false
+              )
+        } yield ()
+  }
+
   "EquivocationDetector" should "not report equivocation when block indirectly references previous creator's block" in withStorage {
     implicit blockStorage =>
       implicit dagStorage =>
@@ -114,9 +193,9 @@ class EquivocationDetectorTest
          *    v0    |      v1     |
          *          |             |
          *          |      b5     |
-         *          |  /     \     |
+         *          |  /     \    |
          *         /|         |   |
-         *       /
+         *       /  |         |   |
          *    b4    |         |   |
          *     |    |         |   |
          *    b3    |         |   |
@@ -226,5 +305,4 @@ class EquivocationDetectorTest
               )
         } yield ()
   }
-
 }
