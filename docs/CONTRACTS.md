@@ -161,7 +161,40 @@ instead of a file with a compiled WASM module.
 Its value should be base16 representation of the contract address,
 for example: `--session-hash 2358448f76c8b3a9e263571007998791a815e954c3c3db2da830a294ea7cba65`.
 
-####  Usinga local standalone node
+
+`payment-hash` is an option equivalent to `--session-hash`
+but for specifying address of payment contract.
+
+**Calling a stored contract by name**
+
+An address of a stored contract can be saved as a UREF 
+in context of the user's account
+and associated with a convenient, human readable, string key.
+
+Typically this is done in the same contract that calls `store_function`.
+In the example below `counter_ext` is a function
+in the same module as the contract being executed.
+The function will bo stored on blockchain with `store_function`
+and 
+its address saved into a UREF that can be referred 
+to by its name `"counter"`.
+```
+    //create map of references for stored contract
+    let mut counter_urefs: BTreeMap<String, Key> = BTreeMap::new();
+    let pointer = store_function("counter_ext", counter_urefs);
+    add_uref("counter", &pointer.into());
+
+```
+
+`casperlabs-client` `deploy` command accepts argument `--session-name`
+which can be used to refer to a stored contract if its address was saved
+to UREF like above, for example `--session-name counter`.
+Equivalent argument for payment is `--payment-name`.
+
+Note, UREFs are valid only in the context of a specific account.
+
+
+####  Using a local standalone node
 
 If you are testing with a [local standalone node](NODE.md#running-a-single-node), you will need to change the `--host` argument:
 
