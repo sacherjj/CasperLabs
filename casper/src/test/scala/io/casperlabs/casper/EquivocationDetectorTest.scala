@@ -47,11 +47,14 @@ class EquivocationDetectorTest
             justifications = justifications
           )
       _ <- EquivocationDetector.checkEquivocations(dag, b) shouldBeF (result)
-      _ <- (EquivocationDetector.checkEquivocationWithUpdate(dag, b).attempt shouldBeF Left(
-            EquivocatedBlock
-          )).whenA(result)
-      _ <- (EquivocationDetector.checkEquivocationWithUpdate(dag, b) shouldBeF Valid
-            .asRight[InvalidBlock]).whenA(!result)
+      blockStatus <- EquivocationDetector
+                      .checkEquivocationWithUpdate(dag, b)
+                      .attempt
+      _ = if (result) {
+        blockStatus shouldBe Left(ValidateErrorWrapper(EquivocatedBlock))
+      } else {
+        blockStatus shouldBe Right(())
+      }
       state <- Cell[Task, CasperState].read
       _     = state.equivocationsTracker.contains(b.getHeader.validatorPublicKey) shouldBe (result)
     } yield b
