@@ -170,61 +170,66 @@ object EquivocationDetector {
       dag: DagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash],
       equivocationTracker: Map[Validator, Long]
-  ): F[Set[Validator]] = {
-    val equivocationRecords = equivocationTracker.filterKeys(latestMessagesHashes.contains)
-    val minRank             = equivocationRecords.values.fold(0L)(_ min _)
-    for {
-      latestMessage                                         <- latestMessagesHashes.values.toList.traverse(dag.lookup).map(_.flatten)
-      implicit0(blockTopoOrdering: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingDesc
+  ): F[Set[Validator]] =
+    if (equivocationTracker.isEmpty) {
+      Set.empty[Validator].pure[F]
+    } else {
+      val minRank = equivocationTracker.values.min
 
-      stream = DagOperations.bfToposortTraverseF(latestMessage)(
-        _.justifications.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
-      )
-      acc <- stream
-              .foldWhileLeft(
-                (Set.empty[Validator], Set.empty[(Validator, Int)])
-              ) {
-                case (
-                    (detectedEquivocator, visitedValidatorAndBlockSeqNum),
-                    b
-                    ) =>
-                  val creator            = b.validatorPublicKey
-                  val creatorBlockSeqNam = b.validatorBlockSeqNum
-                  if (detectedEquivocator == equivocationRecords.keySet || b.rank <= minRank) {
-                    // Stop traversal if all equivocator has occurred in j-post-dag of latestMessages
-                    // or we traversal down to minimal of rank of base block of all equivocator
-                    Right(
-                      (detectedEquivocator, visitedValidatorAndBlockSeqNum)
-                    )
-                  } else if (detectedEquivocator.contains(creator)) {
-                    Left((detectedEquivocator, visitedValidatorAndBlockSeqNum))
-                  } else if (visitedValidatorAndBlockSeqNum.contains(
-                               (creator, creatorBlockSeqNam)
-                             )) {
-                    Left(
-                      (
-                        detectedEquivocator + creator,
-                        visitedValidatorAndBlockSeqNum
+      for {
+        latestMessage                                         <- latestMessagesHashes.values.toList.traverse(dag.lookup).map(_.flatten)
+        implicit0(blockTopoOrdering: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingDesc
+
+        stream = DagOperations.bfToposortTraverseF(latestMessage)(
+          _.justifications.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
+        )
+        acc <- stream
+                .foldWhileLeft(
+                  (Set.empty[Validator], Set.empty[(Validator, Int)])
+                ) {
+                  case (
+                      (detectedEquivocator, visitedValidatorAndBlockSeqNum),
+                      b
+                      ) =>
+                    val creator            = b.validatorPublicKey
+                    val creatorBlockSeqNam = b.validatorBlockSeqNum
+                    if (detectedEquivocator == equivocationTracker.keySet || b.rank <= minRank) {
+                      // Stop traversal if all equivocator has occurred in j-post-dag of latestMessages
+                      // or we traversal down to minimal of rank of base block of all equivocator
+                      Right(
+                        (detectedEquivocator, visitedValidatorAndBlockSeqNum)
                       )
-                    )
-                  } else {
-                    Left(
-                      (
-                        detectedEquivocator,
-                        visitedValidatorAndBlockSeqNum + (creator -> creatorBlockSeqNam)
+                    } else if (detectedEquivocator.contains(creator)) {
+                      Left((detectedEquivocator, visitedValidatorAndBlockSeqNum))
+                    } else if (visitedValidatorAndBlockSeqNum.contains(
+                                 (creator, creatorBlockSeqNam)
+                               )) {
+                      Left(
+                        (
+                          detectedEquivocator + creator,
+                          visitedValidatorAndBlockSeqNum
+                        )
                       )
-                    )
-                  }
-              }
-      (detectedEquivocator, _) = acc
-    } yield detectedEquivocator
-  }
+                    } else {
+                      Left(
+                        (
+                          detectedEquivocator,
+                          visitedValidatorAndBlockSeqNum + (creator -> creatorBlockSeqNam)
+                        )
+                      )
+                    }
+                }
+        (detectedEquivocator, _) = acc
+      } yield detectedEquivocator
+    }
 
   private def rankOfEarlierMessageFromCreator[F[_]: Monad: Log](
       dag: DagRepresentation[F],
       block: Block
   ): F[Long] =
     toposortJDagFromBlock(dag, block)
-      .find(b => b.validatorPublicKey == block.getHeader.validatorPublicKey)
-      .map(_.map(_.rank).getOrElse(0L))
+      .filter(b => b.validatorPublicKey == block.getHeader.validatorPublicKey)
+      .take(2)
+      .toList
+      .map(_.map(_.rank).get(1).getOrElse(0L))
 }
