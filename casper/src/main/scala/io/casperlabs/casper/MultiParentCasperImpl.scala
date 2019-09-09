@@ -14,6 +14,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.ProtoUtil._

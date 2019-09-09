@@ -1,18 +1,19 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.equivocations
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, IndexedDagStorage}
-import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.blockstorage.{BlockStorage, IndexedDagStorage}
+import io.casperlabs.casper._
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Cell
-import org.scalatest.{Assertion, FlatSpec, Matchers}
 import monix.eval.Task
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 

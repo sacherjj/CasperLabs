@@ -1,4 +1,4 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.equivocations
 
 import cats.{Applicative, Monad}
 import cats.implicits._
@@ -7,6 +7,7 @@ import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.{CasperState, EquivocatedBlock, InvalidBlock, PrettyPrinter}
 import io.casperlabs.shared.{Cell, Log, LogSource}
 
 object EquivocationDetector {
@@ -115,5 +116,5 @@ object EquivocationDetector {
     } yield equivocated
 
   private def creatorJustificationHash(block: Block): Option[BlockHash] =
-    ProtoUtil.creatorJustification(block).map(_.latestBlockHash)
+    ProtoUtil.creatorJustification(block.getHeader).map(_.latestBlockHash)
 }

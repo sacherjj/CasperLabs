@@ -161,9 +161,6 @@ object ProtoUtil {
       case (acc, blockMetadata) => math.max(acc, blockMetadata.rank)
     }
 
-  def creatorJustification(block: Block): Option[Justification] =
-    creatorJustification(block.getHeader)
-
   def creatorJustification(header: Block.Header): Option[Justification] =
     header.justifications
       .find {
