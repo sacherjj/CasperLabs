@@ -20,6 +20,10 @@ use std::rc::Rc;
 const INIT_FN_STORE_ID: u32 = 0;
 const INIT_PROTOCOL_VERSION: u64 = 1;
 
+/// This function allows executing the contract stored in the given `wasm_file`, while capturing the
+/// output. It is essentially the same functionality as `Executor::exec`, but the return value of
+/// the contract is returned along with the effects. The  purpose of this function is to test
+/// installer contracts used in the new genesis process.
 pub fn exec<T: FromBytes>(
     builder: &mut WasmTestBuilder,
     address: [u8; 32],
