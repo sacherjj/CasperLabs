@@ -893,6 +893,10 @@ impl WasmTestBuilder {
             .expect("Should have post-state hash.")
     }
 
+    pub fn get_engine_state(&self) -> &EngineState<InMemoryGlobalState> {
+        &self.engine_state
+    }
+
     pub fn get_exec_response(&self, index: usize) -> Option<&ExecResponse> {
         self.exec_responses.get(index)
     }

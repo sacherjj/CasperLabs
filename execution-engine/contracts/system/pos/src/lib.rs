@@ -239,8 +239,7 @@ fn refund_to_account(payment_purse: PurseId, account: PublicKey, amount: U512) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn call() {
+pub fn delegate() {
     let method_name: String = contract_api::get_arg(0);
     let timestamp = contract_api::get_blocktime();
     let pos_purse = get_bonding_purse().unwrap_or_revert();
@@ -349,6 +348,12 @@ pub extern "C" fn call() {
         }
         _ => {}
     }
+}
+
+#[cfg(not(feature = "lib"))]
+#[no_mangle]
+pub extern "C" fn call() {
+    delegate();
 }
 
 #[cfg(test)]

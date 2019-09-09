@@ -226,6 +226,10 @@ where
         }
     }
 
+    pub fn get_result(&self) -> &[u8] {
+        self.result.as_slice()
+    }
+
     pub fn context(&self) -> &RuntimeContext<'a, R> {
         &self.context
     }

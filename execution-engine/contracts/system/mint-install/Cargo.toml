@@ -1,17 +1,17 @@
 [package]
-name = "pos"
+name = "mint-install"
 version = "0.1.0"
-authors = ["Andreas Fackler <andreas@casperlabs.io>"]
+authors = ["Michael Birch <birchmd@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "pos"
-crate-type = ["lib", "cdylib"]
+name = "mint_install"
+crate-type = ["cdylib"]
 
 [features]
 default = []
 std = ["contract-ffi/std"]
-lib = []
 
 [dependencies]
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
+mint-token = { path = "../mint-token", default-features = false, features = ["lib"] }
