@@ -44,7 +44,7 @@ class CLI:
             )
         string_args = [str(a) for a in list(args)]
 
-        if args[0] == "deploy":
+        if args and args[0] == "deploy":
             string_args += self.default_deploy_args
 
         return "--help" in args and string_args or connection_details + string_args
