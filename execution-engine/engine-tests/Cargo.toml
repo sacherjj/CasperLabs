@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Ed Hastings <ed@casperlabs.io>, Henry Till <henrytill@gmail.com>"]
 edition = "2018"
 
-[dev-dependencies]
+[dependencies]
+clap = { version = "2", optional = true }
 contract-ffi = { path = "../contract-ffi", package = "casperlabs-contract-ffi" }
 engine-core = { path = "../engine-core", package = "casperlabs-engine-core" }
 engine-grpc-server = { path = "../engine-grpc-server", package = "casperlabs-engine-grpc-server" }
@@ -12,6 +13,18 @@ engine-shared = { path = "../engine-shared", package = "casperlabs-engine-shared
 engine-storage = { path = "../engine-storage", package = "casperlabs-engine-storage" }
 engine-wasm-prep = { path = "../engine-wasm-prep", package = "casperlabs-engine-wasm-prep" }
 grpc = "0.6.1"
-lazy_static = "1.3.0"
 lmdb = "0.8.0"
 protobuf = "2"
+
+[dev-dependencies]
+lazy_static = "1.3.0"
+
+[features]
+profiling = ["clap"]
+
+[[bin]]
+name = "state-initializer"
+path = "src/profiling/state-initializer.rs"
+test = false
+bench = false
+required-features = ["profiling"]

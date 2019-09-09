@@ -21,7 +21,7 @@ extern crate engine_storage;
 #[cfg(test)]
 extern crate engine_wasm_prep;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "profiling"))]
 pub mod support;
 #[cfg(test)]
 pub mod test;

@@ -43,7 +43,7 @@ where
     T: FromBytes,
 {
     let prestate = builder
-        .get_poststate_hash()
+        .get_post_state_hash()
         .as_slice()
         .try_into()
         .expect("should be able to make Blake2bHash from post-state hash");
