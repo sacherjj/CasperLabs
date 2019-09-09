@@ -1,4 +1,4 @@
-use super::mint_install::exec_with_return;
+use crate::support::exec_with_return;
 use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
@@ -40,7 +40,7 @@ fn should_run_pos_install_contract() {
 
     let total_bond = genesis_validators.values().fold(U512::zero(), |x, y| x + y);
 
-    let (ret_value, ret_urefs, effect): (URef, _, _) = exec_with_return(
+    let (ret_value, ret_urefs, effect): (URef, _, _) = exec_with_return::exec(
         &mut builder,
         SYSTEM_ADDR,
         "pos_install.wasm",
