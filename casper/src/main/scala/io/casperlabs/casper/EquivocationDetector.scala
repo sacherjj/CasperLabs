@@ -27,19 +27,20 @@ object EquivocationDetector {
       implicit state: Cell[F, CasperState]
   ): F[Unit] =
     for {
-      s <- state.read
-      equivocated <- if (s.equivocationsTracker.contains(block.getHeader.validatorPublicKey)) {
+      s       <- state.read
+      creator = block.getHeader.validatorPublicKey
+      equivocated <- if (s.equivocationsTracker.contains(creator)) {
                       Log[F].debug(
                         s"The creator of Block ${PrettyPrinter.buildString(block)} has equivocated before}"
                       ) *> true.pure[F]
                     } else {
-                      checkEquivocations(dag, block) //.map(
+                      checkEquivocations(dag, block)
                     }
       _ <- state
             .modify(
               s =>
                 s.copy(
-                  equivocationsTracker = s.equivocationsTracker + block.getHeader.validatorPublicKey
+                  equivocationsTracker = s.equivocationsTracker + creator
                 )
             )
             .whenA(equivocated)
@@ -50,7 +51,8 @@ object EquivocationDetector {
     * check whether block creates equivocations
     *
     * Caution:
-    *   It may not work when receiving a block created by a validator who has equivocated.
+    *   Always use method `checkEquivocationWithUpdate`.
+		*   It may not work when receiving a block created by a validator who has equivocated.
     *   For example:
     *
     *       |   v0   |
