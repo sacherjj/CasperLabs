@@ -1014,6 +1014,14 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "mint-install"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+ "mint-token 0.1.0",
+]
+
+[[package]]
 name = "mint-purse"
 version = "0.1.0"
 dependencies = [
@@ -1248,6 +1256,14 @@ name = "pos-get-payment-purse"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.13.0",
+]
+
+[[package]]
+name = "pos-install"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.13.0",
+ "pos 0.1.0",
 ]
 
 [[package]]

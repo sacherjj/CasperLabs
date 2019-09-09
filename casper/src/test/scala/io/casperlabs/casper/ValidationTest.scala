@@ -283,7 +283,7 @@ class ValidationTest
                 block.withHeader(modifiedTimestampHeader)
               )
               .attempt shouldBeF Left(InvalidUnslashableBlock)
-        _      <- ValidationImpl[Task].timestamp(block) shouldBeF Valid.asRight[InvalidBlock]
+        _      <- ValidationImpl[Task].timestamp(block).attempt shouldBeF Right(())
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("block timestamp") should be(true)
       } yield result
@@ -300,7 +300,7 @@ class ValidationTest
                 block.withHeader(modifiedTimestampHeader)
               )
               .attempt shouldBeF Left(InvalidUnslashableBlock)
-        _      <- ValidationImpl[Task].timestamp(block).attempt shouldBeF Right(Valid)
+        _      <- ValidationImpl[Task].timestamp(block).attempt shouldBeF Right(())
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("block timestamp") should be(true)
       } yield result

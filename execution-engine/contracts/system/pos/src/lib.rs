@@ -3,13 +3,8 @@
 #[macro_use]
 extern crate alloc;
 
-mod error;
-mod queue;
-mod stakes;
-
 use alloc::string::String;
 use alloc::vec::Vec;
-
 use contract_ffi::contract_api;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
@@ -20,6 +15,10 @@ use contract_ffi::value::U512;
 use crate::error::{Error, PurseLookupError, Result, ResultExt};
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
 use crate::stakes::{ContractStakes, StakesProvider};
+
+mod error;
+mod queue;
+mod stakes;
 
 /// Account used to run system functions (in particular `finalize_payment`).
 const SYSTEM_ACCOUNT: [u8; 32] = [0u8; 32];
@@ -239,8 +238,7 @@ fn refund_to_account(payment_purse: PurseId, account: PublicKey, amount: U512) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn call() {
+pub fn delegate() {
     let method_name: String = contract_api::get_arg(0);
     let timestamp = contract_api::get_blocktime();
     let pos_purse = get_bonding_purse().unwrap_or_revert();
@@ -351,20 +349,25 @@ pub extern "C" fn call() {
     }
 }
 
+#[cfg(not(feature = "lib"))]
+#[no_mangle]
+pub extern "C" fn call() {
+    delegate();
+}
+
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::iter;
-
     use contract_ffi::value::{
         account::{BlockTime, PublicKey},
         U512,
     };
+    use std::cell::RefCell;
+    use std::iter;
 
+    use crate::{bond, BOND_DELAY, step, unbond, UNBOND_DELAY};
     use crate::error::Result;
     use crate::queue::{Queue, QueueProvider};
     use crate::stakes::{Stakes, StakesProvider};
-    use crate::{bond, step, unbond, BOND_DELAY, UNBOND_DELAY};
 
     const KEY1: [u8; 32] = [1; 32];
     const KEY2: [u8; 32] = [2; 32];

@@ -1,7 +1,11 @@
+use contract_ffi::value::account::Weight;
+use contract_ffi::value::U512;
+use engine_core::engine_state::MAX_PAYMENT;
 use std::collections::HashMap;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
-use contract_ffi::value::account::Weight;
+use crate::support::test_support::{
+    DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT, WasmTestBuilder,
+};
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 
@@ -14,10 +18,12 @@ fn should_run_ee_539_serialize_action_thresholds_regression() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT), ),
             "ee_539_regression.wasm",
+            (Weight::new(4), Weight::new(3)),
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
-            (Weight::new(4), Weight::new(3)),
         )
         .expect_success()
         .commit()

@@ -1,3 +1,33 @@
+use contract_ffi::bytesrepr::ToBytes;
+use contract_ffi::contract_api::argsparser::ArgsParser;
+use contract_ffi::execution::Phase;
+use contract_ffi::key::{HASH_SIZE, Key};
+use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
+use contract_ffi::uref::URef;
+use contract_ffi::value::{Account, U512, Value};
+use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
+use engine_shared::gas::Gas;
+use engine_shared::motes::Motes;
+use engine_shared::newtypes::{Blake2bHash, CorrelationId};
+use engine_shared::transform::Transform;
+use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
+use engine_wasm_prep::Preprocessor;
+use engine_wasm_prep::wasm_costs::WasmCosts;
+use std::cell::RefCell;
+use std::collections::{BTreeSet, HashMap};
+use std::rc::Rc;
+
+use crate::engine_state::executable_deploy_item::ExecutableDeployItem;
+use crate::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
+use crate::engine_state::utils::WasmiBytes;
+use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
+use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
+
+pub use self::engine_config::EngineConfig;
+use self::error::{Error, RootNotFound};
+use self::execution_result::ExecutionResult;
+use self::genesis::{create_genesis_effects, GenesisResult};
+
 pub mod engine_config;
 pub mod error;
 pub mod executable_deploy_item;
@@ -6,36 +36,6 @@ pub mod execution_result;
 pub mod genesis;
 pub mod op;
 pub mod utils;
-
-use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
-use std::rc::Rc;
-
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::execution::Phase;
-use contract_ffi::key::{Key, HASH_SIZE};
-use contract_ffi::uref::URef;
-use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
-use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
-use contract_ffi::value::{Account, Value, U512};
-use engine_shared::gas::Gas;
-use engine_shared::motes::Motes;
-use engine_shared::newtypes::{Blake2bHash, CorrelationId};
-use engine_shared::transform::Transform;
-use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
-use engine_wasm_prep::wasm_costs::WasmCosts;
-use engine_wasm_prep::Preprocessor;
-
-pub use self::engine_config::EngineConfig;
-use self::error::{Error, RootNotFound};
-use self::execution_result::ExecutionResult;
-use self::genesis::{create_genesis_effects, GenesisResult};
-use crate::engine_state::executable_deploy_item::ExecutableDeployItem;
-use crate::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
-use crate::engine_state::utils::WasmiBytes;
-use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
-use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 
 // TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
 // TBD gas * CONV_RATE = motes
@@ -185,7 +185,7 @@ where
         )
     }
 
-    fn get_module<A, P: Preprocessor<A>>(
+    pub fn get_module<A, P: Preprocessor<A>>(
         &self,
         tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
         deploy_item: &ExecutableDeployItem,

@@ -203,9 +203,9 @@ package object gossiping {
         case Valid =>
           Log[F].debug(s"Validated and stored block ${show(block.blockHash)}")
 
-        case AdmissibleEquivocation =>
+        case EquivocatedBlock =>
           Log[F].debug(
-            s"Detected AdmissibleEquivocation on block ${show(block.blockHash)}"
+            s"Detected block ${show(block.blockHash)} equivocated"
           )
 
         case other =>

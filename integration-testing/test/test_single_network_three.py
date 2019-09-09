@@ -4,17 +4,16 @@ import threading
 from functools import reduce
 from itertools import count
 from operator import add
-
-from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.client_parser import parse_show_blocks
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.common import (
     COMBINED_CONTRACT,
     COUNTER_CALL,
     HELLO_WORLD,
     MAILING_LIST_CALL,
 )
+from test.cl_node.common import extract_block_hash_from_propose_output
+from test.cl_node.docker_node import DockerNode
+from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
     wait_for_block_hashes_propagated_to_all_nodes,
@@ -83,7 +82,7 @@ test_parameters = [
 
 
 @pytest.mark.parametrize("contract, function_counter, path, expected", test_parameters)
-def test_call_contracts_one_another(
+def test_call_stored_contract(
     three_node_network_with_combined_contract,
     docker_client,
     contract,
@@ -99,12 +98,6 @@ def test_call_contracts_one_another(
     nodes = three_node_network_with_combined_contract.docker_nodes
 
     from_address = nodes[0].genesis_account.public_key_hex
-
-    # Help me figure out what hashes to put into the call contracts.
-    # combined-contracts/define/src/lib.rs defines them;
-    # the order is hello_name_ext, counter_ext, mailing_list_ext
-    # h = contract_hash(from_address, 0, function_counter)
-    # logging.info("The expected contract hash for %s is %s (%s)" % (contract, list(h), h.hex()))
 
     def state(node, path, block_hash):
         return node.d_client.query_state(

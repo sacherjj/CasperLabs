@@ -1,7 +1,11 @@
 use contract_ffi::value::U512;
+use engine_core::engine_state::MAX_PAYMENT;
+use engine_shared::transform::Transform;
 use std::collections::HashMap;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{
+    DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT, WasmTestBuilder,
+};
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 
@@ -12,10 +16,12 @@ fn should_run_ee_460_no_side_effects_on_error_regression() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT), ),
             "ee_460_regression.wasm",
+            (U512::max_value(), ),
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
-            (U512::max_value(),),
         )
         .expect_success()
         .commit()
@@ -28,5 +34,10 @@ fn should_run_ee_460_no_side_effects_on_error_regression() {
     let mint_contract_uref = result.builder().get_mint_contract_uref();
 
     let transforms = &result.builder().get_transforms()[0];
-    assert!(transforms.get(&mint_contract_uref.into()).is_none());
+    let mint_transforms = transforms
+        .get(&mint_contract_uref.into())
+        // Skips the Identity writes introduced since payment code execution for brevity of the
+        // check
+        .filter(|&v| v != &Transform::Identity);
+    assert!(mint_transforms.is_none());
 }

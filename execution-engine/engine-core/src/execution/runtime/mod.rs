@@ -1,36 +1,35 @@
-mod args;
-mod externals;
-
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::convert::TryFrom;
-use std::iter::IntoIterator;
-
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
+use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
+use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
+use contract_ffi::contract_api::argsparser::ArgsParser;
+use contract_ffi::key::Key;
+use contract_ffi::system_contracts::{self, mint};
+use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::value::{Account, U512, Value};
+use contract_ffi::value::account::{ActionType, PUBLIC_KEY_SIZE, PublicKey, PurseId, Weight};
+use engine_shared::gas::Gas;
+use engine_storage::global_state::StateReader;
 use itertools::Itertools;
 use num_traits::ToPrimitive;
 use parity_wasm::elements::Module;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::convert::TryFrom;
+use std::iter::IntoIterator;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
-use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
-use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::{self, mint};
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE};
-use contract_ffi::value::{Account, Value, U512};
-use engine_shared::gas::Gas;
-use engine_storage::global_state::StateReader;
-
-use super::{Error, MINT_NAME, POS_NAME};
 use crate::execution::Error::{KeyNotFound, URefNotFound};
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
 use crate::runtime_context::RuntimeContext;
 use crate::URefAddr;
+
+use super::{Error, MINT_NAME, POS_NAME};
+
+mod args;
+mod externals;
 
 pub struct Runtime<'a, R> {
     memory: MemoryRef,
@@ -224,6 +223,10 @@ where
             host_buf: Vec::new(),
             context,
         }
+    }
+
+    pub fn get_result(&self) -> &[u8] {
+        self.result.as_slice()
     }
 
     pub fn context(&self) -> &RuntimeContext<'a, R> {

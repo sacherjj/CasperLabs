@@ -1,17 +1,20 @@
-use std::collections::HashMap;
-
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
-
 use contract_ffi::base16;
-
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
+use engine_core::engine_state::{CONV_RATE, MAX_PAYMENT};
+use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
+use std::collections::HashMap;
+
+use crate::support::test_support::{
+    DEFAULT_BLOCK_TIME, get_exec_costs, STANDARD_PAYMENT_CONTRACT, WasmTestBuilder,
+};
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const TEST_PURSE_NAME: &str = "test_purse";
+const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
 
 fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
     let keys = if let Transform::AddKeys(keys) = mint_transform {
@@ -50,19 +53,23 @@ fn should_insert_mint_add_keys_transform() {
             .run_genesis(GENESIS_ADDR, HashMap::new())
             .exec_with_args(
                 GENESIS_ADDR,
-                "transfer_to_account_01.wasm",
+                STANDARD_PAYMENT_CONTRACT,
+                (U512::from(MAX_PAYMENT), ),
+                "transfer_purse_to_account.wasm",
+                (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
                 DEFAULT_BLOCK_TIME,
                 [1; 32],
-                (ACCOUNT_1_ADDR,),
             )
             .expect_success()
             .commit()
             .exec_with_args(
                 ACCOUNT_1_ADDR,
+                STANDARD_PAYMENT_CONTRACT,
+                (U512::from(MAX_PAYMENT), ),
                 "create_purse_01.wasm",
+                (TEST_PURSE_NAME, ),
                 DEFAULT_BLOCK_TIME,
                 [1; 32],
-                (TEST_PURSE_NAME,),
             )
             .expect_success()
             .commit()
@@ -82,19 +89,23 @@ fn should_insert_into_account_known_urefs() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
-            "transfer_to_account_01.wasm",
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT), ),
+            "transfer_purse_to_account.wasm",
+            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
             [1; 32],
-            (ACCOUNT_1_ADDR,),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             ACCOUNT_1_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT), ),
             "create_purse_01.wasm",
+            (TEST_PURSE_NAME, ),
             DEFAULT_BLOCK_TIME,
             [1; 32],
-            (TEST_PURSE_NAME,),
         )
         .expect_success()
         .commit()
@@ -112,41 +123,56 @@ fn should_insert_into_account_known_urefs() {
 #[ignore]
 #[test]
 fn should_create_usable_purse_id() {
-    let mut builder = WasmTestBuilder::default();
-    let purse_key = *builder
+    let result = WasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
-            "transfer_to_account_01.wasm",
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT), ),
+            "transfer_purse_to_account.wasm",
+            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
             [1; 32],
-            (ACCOUNT_1_ADDR,),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             ACCOUNT_1_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT), ),
             "create_purse_01.wasm",
+            (TEST_PURSE_NAME, ),
             DEFAULT_BLOCK_TIME,
             [1; 32],
-            (TEST_PURSE_NAME,),
         )
         .expect_success()
         .commit()
-        .finish()
+        .finish();
+
+    let exec_response = result
+        .builder()
+        .get_exec_response(1)
+        .expect("should have exec response 1");
+
+    let account_1 = result
         .builder()
         .get_account(Key::Account(ACCOUNT_1_ADDR))
-        .expect("should have account")
+        .expect("should have account");
+
+    let purse_key = account_1
         .urefs_lookup()
         .get(TEST_PURSE_NAME)
         .expect("should have known_uref");
 
     let purse_id = PurseId::new(*purse_key.as_uref().expect("should have uref"));
 
-    let purse_balance = builder.get_purse_balance(purse_id);
+    let gas_cost =
+        Motes::from_gas(get_exec_costs(&exec_response)[0], CONV_RATE).expect("should convert");
+
+    let purse_balance = result.builder().get_purse_balance(purse_id);
     assert_eq!(
         purse_balance,
-        U512::from(0),
+        U512::from(ACCOUNT_1_INITIAL_BALANCE) - gas_cost.value(),
         "when created directly a purse has 0 balance"
     );
 }
