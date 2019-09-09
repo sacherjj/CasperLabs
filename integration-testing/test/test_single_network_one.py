@@ -4,7 +4,7 @@ import pytest
 import json
 from pathlib import Path
 from pytest import fixture, raises
-from test import contract_hash
+from test.cl_node.contract_address import contract_address
 from test.cl_node.common import testing_root_path, HELLO_NAME_CONTRACT
 from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
 from test.cl_node.common import extract_block_hash_from_propose_output
@@ -305,11 +305,6 @@ def test_revert_subcall(client, node):
 
     r = client.show_deploy(deploy_hash)
     assert r.deploy.deploy_hash == deploy_hash
-
-    # Help me figure out what subcall-revert-test/call/src/lib.rs should look like
-    # TODO: function_counter 0 is a bug, to be fixed in EE.
-    h = contract_hash(GENESIS_ACCOUNT.public_key_hex, 0)
-    logging.info("The expected contract hash is %s (%s)" % (list(h), h.hex()))
 
     block_hash = deploy_and_propose_from_genesis(node, "test_subcall_revert_call.wasm")
     r = client.show_deploys(block_hash)[0]
@@ -674,7 +669,7 @@ def test_cli_scala_extended_deploy(scala_cli):
     cli = scala_cli
     account = GENESIS_ACCOUNT
 
-    # TODO: when paralelizing testd, make sure test don't collide
+    # TODO: when paralelizing tests, make sure test don't collide
     # when trying to access the same file, perhaps map containers /tmp
     # to a unique hosts's directory.
 
@@ -701,3 +696,61 @@ def test_cli_scala_extended_deploy(scala_cli):
         os.remove('/tmp/signed.deploy')
     except Exception as e:
         logging.warning(f"Could not delete temporary files: {str(e)}")
+
+
+def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
+    check_cli_direct_call_by_hash_and_name(scala_cli, scala_cli)
+
+
+def test_cli_python_direct_call_by_hash_and_name(cli, scala_cli):
+    check_cli_direct_call_by_hash_and_name(cli, scala_cli)
+
+
+def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
+    # TODO: For now using scala_cli for assertions because for some
+    # strange reason Python CLI doesn't show is_error and error_message
+    # in the output of show-deploys. This has to be fixed asap.
+    account = cli.node.test_account
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account))
+
+    # First, deploy a contract that stores a function
+    # and saves pointer to it under UREF "revert_test".
+    # The stored function calls revert(2).
+    test_contract = cli.resource("test_subcall_revert_define.wasm")
+
+    first_deploy_hash = cli('deploy',
+                            '--session', test_contract,
+                            '--payment', test_contract)
+    block_hash = cli("propose")
+
+    logging.info(f"""EXECUTING {' '.join(scala_cli.expand_args(["show-deploys", block_hash]))}""")
+    deploys = scala_cli("show-deploys", block_hash)
+    assert len(list(deploys)) == 1
+    for deploy_info in deploys:
+        assert deploy_info.deploy.deploy_hash == first_deploy_hash
+        assert not deploy_info.is_error
+
+    # Call by name
+    deploy_hash = cli("deploy",
+                      '--session-name', "revert_test",
+                      '--payment-name', "revert_test")
+    block_hash = cli("propose")
+
+    deploys = scala_cli("show-deploys", block_hash)
+    for deploy_info in deploys:
+        assert deploy_info.deploy.deploy_hash == deploy_hash
+        assert deploy_info.error_message == 'Exit code: 2'  # Expected: contract called revert(2)
+
+    # Call by function address
+    revert_test_addr = contract_address(first_deploy_hash, 0).hex()  # assume fn_store_id starts from 0
+    deploy_hash = cli("deploy",
+                      '--session-hash', revert_test_addr,
+                      '--payment-hash', revert_test_addr)
+    block_hash = cli("propose")
+
+    deploys = scala_cli("show-deploys", block_hash)
+    for deploy_info in deploys:
+        assert deploy_info.deploy.deploy_hash == deploy_hash
+        assert deploy_info.error_message == 'Exit code: 2'
