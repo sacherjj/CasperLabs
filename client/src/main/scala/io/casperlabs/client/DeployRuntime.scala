@@ -368,7 +368,6 @@ object DeployRuntime {
           .Header()
           .withTimestamp(System.currentTimeMillis)
           .withAccountPublicKey(from)
-          .withNonce(deployConfig.nonce)
           .withGasPrice(deployConfig.gasPrice)
       )
       .withBody(

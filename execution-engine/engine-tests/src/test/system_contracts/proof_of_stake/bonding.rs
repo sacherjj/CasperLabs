@@ -63,7 +63,7 @@ fn should_run_successful_bond_and_unbond() {
             GENESIS_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
             (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
         )
         .expect_success()
@@ -107,7 +107,7 @@ fn should_run_successful_bond_and_unbond() {
             GENESIS_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
-            2,
+            [2; 32],
             (
                 String::from(TEST_SEED_NEW_ACCOUNT),
                 PublicKey::new(ACCOUNT_1_ADDR),
@@ -120,7 +120,7 @@ fn should_run_successful_bond_and_unbond() {
             ACCOUNT_1_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
             (String::from(TEST_BOND), U512::from(ACCOUNT_1_STAKE)),
         )
         .expect_success()
@@ -171,7 +171,7 @@ fn should_run_successful_bond_and_unbond() {
             ACCOUNT_1_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
-            2,
+            [2; 32],
             (
                 String::from(TEST_UNBOND),
                 Some(U512::from(ACCOUNT_1_UNBOND_1)),
@@ -220,7 +220,7 @@ fn should_run_successful_bond_and_unbond() {
             GENESIS_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
-            3,
+            [3; 32],
             (
                 String::from(TEST_UNBOND),
                 Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
@@ -255,7 +255,7 @@ fn should_run_successful_bond_and_unbond() {
             ACCOUNT_1_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
-            3,
+            [3; 32],
             (
                 String::from(TEST_UNBOND),
                 Some(U512::from(ACCOUNT_1_UNBOND_2)),
@@ -297,7 +297,7 @@ fn should_run_successful_bond_and_unbond() {
             GENESIS_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
-            4,
+            [4; 32],
             (String::from(TEST_UNBOND), None as Option<U512>), // <-- va banque
         )
         .expect_success()
@@ -383,7 +383,7 @@ fn should_fail_bonding_with_insufficient_funds() {
             GENESIS_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
             (
                 String::from(TEST_SEED_NEW_ACCOUNT),
                 PublicKey::new(ACCOUNT_1_ADDR),
@@ -395,7 +395,7 @@ fn should_fail_bonding_with_insufficient_funds() {
             ACCOUNT_1_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
             (
                 String::from(TEST_BOND_FROM_MAIN_PURSE),
                 U512::from(GENESIS_ACCOUNT_STAKE + 1),
@@ -436,7 +436,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
             GENESIS_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
-            1,
+            [1; 32],
             (String::from(TEST_UNBOND), Some(U512::from(42))),
         )
         .commit()

@@ -151,30 +151,18 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   override def readPendingHashes: F[List[ByteString]] = readPending.map(_.map(_.deployHash))
 
-  override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
+  override def readAccountPendingOldest(): fs2.Stream[F, DeployHash] =
     fs2.Stream
       .eval(
         readPending.map(
           _.groupBy(_.getHeader.accountPublicKey)
             .mapValues(_.minBy(_.getHeader.timestamp))
             .values
-            .toList
-        )
-      )
-      .flatMap(deploys => fs2.Stream.fromIterator(deploys.toIterator))
-
-  override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
-    fs2.Stream
-      .eval(
-        readPending.map(
-          _.groupBy(_.getHeader.accountPublicKey)
-            .mapValues(_.minBy(_.getHeader.nonce))
-            .values
             .map(_.deployHash)
             .toList
         )
       )
-      .flatMap(d => fs2.Stream.fromIterator(d.toIterator))
+      .flatMap(deploys => fs2.Stream.fromIterator(deploys.toIterator))
 
   override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] = {
     val deploys =

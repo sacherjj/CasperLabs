@@ -37,7 +37,6 @@ class GossipServiceCasperTestNode[F[_]](
     sk: PrivateKey,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
-    validateNonces: Boolean = true,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainId: String = "casperlabs",
     relaying: Relaying[F],
@@ -56,7 +55,6 @@ class GossipServiceCasperTestNode[F[_]](
       local,
       sk,
       genesis,
-      validateNonces,
       maybeMakeEE
     )(concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
   implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorBySingleSweepImpl[F]
@@ -170,7 +168,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit errorHandler: ErrorHandler[F],
@@ -228,7 +225,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
-                  validateNonces = validateNonces,
                   maybeMakeEE = maybeMakeEE
                 )(
                   concurrentF,

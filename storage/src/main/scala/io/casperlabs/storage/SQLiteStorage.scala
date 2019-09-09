@@ -76,11 +76,8 @@ object SQLiteStorage {
           hash: ByteString
       ): F[List[(BlockHash, Block.ProcessedDeploy)]] = deployStorage.getProcessingResults(hash)
 
-      override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
+      override def readAccountPendingOldest(): fs2.Stream[F, DeployHash] =
         deployStorage.readAccountPendingOldest()
-
-      override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
-        deployStorage.readAccountLowestNonce()
 
       override def getRepresentation: F[DagRepresentation[F]] = dagStorage.getRepresentation
 

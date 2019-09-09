@@ -88,10 +88,7 @@ import scala.concurrent.duration._
     * NOTE: Since deploy buffer tables don't have deploy's nonce we pick entry
     * with the lowest `creation_time_seconds` value.
     */
-  def readAccountPendingOldest(): fs2.Stream[F, Deploy]
-
-  /** Reads deploy hashes of deploys in PENDING state, lowest nonce per account. */
-  def readAccountLowestNonce(): fs2.Stream[F, DeployHash]
+  def readAccountPendingOldest(): fs2.Stream[F, DeployHash]
 }
 
 @typeclass trait DeployStorage[F[_]] extends DeployStorageWriter[F] with DeployStorageReader[F] {}
@@ -154,11 +151,8 @@ object DeployStorage {
     override def getProcessingResults(hash: BlockHash): F[List[(BlockHash, ProcessedDeploy)]] =
       reader.getProcessingResults(hash)
 
-    override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
+    override def readAccountPendingOldest(): fs2.Stream[F, DeployHash] =
       reader.readAccountPendingOldest()
-
-    override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
-      reader.readAccountLowestNonce()
 
     override def clear(): F[Unit] = writer.clear()
 

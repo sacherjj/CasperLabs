@@ -63,7 +63,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   val deployCount          = 10L
   val randomDeploys =
     (0L until deployCount).toList
-      .traverse(ProtoUtil.basicProcessedDeploy[Task])
+      .traverse(_ => ProtoUtil.basicProcessedDeploy[Task]())
       .unsafeRunSync(scheduler)
   val body                             = Block.Body().withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")

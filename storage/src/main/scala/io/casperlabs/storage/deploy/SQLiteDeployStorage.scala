@@ -112,17 +112,9 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
         })
         .void
 
-    def writeToDeployAccountNonceTable =
-      Update[(ByteString, ByteString, Long)](
-        "INSERT OR IGNORE INTO deploy_account_nonce (hash, account, nonce) VALUES (?, ?, ?)"
-      ).updateMany(deploys.map { d =>
-          (d.deployHash, d.getHeader.accountPublicKey, d.getHeader.nonce)
-        })
-        .void
-
     for {
       t <- Time[F].currentMillis
-      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t) >> writeToDeployAccountNonceTable)
+      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t))
             .transact(xa)
       _ <- updateMetrics()
     } yield ()
@@ -207,36 +199,18 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
   override def readProcessed: F[List[Deploy]] =
     readByStatus(ProcessedStatusCode)
 
-  override def readAccountPendingOldest(): fs2.Stream[F, Deploy] =
-    sql"""| SELECT data FROM (
-          |   SELECT data, deploys.account, create_time_millis FROM deploys
+  override def readAccountPendingOldest(): fs2.Stream[F, DeployHash] =
+    sql"""| SELECT hash FROM (
+          |   SELECT bd.hash, bd.account, d.create_time_seconds
+          |   FROM deploys d
           |   INNER JOIN buffered_deploys bd
-          |   ON deploys.hash = bd.hash
+          |   ON d.hash = bd.hash
           |   WHERE bd.status = $PendingStatusCode
           | ) pda
           | GROUP BY pda.account
-          | HAVING MIN(pda.create_time_millis)
-          | ORDER BY pda.create_time_millis
+          | HAVING MIN(pda.create_time_seconds)
+          | ORDER BY pda.create_time_seconds
           |""".stripMargin
-      .query[Deploy]
-      .stream
-      .transact(xa)
-
-  /** Reads deploys in PENDING state, lowest nonce per account. */
-  override def readAccountLowestNonce(): fs2.Stream[F, DeployHash] =
-    sql"""|WITH pending_deploys as (
-          |  SELECT n.*
-          |  FROM   buffered_deploys b
-          |    JOIN deploy_account_nonce n ON b.hash = n.hash
-          |  WHERE  b.status = $PendingStatusCode
-          |)
-          |SELECT  hash
-          |FROM    pending_deploys d
-          |WHERE NOT exists (
-          |  select 1 
-          |  FROM  pending_deploys nd
-          |  WHERE nd.account = d.account
-          |    AND nd.nonce < d.nonce )""".stripMargin
       .query[DeployHash]
       .stream
       .transact(xa)
@@ -331,7 +305,6 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       _ <- sql"DELETE FROM deploys".update.run
       _ <- sql"DELETE FROM buffered_deploys".update.run
       _ <- sql"DELETE FROM deploy_process_results".update.run
-      _ <- sql"DELETE FROM deploy_account_nonce".update.run
     } yield ()).transact(xa)
 
   override def close(): F[Unit] = ().pure[F]

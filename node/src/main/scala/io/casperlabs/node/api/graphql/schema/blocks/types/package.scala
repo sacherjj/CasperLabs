@@ -67,12 +67,6 @@ package object types {
         resolve = c => Base64.encode(c.value.getHeader.accountPublicKey.toByteArray)
       ),
       Field(
-        "nonce",
-        LongType,
-        "Nonce that should be incremented on each deploy for an account".some,
-        resolve = c => c.value.getHeader.nonce
-      ),
-      Field(
         "timestamp",
         DateType,
         "Timestamp when the deploy was created".some,

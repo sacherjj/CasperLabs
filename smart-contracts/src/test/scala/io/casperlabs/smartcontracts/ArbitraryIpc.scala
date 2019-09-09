@@ -55,7 +55,6 @@ trait ArbitraryIpc {
       sessionCode       <- arbDeployPayload.arbitrary
       paymentCode       <- arbDeployPayload.arbitrary
       motes             <- Gen.choose(0L, Long.MaxValue)
-      nonce             <- Gen.choose(1L, Long.MaxValue)
       gasPrice          <- Gen.choose(1L, 1000)
       authorizationKeys <- Gen.listOfN(10, genBytes(32))
     } yield DeployItem()
@@ -64,7 +63,6 @@ trait ArbitraryIpc {
       .withPayment(paymentCode)
       .withMotesTransferredInPayment(motes)
       .withGasPrice(gasPrice)
-      .withNonce(nonce)
       .withAuthorizationKeys(authorizationKeys)
   }
 
