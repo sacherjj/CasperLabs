@@ -136,7 +136,32 @@ For more detailed description, use `--help` flag (`casper-client --help`).
 
 See the instructions [here](QUERYING.md).
 
-#### Using a local standalone node
+###### Advanced deploy options
+
+A function that is part of the deployed contract's module
+can be saved on the blockchain 
+with Contract API function `store_function`.
+Such function becomes a stored contract that
+can be later called from another contract with `call_contract`
+or used instead of a WASM file when creating a new deploy on command line.
+
+
+**Calling a stored contract using its address**
+
+A contract stored on blockchain with `store_function` has an address,
+which is a 32 bits long Blake2b hash of the deploy hash
+and a 32 bits integer function counter.
+The function counter is equal `0` for the first function saved
+with `store_function` during execution of a deploy,
+`1` for the second stored function, and so on.
+
+`casperlabs-client` `deploy` command accepts argument `--session-hash`
+which can be used to create a deploy using a stored contract
+instead of a file with a compiled WASM module.
+Its value should be base16 representation of the contract address,
+for example: `--session-hash 2358448f76c8b3a9e263571007998791a815e954c3c3db2da830a294ea7cba65`.
+
+####  Usinga local standalone node
 
 If you are testing with a [local standalone node](NODE.md#running-a-single-node), you will need to change the `--host` argument:
 
