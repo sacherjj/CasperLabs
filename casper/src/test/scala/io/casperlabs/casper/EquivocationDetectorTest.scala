@@ -101,7 +101,7 @@ class EquivocationDetectorTest
         } yield ()
   }
 
-  "EquivocationDetector" should "work well when block indirect reference previous creator block" in withStorage {
+  "EquivocationDetector" should "not report equivocation when block indirectly references previous creator's block" in withStorage {
     implicit blockStorage =>
       implicit dagStorage =>
         /*
@@ -109,14 +109,15 @@ class EquivocationDetectorTest
          *
          *    v0    |      v1     |
          *          |             |
-         *          |    b5       |
-         *          | /     \     |
+         *          |      b5     |
+         *          |  /     \     |
          *         /|         |   |
-         *       b4 |         |   |
-         *        | |         |   |
-         *       b3 |         |   |
-         *         \|         |   |
-         *          |----b2   |   |
+         *       /
+         *    b4    |         |   |
+         *     |    |         |   |
+         *    b3    |         |   |
+         *       \  |         |   |
+         *         \|----b2   |   |
          *          |     \   /   |
          *          |      b1     |
          *                  \

@@ -52,7 +52,7 @@ object EquivocationDetector {
     *
     * Caution:
     *   Always use method `checkEquivocationWithUpdate`.
-		*   It may not work when receiving a block created by a validator who has equivocated.
+    *   It may not work when receiving a block created by a validator who has equivocated.
     *   For example:
     *
     *       |   v0   |
@@ -76,11 +76,12 @@ object EquivocationDetector {
       maybeLatestMessageOfCreator <- dag.latestMessageHash(block.getHeader.validatorPublicKey)
       equivocated <- maybeLatestMessageOfCreator match {
                       case None =>
+                        // It is the first block by that validator
                         false.pure[F]
                       case Some(latestMessageHashOfCreator) =>
                         val maybeCreatorJustification = creatorJustificationHash(block)
                         if (maybeCreatorJustification == maybeLatestMessageOfCreator) {
-                          Applicative[F].unit
+                          // Directly reference latestMessage of creator of the block
                           false.pure[F]
                         } else
                           for {
@@ -96,19 +97,16 @@ object EquivocationDetector {
                                   .traverse(j => dag.lookup(j.latestBlockHash))
                                   .map(_.flatten)
                             )
+                            // Find whether the block cite latestMessageOfCreator
                             decisionPointBlock <- stream.find(
                                                    b =>
                                                      b == latestMessageOfCreator || b.rank < latestMessageOfCreator.rank
                                                  )
-
                             equivocated = decisionPointBlock != latestMessageOfCreator.some
-                            decisionPrintString = decisionPointBlock
-                              .map(b => PrettyPrinter.buildString(b.blockHash))
-                              .getOrElse("None")
                             _ <- Log[F]
                                   .warn(
-                                    s"Find equivocation: The previous creator justification of Block ${PrettyPrinter
-                                      .buildString(block)} is ${decisionPrintString}, local latestBlockMessage of creator is ${PrettyPrinter
+                                    s"Find equivocation: justifications of block ${PrettyPrinter.buildString(block)} don't cite the latest message by validator ${PrettyPrinter
+                                      .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
                                       .buildString(latestMessageHashOfCreator)}"
                                   )
                                   .whenA(equivocated)
