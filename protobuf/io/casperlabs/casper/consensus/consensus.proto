@@ -130,6 +130,14 @@ message Block {
         bytes validator_public_key = 10;
         // Distance from Genesis.
         uint64 rank = 11;
+        MessageType type = 12;
+    }
+
+    // Currently we have two types of messages but that may change in the future.
+    // It's safer to use an enum than `is*` flag.
+    enum MessageType {
+        block  = 0;
+        ballot = 1;
     }
 
     message Body {
