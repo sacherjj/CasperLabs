@@ -304,6 +304,69 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
         } yield ()
   }
 
+  it should "propagate fixed weights on a DAG when excluding equivocators" in withStorage {
+    implicit blockStorage =>
+      implicit dagStorage =>
+        /* The DAG looks like:
+         *
+         *
+         *            ---i
+         *          /    |
+         *        g   h  |
+         *       | \ /  \|
+         *       d  e   f
+         *      / \/   /
+         *     a  b   c
+         *      \ |  /
+         *       genesis
+         */
+        val v1     = generateValidator("V1")
+        val v2     = generateValidator("V2")
+        val v3     = generateValidator("V3")
+        val v1Bond = Bond(v1, 7)
+        val v2Bond = Bond(v2, 5)
+        val v3Bond = Bond(v3, 3)
+        val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+
+        for {
+          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+          e            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
+          f            <- createBlock[Task](Seq(c.blockHash), v3, bonds)
+          g            <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+          h            <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+          i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+          dag          <- dagStorage.getRepresentation
+          latestBlocks <- dag.latestMessageHashes
+          lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
+          scores       <- Estimator.lmdScoring(dag, lca, latestBlocks, Set(v1))
+          _ = scores shouldEqual Map(
+            genesis.blockHash -> (3 + 5 + 0),
+            a.blockHash       -> (3 + 0),
+            b.blockHash       -> 5,
+            d.blockHash       -> (3 + 0),
+            e.blockHash       -> 5,
+            g.blockHash       -> (3 + 0),
+            h.blockHash       -> 5,
+            i.blockHash       -> 3
+          )
+          scores <- Estimator.lmdScoring(dag, lca, latestBlocks, Set(v1, v2, v3))
+          _ = scores shouldEqual Map(
+            genesis.blockHash -> 0,
+            a.blockHash       -> 0,
+            b.blockHash       -> 0,
+            d.blockHash       -> 0,
+            e.blockHash       -> 0,
+            g.blockHash       -> 0,
+            h.blockHash       -> 0,
+            i.blockHash       -> 0
+          )
+        } yield ()
+  }
+
   it should "stop traversing DAG when reaches the stop hash" in withStorage {
     implicit blockStore =>
       implicit blockDagStorage =>
