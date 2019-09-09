@@ -14,6 +14,9 @@ const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];
 const N_VALIDATORS: u8 = 5;
 
+// one known_uref for each validator, one for the mint and three for the purses
+const EXPECTED_UREFS_LEN: usize = (N_VALIDATORS as usize) + 1 + 3;
+
 const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
 const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
@@ -69,8 +72,7 @@ fn should_run_pos_install_contract() {
         _ => panic!("Expected contract to be written under the key"),
     };
 
-    // one known_uref for each validator, one for the mint and three for the purses
-    assert_eq!(known_urefs.len(), (N_VALIDATORS as usize) + 1 + 3);
+    assert_eq!(known_urefs.len(), EXPECTED_UREFS_LEN);
 
     // bonding purse has correct balance
     let bonding_purse = get_purse(known_urefs, POS_BONDING_PURSE)
