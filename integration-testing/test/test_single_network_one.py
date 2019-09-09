@@ -734,7 +734,7 @@ def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
     deploys = cli("show-deploys", block_hash)
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == deploy_hash
-        assert deploy_info.error_message == 'Exit code: 2'  # Epected: contract called revert(2)
+        assert deploy_info.error_message == 'Exit code: 2'  # Expected: contract called revert(2)
 
     # Call by function address
     revert_test_addr = contract_address(first_deploy_hash, 0).hex()  # assume fn_store_id starts from 0

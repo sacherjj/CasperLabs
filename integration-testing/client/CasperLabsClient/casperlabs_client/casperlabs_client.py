@@ -466,7 +466,8 @@ class CasperLabsClient:
         body = consensus.Deploy.Body(
             session=_encode_contract(session_options, session_args),
             payment=_encode_contract(
-                payment_options, payment == session and session_args or payment_args
+                payment_options,
+                payment_options == session_options and session_args or payment_args,
             ),
         )
 
