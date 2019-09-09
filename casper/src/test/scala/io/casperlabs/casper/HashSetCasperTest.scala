@@ -675,7 +675,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  it should "ignore adding equivocation blocks" in effectTest {
+  it should "adding equivocation blocks" in effectTest {
     for {
       nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
 
@@ -696,118 +696,18 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
       result <- nodes(1).casperEff
-                 .contains(signedBlock1Prime) shouldBeF false // we still add the equivocation pair
+                 .contains(signedBlock1Prime) shouldBeF true // we still add the equivocated block to dag
 
       _ <- nodes(0).tearDownNode()
       _ <- nodes(1).tearDownNode()
       _ <- validateBlockStorage(nodes(1)) { blockStorage =>
             for {
-              _      <- blockStorage.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-              result <- blockStorage.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF None
-            } yield result
-          }(nodes(0).metricEff, nodes(0).logEff)
-    } yield result
-  }
-
-  // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
-  it should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
-    for {
-      nodes <- networkEff(validatorKeys.take(3), genesis, transforms)
-      deployDatas <- (0L to 5L).toList
-                      .traverse[Effect, Deploy](_ => ProtoUtil.basicDeploy[Effect]())
-
-      // Creates a pair that constitutes equivocation blocks.
-      createBlockResult1 <- nodes(0).casperEff
-                             .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-      Created(signedBlock1) = createBlockResult1
-      // Create a 2nd block without storing the 1st, so they have the same parent.
-      createBlockResult1Prime <- nodes(0).casperEff
-                                  .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
-      Created(signedBlock1Prime) = createBlockResult1Prime
-
-      // NOTE: Adding a block created (but not stored) by node(0) directly to node(1)
-      // is not something you can normally achieve with gossiping.
-      _ <- nodes(1).casperEff.addBlock(signedBlock1)
-      _ <- nodes(0).clearMessages() //nodes(0) misses this block
-      _ <- nodes(2).clearMessages() //nodes(2) misses this block
-
-      _ <- nodes(0).casperEff.addBlock(signedBlock1Prime)
-      _ <- nodes(2).receive()
-      _ <- nodes(1).clearMessages() //nodes(1) misses this block
-
-      _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
-      _ <- nodes(2).casperEff.contains(signedBlock1) shouldBeF false
-
-      _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF false
-      _ <- nodes(2).casperEff.contains(signedBlock1Prime) shouldBeF true
-
-      // Now that node(1) and node(2) have different blocks, they each create one on top of theirs.
-      createBlockResult2 <- nodes(1).casperEff
-                             .deploy(deployDatas(2)) *> nodes(1).casperEff.createBlock
-      Created(signedBlock2) = createBlockResult2
-      createBlockResult3 <- nodes(2).casperEff
-                             .deploy(deployDatas(3)) *> nodes(2).casperEff.createBlock
-      Created(signedBlock3) = createBlockResult3
-
-      _ <- nodes(2).casperEff.addBlock(signedBlock3)
-      _ <- nodes(1).casperEff.addBlock(signedBlock2)
-      _ <- nodes(2).clearMessages() //nodes(2) ignores block2
-      _ <- nodes(1).receive() // receives block3; asks for block1'
-      _ <- nodes(2).receive() // receives request for block1'; sends block1'
-      _ <- nodes(1).receive() // receives block1'; adds both block3 and block1'
-
-      // node(1) should have both block2 and block3 at this point and recognize the equivocation.
-      // Because node(1) will also see that the signedBlock3 is building on top of signedBlock1Prime,
-      //it should download signedBlock1Prime as an `AdmissibleEquivocation`; otherwise if it didn't
-      // have an offspring it would be an `IgnorableEquivocation` and dropped.
-      _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true
-      _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
-
-      createBlockResult4 <- nodes(1).casperEff
-                             .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
-      Created(signedBlock4) = createBlockResult4
-      _                     <- nodes(1).casperEff.addBlock(signedBlock4)
-
-      // Node 1 should contain both blocks constituting the equivocation
-      _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
-      _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
-
-      _ <- nodes(1).casperEff
-            .contains(signedBlock4) shouldBeF false // Since we have enough evidence that it is equivocation, we no longer add it to dag.
-
-      _ = nodes(1).logEff.infos.count(_ contains "Added admissible equivocation") should be(1)
-      _ = nodes(2).logEff.warns.size should be(0)
-      _ = nodes(1).logEff.warns.size should be(1)
-      _ = nodes(0).logEff.warns.size should be(0)
-
-      _ <- nodes(1).casperEff
-            .normalizedInitialFault(ProtoUtil.weightMap(genesis)) shouldBeF 1f / (1f + 3f + 5f + 7f)
-      _ <- nodes.map(_.tearDownNode()).toList.sequence
-
-      _ <- validateBlockStorage(nodes(0)) { blockStorage =>
-            for {
-              _ <- blockStorage.getBlockMessage(signedBlock1.blockHash) shouldBeF None
+              _ <- blockStorage.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
               result <- blockStorage.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
                          signedBlock1Prime
                        )
             } yield result
           }(nodes(0).metricEff, nodes(0).logEff)
-      _ <- validateBlockStorage(nodes(1)) { blockStorage =>
-            for {
-              _      <- blockStorage.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-              result <- blockStorage.getBlockMessage(signedBlock4.blockHash) shouldBeF None
-            } yield result
-          }(nodes(1).metricEff, nodes(1).logEff)
-      result <- validateBlockStorage(nodes(2)) { blockStorage =>
-                 for {
-                   _ <- blockStorage.getBlockMessage(signedBlock3.blockHash) shouldBeF Some(
-                         signedBlock3
-                       )
-                   result <- blockStorage.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
-                              signedBlock1Prime
-                            )
-                 } yield result
-               }(nodes(2).metricEff, nodes(2).logEff)
     } yield result
   }
 
@@ -828,13 +728,13 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       block1Prime <- makeDeploy(0)
 
       _ <- nodes(0).casperEff.addBlock(block1) shouldBeF Valid
-      _ <- nodes(0).casperEff.addBlock(block1Prime) shouldBeF IgnorableEquivocation
+      _ <- nodes(0).casperEff.addBlock(block1Prime) shouldBeF EquivocatedBlock
       _ <- nodes(1).clearMessages()
       _ <- nodes(1).casperEff.addBlock(block1Prime) shouldBeF Valid
       _ <- nodes(0).receive()
 
       _ <- nodes(0).casperEff.contains(block1) shouldBeF true
-      _ <- nodes(0).casperEff.contains(block1Prime) shouldBeF false
+      _ <- nodes(0).casperEff.contains(block1Prime) shouldBeF true
 
       block2Prime <- makeDeploy(1)
       _           <- nodes(1).casperEff.addBlock(block2Prime) shouldBeF Valid
