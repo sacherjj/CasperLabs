@@ -11,6 +11,8 @@ mod local_state;
 #[cfg(test)]
 mod main_purse;
 #[cfg(test)]
+mod mint_purse;
+#[cfg(test)]
 mod revert;
 #[cfg(test)]
 mod transfer;
