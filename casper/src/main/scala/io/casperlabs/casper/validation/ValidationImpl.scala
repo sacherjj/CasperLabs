@@ -415,22 +415,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F]
   ): F[Unit] =
     for {
-      creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b.getHeader).foldM(-1) {
-                                        case (_, Justification(_, latestBlockHash)) =>
-                                          dag.lookup(latestBlockHash).flatMap {
-                                            case Some(meta) =>
-                                              meta.validatorBlockSeqNum.pure[F]
-
-                                            case None =>
-                                              MonadThrowable[F].raiseError[Int](
-                                                new Exception(
-                                                  s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
-                                                )
-                                              )
-                                          }
-                                      }
-      number = b.getHeader.validatorBlockSeqNum
-      ok     = creatorJustificationSeqNumber + 1 == number
+      creatorJustificationSeqNumber <- ProtoUtil.calculateValidatorBlockSeqNum(dag, b.getHeader)
+      number                        = b.getHeader.validatorBlockSeqNum
+      ok                            = creatorJustificationSeqNumber + 1 == number
       _ <- if (ok) {
             Applicative[F].unit
           } else {

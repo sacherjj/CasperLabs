@@ -161,6 +161,27 @@ object ProtoUtil {
       case (acc, blockMetadata) => math.max(acc, blockMetadata.rank)
     }
 
+  def calculateValidatorBlockSeqNum[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      blockHeader: Block.Header
+  ): F[Int] =
+    creatorJustification(blockHeader)
+      .foldM(-1) {
+        case (_, Justification(_, latestBlockHash)) =>
+          dag.lookup(latestBlockHash).flatMap {
+            case Some(meta) =>
+              meta.validatorBlockSeqNum.pure[F]
+
+            case None =>
+              MonadThrowable[F].raiseError[Int](
+                new Exception(
+                  s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
+                )
+              )
+          }
+      }
+      .map(_ + 1)
+
   def creatorJustification(header: Block.Header): Option[Justification] =
     header.justifications
       .find {
@@ -373,7 +394,7 @@ object ProtoUtil {
       .withBody(body)
   }
 
-  def signBlock[F[_]: Applicative](
+  def signBlock[F[_]: MonadThrowable](
       block: Block,
       dag: DagRepresentation[F],
       pk: PublicKey,
@@ -382,8 +403,7 @@ object ProtoUtil {
   ): F[Block] = {
     val validator = ByteString.copyFrom(pk)
     for {
-      latestMessageOpt <- dag.latestMessage(validator)
-      seqNum           = latestMessageOpt.fold(-1)(_.validatorBlockSeqNum) + 1
+      seqNum <- calculateValidatorBlockSeqNum(dag, block.getHeader)
       header = {
         assert(block.header.isDefined, "A block without a header doesn't make sense")
         block.getHeader
