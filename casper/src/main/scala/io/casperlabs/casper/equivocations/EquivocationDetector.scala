@@ -4,11 +4,13 @@ import cats.{Applicative, Monad}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
-import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.{CasperState, EquivocatedBlock, InvalidBlock, PrettyPrinter}
 import io.casperlabs.shared.{Cell, Log, LogSource, StreamT}
+
+import scala.collection.immutable.{Map, Set}
 
 object EquivocationDetector {
 
@@ -147,6 +149,75 @@ object EquivocationDetector {
         .traverse(j => dag.lookup(j.latestBlockHash))
         .map(_.flatten)
     )
+  }
+
+  /**
+    * Find equivocators basing latestMessageHashes
+		*
+    * We use `bfToposortTraverseF` to traverse from `latestMessageHashes` down to minimal rank
+    * of base block of equivocationRecord. `bfToposortTraverseF` guarantee that we will only
+    * meet a specific block only once, and `validatorBlockSeqNum` is equal to 1 plus
+    * validatorBlock of creator's previous created block. So that once we find duplicated
+    * (Validator, validatorBlockSeqNum), we know the validator has equivocated.
+		*
+    * @param dag the block dag
+    * @param latestMessagesHashes generate from direct justifications
+    * @param equivocationTracker local tracker of equivocations
+    * @tparam F effect type
+    * @return equivocators that can be seen from view of latestMessages
+    */
+  def equivocatorDetectFromLatestMessage[F[_]: Monad](
+      dag: DagRepresentation[F],
+      latestMessagesHashes: Map[Validator, BlockHash],
+      equivocationTracker: Map[Validator, Long]
+  ): F[Set[Validator]] = {
+    val equivocationRecords = equivocationTracker.filterKeys(latestMessagesHashes.contains)
+    val minRank             = equivocationRecords.values.fold(0L)(_ min _)
+    for {
+      latestMessage                                         <- latestMessagesHashes.values.toList.traverse(dag.lookup).map(_.flatten)
+      implicit0(blockTopoOrdering: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingDesc
+
+      stream = DagOperations.bfToposortTraverseF(latestMessage)(
+        _.justifications.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
+      )
+      acc <- stream
+              .foldWhileLeft(
+                (Set.empty[Validator], Set.empty[(Validator, Int)])
+              ) {
+                case (
+                    (detectedEquivocator, visitedValidatorAndBlockSeqNum),
+                    b
+                    ) =>
+                  val creator            = b.validatorPublicKey
+                  val creatorBlockSeqNam = b.validatorBlockSeqNum
+                  if (detectedEquivocator == equivocationRecords.keySet || b.rank <= minRank) {
+                    // Stop traversal if all equivocator has occurred in j-post-dag of latestMessages
+                    // or we traversal down to minimal of rank of base block of all equivocator
+                    Right(
+                      (detectedEquivocator, visitedValidatorAndBlockSeqNum)
+                    )
+                  } else if (detectedEquivocator.contains(creator)) {
+                    Left((detectedEquivocator, visitedValidatorAndBlockSeqNum))
+                  } else if (visitedValidatorAndBlockSeqNum.contains(
+                               (creator, creatorBlockSeqNam)
+                             )) {
+                    Left(
+                      (
+                        detectedEquivocator + creator,
+                        visitedValidatorAndBlockSeqNum
+                      )
+                    )
+                  } else {
+                    Left(
+                      (
+                        detectedEquivocator,
+                        visitedValidatorAndBlockSeqNum + (creator -> creatorBlockSeqNam)
+                      )
+                    )
+                  }
+              }
+      (detectedEquivocator, _) = acc
+    } yield detectedEquivocator
   }
 
   private def rankOfEarlierMessageFromCreator[F[_]: Monad: Log](
