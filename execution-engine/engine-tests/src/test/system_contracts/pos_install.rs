@@ -1,10 +1,13 @@
 use crate::support::exec_with_return;
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::Value;
 use contract_ffi::value::U512;
+use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 use std::collections::{BTreeMap, HashMap};
 
@@ -30,10 +33,12 @@ fn should_run_pos_install_contract() {
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_to_account_01.wasm",
+            (SYSTEM_ADDR,),
             DEFAULT_BLOCK_TIME,
             DEPLOY_HASH_1,
-            (SYSTEM_ADDR,),
         )
         .commit()
         .expect_success();

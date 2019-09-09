@@ -7,6 +7,7 @@ use crate::support::test_support::{
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
+use engine_core::engine_state::genesis::POS_REWARDS_PURSE;
 use engine_core::engine_state::{EngineConfig, CONV_RATE, MAX_PAYMENT};
 use engine_shared::transform::Transform;
 
@@ -510,6 +511,68 @@ fn should_correctly_charge_when_session_code_succeeds() {
         initial_balance, tally,
         "no net resources should be gained or lost post-distribution"
     );
+    assert_eq!(
+        initial_balance, tally,
+        "no net resources should be gained or lost post-distribution"
+    )
+}
+
+fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Option<PurseId> {
+    let pos_contract = builder.get_pos_contract();
+
+    pos_contract
+        .urefs_lookup()
+        .get(purse_name)
+        .and_then(Key::as_uref)
+        .map(|u| PurseId::new(*u))
+}
+
+fn get_pos_rewards_purse_balance(builder: &WasmTestBuilder) -> U512 {
+    let purse_id = get_pos_purse_id_by_name(builder, POS_REWARDS_PURSE)
+        .expect("should find PoS payment purse");
+    builder.get_purse_balance(purse_id)
+}
+
+#[ignore]
+#[test]
+fn should_finalize_to_rewards_purse() {
+    let genesis_addr = GENESIS_ADDR;
+    let genesis_public_key = PublicKey::new(genesis_addr);
+    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let payment_purse_amount = 10_000_000;
+    let transferred_amount = 1;
+
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
+
+    let exec_request = {
+        let deploy = DeployBuilder::new()
+            .with_address(genesis_addr)
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (account_1_public_key, U512::from(transferred_amount)),
+            )
+            .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
+            .with_authorization_keys(&[genesis_public_key])
+            .with_deploy_hash([1; 32])
+            .build();
+
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    let mut builder = WasmTestBuilder::new(engine_config);
+
+    builder.run_genesis(genesis_addr, HashMap::default());
+
+    let rewards_purse_balance = get_pos_rewards_purse_balance(&builder);
+    assert!(rewards_purse_balance.is_zero());
+
+    builder
+        .exec_with_exec_request(exec_request)
+        .expect_success()
+        .commit();
+
+    let rewards_purse_balance = get_pos_rewards_purse_balance(&builder);
+    assert!(!rewards_purse_balance.is_zero());
 }
 
 #[ignore]
