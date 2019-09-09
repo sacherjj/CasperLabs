@@ -669,7 +669,7 @@ def test_cli_scala_extended_deploy(scala_cli):
     cli = scala_cli
     account = GENESIS_ACCOUNT
 
-    # TODO: when paralelizing testd, make sure test don't collide
+    # TODO: when paralelizing tests, make sure test don't collide
     # when trying to access the same file, perhaps map containers /tmp
     # to a unique hosts's directory.
 
@@ -701,19 +701,18 @@ def test_cli_scala_extended_deploy(scala_cli):
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
     cli = scala_cli
     account = scala_cli.node.test_account
-    public_key, private_key = account.public_key_docker_path, account.private_key_docker_path
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account))
 
     # First, deploy a contract that stores a function
     # and saves pointer to it under UREF "revert_test".
     # The stored function calls revert(2).
-    test_contract = "/data/test_subcall_revert_define.wasm"
+    test_contract = cli.resource("test_subcall_revert_define.wasm")
 
     first_deploy_hash = cli('deploy',
-                            '--from', account.public_key_hex,
                             '--session', test_contract,
-                            '--payment', test_contract,
-                            '--private-key', private_key,
-                            '--public-key', public_key)
+                            '--payment', test_contract)
     block_hash = cli("propose")
 
     deploys = cli("show-deploys", block_hash)
@@ -724,11 +723,8 @@ def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
 
     # Call by name
     deploy_hash = cli("deploy",
-                      '--from', account.public_key_hex,
                       '--session-name', "revert_test",
-                      '--payment-name', "revert_test",
-                      '--private-key', private_key,
-                      '--public-key', public_key)
+                      '--payment-name', "revert_test")
     block_hash = cli("propose")
 
     deploys = cli("show-deploys", block_hash)
@@ -739,11 +735,8 @@ def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
     # Call by function address
     revert_test_addr = contract_address(first_deploy_hash, 0).hex()  # assume fn_store_id starts from 0
     deploy_hash = cli("deploy",
-                      '--from', account.public_key_hex,
                       '--session-hash', revert_test_addr,
-                      '--payment-hash', revert_test_addr,
-                      '--private-key', private_key,
-                      '--public-key', public_key)
+                      '--payment-hash', revert_test_addr)
     block_hash = cli("propose")
 
     deploys = cli("show-deploys", block_hash)
