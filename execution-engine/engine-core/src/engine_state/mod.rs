@@ -185,7 +185,7 @@ where
         )
     }
 
-    fn get_module<A, P: Preprocessor<A>>(
+    pub fn get_module<A, P: Preprocessor<A>>(
         &self,
         tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
         deploy_item: &ExecutableDeployItem,

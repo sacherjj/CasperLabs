@@ -25,6 +25,15 @@ class CLI:
         self.internal_port = node.grpc_internal_docker_port
         self.cli_cmd = cli_cmd
         self.tls_parameters = tls_parameters or {}
+        self.default_deploy_args = []
+        self.resources_directory = "resources/"
+
+    def set_default_deploy_args(self, *args):
+        """ Set args that will be appended to subsequent deploy command. """
+        self.default_deploy_args = [str(arg) for arg in args]
+
+    def resource(self, file_name):
+        return self.resources_directory + file_name
 
     def expand_args(self, args):
         connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
@@ -33,7 +42,10 @@ class CLI:
                 add,
                 [[str(p), str(self.tls_parameters[p])] for p in self.tls_parameters],
             )
-        string_args = [str(a) for a in args]
+        string_args = [str(a) for a in list(args)]
+
+        if args and args[0] == "deploy":
+            string_args += self.default_deploy_args
 
         return "--help" in args and string_args or connection_details + string_args
 
@@ -81,8 +93,18 @@ class CLI:
 
         return self.parse_output(args[0], binary_output)
 
+    def public_key_path(self, account):
+        return account.public_key_path
+
+    def private_key_path(self, account):
+        return account.private_key_path
+
 
 class DockerCLI(CLI):
+    def __init__(self, node, tls_parameters=None):
+        super().__init__(node, tls_parameters=tls_parameters)
+        self.resources_directory = "/data/"
+
     def __call__(self, *args):
         logging.info(f"EXECUTING []: {args}")
         self.host = self.node.container_name
@@ -92,3 +114,9 @@ class DockerCLI(CLI):
             command, decode_stdout=False, add_host=False
         )
         return self.parse_output(args[0], binary_output)
+
+    def public_key_path(self, account):
+        return account.public_key_docker_path
+
+    def private_key_path(self, account):
+        return account.private_key_docker_path

@@ -5,8 +5,9 @@ use std::rc::Rc;
 
 use grpc::RequestOptions;
 
+use contract_ffi::value::U512;
 use engine_core::engine_state::utils::WasmiBytes;
-use engine_core::engine_state::{EngineConfig, EngineState};
+use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT};
 use engine_core::execution::POS_NAME;
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
@@ -17,6 +18,7 @@ use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{to_domain_validators, CommitTransforms};
 use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_grpc_server::engine_server::{ipc, transforms};
+use engine_shared::gas::Gas;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
@@ -282,17 +284,21 @@ pub fn create_query_request(
     query_request
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_exec_request(
     address: [u8; 32],
-    session_contract_file_name: &str,
+    payment_file: &str,
+    payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    session_file: &str,
+    session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     pre_state_hash: &[u8],
     block_time: u64,
     deploy_hash: [u8; 32],
-    arguments: impl contract_ffi::contract_api::argsparser::ArgsParser,
     authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
 ) -> ExecRequest {
     let deploy = DeployBuilder::new()
-        .with_session_code(session_contract_file_name, arguments)
+        .with_session_code(session_file, session_args)
+        .with_payment_code(payment_file, payment_args)
         .with_address(address)
         .with_authorization_keys(&authorized_keys)
         .with_deploy_hash(deploy_hash)
@@ -351,6 +357,15 @@ pub fn get_exec_transforms(
                 .expect("should convert");
             commit_transforms.value()
         })
+        .collect()
+}
+
+pub fn get_exec_costs(exec_response: &ExecResponse) -> Vec<Gas> {
+    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
+
+    deploy_results
+        .iter()
+        .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
         .collect()
 }
 
@@ -452,6 +467,8 @@ pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> Stri
     }
 }
 
+pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
+
 /// Builder for simple WASM test
 #[derive(Clone)]
 pub struct WasmTestBuilder {
@@ -478,8 +495,9 @@ pub struct WasmTestBuilder {
 
 impl Default for WasmTestBuilder {
     fn default() -> WasmTestBuilder {
+        let engine_config = EngineConfig::new().set_use_payment_code(true);
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
-        let engine_state = EngineState::new(global_state, Default::default());
+        let engine_state = EngineState::new(global_state, engine_config);
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
@@ -666,43 +684,53 @@ impl WasmTestBuilder {
 
     /// Runs a contract and after that runs actual WASM contract and expects
     /// transformations to happen at the end of execution.
+    #[allow(clippy::too_many_arguments)]
     pub fn exec_with_args_and_keys(
         &mut self,
         address: [u8; 32],
-        wasm_file: &str,
+        payment_file: &str,
+        payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+        session_file: &str,
+        session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         block_time: u64,
         deploy_hash: [u8; 32],
-        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
     ) -> &mut WasmTestBuilder {
         let exec_request = create_exec_request(
             address,
-            &wasm_file,
+            payment_file,
+            payment_args,
+            session_file,
+            session_args,
             self.post_state_hash
                 .as_ref()
                 .expect("Should have post state hash"),
             block_time,
             deploy_hash,
-            args,
             authorized_keys,
         );
         self.exec_with_exec_request(exec_request)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn exec_with_args(
         &mut self,
         address: [u8; 32],
-        wasm_file: &str,
+        payment_file: &str,
+        payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+        session_file: &str,
+        session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         block_time: u64,
         deploy_hash: [u8; 32],
-        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     ) -> &mut WasmTestBuilder {
         self.exec_with_args_and_keys(
             address,
-            wasm_file,
+            payment_file,
+            payment_args,
+            session_file,
+            session_args,
             block_time,
             deploy_hash,
-            args,
             // Exec with different account also implies the authorized keys should default to
             // the calling account.
             vec![contract_ffi::value::account::PublicKey::new(address)],
@@ -712,11 +740,21 @@ impl WasmTestBuilder {
     pub fn exec(
         &mut self,
         address: [u8; 32],
-        wasm_file: &str,
+        session_file: &str,
         block_time: u64,
         deploy_hash: [u8; 32],
     ) -> &mut WasmTestBuilder {
-        self.exec_with_args(address, wasm_file, block_time, deploy_hash, ())
+        let payment_file = STANDARD_PAYMENT_CONTRACT;
+        let payment_args = (U512::from(MAX_PAYMENT),);
+        self.exec_with_args(
+            address,
+            payment_file,
+            payment_args,
+            session_file,
+            (), // no arguments passed to session contract by default
+            block_time,
+            deploy_hash,
+        )
     }
 
     /// Commit effects of previous exec call on the latest post-state hash.
@@ -853,6 +891,10 @@ impl WasmTestBuilder {
         self.post_state_hash
             .clone()
             .expect("Should have post-state hash.")
+    }
+
+    pub fn get_engine_state(&self) -> &EngineState<InMemoryGlobalState> {
+        &self.engine_state
     }
 
     pub fn get_exec_response(&self, index: usize) -> Option<&ExecResponse> {

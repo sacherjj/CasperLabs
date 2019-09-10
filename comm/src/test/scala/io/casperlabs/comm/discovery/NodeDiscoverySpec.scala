@@ -470,11 +470,11 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           alivePeersCacheSize = totalN(peers),
           // To cause update on next cycle
           alivePeersCacheMinThreshold = totalN(peers) + 1,
-          alivePeersCacheUpdatePeriod = 100.milliseconds
+          alivePeersCacheUpdatePeriod = 200.milliseconds
         ) { (kademlia, nd, _) =>
           for {
             _ <- nd.schedulePeriodicRecentlyAlivePeersCacheUpdate.start
-            _ <- Task.sleep(150.millis)
+            _ <- Task.sleep(300.millis)
           } yield {
             kademlia.totalPings shouldBe (totalN(peers) * 2)
           }
