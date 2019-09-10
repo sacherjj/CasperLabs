@@ -130,10 +130,10 @@ message Block {
         bytes validator_public_key = 10;
         // Distance from Genesis.
         uint64 rank = 11;
-        MessageType type = 12;
+        Role role_type = 12;
     }
 
-    enum MessageType {
+    enum Role {
         // Regular block (with deploys, multiple parents etc).
         BLOCK  = 0;
         // A message that doesn't have any deploys,
