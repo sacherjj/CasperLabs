@@ -216,12 +216,6 @@ private[configuration] final case class Options private (
       )
 
     @scallop
-    val tlsSecureRandomNonBlocking =
-      gen[Flag](
-        "Use a non blocking secure random instance."
-      )
-
-    @scallop
     val serverPort =
       gen[Int]("Network port to use for intra-node gRPC communication.", 'p')
 

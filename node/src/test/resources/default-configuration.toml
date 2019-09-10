@@ -55,7 +55,6 @@ use-tls = false
 [tls]
 certificate = "/tmp/test"
 key = "/tmp/test"
-secure-random-non-blocking = false
 
 [casper]
 validator-public-key = "test"

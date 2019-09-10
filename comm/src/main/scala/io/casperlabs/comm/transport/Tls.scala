@@ -8,12 +8,7 @@ import scala.io.Source
 
 final case class Tls(
     certificate: Path,
-    key: Path,
-    @ignore
-    customCertificateLocation: Boolean = false,
-    @ignore
-    customKeyLocation: Boolean = false,
-    secureRandomNonBlocking: Boolean
+    key: Path
 ) extends SubConfig {
   def readCertAndKey: Tls.CertAndKey = {
     val c = Resources.withResource(Source.fromFile(certificate.toFile))(_.mkString)

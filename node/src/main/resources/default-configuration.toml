@@ -154,14 +154,12 @@ use-tls = false
 # io.casperlabs.comm.transport.Tls
 [tls]
 
-# Path to node's X.509 certificate file, that is being used for identification.
+# Path to node's X.509 certificate file, that is being used for identification during intra-node gossiping.
+# The Common Name in the certificate should be the same as the Keccak256 hash of the public key in it.
 certificate = "$HOME/.casperlabs/node.certificate.pem"
 
-# Path to node's unencrypted secp256r1 PKCS#8 private key file, that is being used for TLS communication.
+# Path to node's unencrypted secp256r1 PKCS#8 private key file, that is being used for intra-node TLS communication.
 key = "$HOME/.casperlabs/node.key.pem"
-
-# Use a non blocking secure random instance.
-secure-random-non-blocking = false
 
 
 # io.casperlabs.casper.CasperConf
