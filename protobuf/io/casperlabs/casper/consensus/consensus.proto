@@ -133,10 +133,12 @@ message Block {
         MessageType type = 12;
     }
 
-    // Currently we have two types of messages but that may change in the future.
-    // It's safer to use an enum than `is*` flag.
     enum MessageType {
+        // Regular block (with deploys, multiple parents etc).
         BLOCK  = 0;
+        // A message that doesn't have any deploys,
+        // targets one block (no secondary parents),
+        // and cannot be used as a parent (is a leaf in the DAG).
         BALLOT = 1;
     }
 
