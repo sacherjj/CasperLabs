@@ -172,8 +172,14 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val tlsApiCertificate =
     opt[File](
       descr =
-        "Certificate of the node to be used for TLS communication. If the --node-id is also provided it will override the authority in the certificate, otherwise we expect the certificate to match the domain.",
-      required = false
+        "Certificate of the node to be used for TLS communication. If the --node-id is also provided it will override the authority in the certificate, otherwise we expect the certificate to match the domain."
+    )
+
+  val useTls =
+    opt[String](
+      descr =
+        "Optionally, force the TLS to be on or off. When it's on without node-id or tls-api-certificate it will rely on the default system certificate chain. [true | false]",
+      validate = Set("true", "false").contains(_)
     )
 
   val makeDeploy = new Subcommand("make-deploy") with DeployOptions {

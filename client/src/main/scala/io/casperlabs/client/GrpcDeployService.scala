@@ -7,6 +7,7 @@ import java.util.concurrent.{ThreadFactory, TimeUnit}
 import cats.Id
 import cats.data.StateT
 import cats.mtl.implicits._
+import cats.syntax.option._
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.state.Value
@@ -36,7 +37,7 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
   private var internalConnected = false
 
   private def makeChannel(port: Int): ManagedChannel = {
-    var builder = NettyChannelBuilder
+    val builder = NettyChannelBuilder
       .forAddress(conn.host, port)
       .maxInboundMessageSize(DefaultMaxMessageSize)
       //.eventLoopGroup(new NioEventLoopGroup(0, scheduler))
@@ -46,46 +47,54 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       .executor(scheduler)
 
     // Decide whether to use SSL encryption.
-    builder = (conn.nodeId, conn.tlsApiCertificate) match {
-      case (None, None) =>
+    val maybeSslContext: Option[io.netty.handler.ssl.SslContext] =
+      (conn.nodeId, conn.tlsApiCertificate, conn.useTls) match {
+        case (None, None, None) | (_, _, Some(false)) =>
+          none
+
+        case (None, None, Some(true)) =>
+          // We expect that the server will have a normal SSL certificate signed by a Root CA that
+          // we can verify using the systems built-in certs. PAssing `null` as a file should do the same.
+          GrpcSslContexts.forClient.build.some
+
+        case (_, Some(crt), _) =>
+          // Server side TLS only. The client will compare the server side cert with
+          // what it has on disk. An example of obtaining a cert programmatically:
+          // openssl s_client -showcerts -connect localhost:40401 </dev/null 2>/dev/null | openssl x509 -outform PEM > node.crt
+          GrpcSslContexts.forClient
+            .trustManager(crt)
+            .build
+            .some
+
+        case (Some(_), _, _) =>
+          // Server side TLS only. The client will compare the Node ID it's expecting the server
+          // to have with the hash of the public key from the TLS certificate.
+          val trustManagerFactory = new SimpleTrustManagerFactory {
+            private val hostNameTrustManager = new HostnameTrustManager()
+
+            def engineInit(keyStore: KeyStore): Unit                                 = {}
+            def engineInit(managerFactoryParameters: ManagerFactoryParameters): Unit = {}
+            def engineGetTrustManagers(): Array[TrustManager] =
+              Array[TrustManager](hostNameTrustManager)
+          }
+
+          GrpcSslContexts.forClient
+            .trustManager(trustManagerFactory)
+            .build
+            .some
+      }
+
+    maybeSslContext match {
+      case None =>
         builder.usePlaintext
-
-      case (Some(_), None) =>
-        // Server side TLS only. The client will compare the Node ID it's expecting the server
-        // to have with the hash of the public key from the TLS certificate.
-        val trustManagerFactory = new SimpleTrustManagerFactory {
-          private val hostNameTrustManager = new HostnameTrustManager()
-
-          def engineInit(keyStore: KeyStore): Unit                                 = {}
-          def engineInit(managerFactoryParameters: ManagerFactoryParameters): Unit = {}
-          def engineGetTrustManagers(): Array[TrustManager] =
-            Array[TrustManager](hostNameTrustManager)
+      case Some(sslContext) =>
+        builder
+          .negotiationType(NegotiationType.TLS)
+          .sslContext(sslContext)
+        // If the node ID is given then assume the cert is made for that name.
+        conn.nodeId foreach { hash =>
+          builder.overrideAuthority(hash) // So it doesn't expect for the host name to match the Common Name in the cert.
         }
-
-        val sslContext = GrpcSslContexts.forClient
-          .trustManager(trustManagerFactory)
-          .build
-
-        builder
-          .negotiationType(NegotiationType.TLS)
-          .sslContext(sslContext)
-
-      case (_, Some(crt)) =>
-        // Server side TLS only. The client will compare the server side cert with
-        // what it has on disk. An example of obtaining a cert programmatically:
-        // openssl s_client -showcerts -connect localhost:40401 </dev/null 2>/dev/null | openssl x509 -outform PEM > node.crt
-        val sslContext = GrpcSslContexts.forClient
-          .trustManager(crt) // `null` would use the system default, which could be enough if we have Root CA signed cert.
-          .build
-
-        builder
-          .negotiationType(NegotiationType.TLS)
-          .sslContext(sslContext)
-    }
-
-    // If the node ID is given then assume the cert is made for that name.
-    builder = conn.nodeId.fold(builder) { hash =>
-      builder.overrideAuthority(hash) // So it doesn't expect for the host name to match the Common Name in the cert.
     }
 
     builder.build()
