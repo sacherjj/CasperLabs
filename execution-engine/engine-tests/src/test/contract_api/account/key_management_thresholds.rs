@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use contract_ffi::value::account::PublicKey;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
@@ -13,7 +13,7 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 #[ignore]
 #[test]
 fn should_verify_key_management_permission_with_low_weight() {
-    WasmTestBuilder::default()
+    InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
@@ -43,7 +43,7 @@ fn should_verify_key_management_permission_with_low_weight() {
 #[ignore]
 #[test]
 fn should_verify_key_management_permission_with_sufficient_weight() {
-    WasmTestBuilder::default()
+    InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,

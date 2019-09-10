@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder};
+use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
 use contract_ffi::execution::Phase;
 use contract_ffi::value::account::PublicKey;
 use engine_core::engine_state::EngineConfig;
@@ -26,7 +26,7 @@ fn should_run_get_phase_contract() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    WasmTestBuilder::new(engine_config)
+    InMemoryWasmTestBuilder::new(engine_config)
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_exec_request(exec_request)
         .commit()

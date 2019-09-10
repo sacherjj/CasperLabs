@@ -6,7 +6,7 @@ use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 
 const CREATE: &str = "create";
@@ -31,7 +31,7 @@ fn should_run_ee_572_regression() {
 
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let mut builder = WasmTestBuilder::default();
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     // Create Accounts
     builder

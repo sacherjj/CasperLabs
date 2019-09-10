@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::value::account::Weight;
 use contract_ffi::value::U512;
@@ -14,7 +14,7 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 fn should_run_ee_539_serialize_action_thresholds_regression() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let _result = WasmTestBuilder::default()
+    let _result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,

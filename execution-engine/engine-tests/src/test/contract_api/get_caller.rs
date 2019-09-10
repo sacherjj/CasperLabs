@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
@@ -14,7 +14,7 @@ const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
 #[ignore]
 #[test]
 fn should_run_get_caller_contract() {
-    WasmTestBuilder::default()
+    InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
@@ -28,7 +28,7 @@ fn should_run_get_caller_contract() {
         .commit()
         .expect_success();
 
-    WasmTestBuilder::default()
+    InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
@@ -57,7 +57,7 @@ fn should_run_get_caller_contract() {
 #[ignore]
 #[test]
 fn should_run_get_caller_subcall_contract() {
-    WasmTestBuilder::default()
+    InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
@@ -71,7 +71,7 @@ fn should_run_get_caller_subcall_contract() {
         .commit()
         .expect_success();
 
-    WasmTestBuilder::default()
+    InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,

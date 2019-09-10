@@ -6,7 +6,7 @@ use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
 };
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
@@ -18,7 +18,7 @@ fn should_run_purse_to_purse_transfer() {
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
 
-    let transfer_result = WasmTestBuilder::default()
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
@@ -115,7 +115,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
 
-    let transfer_result = WasmTestBuilder::default()
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,

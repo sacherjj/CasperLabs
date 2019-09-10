@@ -6,10 +6,13 @@ use contract_ffi::uref::URef;
 use contract_ffi::value::account::BlockTime;
 use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 use engine_core::engine_state::execution_effect::ExecutionEffect;
+use engine_core::engine_state::EngineState;
 use engine_core::execution;
 use engine_core::runtime_context::RuntimeContext;
+use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
+use engine_storage::global_state::StateProvider;
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::WasmiPreprocessor;
 use std::cell::RefCell;
@@ -22,17 +25,23 @@ const INIT_PROTOCOL_VERSION: u64 = 1;
 
 /// This function allows executing the contract stored in the given `wasm_file`, while capturing the
 /// output. It is essentially the same functionality as `Executor::exec`, but the return value of
-/// the contract is returned along with the effects. The  purpose of this function is to test
+/// the contract is returned along with the effects. The purpose of this function is to test
 /// installer contracts used in the new genesis process.
-pub fn exec<T: FromBytes>(
-    builder: &mut WasmTestBuilder,
+pub fn exec<S, T>(
+    builder: &mut WasmTestBuilder<S>,
     address: [u8; 32],
     wasm_file: &str,
     block_time: u64,
     deploy_hash: [u8; 32],
     args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     extra_urefs: Vec<URef>,
-) -> Option<(T, Vec<URef>, ExecutionEffect)> {
+) -> Option<(T, Vec<URef>, ExecutionEffect)>
+where
+    S: StateProvider,
+    S::Error: Into<execution::Error>,
+    EngineState<S>: ExecutionEngineService,
+    T: FromBytes,
+{
     let prestate = builder
         .get_poststate_hash()
         .as_slice()

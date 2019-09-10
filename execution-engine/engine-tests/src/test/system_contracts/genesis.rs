@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use grpc::RequestOptions;
 
-use crate::support::test_support::WasmTestBuilder;
+use crate::support::test_support::InMemoryWasmTestBuilder;
 use engine_core::engine_state::{EngineConfig, EngineState};
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -35,7 +35,7 @@ fn should_run_genesis() {
 #[ignore]
 #[test]
 fn test_genesis_hash_match() {
-    let mut builder_base = WasmTestBuilder::default();
+    let mut builder_base = InMemoryWasmTestBuilder::default();
 
     let builder = builder_base.run_genesis(GENESIS_ADDR, HashMap::new());
 

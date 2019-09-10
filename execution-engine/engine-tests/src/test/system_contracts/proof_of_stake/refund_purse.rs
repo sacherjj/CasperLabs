@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder};
+use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
@@ -23,16 +23,16 @@ fn should_run_pos_refund_purse_contract_account_1() {
     refund_tests(&mut builder, ACCOUNT_1_ADDR);
 }
 
-fn initialize() -> WasmTestBuilder {
+fn initialize() -> InMemoryWasmTestBuilder {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     builder.run_genesis(GENESIS_ADDR, HashMap::default());
 
     builder
 }
 
-fn transfer(builder: &mut WasmTestBuilder, address: [u8; 32], amount: U512) {
+fn transfer(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32], amount: U512) {
     let exec_request = {
         let genesis_public_key = PublicKey::new(GENESIS_ADDR);
         let account_1_public_key = PublicKey::new(address);
@@ -57,7 +57,7 @@ fn transfer(builder: &mut WasmTestBuilder, address: [u8; 32], amount: U512) {
         .commit();
 }
 
-fn refund_tests(builder: &mut WasmTestBuilder, address: [u8; 32]) {
+fn refund_tests(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32]) {
     let exec_request = {
         let public_key = PublicKey::new(address);
 

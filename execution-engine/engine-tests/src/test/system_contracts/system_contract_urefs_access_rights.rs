@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
@@ -14,7 +14,7 @@ const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT * 2;
 #[ignore]
 #[test]
 fn should_have_read_only_access_to_system_contract_urefs() {
-    let mut builder = WasmTestBuilder::default();
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
         .run_genesis(GENESIS_ADDR, HashMap::new())
