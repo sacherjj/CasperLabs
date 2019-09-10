@@ -165,7 +165,14 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val nodeId =
     opt[String](
       descr =
-        "Node ID (i.e. the Keccak256 hash of the public key the node uses for TLS) in case secure communication is needed.",
+        "Node ID (i.e. the Keccak256 hash of the public key the node uses for TLS) in case secure communication is based on the intra-node certificates.",
+      required = false
+    )
+
+  val tlsApiCertificate =
+    opt[File](
+      descr =
+        "Certificate of the node to be used for TLS communication. If the --node-id is also provided it will override the authority in the certificate, otherwise we expect the certificate to match the domain.",
       required = false
     )
 

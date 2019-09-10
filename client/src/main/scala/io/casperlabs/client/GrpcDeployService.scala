@@ -45,8 +45,12 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       // under investigation (see NODE-832).
       .executor(scheduler)
 
-    builder = conn.nodeId match {
-      case Some(hash) =>
+    // Decide whether to use SSL encryption.
+    builder = (conn.nodeId, conn.tlsApiCertificate) match {
+      case (None, None) =>
+        builder.usePlaintext
+
+      case (Some(_), None) =>
         // Server side TLS only. The client will compare the Node ID it's expecting the server
         // to have with the hash of the public key from the TLS certificate.
         val trustManagerFactory = new SimpleTrustManagerFactory {
@@ -65,10 +69,23 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
         builder
           .negotiationType(NegotiationType.TLS)
           .sslContext(sslContext)
-          .overrideAuthority(hash) // So it doesn't expect for the host name.
 
-      case None =>
-        builder.usePlaintext
+      case (_, Some(crt)) =>
+        // Server side TLS only. The client will compare the server side cert with
+        // what it has on disk. An example of obtaining a cert programmatically:
+        // openssl s_client -showcerts -connect localhost:40401 </dev/null 2>/dev/null | openssl x509 -outform PEM > node.crt
+        val sslContext = GrpcSslContexts.forClient
+          .trustManager(crt) // `null` would use the system default, which could be enough if we have Root CA signed cert.
+          .build
+
+        builder
+          .negotiationType(NegotiationType.TLS)
+          .sslContext(sslContext)
+    }
+
+    // If the node ID is given then assume the cert is made for that name.
+    builder = conn.nodeId.fold(builder) { hash =>
+      builder.overrideAuthority(hash) // So it doesn't expect for the host name to match the Common Name in the cert.
     }
 
     builder.build()
