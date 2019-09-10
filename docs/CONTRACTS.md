@@ -206,6 +206,21 @@ Equivalent argument for payment contract is `--payment-name`.
 
 Note: names are valid only in the context of the account which called `add_uref`.
 
+**Understanding difference between calling a contract directly and with `call_contract`**
+
+When a contract is stored with `store_function` 
+there is a new context created for it,
+with initial content defined by the map passed to `store_function` as its second argument.
+Later, when the stored contract is called with `call_contract` it is executed in this context.
+
+In contrast, when the same stored contract is called directly,
+for example, its address is passed to `--session-hash` argument of the `deploy` command,
+the contract will be executed in the context of the account that creates the deploy.
+The consequence of this is that stateful contracts designed to operate in a specific context
+may not work as expected when called directly. 
+They may, for instance, attempt to read or modify a UREF that they expect to exist in their context,
+but find it missing in the context that they are actually run in, that is of the deployer's account.
+
 
 ####  Using a local standalone node
 
