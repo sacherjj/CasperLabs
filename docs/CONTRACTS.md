@@ -138,6 +138,8 @@ See the instructions [here](QUERYING.md).
 
 ###### Advanced deploy options
 
+**Stored contracts**
+
 A function that is part of the deployed contract's module
 can be saved on the blockchain 
 with Contract API function `store_function`.
@@ -146,7 +148,7 @@ can be later called from another contract with `call_contract`
 or used instead of a WASM file when creating a new deploy on command line.
 
 
-**Calling a stored contract using its address**
+**Contract address**
 
 A contract stored on blockchain with `store_function` has an address,
 which is a 32 bits long Blake2b hash of the deploy hash
@@ -154,6 +156,15 @@ and a 32 bits integer function counter.
 The function counter is equal `0` for the first function saved
 with `store_function` during execution of a deploy,
 `1` for the second stored function, and so on.
+
+
+**Calling a stored contract using its address**
+
+Contract address is a cryptographic hash
+uniquely identifyiyng a stored contract in the system.
+Thus, it can be used to call the stored contract,
+both directly when creating a deploy, e.g. on command line
+or from another contract.
 
 `casperlabs-client` `deploy` command accepts argument `--session-hash`
 which can be used to create a deploy using a stored contract
@@ -167,17 +178,16 @@ but for specifying address of payment contract.
 
 **Calling a stored contract by name**
 
-An address of a stored contract can be saved as a UREF 
-in context of the user's account
-and associated with a convenient, human readable, string key.
+For convenience, a contract address can be 
+associated with a name in the context of user's account.
 
 Typically this is done in the same contract that calls `store_function`.
-In the example below `counter_ext` is a function
-in the same module as the contract being executed.
-The function will bo stored on blockchain with `store_function`
-and 
-its address saved into a UREF that can be referred 
+In the example below 
+`counter_ext` is a function in the same module as the executing contract.
+The function is stored on blockchain with `store_function`
+and its address saved into a UREF that can be referred 
 to by its name `"counter"`.
+
 ```
     //create map of references for stored contract
     let mut counter_urefs: BTreeMap<String, Key> = BTreeMap::new();
