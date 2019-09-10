@@ -136,7 +136,93 @@ For more detailed description, use `--help` flag (`casper-client --help`).
 
 See the instructions [here](QUERYING.md).
 
-#### Using a local standalone node
+###### Advanced deploy options
+
+**Stored contracts**
+
+A function that is part of the deployed contract's module
+can be saved on the blockchain 
+with Contract API function `store_function`.
+Such function becomes a stored contract that
+can be later called from another contract with `call_contract`
+or used instead of a WASM file when creating a new deploy on command line.
+
+
+**Contract address**
+
+A contract stored on blockchain with `store_function` has an address,
+which is a 256 bits long Blake2b hash of the deploy hash
+and a 32 bits integer function counter.
+The function counter is equal `0` for the first function saved
+with `store_function` during execution of a deploy,
+`1` for the second stored function, and so on.
+
+
+**Calling a stored contract using its address**
+
+Contract address is a cryptographic hash
+uniquely identifyiyng a stored contract in the system.
+Thus, it can be used to call the stored contract,
+both directly when creating a deploy, e.g. on command line
+or from another contract.
+
+`casperlabs-client` `deploy` command accepts argument `--session-hash`
+which can be used to create a deploy using a stored contract
+instead of a file with a compiled WASM module.
+Its value should be a base16 representation of the contract address,
+for example: `--session-hash 2358448f76c8b3a9e263571007998791a815e954c3c3db2da830a294ea7cba65`.
+
+
+`payment-hash` is an option equivalent to `--session-hash`
+but for specifying address of payment contract.
+
+**Calling a stored contract by name**
+
+For convenience, a contract address can be 
+associated with a name in the context of a user's account.
+
+Typically this is done in the same contract that calls `store_function`.
+In the example below 
+`counter_ext` is a function in the same module as the executing contract.
+The function is stored on blockchain with `store_function`.
+Next, a call to `add_uref` associates the stored contract's address with a name `"counter"`.
+
+```
+    //create map of references for stored contract
+    let mut counter_urefs: BTreeMap<String, Key> = BTreeMap::new();
+    let pointer = store_function("counter_ext", counter_urefs);
+    add_uref("counter", &pointer.into());
+
+```
+
+`casperlabs-client` `deploy` command accepts argument `--session-name`
+which can be used to refer to a stored contract by its name,
+for example `--session-name counter`.
+This option can be used
+to create a deploy with a stored contract
+acting as the deploy's session contract.
+
+Equivalent argument for payment contract is `--payment-name`.
+
+Note: names are valid only in the context of the account which called `add_uref`.
+
+**Understanding difference between calling a contract directly and with `call_contract`**
+
+When a contract is stored with `store_function` 
+there is a new context created for it,
+with initial content defined by the map passed to `store_function` as its second argument.
+Later, when the stored contract is called with `call_contract` it is executed in this context.
+
+In contrast, when the same stored contract is called directly,
+for example, its address is passed to `--session-hash` argument of the `deploy` command,
+the contract will be executed in the context of the account that creates the deploy.
+The consequence of this is that stateful contracts designed to operate in a specific context
+may not work as expected when called directly. 
+They may, for instance, attempt to read or modify a `URef` that they expect to exist in their context,
+but find it missing in the context that they are actually run in, that is of the deployer's account.
+
+
+####  Using a local standalone node
 
 If you are testing with a [local standalone node](NODE.md#running-a-single-node), you will need to change the `--host` argument:
 
