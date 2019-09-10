@@ -179,7 +179,7 @@ but for specifying address of payment contract.
 **Calling a stored contract by name**
 
 For convenience, a contract address can be 
-associated with a name in the context of user's account.
+associated with a name in the context of a user's account.
 
 Typically this is done in the same contract that calls `store_function`.
 In the example below 
