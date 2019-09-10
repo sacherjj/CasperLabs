@@ -10,6 +10,8 @@ import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 
 trait DagStorage[F[_]] {
+  //TODO: Get rid of DagRepresentation if SQLite works out
+  /* Doesn't guarantee to return immutable representation */
   def getRepresentation: F[DagRepresentation[F]]
   private[storage] def insert(block: Block): F[DagRepresentation[F]]
   def checkpoint(): F[Unit]
