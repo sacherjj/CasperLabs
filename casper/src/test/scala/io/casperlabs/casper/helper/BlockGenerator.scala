@@ -104,7 +104,7 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  def createAndStoreBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+  def createBlock[F[_]: Monad: Time: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -160,6 +160,29 @@ trait BlockGenerator {
         unsignedIndexedBlock.getBody,
         unsignedIndexedBlock.getHeader
       )
-      _ <- BlockStorage[F].put(signedIndexedBlock.blockHash, signedIndexedBlock, Seq.empty)
     } yield signedIndexedBlock
+
+  def createAndStoreBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+      parentsHashList: Seq[BlockHash],
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
+      postStateHash: ByteString = ByteString.EMPTY,
+      chainId: String = "casperlabs",
+      preStateHash: ByteString = ByteString.EMPTY
+  ): F[Block] =
+    for {
+      block <- createBlock[F](
+                parentsHashList = parentsHashList,
+                creator = creator,
+                bonds = bonds,
+                justifications = justifications,
+                deploys = deploys,
+                postStateHash = postStateHash,
+                chainId = chainId,
+                preStateHash = preStateHash
+              )
+      _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
+    } yield block
 }
