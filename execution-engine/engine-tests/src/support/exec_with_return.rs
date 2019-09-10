@@ -136,7 +136,7 @@ where
                         let effect = runtime.context().effect();
                         let urefs = ret_urefs.clone();
 
-                        let value: T = bytesrepr::deserialize(runtime.get_result())
+                        let value: T = bytesrepr::deserialize(runtime.result())
                             .expect("should deserialize return value");
 
                         Some((value, urefs, effect))

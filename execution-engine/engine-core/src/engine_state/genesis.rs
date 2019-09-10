@@ -15,6 +15,8 @@ use contract_ffi::value::{Account, Contract, Value, U512};
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{Transform, TypeMismatch};
 use engine_storage::global_state::CommitResult;
+use engine_storage::protocol_data_store::ProtocolVersion;
+use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::execution::AddressGenerator;
 use contract_ffi::execution::Phase;
@@ -826,5 +828,114 @@ mod tests {
             Some(&Key::URef(pos_bonding_purse)),
             "create_pos_effects should store POS_BONDING_PURSE in PoS contract's known urefs map."
         );
+    }
+}
+
+/* --- NEW GENESIS STARTS HERE --- */
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenesisAccount {
+    public_key: PublicKey,
+    balance: U512,
+    bonded_amount: U512,
+}
+
+impl GenesisAccount {
+    pub fn new(public_key: PublicKey, balance: U512, bonded_amount: U512) -> Self {
+        GenesisAccount {
+            public_key,
+            balance,
+            bonded_amount,
+        }
+    }
+
+    pub fn public_key(&self) -> PublicKey {
+        self.public_key
+    }
+
+    pub fn balance(&self) -> U512 {
+        self.balance
+    }
+
+    pub fn bonded_amount(&self) -> U512 {
+        self.bonded_amount
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenesisConfig {
+    name: String,
+    timestamp: u64,
+    protocol_version: ProtocolVersion,
+    mint_installer_bytes: Vec<u8>,
+    proof_of_stake_installer_bytes: Vec<u8>,
+    accounts: Vec<GenesisAccount>,
+    wasm_costs: WasmCosts,
+}
+
+impl GenesisConfig {
+    pub fn new(
+        name: String,
+        timestamp: u64,
+        protocol_version: ProtocolVersion,
+        mint_installer_bytes: Vec<u8>,
+        proof_of_stake_installer_bytes: Vec<u8>,
+        accounts: Vec<GenesisAccount>,
+        wasm_costs: WasmCosts,
+    ) -> Self {
+        GenesisConfig {
+            name,
+            timestamp,
+            protocol_version,
+            mint_installer_bytes,
+            proof_of_stake_installer_bytes,
+            accounts,
+            wasm_costs,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    pub fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        self.protocol_version
+    }
+
+    pub fn mint_installer_bytes(&self) -> &[u8] {
+        self.mint_installer_bytes.as_slice()
+    }
+
+    pub fn proof_of_stake_installer_bytes(&self) -> &[u8] {
+        self.proof_of_stake_installer_bytes.as_slice()
+    }
+
+    pub fn wasm_costs(&self) -> WasmCosts {
+        self.wasm_costs
+    }
+
+    pub fn get_bonded_validators(&self) -> BTreeMap<PublicKey, U512> {
+        let zero = U512::zero();
+        self.accounts
+            .iter()
+            .filter_map(|genesis_account| {
+                if genesis_account.bonded_amount() > zero {
+                    Some((
+                        genesis_account.public_key(),
+                        genesis_account.bonded_amount(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn accounts(&self) -> &[GenesisAccount] {
+        self.accounts.as_slice()
     }
 }

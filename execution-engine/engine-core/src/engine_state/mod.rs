@@ -8,34 +8,38 @@ pub mod op;
 pub mod utils;
 
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::rc::Rc;
 
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, HASH_SIZE};
+use contract_ffi::system_contracts::mint;
 use contract_ffi::uref::URef;
 use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, Value, U512};
 use engine_shared::gas::Gas;
 use engine_shared::motes::Motes;
-use engine_shared::newtypes::{Blake2bHash, CorrelationId};
+use engine_shared::newtypes::{Blake2bHash, CorrelationId, Validated};
 use engine_shared::transform::Transform;
 use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
+use engine_storage::protocol_data::ProtocolData;
 use engine_wasm_prep::wasm_costs::WasmCosts;
-use engine_wasm_prep::Preprocessor;
+use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 pub use self::engine_config::EngineConfig;
 use self::error::{Error, RootNotFound};
+use self::executable_deploy_item::ExecutableDeployItem;
 use self::execution_result::ExecutionResult;
 use self::genesis::{create_genesis_effects, GenesisResult};
-use crate::engine_state::executable_deploy_item::ExecutableDeployItem;
-use crate::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
-use crate::engine_state::utils::WasmiBytes;
-use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
+use self::genesis::{GenesisAccount, GenesisConfig, POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
+use self::utils::WasmiBytes;
+use crate::execution::AddressGenerator;
+use crate::execution::{self, Executor, WasmiExecutor, MINT_NAME, POS_NAME};
 use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
+use crate::KnownKeys;
 
 // TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
 // TBD gas * CONV_RATE = motes
@@ -45,6 +49,8 @@ pub const CONV_RATE: u64 = 10;
 pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 
 const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
+const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
+const MINT_METHOD_NAME: &str = "mint";
 
 #[derive(Debug)]
 pub struct EngineState<S> {
@@ -99,6 +105,297 @@ where
             .commit(correlation_id, prestate_hash, effects.transforms.to_owned())
             .map_err(Into::into)?;
 
+        let genesis_result = GenesisResult::from_commit_result(commit_result, effects);
+
+        Ok(genesis_result)
+    }
+
+    pub fn commit_genesis_with_chainspec(
+        &self,
+        correlation_id: CorrelationId,
+        genesis_config: GenesisConfig,
+    ) -> Result<GenesisResult, Error> {
+        // Preliminaries
+        let executor = WasmiExecutor;
+        let blocktime = BlockTime(GENESIS_INITIAL_BLOCKTIME);
+        let gas_limit = Gas::from_u64(std::u64::MAX);
+        let phase = Phase::System;
+
+        let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+        let initial_root_hash = self.state.empty_root();
+        let protocol_version = genesis_config.protocol_version();
+        let wasm_costs = genesis_config.wasm_costs();
+        let preprocessor = WasmiPreprocessor::new(wasm_costs);
+
+        // Spec #2: Associate given CostTable with given ProtocolVersion.
+        {
+            let protocol_data = ProtocolData::new(wasm_costs);
+            self.state
+                .put_protocol_data(protocol_version, &protocol_data)
+                .map_err(Into::into)?
+        }
+
+        // Spec #3: Create "virtual system account" object.
+        let virtual_system_account = {
+            let known_keys = BTreeMap::new();
+            let purse = PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE));
+            Account::create(SYSTEM_ACCOUNT_ADDR, known_keys, purse)
+        };
+
+        // Spec #4: Create a runtime.
+        let tracking_copy = match self.tracking_copy(initial_root_hash) {
+            Ok(Some(tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
+            Ok(None) => panic!("state has not been initialized properly"),
+            Err(error) => return Err(error),
+        };
+
+        // Persist the "virtual system account".  It will get overwritten with the actual system
+        // account below.
+        {
+            let key = {
+                let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+                Validated::new(key, Validated::valid).unwrap() // safe to unwrap
+            };
+            let value = {
+                let virtual_system_account = virtual_system_account.clone();
+                let value = Value::Account(virtual_system_account);
+                Validated::new(value, Validated::valid).unwrap() // safe to unwrap
+            };
+
+            tracking_copy.borrow_mut().write(key, value);
+        }
+
+        // Spec #4A: random number generator is seeded from the hash of GenesisConfig.name
+        // concatenated with GenesisConfig.timestamp (aka "deploy hash").
+        //
+        // @birchmd adds: "Probably we will want to include the hash of the cost table in there
+        // as well actually. Otherwise it has no direct effect on the genesis post
+        // state hash either."
+        let install_deploy_hash = {
+            let name: &[u8] = genesis_config.name().as_bytes();
+            let timestamp: &[u8] = &genesis_config.timestamp().to_le_bytes();
+            let wasm_costs_bytes: &[u8] = &wasm_costs.to_bytes()?;
+            let bytes: Vec<u8> = {
+                let mut ret = Vec::new();
+                ret.extend_from_slice(name);
+                ret.extend_from_slice(timestamp);
+                ret.extend_from_slice(wasm_costs_bytes);
+                ret
+            };
+            Blake2bHash::new(&bytes)
+        };
+
+        let address_generator = {
+            let generator = AddressGenerator::new(install_deploy_hash.into(), phase);
+            Rc::new(RefCell::new(generator))
+        };
+
+        // Spec #5: Execute the wasm code from the mint installer bytes
+        let mint_reference: URef = {
+            let mint_installer_module = {
+                let bytes = genesis_config.mint_installer_bytes();
+                preprocessor.preprocess(bytes)?
+            };
+            let args = Vec::new();
+            let mut key_lookup = BTreeMap::new();
+            let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
+            let install_deploy_hash = install_deploy_hash.into();
+            let address_generator = Rc::clone(&address_generator);
+            let tracking_copy = Rc::clone(&tracking_copy);
+
+            executor.better_exec(
+                mint_installer_module,
+                &args,
+                &mut key_lookup,
+                initial_base_key,
+                &virtual_system_account,
+                authorization_keys,
+                blocktime,
+                install_deploy_hash,
+                gas_limit,
+                address_generator,
+                protocol_version,
+                correlation_id,
+                tracking_copy,
+                phase,
+            )?
+        };
+
+        // Spec #7: Execute pos installer wasm code, passing the initially bonded validators as an
+        // argument
+        let proof_of_stake_reference: URef = {
+            let proof_of_stake_installer_module = {
+                let bytes = genesis_config.proof_of_stake_installer_bytes();
+                preprocessor.preprocess(bytes)?
+            };
+            let args = {
+                // Spec #6: Compute initially bonded validators as the contents of accounts_path
+                // filtered to non-zero staked amounts.
+                let bonded_validators = genesis_config.get_bonded_validators();
+                let args = (mint_reference, bonded_validators);
+                ArgsParser::parse(&args)
+                    .and_then(|args| args.to_bytes())
+                    .expect("args should parse")
+            };
+            let mut key_lookup = {
+                let mut ret = BTreeMap::new();
+                ret.insert(MINT_NAME.to_string(), Key::URef(mint_reference));
+                ret
+            };
+            let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
+            let install_deploy_hash = install_deploy_hash.into();
+            let address_generator = Rc::clone(&address_generator);
+            let tracking_copy = Rc::clone(&tracking_copy);
+
+            executor.better_exec(
+                proof_of_stake_installer_module,
+                &args,
+                &mut key_lookup,
+                initial_base_key,
+                &virtual_system_account,
+                authorization_keys,
+                blocktime,
+                install_deploy_hash,
+                gas_limit,
+                address_generator,
+                protocol_version,
+                correlation_id,
+                tracking_copy,
+                phase,
+            )?
+        };
+
+        //
+        // NOTE: The following stanzas deviate from the implementation strategy described in the
+        // original specification.
+        //
+        // It has the following benefits over that approach:
+        // * It does not make an intermediate commit
+        // * The system account never holds funds
+        // * Similarly, the system account does not need to be handled differently than a normal
+        //   account (with the exception of its known keys)
+        //
+
+        // Create known keys for chainspec accounts
+        let account_known_keys = {
+            let mut ret = BTreeMap::new();
+            let m_attenuated = URef::new(mint_reference.addr(), AccessRights::READ);
+            let p_attenuated = URef::new(proof_of_stake_reference.addr(), AccessRights::READ);
+            ret.insert(MINT_NAME.to_string(), Key::URef(m_attenuated));
+            ret.insert(POS_NAME.to_string(), Key::URef(p_attenuated));
+            ret
+        };
+
+        // Create known keys for system account
+        let system_account_known_keys = {
+            let mut ret = BTreeMap::new();
+            ret.insert(MINT_NAME.to_string(), Key::URef(mint_reference));
+            ret.insert(POS_NAME.to_string(), Key::URef(proof_of_stake_reference));
+            ret
+        };
+
+        // Create accounts
+        {
+            // Collect chainspec accounts and their known keys with the genesis account and its
+            // known keys
+            let accounts = {
+                let mut ret: Vec<(GenesisAccount, KnownKeys)> = genesis_config
+                    .accounts()
+                    .to_vec()
+                    .into_iter()
+                    .map(|account| (account, account_known_keys.clone()))
+                    .collect();
+                let system_account = GenesisAccount::new(
+                    PublicKey::new(SYSTEM_ACCOUNT_ADDR),
+                    U512::zero(),
+                    U512::zero(),
+                );
+                ret.push((system_account, system_account_known_keys));
+                ret
+            };
+
+            // Get the mint module
+            let module = {
+                let contract = tracking_copy
+                    .borrow_mut()
+                    .get_contract(correlation_id, Key::URef(mint_reference).normalize())?;
+                let (bytes, _, _) = contract.destructure();
+                preprocessor.deserialize(&bytes)?
+            };
+
+            // For each account...
+            for (account, known_keys) in accounts.into_iter() {
+                let module = module.clone();
+                let args = {
+                    let motes = account.balance();
+                    let args = (MINT_METHOD_NAME.to_string(), motes);
+                    ArgsParser::parse(&args)
+                        .and_then(|args| args.to_bytes())
+                        .expect("args should parse")
+                };
+                let tracking_copy_exec = Rc::clone(&tracking_copy);
+                let tracking_copy_write = Rc::clone(&tracking_copy);
+                let mut key_lookup = BTreeMap::new();
+                let base_key = Key::URef(mint_reference);
+                let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
+                let account_public_key = account.public_key();
+                let purse_creation_deploy_hash = account_public_key.value();
+                let address_generator = {
+                    let generator = AddressGenerator::new(purse_creation_deploy_hash, phase);
+                    Rc::new(RefCell::new(generator))
+                };
+
+                // ...call the Mint's "mint" endpoint to create purse with tokens...
+                let mint_result: Result<URef, mint::error::Error> = executor.better_exec(
+                    module,
+                    &args,
+                    &mut key_lookup,
+                    base_key,
+                    &virtual_system_account,
+                    authorization_keys,
+                    blocktime,
+                    purse_creation_deploy_hash,
+                    gas_limit,
+                    address_generator,
+                    protocol_version,
+                    correlation_id,
+                    tracking_copy_exec,
+                    phase,
+                )?;
+
+                // ...and write that account to global state...
+                let key = {
+                    let key = Key::Account(account_public_key.value());
+                    Validated::new(key, Validated::valid).unwrap() // safe to unwrap
+                };
+                let value = {
+                    let account_main_purse = mint_result?;
+                    let purse_id = PurseId::new(account_main_purse);
+                    let value = Value::Account(Account::create(
+                        account_public_key.value(),
+                        known_keys,
+                        purse_id,
+                    ));
+                    Validated::new(value, Validated::valid).unwrap() // safe to unwrap
+                };
+
+                tracking_copy_write.borrow_mut().write(key, value);
+            }
+        }
+
+        // Spec #15: Commit the transforms.
+        let effects = tracking_copy.borrow().effect();
+
+        let commit_result = self
+            .state
+            .commit(
+                correlation_id,
+                initial_root_hash,
+                effects.transforms.to_owned(),
+            )
+            .map_err(Into::into)?;
+
+        // Return the result
         let genesis_result = GenesisResult::from_commit_result(commit_result, effects);
 
         Ok(genesis_result)

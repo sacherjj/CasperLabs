@@ -1,19 +1,21 @@
 use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
-use std::fmt::Display;
+use std::fmt::{self, Display, Formatter};
 use std::string::ToString;
 
-use protobuf::ProtobufEnum;
+use protobuf::{ProtobufEnum, RepeatedField};
 
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+    KEY_SIZE,
 };
 use contract_ffi::value::U512;
 use engine_core::engine_state::error::{Error as EngineError, RootNotFound};
 use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::execution_result::ExecutionResult;
+use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::op::Op;
 use engine_core::execution::Error as ExecutionError;
 use engine_core::tracking_copy::utils;
@@ -23,13 +25,47 @@ use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{self, TypeMismatch};
 use engine_storage::global_state::{CommitResult, StateProvider};
 
+use crate::engine_server::ipc::{ChainSpec_CostTable, ChainSpec_GenesisAccount};
 use crate::engine_server::{ipc, state, transforms};
+use engine_wasm_prep::wasm_costs::WasmCosts;
 
 mod uint;
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: contract_ffi::value::Value) -> Result<transform::Transform, ParsingError> {
     Ok(transform::Transform::Write(v))
+}
+
+#[derive(Debug)]
+pub enum MappingError {
+    InvalidPublicKeyLength { expected: usize, actual: usize },
+    ParsingError(ParsingError),
+}
+
+impl MappingError {
+    pub fn invalid_public_key_length(actual: usize) -> Self {
+        let expected = KEY_SIZE;
+        MappingError::InvalidPublicKeyLength { expected, actual }
+    }
+}
+
+impl From<ParsingError> for MappingError {
+    fn from(error: ParsingError) -> Self {
+        MappingError::ParsingError(error)
+    }
+}
+
+impl Display for MappingError {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        match self {
+            MappingError::InvalidPublicKeyLength { expected, actual } => write!(
+                f,
+                "Invalid public key length: expected {}, actual {}",
+                expected, actual
+            ),
+            error @ MappingError::ParsingError(_) => Self::fmt(error, f),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -744,6 +780,14 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         let msg = error.to_string();
                         execution_error(msg, cost.as_u64(), effect)
                     }
+                    error @ EngineError::SerializationError(_) => {
+                        let msg = error.to_string();
+                        execution_error(msg, cost.as_u64(), effect)
+                    }
+                    error @ EngineError::MintError(_) => {
+                        let msg = error.to_string();
+                        execution_error(msg, cost.as_u64(), effect)
+                    }
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
                             let mut deploy_result = ipc::DeployResult::new();
@@ -911,6 +955,145 @@ impl From<ipc::DeployPayload_oneof_payload> for ExecutableDeployItem {
                 }
             }
         }
+    }
+}
+
+impl TryFrom<ipc::ChainSpec_GenesisAccount> for GenesisAccount {
+    type Error = MappingError;
+
+    fn try_from(genesis_account: ipc::ChainSpec_GenesisAccount) -> Result<Self, Self::Error> {
+        let public_key = {
+            let tmp = genesis_account.get_public_key();
+            // TODO: our TryFromSliceForPublicKeyError should convey length info
+            match tmp.try_into() {
+                Ok(public_key) => public_key,
+                Err(_) => return Err(MappingError::invalid_public_key_length(tmp.len())),
+            }
+        };
+        let balance = genesis_account.get_balance().try_into()?;
+        let bonded_amount = genesis_account.get_bonded_amount().try_into()?;
+        Ok(GenesisAccount::new(public_key, balance, bonded_amount))
+    }
+}
+
+impl From<GenesisAccount> for ipc::ChainSpec_GenesisAccount {
+    fn from(account: GenesisAccount) -> Self {
+        let mut ret = ipc::ChainSpec_GenesisAccount::new();
+
+        ret.set_public_key(account.public_key().value().to_vec());
+
+        let mut bonded_amount = state::BigInt::new();
+        bonded_amount.set_bit_width(512);
+        bonded_amount.set_value(account.bonded_amount().to_string());
+        ret.set_bonded_amount(bonded_amount);
+
+        let mut balance = state::BigInt::new();
+        balance.set_bit_width(512);
+        balance.set_value(account.balance().to_string());
+        ret.set_balance(balance);
+        ret
+    }
+}
+
+impl From<ipc::ChainSpec_CostTable_WasmCosts> for WasmCosts {
+    fn from(wasm_costs: ipc::ChainSpec_CostTable_WasmCosts) -> Self {
+        let regular = wasm_costs.get_regular();
+        let div = wasm_costs.get_div();
+        let mul = wasm_costs.get_mul();
+        let mem = wasm_costs.get_mem();
+        let initial_mem = wasm_costs.get_initial_mem();
+        let grow_mem = wasm_costs.get_grow_mem();
+        let memcpy = wasm_costs.get_memcpy();
+        let max_stack_height = wasm_costs.get_max_stack_height();
+        let opcodes_mul = wasm_costs.get_opcodes_mul();
+        let opcodes_div = wasm_costs.get_opcodes_div();
+        WasmCosts {
+            regular,
+            div,
+            mul,
+            mem,
+            initial_mem,
+            grow_mem,
+            memcpy,
+            max_stack_height,
+            opcodes_mul,
+            opcodes_div,
+        }
+    }
+}
+
+impl From<WasmCosts> for ipc::ChainSpec_CostTable_WasmCosts {
+    fn from(wasm_costs: WasmCosts) -> Self {
+        let mut cost_table = ipc::ChainSpec_CostTable_WasmCosts::new();
+        cost_table.set_regular(wasm_costs.regular);
+        cost_table.set_div(wasm_costs.div);
+        cost_table.set_mul(wasm_costs.mul);
+        cost_table.set_mem(wasm_costs.mem);
+        cost_table.set_initial_mem(wasm_costs.initial_mem);
+        cost_table.set_grow_mem(wasm_costs.grow_mem);
+        cost_table.set_memcpy(wasm_costs.memcpy);
+        cost_table.set_max_stack_height(wasm_costs.max_stack_height);
+        cost_table.set_opcodes_mul(wasm_costs.opcodes_mul);
+        cost_table.set_opcodes_div(wasm_costs.opcodes_div);
+        cost_table
+    }
+}
+
+impl TryFrom<ipc::ChainSpec_GenesisConfig> for GenesisConfig {
+    type Error = MappingError;
+
+    fn try_from(genesis_config: ipc::ChainSpec_GenesisConfig) -> Result<Self, Self::Error> {
+        let name = genesis_config.get_name().to_string();
+        let timestamp = genesis_config.get_timestamp();
+        let protocol_version = genesis_config.get_protocol_version().get_value();
+        let mint_initializer_bytes = genesis_config.get_mint_installer().to_vec();
+        let proof_of_stake_initializer_bytes = genesis_config.get_pos_installer().to_vec();
+        let accounts = genesis_config
+            .get_accounts()
+            .iter()
+            .cloned()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<GenesisAccount>, Self::Error>>()?;
+        let wasm_costs = genesis_config.get_costs().get_wasm().to_owned().into();
+        Ok(GenesisConfig::new(
+            name,
+            timestamp,
+            protocol_version,
+            mint_initializer_bytes,
+            proof_of_stake_initializer_bytes,
+            accounts,
+            wasm_costs,
+        ))
+    }
+}
+
+impl From<GenesisConfig> for ipc::ChainSpec_GenesisConfig {
+    fn from(genesis_config: GenesisConfig) -> Self {
+        let mut ret = ipc::ChainSpec_GenesisConfig::new();
+        ret.set_name(genesis_config.name().to_string());
+        ret.set_timestamp(genesis_config.timestamp());
+        {
+            let mut protocol_version = state::ProtocolVersion::new();
+            protocol_version.set_value(genesis_config.protocol_version());
+            ret.set_protocol_version(protocol_version);
+        }
+        ret.set_mint_installer(genesis_config.mint_installer_bytes().to_vec());
+        ret.set_pos_installer(genesis_config.proof_of_stake_installer_bytes().to_vec());
+        {
+            let accounts = genesis_config
+                .accounts()
+                .iter()
+                .cloned()
+                .map(Into::into)
+                .collect::<Vec<ChainSpec_GenesisAccount>>();
+            ret.set_accounts(RepeatedField::from(accounts));
+        }
+        {
+            let mut cost_table = ChainSpec_CostTable::new();
+            cost_table.set_wasm(genesis_config.wasm_costs().into());
+            ret.set_costs(cost_table);
+        }
+        ret
     }
 }
 
