@@ -218,7 +218,7 @@ for example, its address is passed to `--session-hash` argument of the `deploy` 
 the contract will be executed in the context of the account that creates the deploy.
 The consequence of this is that stateful contracts designed to operate in a specific context
 may not work as expected when called directly. 
-They may, for instance, attempt to read or modify a UREF that they expect to exist in their context,
+They may, for instance, attempt to read or modify a `URef` that they expect to exist in their context,
 but find it missing in the context that they are actually run in, that is of the deployer's account.
 
 
