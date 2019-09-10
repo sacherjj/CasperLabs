@@ -17,10 +17,11 @@ use engine_storage::global_state::StateReader;
 use crate::engine_state::execution_result::ExecutionResult;
 
 use super::Error;
-use super::{create_rng, extract_access_rights_from_keys, instance_and_memory, Runtime};
+use super::{extract_access_rights_from_keys, instance_and_memory, Runtime};
+use crate::execution::address_generator::AddressGenerator;
 use crate::runtime_context::RuntimeContext;
 use crate::tracking_copy::TrackingCopy;
-use crate::URefAddr;
+use crate::Address;
 
 pub trait Executor<A> {
     #[allow(clippy::too_many_arguments)]
@@ -126,9 +127,9 @@ impl Executor<Module> for WasmiExecutor {
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
-        let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
+        let known_urefs: HashMap<Address, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup_local.values().cloned());
-        let rng = create_rng(deploy_hash, phase);
+        let address_generator = AddressGenerator::new(deploy_hash, phase);
         let gas_counter: Gas = Gas::default();
         let fn_store_id = 0u32;
 
@@ -161,7 +162,7 @@ impl Executor<Module> for WasmiExecutor {
             gas_limit,
             gas_counter,
             fn_store_id,
-            Rc::new(RefCell::new(rng)),
+            Rc::new(RefCell::new(address_generator)),
             protocol_version,
             correlation_id,
             phase,
@@ -200,12 +201,12 @@ impl Executor<Module> for WasmiExecutor {
         R::Error: Into<Error>,
     {
         let mut uref_lookup = keys.clone();
-        let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
+        let known_urefs: HashMap<Address, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup.values().cloned());
 
-        let rng = {
-            let rng = create_rng(deploy_hash, phase);
-            Rc::new(RefCell::new(rng))
+        let address_generator = {
+            let address_generator = AddressGenerator::new(deploy_hash, phase);
+            Rc::new(RefCell::new(address_generator))
         };
         let gas_counter = Gas::default(); // maybe const?
         let fn_store_id = 0u32; // maybe const?
@@ -237,7 +238,7 @@ impl Executor<Module> for WasmiExecutor {
             gas_limit,
             gas_counter,
             fn_store_id,
-            rng,
+            address_generator,
             protocol_version,
             correlation_id,
             phase,

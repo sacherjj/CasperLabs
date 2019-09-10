@@ -2,7 +2,7 @@ use contract_ffi::value::U512;
 use std::collections::HashMap;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
@@ -12,7 +12,7 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 #[ignore]
 #[test]
 fn should_run_ee_460_no_side_effects_on_error_regression() {
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,

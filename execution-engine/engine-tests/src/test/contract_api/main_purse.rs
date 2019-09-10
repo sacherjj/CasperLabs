@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::Account;
@@ -15,7 +15,7 @@ const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
 #[ignore]
 #[test]
 fn should_run_main_purse_contract_genesis_account() {
-    let mut builder = WasmTestBuilder::default();
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let builder = builder.run_genesis(GENESIS_ADDR, HashMap::new());
 
@@ -46,7 +46,7 @@ fn should_run_main_purse_contract_genesis_account() {
 fn should_run_main_purse_contract_account_1() {
     let account_key = Key::Account(ACCOUNT_1_ADDR);
 
-    let mut builder = WasmTestBuilder::default();
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let builder = builder
         .run_genesis(GENESIS_ADDR, HashMap::new())

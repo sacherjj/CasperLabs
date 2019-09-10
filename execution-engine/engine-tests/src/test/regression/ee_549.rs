@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 
 #[ignore]
 #[test]
 fn should_run_ee_549_set_refund_regression() {
-    let mut builder = WasmTestBuilder::default();
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(GENESIS_ADDR, HashMap::new()).exec(
         GENESIS_ADDR,

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 
 use crate::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, WasmTestBuilder, GENESIS_INITIAL_BALANCE,
+    DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, GENESIS_INITIAL_BALANCE,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
@@ -42,7 +42,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     let _response = builder
         .run_genesis(GENESIS_ADDR, HashMap::default())
@@ -117,7 +117,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     let _response = builder
         .run_genesis(GENESIS_ADDR, HashMap::default())
@@ -206,7 +206,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = WasmTestBuilder::new(engine_config)
+    let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
         .run_genesis(genesis_addr, HashMap::default())
         .exec_with_exec_request(exec_request)
         .commit()
@@ -297,7 +297,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     let transfer_result = builder
         .run_genesis(genesis_addr, HashMap::default())
@@ -339,7 +339,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     let transfer_result = builder
         .run_genesis(genesis_addr, HashMap::default())
@@ -409,7 +409,7 @@ fn should_correctly_charge_when_session_code_fails() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     let transfer_result = builder
         .run_genesis(genesis_addr, HashMap::default())
@@ -474,7 +474,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     let transfer_result = builder
         .run_genesis(genesis_addr, HashMap::default())
@@ -517,7 +517,10 @@ fn should_correctly_charge_when_session_code_succeeds() {
     )
 }
 
-fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Option<PurseId> {
+fn get_pos_purse_id_by_name(
+    builder: &InMemoryWasmTestBuilder,
+    purse_name: &str,
+) -> Option<PurseId> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
@@ -527,7 +530,7 @@ fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Opti
         .map(|u| PurseId::new(*u))
 }
 
-fn get_pos_rewards_purse_balance(builder: &WasmTestBuilder) -> U512 {
+fn get_pos_rewards_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
     let purse_id = get_pos_purse_id_by_name(builder, POS_REWARDS_PURSE)
         .expect("should find PoS payment purse");
     builder.get_purse_balance(purse_id)
@@ -559,7 +562,7 @@ fn should_finalize_to_rewards_purse() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     builder.run_genesis(genesis_addr, HashMap::default());
 
@@ -584,7 +587,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     let setup_exec_request = {
         let deploy = DeployBuilder::new()
@@ -674,7 +677,7 @@ fn should_charge_non_main_purse() {
     let account_1_purse_funding_amount = U512::from(50_000_000);
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     // arrange
     let setup_exec_request = {

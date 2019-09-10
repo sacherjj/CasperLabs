@@ -4,7 +4,7 @@ use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
@@ -12,7 +12,7 @@ const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
 #[ignore]
 #[test]
 fn should_run_known_urefs_contract() {
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec(
             GENESIS_ADDR,

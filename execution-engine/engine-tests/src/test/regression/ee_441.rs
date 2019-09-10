@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
@@ -21,7 +21,7 @@ fn get_uref(key: Key) -> URef {
 fn do_pass(pass: &str) -> (URef, URef) {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let transforms = WasmTestBuilder::default()
+    let transforms = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,

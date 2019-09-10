@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, Weight};
@@ -17,7 +17,7 @@ const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT * 2;
 fn should_manage_associated_key() {
     // for a given account, should be able to add a new associated key and update
     // that key
-    let mut builder = WasmTestBuilder::default();
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let builder = builder
         .run_genesis(GENESIS_ADDR, HashMap::new())

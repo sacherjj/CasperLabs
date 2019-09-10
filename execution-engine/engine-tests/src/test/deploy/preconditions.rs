@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder};
+use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
@@ -35,7 +35,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = WasmTestBuilder::new(engine_config)
+    let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_exec_request(exec_request)
         .finish();
@@ -72,7 +72,7 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = WasmTestBuilder::new(engine_config)
+    let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_exec_request(exec_request)
         .finish();
@@ -118,7 +118,7 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = WasmTestBuilder::new(engine_config)
+    let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_exec_request(exec_request)
         .finish();

@@ -10,7 +10,7 @@ use engine_core::engine_state::MAX_PAYMENT;
 use engine_core::engine_state::{EngineConfig, CONV_RATE};
 
 use crate::support::test_support::{
-    self, DeployBuilder, ExecRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME,
+    self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME,
     STANDARD_PAYMENT_CONTRACT,
 };
 
@@ -21,8 +21,8 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const ACCOUNT_ADDR: [u8; 32] = [1u8; 32];
 
-fn initialize() -> WasmTestBuilder {
-    let mut builder = WasmTestBuilder::default();
+fn initialize() -> InMemoryWasmTestBuilder {
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
         .run_genesis(GENESIS_ADDR, HashMap::new())
@@ -94,7 +94,7 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
 #[test]
 fn finalize_payment_should_refund_to_specified_purse() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
     let payment_amount = U512::from(10_000_000);
     let refund_purse_flag: u8 = 1;
     // Don't need to run finalize_payment manually, it happens during
@@ -158,19 +158,19 @@ fn finalize_payment_should_refund_to_specified_purse() {
 
 // ------------- utility functions -------------------- //
 
-fn get_pos_payment_purse_balance(builder: &WasmTestBuilder) -> U512 {
+fn get_pos_payment_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
     let purse_id = get_pos_purse_id_by_name(builder, POS_PAYMENT_PURSE)
         .expect("should find PoS payment purse");
     builder.get_purse_balance(purse_id)
 }
 
-fn get_pos_rewards_purse_balance(builder: &WasmTestBuilder) -> U512 {
+fn get_pos_rewards_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
     let purse_id = get_pos_purse_id_by_name(builder, POS_REWARDS_PURSE)
         .expect("should find PoS rewards purse");
     builder.get_purse_balance(purse_id)
 }
 
-fn get_pos_refund_purse(builder: &WasmTestBuilder) -> Option<Key> {
+fn get_pos_refund_purse(builder: &InMemoryWasmTestBuilder) -> Option<Key> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
@@ -179,7 +179,10 @@ fn get_pos_refund_purse(builder: &WasmTestBuilder) -> Option<Key> {
         .cloned()
 }
 
-fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Option<PurseId> {
+fn get_pos_purse_id_by_name(
+    builder: &InMemoryWasmTestBuilder,
+    purse_name: &str,
+) -> Option<PurseId> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
@@ -190,7 +193,7 @@ fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Opti
 }
 
 fn get_named_account_balance(
-    builder: &WasmTestBuilder,
+    builder: &InMemoryWasmTestBuilder,
     account_address: [u8; 32],
     name: &str,
 ) -> Option<U512> {

@@ -13,13 +13,16 @@ use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
-    self, WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+    self, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 
-fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Option<PurseId> {
+fn get_pos_purse_id_by_name(
+    builder: &InMemoryWasmTestBuilder,
+    purse_name: &str,
+) -> Option<PurseId> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
@@ -29,7 +32,7 @@ fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Opti
         .map(|u| PurseId::new(*u))
 }
 
-fn get_pos_bonding_purse_balance(builder: &WasmTestBuilder) -> U512 {
+fn get_pos_bonding_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
     let purse_id = get_pos_purse_id_by_name(builder, POS_BONDING_PURSE)
         .expect("should find PoS payment purse");
     builder.get_purse_balance(purse_id)
@@ -63,7 +66,7 @@ fn should_run_successful_bond_and_unbond() {
         result
     };
 
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators)
         .finish();
 
@@ -74,7 +77,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let pos = result.builder().get_pos_contract_uref();
 
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
@@ -123,7 +126,7 @@ fn should_run_successful_bond_and_unbond() {
     );
 
     // Create new account (from genesis funds) and bond with it
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
@@ -205,7 +208,7 @@ fn should_run_successful_bond_and_unbond() {
     //
 
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
@@ -265,7 +268,7 @@ fn should_run_successful_bond_and_unbond() {
     //
     // Genesis account unbonds less than 50% of his stake
 
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
@@ -314,7 +317,7 @@ fn should_run_successful_bond_and_unbond() {
     //
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
 
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
@@ -366,7 +369,7 @@ fn should_run_successful_bond_and_unbond() {
     //
 
     // Genesis account unbonds less than 50% of his stake
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
@@ -466,7 +469,7 @@ fn should_fail_bonding_with_insufficient_funds() {
         result
     };
 
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators)
         .exec_with_args(
             GENESIS_ADDR,
@@ -524,7 +527,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
         result
     };
 
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators)
         .exec_with_args(
             GENESIS_ADDR,
