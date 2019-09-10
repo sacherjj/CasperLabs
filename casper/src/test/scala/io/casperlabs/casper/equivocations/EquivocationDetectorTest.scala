@@ -42,7 +42,7 @@ class EquivocationDetectorTest
   ): Task[Block] =
     for {
       dag <- dagStorage.getRepresentation
-      b <- createAndStoreBlock[Task](
+      b <- createBlock[Task](
             parentsHashList,
             creator,
             justifications = justifications
@@ -56,6 +56,7 @@ class EquivocationDetectorTest
       } else {
         blockStatus shouldBe Right(())
       }
+      _     <- blockStorage.put(b.blockHash, b, Seq.empty)
       state <- Cell[Task, CasperState].read
       _     = state.equivocationsTracker.contains(b.getHeader.validatorPublicKey) shouldBe (result)
     } yield b
