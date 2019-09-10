@@ -204,7 +204,7 @@ acting as the deploy's session contract.
 
 Equivalent argument for payment contract is `--payment-name`.
 
-Note, UREFs are valid only in the context of a specific account.
+Note: names are valid only in the context of the account which called `add_uref`.
 
 
 ####  Using a local standalone node
