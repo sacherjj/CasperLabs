@@ -151,7 +151,7 @@ or used instead of a WASM file when creating a new deploy on command line.
 **Contract address**
 
 A contract stored on blockchain with `store_function` has an address,
-which is a 32 bits long Blake2b hash of the deploy hash
+which is a 256 bits long Blake2b hash of the deploy hash
 and a 32 bits integer function counter.
 The function counter is equal `0` for the first function saved
 with `store_function` during execution of a deploy,
