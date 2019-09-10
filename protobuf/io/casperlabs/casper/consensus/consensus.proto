@@ -130,6 +130,16 @@ message Block {
         bytes validator_public_key = 10;
         // Distance from Genesis.
         uint64 rank = 11;
+        Role role_type = 12;
+    }
+
+    enum Role {
+        // Regular block (with deploys, multiple parents etc).
+        BLOCK  = 0;
+        // A message that doesn't have any deploys,
+        // targets one block (no secondary parents),
+        // and cannot be used as a parent (is a leaf in the DAG).
+        BALLOT = 1;
     }
 
     message Body {
