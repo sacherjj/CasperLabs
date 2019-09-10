@@ -53,8 +53,10 @@ port-internal = 1
 use-tls = false
 
 [tls]
-certificate = "/tmp/test"
-key = "/tmp/test"
+certificate = "/tmp/test.crt"
+key = "/tmp/test.key"
+api-certificate = "/tmp/test.api.crt"
+api-key = "/tmp/test.api.key"
 
 [casper]
 validator-public-key = "test"

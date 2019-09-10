@@ -161,6 +161,14 @@ certificate = "$HOME/.casperlabs/node.certificate.pem"
 # Path to node's unencrypted secp256r1 PKCS#8 private key file, that is being used for intra-node TLS communication.
 key = "$HOME/.casperlabs/node.key.pem"
 
+# X.509 certificate used for the public facing API, preferrably one signed by a root CA
+# so that clients which can't implement custom SSL verificaton can use standard methods.
+# The Common Name should match the host name where the node is exposed.
+api-certificate = "$HOME/.casperlabs/api.certificate.pem"
+
+# Private key to use with the public API certificate.
+api-key = "$HOME/.casperlabs/api.key.pem"
+
 
 # io.casperlabs.casper.CasperConf
 [casper]

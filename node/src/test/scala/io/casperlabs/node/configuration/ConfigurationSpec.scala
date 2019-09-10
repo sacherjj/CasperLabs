@@ -121,8 +121,10 @@ class ConfigurationSpec
       maxBlockSizeBytes = 1
     )
     val tls = Tls(
-      certificate = Paths.get("/tmp/test"),
-      key = Paths.get("/tmp/test")
+      certificate = Paths.get("/tmp/test.crt"),
+      key = Paths.get("/tmp/test.key"),
+      apiCertificate = Paths.get("/tmp/test.api.crt"),
+      apiKey = Paths.get("/tmp/test.api.key")
     )
     val lmdb = LMDBBlockStorage.Config(
       dir = Paths.get("/tmp/lmdb-block-storage"),
