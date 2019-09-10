@@ -415,9 +415,13 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F]
   ): F[Unit] =
     for {
-      creatorJustificationSeqNumber <- ProtoUtil.calculateValidatorBlockSeqNum(dag, b.getHeader)
-      number                        = b.getHeader.validatorBlockSeqNum
-      ok                            = creatorJustificationSeqNumber + 1 == number
+      creatorJustificationSeqNumber <- ProtoUtil.calculateValidatorBlockSeqNum(
+                                        dag,
+                                        b.getHeader.justifications,
+                                        b.getHeader.validatorPublicKey
+                                      )
+      number = b.getHeader.validatorBlockSeqNum
+      ok     = creatorJustificationSeqNumber == number
       _ <- if (ok) {
             Applicative[F].unit
           } else {

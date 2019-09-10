@@ -163,9 +163,14 @@ object ProtoUtil {
 
   def calculateValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      blockHeader: Block.Header
+      justifications: Seq[Justification],
+      creator: Validator
   ): F[Int] =
-    creatorJustification(blockHeader)
+    justifications
+      .find {
+        case Justification(validator: Validator, _) =>
+          validator == creator
+      }
       .foldM(-1) {
         case (_, Justification(_, latestBlockHash)) =>
           dag.lookup(latestBlockHash).flatMap {
@@ -403,7 +408,7 @@ object ProtoUtil {
   ): F[Block] = {
     val validator = ByteString.copyFrom(pk)
     for {
-      seqNum <- calculateValidatorBlockSeqNum(dag, block.getHeader)
+      seqNum <- calculateValidatorBlockSeqNum(dag, block.getHeader.justifications, validator)
       header = {
         assert(block.header.isDefined, "A block without a header doesn't make sense")
         block.getHeader
