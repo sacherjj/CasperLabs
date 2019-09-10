@@ -12,6 +12,7 @@ use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Account, Contract, Value, U512};
+use engine_shared::motes::Motes;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{Transform, TypeMismatch};
 use engine_storage::global_state::CommitResult;
@@ -836,12 +837,12 @@ mod tests {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenesisAccount {
     public_key: PublicKey,
-    balance: U512,
-    bonded_amount: U512,
+    balance: Motes,
+    bonded_amount: Motes,
 }
 
 impl GenesisAccount {
-    pub fn new(public_key: PublicKey, balance: U512, bonded_amount: U512) -> Self {
+    pub fn new(public_key: PublicKey, balance: Motes, bonded_amount: Motes) -> Self {
         GenesisAccount {
             public_key,
             balance,
@@ -853,11 +854,11 @@ impl GenesisAccount {
         self.public_key
     }
 
-    pub fn balance(&self) -> U512 {
+    pub fn balance(&self) -> Motes {
         self.balance
     }
 
-    pub fn bonded_amount(&self) -> U512 {
+    pub fn bonded_amount(&self) -> Motes {
         self.bonded_amount
     }
 }
@@ -918,21 +919,18 @@ impl GenesisConfig {
         self.wasm_costs
     }
 
-    pub fn get_bonded_validators(&self) -> BTreeMap<PublicKey, U512> {
-        let zero = U512::zero();
-        self.accounts
-            .iter()
-            .filter_map(|genesis_account| {
-                if genesis_account.bonded_amount() > zero {
-                    Some((
-                        genesis_account.public_key(),
-                        genesis_account.bonded_amount(),
-                    ))
-                } else {
-                    None
-                }
-            })
-            .collect()
+    pub fn get_bonded_validators(&self) -> impl Iterator<Item = (PublicKey, Motes)> + '_ {
+        let zero = Motes::zero();
+        self.accounts.iter().filter_map(move |genesis_account| {
+            if genesis_account.bonded_amount() > zero {
+                Some((
+                    genesis_account.public_key(),
+                    genesis_account.bonded_amount(),
+                ))
+            } else {
+                None
+            }
+        })
     }
 
     pub fn accounts(&self) -> &[GenesisAccount] {

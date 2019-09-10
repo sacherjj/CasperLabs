@@ -30,6 +30,10 @@ impl Motes {
     pub fn from_u64(value: u64) -> Motes {
         Motes(U512::from(value))
     }
+
+    pub fn zero() -> Motes {
+        Motes(U512::zero())
+    }
 }
 
 impl fmt::Display for Motes {

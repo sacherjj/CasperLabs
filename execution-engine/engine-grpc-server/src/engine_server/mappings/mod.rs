@@ -21,6 +21,7 @@ use engine_core::execution::Error as ExecutionError;
 use engine_core::tracking_copy::utils;
 use engine_shared::logging;
 use engine_shared::logging::log_level;
+use engine_shared::motes::Motes;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{self, TypeMismatch};
 use engine_storage::global_state::{CommitResult, StateProvider};
@@ -970,8 +971,11 @@ impl TryFrom<ipc::ChainSpec_GenesisAccount> for GenesisAccount {
                 Err(_) => return Err(MappingError::invalid_public_key_length(tmp.len())),
             }
         };
-        let balance = genesis_account.get_balance().try_into()?;
-        let bonded_amount = genesis_account.get_bonded_amount().try_into()?;
+        let balance = genesis_account.get_balance().try_into().map(Motes::new)?;
+        let bonded_amount = genesis_account
+            .get_bonded_amount()
+            .try_into()
+            .map(Motes::new)?;
         Ok(GenesisAccount::new(public_key, balance, bonded_amount))
     }
 }

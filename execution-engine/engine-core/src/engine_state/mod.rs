@@ -231,7 +231,10 @@ where
             let args = {
                 // Spec #6: Compute initially bonded validators as the contents of accounts_path
                 // filtered to non-zero staked amounts.
-                let bonded_validators = genesis_config.get_bonded_validators();
+                let bonded_validators: BTreeMap<PublicKey, U512> = genesis_config
+                    .get_bonded_validators()
+                    .map(|(k, v)| (k, v.value()))
+                    .collect();
                 let args = (mint_reference, bonded_validators);
                 ArgsParser::parse(&args)
                     .and_then(|args| args.to_bytes())
@@ -307,8 +310,8 @@ where
                     .collect();
                 let system_account = GenesisAccount::new(
                     PublicKey::new(SYSTEM_ACCOUNT_ADDR),
-                    U512::zero(),
-                    U512::zero(),
+                    Motes::zero(),
+                    Motes::zero(),
                 );
                 ret.push((system_account, system_account_known_keys));
                 ret
@@ -327,7 +330,7 @@ where
             for (account, known_keys) in accounts.into_iter() {
                 let module = module.clone();
                 let args = {
-                    let motes = account.balance();
+                    let motes = account.balance().value();
                     let args = (MINT_METHOD_NAME.to_string(), motes);
                     ArgsParser::parse(&args)
                         .and_then(|args| args.to_bytes())
