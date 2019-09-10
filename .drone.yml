@@ -67,6 +67,7 @@ steps:
   depends_on:
   - sbt-compile-test-pr
 
+#Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-pr
   environment:
     CARGO_FLAGS: "--locked"
@@ -79,6 +80,8 @@ steps:
   when:
     event:
     - pull_request
+  depends_on:
+  - sbt-compile-test-pr
 
 - name: run-cargo-fmt-pr
   commands:
@@ -156,6 +159,7 @@ steps:
   depends_on:
   - sbt-test-docker-bors
 
+#Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-bors
   environment:
     CARGO_FLAGS: "--locked"
@@ -167,6 +171,8 @@ steps:
     branch:
     - staging
     - trying
+  depends_on:
+  - sbt-test-docker-bors
 
 # Note: Added the dependency on the sbt step to be finished first because in testing,
 # Drone was getting random sbt build failures when too many steps were running simultaneously.

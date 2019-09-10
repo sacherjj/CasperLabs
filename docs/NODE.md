@@ -33,13 +33,13 @@ Or you can run the following commands from the root directory of the repo, using
 
 ### Running a validator on the CasperLabs Network
 
-##### Step 1: Create an account at [explorer.casperlabs.io](https://explorer.casperlabs.io)
+##### Step 1: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
 
 Create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine where you will run the node.  This will be your validator account and keypair.
 
 ##### Step 2: Add coins to this account
 
-Add coins to this account using the [faucet](https://explorer.casperlabs.io/#/faucet).
+Add coins to this account using the [faucet](https://clarity.casperlabs.io/#/faucet).
 
 ##### Step 3: Bond your validator onto the network
 
