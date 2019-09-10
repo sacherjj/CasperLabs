@@ -96,7 +96,7 @@ You can run a single Node in standalone mode for testing purposes.
 
 ```
 mkdir -p ~/.casperlabs/genesis
-(cat keys/validator-id; echo "100") >> ~/.casperlabs/genesis/bonds.txt
+(cat keys/validator-id; echo " 100") >> ~/.casperlabs/genesis/bonds.txt
 ```
 
 ##### Step 2: Start the Execution Engine
@@ -110,7 +110,7 @@ casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 
 ```
 casperlabs-node run \
-    --standalone \
+    --casper-standalone \
     --tls-key ./keys/node.key.pem \
     --tls-certificate ./keys/node.certificate.pem \
     --casper-validator-private-key-path ./keys/validator-private.pem \
