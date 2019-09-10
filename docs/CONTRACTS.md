@@ -169,7 +169,7 @@ or from another contract.
 `casperlabs-client` `deploy` command accepts argument `--session-hash`
 which can be used to create a deploy using a stored contract
 instead of a file with a compiled WASM module.
-Its value should be base16 representation of the contract address,
+Its value should be a base16 representation of the contract address,
 for example: `--session-hash 2358448f76c8b3a9e263571007998791a815e954c3c3db2da830a294ea7cba65`.
 
 
@@ -184,9 +184,8 @@ associated with a name in the context of user's account.
 Typically this is done in the same contract that calls `store_function`.
 In the example below 
 `counter_ext` is a function in the same module as the executing contract.
-The function is stored on blockchain with `store_function`
-and its address saved into a UREF that can be referred 
-to by its name `"counter"`.
+The function is stored on blockchain with `store_function`.
+Next, a call to `add_uref` associates the stored contract's address with a name `"counter"`.
 
 ```
     //create map of references for stored contract
@@ -197,9 +196,13 @@ to by its name `"counter"`.
 ```
 
 `casperlabs-client` `deploy` command accepts argument `--session-name`
-which can be used to refer to a stored contract if its address was saved
-to UREF like above, for example `--session-name counter`.
-Equivalent argument for payment is `--payment-name`.
+which can be used to refer to a stored contract by its name,
+for example `--session-name counter`.
+This option can be used
+to create a deploy with a stored contract
+acting as the deploy's session contract.
+
+Equivalent argument for payment contract is `--payment-name`.
 
 Note, UREFs are valid only in the context of a specific account.
 
