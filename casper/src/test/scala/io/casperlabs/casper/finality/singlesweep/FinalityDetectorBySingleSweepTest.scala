@@ -51,50 +51,50 @@ class FinalityDetectorBySingleSweepTest
         implicit val finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          b1 <- createBlock[Task](
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          b1 <- createAndStoreBlock[Task](
                  Seq(genesis.blockHash),
                  v1,
                  bonds,
                  HashMap(v1 -> genesis.blockHash)
                )
-          b2 <- createBlock[Task](
+          b2 <- createAndStoreBlock[Task](
                  Seq(b1.blockHash),
                  v1,
                  bonds,
                  HashMap(v1 -> b1.blockHash)
                )
-          b3 <- createBlock[Task](
+          b3 <- createAndStoreBlock[Task](
                  Seq(b1.blockHash),
                  v2,
                  bonds,
                  HashMap(v1 -> b1.blockHash)
                )
-          b4 <- createBlock[Task](
+          b4 <- createAndStoreBlock[Task](
                  Seq(b2.blockHash),
                  v1,
                  bonds,
                  HashMap(v1 -> b2.blockHash, v2 -> b3.blockHash)
                )
-          b5 <- createBlock[Task](
+          b5 <- createAndStoreBlock[Task](
                  Seq(b3.blockHash),
                  v2,
                  bonds,
                  HashMap(v2 -> b3.blockHash)
                )
-          b6 <- createBlock[Task](
+          b6 <- createAndStoreBlock[Task](
                  Seq(b4.blockHash),
                  v1,
                  bonds,
                  HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
                )
-          b7 <- createBlock[Task](
+          b7 <- createAndStoreBlock[Task](
                  Seq(b5.blockHash),
                  v2,
                  bonds,
                  HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
                )
-          b8 <- createBlock[Task](
+          b8 <- createAndStoreBlock[Task](
                  Seq(b6.blockHash),
                  v1,
                  bonds,
@@ -190,45 +190,45 @@ class FinalityDetectorBySingleSweepTest
        *
        */
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
-        b1 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
+        b1 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v0,
                bonds,
                Map(v0 -> genesis.blockHash)
              )
-        b2 <- createBlock[Task](
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v3,
                bonds,
                Map(v3 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(b1.blockHash),
                v1,
                bonds,
                Map(v0 -> b1.blockHash, v1 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b1.blockHash),
                v0,
                bonds,
                Map(v0 -> b1.blockHash)
              )
         // b5 vote for b2 instead of b1
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                Map(v1 -> b3.blockHash, v3 -> b2.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                Map(v0 -> b4.blockHash, v2 -> genesis.blockHash, v3 -> b5.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b6.blockHash),
                v2,
                bonds,
@@ -278,44 +278,44 @@ class FinalityDetectorBySingleSweepTest
 
       implicit val finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b3.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b5.blockHash),
                v3,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
-        b8 <- createBlock[Task](
+        b8 <- createAndStoreBlock[Task](
                Seq(b6.blockHash),
                v2,
                bonds,

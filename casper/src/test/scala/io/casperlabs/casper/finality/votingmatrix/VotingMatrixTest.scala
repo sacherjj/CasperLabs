@@ -99,7 +99,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
         val v2Bond = Bond(v2, 10)
         val bonds  = Seq(v1Bond, v2Bond)
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- dagStorage.getRepresentation
           implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
                                                           .create[Task](dag, genesis.blockHash)
@@ -253,7 +253,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
       implicit votingMatrix: VotingMatrix[F]
   ): F[Block] =
     for {
-      b           <- createBlock[F](parentsHashList, creator, bonds, justifications)
+      b           <- createAndStoreBlock[F](parentsHashList, creator, bonds, justifications)
       dag         <- IndexedDagStorage[F].getRepresentation
       votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlockHash, b.blockHash)
       _ <- updateVoterPerspective(
