@@ -38,8 +38,8 @@ class CasperLabsNetwork:
     Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
 
-    is_payment_code_enabled = False
     grpc_encryption = False
+    initial_motes = INITIAL_MOTES_AMOUNT
 
     def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
         self.extra_docker_params = extra_docker_params or {}
@@ -135,7 +135,6 @@ class CasperLabsNetwork:
             self.docker_client,
             node_private_key=kp.private_key,
             node_account=kp,
-            is_payment_code_enabled=self.is_payment_code_enabled,
             grpc_encryption=self.grpc_encryption,
         )
         self.add_cl_node(config)
@@ -233,8 +232,6 @@ class CasperLabsNetwork:
 class OneNodeNetwork(CasperLabsNetwork):
     """ A single node network with just a bootstrap """
 
-    is_payment_code_enabled = False
-    initial_motes = INITIAL_MOTES_AMOUNT
     grpc_encryption = False
 
     def create_cl_network(self):
@@ -244,7 +241,6 @@ class OneNodeNetwork(CasperLabsNetwork):
             node_private_key=kp.private_key,
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
-            is_payment_code_enabled=self.is_payment_code_enabled,
             initial_motes=self.initial_motes,
             node_account=kp,
             grpc_encryption=self.grpc_encryption,
@@ -256,13 +252,12 @@ class OneNodeNetwork(CasperLabsNetwork):
 class PaymentNodeNetwork(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
-    is_payment_code_enabled = True
+    pass
 
 
 class TrillionPaymentNodeNetwork(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
-    is_payment_code_enabled = True
     initial_motes = (
         MAX_PAYMENT_COST * 100 * 1000
     )  # 10 millions * 100 * 1000 =  billion motes * 1000 = trillion
@@ -271,13 +266,10 @@ class TrillionPaymentNodeNetwork(OneNodeNetwork):
 class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
-    is_payment_code_enabled = True
     initial_motes = 10 ** 3
 
 
 class OneNodeWithGRPCEncryption(OneNodeNetwork):
-    is_payment_code_enabled = True
-    initial_motes = MAX_PAYMENT_COST * 100
     grpc_encryption = True
 
 
@@ -299,16 +291,10 @@ class TwoNodeNetwork(CasperLabsNetwork):
 
 
 class EncryptedTwoNodeNetwork(TwoNodeNetwork):
-    is_payment_code_enabled = True
-    initial_motes = MAX_PAYMENT_COST * 100
     grpc_encryption = True
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):
-
-    is_payment_code_enabled = True
-    initial_motes = INITIAL_MOTES_AMOUNT
-
     def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(
@@ -335,10 +321,6 @@ class ThreeNodeNetwork(CasperLabsNetwork):
 
 
 class MultiNodeJoinedNetwork(CasperLabsNetwork):
-
-    is_payment_code_enabled = True
-    initial_motes = INITIAL_MOTES_AMOUNT
-
     def create_cl_network(self, node_count=10):
         kp = self.get_key()
         config = DockerConfig(
@@ -365,10 +347,6 @@ class MultiNodeJoinedNetwork(CasperLabsNetwork):
 
 
 class CustomConnectionNetwork(CasperLabsNetwork):
-
-    is_payment_code_enabled = True
-    initial_motes = INITIAL_MOTES_AMOUNT
-
     def create_cl_network(
         self, node_count: int = 3, network_connections: List[List[int]] = None
     ) -> None:

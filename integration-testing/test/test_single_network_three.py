@@ -28,7 +28,7 @@ def three_node_network_with_combined_contract(three_node_network):
     tnn = three_node_network
     bootstrap, node1, node2 = tnn.docker_nodes
     node = bootstrap
-    block_hash = bootstrap.d_client.deploy_and_propose(
+    block_hash = bootstrap.p_client.deploy_and_propose(
         session_contract=Contract.COMBINEDCONTRACTSDEFINE,
         from_address=node.genesis_account.public_key_hex,
         public_key=node.genesis_account.public_key_path,
@@ -39,13 +39,13 @@ def three_node_network_with_combined_contract(three_node_network):
 
 
 def deploy_and_propose(node, contract):
-    block_hash = node.d_client.deploy_and_propose(
+    block_hash = node.p_client.deploy_and_propose(
         session_contract=contract,
         from_address=node.genesis_account.public_key_hex,
         public_key=node.genesis_account.public_key_path,
         private_key=node.genesis_account.private_key_path,
     )
-    deploys = node.d_client.show_deploys(block_hash)
+    deploys = node.p_client.show_deploys(block_hash)
     for deploy in deploys:
         assert deploy.is_error is False
     return block_hash
@@ -63,7 +63,7 @@ test_parameters = [
         Contract.MAILINGLISTCALL,
         2,
         "mailing/list",
-        lambda r: r.string_list.values == "CasperLabs",
+        lambda r: "CasperLabs" in r.string_list.values,
     ),
     (
         Contract.COUNTERCALL,
@@ -100,14 +100,15 @@ def test_call_contracts_one_another(
     # logging.info("The expected contract hash for %s is %s (%s)" % (contract, list(h), h.hex()))
 
     def state(node, path, block_hash):
-        return node.d_client.query_state(
+        return node.p_client.query_state(
             block_hash=block_hash, key=from_address, key_type="address", path=path
         )
 
     for node in nodes:
         block_hash = deploy_and_propose(node, contract)
         wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
-        assert expected(state(node, path, block_hash))
+        cur_state = state(node, path, block_hash)
+        assert expected(cur_state)
 
 
 CONTRACT_1 = "old_wasm/helloname_invalid_just_1.wasm"

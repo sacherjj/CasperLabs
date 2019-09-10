@@ -173,7 +173,7 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
     genesis_balance = node0.d_client.get_balance(
         account_address=GENESIS_ACCOUNT.public_key_hex, block_hash=genesis_hash
     )
-    assert genesis_balance == 10 ** 12
+    assert genesis_balance == 1000000000000
     transfer_amount = 10 ** 8
     account1 = network.test_account(node0, transfer_amount)
     account1_starting_balance = node0.d_client.get_balance(

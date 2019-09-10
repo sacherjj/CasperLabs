@@ -398,8 +398,6 @@ class CasperLabsClient:
         if from_addr and len(from_addr) != 32:
             raise Exception(f"from_addr must be 32 bytes")
 
-        payment = payment or session
-
         def hash(data: bytes) -> bytes:
             h = blake2b(digest_size=32)
             h.update(data)
@@ -428,9 +426,7 @@ class CasperLabsClient:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
         body = consensus.Deploy.Body(
             session=read_code(session, session_args),
-            payment=read_code(
-                payment, payment == session and session_args or payment_args
-            ),
+            payment=read_code(payment, payment_args),
         )
 
         approval_public_key = public_key and read_pem_key(public_key)

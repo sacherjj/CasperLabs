@@ -55,12 +55,12 @@ class Contract:
     UPDATE_ASSOCIATED_KEY = "update_associated_key.wasm"
 
 
-MAX_PAYMENT_COST = 10000000  # ten million
+MAX_PAYMENT_COST = 10000000
 INITIAL_MOTES_AMOUNT = 10 ** 20
 MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
 MAX_PAYMENT_JSON = json.dumps(
     [{"name": "amount", "value": {"long_value": MAX_PAYMENT_COST}}]
-).replace(" ", "")
+)  # .replace(" ", "")
 CONV_RATE = 10
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
@@ -77,6 +77,10 @@ def testing_root_path() -> Path:
     while cur_path.name != "integration-testing":
         cur_path = cur_path.parent
     return cur_path
+
+
+def resources_path() -> Path:
+    return testing_root_path() / "resources"
 
 
 def random_string(length: int) -> str:

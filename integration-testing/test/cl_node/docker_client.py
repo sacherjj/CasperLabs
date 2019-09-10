@@ -47,7 +47,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
                 )
                 command = f"--node-id {node_id} {command}"
         self.logger.info(f"COMMAND {command}")
-        command = command.replace('"', '""')
+        command = command.replace('"', '"')
         container = self.docker_client.containers.run(
             image=f"casperlabs/client:{self.node.docker_tag}",
             name=f"client-{self.node.config.number}-{random_string(5)}",
@@ -158,10 +158,10 @@ class DockerClient(CasperLabsClient, LoggingMixin):
             f" --payment=/data/{payment_contract}"
             f" --private-key={private_key}"
             f" --public-key={public_key}"
-            f" --payment-args={payment_args}"
+            f" --payment-args='{payment_args}'"
         )
         if session_args:
-            command += f" --session-args={session_args}"
+            command += f" --session-args='{session_args}'"
 
         return self.invoke_client(command)
 
