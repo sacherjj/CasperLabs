@@ -672,7 +672,7 @@ package object gossiping {
   ): Resource[F, Unit] = {
     def loop(synchronizer: InitialSynchronization[F]): F[Unit] = {
       val syncOne: F[Unit] = for {
-        _         <- Time[F].sleep(conf.server.initSyncRoundPeriod)
+        _         <- Time[F].sleep(conf.server.periodicSyncRoundPeriod)
         hasPeers  <- NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map(_.nonEmpty)
         isInitial <- isInitialRef.get
         // While the initial sync is running let's not pile on top.
@@ -691,7 +691,7 @@ package object gossiping {
                          minSuccessful = 1,
                          memoizeNodes = false,
                          skipFailedNodesInNextRounds = false,
-                         roundPeriod = conf.server.initSyncRoundPeriod,
+                         roundPeriod = conf.server.periodicSyncRoundPeriod,
                          connector = connectToGossip
                        )
                      }

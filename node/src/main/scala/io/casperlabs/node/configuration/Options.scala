@@ -395,6 +395,10 @@ private[configuration] final case class Options private (
       gen[FiniteDuration]("Time to wait between initial synchronization attempts.")
 
     @scallop
+    val serverPeriodicSyncRoundPeriod =
+      gen[FiniteDuration]("Time to wait between periodic synchronization attempts.")
+
+    @scallop
     val serverDownloadMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads initiated by the download manager.")
     @scallop

@@ -76,6 +76,7 @@ class ConfigurationSpec
       initSyncSkipFailedNodes = false,
       initSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       initSyncMaxBlockCount = 1,
+      periodicSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       downloadMaxParallelBlocks = 1,
       downloadMaxRetries = 1,
       downloadRetryInitialBackoffPeriod = FiniteDuration(1, TimeUnit.SECONDS),
