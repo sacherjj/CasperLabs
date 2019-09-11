@@ -209,7 +209,7 @@ dependencies = [
 
 [[package]]
 name = "casperlabs-engine-grpc-server"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "casperlabs-contract-ffi 0.13.0",
  "casperlabs-engine-core 0.1.0",
@@ -284,7 +284,7 @@ version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.13.0",
  "casperlabs-engine-core 0.1.0",
- "casperlabs-engine-grpc-server 0.6.0",
+ "casperlabs-engine-grpc-server 0.7.0",
  "casperlabs-engine-shared 0.2.0",
  "casperlabs-engine-storage 0.1.0",
  "casperlabs-engine-wasm-prep 0.1.0",
