@@ -33,7 +33,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val tlsApiCertificate =
     opt[File](
       descr =
-        "Certificate of the node to be used for TLS communication. If the --node-id is also provided it will override the authority in the certificate, otherwise we expect the certificate to match the domain."
+        "Certificate of the node to be used for TLS communication. If the --node-id is also provided it will override the authority in the certificate, otherwise we expect the certificate to match the domain. " +
+          "A certificate can be downloaded using OpenSSL: `openssl s_client -showcerts -connect localhost:40401 </dev/null 2>/dev/null | openssl x509 -outform PEM > node.crt`"
     )
 
   val useTls =
