@@ -566,7 +566,10 @@ impl InMemoryWasmTestBuilder {
 }
 
 impl LmdbWasmTestBuilder {
-    pub fn new<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> Self {
+    pub fn new_with_config<T: AsRef<OsStr> + ?Sized>(
+        data_dir: &T,
+        engine_config: EngineConfig,
+    ) -> Self {
         let environment = Arc::new(
             LmdbEnvironment::new(&data_dir.into(), DEFAULT_MAP_SIZE)
                 .expect("should create LmdbEnvironment"),
@@ -581,7 +584,7 @@ impl LmdbWasmTestBuilder {
         );
         let global_state = LmdbGlobalState::empty(environment, trie_store, protocol_data_store)
             .expect("should create LmdbGlobalState");
-        let engine_state = EngineState::new(global_state, Default::default());
+        let engine_state = EngineState::new(global_state, engine_config);
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
@@ -594,6 +597,10 @@ impl LmdbWasmTestBuilder {
             pos_contract_uref: None,
             genesis_transforms: None,
         }
+    }
+
+    pub fn new<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> Self {
+        Self::new_with_config(data_dir, Default::default())
     }
 }
 

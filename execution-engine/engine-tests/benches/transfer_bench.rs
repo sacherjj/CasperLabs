@@ -3,6 +3,7 @@ use casperlabs_engine_tests::support::test_support::{
 };
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
+use engine_core::engine_state::EngineConfig;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
 use std::collections::HashMap;
@@ -13,6 +14,10 @@ use tempfile::TempDir;
 
 const GENESIS_ADDR: [u8; 32] = [1; 32];
 
+fn engine_with_payments() -> EngineConfig {
+    EngineConfig::new().set_use_payment_code(true)
+}
+
 fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDir) {
     println!("Creating {} accounts...", accounts.len());
     let accounts_bytes: Vec<Vec<u8>> = accounts
@@ -22,7 +27,7 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
     let amount = U512::from(1);
 
     let data_dir = TempDir::new().expect("should create temp dir");
-    let result = LmdbWasmTestBuilder::new(&data_dir.path())
+    let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
@@ -126,7 +131,8 @@ pub fn transfer_bench(c: &mut Criterion) {
         |b, accounts| {
             // Create new directory with copied contents of existing boostrapped LMDB database
             let cloned_db = clone_directory(&source_dir.path());
-            let mut builder = LmdbWasmTestBuilder::new(&cloned_db.path());
+            let mut builder =
+                LmdbWasmTestBuilder::new_with_config(&cloned_db.path(), engine_with_payments());
 
             // Applies all properties from existing result
             builder.apply_from_result(&result);
