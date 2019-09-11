@@ -21,6 +21,7 @@ use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::execution::AddressGenerator;
 use contract_ffi::execution::Phase;
+use num_traits::Zero;
 
 pub const DEPLOY_HASH: [u8; 32] = [0u8; 32];
 
