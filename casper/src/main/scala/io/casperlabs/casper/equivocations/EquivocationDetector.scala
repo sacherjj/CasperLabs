@@ -30,49 +30,35 @@ object EquivocationDetector {
       implicit state: Cell[F, CasperState]
   ): F[Unit] =
     for {
-      _ <- state.flatModify(s => {
-            val creator = block.getHeader.validatorPublicKey
-            s.equivocationsTracker.get(creator) match {
-              case Some(lowestBaseSeqNum) =>
-                for {
-                  earlierRank <- rankOfEarlierMessageFromCreator(dag, block)
-                  newState = if (earlierRank < lowestBaseSeqNum) {
-                    s.copy(
-                      equivocationsTracker = s.equivocationsTracker.updated(
-                        creator,
-                        earlierRank
-                      )
-                    )
-                  } else {
-                    s
-                  }
-                  _ <- Log[F].debug(
+      s       <- state.read
+      creator = block.getHeader.validatorPublicKey
+      equivocated <- if (s.equivocationsTracker.contains(creator)) {
+                      Log[F].debug(
                         s"The creator of Block ${PrettyPrinter.buildString(block)} has equivocated before}"
-                      )
-                } yield newState
-
-              case None =>
-                checkEquivocations(dag, block).flatMap(
-                  equivocated =>
-                    if (equivocated) {
-                      rankOfEarlierMessageFromCreator(dag, block).map(
-                        earlierRank =>
-                          s.copy(
-                            equivocationsTracker = s.equivocationsTracker + (creator -> earlierRank)
-                          )
-                      )
+                      ) *> true.pure[F]
                     } else {
-                      s.pure[F]
+                      checkEquivocations(dag, block)
                     }
-                )
+
+      _ <- rankOfEarlierMessageFromCreator(dag, block)
+            .flatMap { earlierRank =>
+              state.modify { s =>
+                s.equivocationsTracker.get(creator) match {
+                  case Some(lowestBaseSeqNum) if earlierRank < lowestBaseSeqNum =>
+                    s.copy(
+                      equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank)
+                    )
+                  case None =>
+                    s.copy(
+                      equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank)
+                    )
+                  case _ =>
+                    s
+                }
+              }
             }
-          })
-      s <- state.read
-      _ <- if (s.equivocationsTracker.contains(block.getHeader.validatorPublicKey)) {
-            FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock)
-          } else {
-            Applicative[F].unit
-          }
+            .whenA(equivocated)
+      _ <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
     } yield ()
 
   /**
