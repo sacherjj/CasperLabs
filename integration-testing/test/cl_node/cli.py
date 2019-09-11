@@ -114,10 +114,6 @@ class CLI:
     def payment_json(self) -> str:
         return self.format_args(self._MAX_PAYMENT_JSON)
 
-    @property
-    def join_char(self) -> str:
-        return " "
-
 
 class DockerCLI(CLI):
 
@@ -154,7 +150,3 @@ class DockerCLI(CLI):
 
     def format_args(self, args: str) -> str:
         return f"'{args}'"
-
-    @property
-    def join_char(self) -> str:
-        return "="
