@@ -2,6 +2,7 @@ package io.casperlabs.comm.gossiping
 
 import cats.Monad
 import cats.effect._
+import cats.effect.implicits._
 import cats.implicits._
 import cats.temp.par._
 import com.google.protobuf.ByteString
@@ -17,7 +18,10 @@ import scala.util.Random
 
 @typeclass
 trait Relaying[F[_]] {
-  def relay(hashes: List[ByteString]): F[Unit]
+
+  /** Notify peers about the availability of some blocks.
+    * Return a handle that can be waited upon. */
+  def relay(hashes: List[ByteString]): F[WaitHandle[F]]
 }
 
 object RelayingImpl {
@@ -31,7 +35,7 @@ object RelayingImpl {
       _ <- Metrics[F].incrementCounter("relay_failed", 0)
     } yield ()
 
-  def apply[F[_]: Sync: Par: Log: Metrics: NodeAsk](
+  def apply[F[_]: Concurrent: Par: Log: Metrics: NodeAsk](
       nd: NodeDiscovery[F],
       connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
@@ -49,7 +53,7 @@ object RelayingImpl {
 /**
   * https://techspec.casperlabs.io/technical-details/global-state/communications#picking-nodes-for-gossip
   */
-class RelayingImpl[F[_]: Sync: Par: Log: Metrics: NodeAsk](
+class RelayingImpl[F[_]: Concurrent: Par: Log: Metrics: NodeAsk](
     nd: NodeDiscovery[F],
     connectToGossip: Node => F[GossipService[F]],
     relayFactor: Int,
@@ -57,7 +61,7 @@ class RelayingImpl[F[_]: Sync: Par: Log: Metrics: NodeAsk](
 ) extends Relaying[F] {
   import RelayingImpl._
 
-  override def relay(hashes: List[ByteString]): F[Unit] = {
+  override def relay(hashes: List[ByteString]): F[WaitHandle[F]] = {
     def loop(hash: ByteString, peers: List[Node], relayed: Int, contacted: Int): F[Unit] = {
       val parallelism = math.min(relayFactor - relayed, maxToTry - contacted)
       if (parallelism > 0 && peers.nonEmpty) {
@@ -70,12 +74,15 @@ class RelayingImpl[F[_]: Sync: Par: Log: Metrics: NodeAsk](
       }
     }
 
-    for {
+    val run = for {
       peers <- nd.recentlyAlivePeersAscendingDistance
       _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers), 0, 0))
     } yield ()
+
+    run.start.map(_.join)
   }
 
+  /** Try to relay to a peer, return whether it was new, or false if failed. */
   private def relay(peer: Node, hash: ByteString): F[Boolean] =
     (for {
       service  <- connectToGossip(peer)
