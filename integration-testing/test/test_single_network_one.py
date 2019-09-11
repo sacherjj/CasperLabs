@@ -754,3 +754,23 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == deploy_hash
         assert deploy_info.error_message == 'Exit code: 2'
+
+
+def test_multiple_deploys_per_block(cli):
+    account = cli.node.test_account
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account))
+    deploy_hash1 = cli('deploy',
+                       '--session-name', cli.resource('test_counterdefine.wasm'),
+                       '--payment-name', cli.resource('test_counterdefine.wasm'))
+    deploy_hash2 = cli('deploy',
+                       '--session-name', cli.resource('test_countercall.wasm'),
+                       '--payment-name', cli.resource('test_countercall.wasm'))
+    block_hash = cli("propose")
+    deploys = list(cli("show-deploys", block_hash))
+    assert len(deploys) == 2
+    for deploy_info in deploys:
+        assert deploy_info.deploy.deploy_hash in (deploy_hash1, deploy_hash2)
+        assert not deploy_info.is_error
+        assert deploy_info.error_message == ''
