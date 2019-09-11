@@ -96,5 +96,5 @@ check-publish:
 	cd contract-ffi && $(CARGO) publish --dry-run
 
 .PHONY: bench
-bench:
+bench: build-contracts
 	$(CARGO) bench
