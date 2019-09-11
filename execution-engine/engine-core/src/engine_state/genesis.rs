@@ -835,7 +835,7 @@ mod tests {
 
 /* --- NEW GENESIS STARTS HERE --- */
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct GenesisAccount {
     public_key: PublicKey,
     balance: Motes,
