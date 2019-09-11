@@ -143,9 +143,9 @@ export class AuthContainer {
     }
   }
 
-  private addAccount(account: UserAccount) {
+  private async addAccount(account: UserAccount) {
     this.accounts!.push(account);
-    this.errors.capture(this.saveAccounts());
+    await this.errors.capture(this.saveAccounts());
   }
 
   private async saveAccounts() {
@@ -178,7 +178,14 @@ class NewAccountFormData extends CleanableFormData {
   @observable privateKeyBase64: string = '';
 
   protected check() {
-    if (this.name === '') return 'Name cannot be empty!';
+    if (this.name === '')
+      return 'Name cannot be empty!';
+
+    if (this.name.indexOf(' ') > -1)
+      return "Please don't include spaces in the name. " +
+        "It will be the default name of the key files intended to be used with " +
+        "CLI tools which don't play that well with spaces, and it's just easier " +
+        "if the key and file names match.";
 
     if (this.accounts.some(x => x.name === this.name))
       return `An account with name '${this.name}' already exists.`;
