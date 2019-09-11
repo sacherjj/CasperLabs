@@ -116,7 +116,7 @@ class NodeRuntime private[node] (
 
     // SSL context to use for the public facing API.
     val maybeApiSslContext = if (conf.grpc.useTls) {
-      val (cert, key) = conf.tls.readApiCertAndKey
+      val (cert, key) = conf.tls.readPublicApiCertAndKey
       Option(SslContexts.forServer(cert, key, ClientAuth.NONE))
     } else None
 
