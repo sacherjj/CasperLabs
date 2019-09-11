@@ -36,7 +36,7 @@ object NodeEnvironment {
   private def name(conf: Configuration): Effect[String] = {
     val certificate: Effect[X509Certificate] =
       Task
-        .delay(CertificateHelper.fromFile(conf.tls.intraNodeCertificate.toFile))
+        .delay(CertificateHelper.fromFile(conf.tls.certificate.toFile))
         .attemptT
         .leftMap(e => InitializationError(s"Failed to read the X.509 certificate: ${e.getMessage}"))
 
@@ -69,12 +69,12 @@ object NodeEnvironment {
   )
 
   private def hasCertificate(conf: Configuration): Effect[Unit] = isValid(
-    !conf.tls.intraNodeCertificate.toFile.exists(),
-    s"Certificate file ${conf.tls.intraNodeCertificate} not found"
+    !conf.tls.certificate.toFile.exists(),
+    s"Certificate file ${conf.tls.certificate} not found"
   )
 
   private def hasKey(conf: Configuration): Effect[Unit] = isValid(
-    !conf.tls.intraNodeKey.toFile.exists(),
-    s"Secret key file ${conf.tls.intraNodeCertificate} not found"
+    !conf.tls.key.toFile.exists(),
+    s"Secret key file ${conf.tls.key} not found"
   )
 }

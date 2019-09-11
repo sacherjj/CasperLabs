@@ -6,16 +6,18 @@ import java.nio.file.Path
 import scala.io.Source
 
 final case class Tls(
-    intraNodeCertificate: Path,
-    intraNodeKey: Path,
-    publicApiCertificate: Path,
-    publicApiKey: Path
+    // Intra node.
+    certificate: Path,
+    key: Path,
+    // Public API.
+    apiCertificate: Path,
+    apiKey: Path
 ) extends SubConfig {
   def readIntraNodeCertAndKey: Tls.CertAndKey =
-    read(intraNodeCertificate, intraNodeKey)
+    read(certificate, key)
 
   def readPublicApiCertAndKey: Tls.CertAndKey =
-    read(publicApiCertificate, publicApiKey)
+    read(apiCertificate, apiKey)
 
   private def read(cp: Path, kp: Path): Tls.CertAndKey = {
     val c = Resources.withResource(Source.fromFile(cp.toFile))(_.mkString)

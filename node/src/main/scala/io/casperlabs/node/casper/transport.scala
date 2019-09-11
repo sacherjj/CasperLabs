@@ -84,8 +84,8 @@ package object transport {
       implicit0(transport: TransportLayer[Task]) = {
         effects.tcpTransportLayer(
           port,
-          conf.tls.intraNodeCertificate,
-          conf.tls.intraNodeKey,
+          conf.tls.certificate,
+          conf.tls.key,
           conf.server.maxMessageSize,
           conf.server.chunkSize,
           commTmpFolder
