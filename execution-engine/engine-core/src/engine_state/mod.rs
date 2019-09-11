@@ -331,7 +331,7 @@ where
                 let module = module.clone();
                 let args = {
                     let motes = account.balance().value();
-                    let args = (MINT_METHOD_NAME.to_string(), motes);
+                    let args = (MINT_METHOD_NAME, motes);
                     ArgsParser::parse(&args)
                         .and_then(|args| args.to_bytes())
                         .expect("args should parse")
