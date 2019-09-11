@@ -13,6 +13,7 @@ from test.cl_node.casperlabs_network import (
     TrillionPaymentNodeNetwork,
     OneNodeWithGRPCEncryption,
     EncryptedTwoNodeNetwork,
+    ReadOnlyNodeNetwork,
 )
 from docker.client import DockerClient
 
@@ -27,9 +28,16 @@ def docker_client_fixture() -> Generator[DockerClient, None, None]:
         docker_client.networks.prune()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def one_node_network(docker_client_fixture):
     with OneNodeNetwork(docker_client_fixture) as onn:
+        onn.create_cl_network()
+        yield onn
+
+
+@pytest.fixture(scope="module")
+def read_only_node_network(docker_client_fixture):
+    with ReadOnlyNodeNetwork(docker_client_fixture) as onn:
         onn.create_cl_network()
         yield onn
 
