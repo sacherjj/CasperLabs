@@ -58,21 +58,22 @@ import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
     conf: Configuration,
-    id: NodeIdentifier
+    id: NodeIdentifier,
+    mainScheduler: Scheduler
 )(
     implicit log: Log[Task],
     uncaughtExceptionHandler: UncaughtExceptionHandler
 ) {
 
   private[this] val loopScheduler =
-    Scheduler.fixedPool("loop", 4, reporter = uncaughtExceptionHandler)
+    Scheduler.fixedPool("loop", 2, reporter = uncaughtExceptionHandler)
 
   // Bounded thread pool for incoming traffic. Limited thread pool size so loads of request cannot exhaust all resources.
   private[this] val ingressScheduler =
-    Scheduler.cached("ingress-io", 4, 64, reporter = uncaughtExceptionHandler)
+    Scheduler.cached("ingress-io", 2, 64, reporter = uncaughtExceptionHandler)
   // Unbounded thread pool for outgoing, blocking IO. It is recommended to have unlimited thread pools for waiting on IO.
   private[this] val egressScheduler =
-    Scheduler.cached("egress-io", 4, Int.MaxValue, reporter = uncaughtExceptionHandler)
+    Scheduler.cached("egress-io", 2, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
   private[this] val dbConnScheduler =
     Scheduler.cached("db-conn", 1, 64, reporter = uncaughtExceptionHandler)
@@ -81,7 +82,7 @@ class NodeRuntime private[node] (
 
   private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
     catsConcurrentEffectForEffect(
-      egressScheduler
+      mainScheduler
     )
 
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
@@ -443,11 +444,12 @@ object NodeRuntime {
       conf: Configuration
   )(
       implicit
+      scheduler: Scheduler,
       log: Log[Task],
       uncaughtExceptionHandler: UncaughtExceptionHandler
   ): Effect[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
-      runtime <- Task.delay(new NodeRuntime(conf, id)).toEffect
+      runtime <- Task.delay(new NodeRuntime(conf, id, scheduler)).toEffect
     } yield runtime
 }
