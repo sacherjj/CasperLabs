@@ -2,19 +2,21 @@
 //! standalone test executable(s).  This will allow profiling to be done on executables running only
 //! meaningful code, rather than including test setup effort in the profile results.
 
+use std::{collections::HashMap, env, path::PathBuf, str::FromStr};
+
+use clap::{crate_version, App, Arg};
+
 use casperlabs_engine_tests::support::test_support::{
     DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder,
 };
-use clap::{crate_version, App, Arg};
 use contract_ffi::base16;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
-use std::{collections::HashMap, env, path::PathBuf, str::FromStr};
 
 const ABOUT: &str = "Initializes global state in preparation for profiling runs. Outputs the root \
                      hash from the commit response.";
-const DATA_DIR_ARG_NAME: &str = "data_dir";
+const DATA_DIR_ARG_NAME: &str = "data-dir";
 const DATA_DIR_ARG_SHORT: &str = "d";
 const DATA_DIR_ARG_LONG: &str = "data-dir";
 const DATA_DIR_ARG_VALUE_NAME: &str = "PATH";
