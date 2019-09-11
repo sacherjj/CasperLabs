@@ -120,7 +120,7 @@ where
         // Preliminaries
         let executor = WasmiExecutor;
         let blocktime = BlockTime(GENESIS_INITIAL_BLOCKTIME);
-        let gas_limit = Gas::from_u64(std::u64::MAX);
+        let gas_limit = Gas::new(std::u64::MAX.into());
         let phase = Phase::System;
 
         let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
