@@ -1,9 +1,12 @@
+from pathlib import Path
 import os
 import logging
+import json
 import subprocess
 from operator import add
 from functools import reduce
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
+from test.cl_node.common import MAX_PAYMENT_COST, resources_path
 
 
 class CLIErrorExit(Exception):
@@ -16,6 +19,11 @@ class CLIErrorExit(Exception):
 
 
 class CLI:
+
+    _MAX_PAYMENT_JSON = json.dumps(
+        [{"name": "amount", "value": {"u512": MAX_PAYMENT_COST}}]
+    ).replace(" ", "")
+
     def __init__(self, node, cli_cmd="casperlabs_client", tls_parameters=None):
         self.node = node
         self.host = (
@@ -26,14 +34,14 @@ class CLI:
         self.cli_cmd = cli_cmd
         self.tls_parameters = tls_parameters or {}
         self.default_deploy_args = []
-        self.resources_directory = "resources/"
+        self.resources_directory = resources_path()
 
     def set_default_deploy_args(self, *args):
         """ Set args that will be appended to subsequent deploy command. """
         self.default_deploy_args = [str(arg) for arg in args]
 
     def resource(self, file_name):
-        return self.resources_directory + file_name
+        return self.resources_directory / file_name
 
     def expand_args(self, args):
         connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
@@ -99,11 +107,27 @@ class CLI:
     def private_key_path(self, account):
         return account.private_key_path
 
+    def format_args(self, args: str) -> str:
+        return args
+
+    @property
+    def payment_json(self) -> str:
+        return self.format_args(self._MAX_PAYMENT_JSON)
+
+    @property
+    def join_char(self) -> str:
+        return " "
+
 
 class DockerCLI(CLI):
+
+    _MAX_PAYMENT_JSON = json.dumps(
+        [{"name": "amount", "value": {"long_value": MAX_PAYMENT_COST}}]
+    )
+
     def __init__(self, node, tls_parameters=None):
         super().__init__(node, tls_parameters=tls_parameters)
-        self.resources_directory = "/data/"
+        self.resources_directory = Path("/data/")
 
     def __call__(self, *args):
         logging.info(f"EXECUTING []: {args}")
@@ -120,3 +144,10 @@ class DockerCLI(CLI):
 
     def private_key_path(self, account):
         return account.private_key_docker_path
+
+    def format_args(self, args: str) -> str:
+        return f"'{args}'"
+
+    @property
+    def join_char(self) -> str:
+        return "="

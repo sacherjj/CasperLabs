@@ -3,7 +3,6 @@ import os
 import re
 import random
 import string
-import json
 import tempfile
 from pathlib import Path
 
@@ -15,6 +14,8 @@ from casperlabs_client import ABI
 
 
 class Contract:
+    """ This is generated with util/generate_contract_class.py """
+
     ADD_ASSOCIATED_KEY = "add_associated_key.wasm"
     ARGS = "test_args.wasm"
     ARGS_MULTI = "test_args_multi.wasm"
@@ -58,9 +59,6 @@ class Contract:
 MAX_PAYMENT_COST = 10000000
 INITIAL_MOTES_AMOUNT = 10 ** 20
 MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
-MAX_PAYMENT_JSON = json.dumps(
-    [{"name": "amount", "value": {"long_value": MAX_PAYMENT_COST}}]
-)  # .replace(" ", "")
 CONV_RATE = 10
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"

@@ -2,16 +2,14 @@ import os
 import logging
 import pytest
 import json
-from pathlib import Path
 from pytest import fixture, raises
+
 from test.cl_node.contract_address import contract_address
 from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
 from test.cl_node.common import (
     resources_path,
     extract_block_hash_from_propose_output,
     Contract,
-    INITIAL_MOTES_AMOUNT,
-    MAX_PAYMENT_JSON,
     MAX_PAYMENT_ABI,
 )
 from test.cl_node.docker_node import DockerNode
@@ -19,7 +17,6 @@ from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import wait_for_genesis_block
 from casperlabs_client import ABI
 from test.cl_node.cli import CLI, DockerCLI, CLIErrorExit
-
 
 """
 Test account state retrieval with query-state.
@@ -85,7 +82,6 @@ def test_account_state(one_node_network):
 
 
 def test_transfer_with_overdraft(one_node_network):
-
     acct1 = Account(1)
     acct2 = Account(2)
 
@@ -94,9 +90,7 @@ def test_transfer_with_overdraft(one_node_network):
 
     # For compatibility with EE with no execution cost
     # payment_contract="transfer_to_account.wasm"
-    block_hash = node.transfer_to_account(
-        to_account_id=1, amount=100000000, from_account_id="genesis"
-    )
+    block_hash = node.transfer_to_account(to_account_id=1, amount=100000000)
 
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error, f"error_message: {deploys[0].error_message}"
@@ -254,9 +248,7 @@ def client(node):
 
 @pytest.fixture()  # (scope="module")
 def block_hash(node):
-    return node.d_client.deploy_and_propose(
-        session_contract="test_helloname.wasm", payment_contract="test_helloname.wasm"
-    )
+    return node.d_client.deploy_and_propose(session_contract="test_helloname.wasm")
 
 
 block_hash_queries = [
@@ -490,7 +482,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
 # Python CLI #
 
 @pytest.fixture()  # scope="module")
-def python_cli(one_node_network):
+def cli(one_node_network):
     return CLI(one_node_network.docker_nodes[0], "casperlabs_client")
 
 
@@ -499,71 +491,74 @@ def scala_cli(one_node_network):
     return DockerCLI(one_node_network.docker_nodes[0])
 
 
-def test_cli_no_parameters(python_cli):
+def test_cli_no_parameters(cli):
     with raises(CLIErrorExit) as ex_info:
-        python_cli()
+        cli()
     assert "You must provide a command" in str(ex_info.value)
 
 
-def test_cli_help(python_cli):
-    out = python_cli("--help")
+def test_cli_help(cli):
+    out = cli("--help")
     # deploy,propose,show-block,show-blocks,show-deploy,show-deploys,vdag,query-state
     assert "Casper" in out
 
 
-def test_cli_show_blocks_and_show_block(python_cli):
-    blocks = python_cli("show-blocks", "--depth", "1")
+def test_cli_show_blocks_and_show_block(cli):
+    blocks = cli("show-blocks", "--depth", "1")
     assert len(blocks) > 0
 
     for block in blocks:
         block_hash = block.summary.block_hash
         assert len(block_hash) == 32 * 2  # hex
 
-        b = python_cli("show-block", block_hash)
+        b = cli("show-block", block_hash)
         assert block_hash == b.summary.block_hash
 
 
-def test_cli_show_block_not_found(python_cli):
+def test_cli_show_block_not_found(cli):
     block_hash = "00" * 32
     with raises(CLIErrorExit) as ex_info:
-        python_cli("show-block", block_hash)
+        cli("show-block", block_hash)
     # StatusCode.NOT_FOUND: Cannot find block matching hash
     # 0000000000000000000000000000000000000000000000000000000000000000
     assert "NOT_FOUND" in str(ex_info.value)
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
-def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(python_cli):
-    account = GENESIS_ACCOUNT
+@pytest.mark.skip
+def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli):
 
-    deploy_hash = python_cli(
+    account = cli.node.test_account
+
+    deploy_hash = cli(
         "deploy",
         f"--from {account.public_key_hex}",
-        f"--session {resources_path() / Contract.HELLONAME}",
-        f"--payment {resources_path() / Contract.STANDARD_PAYMENT}",
-        f"--payment-args {MAX_PAYMENT_JSON}",
-        f"--private-key {account.private_key_path}",
-        f"--public-key {account.public_key_path}",
+        f"--payment {cli.resource(Contract.STANDARD_PAYMENT)}",
+        f"--session {cli.resource(Contract.HELLONAME)}",
+        f"--private-key {str(account.private_key_path)}",
+        f"--public-key {str(account.public_key_path)}",
+        f"--payment-args {cli.payment_json}"
     )
-    block_hash = python_cli("propose")
-    deploys = python_cli("show-deploys", block_hash)
+    block_hash = cli("propose")
+    deploys = cli("show-deploys", block_hash)
     deploy_hashes = [d.deploy.deploy_hash for d in deploys]
     assert deploy_hash in deploy_hashes
 
-    deploy_info = python_cli("show-deploy", deploy_hash)
+    deploy_info = cli("show-deploy", deploy_hash)
     assert deploy_info.deploy.deploy_hash == deploy_hash
 
-    result = python_cli("query-state",
-                        "--block-hash", block_hash,
-                        "--type", "address",
-                        "--key", account.public_key_hex,
-                        "--path", "", )
+    result = cli("query-state",
+                 "--block-hash", block_hash,
+                 "--type", "address",
+                 "--key", account.public_key_hex,
+                 "--path", "",)
     assert "hello_name" in [u.name for u in result.account.known_urefs]
 
     balance = int(
-        python_cli("balance", "--address", account.public_key_hex, "--block-hash", block_hash)
+        cli("balance", "--address", account.public_key_hex, "--block-hash", block_hash)
     )
-    assert balance == INITIAL_MOTES_AMOUNT  # genesis
+    # TODO Need constant for where this 1000000000 is from.
+    assert balance == 1000000000  # genesis
 
 # CLI ABI
 
@@ -582,19 +577,34 @@ abi_unsigned_test_data = [
 ]
 
 
-def check_cli_abi_unsigned(cli, quote, resources_directory, unsigned_type, value, test_contract, keys):
+@pytest.mark.parametrize("unsigned_type, test_contract, value", abi_unsigned_test_data)
+def test_cli_abi_unsigned_scala(node, unsigned_type, test_contract, value):
+    check_cli_abi_unsigned(DockerCLI(node),
+                           unsigned_type,
+                           value,
+                           test_contract)
+
+
+@pytest.mark.parametrize("unsigned_type, test_contract, value", abi_unsigned_test_data)
+def test_cli_abi_unsigned_python(node, unsigned_type, test_contract, value):
+    check_cli_abi_unsigned(CLI(node),
+                           unsigned_type,
+                           value,
+                           test_contract)
+
+
+def check_cli_abi_unsigned(cli, unsigned_type, value, test_contract):
     account = GENESIS_ACCOUNT
-    private_key, public_key = keys(account)
     for number in [2, 256, 1024]:
         session_args = json.dumps([{"name": "number", "value": {unsigned_type: value(number)}}])
         args = ('deploy',
                 '--from', account.public_key_hex,
-                '--session', resources_directory / test_contract,
-                '--session-args', quote(session_args),
-                '--payment', resources_directory / Contract.STANDARD_PAYMENT,
-                '--payment-args', quote(MAX_PAYMENT_JSON),
-                '--private-key', private_key,
-                '--public-key', public_key)
+                '--session', cli.resource(test_contract),
+                '--session-args', cli.format_args(session_args),
+                '--payment', cli.resource(Contract.STANDARD_PAYMENT),
+                '--payment-args', cli.payment_json,
+                '--private-key', cli.private_key_path(account),
+                '--public-key', cli.public_key_path(account))
         logging.info(f"EXECUTING {' '.join(cli.expand_args(args))}")
         deploy_hash = cli(*args)
 
@@ -604,47 +614,24 @@ def check_cli_abi_unsigned(cli, quote, resources_directory, unsigned_type, value
         assert deploy_info.processing_results[0].error_message == f"Exit code: {number}"
 
 
-@pytest.mark.parametrize("unsigned_type, test_contract, value", abi_unsigned_test_data)
-def test_cli_abi_unsigned_scala(node, unsigned_type, test_contract, value):
-    check_cli_abi_unsigned(DockerCLI(node),
-                           lambda s: f"'{s}'",
-                           Path('/data'),
-                           unsigned_type,
-                           value,
-                           test_contract,
-                           lambda a: (a.private_key_docker_path, a.public_key_docker_path))
-
-
-@pytest.mark.parametrize("unsigned_type, test_contract, value", abi_unsigned_test_data)
-def test_cli_abi_unsigned_python(node, unsigned_type, test_contract, value):
-    check_cli_abi_unsigned(CLI(node),
-                           lambda s: s,
-                           resources_path(),
-                           unsigned_type,
-                           value,
-                           test_contract,
-                           lambda a: (a.private_key_path, a.public_key_path))
-
-
-def test_cli_abi_multiple(python_cli):
+def test_cli_abi_multiple(cli):
     account = GENESIS_ACCOUNT
-    test_contract = resources_path() / Contract.ARGS_MULTI
     account_hex = "0101010102020202030303030404040405050505060606060707070708080808"
     number = 1000
     total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
 
     session_args = json.dumps([{'name': 'account', 'value': {'account': account_hex}},
                                {'name': 'number', 'value': {'int_value': number}}])
-    deploy_hash = python_cli('deploy',
-                             '--from', account.public_key_hex,
-                             '--session', resources_path() / test_contract,
-                             '--session-args', session_args,
-                             '--private-key', account.private_key_path,
-                             '--public-key', account.public_key_path,
-                             '--payment', resources_path() / Contract.STANDARD_PAYMENT,
-                             '--payment-args', MAX_PAYMENT_JSON)
-    python_cli('propose')
-    deploy_info = python_cli("show-deploy", deploy_hash)
+    deploy_hash = cli('deploy',
+                      '--from', account.public_key_hex,
+                      '--session', cli.resource(Contract.ARGS_MULTI),
+                      '--session-args', session_args,
+                      '--private-key', cli.private_key_path(account),
+                      '--public-key', cli.public_key_path(account),
+                      '--payment', cli.resource(Contract.STANDARD_PAYMENT),
+                      '--payment-args', cli.payment_json)
+    cli('propose')
+    deploy_info = cli("show-deploy", deploy_hash)
     assert deploy_info.processing_results[0].is_error is True
     assert deploy_info.processing_results[0].error_message == f"Exit code: {total_sum}"
 
@@ -662,13 +649,12 @@ def test_cli_scala_extended_deploy(scala_cli):
     # when trying to access the same file, perhaps map containers /tmp
     # to a unique hosts's directory.
 
-    test_contract = "/data/test_helloname.wasm"
     cli('make-deploy',
         '-o', '/tmp/unsigned.deploy',
         '--from', account.public_key_hex,
-        '--session', test_contract,
-        '--payment', Path("/data") / Contract.STANDARD_PAYMENT,
-        "--payment-args", f"'{MAX_PAYMENT_JSON}'")
+        '--session', cli.resource(Contract.HELLONAME),
+        '--payment', cli.resource(Contract.STANDARD_PAYMENT),
+        "--payment-args", cli.payment_json)
 
     cli('sign-deploy',
         '-i', '/tmp/unsigned.deploy',
@@ -704,7 +690,9 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
     account = cli.node.test_account
     cli.set_default_deploy_args('--from', account.public_key_hex,
                                 '--private-key', cli.private_key_path(account),
-                                '--public-key', cli.public_key_path(account))
+                                '--public-key', cli.public_key_path(account),
+                                '--payment', cli.resource(Contract.STANDARD_PAYMENT),
+                                '--payment-args', cli.payment_json)
 
     # First, deploy a contract that stores a function
     # and saves pointer to it under UREF "revert_test".
@@ -712,8 +700,7 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
     test_contract = cli.resource("test_subcall_revert_define.wasm")
 
     first_deploy_hash = cli('deploy',
-                            '--session', test_contract,
-                            '--payment', test_contract)
+                            '--session', cli.resource(test_contract))
     block_hash = cli("propose")
 
     logging.info(f"""EXECUTING {' '.join(scala_cli.expand_args(["show-deploys", block_hash]))}""")
@@ -725,8 +712,7 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
 
     # Call by name
     deploy_hash = cli("deploy",
-                      '--session-name', "revert_test",
-                      '--payment-name', "revert_test")
+                      '--session-name', "revert_test")
     block_hash = cli("propose")
 
     deploys = scala_cli("show-deploys", block_hash)
@@ -737,8 +723,7 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
     # Call by function address
     revert_test_addr = contract_address(first_deploy_hash, 0).hex()  # assume fn_store_id starts from 0
     deploy_hash = cli("deploy",
-                      '--session-hash', revert_test_addr,
-                      '--payment-hash', revert_test_addr)
+                      '--session-hash', revert_test_addr)
     block_hash = cli("propose")
 
     deploys = scala_cli("show-deploys", block_hash)

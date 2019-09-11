@@ -36,7 +36,6 @@ class DeployThread(threading.Thread):
             for contract in batch:
                 deploy_response = self.node.client.deploy(
                     session_contract=contract,
-                    payment_contract=contract,
                     from_address=self.account.public_key_hex,
                     public_key=self.account.public_key_path,
                     private_key=self.account.private_key_path,

@@ -1,22 +1,31 @@
 import time
 from typing import Optional, Union
 import docker.errors
-import os
+import json
 from pathlib import Path
 
 from test.cl_node import LoggingMixin
-from test.cl_node.common import extract_block_count_from_show_blocks
-from test.cl_node.common import extract_block_hash_from_propose_output
+from test.cl_node.common import (
+    extract_block_count_from_show_blocks,
+    extract_block_hash_from_propose_output,
+    random_string,
+    Contract,
+    MAX_PAYMENT_COST,
+    resources_path,
+)
 from test.cl_node.client_base import CasperLabsClient
-from test.cl_node.common import random_string, Contract, MAX_PAYMENT_JSON
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.client_parser import parse, parse_show_deploys
 from casperlabs_client import extract_common_name
 
 
 def resource(file_name):
-    resources_path = "../../resources/"
-    return Path(os.path.dirname(os.path.realpath(__file__)), resources_path, file_name)
+    return resources_path() / file_name
+
+
+_MAX_PAYMENT_JSON = json.dumps(
+    [{"name": "amount", "value": {"long_value": MAX_PAYMENT_COST}}]
+)
 
 
 class DockerClient(CasperLabsClient, LoggingMixin):
@@ -47,7 +56,6 @@ class DockerClient(CasperLabsClient, LoggingMixin):
                 )
                 command = f"--node-id {node_id} {command}"
         self.logger.info(f"COMMAND {command}")
-        command = command.replace('"', '"')
         container = self.docker_client.containers.run(
             image=f"casperlabs/client:{self.node.docker_tag}",
             name=f"client-{self.node.config.number}-{random_string(5)}",
@@ -130,7 +138,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         session_contract: Optional[Union[str, Path]] = None,
         session_args: Optional[str] = None,
         payment_contract: Optional[Union[str, Path]] = Contract.STANDARD_PAYMENT,
-        payment_args: Optional[str] = MAX_PAYMENT_JSON,
+        payment_args: Optional[str] = _MAX_PAYMENT_JSON,
         public_key: Optional[Union[str, Path]] = None,
         private_key: Optional[Union[str, Path]] = None,
     ) -> str:
