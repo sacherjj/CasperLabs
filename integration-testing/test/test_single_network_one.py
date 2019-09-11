@@ -525,19 +525,17 @@ def test_cli_show_block_not_found(cli):
     assert "Cannot find block matching hash" in str(ex_info.value)
 
 
-@pytest.mark.skip
 def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli):
-
     account = cli.node.test_account
 
     deploy_hash = cli(
         "deploy",
-        f"--from {account.public_key_hex}",
-        f"--payment {cli.resource(Contract.STANDARD_PAYMENT)}",
-        f"--session {cli.resource(Contract.HELLONAME)}",
-        f"--private-key {str(account.private_key_path)}",
-        f"--public-key {str(account.public_key_path)}",
-        f"--payment-args {cli.payment_json}"
+        "--from", account.public_key_hex,
+        "--payment", cli.resource(Contract.STANDARD_PAYMENT),
+        "--session", cli.resource(Contract.HELLONAME),
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account),
+        "--payment-args", cli.payment_json
     )
     block_hash = cli("propose")
     deploys = cli("show-deploys", block_hash)
@@ -551,14 +549,15 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli
                  "--block-hash", block_hash,
                  "--type", "address",
                  "--key", account.public_key_hex,
-                 "--path", "",)
+                 "--path", "", )
     assert "hello_name" in [u.name for u in result.account.known_urefs]
 
     balance = int(
         cli("balance", "--address", account.public_key_hex, "--block-hash", block_hash)
     )
     # TODO Need constant for where this 1000000000 is from.
-    assert balance == 1000000000  # genesis
+    assert balance < 1000000000  # genesis minus payment
+
 
 # CLI ABI
 

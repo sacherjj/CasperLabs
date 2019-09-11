@@ -122,7 +122,14 @@ class CLI:
 class DockerCLI(CLI):
 
     _MAX_PAYMENT_JSON = json.dumps(
-        [{"name": "amount", "value": {"long_value": MAX_PAYMENT_COST}}]
+        [
+            {
+                "name": "amount",
+                "value": {
+                    "big_int": {"value": f"{MAX_PAYMENT_COST}", "bit_width": 512}
+                },
+            }
+        ]
     )
 
     def __init__(self, node, tls_parameters=None):

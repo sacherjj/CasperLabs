@@ -24,7 +24,12 @@ def resource(file_name):
 
 
 _MAX_PAYMENT_JSON = json.dumps(
-    [{"name": "amount", "value": {"long_value": MAX_PAYMENT_COST}}]
+    [
+        {
+            "name": "amount",
+            "value": {"big_int": {"value": f"{MAX_PAYMENT_COST}", "bit_width": 512}},
+        }
+    ]
 )
 
 
