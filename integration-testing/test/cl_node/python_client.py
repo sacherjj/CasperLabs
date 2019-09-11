@@ -47,19 +47,14 @@ class PythonClient(CasperLabsClient, LoggingMixin):
         from_address: str = None,
         gas_price: int = 1,
         session_contract: Optional[Union[str, Path]] = None,
-        payment_contract: Optional[Union[str, Path]] = None,
+        payment_contract: Optional[Union[str, Path]] = Contract.STANDARD_PAYMENT,
         private_key: Optional[str] = None,
         public_key: Optional[str] = None,
         session_args: list = None,
-        payment_args: list = None,
+        payment_args: list = MAX_PAYMENT_ABI,
     ) -> str:
 
         assert session_contract is not None
-        if payment_contract is None:
-            payment_contract = Contract.STANDARD_PAYMENT
-
-        if payment_args is None:
-            payment_args = MAX_PAYMENT_ABI
 
         public_key = public_key or self.node.test_account.public_key_path
         private_key = private_key or self.node.test_account.private_key_path
