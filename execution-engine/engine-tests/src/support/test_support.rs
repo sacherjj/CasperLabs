@@ -32,7 +32,6 @@ use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
 use engine_storage::transaction_source::lmdb::LmdbEnvironment;
 use engine_storage::trie_store::lmdb::LmdbTrieStore;
 use transforms::TransformEntry;
-
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
@@ -509,6 +508,7 @@ impl Default for InMemoryWasmTestBuilder {
         let engine_config = EngineConfig::new().set_use_payment_code(true);
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, engine_config);
+
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
@@ -617,6 +617,17 @@ where
             pos_contract_uref: result.0.pos_contract_uref,
             genesis_transforms: result.0.genesis_transforms,
         }
+    }
+
+    /// Applies values only which allows the engine state to be swapped with new one
+    /// possibly after running genesis once and reusing existing database (i.e. LMDB).
+    pub fn apply_from_result(&mut self, result: &WasmTestResult<S>) -> &mut Self {
+        self.genesis_hash = result.0.genesis_hash.clone();
+        self.post_state_hash = result.0.post_state_hash.clone();
+        self.bonded_validators = result.0.bonded_validators.clone();
+        self.mint_contract_uref = result.0.mint_contract_uref;
+        self.pos_contract_uref = result.0.pos_contract_uref;
+        self
     }
 
     pub fn run_genesis(
