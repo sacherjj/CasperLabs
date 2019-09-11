@@ -116,10 +116,10 @@ class NodeRuntime private[node] (
     implicit val filesApiEff            = FilesAPI.create[Effect](Sync[Effect], logEff)
 
     // SSL context to use for the public facing API.
-    val maybeApiSslContext = Option(conf.tls.readCertAndKey).filter(_ => conf.grpc.useTls).map {
-      case (cert, key) =>
-        SslContexts.forServer(cert, key, ClientAuth.NONE)
-    }
+    val maybeApiSslContext = if (conf.grpc.useTls) {
+      val (cert, key) = conf.tls.readPublicApiCertAndKey
+      Option(SslContexts.forServer(cert, key, ClientAuth.NONE))
+    } else None
 
     rpConfState >>= (_.runState { implicit state =>
       implicit val metrics     = diagnostics.effects.metrics[Task]

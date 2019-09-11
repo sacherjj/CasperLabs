@@ -76,6 +76,8 @@ class DockerConfig:
             "--metrics-prometheus": "",
             "--tls-certificate": self.tls_certificate_path(),
             "--tls-key": self.tls_key_path(),
+            "--tls-api-certificate": self.tls_certificate_path(),
+            "--tls-api-key": self.tls_key_path(),
         }
         if self.grpc_encryption:
             options["--grpc-use-tls"] = ""

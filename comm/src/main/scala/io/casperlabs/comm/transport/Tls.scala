@@ -1,23 +1,27 @@
 package io.casperlabs.comm.transport
 
-import java.nio.file.Path
-
 import io.casperlabs.configuration.{ignore, SubConfig}
 import io.casperlabs.shared.Resources
+import java.nio.file.Path
 import scala.io.Source
 
 final case class Tls(
+    // Intra node.
     certificate: Path,
     key: Path,
-    @ignore
-    customCertificateLocation: Boolean = false,
-    @ignore
-    customKeyLocation: Boolean = false,
-    secureRandomNonBlocking: Boolean
+    // Public API.
+    apiCertificate: Path,
+    apiKey: Path
 ) extends SubConfig {
-  def readCertAndKey: Tls.CertAndKey = {
-    val c = Resources.withResource(Source.fromFile(certificate.toFile))(_.mkString)
-    val k = Resources.withResource(Source.fromFile(key.toFile))(_.mkString)
+  def readIntraNodeCertAndKey: Tls.CertAndKey =
+    read(certificate, key)
+
+  def readPublicApiCertAndKey: Tls.CertAndKey =
+    read(apiCertificate, apiKey)
+
+  private def read(cp: Path, kp: Path): Tls.CertAndKey = {
+    val c = Resources.withResource(Source.fromFile(cp.toFile))(_.mkString)
+    val k = Resources.withResource(Source.fromFile(kp.toFile))(_.mkString)
     (c, k)
   }
 }
