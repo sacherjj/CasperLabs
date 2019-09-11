@@ -39,4 +39,6 @@ pub mod resolvers;
 pub mod runtime_context;
 pub mod tracking_copy;
 
-type URefAddr = [u8; 32];
+pub const ADDRESS_LENGTH: usize = 32;
+
+type Address = [u8; ADDRESS_LENGTH];

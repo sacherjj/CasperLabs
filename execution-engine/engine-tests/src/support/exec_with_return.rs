@@ -8,6 +8,7 @@ use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::EngineState;
 use engine_core::execution;
+use engine_core::execution::AddressGenerator;
 use engine_core::runtime_context::RuntimeContext;
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_shared::gas::Gas;
@@ -56,9 +57,9 @@ where
     ));
 
     let phase = Phase::Session;
-    let rng = {
-        let rng = execution::create_rng(deploy_hash, phase);
-        Rc::new(RefCell::new(rng))
+    let address_generator = {
+        let address_generator = AddressGenerator::new(deploy_hash, phase);
+        Rc::new(RefCell::new(address_generator))
     };
     let gas_counter = Gas::default();
     let fn_store_id = INIT_FN_STORE_ID;
@@ -94,7 +95,7 @@ where
         gas_limit,
         gas_counter,
         fn_store_id,
-        rng,
+        address_generator,
         protocol_version,
         correlation_id,
         phase,
