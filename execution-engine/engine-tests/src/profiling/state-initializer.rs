@@ -6,17 +6,20 @@ use casperlabs_engine_tests::support::test_support::{
     DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder,
 };
 use clap::{crate_version, App, Arg};
+use contract_ffi::base16;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 use std::{collections::HashMap, env, path::PathBuf, str::FromStr};
 
-const ABOUT: &str = "Initializes global state in preparation for profiling runs.";
+const ABOUT: &str = "Initializes global state in preparation for profiling runs. Outputs the root \
+                     hash from the commit response.";
 const DATA_DIR_ARG_NAME: &str = "data_dir";
 const DATA_DIR_ARG_SHORT: &str = "d";
 const DATA_DIR_ARG_LONG: &str = "data-dir";
 const DATA_DIR_ARG_VALUE_NAME: &str = "PATH";
-const DATA_DIR_ARG_HELP: &str = "data_dir";
+const DATA_DIR_ARG_HELP: &str = "Directory in which to store persistent data [default: current \
+                                 working directory]";
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -80,5 +83,5 @@ fn main() {
         .expect_success()
         .commit()
         .get_post_state_hash();
-    println!("{:?}", post_state_hash);
+    println!("{}", base16::encode_lower(&post_state_hash));
 }

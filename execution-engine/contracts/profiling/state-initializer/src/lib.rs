@@ -1,9 +1,5 @@
 //! Transfers the requested amount of motes to the first account and zero motes to the second
 //! account.
-//!
-//! Revert status codes:
-//! 10 - transferred to existing account
-//! 11 - transfer error
 #![no_std]
 
 extern crate contract_ffi;
@@ -12,11 +8,18 @@ use contract_ffi::contract_api::{self, TransferResult};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
+enum Error {
+    AccountAlreadyExists = 1,
+    TransferError = 2,
+}
+
 fn create_account_with_amount(account: PublicKey, amount: U512) {
     match contract_api::transfer_to_account(account, amount) {
         TransferResult::TransferredToNewAccount => (),
-        TransferResult::TransferredToExistingAccount => contract_api::revert(10),
-        TransferResult::TransferError => contract_api::revert(11),
+        TransferResult::TransferredToExistingAccount => {
+            contract_api::revert(Error::AccountAlreadyExists as u32)
+        }
+        TransferResult::TransferError => contract_api::revert(Error::TransferError as u32),
     }
 }
 

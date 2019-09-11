@@ -25,7 +25,6 @@ all: build build-contracts
 .PHONY: build
 build:
 	$(CARGO) build $(CARGO_FLAGS)
-	$(CARGO) build $(CARGO_FLAGS) --bin=state-initializer --features=profiling --manifest-path=engine-tests/Cargo.toml
 
 build-contract/%:
 	$(CARGO) build $(filter-out --release, $(CARGO_FLAGS)) -p $* --release --target wasm32-unknown-unknown
