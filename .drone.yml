@@ -37,13 +37,14 @@ name: build-bors-merge
 
 steps:
 # Below is for pull_request webhooks only
-- name: markdown-link-check
-  commands:
-  - "ci/markdown-link-check.sh"
-  image: "casperlabs/buildenv:latest"
-  when:
-    event:
-    - pull_request
+
+# - name: markdown-link-check
+#   commands:
+#   - "ci/markdown-link-check.sh"
+#   image: "casperlabs/buildenv:latest"
+#   when:
+#     event:
+#     - pull_request
 
 - name: sbt-compile-test-pr
   commands:
@@ -66,6 +67,7 @@ steps:
   depends_on:
   - sbt-compile-test-pr
 
+#Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-pr
   environment:
     CARGO_FLAGS: "--locked"
@@ -78,6 +80,8 @@ steps:
   when:
     event:
     - pull_request
+  depends_on:
+  - sbt-compile-test-pr
 
 - name: run-cargo-fmt-pr
   commands:
@@ -118,14 +122,15 @@ steps:
   - rust-compile-test-pr
 
 # This section is for bors' branches only
-- name: markdown-link-check-bors
-  commands:
-  - "ci/markdown-link-check.sh"
-  image: "casperlabs/buildenv:latest"
-  when:
-    branch:
-    - staging
-    - trying
+
+# - name: markdown-link-check-bors
+#   commands:
+#   - "ci/markdown-link-check.sh"
+#   image: "casperlabs/buildenv:latest"
+#   when:
+#     branch:
+#     - staging
+#     - trying
 
 - name: sbt-test-docker-bors
   commands:
@@ -154,6 +159,7 @@ steps:
   depends_on:
   - sbt-test-docker-bors
 
+#Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-bors
   environment:
     CARGO_FLAGS: "--locked"
@@ -165,6 +171,8 @@ steps:
     branch:
     - staging
     - trying
+  depends_on:
+  - sbt-test-docker-bors
 
 # Note: Added the dependency on the sbt step to be finished first because in testing,
 # Drone was getting random sbt build failures when too many steps were running simultaneously.

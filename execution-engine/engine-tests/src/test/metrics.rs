@@ -1,7 +1,7 @@
 use grpc::RequestOptions;
 use lazy_static;
 
-use engine_core::engine_state::EngineState;
+use engine_core::engine_state::{EngineConfig, EngineState};
 use engine_shared::logging::log_level::LogLevel;
 use engine_shared::logging::log_settings::{self, LogLevelFilter, LogSettings};
 use engine_shared::logging::logger::{self, LogBufferProvider, BUFFERED_LOGGER};
@@ -41,7 +41,8 @@ fn should_query_with_metrics() {
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = root_hash.to_vec();
-    let engine_state = EngineState::new(global_state, Default::default());
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
+    let engine_state = EngineState::new(global_state, engine_config);
 
     let mut query_request = QueryRequest::new();
     {
@@ -94,7 +95,8 @@ fn should_exec_with_metrics() {
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = root_hash.to_vec();
-    let engine_state = EngineState::new(global_state, Default::default());
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
+    let engine_state = EngineState::new(global_state, engine_config);
 
     let mut exec_request = ExecRequest::new();
     {
@@ -145,7 +147,8 @@ fn should_commit_with_metrics() {
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = root_hash.to_vec();
-    let engine_state = EngineState::new(global_state, Default::default());
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
+    let engine_state = EngineState::new(global_state, engine_config);
 
     let request_options = RequestOptions::new();
 
@@ -192,7 +195,8 @@ fn should_validate_with_metrics() {
     let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let (global_state, _) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-    let engine_state = EngineState::new(global_state, Default::default());
+    let engine_config = EngineConfig::new().set_use_payment_code(true);
+    let engine_state = EngineState::new(global_state, engine_config);
 
     let mut validate_request = ValidateRequest::new();
 

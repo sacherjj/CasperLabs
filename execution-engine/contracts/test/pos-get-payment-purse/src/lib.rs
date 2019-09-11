@@ -36,6 +36,8 @@ pub extern "C" fn call() {
 
     let source_purse = contract_api::main_purse();
     let payment_amount: U512 = 100.into();
+    // amount passed to payment contract
+    let payment_fund: U512 = contract_api::get_arg(0);
     let payment_purse: PurseId =
         contract_api::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
 
@@ -51,7 +53,7 @@ pub extern "C" fn call() {
         None => contract_api::revert(Error::GetBalance as u32),
     };
 
-    if payment_balance != payment_amount {
+    if payment_balance.saturating_sub(payment_fund) != payment_amount {
         contract_api::revert(Error::CheckBalance as u32)
     }
 

@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use grpc::RequestOptions;
+use lmdb::DatabaseFlags;
 
+use contract_ffi::value::U512;
 use engine_core::engine_state::utils::WasmiBytes;
-use engine_core::engine_state::{EngineConfig, EngineState};
-use engine_core::execution::POS_NAME;
+use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT};
+use engine_core::execution::{self, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
     DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisRequest, GenesisResponse,
@@ -17,16 +21,26 @@ use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{to_domain_validators, CommitTransforms};
 use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_grpc_server::engine_server::{ipc, transforms};
+use engine_shared::gas::Gas;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
+use engine_storage::global_state::lmdb::LmdbGlobalState;
+use engine_storage::global_state::StateProvider;
+use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
+use engine_storage::transaction_source::lmdb::LmdbEnvironment;
+use engine_storage::trie_store::lmdb::LmdbTrieStore;
 use transforms::TransformEntry;
 
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
 pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
+const DEFAULT_MAP_SIZE: usize = 805_306_368_000; // 750 GiB as per grpc-server default
+
+pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
+pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
 
 pub struct DeployBuilder {
     deploy: Deploy,
@@ -282,17 +296,21 @@ pub fn create_query_request(
     query_request
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_exec_request(
     address: [u8; 32],
-    session_contract_file_name: &str,
+    payment_file: &str,
+    payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    session_file: &str,
+    session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
     pre_state_hash: &[u8],
     block_time: u64,
     deploy_hash: [u8; 32],
-    arguments: impl contract_ffi::contract_api::argsparser::ArgsParser,
     authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
 ) -> ExecRequest {
     let deploy = DeployBuilder::new()
-        .with_session_code(session_contract_file_name, arguments)
+        .with_session_code(session_file, session_args)
+        .with_payment_code(payment_file, payment_args)
         .with_address(address)
         .with_authorization_keys(&authorized_keys)
         .with_deploy_hash(deploy_hash)
@@ -351,6 +369,15 @@ pub fn get_exec_transforms(
                 .expect("should convert");
             commit_transforms.value()
         })
+        .collect()
+}
+
+pub fn get_exec_costs(exec_response: &ExecResponse) -> Vec<Gas> {
+    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
+
+    deploy_results
+        .iter()
+        .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
         .collect()
 }
 
@@ -452,12 +479,13 @@ pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> Stri
     }
 }
 
+pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
+
 /// Builder for simple WASM test
-#[derive(Clone)]
-pub struct WasmTestBuilder {
+pub struct WasmTestBuilder<S> {
     /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for
     /// EngineState`
-    engine_state: Rc<EngineState<InMemoryGlobalState>>,
+    engine_state: Rc<EngineState<S>>,
     exec_responses: Vec<ExecResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
@@ -476,9 +504,83 @@ pub struct WasmTestBuilder {
     pos_contract_uref: Option<contract_ffi::uref::URef>,
 }
 
-impl Default for WasmTestBuilder {
-    fn default() -> WasmTestBuilder {
+impl Default for InMemoryWasmTestBuilder {
+    fn default() -> Self {
+        let engine_config = EngineConfig::new().set_use_payment_code(true);
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
+        let engine_state = EngineState::new(global_state, engine_config);
+        WasmTestBuilder {
+            engine_state: Rc::new(engine_state),
+            exec_responses: Vec::new(),
+            genesis_hash: None,
+            post_state_hash: None,
+            transforms: Vec::new(),
+            bonded_validators: Vec::new(),
+            genesis_account: None,
+            mint_contract_uref: None,
+            pos_contract_uref: None,
+            genesis_transforms: None,
+        }
+    }
+}
+
+// TODO: Deriving `Clone` for `WasmTestBuilder<S>` doesn't work correctly (unsure why), so
+// implemented by hand here.  Try to derive in the future with a different compiler version.
+impl<S> Clone for WasmTestBuilder<S> {
+    fn clone(&self) -> Self {
+        WasmTestBuilder {
+            engine_state: Rc::clone(&self.engine_state),
+            exec_responses: self.exec_responses.clone(),
+            genesis_hash: self.genesis_hash.clone(),
+            post_state_hash: self.post_state_hash.clone(),
+            transforms: self.transforms.clone(),
+            bonded_validators: self.bonded_validators.clone(),
+            genesis_account: self.genesis_account.clone(),
+            mint_contract_uref: self.mint_contract_uref,
+            pos_contract_uref: self.pos_contract_uref,
+            genesis_transforms: self.genesis_transforms.clone(),
+        }
+    }
+}
+
+/// A wrapper type to disambiguate builder from an actual result
+#[derive(Clone)]
+pub struct WasmTestResult<S>(WasmTestBuilder<S>);
+
+impl<S> WasmTestResult<S> {
+    /// Access the builder
+    pub fn builder(&self) -> &WasmTestBuilder<S> {
+        &self.0
+    }
+}
+
+impl InMemoryWasmTestBuilder {
+    pub fn new(engine_config: EngineConfig) -> Self {
+        let global_state = InMemoryGlobalState::empty().expect("should create global state");
+        let engine_state = EngineState::new(global_state, engine_config);
+        WasmTestBuilder {
+            engine_state: Rc::new(engine_state),
+            ..Default::default()
+        }
+    }
+}
+
+impl LmdbWasmTestBuilder {
+    pub fn new<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> Self {
+        let environment = Arc::new(
+            LmdbEnvironment::new(&data_dir.into(), DEFAULT_MAP_SIZE)
+                .expect("should create LmdbEnvironment"),
+        );
+        let trie_store = Arc::new(
+            LmdbTrieStore::new(&environment, None, DatabaseFlags::empty())
+                .expect("should create LmdbTrieStore"),
+        );
+        let protocol_data_store = Arc::new(
+            LmdbProtocolDataStore::new(&environment, None, DatabaseFlags::empty())
+                .expect("should create LmdbProtocolDataStore"),
+        );
+        let global_state = LmdbGlobalState::empty(environment, trie_store, protocol_data_store)
+            .expect("should create LmdbGlobalState");
         let engine_state = EngineState::new(global_state, Default::default());
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
@@ -495,20 +597,14 @@ impl Default for WasmTestBuilder {
     }
 }
 
-/// A wrapper type to disambiguate builder from an actual result
-#[derive(Clone)]
-pub struct WasmTestResult(WasmTestBuilder);
-
-impl WasmTestResult {
-    /// Access the builder
-    pub fn builder(&self) -> &WasmTestBuilder {
-        &self.0
-    }
-}
-
-impl WasmTestBuilder {
+impl<S> WasmTestBuilder<S>
+where
+    S: StateProvider,
+    S::Error: Into<execution::Error>,
+    EngineState<S>: ExecutionEngineService,
+{
     /// Carries on attributes from TestResult for further executions
-    pub fn from_result(result: WasmTestResult) -> WasmTestBuilder {
+    pub fn from_result(result: WasmTestResult<S>) -> Self {
         WasmTestBuilder {
             engine_state: result.0.engine_state,
             exec_responses: Vec::new(),
@@ -523,23 +619,6 @@ impl WasmTestBuilder {
         }
     }
 
-    pub fn new(engine_config: EngineConfig) -> WasmTestBuilder {
-        let global_state = InMemoryGlobalState::empty().expect("should create global state");
-        let engine_state = EngineState::new(global_state, engine_config);
-        WasmTestBuilder {
-            engine_state: Rc::new(engine_state),
-            exec_responses: Vec::new(),
-            genesis_hash: None,
-            post_state_hash: None,
-            transforms: Vec::new(),
-            bonded_validators: Vec::new(),
-            genesis_account: None,
-            mint_contract_uref: None,
-            pos_contract_uref: None,
-            genesis_transforms: None,
-        }
-    }
-
     pub fn run_genesis(
         &mut self,
         genesis_addr: [u8; 32],
@@ -547,7 +626,7 @@ impl WasmTestBuilder {
             contract_ffi::value::account::PublicKey,
             contract_ffi::value::U512,
         >,
-    ) -> &mut WasmTestBuilder {
+    ) -> &mut Self {
         let (genesis_request, contracts) =
             create_genesis_request(genesis_addr, genesis_validators.clone());
 
@@ -627,10 +706,7 @@ impl WasmTestBuilder {
         }
     }
 
-    pub fn exec_with_exec_request(
-        &mut self,
-        mut exec_request: ExecRequest,
-    ) -> &mut WasmTestBuilder {
+    pub fn exec_with_exec_request(&mut self, mut exec_request: ExecRequest) -> &mut Self {
         let exec_request = {
             let hash = self
                 .post_state_hash
@@ -666,43 +742,53 @@ impl WasmTestBuilder {
 
     /// Runs a contract and after that runs actual WASM contract and expects
     /// transformations to happen at the end of execution.
+    #[allow(clippy::too_many_arguments)]
     pub fn exec_with_args_and_keys(
         &mut self,
         address: [u8; 32],
-        wasm_file: &str,
+        payment_file: &str,
+        payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+        session_file: &str,
+        session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         block_time: u64,
         deploy_hash: [u8; 32],
-        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
-    ) -> &mut WasmTestBuilder {
+    ) -> &mut Self {
         let exec_request = create_exec_request(
             address,
-            &wasm_file,
+            payment_file,
+            payment_args,
+            session_file,
+            session_args,
             self.post_state_hash
                 .as_ref()
                 .expect("Should have post state hash"),
             block_time,
             deploy_hash,
-            args,
             authorized_keys,
         );
         self.exec_with_exec_request(exec_request)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn exec_with_args(
         &mut self,
         address: [u8; 32],
-        wasm_file: &str,
+        payment_file: &str,
+        payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+        session_file: &str,
+        session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
         block_time: u64,
         deploy_hash: [u8; 32],
-        args: impl contract_ffi::contract_api::argsparser::ArgsParser,
-    ) -> &mut WasmTestBuilder {
+    ) -> &mut Self {
         self.exec_with_args_and_keys(
             address,
-            wasm_file,
+            payment_file,
+            payment_args,
+            session_file,
+            session_args,
             block_time,
             deploy_hash,
-            args,
             // Exec with different account also implies the authorized keys should default to
             // the calling account.
             vec![contract_ffi::value::account::PublicKey::new(address)],
@@ -712,15 +798,25 @@ impl WasmTestBuilder {
     pub fn exec(
         &mut self,
         address: [u8; 32],
-        wasm_file: &str,
+        session_file: &str,
         block_time: u64,
         deploy_hash: [u8; 32],
-    ) -> &mut WasmTestBuilder {
-        self.exec_with_args(address, wasm_file, block_time, deploy_hash, ())
+    ) -> &mut Self {
+        let payment_file = STANDARD_PAYMENT_CONTRACT;
+        let payment_args = (U512::from(MAX_PAYMENT),);
+        self.exec_with_args(
+            address,
+            payment_file,
+            payment_args,
+            session_file,
+            (), // no arguments passed to session contract by default
+            block_time,
+            deploy_hash,
+        )
     }
 
     /// Commit effects of previous exec call on the latest post-state hash.
-    pub fn commit(&mut self) -> &mut WasmTestBuilder {
+    pub fn commit(&mut self) -> &mut Self {
         let prestate_hash = self
             .post_state_hash
             .clone()
@@ -741,7 +837,7 @@ impl WasmTestBuilder {
         &mut self,
         prestate_hash: Vec<u8>,
         effects: HashMap<contract_ffi::key::Key, Transform>,
-    ) -> &mut WasmTestBuilder {
+    ) -> &mut Self {
         let commit_request = create_commit_request(&prestate_hash, &effects);
 
         let commit_response = self
@@ -767,7 +863,7 @@ impl WasmTestBuilder {
     }
 
     /// Expects a successful run and caches transformations
-    pub fn expect_success(&mut self) -> &mut WasmTestBuilder {
+    pub fn expect_success(&mut self) -> &mut Self {
         // Check first result, as only first result is interesting for a simple test
         let exec_response = self
             .exec_responses
@@ -855,11 +951,15 @@ impl WasmTestBuilder {
             .expect("Should have post-state hash.")
     }
 
+    pub fn get_engine_state(&self) -> &EngineState<S> {
+        &self.engine_state
+    }
+
     pub fn get_exec_response(&self, index: usize) -> Option<&ExecResponse> {
         self.exec_responses.get(index)
     }
 
-    pub fn finish(&self) -> WasmTestResult {
+    pub fn finish(&self) -> WasmTestResult<S> {
         WasmTestResult(self.clone())
     }
 

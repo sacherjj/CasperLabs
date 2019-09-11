@@ -4,6 +4,8 @@ extern crate grpc;
 #[cfg(test)]
 extern crate lazy_static;
 #[cfg(test)]
+extern crate lmdb;
+#[cfg(test)]
 extern crate protobuf;
 
 #[cfg(test)]

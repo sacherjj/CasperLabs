@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, WasmTestBuilder};
+use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
@@ -27,7 +27,7 @@ fn should_run_ee_584_no_errored_session_transforms() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = WasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     builder
         .run_genesis(GENESIS_ADDR, HashMap::default())

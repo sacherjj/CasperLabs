@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
@@ -8,7 +8,7 @@ const GENESIS_ADDR: [u8; 32] = [12; 32];
 #[ignore]
 #[test]
 fn regression_test_genesis_hash_mismatch() {
-    let mut builder_base = WasmTestBuilder::default();
+    let mut builder_base = InMemoryWasmTestBuilder::default();
 
     // Step 1.
     let builder = builder_base.run_genesis(GENESIS_ADDR, HashMap::new());

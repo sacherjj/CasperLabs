@@ -317,10 +317,10 @@ object GossipServiceCasperTestNodeFactory {
                                      Log[F].debug(s"Validated and stored block ${PrettyPrinter
                                        .buildString(block.blockHash)}")
 
-                                   case AdmissibleEquivocation =>
+                                   case EquivocatedBlock =>
                                      Log[F].debug(
-                                       s"Detected AdmissibleEquivocation on block ${PrettyPrinter
-                                         .buildString(block.blockHash)} Carry on down downloading children."
+                                       s"Detected Equivocation on block ${PrettyPrinter
+                                         .buildString(block.blockHash)}"
                                      )
 
                                    case other =>
