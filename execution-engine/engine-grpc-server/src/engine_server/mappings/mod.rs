@@ -64,7 +64,9 @@ impl Display for MappingError {
                 "Invalid public key length: expected {}, actual {}",
                 expected, actual
             ),
-            error @ MappingError::ParsingError(_) => Self::fmt(error, f),
+            MappingError::ParsingError(ParsingError(message)) => {
+                write!(f, "Parsing error: {}", message)
+            }
         }
     }
 }
