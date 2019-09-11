@@ -153,19 +153,17 @@ where
 
         // Persist the "virtual system account".  It will get overwritten with the actual system
         // account below.
-        {
-            let key = {
-                let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-                Validated::new(key, Validated::valid).unwrap() // safe to unwrap
-            };
-            let value = {
-                let virtual_system_account = virtual_system_account.clone();
-                let value = Value::Account(virtual_system_account);
-                Validated::new(value, Validated::valid).unwrap() // safe to unwrap
-            };
+        let key = {
+            let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+            Validated::new(key, Validated::valid).unwrap() // safe to unwrap
+        };
+        let value = {
+            let virtual_system_account = virtual_system_account.clone();
+            let value = Value::Account(virtual_system_account);
+            Validated::new(value, Validated::valid).unwrap() // safe to unwrap
+        };
 
-            tracking_copy.borrow_mut().write(key, value);
-        }
+        tracking_copy.borrow_mut().write(key, value);
 
         // Spec #4A: random number generator is seeded from the hash of GenesisConfig.name
         // concatenated with GenesisConfig.timestamp (aka "deploy hash").
