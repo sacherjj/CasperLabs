@@ -39,14 +39,15 @@ object RelayingImpl {
       nd: NodeDiscovery[F],
       connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
-      relaySaturation: Int
+      relaySaturation: Int,
+      isSynchronous: Boolean = false
   ): Relaying[F] = {
     val maxToTry = if (relaySaturation == 100) {
       Int.MaxValue
     } else {
       (relayFactor * 100) / (100 - relaySaturation)
     }
-    new RelayingImpl[F](nd, connectToGossip, relayFactor, maxToTry)
+    new RelayingImpl[F](nd, connectToGossip, relayFactor, maxToTry, isSynchronous)
   }
 }
 
@@ -57,7 +58,8 @@ class RelayingImpl[F[_]: Concurrent: Par: Log: Metrics: NodeAsk](
     nd: NodeDiscovery[F],
     connectToGossip: Node => F[GossipService[F]],
     relayFactor: Int,
-    maxToTry: Int
+    maxToTry: Int,
+    isSynchronous: Boolean
 ) extends Relaying[F] {
   import RelayingImpl._
 
@@ -79,7 +81,11 @@ class RelayingImpl[F[_]: Concurrent: Par: Log: Metrics: NodeAsk](
       _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers), 0, 0))
     } yield ()
 
-    run.start.map(_.join)
+    if (isSynchronous) {
+      run *> ().pure[F].pure[F]
+    } else {
+      run.start.map(_.join)
+    }
   }
 
   /** Try to relay to a peer, return whether it was new, or false if failed. */
