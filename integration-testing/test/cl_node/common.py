@@ -17,7 +17,6 @@ class Contract:
     """ This is generated with util/generate_contract_class.py """
 
     ADD_ASSOCIATED_KEY = "add_associated_key.wasm"
-    ARGS = "test_args.wasm"
     ARGS_MULTI = "test_args_multi.wasm"
     ARGS_U32 = "test_args_u32.wasm"
     ARGS_U512 = "test_args_u512.wasm"
@@ -48,10 +47,6 @@ class Contract:
     SUBCALL_REVERT_CALL = "test_subcall_revert_call.wasm"
     SUBCALL_REVERT_DEFINE = "test_subcall_revert_define.wasm"
     TRANSFER_TO_ACCOUNT = "transfer_to_account.wasm"
-    TRANSFER_TO_ACCOUNT_1 = "test_transfer_to_account_1.wasm"
-    TRANSFER_TO_ACCOUNT_1_CALL = "test_transfer_to_account_1_call.wasm"
-    TRANSFER_TO_ACCOUNT_2 = "test_transfer_to_account_2.wasm"
-    TRANSFER_TO_ACCOUNT_2_CALL = "test_transfer_to_account_2_call.wasm"
     UNBONDINGCALL = "test_unbondingcall.wasm"
     UPDATE_ASSOCIATED_KEY = "update_associated_key.wasm"
 
