@@ -6,7 +6,6 @@ extern crate engine_shared;
 extern crate engine_storage;
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::Duration;
 
 use criterion::{black_box, BatchSize, Criterion, Throughput};
 use fs_extra::{copy_items, dir::CopyOptions};

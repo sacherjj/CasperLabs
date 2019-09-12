@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 use contract_ffi::contract_api::{self, TransferResult};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
+use core::convert::TryFrom;
 
 enum Error {
     SeedTransferFail = 100,
@@ -19,12 +20,8 @@ pub extern "C" fn call() {
         let data: Vec<Vec<u8>> = contract_api::get_arg(0);
         data.into_iter()
             .map(|bytes| {
-                if bytes.len() != 32 {
-                    contract_api::revert(Error::InvalidPublicKeyLength as u32);
-                }
-                let mut public_key_bytes = [0u8; 32];
-                public_key_bytes.copy_from_slice(&bytes);
-                PublicKey::new(public_key_bytes)
+                PublicKey::try_from(bytes.as_slice())
+                    .unwrap_or_else(|_| contract_api::revert(Error::InvalidPublicKeyLength as u32))
             })
             .collect()
     };
