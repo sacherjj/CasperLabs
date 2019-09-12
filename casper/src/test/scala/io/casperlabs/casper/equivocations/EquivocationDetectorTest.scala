@@ -56,6 +56,7 @@ class EquivocationDetectorTest
       } else {
         blockStatus shouldBe Right(())
       }
+      _     <- blockStorage.put(b.blockHash, b, Seq.empty)
       state <- Cell[Task, CasperState].read
       _     = state.equivocationsTracker.contains(b.getHeader.validatorPublicKey) shouldBe (result)
     } yield b
@@ -80,7 +81,7 @@ class EquivocationDetectorTest
         val v0                             = generateValidator("V0")
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
@@ -138,7 +139,7 @@ class EquivocationDetectorTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           b0 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
                  v1,
@@ -214,7 +215,7 @@ class EquivocationDetectorTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           b1 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
                  v1,
@@ -271,7 +272,7 @@ class EquivocationDetectorTest
         val v0                             = generateValidator("V0")
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
@@ -294,7 +295,7 @@ class EquivocationDetectorTest
                  result = true
                )
           dag <- dagStorage.getRepresentation
-          b4 <- createBlock[Task](
+          b4 <- createAndStoreBlock[Task](
                  Seq(b3.blockHash),
                  v0,
                  justifications = HashMap(v0 -> b3.blockHash)

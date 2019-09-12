@@ -54,7 +54,7 @@ class FinalityDetectorByVotingMatrixTest
         val bonds  = Seq(v1Bond, v2Bond)
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                       .of[Task](
@@ -116,7 +116,7 @@ class FinalityDetectorByVotingMatrixTest
         val v1Bond = Bond(v1, 10)
         val bonds  = Seq(v1Bond)
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                       .of[Task](
@@ -189,7 +189,7 @@ class FinalityDetectorByVotingMatrixTest
         val v3Bond = Bond(v3, 10)
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                       .of[Task](
@@ -263,7 +263,7 @@ class FinalityDetectorByVotingMatrixTest
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash]
   ): F[(Block, Option[CommitteeWithConsensusValue])] =
     for {
-      block <- createBlock[F](
+      block <- createAndStoreBlock[F](
                 parentsHashList,
                 creator,
                 bonds,

@@ -75,14 +75,14 @@ class ValidationTest
       bonds: Seq[Bond] = Seq.empty[Bond],
       creator: Validator = ByteString.EMPTY
   ): F[Block] =
-    (0 until length).foldLeft(createBlock[F](Seq.empty, bonds = bonds)) {
+    (0 until length).foldLeft(createAndStoreBlock[F](Seq.empty, bonds = bonds)) {
       case (block, _) =>
         for {
           bprev         <- block
           dag           <- IndexedDagStorage[F].getRepresentation
           latestMsgs    <- dag.latestMessages
           justification = latestMsgs.map { case (v, b) => (v, b.blockHash) }
-          bnext <- createBlock[F](
+          bnext <- createAndStoreBlock[F](
                     Seq(bprev.blockHash),
                     creator = creator,
                     bonds = bonds,
@@ -101,7 +101,7 @@ class ValidationTest
       .zip(validatorRoundRobinCycle)
       .foldLeft(
         for {
-          genesis             <- createBlock[F](Seq.empty)
+          genesis             <- createAndStoreBlock[F](Seq.empty)
           emptyLatestMessages <- HashMap.empty[Validator, BlockHash].pure[F]
         } yield (genesis, emptyLatestMessages)
       ) {
@@ -110,7 +110,7 @@ class ValidationTest
           for {
             unwrappedAcc            <- acc
             (block, latestMessages) = unwrappedAcc
-            bnext <- createBlock[F](
+            bnext <- createAndStoreBlock[F](
                       parentsHashList = Seq(block.blockHash),
                       creator = creator,
                       justifications = latestMessages
@@ -476,7 +476,7 @@ class ValidationTest
       ): F[Block] =
         for {
           deploy <- ProtoUtil.basicProcessedDeploy[F]()
-          block <- createBlock[F](
+          block <- createAndStoreBlock[F](
                     parents.map(_.blockHash),
                     creator = validators(validator),
                     bonds = bonds,
@@ -486,7 +486,7 @@ class ValidationTest
         } yield block
 
       for {
-        b0 <- createBlock[Task](Seq.empty, bonds = bonds)
+        b0 <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
         b1 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 0)
         b2 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 1)
         b3 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 2)
@@ -770,11 +770,11 @@ class ValidationTest
       val invalidHash            = ByteString.copyFromUtf8("invalid")
 
       for {
-        genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
-        b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-        b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+        genesis <- createAndStoreBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
+        b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+        b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
         // set wrong preStateHash for b3
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(b1.blockHash, b2.blockHash),
                deploys = b3DeploysWithCost,
                preStateHash = invalidHash
@@ -794,8 +794,8 @@ class ValidationTest
       val contract        = ByteString.copyFromUtf8("some contract")
       val deploysWithCost = prepareDeploys(Vector(contract), 1)
       for {
-        genesis <- createBlock[Task](Seq.empty, deploys = deploysWithCost)
-        block   <- createBlock[Task](Seq(genesis.blockHash), deploys = deploysWithCost)
+        genesis <- createAndStoreBlock[Task](Seq.empty, deploys = deploysWithCost)
+        block   <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = deploysWithCost)
         dag     <- dagStorage.getRepresentation
         result  <- ValidationImpl[Task].deployUniqueness(block, dag).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(InvalidRepeatDeploy))
@@ -806,7 +806,7 @@ class ValidationTest
       val contract        = ByteString.copyFromUtf8("some contract")
       val deploysWithCost = prepareDeploys(Vector(contract), 1)
       for {
-        genesis <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](
                     Seq.empty,
                     deploys = deploysWithCost ++ deploysWithCost
                   )
@@ -824,7 +824,7 @@ class ValidationTest
       val processedDeploys = deploys.map(d => Block.ProcessedDeploy().withDeploy(d).withCost(1))
       val invalidHash      = ByteString.copyFromUtf8("invalid")
       for {
-        genesis <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](
                     Seq.empty,
                     deploys = processedDeploys,
                     postStateHash = invalidHash
@@ -871,7 +871,7 @@ class ValidationTest
           processedDeploys,
           _
         ) = deploysCheckpoint
-        block <- createBlock[Task](
+        block <- createAndStoreBlock[Task](
                   Seq.empty,
                   deploys = processedDeploys,
                   postStateHash = computedPostStateHash,

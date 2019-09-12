@@ -66,10 +66,10 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
        */
 
       for {
-        genesis                                     <- createBlock[Task](Seq.empty, deploys = genesisDeploysCost)
-        b1                                          <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysCost)
-        b2                                          <- createBlock[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
-        b3                                          <- createBlock[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
+        genesis                                     <- createAndStoreBlock[Task](Seq.empty, deploys = genesisDeploysCost)
+        b1                                          <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysCost)
+        b2                                          <- createAndStoreBlock[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
+        b3                                          <- createAndStoreBlock[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
         dag1                                        <- dagStorage.getRepresentation
         blockCheckpoint                             <- computeBlockCheckpoint(genesis, genesis, dag1)
         (postGenStateHash, postGenProcessedDeploys) = blockCheckpoint
@@ -231,10 +231,10 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         } yield postB1StateHash
 
       for {
-        genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
-        b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-        b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-        _       <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
+        genesis <- createAndStoreBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
+        b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+        b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+        _       <- createAndStoreBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
         _       <- step(0, genesis)
         _       <- step(1, genesis)
         r1 <- step(2, genesis)(failedExecEEService).onErrorHandleWith { ex =>

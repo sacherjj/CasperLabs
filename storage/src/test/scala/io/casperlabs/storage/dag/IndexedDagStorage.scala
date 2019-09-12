@@ -14,6 +14,7 @@ final class IndexedDagStorage[F[_]: Monad](
     currentIdRef: Ref[F, Long]
 ) extends DagStorage[F] {
 
+  /* May not return immutable representation for some implementations */
   def getRepresentation: F[DagRepresentation[F]] =
     for {
       _      <- lock.acquire
@@ -29,7 +30,7 @@ final class IndexedDagStorage[F[_]: Monad](
       updatedDag <- getRepresentation
     } yield updatedDag
 
-  def insertIndexed(block: Block): F[Block] =
+  def index(block: Block): F[Block] =
     for {
       _         <- lock.acquire
       header    = block.header.get
@@ -52,7 +53,6 @@ final class IndexedDagStorage[F[_]: Monad](
             .withValidatorBlockSeqNum(nextCreatorSeqNum)
             .withRank(rank)
         )
-      _ <- underlying.insert(modifiedBlock)
       _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
       _ <- currentIdRef.set(nextId)
       _ <- lock.release

@@ -34,44 +34,44 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
   "showMainChain" should "return only blocks in the main chain" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b3.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
-        _ <- createBlock[Task](
+        _ <- createAndStoreBlock[Task](
               Seq(b5.blockHash),
               v3,
               bonds,
               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
-        _ <- createBlock[Task](
+        _ <- createAndStoreBlock[Task](
               Seq(b6.blockHash),
               v2,
               bonds,
@@ -95,44 +95,44 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
   "showBlocks" should "return all blocks" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b3.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
-        _ <- createBlock[Task](
+        _ <- createAndStoreBlock[Task](
               Seq(b5.blockHash),
               v3,
               bonds,
               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
-        _ <- createBlock[Task](
+        _ <- createAndStoreBlock[Task](
               Seq(b6.blockHash),
               v2,
               bonds,
@@ -172,44 +172,44 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
           *
           */
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          b2 <- createBlock[Task](
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          b2 <- createAndStoreBlock[Task](
                  Seq(genesis.blockHash),
                  v2,
                  bonds,
                  HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
                )
-          b3 <- createBlock[Task](
+          b3 <- createAndStoreBlock[Task](
                  Seq(genesis.blockHash),
                  v1,
                  bonds,
                  HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
                )
-          b4 <- createBlock[Task](
+          b4 <- createAndStoreBlock[Task](
                  Seq(b2.blockHash),
                  v3,
                  bonds,
                  HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
                )
-          b5 <- createBlock[Task](
+          b5 <- createAndStoreBlock[Task](
                  Seq(b3.blockHash),
                  v2,
                  bonds,
                  HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
                )
-          b6 <- createBlock[Task](
+          b6 <- createAndStoreBlock[Task](
                  Seq(b4.blockHash),
                  v1,
                  bonds,
                  HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
                )
-          _ <- createBlock[Task](
+          _ <- createAndStoreBlock[Task](
                 Seq(b5.blockHash),
                 v3,
                 bonds,
                 HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
               )
-          _ <- createBlock[Task](
+          _ <- createAndStoreBlock[Task](
                 Seq(b6.blockHash),
                 v2,
                 bonds,

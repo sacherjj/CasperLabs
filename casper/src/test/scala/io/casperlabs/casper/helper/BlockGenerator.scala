@@ -104,7 +104,7 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+  def createBlock[F[_]: Monad: Time: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -154,10 +154,35 @@ trait BlockGenerator {
           chainId = chainId
         )
         .withValidatorPublicKey(creator)
-      block               = ProtoUtil.unsignedBlockProto(body, header)
-      serializedBlockHash = block.blockHash
-      // NOTE: Block hash should be recalculated.
-      modifiedBlock <- IndexedDagStorage[F].insertIndexed(block)
-      _             <- BlockStorage[F].put(serializedBlockHash, modifiedBlock, Seq.empty)
-    } yield modifiedBlock
+      block                = ProtoUtil.unsignedBlockProto(body, header)
+      unsignedIndexedBlock <- IndexedDagStorage[F].index(block)
+      signedIndexedBlock = ProtoUtil.unsignedBlockProto(
+        unsignedIndexedBlock.getBody,
+        unsignedIndexedBlock.getHeader
+      )
+    } yield signedIndexedBlock
+
+  def createAndStoreBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+      parentsHashList: Seq[BlockHash],
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
+      postStateHash: ByteString = ByteString.EMPTY,
+      chainId: String = "casperlabs",
+      preStateHash: ByteString = ByteString.EMPTY
+  ): F[Block] =
+    for {
+      block <- createBlock[F](
+                parentsHashList = parentsHashList,
+                creator = creator,
+                bonds = bonds,
+                justifications = justifications,
+                deploys = deploys,
+                postStateHash = postStateHash,
+                chainId = chainId,
+                preStateHash = preStateHash
+              )
+      _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
+    } yield block
 }

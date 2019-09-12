@@ -22,44 +22,44 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Sto
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
              )
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b8 <- createBlock[Task](
+        b8 <- createAndStoreBlock[Task](
                Seq(b7.blockHash),
                v1,
                bonds,
@@ -83,44 +83,44 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Sto
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
              )
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b8 <- createBlock[Task](
+        b8 <- createAndStoreBlock[Task](
                Seq(b7.blockHash),
                v1,
                bonds,
@@ -149,44 +149,44 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Sto
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b3.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b5.blockHash),
                v3,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
-        b8 <- createBlock[Task](
+        b8 <- createAndStoreBlock[Task](
                Seq(b6.blockHash),
                v2,
                bonds,
@@ -226,13 +226,13 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Sto
         val v3Bond = Bond(v3, 3)
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
         for {
-          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createBlock[Task](Seq(a.blockHash), v1, bonds)
-          e            <- createBlock[Task](Seq(a.blockHash, c.blockHash), v3, bonds)
-          f            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
+          genesis      <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createAndStoreBlock[Task](Seq(a.blockHash), v1, bonds)
+          e            <- createAndStoreBlock[Task](Seq(a.blockHash, c.blockHash), v3, bonds)
+          f            <- createAndStoreBlock[Task](Seq(b.blockHash), v2, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
@@ -273,16 +273,16 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Sto
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
-          e            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
-          f            <- createBlock[Task](Seq(c.blockHash), v3, bonds)
-          g            <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
-          h            <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
-          i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+          genesis      <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createAndStoreBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+          e            <- createAndStoreBlock[Task](Seq(b.blockHash), v2, bonds)
+          f            <- createAndStoreBlock[Task](Seq(c.blockHash), v3, bonds)
+          g            <- createAndStoreBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+          h            <- createAndStoreBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+          i            <- createAndStoreBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
@@ -330,25 +330,25 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Sto
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
-          a       <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b       <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
-          e       <- createBlock[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
-          f       <- createBlock[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
-          g       <- createBlock[Task](Seq(f.blockHash), v1, bonds)
-          h       <- createBlock[Task](Seq(f.blockHash), v2, bonds)
-          i       <- createBlock[Task](Seq(f.blockHash), v3, bonds)
-          j       <- createBlock[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
-          k       <- createBlock[Task](Seq(h.blockHash), v2, bonds)
-          l <- createBlock[Task](
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
+          a       <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b       <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c       <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d       <- createAndStoreBlock[Task](Seq(a.blockHash), v1, bonds)
+          e       <- createAndStoreBlock[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
+          f       <- createAndStoreBlock[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
+          g       <- createAndStoreBlock[Task](Seq(f.blockHash), v1, bonds)
+          h       <- createAndStoreBlock[Task](Seq(f.blockHash), v2, bonds)
+          i       <- createAndStoreBlock[Task](Seq(f.blockHash), v3, bonds)
+          j       <- createAndStoreBlock[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
+          k       <- createAndStoreBlock[Task](Seq(h.blockHash), v2, bonds)
+          l <- createAndStoreBlock[Task](
                 Seq(i.blockHash),
                 v3,
                 bonds,
                 justifications = Map(v3 -> i.blockHash)
               )
-          m            <- createBlock[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
+          m            <- createAndStoreBlock[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
@@ -391,16 +391,16 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Sto
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
-          e            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
-          f            <- createBlock[Task](Seq(c.blockHash), v3, bonds)
-          g            <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
-          h            <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
-          i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+          genesis      <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createAndStoreBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+          e            <- createAndStoreBlock[Task](Seq(b.blockHash), v2, bonds)
+          f            <- createAndStoreBlock[Task](Seq(c.blockHash), v3, bonds)
+          g            <- createAndStoreBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+          h            <- createAndStoreBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+          i            <- createAndStoreBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks)
