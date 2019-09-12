@@ -3,8 +3,13 @@
 #[macro_use]
 extern crate alloc;
 
+mod error;
+mod queue;
+mod stakes;
+
 use alloc::string::String;
 use alloc::vec::Vec;
+
 use contract_ffi::contract_api;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
@@ -15,10 +20,6 @@ use contract_ffi::value::U512;
 use crate::error::{Error, PurseLookupError, Result, ResultExt};
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
 use crate::stakes::{ContractStakes, StakesProvider};
-
-mod error;
-mod queue;
-mod stakes;
 
 /// Account used to run system functions (in particular `finalize_payment`).
 const SYSTEM_ACCOUNT: [u8; 32] = [0u8; 32];
@@ -357,12 +358,13 @@ pub extern "C" fn call() {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+    use std::iter;
+
     use contract_ffi::value::{
         account::{BlockTime, PublicKey},
         U512,
     };
-    use std::cell::RefCell;
-    use std::iter;
 
     use crate::error::Result;
     use crate::queue::{Queue, QueueProvider};

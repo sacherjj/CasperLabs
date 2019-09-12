@@ -1,3 +1,4 @@
+use crate::support::test_support::{self, WasmTestBuilder};
 use contract_ffi::bytesrepr::{self, FromBytes};
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
@@ -19,8 +20,6 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::rc::Rc;
-
-use crate::support::test_support::{self, WasmTestBuilder};
 
 const INIT_FN_STORE_ID: u32 = 0;
 const INIT_PROTOCOL_VERSION: u64 = 1;

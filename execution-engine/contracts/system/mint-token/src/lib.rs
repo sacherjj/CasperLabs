@@ -5,18 +5,6 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use alloc::string::String;
-use capabilities::{ARef, RAWRef};
-use contract_ffi::contract_api;
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::mint::error::Error;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::KEY_SIZE;
-use contract_ffi::value::U512;
-use core::convert::TryInto;
-use internal_purse_id::{DepositId, WithdrawId};
-use mint::Mint;
-
 mod capabilities;
 
 // These types are purposely defined in a separate module
@@ -26,6 +14,20 @@ mod capabilities;
 mod internal_purse_id;
 
 mod mint;
+
+use alloc::string::String;
+use core::convert::TryInto;
+
+use contract_ffi::contract_api;
+use contract_ffi::key::Key;
+use contract_ffi::system_contracts::mint::error::Error;
+use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::value::account::KEY_SIZE;
+use contract_ffi::value::U512;
+
+use capabilities::{ARef, RAWRef};
+use internal_purse_id::{DepositId, WithdrawId};
+use mint::Mint;
 
 const SYSTEM_ACCOUNT: [u8; KEY_SIZE] = [0u8; KEY_SIZE];
 

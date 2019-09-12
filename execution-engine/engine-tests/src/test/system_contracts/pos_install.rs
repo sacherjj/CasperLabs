@@ -1,3 +1,7 @@
+use crate::support::exec_with_return;
+use crate::support::test_support::{
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{PublicKey, PurseId};
@@ -6,11 +10,6 @@ use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 use std::collections::{BTreeMap, HashMap};
-
-use crate::support::exec_with_return;
-use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];

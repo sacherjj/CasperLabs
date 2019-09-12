@@ -1,17 +1,19 @@
-import json
-import logging
 import os
+import logging
 import pytest
-from casperlabs_client import ABI
+import json
 from pathlib import Path
 from pytest import fixture, raises
-from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
-from test.cl_node.cli import CLI, DockerCLI, CLIErrorExit
-from test.cl_node.common import extract_block_hash_from_propose_output
-from test.cl_node.common import testing_root_path, HELLO_NAME_CONTRACT
 from test.cl_node.contract_address import contract_address
+from test.cl_node.common import testing_root_path, HELLO_NAME_CONTRACT
+from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
+from test.cl_node.common import extract_block_hash_from_propose_output
+from test.cl_node.docker_node import DockerNode
 from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import wait_for_genesis_block
+from casperlabs_client import ABI
+from test.cl_node.cli import CLI, DockerCLI, CLIErrorExit
+
 
 """
 Test account state retrieval with query-state.
@@ -723,8 +725,7 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
                             '--payment', test_contract)
     block_hash = cli("propose")
 
-    logging.info(
-        f"""EXECUTING {' '.join(scala_cli.expand_args(["show-deploys", block_hash]))}""")
+    logging.info(f"""EXECUTING {' '.join(scala_cli.expand_args(["show-deploys", block_hash]))}""")
     deploys = scala_cli("show-deploys", block_hash)
     assert len(list(deploys)) == 1
     for deploy_info in deploys:
@@ -743,8 +744,7 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
         assert deploy_info.error_message == 'Exit code: 2'  # Expected: contract called revert(2)
 
     # Call by function address
-    revert_test_addr = contract_address(first_deploy_hash,
-                                        0).hex()  # assume fn_store_id starts from 0
+    revert_test_addr = contract_address(first_deploy_hash, 0).hex()  # assume fn_store_id starts from 0
     deploy_hash = cli("deploy",
                       '--session-hash', revert_test_addr,
                       '--payment-hash', revert_test_addr)

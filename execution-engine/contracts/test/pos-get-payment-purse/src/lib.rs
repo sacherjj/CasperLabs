@@ -4,6 +4,7 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use alloc::vec::Vec;
+
 use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
 use contract_ffi::contract_api::{self, PurseTransferResult};
 use contract_ffi::key::Key;

@@ -1,10 +1,10 @@
-use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
 use std::collections::HashMap;
 
 use crate::support::test_support::{
     WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
+use contract_ffi::value::U512;
+use engine_core::engine_state::MAX_PAYMENT;
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];

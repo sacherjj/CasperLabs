@@ -4,16 +4,17 @@ import threading
 from functools import reduce
 from itertools import count
 from operator import add
+
+from test.cl_node.common import extract_block_hash_from_propose_output
 from test.cl_node.client_parser import parse_show_blocks
+from test.cl_node.docker_node import DockerNode
+from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.common import (
     COMBINED_CONTRACT,
     COUNTER_CALL,
     HELLO_WORLD,
     MAILING_LIST_CALL,
 )
-from test.cl_node.common import extract_block_hash_from_propose_output
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.errors import NonZeroExitCodeError
 from test.cl_node.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
     wait_for_block_hashes_propagated_to_all_nodes,

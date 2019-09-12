@@ -1,8 +1,8 @@
-import logging
 import os
+import logging
 import subprocess
-from functools import reduce
 from operator import add
+from functools import reduce
 from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
 
 

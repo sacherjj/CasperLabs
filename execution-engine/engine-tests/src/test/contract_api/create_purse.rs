@@ -1,15 +1,17 @@
+use std::collections::HashMap;
+
+use crate::support::test_support::{
+    get_exec_costs, WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
+
 use contract_ffi::base16;
+
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 use engine_core::engine_state::{CONV_RATE, MAX_PAYMENT};
 use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
-use std::collections::HashMap;
-
-use crate::support::test_support::{
-    get_exec_costs, WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
