@@ -51,10 +51,15 @@ class Contract:
     UPDATE_ASSOCIATED_KEY = "update_associated_key.wasm"
 
 
+# TEST Account Use Notes
+# test_transfer_to_accounts: 300, 299, 298
+# test_transfer_with_overdraft: 297, 296
+
 MAX_PAYMENT_COST = 10000000
 INITIAL_MOTES_AMOUNT = 10 ** 20
 MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
 CONV_RATE = 10
+TEST_ACCOUNT_INITIAL_BALANCE = 100000000
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
 

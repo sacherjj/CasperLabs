@@ -2,7 +2,12 @@ import logging
 import os
 import threading
 from test.cl_node.casperlabs_node import CasperLabsNode
-from test.cl_node.common import random_string, MAX_PAYMENT_COST, INITIAL_MOTES_AMOUNT
+from test.cl_node.common import (
+    random_string,
+    MAX_PAYMENT_COST,
+    INITIAL_MOTES_AMOUNT,
+    TEST_ACCOUNT_INITIAL_BALANCE,
+)
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.docker_execution_engine import DockerExecutionEngine
 from test.cl_node.docker_node import DockerNode, FIRST_VALIDATOR_ACCOUNT
@@ -73,7 +78,7 @@ class CasperLabsNetwork:
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
 
-    def test_account(self, node, amount=100000000) -> Account:
+    def test_account(self, node, amount=TEST_ACCOUNT_INITIAL_BALANCE) -> Account:
         name = test_name()
         if not name:
             # This happens when a thread tries to deploy.

@@ -62,9 +62,7 @@ def account_state(node, block_hash, account=GENESIS_ACCOUNT):
     )
 
 
-def test_account_state(one_node_network):
-    node = one_node_network.docker_nodes[0]
-
+def test_account_state(node):
     block_hash = deploy_and_propose_from_genesis(node, Contract.COUNTERDEFINE)
     deploys = node.d_client.show_deploys(block_hash)
     assert not deploys[0].is_error
@@ -81,73 +79,85 @@ def test_account_state(one_node_network):
     assert "counter" in names
 
 
-def test_transfer_with_overdraft(one_node_network):
-    acct1 = Account(1)
-    acct2 = Account(2)
+def test_transfer_with_overdraft(node):
+    # Notated uses of account ids in common.py
+    a_id = 297
+    b_id = 296
 
-    node: DockerNode = one_node_network.docker_nodes[0]
-    # Transfer 1000000 from genesis... to acct1...
+    acct_a = Account(a_id)
+    acct_b = Account(b_id)
 
-    # For compatibility with EE with no execution cost
-    # payment_contract="transfer_to_account.wasm"
-    block_hash = node.transfer_to_account(to_account_id=1, amount=100000000)
+    initial_amt = 100000000
+    block_hash = node.transfer_to_account(to_account_id=a_id, amount=initial_amt)
 
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error, f"error_message: {deploys[0].error_message}"
 
     # Response not used, but assures account exist
-    _ = account_state(node, block_hash, acct1)
+    _ = account_state(node, block_hash, acct_a)
 
     # Should error as account doesn't exist.
     with raises(Exception):
-        _ = account_state(block_hash, acct2.public_key_hex)
+        _ = account_state(block_hash, acct_b.public_key_hex)
 
     # No API currently exists for getting balance to check transfer.
     # Transfer 750000 from acct1... to acct2...
     block_hash = node.transfer_to_account(
-        to_account_id=2, amount=750, from_account_id=1
+        to_account_id=b_id, amount=750, from_account_id=a_id
     )
 
     deploys = node.client.show_deploys(block_hash)
     assert not deploys[0].is_error, f"error_message: {deploys[0].error_message}"
 
     # Response not used, but assures account exist
-    _ = account_state(node, block_hash, acct2)
+    _ = account_state(node, block_hash, acct_b)
 
-    # Transfer 750000000000 from acct1... to acct2...
-    # Should fail with acct1 overdrawn.   Requires assert in contract to generate is_error.
+    # Should fail with acct_a overdrawn.   Requires assert in contract to generate is_error.
     with raises(Exception):
         _ = node.transfer_to_account(
-            to_account_id=2, amount=750000000000, from_account_id=1
+            to_account_id=b_id, amount=initial_amt * 10, from_account_id=a_id
         )
 
 
-def test_transfer_to_accounts(one_node_network):
-    node: DockerNode = one_node_network.docker_nodes[0]
-    transfer_amt = 100000000
+def test_transfer_to_accounts(node):
+    # Notated uses of account ids in common.py
+    a_id = 300
+    b_id = 299
+    c_id = 298
+
+    initial_amt = 100000000
+    acct_a = Account(a_id)
+    acct_b = Account(b_id)
+    acct_c = Account(c_id)
+
     # Setup accounts with enough to transfer and pay for transfer
-    node.transfer_to_accounts([(1, transfer_amt), (2, transfer_amt)])
+    node.transfer_to_accounts([(a_id, initial_amt), (b_id, initial_amt)])
+
     with raises(Exception):
-        # Acct 1 has not enough funds so it should fail
+        # Acct a has not enough funds so it should fail
         node.transfer_to_account(
-            to_account_id=4, amount=transfer_amt * 10, from_account_id=1
+            to_account_id=c_id, amount=initial_amt * 10, from_account_id=a_id
         )
-    node.transfer_to_account(to_account_id=3, amount=700, from_account_id=2)
+
+    # This is throwing an Exit 1.  (Transfer Failure in Contract)
+    node.transfer_to_account(to_account_id=c_id, amount=700, from_account_id=b_id)
 
     blocks = node.p_client.show_blocks(10)
     block = blocks.__next__()
     block_hash = block.summary.block_hash.hex()
 
+    acct_a_bal = node.p_client.balance(acct_a.public_key_hex, block_hash)
     assert (
-        node.p_client.balance(Account(1).public_key_hex, block_hash) < transfer_amt
+        acct_a_bal < initial_amt
     ), "Should not have transferred any money, but spent on payment"
+
+    acct_b_bal = node.p_client.balance(acct_b.public_key_hex, block_hash)
     assert (
-        node.p_client.balance(Account(2).public_key_hex, block_hash)
-        < transfer_amt - 700
+        acct_b_bal < initial_amt - 700
     ), "Should be transfer_amt - 700 - payment for transfer"
-    assert (
-        node.p_client.balance(Account(3).public_key_hex, block_hash) == 700
-    ), "Should be result of only transfer in"
+
+    acct_c_bal = node.p_client.balance(acct_c.public_key_hex, block_hash)
+    assert acct_c_bal == 700, "Should be result of only transfers in"
 
 
 def balance(node, account_address, block_hash):
