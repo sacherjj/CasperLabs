@@ -599,7 +599,7 @@ def check_cli_abi_unsigned(cli, unsigned_type, value, test_contract):
         args = ('deploy',
                 '--from', account.public_key_hex,
                 '--session', cli.resource(test_contract),
-                '--session-args', cli.format_args(session_args),
+                '--session-args', cli.format_json_str(session_args),
                 '--payment', cli.resource(Contract.STANDARD_PAYMENT),
                 '--payment-args', cli.payment_json,
                 '--private-key', cli.private_key_path(account),

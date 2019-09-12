@@ -22,7 +22,7 @@ class CLI:
 
     _MAX_PAYMENT_JSON = json.dumps(
         [{"name": "amount", "value": {"u512": MAX_PAYMENT_COST}}]
-    ).replace(" ", "")
+    )
 
     def __init__(self, node, cli_cmd="casperlabs_client", tls_parameters=None):
         self.node = node
@@ -107,12 +107,12 @@ class CLI:
     def private_key_path(self, account):
         return account.private_key_path
 
-    def format_args(self, args: str) -> str:
+    def format_json_str(self, args: str) -> str:
         return args
 
     @property
     def payment_json(self) -> str:
-        return self.format_args(self._MAX_PAYMENT_JSON)
+        return self.format_json_str(self._MAX_PAYMENT_JSON)
 
 
 class DockerCLI(CLI):
@@ -148,5 +148,5 @@ class DockerCLI(CLI):
     def private_key_path(self, account):
         return account.private_key_docker_path
 
-    def format_args(self, args: str) -> str:
+    def format_json_str(self, args: str) -> str:
         return f"'{args}'"
