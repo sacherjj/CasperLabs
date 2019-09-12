@@ -109,7 +109,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         TrackingCopy {
             reader,
             cache: TrackingCopyCache::new(1024 * 16, HeapSize), /* TODO: Should `max_cache_size`
-                                                                 * be fraction of Wasm memory
+                                                                 * be fraction of wasm memory
                                                                  * limit? */
             ops: HashMap::new(),
             fns: HashMap::new(),
@@ -188,7 +188,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         let k = k.normalize();
         match self.get(correlation_id, &k)? {
             None => Ok(AddResult::KeyNotFound(k)),
-            Some(curr) => {
+            Some(current_value) => {
                 let t = match v.into_raw() {
                     Value::Int32(i) => Transform::AddInt32(i),
                     Value::UInt128(i) => Transform::AddUInt128(i),
@@ -206,7 +206,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                         )))
                     }
                 };
-                match t.clone().apply(curr) {
+                match t.clone().apply(current_value) {
                     Ok(new_value) => {
                         self.cache.insert_write(k, new_value);
                         utils::add(&mut self.ops, k, Op::Add);
@@ -247,8 +247,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                     // QueryResult::ValueNotFound and Err(_) corresponds to
                     // a storage-related error. The information in the Ok(_) case is used
                     // to build an informative error message about why the query was not successful.
-                    |curr_value, (i, name)| -> Result<Value, Result<(usize, String), R::Error>> {
-                        match curr_value {
+                    |current_value, (i, name)| -> Result<Value, Result<(usize, String), R::Error>> {
+                        match current_value {
                             Value::Account(account) => {
                                 if let Some(key) = account.urefs_lookup().get(name) {
                                     let validated_key = Validated::new(*key, Validated::valid)?;
@@ -292,11 +292,11 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         i: usize,
     ) -> Result<Value, Result<(usize, String), R::Error>> {
         match self.read(correlation_id, &key) {
-            // continue recursing
+            // continue recursion
             Ok(Some(value)) => Ok(value),
-            // key not found in the global state; stop recursing
+            // key not found in the global state; stop recursion
             Ok(None) => Err(Ok((i, format!("Name {:?} not found: ", *key)))),
-            // global state access error; stop recursing
+            // global state access error; stop recursion
             Err(error) => Err(Err(error)),
         }
     }
