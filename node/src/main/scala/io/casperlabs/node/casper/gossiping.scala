@@ -679,7 +679,7 @@ package object gossiping {
         _ <- synchronizer.sync().flatMap(identity).whenA(hasPeers && !isInitial)
       } yield ()
 
-      syncOne.attempt *> loop(synchronizer)
+      syncOne.attempt >> loop(synchronizer)
     }
 
     for {
@@ -696,7 +696,7 @@ package object gossiping {
                        )
                      }
       _ <- makeFiberResource {
-            awaitApproved *> loop(periodicSync)
+            awaitApproved >> loop(periodicSync)
           }
     } yield ()
   }
@@ -719,12 +719,10 @@ package object gossiping {
         _ <- Time[F].sleep(15.seconds)
       } yield peers
 
-      Time[F].sleep(5.seconds) *> newPeers flatMap { peers =>
-        loop(peers)
-      }
+      Time[F].sleep(5.seconds) *> newPeers >>= (loop(_))
     }
 
-    makeFiberResource(loop(Set.empty)).map(_ => ())
+    makeFiberResource(loop(Set.empty)).void
   }
 
   /** Start something in a fiber. Make sure it stops if the resource is released. */
