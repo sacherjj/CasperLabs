@@ -33,7 +33,7 @@ object Estimator {
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       genesis: BlockHash,
-      latestMessagesHashes: Map[Validator, BlockHash],
+      latestMessageHashes: Map[Validator, BlockHash],
       equivocationTracker: Map[Validator, Long]
   ): F[List[BlockHash]] = {
 
@@ -71,17 +71,17 @@ object Estimator {
       } yield result
 
     for {
-      lca <- if (latestMessagesHashes.isEmpty) genesis.pure[F]
+      lca <- if (latestMessageHashes.isEmpty) genesis.pure[F]
             else
-              DagOperations.latestCommonAncestorsMainParent(dag, latestMessagesHashes.values.toList)
-      equivocator <- EquivocationDetector.equivocatorDetectFromLatestMessage(
-                      dag,
-                      latestMessagesHashes,
-                      equivocationTracker
-                    )
-      scores           <- lmdScoring(dag, lca, latestMessagesHashes, equivocator)
+              DagOperations.latestCommonAncestorsMainParent(dag, latestMessageHashes.values.toList)
+      equivocatingValidators <- EquivocationDetector.equivocatorDetectFromLatestMessage(
+                                 dag,
+                                 latestMessageHashes,
+                                 equivocationTracker
+                               )
+      scores           <- lmdScoring(dag, lca, latestMessageHashes, equivocatingValidators)
       newMainParent    <- forkChoiceTip(dag, lca, scores)
-      parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
+      parents          <- tipsOfLatestMessages(latestMessageHashes.values.toList, scores)
       secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
         .sortBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8)
@@ -101,10 +101,10 @@ object Estimator {
   def lmdScoring[F[_]: Monad](
       dag: DagRepresentation[F],
       stopHash: BlockHash,
-      latestMessagesHashes: Map[Validator, BlockHash],
-      equivocator: Set[Validator]
+      latestMessageHashes: Map[Validator, BlockHash],
+      equivocatingValidators: Set[Validator]
   ): F[Map[BlockHash, Long]] =
-    latestMessagesHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
+    latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
       case (acc, (validator, latestMessageHash)) =>
         DagOperations
           .bfTraverseF[F, BlockHash](List(latestMessageHash))(
@@ -114,7 +114,7 @@ object Estimator {
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
               weightFromValidatorByDag(dag, blockHash, validator).map(weight => {
-                val realWeight = if (equivocator.contains(validator)) {
+                val realWeight = if (equivocatingValidators.contains(validator)) {
                   0L
                 } else {
                   weight

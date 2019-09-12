@@ -17,7 +17,7 @@ object EquivocationDetector {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   /**
-    * Check whether block create equivocations and if so add it and rank of lowest base block to `EquivocationsTracker`.
+    * Check whether a block creates equivocations, and if so add it and the rank of the lowest base block to `EquivocationsTracker`.
     *
     * Since we had added all equivocating messages to the BlockDag, then once
     * a validator has been detected as equivocating, then for every message M1 he creates later,
@@ -32,7 +32,7 @@ object EquivocationDetector {
     for {
       s       <- state.read
       creator = block.getHeader.validatorPublicKey
-      equivocated <- if (s.equivocationsTracker.contains(creator)) {
+      equivocated <- if (s.equivocationTracker.contains(creator)) {
                       Log[F].debug(
                         s"The creator of Block ${PrettyPrinter.buildString(block)} has equivocated before}"
                       ) *> true.pure[F]
@@ -43,14 +43,14 @@ object EquivocationDetector {
       _ <- rankOfEarlierMessageFromCreator(dag, block)
             .flatMap { earlierRank =>
               state.modify { s =>
-                s.equivocationsTracker.get(creator) match {
+                s.equivocationTracker.get(creator) match {
                   case Some(lowestBaseSeqNum) if earlierRank < lowestBaseSeqNum =>
                     s.copy(
-                      equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank)
+                      equivocationTracker = s.equivocationTracker.updated(creator, earlierRank)
                     )
                   case None =>
                     s.copy(
-                      equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank)
+                      equivocationTracker = s.equivocationTracker.updated(creator, earlierRank)
                     )
                   case _ =>
                     s
@@ -163,13 +163,13 @@ object EquivocationDetector {
       val minRank = equivocationTracker.values.min
 
       for {
-        latestMessage                                         <- latestMessagesHashes.values.toList.traverse(dag.lookup).map(_.flatten)
+        latestMessages                                        <- latestMessagesHashes.values.toList.traverse(dag.lookup).map(_.flatten)
         implicit0(blockTopoOrdering: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingDesc
 
-        stream = DagOperations.bfToposortTraverseF(latestMessage)(
+        toposortJDagFromBlock = DagOperations.bfToposortTraverseF(latestMessages)(
           _.justifications.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
         )
-        acc <- stream
+        acc <- toposortJDagFromBlock
                 .foldWhileLeft(
                   (Set.empty[Validator], Set.empty[(Validator, Int)])
                 ) {
@@ -180,8 +180,8 @@ object EquivocationDetector {
                     val creator            = b.validatorPublicKey
                     val creatorBlockSeqNam = b.validatorBlockSeqNum
                     if (detectedEquivocator == equivocationTracker.keySet || b.rank <= minRank) {
-                      // Stop traversal if all equivocator has occurred in j-post-dag of latestMessages
-                      // or we traversal down to minimal of rank of base block of all equivocator
+                      // Stop traversal if all equivocators equivocated in j-post-cone of `b`
+                      // or we reached a block older than oldest equivocation
                       Right(
                         (detectedEquivocator, visitedValidatorAndBlockSeqNum)
                       )

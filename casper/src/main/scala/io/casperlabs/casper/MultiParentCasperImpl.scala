@@ -44,13 +44,13 @@ import scala.util.control.NonFatal
   *
   * @param blockBuffer
   * @param invalidBlockTracker
-  * @param equivocationsTracker : Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
+  * @param equivocationTracker : Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
   */
 final case class CasperState(
     blockBuffer: Map[ByteString, Block] = Map.empty,
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationsTracker: Map[Validator, Long] = Map.empty
+    equivocationTracker: Map[Validator, Long] = Map.empty
 )
 
 class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection](
@@ -355,7 +355,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     Metrics[F].timer("estimator") {
       Cell[F, CasperState].read
         .flatMap(
-          casperState => Estimator.tips[F](dag, genesis.blockHash, casperState.equivocationsTracker)
+          casperState => Estimator.tips[F](dag, genesis.blockHash, casperState.equivocationTracker)
         )
     }
 
@@ -585,7 +585,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     for {
       state   <- Cell[F, CasperState].read
-      tracker = state.equivocationsTracker
+      tracker = state.equivocationTracker
     } yield tracker.keys
       .flatMap(weights.get)
       .sum
@@ -737,7 +737,7 @@ object MultiParentCasperImpl {
                        .pure[F]
                    ) { ctx =>
                      Validation[F]
-                       .parents(block, ctx.genesis.blockHash, dag, casperState.equivocationsTracker)
+                       .parents(block, ctx.genesis.blockHash, dag, casperState.equivocationTracker)
                    }
           _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
           preStateHash <- ExecEngineUtil.computePrestate[F](merged)
