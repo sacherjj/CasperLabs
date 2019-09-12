@@ -105,6 +105,7 @@ extern crate engine_shared;
 extern crate engine_storage;
 
 use criterion::black_box;
+use criterion::BatchSize;
 use criterion::Criterion;
 use criterion::Throughput;
 use std::time::Duration;
@@ -130,14 +131,28 @@ pub fn transfer_bench(c: &mut Criterion) {
         &accounts,
         |b, accounts| {
             // Create new directory with copied contents of existing boostrapped LMDB database
-            let cloned_db = clone_directory(&source_dir.path());
-            let mut builder =
-                LmdbWasmTestBuilder::new_with_config(&cloned_db.path(), engine_with_payments());
 
-            // Applies all properties from existing result
-            builder.apply_from_result(&result);
-
-            b.iter(|| exec_send_to_account(black_box(&mut builder), black_box(accounts)))
+            b.iter_batched(
+                || {
+                    // For each iteration prepare a clone of the bootstrapped database
+                    let cloned_db = clone_directory(&source_dir.path());
+                    let mut builder = LmdbWasmTestBuilder::new_with_config(
+                        &cloned_db.path(),
+                        engine_with_payments(),
+                    );
+                    // Applies all properties from existing result
+                    builder.apply_from_result(&result);
+                    builder.finish()
+                },
+                |result| {
+                    // Execute transfers on a database
+                    exec_send_to_account(
+                        black_box(&mut LmdbWasmTestBuilder::from_result(result)),
+                        black_box(accounts),
+                    )
+                },
+                BatchSize::SmallInput,
+            )
         },
     );
     group.finish();
