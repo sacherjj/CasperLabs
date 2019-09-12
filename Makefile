@@ -255,11 +255,11 @@ cargo-native-packager/%:
 #
 # .rpm will be in execution-engine/target/release/rpmbuild/RPMS/x86_64
 # .deb will be in execution-engine/target/debian
-.make/cargo-native-packager/engine-grpc-server: $(RUST_SRC) \
+.make/cargo-native-packager/execution-engine/engine-grpc-server: $(RUST_SRC) \
 		.make/install/protoc \
 		.make/install/cargo-native-packager
-	$(MAKE) -c execution-engine rpm
-	$(MAKE) -c execution-engine deb
+	$(MAKE) -C execution-engine rpm
+	$(MAKE) -C execution-engine deb
 	mkdir -p $(dir $@) && touch $@
 
 # Create .rpm and .deb packages with Docker so people using Macs can build
@@ -287,6 +287,7 @@ cargo-native-packager/%:
 			export HOME=/home/builder ; \
 			cd /CasperLabs/execution-engine ; \
 			make setup ; \
+			make setup-cargo-packagers ; \
 			make rpm ; \
 			make deb \
 		'"

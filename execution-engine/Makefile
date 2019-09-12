@@ -75,14 +75,14 @@ clean:
 	$(CARGO) clean
 
 .PHONY: deb
-deb: setup-cargo-packagers
+deb:
 	cd engine-grpc-server && $(CARGO) deb
 
-comm/.rpm: setup-cargo-packagers
+engine-grpc-server/.rpm:
 	cd engine-grpc-server && $(CARGO) rpm init
 
 .PHONY: rpm
-rpm: comm/.rpm
+rpm: engine-grpc-server/.rpm
 	cd engine-grpc-server && $(CARGO) rpm build
 
 target/system-contracts.tar.gz: $(SYSTEM_CONTRACTS)
