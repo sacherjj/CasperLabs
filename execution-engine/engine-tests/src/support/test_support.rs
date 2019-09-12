@@ -603,8 +603,14 @@ impl LmdbWasmTestBuilder {
         Self::new_with_config(data_dir, Default::default())
     }
 
-    /// Creates new instance of builder and pplies values only which allows the engine state to be swapped with a new one, possibly after running genesis once and reusing existing database (i.e. LMDB).
-    pub fn new_with_config_and_result<T: AsRef<OsStr> + ?Sized>(data_dir: &T, engine_config: EngineConfig, result: &WasmTestResult<LmdbGlobalState>) -> Self {
+    /// Creates new instance of builder and pplies values only which allows the engine state to be
+    /// swapped with a new one, possibly after running genesis once and reusing existing database
+    /// (i.e. LMDB).
+    pub fn new_with_config_and_result<T: AsRef<OsStr> + ?Sized>(
+        data_dir: &T,
+        engine_config: EngineConfig,
+        result: &WasmTestResult<LmdbGlobalState>,
+    ) -> Self {
         let mut builder = Self::new_with_config(data_dir, engine_config);
         // Applies existing properties from gi
         builder.genesis_hash = result.0.genesis_hash.clone();
@@ -614,8 +620,6 @@ impl LmdbWasmTestBuilder {
         builder.pos_contract_uref = result.0.pos_contract_uref;
         builder
     }
-
-
 }
 
 impl<S> WasmTestBuilder<S>

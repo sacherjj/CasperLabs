@@ -5,22 +5,21 @@ extern crate engine_core;
 extern crate engine_shared;
 extern crate engine_storage;
 use std::collections::HashMap;
-use std::fs::{self, DirEntry};
-use std::io;
 use std::path::Path;
 use std::time::Duration;
-use tempfile::TempDir;
 
 use criterion::{black_box, BatchSize, Criterion, Throughput};
+use fs_extra::{copy_items, dir::CopyOptions};
+use tempfile::TempDir;
 
+use casperlabs_engine_tests::support::test_support::{
+    LmdbWasmTestBuilder, WasmTestResult, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
-use casperlabs_engine_tests::support::test_support::{
-    LmdbWasmTestBuilder, WasmTestResult, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
 
 const GENESIS_ADDR: [u8; 32] = [1; 32];
 
@@ -34,7 +33,7 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
         .iter()
         .map(|public_key| public_key.value().to_vec())
         .collect();
-    let amount = U512::from(1);
+    let amount = U512::one();
 
     let data_dir = TempDir::new().expect("should create temp dir");
     let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
@@ -56,38 +55,24 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
     (result, data_dir)
 }
 
-fn visit_dirs(dir: &Path, cb: &dyn Fn(&DirEntry)) -> io::Result<()> {
-    if dir.is_dir() {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                visit_dirs(&path, cb)?;
-            } else {
-                cb(&entry);
-            }
-        }
-    }
-    Ok(())
-}
-
 fn clone_directory(source: &Path) -> TempDir {
     let dest = TempDir::new().expect("should create temp dir");
-    visit_dirs(&source, &|dir_entry: &DirEntry| {
-        // Source
-        let source_path = dir_entry.path();
-        // Destination
-        let mut dest_path = dest.path().to_path_buf();
-        dest_path.push(dir_entry.path().file_name().unwrap());
-        assert_ne!(source_path, dest_path);
-        fs::copy(source_path, dest_path).unwrap();
-    })
-    .expect("should visit");
+
+    let items = ["data.mdb", "lock.mdb"]
+        .iter()
+        .map(|path| {
+            let mut buf = source.to_path_buf();
+            buf.push(path);
+            buf
+        })
+        .collect();
+
+    copy_items(&items, &dest, &CopyOptions::new()).expect("should copy items");
     dest
 }
 
 fn exec_send_to_account(builder: &mut LmdbWasmTestBuilder, accounts: &[PublicKey]) {
-    let amount: U512 = 1u64.into();
+    let amount = U512::one();
     // To see raw numbers take current time
     for (i, account) in accounts.iter().enumerate() {
         builder
@@ -115,11 +100,8 @@ pub fn transfer_bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("tps");
 
     // Minimize no of samples and measurement times to decrease the total time of this benchmark
-    // possibly not decreasung quality of the numbers that much.
-    group
-        .sample_size(10)
-        .nresamples(10)
-        .measurement_time(Duration::new(180, 0));
+    // possibly not decreasing quality of the numbers that much.
+    group.sample_size(10).nresamples(10);
 
     // Measure by elements where one element/s is one transaction per second
     group.throughput(Throughput::Elements(accounts.len() as u64));
@@ -127,8 +109,7 @@ pub fn transfer_bench(c: &mut Criterion) {
         format!("send_to_account/{}", accounts.len()),
         &accounts,
         |b, accounts| {
-            // Create new directory with copied contents of existing boostrapped LMDB database
-
+            // Create new directory with copied contents of existing bootstrapped LMDB database
             b.iter_batched(
                 || {
                     // For each iteration prepare a clone of the bootstrapped database
