@@ -3,8 +3,7 @@ import os
 import subprocess
 from functools import reduce
 from operator import add
-from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, \
-    parse
+from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
 
 
 class CLIErrorExit(Exception):

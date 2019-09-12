@@ -419,12 +419,12 @@ class CasperLabsClient:
         private_key: str = None,
         session_args: bytes = None,
         payment_args: bytes = None,
-            payment_hash: bytes = None,
-            payment_name: str = None,
-            payment_uref: bytes = None,
-            session_hash: bytes = None,
-            session_name: str = None,
-            session_uref: bytes = None,
+        payment_hash: bytes = None,
+        payment_name: str = None,
+        payment_uref: bytes = None,
+        session_hash: bytes = None,
+        session_name: str = None,
+        session_uref: bytes = None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -462,8 +462,7 @@ class CasperLabsClient:
 
         # Compatibility mode, should be removed when payment is obligatory
         if len(list(filter(None, payment_options))) == 0:
-            logging.info(
-                "No payment contract provided, using session as payment")
+            logging.info("No payment contract provided, using session as payment")
             payment_options = session_options
 
         if len(list(filter(None, session_options))) != 1:
@@ -509,8 +508,7 @@ class CasperLabsClient:
             ]
         )
         d = consensus.Deploy(
-            deploy_hash=deploy_hash, approvals=approvals, header=header,
-            body=body
+            deploy_hash=deploy_hash, approvals=approvals, header=header, body=body
         )
 
         # TODO: Deploy returns Empty, error handing via exceptions, apparently,
