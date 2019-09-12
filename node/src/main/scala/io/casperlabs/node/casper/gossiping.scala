@@ -282,7 +282,7 @@ package object gossiping {
       } yield s.copy(connections = s.connections - peer)
     }
 
-  def makeRelaying[F[_]: Sync: Par: Log: Metrics: NodeDiscovery: NodeAsk](
+  def makeRelaying[F[_]: Concurrent: Par: Log: Metrics: NodeDiscovery: NodeAsk](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F]
   ): Resource[F, Relaying[F]] =

@@ -213,7 +213,10 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             nodeDiscovery,
             connectToGossip = connectToGossip,
             relayFactor = peers.size - 1,
-            relaySaturation = 100
+            relaySaturation = 100,
+            // Some tests assume that once `addBlock` has finished all the notifications
+            // have also been sent.
+            isSynchronous = true
           )
 
           initStorage(genesis) flatMap {
