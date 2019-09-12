@@ -53,7 +53,7 @@ object Options {
       opt[Args](
         required = false,
         descr =
-          "JSON encoded list of Deploy.Arg protobuf messages for the session, e.g. [{'name': 'amount', 'value': {'long_value': 123456}}]"
+          """JSON encoded list of Deploy.Arg protobuf messages for the session, e.g. '[{"name": "amount", "value": {"long_value": 123456}}]'"""
       )
 
     val payment =
@@ -89,7 +89,7 @@ object Options {
       opt[Args](
         required = false,
         descr =
-          "JSON encoded list of Deploy.Arg protobuf messages for the payment, e.g. [{'name': 'amount', 'value': {'long_value': 123456}}]"
+          """JSON encoded list of Deploy.Arg protobuf messages for the payment, e.g. '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'"""
       )
 
     val gasPrice = opt[Long](

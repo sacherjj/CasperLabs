@@ -42,6 +42,8 @@ pub enum Error {
     SetThresholdFailure(SetThresholdFailure),
     SystemContractError(system_contracts::error::Error),
     DeploymentAuthorizationFailure,
+    ExpectedReturnValue,
+    UnexpectedReturnValue,
 }
 
 impl fmt::Display for Error {

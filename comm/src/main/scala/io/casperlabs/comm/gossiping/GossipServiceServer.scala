@@ -20,6 +20,7 @@ import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
 import scala.util.control.NonFatal
+import scala.xml.PrettyPrinter
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
 class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
@@ -95,7 +96,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
 
     val trySync = for {
       _ <- Log[F].info(
-            s"Received notification about ${newBlockHashes.size} new blocks from ${source.show}."
+            s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show}: ${newBlockHashes.map(Utils.hex).mkString(", ")}"
           )
       dagOrError <- synchronizer.syncDag(
                      source = source,

@@ -86,6 +86,9 @@ init-sync-round-period = "30second"
 # Maximum number of blocks to allow to be synced initially.
 init-sync-max-block-count = 1000000
 
+# Time to wait between periodic synchronization attempts.
+periodic-sync-round-period = "60second"
+
 # Maximum number of parallel block downloads initiated by the download manager.
 download-max-parallel-blocks = 10
 
