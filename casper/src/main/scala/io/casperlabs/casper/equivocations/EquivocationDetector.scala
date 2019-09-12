@@ -209,6 +209,14 @@ object EquivocationDetector {
       } yield detectedEquivocator
     }
 
+  /**
+		* From j-past-cone of the block, find the maximum rank of blocks created by the same validator.
+    *
+    * @param dag The block dag
+    * @param block Block to run
+    * @tparam F Effect type
+    * @return
+    */
   private def rankOfEarlierMessageFromCreator[F[_]: Monad: Log](
       dag: DagRepresentation[F],
       block: Block
@@ -217,5 +225,9 @@ object EquivocationDetector {
       .filter(b => b.validatorPublicKey == block.getHeader.validatorPublicKey)
       .take(2)
       .toList
-      .map(_.map(_.rank).get(1).getOrElse(0L))
+      .map(
+        _.map(_.rank)
+          .get(1)        // The first element is the block we start traversal, ignore it.
+          .getOrElse(0L) // when reached genesis, return 0, which is the rank of genesis
+      )
 }
