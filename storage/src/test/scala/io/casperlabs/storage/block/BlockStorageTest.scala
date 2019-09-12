@@ -16,11 +16,17 @@ import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block.InMemBlockStorage.emptyMapRef
-import io.casperlabs.storage.blockImplicits.{blockBatchesGen, blockElementsGen}
-import io.casperlabs.storage.{BlockMsgWithTransform, Context, SQLiteFixture, SQLiteStorage}
+import io.casperlabs.storage.{
+  ArbitraryStorageData,
+  BlockMsgWithTransform,
+  Context,
+  SQLiteFixture,
+  SQLiteStorage
+}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
+import org.scalacheck._
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -35,7 +41,19 @@ trait BlockStorageTest
     with OptionValues
     with EitherValues
     with GeneratorDrivenPropertyChecks
-    with BeforeAndAfterAll {
+    with BeforeAndAfterAll
+    with ArbitraryStorageData {
+
+  implicit val consensusConfig: ConsensusConfig = ConsensusConfig(
+    maxSessionCodeBytes = 0,
+    maxPaymentCodeBytes = 0
+  )
+
+  val blockElementsGen: Gen[List[BlockMsgWithTransform]] = listOfBlockMsgWithTransform(1, 3)
+  val blockBatchesGen: Gen[List[List[BlockMsgWithTransform]]] = for {
+    n       <- Gen.choose(1, 3)
+    batches <- Gen.listOfN(n, blockElementsGen)
+  } yield batches
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(100))
@@ -52,7 +70,7 @@ trait BlockStorageTest
     }
 
   it should "return Some(message) on get for a published key and return Some(blockSummary) on getSummary" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
+    forAll(blockElementsGen) { blockStorageElements =>
       withStorage { storage =>
         val items = blockStorageElements
         for {
@@ -74,7 +92,7 @@ trait BlockStorageTest
   }
 
   it should "discover blocks/summaries by block hash prefix" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
+    forAll(blockElementsGen) { blockStorageElements =>
       withStorage { storage =>
         val items = blockStorageElements
         for {
@@ -110,7 +128,7 @@ trait BlockStorageTest
   }
 
   it should "be able to get blocks containing the specific deploy" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
+    forAll(blockElementsGen) { blockStorageElements =>
       val deployHashToBlockHashes =
         blockStorageElements
           .flatMap(
@@ -257,7 +275,7 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
   }
 
   "FileLMDBIndexBlockStorage" should "persist storage on restart" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStorageElements =>
+    forAll(blockElementsGen) { blockStorageElements =>
       withStorageLocation { blockStorageDataDir =>
         for {
           firstStorage  <- createBlockStorage(blockStorageDataDir)
@@ -335,7 +353,7 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
   }
 
   it should "be able to store multiple checkpoints" in {
-    forAll(blockBatchesGen, minSize(5), sizeRange(10)) { blockStorageBatches =>
+    forAll(blockBatchesGen) { blockStorageBatches =>
       withStorageLocation { blockStorageDataDir =>
         val blocks = blockStorageBatches.flatten
         for {
@@ -370,7 +388,7 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
   }
 
   it should "be able to clean storage and continue to work" in {
-    forAll(blockBatchesGen, minSize(5), sizeRange(10)) { blockStorageBatches =>
+    forAll(blockBatchesGen) { blockStorageBatches =>
       withStorageLocation { blockStorageDataDir =>
         val blocks            = blockStorageBatches.flatten
         val checkpointsDir    = blockStorageDataDir.resolve("checkpoints")

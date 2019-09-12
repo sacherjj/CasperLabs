@@ -5,18 +5,25 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.blockImplicits
+import io.casperlabs.storage.ArbitraryStorageData
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
 
 import scala.concurrent.duration._
 
-class CachingBlockStorageTest extends WordSpecLike with Matchers {
+class CachingBlockStorageTest extends WordSpecLike with Matchers with ArbitraryStorageData {
   import BlockStorage.BlockHash
   import CachingBlockStorageTest.TestFixture
 
-  val sampleBlock = blockImplicits.blockMsgWithTransformGen.sample.get
+  implicit val consensusConfig: ConsensusConfig = ConsensusConfig(
+    maxSessionCodeBytes = 1,
+    maxPaymentCodeBytes = 1,
+    minSessionCodeBytes = 1,
+    minPaymentCodeBytes = 1
+  )
+
+  val sampleBlock = sample(arbBlockMsgWithTransformFromBlock.arbitrary)
 
   def verifyCached[A](
       name: String,
