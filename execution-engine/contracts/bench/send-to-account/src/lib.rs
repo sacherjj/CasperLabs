@@ -7,6 +7,11 @@ use contract_ffi::contract_api::{self, TransferResult};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
+enum Arg {
+    PublicKey = 0,
+    Amount = 1,
+}
+
 enum Error {
     TransferredToNewAccount = 100,
     TransferError = 101,
@@ -14,8 +19,8 @@ enum Error {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let public_key: PublicKey = contract_api::get_arg(0);
-    let amount: U512 = contract_api::get_arg(1);
+    let public_key: PublicKey = contract_api::get_arg(Arg::PublicKey as u32);
+    let amount: U512 = contract_api::get_arg(Arg::Amount as u32);
     let result = contract_ffi::contract_api::transfer_to_account(public_key, amount);
     match result {
         TransferResult::TransferredToExistingAccount => {

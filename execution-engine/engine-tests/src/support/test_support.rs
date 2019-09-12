@@ -602,6 +602,20 @@ impl LmdbWasmTestBuilder {
     pub fn new<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> Self {
         Self::new_with_config(data_dir, Default::default())
     }
+
+    /// Creates new instance of builder and pplies values only which allows the engine state to be swapped with a new one, possibly after running genesis once and reusing existing database (i.e. LMDB).
+    pub fn new_with_config_and_result<T: AsRef<OsStr> + ?Sized>(data_dir: &T, engine_config: EngineConfig, result: &WasmTestResult<LmdbGlobalState>) -> Self {
+        let mut builder = Self::new_with_config(data_dir, engine_config);
+        // Applies existing properties from gi
+        builder.genesis_hash = result.0.genesis_hash.clone();
+        builder.post_state_hash = result.0.post_state_hash.clone();
+        builder.bonded_validators = result.0.bonded_validators.clone();
+        builder.mint_contract_uref = result.0.mint_contract_uref;
+        builder.pos_contract_uref = result.0.pos_contract_uref;
+        builder
+    }
+
+
 }
 
 impl<S> WasmTestBuilder<S>
@@ -624,17 +638,6 @@ where
             pos_contract_uref: result.0.pos_contract_uref,
             genesis_transforms: result.0.genesis_transforms,
         }
-    }
-
-    /// Applies values only which allows the engine state to be swapped with new one
-    /// possibly after running genesis once and reusing existing database (i.e. LMDB).
-    pub fn apply_from_result(&mut self, result: &WasmTestResult<S>) -> &mut Self {
-        self.genesis_hash = result.0.genesis_hash.clone();
-        self.post_state_hash = result.0.post_state_hash.clone();
-        self.bonded_validators = result.0.bonded_validators.clone();
-        self.mint_contract_uref = result.0.mint_contract_uref;
-        self.pos_contract_uref = result.0.pos_contract_uref;
-        self
     }
 
     pub fn run_genesis(

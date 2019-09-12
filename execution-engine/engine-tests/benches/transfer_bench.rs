@@ -1,16 +1,26 @@
-use casperlabs_engine_tests::support::test_support::{
-    LmdbWasmTestBuilder, WasmTestResult, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
+#[macro_use]
+extern crate criterion;
+extern crate contract_ffi;
+extern crate engine_core;
+extern crate engine_shared;
+extern crate engine_storage;
+use std::collections::HashMap;
+use std::fs::{self, DirEntry};
+use std::io;
+use std::path::Path;
+use std::time::Duration;
+use tempfile::TempDir;
+
+use criterion::{black_box, BatchSize, Criterion, Throughput};
+
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
-use std::collections::HashMap;
-use std::fs::{self, DirEntry};
-use std::io;
-use std::path::Path;
-use tempfile::TempDir;
+use casperlabs_engine_tests::support::test_support::{
+    LmdbWasmTestBuilder, WasmTestResult, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 
 const GENESIS_ADDR: [u8; 32] = [1; 32];
 
@@ -97,19 +107,6 @@ fn exec_send_to_account(builder: &mut LmdbWasmTestBuilder, accounts: &[PublicKey
     // accounts.len() / now.elapsed().as_millis() * 1000;
 }
 
-#[macro_use]
-extern crate criterion;
-extern crate contract_ffi;
-extern crate engine_core;
-extern crate engine_shared;
-extern crate engine_storage;
-
-use criterion::black_box;
-use criterion::BatchSize;
-use criterion::Criterion;
-use criterion::Throughput;
-use std::time::Duration;
-
 pub fn transfer_bench(c: &mut Criterion) {
     let accounts: Vec<PublicKey> = (100u8..=170u8).map(|b| PublicKey::from([b; 32])).collect();
     // Bootstrap database once to shave off time of subsequent bootstrapping
@@ -136,12 +133,12 @@ pub fn transfer_bench(c: &mut Criterion) {
                 || {
                     // For each iteration prepare a clone of the bootstrapped database
                     let cloned_db = clone_directory(&source_dir.path());
-                    let mut builder = LmdbWasmTestBuilder::new_with_config(
+                    let builder = LmdbWasmTestBuilder::new_with_config_and_result(
                         &cloned_db.path(),
                         engine_with_payments(),
+                        &result,
                     );
                     // Applies all properties from existing result
-                    builder.apply_from_result(&result);
                     builder.finish()
                 },
                 |result| {
