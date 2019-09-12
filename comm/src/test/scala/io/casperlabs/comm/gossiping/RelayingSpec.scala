@@ -1,7 +1,7 @@
 package io.casperlabs.comm.gossiping
 
 import cats.Applicative
-import cats.effect.Sync
+import cats.effect._
 import cats.mtl.DefaultApplicativeAsk
 import cats.syntax.option._
 import cats.temp.par.Par
@@ -52,7 +52,8 @@ class RelayingSpec
           TestFixture(peers.size / 2, 0, peers, acceptOrFailure = _ => false.some) {
             (relaying, asked, _) =>
               for {
-                _ <- relaying.relay(List(hash))
+                awaitRelay <- relaying.relay(List(hash))
+                _          <- awaitRelay
               } yield asked.get() shouldBe (peers.size / 2)
           }
         }
@@ -61,7 +62,8 @@ class RelayingSpec
         forAll(genListNode, genHash) { (peers: List[Node], hash: ByteString) =>
           TestFixture(1, 50, peers, acceptOrFailure = _ => false.some) { (relaying, asked, _) =>
             for {
-              _ <- relaying.relay(List(hash))
+              awaitRelay <- relaying.relay(List(hash))
+              _          <- awaitRelay
             } yield asked.get() shouldBe 2
           }
         }
@@ -72,7 +74,8 @@ class RelayingSpec
           TestFixture(relayFactor, 100, peers, acceptOrFailure = _ => true.some) {
             (relaying, asked, _) =>
               for {
-                _ <- relaying.relay(List(hash))
+                awaitRelay <- relaying.relay(List(hash))
+                _          <- awaitRelay
               } yield asked.get() shouldBe relayFactor
           }
         }
@@ -88,7 +91,8 @@ class RelayingSpec
             acceptOrFailure = _ => synchronized(responseIter.next.some)
           ) { (relaying, asked, _) =>
             for {
-              _ <- relaying.relay(List(hash))
+              awaitRelay <- relaying.relay(List(hash))
+              _          <- awaitRelay
             } yield responses.take(asked.get()).count(identity) should be <= relayFactor
           }
         }
@@ -99,7 +103,8 @@ class RelayingSpec
           TestFixture(peers.size, 100, peers, acceptOrFailure = _ => none[Boolean], log) {
             (relaying, asked, _) =>
               for {
-                _ <- relaying.relay(List(hash))
+                awaitRelay <- relaying.relay(List(hash))
+                _          <- awaitRelay
               } yield {
                 asked.get() shouldBe peers.size
                 log.debugs.size shouldBe peers.size
@@ -113,7 +118,8 @@ class RelayingSpec
             TestFixture(peers.size, 100, peers, acceptOrFailure = _ => false.some) {
               (relaying, _, maxConcurrentRequests) =>
                 for {
-                  _ <- relaying.relay(List(hash1, hash2, hash3))
+                  awaitRelay <- relaying.relay(List(hash1, hash2, hash3))
+                  _          <- awaitRelay
                 } yield maxConcurrentRequests.get() should be > 1
             }
         }
@@ -179,7 +185,7 @@ object RelayingSpec {
         }
 
       val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(
-        Sync[Task],
+        Concurrent[Task],
         Par.fromParallel(CatsParallelForTask),
         log,
         metrics,

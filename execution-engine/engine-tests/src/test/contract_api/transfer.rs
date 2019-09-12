@@ -648,7 +648,7 @@ fn should_fail_when_insufficient_funds() {
 #[ignore]
 #[test]
 fn should_transfer_total_amount() {
-    let mut builder = test_support::WasmTestBuilder::default();
+    let mut builder = test_support::InMemoryWasmTestBuilder::default();
 
     builder
         .run_genesis(GENESIS_ADDR, HashMap::new())

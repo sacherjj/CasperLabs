@@ -1,23 +1,28 @@
+use std::collections::HashMap;
+
 use contract_ffi::base16;
 use contract_ffi::key::Key;
-use contract_ffi::value::{U512, Value};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::account::PurseId;
-use engine_core::engine_state::CONV_RATE;
+use contract_ffi::value::{Value, U512};
+
 use engine_core::engine_state::genesis::POS_BONDING_PURSE;
+use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
-use std::collections::HashMap;
 
 use crate::support::test_support::{
-    self, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT, WasmTestBuilder,
+    self, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 
-fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Option<PurseId> {
+fn get_pos_purse_id_by_name(
+    builder: &InMemoryWasmTestBuilder,
+    purse_name: &str,
+) -> Option<PurseId> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
@@ -27,7 +32,7 @@ fn get_pos_purse_id_by_name(builder: &WasmTestBuilder, purse_name: &str) -> Opti
         .map(|u| PurseId::new(*u))
 }
 
-fn get_pos_bonding_purse_balance(builder: &WasmTestBuilder) -> U512 {
+fn get_pos_bonding_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
     let purse_id = get_pos_purse_id_by_name(builder, POS_BONDING_PURSE)
         .expect("should find PoS payment purse");
     builder.get_purse_balance(purse_id)
@@ -61,7 +66,7 @@ fn should_run_successful_bond_and_unbond() {
         result
     };
 
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators)
         .finish();
 
@@ -72,11 +77,11 @@ fn should_run_successful_bond_and_unbond() {
 
     let pos = result.builder().get_pos_contract_uref();
 
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
             (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
             DEFAULT_BLOCK_TIME,
@@ -121,11 +126,11 @@ fn should_run_successful_bond_and_unbond() {
     );
 
     // Create new account (from genesis funds) and bond with it
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
             (
                 String::from(TEST_SEED_NEW_ACCOUNT),
@@ -140,7 +145,7 @@ fn should_run_successful_bond_and_unbond() {
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
             (
                 String::from(TEST_BOND_FROM_MAIN_PURSE),
@@ -203,11 +208,11 @@ fn should_run_successful_bond_and_unbond() {
     //
 
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
             (
                 String::from(TEST_UNBOND),
@@ -263,11 +268,11 @@ fn should_run_successful_bond_and_unbond() {
     //
     // Genesis account unbonds less than 50% of his stake
 
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
             (
                 String::from(TEST_UNBOND),
@@ -293,9 +298,9 @@ fn should_run_successful_bond_and_unbond() {
         U512::from(
             test_support::GENESIS_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)
-                .expect("should convert")
-                .value()
-                .as_u64()
+                    .expect("should convert")
+                    .value()
+                    .as_u64()
                 - ACCOUNT_1_SEED_AMOUNT
                 - GENESIS_ACCOUNT_UNBOND_2
         ),
@@ -312,11 +317,11 @@ fn should_run_successful_bond_and_unbond() {
     //
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
 
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
             (
                 String::from(TEST_UNBOND),
@@ -364,11 +369,11 @@ fn should_run_successful_bond_and_unbond() {
     //
 
     // Genesis account unbonds less than 50% of his stake
-    let result = WasmTestBuilder::from_result(result)
+    let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
             (String::from(TEST_UNBOND), None as Option<U512>), // <-- va banque
             DEFAULT_BLOCK_TIME,
@@ -392,9 +397,9 @@ fn should_run_successful_bond_and_unbond() {
         U512::from(
             test_support::GENESIS_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)
-                .expect("should convert")
-                .value()
-                .as_u64()
+                    .expect("should convert")
+                    .value()
+                    .as_u64()
                 - ACCOUNT_1_SEED_AMOUNT
         )
     );
@@ -464,12 +469,12 @@ fn should_fail_bonding_with_insufficient_funds() {
         result
     };
 
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators)
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
             (
                 String::from(TEST_SEED_NEW_ACCOUNT),
@@ -483,7 +488,7 @@ fn should_fail_bonding_with_insufficient_funds() {
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
             (
                 String::from(TEST_BOND_FROM_MAIN_PURSE),
@@ -522,12 +527,12 @@ fn should_fail_unbonding_validator_without_bonding_first() {
         result
     };
 
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators)
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "pos_bonding.wasm",
             (String::from(TEST_UNBOND), Some(U512::from(42))),
             DEFAULT_BLOCK_TIME,

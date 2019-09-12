@@ -1,11 +1,12 @@
-use contract_ffi::key::Key;
-use contract_ffi::value::{U512, Value};
-use contract_ffi::value::account::PublicKey;
-use engine_core::engine_state::MAX_PAYMENT;
 use std::collections::HashMap;
 
+use contract_ffi::key::Key;
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::{Value, U512};
+use engine_core::engine_state::MAX_PAYMENT;
+
 use crate::support::test_support::{
-    DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT, WasmTestBuilder,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 
 const CREATE: &str = "create";
@@ -30,7 +31,7 @@ fn should_run_ee_572_regression() {
 
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let mut builder = WasmTestBuilder::default();
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     // Create Accounts
     builder
@@ -38,7 +39,7 @@ fn should_run_ee_572_regression() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             CONTRACT_TRANSFER,
             account_1_creation_args,
             DEFAULT_BLOCK_TIME,
@@ -49,7 +50,7 @@ fn should_run_ee_572_regression() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             CONTRACT_TRANSFER,
             account_2_creation_args,
             DEFAULT_BLOCK_TIME,
@@ -85,9 +86,9 @@ fn should_run_ee_572_regression() {
         .exec_with_args(
             ACCOUNT_2_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             CONTRACT_ESCALATE,
-            (contract, ),
+            (contract,),
             DEFAULT_BLOCK_TIME,
             [4u8; 32],
         )

@@ -5,7 +5,7 @@ use contract_ffi::key::Key;
 use contract_ffi::value::Value;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 
@@ -14,7 +14,7 @@ const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 fn should_run_local_state_contract() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec(
             GENESIS_ADDR,

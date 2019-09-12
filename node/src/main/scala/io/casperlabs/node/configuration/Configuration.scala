@@ -138,7 +138,6 @@ object Configuration extends ParserImplicits {
       .parse(cliByName, envVars, configFile, defaultConfigFile, Nil)
       .map(updatePaths(_, defaultDataDir))
       .toEither
-      .flatMap(updateTls(_, defaultConfigFile).leftMap(NonEmptyList(_, Nil)))
       .fold(Invalid(_), Valid(_))
 
   /**
@@ -190,40 +189,6 @@ object Configuration extends ParserImplicits {
       implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
     }
     GenericPathUpdater.gen[Configuration].update(c)
-  }
-
-  private[configuration] def updateTls(
-      c: Configuration,
-      defaultConfigFile: Map[CamelCase, String]
-  ): Either[String, Configuration] = {
-    val dataDir = c.server.dataDir
-    for {
-      defaultDataDir <- readDefaultDataDir
-      defaultCertificate <- defaultConfigFile
-                             .get(CamelCase("tlsCertificate"))
-                             .fold("tls.certificate must have default value".asLeft[Path])(
-                               s => Parser[Path].parse(s)
-                             )
-      defaultKey <- defaultConfigFile
-                     .get(CamelCase("tlsKey"))
-                     .fold("tls.key must have default value".asLeft[Path])(
-                       s => Parser[Path].parse(s)
-                     )
-    } yield {
-      val isCertCustomLocation = stripPrefix(c.tls.certificate, dataDir) != stripPrefix(
-        defaultCertificate,
-        defaultDataDir
-      )
-      val isKeyCustomLocation =
-        stripPrefix(c.tls.key, dataDir) !=
-          stripPrefix(defaultKey, defaultDataDir)
-      c.copy(
-        tls = c.tls.copy(
-          customCertificateLocation = isCertCustomLocation,
-          customKeyLocation = isKeyCustomLocation
-        )
-      )
-    }
   }
 
   private def readDefaultDataDir: Either[String, Path] =

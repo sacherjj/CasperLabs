@@ -21,7 +21,7 @@ pip3 install casperlabs-client
 ## Getting started
 
 After installing `casperlabs-client` you can start interacting with
-[CasperLabs devnet](https://explorer.casperlabs.io).
+[CasperLabs devnet](https://clarity.casperlabs.io).
 
 
 ```python
@@ -46,7 +46,7 @@ d286526663ca3766c80781543a148c635f2388bfe128981c3e4ac69cea88dc35: 3000000000
 
 To deploy a smart contract to CasperLabs devnet you have to first:
 
-1. Create an account using [CasperLabs Explorer](https://explorer.casperlabs.io/#/)
+1. Create an account using [CasperLabs Explorer](https://clarity.casperlabs.io/#/)
 and transfer (free) tokens to the account from the faucet.
 
    An account address is a public key in hex format such as:

@@ -1,11 +1,12 @@
-use contract_ffi::key::Key;
-use contract_ffi::value::{U512, Value};
-use engine_core::engine_state::MAX_PAYMENT;
-use engine_shared::transform::Transform;
 use std::collections::HashMap;
 
+use contract_ffi::key::Key;
+use contract_ffi::value::{Value, U512};
+use engine_core::engine_state::MAX_PAYMENT;
+use engine_shared::transform::Transform;
+
 use crate::support::test_support::{
-    DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT, WasmTestBuilder,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
 };
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
@@ -17,12 +18,12 @@ fn should_run_purse_to_purse_transfer() {
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
 
-    let transfer_result = WasmTestBuilder::default()
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_purse.wasm",
             (source, target, U512::from(PURSE_TO_PURSE_AMOUNT)),
             DEFAULT_BLOCK_TIME,
@@ -114,12 +115,12 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
 
-    let transfer_result = WasmTestBuilder::default()
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_purse.wasm",
             (
                 source,

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 use engine_core::engine_state::error;
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
@@ -11,7 +11,7 @@ const UNKNOWN_ADDR: [u8; 32] = [42u8; 32];
 fn should_run_ee_532_get_uref_regression_test() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec(
             UNKNOWN_ADDR,

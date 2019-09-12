@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 
@@ -17,7 +17,7 @@ fn should_return_bonded_validators() {
     .into_iter()
     .collect();
 
-    let bonded_validators = WasmTestBuilder::default()
+    let bonded_validators = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators.clone())
         .exec(
             GENESIS_ADDR,

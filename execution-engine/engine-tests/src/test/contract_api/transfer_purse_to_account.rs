@@ -1,12 +1,13 @@
-use contract_ffi::key::Key;
-use contract_ffi::value::{U512, Value};
-use contract_ffi::value::account::PublicKey;
-use engine_core::engine_state::MAX_PAYMENT;
-use engine_shared::transform::Transform;
 use std::collections::HashMap;
 
+use contract_ffi::key::Key;
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::{Value, U512};
+use engine_core::engine_state::MAX_PAYMENT;
+use engine_shared::transform::Transform;
+
 use crate::support::test_support::{
-    DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT, WasmTestBuilder,
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
 };
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
@@ -19,12 +20,12 @@ fn should_run_purse_to_account_transfer() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let genesis_public_key = PublicKey::new(GENESIS_ADDR);
 
-    let transfer_result = WasmTestBuilder::default()
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
             (account_1_public_key, U512::from(ACCOUNT_1_INITIAL_FUND)),
             DEFAULT_BLOCK_TIME,
@@ -35,7 +36,7 @@ fn should_run_purse_to_account_transfer() {
         .exec_with_args(
             account_1_public_key.value(),
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
             (genesis_public_key, U512::from(1)),
             DEFAULT_BLOCK_TIME,
@@ -200,12 +201,12 @@ fn should_run_purse_to_account_transfer() {
 fn should_fail_when_sending_too_much_from_purse_to_account() {
     let account_1_key = PublicKey::new(ACCOUNT_1_ADDR);
 
-    let transfer_result = WasmTestBuilder::default()
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
             (account_1_key, U512::max_value()),
             DEFAULT_BLOCK_TIME,

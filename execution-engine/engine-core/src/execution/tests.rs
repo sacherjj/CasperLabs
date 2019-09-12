@@ -1,11 +1,7 @@
-use rand::RngCore;
-use rand_chacha::ChaChaRng;
-
 use engine_shared::gas::Gas;
 
 use super::Error;
 use crate::engine_state::execution_result::ExecutionResult;
-use crate::execution::create_rng;
 
 fn on_fail_charge_test_helper<T>(
     f: impl Fn() -> Result<T, Error>,
@@ -71,52 +67,4 @@ fn on_fail_charge_with_action() {
             assert_eq!(effect.transforms.len(), 1);
         }
     }
-}
-
-fn gen_random(rng: &mut ChaChaRng) -> [u8; 32] {
-    let mut buff = [0u8; 32];
-    rng.fill_bytes(&mut buff);
-    buff
-}
-
-#[test]
-fn should_generate_different_numbers_for_different_seeds() {
-    let mut rng_a = create_rng([1u8; 32], contract_ffi::execution::Phase::Session);
-    let mut rng_b = create_rng([2u8; 32], contract_ffi::execution::Phase::Session);
-    let random_a = gen_random(&mut rng_a);
-    let random_b = gen_random(&mut rng_b);
-
-    assert_ne!(random_a, random_b)
-}
-
-#[test]
-fn should_generate_same_numbers_for_same_seed() {
-    let mut rng_a = create_rng([1u8; 32], contract_ffi::execution::Phase::Session);
-    let mut rng_b = create_rng([1u8; 32], contract_ffi::execution::Phase::Session);
-    let random_a = gen_random(&mut rng_a);
-    let random_b = gen_random(&mut rng_b);
-
-    assert_eq!(random_a, random_b)
-}
-
-#[test]
-fn should_not_generate_same_numbers_for_different_phase() {
-    let deploy_hash = [1u8; 32];
-    let mut rng_a = create_rng(deploy_hash, contract_ffi::execution::Phase::Payment);
-    let mut rng_b = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
-    let random_a = gen_random(&mut rng_a);
-    let random_b = gen_random(&mut rng_b);
-
-    assert_ne!(
-        random_a, random_b,
-        "different phase should have different output"
-    );
-
-    let mut rng_c = create_rng(deploy_hash, contract_ffi::execution::Phase::FinalizePayment);
-    let random_c = gen_random(&mut rng_c);
-
-    assert_ne!(
-        random_a, random_c,
-        "different phase should have different output"
-    );
 }

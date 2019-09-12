@@ -33,7 +33,7 @@ The node module comes with an executable (jar, docker image, debian or fedora pa
 To see the list of available flags you can run `./casperlabs-node --help`
 
 ### 2.1 The Node
-By default when you execute the program, it will fire up a running node instance. That instance will become either a bootstrap node (see `--standalone` flag) or will try to connect to existing bootstrap.
+By default when you execute the program, it will fire up a running node instance. That instance will become either a bootstrap node (see `--casper-standalone` flag) or will try to connect to existing bootstrap.
 
 Node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentially acting as bootstrap node). __Note__ This release prints a great deal of diagnostic information.
 

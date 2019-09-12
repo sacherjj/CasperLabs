@@ -62,7 +62,7 @@ fn should_run_pos_install_contract() {
     )
         .expect("should run successfully");
 
-    let prestate = builder.get_poststate_hash();
+    let prestate = builder.get_post_state_hash();
     builder.commit_effects(prestate, effect.transforms.clone());
 
     // should return a uref

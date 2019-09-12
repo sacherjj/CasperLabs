@@ -216,9 +216,15 @@ private[configuration] final case class Options private (
       )
 
     @scallop
-    val tlsSecureRandomNonBlocking =
-      gen[Flag](
-        "Use a non blocking secure random instance."
+    val tlsApiCertificate =
+      gen[Path](
+        "Path to an optional X.509 certificate file signed by a trusted root CA, to be used in the with public API."
+      )
+
+    @scallop
+    val tlsApiKey =
+      gen[Path](
+        "Path to the unencrypted secp256r1 PKCS#8 private key file corresponding to the API certificate, if given."
       )
 
     @scallop

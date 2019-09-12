@@ -1,35 +1,31 @@
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
-use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
-use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
-use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::{self, mint};
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::{Account, U512, Value};
-use contract_ffi::value::account::{ActionType, PUBLIC_KEY_SIZE, PublicKey, PurseId, Weight};
-use engine_shared::gas::Gas;
-use engine_storage::global_state::StateReader;
-use itertools::Itertools;
-use num_traits::ToPrimitive;
-use parity_wasm::elements::Module;
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
+mod args;
+mod externals;
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::iter::IntoIterator;
+
+use itertools::Itertools;
+use parity_wasm::elements::Module;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
+use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
+use contract_ffi::contract_api::argsparser::ArgsParser;
+use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
+use contract_ffi::key::Key;
+use contract_ffi::system_contracts::{self, mint};
+use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::value::account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE};
+use contract_ffi::value::{Account, Value, U512};
+use engine_shared::gas::Gas;
+use engine_storage::global_state::StateReader;
+
+use super::{Error, MINT_NAME, POS_NAME};
 use crate::execution::Error::{KeyNotFound, URefNotFound};
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
 use crate::runtime_context::RuntimeContext;
-use crate::URefAddr;
-
-use super::{Error, MINT_NAME, POS_NAME};
-
-mod args;
-mod externals;
+use crate::Address;
 
 pub struct Runtime<'a, R> {
     memory: MemoryRef,
@@ -86,7 +82,7 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
 /// rights per key
 pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
     input: I,
-) -> HashMap<URefAddr, HashSet<AccessRights>> {
+) -> HashMap<Address, HashSet<AccessRights>> {
     input
         .into_iter()
         .map(|uref: URef| (uref.addr(), uref.access_rights()))
@@ -107,7 +103,7 @@ pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
 /// per key.
 pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
     input: I,
-) -> HashMap<URefAddr, HashSet<AccessRights>> {
+) -> HashMap<Address, HashSet<AccessRights>> {
     input
         .into_iter()
         .map(key_to_tuple)
@@ -123,17 +119,6 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
             )
         })
         .collect()
-}
-
-pub fn create_rng(deploy_hahs: [u8; 32], phase: contract_ffi::execution::Phase) -> ChaChaRng {
-    let mut seed: [u8; 32] = [0u8; 32];
-    let mut data: Vec<u8> = Vec::new();
-    let mut hasher = VarBlake2b::new(32).unwrap();
-    data.extend(&deploy_hahs);
-    data.extend_from_slice(&[phase.to_u8().expect("Phase is represented as a u8")]);
-    hasher.input(data);
-    hasher.variable_result(|hash| seed.clone_from_slice(hash));
-    ChaChaRng::from_seed(seed)
 }
 
 fn sub_call<R: StateReader<Key, Value>>(
@@ -172,7 +157,7 @@ where
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
-            current_runtime.context.rng(),
+            current_runtime.context.address_generator(),
             protocol_version,
             current_runtime.context.correlation_id(),
             current_runtime.context.phase(),
@@ -192,7 +177,7 @@ where
                 match downcasted_error {
                     Error::Ret(ref ret_urefs) => {
                         //insert extra urefs returned from call
-                        let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
+                        let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
                             extract_access_rights_from_urefs(ret_urefs.clone());
                         current_runtime.context.add_urefs(ret_urefs_map);
                         return Ok(runtime.result);

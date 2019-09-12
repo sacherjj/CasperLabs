@@ -1,10 +1,11 @@
+use std::collections::HashMap;
+
+use grpc::RequestOptions;
+
+use crate::support::test_support::InMemoryWasmTestBuilder;
 use engine_core::engine_state::{EngineConfig, EngineState};
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
-use grpc::RequestOptions;
-use std::collections::HashMap;
-
-use crate::support::test_support::WasmTestBuilder;
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 
@@ -34,7 +35,7 @@ fn should_run_genesis() {
 #[ignore]
 #[test]
 fn test_genesis_hash_match() {
-    let mut builder_base = WasmTestBuilder::default();
+    let mut builder_base = InMemoryWasmTestBuilder::default();
 
     let builder = builder_base.run_genesis(GENESIS_ADDR, HashMap::new());
 
@@ -50,7 +51,7 @@ fn test_genesis_hash_match() {
     // This is trie's post state hash after committing genesis effects on top of empty trie.
     let genesis_transforms_hash = builder
         .commit_effects(empty_root_hash.to_vec(), genesis_transforms)
-        .get_poststate_hash();
+        .get_post_state_hash();
 
     // They should match.
     assert_eq!(genesis_run_hash, genesis_transforms_hash);
