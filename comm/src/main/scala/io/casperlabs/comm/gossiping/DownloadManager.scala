@@ -36,7 +36,7 @@ trait DownloadManager[F[_]] {
     *
     * The unwrapped `F[Unit]` _inside_ the `F[F[Unit]]` can be used to
     * wait until the actual download finishes, or results in an error. */
-  def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean): F[F[Unit]]
+  def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean): F[WaitHandle[F]]
 }
 
 object DownloadManagerImpl {
@@ -180,7 +180,11 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
       Sync[F].unit
     )
 
-  override def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean): F[F[Unit]] =
+  override def scheduleDownload(
+      summary: BlockSummary,
+      source: Node,
+      relay: Boolean
+  ): F[WaitHandle[F]] =
     for {
       // Fail rather than block forever.
       _ <- ensureNotShutdown

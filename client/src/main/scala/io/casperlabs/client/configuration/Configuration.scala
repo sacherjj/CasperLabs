@@ -11,7 +11,9 @@ final case class ConnectOptions(
     host: String,
     portExternal: Int,
     portInternal: Int,
-    nodeId: Option[String]
+    nodeId: Option[String],
+    tlsApiCertificate: Option[File],
+    useTls: Option[Boolean]
 )
 
 /** Options to capture all the possible ways of passing one of the session or payment contracts. */
@@ -198,7 +200,9 @@ object Configuration {
       options.host(),
       options.port(),
       options.portInternal(),
-      options.nodeId.toOption
+      options.nodeId.toOption,
+      options.tlsApiCertificate.toOption,
+      options.useTls.toOption.map(_ == "true")
     )
     val conf = options.subcommand.map {
       case options.deploy =>

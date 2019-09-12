@@ -71,7 +71,7 @@ fn test_genesis_hash_match() {
     // This is trie's post state hash after committing genesis effects on top of empty trie.
     let genesis_transforms_hash = builder
         .commit_effects(empty_root_hash.to_vec(), genesis_transforms)
-        .get_poststate_hash();
+        .get_post_state_hash();
 
     // They should match.
     assert_eq!(genesis_run_hash, genesis_transforms_hash);
