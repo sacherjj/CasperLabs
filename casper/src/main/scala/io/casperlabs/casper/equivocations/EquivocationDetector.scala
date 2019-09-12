@@ -14,6 +14,8 @@ import scala.collection.immutable.{Map, Set}
 
 object EquivocationDetector {
 
+  type EquivocationTracker = Map[Validator, Long] // Map[Validator, Rank]
+
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   /**
@@ -139,13 +141,13 @@ object EquivocationDetector {
 
   /**
     * Find equivocators basing latestMessageHashes
-		*
+    *
     * We use `bfToposortTraverseF` to traverse from `latestMessageHashes` down to minimal rank
     * of base block of equivocationRecord. `bfToposortTraverseF` guarantee that we will only
     * meet a specific block only once, and `validatorBlockSeqNum` is equal to 1 plus
     * validatorBlock of creator's previous created block. So that once we find duplicated
     * (Validator, validatorBlockSeqNum), we know the validator has equivocated.
-		*
+    *
     * @param dag the block dag
     * @param latestMessagesHashes generate from direct justifications
     * @param equivocationTracker local tracker of equivocations
@@ -155,7 +157,7 @@ object EquivocationDetector {
   def equivocatorDetectFromLatestMessage[F[_]: Monad](
       dag: DagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash],
-      equivocationTracker: Map[Validator, Long]
+      equivocationTracker: EquivocationTracker
   ): F[Set[Validator]] =
     if (equivocationTracker.isEmpty) {
       Set.empty[Validator].pure[F]
@@ -210,7 +212,7 @@ object EquivocationDetector {
     }
 
   /**
-		* From j-past-cone of the block, find the maximum rank of blocks created by the same validator.
+    * From j-past-cone of the block, find the maximum rank of blocks created by the same validator.
     *
     * @param dag The block dag
     * @param block Block to run

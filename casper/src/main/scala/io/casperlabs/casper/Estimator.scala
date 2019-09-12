@@ -10,6 +10,7 @@ import implicits.{eqBlockHash, showBlockHash}
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.equivocations.EquivocationDetector
+import io.casperlabs.casper.equivocations.EquivocationDetector.EquivocationTracker
 
 import scala.collection.immutable.{Map, Set}
 
@@ -22,7 +23,7 @@ object Estimator {
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       genesis: BlockHash,
-      equivocationTracker: Map[Validator, Long]
+      equivocationTracker: EquivocationTracker
   ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- dag.latestMessageHashes
@@ -34,7 +35,7 @@ object Estimator {
       dag: DagRepresentation[F],
       genesis: BlockHash,
       latestMessageHashes: Map[Validator, BlockHash],
-      equivocationTracker: Map[Validator, Long]
+      equivocationTracker: EquivocationTracker
   ): F[List[BlockHash]] = {
 
     /** Finds children of the block b that have been scored by the LMD algorithm.
