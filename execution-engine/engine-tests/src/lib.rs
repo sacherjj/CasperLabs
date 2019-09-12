@@ -3,9 +3,7 @@ extern crate grpc;
 #[cfg(test)]
 #[macro_use]
 extern crate lazy_static;
-#[cfg(test)]
 extern crate lmdb;
-#[cfg(test)]
 extern crate protobuf;
 
 extern crate contract_ffi;

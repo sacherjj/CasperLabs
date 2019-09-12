@@ -970,7 +970,7 @@ where
             .expect("Genesis hash should be present. Should be called after run_genesis.")
     }
 
-    pub fn get_poststate_hash(&self) -> Vec<u8> {
+    pub fn get_post_state_hash(&self) -> Vec<u8> {
         self.post_state_hash
             .clone()
             .expect("Should have post-state hash.")

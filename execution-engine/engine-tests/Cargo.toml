@@ -5,6 +5,7 @@ authors = ["Ed Hastings <ed@casperlabs.io>, Henry Till <henrytill@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+clap = "2"
 contract-ffi = { path = "../contract-ffi", package = "casperlabs-contract-ffi" }
 engine-core = { path = "../engine-core", package = "casperlabs-engine-core" }
 engine-grpc-server = { path = "../engine-grpc-server", package = "casperlabs-engine-grpc-server" }
@@ -26,3 +27,9 @@ protobuf = "2"
 [[bench]]
 name = "transfer_bench"
 harness = false
+
+[[bin]]
+name = "state-initializer"
+path = "src/profiling/state-initializer.rs"
+test = false
+bench = false

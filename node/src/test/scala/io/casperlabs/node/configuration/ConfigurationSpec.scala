@@ -121,9 +121,10 @@ class ConfigurationSpec
       maxBlockSizeBytes = 1
     )
     val tls = Tls(
-      certificate = Paths.get("/tmp/test"),
-      key = Paths.get("/tmp/test"),
-      secureRandomNonBlocking = false
+      certificate = Paths.get("/tmp/test.crt"),
+      key = Paths.get("/tmp/test.key"),
+      apiCertificate = Paths.get("/tmp/test.api.crt"),
+      apiKey = Paths.get("/tmp/test.api.key")
     )
     val lmdb = LMDBBlockStorage.Config(
       dir = Paths.get("/tmp/lmdb-block-storage"),
@@ -161,49 +162,6 @@ class ConfigurationSpec
       kamonSettings,
       influx.some
     )
-  }
-
-  test("""
-        |Configuration.updateTls should update
-        |'customCertificateLocation' and 'customKeyLocation'
-        |if certificate and key are custom""".stripMargin) {
-    forAll { (maybeDataDir: Option[Path], maybeCert: Option[Path], maybeKey: Option[Path]) =>
-      import shapeless._
-
-      /*_*/
-      val confUpdatedDataDir =
-        maybeDataDir.fold(defaultConf)(lens[Configuration].server.dataDir.set(defaultConf))
-      val confUpdatedCert =
-        maybeCert.fold(confUpdatedDataDir)(
-          lens[Configuration].tls.certificate.set(confUpdatedDataDir)
-        )
-      val confUpdatedKey =
-        maybeKey.fold(confUpdatedCert)(lens[Configuration].tls.key.set(confUpdatedCert))
-      /*_*/
-
-      val Right(defaults) = readFile(Source.fromResource("default-configuration.toml")) map Configuration.parseToml
-      val Right(res) = Configuration
-        .updateTls(Configuration.updatePaths(confUpdatedKey, defaultConf.server.dataDir), defaults)
-      val Right(defaultCert) =
-        Parser[java.nio.file.Path].parse(defaults(CamelCase("tlsCertificate")))
-      val Right(defaultKey) = Parser[java.nio.file.Path].parse(defaults(CamelCase("tlsKey")))
-
-      maybeCert match {
-        case Some(c) =>
-          val certStrippedPath        = stripPrefix(c, res.server.dataDir)
-          val defaultCertStrippedPath = stripPrefix(defaultCert, defaultConf.server.dataDir)
-          assert(res.tls.customCertificateLocation && certStrippedPath != defaultCertStrippedPath)
-        case None =>
-          assert(!res.tls.customCertificateLocation)
-      }
-      maybeKey match {
-        case Some(k) =>
-          val keyStrippedPath        = stripPrefix(k, res.server.dataDir)
-          val defaultKeyStrippedPath = stripPrefix(defaultKey, defaultConf.server.dataDir)
-          assert(res.tls.customKeyLocation && keyStrippedPath != defaultKeyStrippedPath)
-        case None => assert(!res.tls.customKeyLocation)
-      }
-    }
   }
 
   test("""

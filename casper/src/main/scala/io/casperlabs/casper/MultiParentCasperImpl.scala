@@ -996,7 +996,7 @@ object MultiParentCasperImpl {
           case Valid | EquivocatedBlock =>
             maybeOwnPublickKey match {
               case Some(key) if key == block.getHeader.validatorPublicKey =>
-                relaying.relay(List(block.blockHash))
+                relaying.relay(List(block.blockHash)).void
               case _ =>
                 // We were adding somebody else's block. The DownloadManager did the gossiping.
                 ().pure[F]

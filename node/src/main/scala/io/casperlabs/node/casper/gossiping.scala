@@ -53,7 +53,7 @@ package object gossiping {
       egressScheduler: Scheduler
   )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
 
-    val (cert, key) = conf.tls.readCertAndKey
+    val (cert, key) = conf.tls.readIntraNodeCertAndKey
 
     // SSL context to use when connecting to another node.
     val clientSslContext = SslContexts.forClient(cert, key)
@@ -282,7 +282,7 @@ package object gossiping {
       } yield s.copy(connections = s.connections - peer)
     }
 
-  def makeRelaying[F[_]: Sync: Par: Log: Metrics: NodeDiscovery: NodeAsk](
+  def makeRelaying[F[_]: Concurrent: Par: Log: Metrics: NodeDiscovery: NodeAsk](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F]
   ): Resource[F, Relaying[F]] =

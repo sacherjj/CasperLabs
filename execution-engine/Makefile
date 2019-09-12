@@ -2,19 +2,21 @@
 CARGO = $(or $(shell which cargo), $(HOME)/.cargo/bin/cargo)
 
 # Directory names should match crate names
-SYSTEM_CONTRACTS   = $(shell find ./contracts/system   -mindepth 1 -maxdepth 1 -exec basename {} \;)
-TEST_CONTRACTS     = $(shell find ./contracts/test     -mindepth 1 -maxdepth 1 -exec basename {} \;)
-CLIENT_CONTRACTS   = $(shell find ./contracts/client   -mindepth 1 -maxdepth 1 -exec basename {} \;)
-EXPLORER_CONTRACTS = $(shell find ./contracts/explorer -mindepth 1 -maxdepth 1 -exec basename {} \;)
+SYSTEM_CONTRACTS             = $(shell find ./contracts/system   -mindepth 1 -maxdepth 1 -exec basename {} \;)
+TEST_CONTRACTS               = $(shell find ./contracts/test     -mindepth 1 -maxdepth 1 -exec basename {} \;)
+CLIENT_CONTRACTS             = $(shell find ./contracts/client   -mindepth 1 -maxdepth 1 -exec basename {} \;)
+EXPLORER_CONTRACTS           = $(shell find ./contracts/explorer -mindepth 1 -maxdepth 1 -exec basename {} \;)
 LONG_RUNNING_TESTS_CONTRACTS = $(shell find ./contracts/long-running-tests -mindepth 1 -maxdepth 1 -exec basename {} \;)
 BENCH_CONTRACTS = $(shell find ./contracts/bench       -mindepth 1 -maxdepth 1 -exec basename {} \;)
+PROFILING_CONTRACTS          = $(shell find ./contracts/profiling -mindepth 1 -maxdepth 1 -exec basename {} \;)
 
-SYSTEM_CONTRACTS   := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
-TEST_CONTRACTS     := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
-CLIENT_CONTRACTS   := $(patsubst %, build-contract/%, $(CLIENT_CONTRACTS))
-EXPLORER_CONTRACTS := $(patsubst %, build-contract/%, $(EXPLORER_CONTRACTS))
+SYSTEM_CONTRACTS             := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
+TEST_CONTRACTS               := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
+CLIENT_CONTRACTS             := $(patsubst %, build-contract/%, $(CLIENT_CONTRACTS))
+EXPLORER_CONTRACTS           := $(patsubst %, build-contract/%, $(EXPLORER_CONTRACTS))
 LONG_RUNNING_TESTS_CONTRACTS := $(patsubst %, build-contract/%, $(LONG_RUNNING_TESTS_CONTRACTS))
 BENCH_CONTRACTS := $(patsubst %, build-contract/%, $(BENCH_CONTRACTS))
+PROFILING_CONTRACTS          := $(patsubst %, build-contract/%, $(PROFILING_CONTRACTS))
 
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
 PACKAGED_SYSTEM_CONTRACTS = mint_token.wasm pos.wasm
@@ -27,7 +29,7 @@ build:
 	$(CARGO) build $(CARGO_FLAGS)
 
 build-contract/%:
-	$(CARGO) build $(CARGO_FLAGS) -p $* --release --target wasm32-unknown-unknown
+	$(CARGO) build $(filter-out --release, $(CARGO_FLAGS)) -p $* --release --target wasm32-unknown-unknown
 
 .PHONY: build-contracts
 build-contracts: \
@@ -36,7 +38,8 @@ build-contracts: \
 	$(CLIENT_CONTRACTS) \
 	$(EXPLORER_CONTRACTS) \
 	$(LONG_RUNNING_TESTS_CONTRACTS) \
-	$(BENCH_CONTRACTS)
+	$(BENCH_CONTRACTS) \
+	$(PROFILING_CONTRACTS)
 
 .PHONY: test
 test:

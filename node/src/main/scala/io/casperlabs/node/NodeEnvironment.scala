@@ -75,6 +75,6 @@ object NodeEnvironment {
 
   private def hasKey(conf: Configuration): Effect[Unit] = isValid(
     !conf.tls.key.toFile.exists(),
-    s"Secret key file ${conf.tls.certificate} not found"
+    s"Secret key file ${conf.tls.key} not found"
   )
 }
