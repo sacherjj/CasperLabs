@@ -75,7 +75,7 @@ object Estimator {
       lca <- if (latestMessageHashes.isEmpty) genesis.pure[F]
             else
               DagOperations.latestCommonAncestorsMainParent(dag, latestMessageHashes.values.toList)
-      equivocatingValidators <- EquivocationDetector.equivocatorDetectFromLatestMessage(
+      equivocatingValidators <- EquivocationDetector.detectVisibleFromLatestMessages(
                                  dag,
                                  latestMessageHashes,
                                  equivocationTracker

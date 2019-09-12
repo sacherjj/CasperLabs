@@ -154,7 +154,7 @@ object EquivocationDetector {
     * @tparam F effect type
     * @return equivocators that can be seen from view of latestMessages
     */
-  def equivocatorDetectFromLatestMessage[F[_]: Monad](
+  def detectVisibleFromLatestMessages[F[_]: Monad](
       dag: DagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash],
       equivocationTracker: EquivocationTracker
@@ -176,33 +176,33 @@ object EquivocationDetector {
                   (Set.empty[Validator], Set.empty[(Validator, Int)])
                 ) {
                   case (
-                      (detectedEquivocator, visitedValidatorAndBlockSeqNum),
+                      (detectedEquivocators, visitedValidatorAndBlockSeqNums),
                       b
                       ) =>
                     val creator            = b.validatorPublicKey
                     val creatorBlockSeqNam = b.validatorBlockSeqNum
-                    if (detectedEquivocator == equivocationTracker.keySet || b.rank <= minRank) {
-                      // Stop traversal if all equivocators equivocated in j-post-cone of `b`
+                    if (detectedEquivocators == equivocationTracker.keySet || b.rank <= minRank) {
+                      // Stop traversal if all known equivocations has been found in j-past-cone of `b`
                       // or we reached a block older than oldest equivocation
                       Right(
-                        (detectedEquivocator, visitedValidatorAndBlockSeqNum)
+                        (detectedEquivocators, visitedValidatorAndBlockSeqNums)
                       )
-                    } else if (detectedEquivocator.contains(creator)) {
-                      Left((detectedEquivocator, visitedValidatorAndBlockSeqNum))
-                    } else if (visitedValidatorAndBlockSeqNum.contains(
+                    } else if (detectedEquivocators.contains(creator)) {
+                      Left((detectedEquivocators, visitedValidatorAndBlockSeqNums))
+                    } else if (visitedValidatorAndBlockSeqNums.contains(
                                  (creator, creatorBlockSeqNam)
                                )) {
                       Left(
                         (
-                          detectedEquivocator + creator,
-                          visitedValidatorAndBlockSeqNum
+                          detectedEquivocators + creator,
+                          visitedValidatorAndBlockSeqNums
                         )
                       )
                     } else {
                       Left(
                         (
-                          detectedEquivocator,
-                          visitedValidatorAndBlockSeqNum + (creator -> creatorBlockSeqNam)
+                          detectedEquivocators,
+                          visitedValidatorAndBlockSeqNums + (creator -> creatorBlockSeqNam)
                         )
                       )
                     }

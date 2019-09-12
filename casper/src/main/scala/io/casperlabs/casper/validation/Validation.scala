@@ -28,7 +28,7 @@ trait Validation[F[_]] {
       b: Block,
       lastFinalizedBlockHash: BlockHash,
       dag: DagRepresentation[F],
-      equivocationTracker: EquivocationTracker = Map.empty
+      equivocationTracker: EquivocationTracker
   )(implicit bs: BlockStorage[F]): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]]
 
   def blockSignature(b: BlockSummary): F[Boolean]

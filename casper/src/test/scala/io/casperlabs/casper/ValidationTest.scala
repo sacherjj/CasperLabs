@@ -503,17 +503,17 @@ class ValidationTest
                    genesisBlockHash = b0.blockHash
 
                    // Valid
-                   _ <- Validation[Task].parents(b1, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b2, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b3, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b4, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b5, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b6, genesisBlockHash, dag)
+                   _ <- Validation[Task].parents(b1, genesisBlockHash, dag, Map.empty)
+                   _ <- Validation[Task].parents(b2, genesisBlockHash, dag, Map.empty)
+                   _ <- Validation[Task].parents(b3, genesisBlockHash, dag, Map.empty)
+                   _ <- Validation[Task].parents(b4, genesisBlockHash, dag, Map.empty)
+                   _ <- Validation[Task].parents(b5, genesisBlockHash, dag, Map.empty)
+                   _ <- Validation[Task].parents(b6, genesisBlockHash, dag, Map.empty)
 
                    // Not valid
-                   _ <- Validation[Task].parents(b7, genesisBlockHash, dag).attempt
-                   _ <- Validation[Task].parents(b8, genesisBlockHash, dag).attempt
-                   _ <- Validation[Task].parents(b9, genesisBlockHash, dag).attempt
+                   _ <- Validation[Task].parents(b7, genesisBlockHash, dag, Map.empty).attempt
+                   _ <- Validation[Task].parents(b8, genesisBlockHash, dag, Map.empty).attempt
+                   _ <- Validation[Task].parents(b9, genesisBlockHash, dag, Map.empty).attempt
 
                    _ = log.warns should have size 3
                    _ = log.warns.forall(
@@ -525,7 +525,7 @@ class ValidationTest
                    )
 
                    result <- Validation[Task]
-                              .parents(b10, genesisBlockHash, dag)
+                              .parents(b10, genesisBlockHash, dag, Map.empty)
                               .attempt shouldBeF Left(ValidateErrorWrapper(InvalidParents))
 
                  } yield result

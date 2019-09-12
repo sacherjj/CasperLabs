@@ -34,7 +34,7 @@ class EquivocationDetectorTest
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
-      result: Boolean
+      equivocationExpected: Boolean
   )(
       implicit dagStorage: IndexedDagStorage[Task],
       blockStorage: BlockStorage[Task],
@@ -48,22 +48,22 @@ class EquivocationDetectorTest
             creator,
             justifications = justifications
           )
-      _ <- EquivocationDetector.checkEquivocations(dag, b) shouldBeF (result)
+      _ <- EquivocationDetector.checkEquivocations(dag, b) shouldBeF (equivocationExpected)
       blockStatus <- EquivocationDetector
                       .checkEquivocationWithUpdate(dag, b)
                       .attempt
-      _ = if (result) {
+      _ = if (equivocationExpected) {
         blockStatus shouldBe Left(ValidateErrorWrapper(EquivocatedBlock))
       } else {
         blockStatus shouldBe Right(())
       }
       state <- Cell[Task, CasperState].read
-      _     = state.equivocationTracker.contains(b.getHeader.validatorPublicKey) shouldBe (result)
+      _     = state.equivocationTracker.contains(b.getHeader.validatorPublicKey) shouldBe (equivocationExpected)
     } yield b
 
-  def findEquivocatorFromViewOfBlock(
+  def checkEquivocatorsFromViewOfBlock(
       block: Block,
-      result: Set[Validator]
+      expected: Set[Validator]
   )(
       implicit dagStorage: IndexedDagStorage[Task],
       blockStorage: BlockStorage[Task],
@@ -73,11 +73,11 @@ class EquivocationDetectorTest
       dag            <- dagStorage.getRepresentation
       latestMessages <- ProtoUtil.toLatestMessage[Task](block.getHeader.justifications)
       state          <- casperState.read
-      _ <- EquivocationDetector.equivocatorDetectFromLatestMessage(
+      _ <- EquivocationDetector.detectVisibleFromLatestMessages(
             dag,
             latestMessages.mapValues(f => f.blockHash),
             state.equivocationTracker
-          ) shouldBeF result
+          ) shouldBeF expected
     } yield ()
 
   "EquivocationDetector" should "detect simple equivocation" in withStorage {
@@ -108,19 +108,19 @@ class EquivocationDetectorTest
                  Seq(genesis.blockHash),
                  v0,
                  justifications = HashMap(v0 -> genesis.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b1.blockHash),
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
-                result = false
+                equivocationExpected = false
               )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b1.blockHash),
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
-                result = true
+                equivocationExpected = true
               )
         } yield ()
   }
@@ -163,43 +163,43 @@ class EquivocationDetectorTest
                  Seq(genesis.blockHash),
                  v1,
                  justifications = HashMap(v1 -> genesis.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           b1 <- createBlockAndTestEquivocateDetector(
                  Seq(b0.blockHash),
                  v0,
                  justifications = HashMap(v1 -> b0.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           b2 <- createBlockAndTestEquivocateDetector(
                  Seq(b0.blockHash),
                  v1,
                  justifications = HashMap(v1 -> b0.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           b3 <- createBlockAndTestEquivocateDetector(
                  Seq(b1.blockHash),
                  v0,
                  justifications = HashMap(v0 -> b1.blockHash, v1 -> b2.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           b4 <- createBlockAndTestEquivocateDetector(
                  Seq(b3.blockHash),
                  v0,
                  justifications = HashMap(v0 -> b3.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b3.blockHash),
                 v0,
                 justifications = HashMap(v0 -> b3.blockHash),
-                result = true
+                equivocationExpected = true
               )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b4.blockHash),
                 v1,
                 justifications = HashMap(v0 -> b4.blockHash),
-                result = false
+                equivocationExpected = false
               )
         } yield ()
   }
@@ -239,31 +239,31 @@ class EquivocationDetectorTest
                  Seq(genesis.blockHash),
                  v1,
                  justifications = HashMap(v1 -> genesis.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           b2 <- createBlockAndTestEquivocateDetector(
                  Seq(b1.blockHash),
                  v1,
                  justifications = HashMap(v1 -> b1.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           b3 <- createBlockAndTestEquivocateDetector(
                  Seq(b2.blockHash),
                  v0,
                  justifications = HashMap(v1 -> b2.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           b4 <- createBlockAndTestEquivocateDetector(
                  Seq(b3.blockHash),
                  v0,
                  justifications = HashMap(v0 -> b3.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b4.blockHash),
                 v1,
                 justifications = HashMap(v0 -> b4.blockHash, v1 -> b1.blockHash),
-                result = false
+                equivocationExpected = false
               )
         } yield ()
   }
@@ -299,19 +299,19 @@ class EquivocationDetectorTest
                  Seq(genesis.blockHash),
                  v0,
                  justifications = HashMap(v0 -> genesis.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b1.blockHash),
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
-                result = false
+                equivocationExpected = false
               )
           b3 <- createBlockAndTestEquivocateDetector(
                  Seq(b1.blockHash),
                  v0,
                  justifications = HashMap(v0 -> b1.blockHash),
-                 result = true
+                 equivocationExpected = true
                )
           dag <- dagStorage.getRepresentation
           b4 <- createBlock[Task](
@@ -365,40 +365,40 @@ class EquivocationDetectorTest
                  Seq(genesis.blockHash),
                  v1,
                  justifications = HashMap(v1 -> genesis.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           b2 <- createBlockAndTestEquivocateDetector(
                  Seq(b1.blockHash),
                  v1,
                  justifications = HashMap(v1 -> b1.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
           b3 <- createBlockAndTestEquivocateDetector(
                  Seq(b1.blockHash),
                  v1,
                  justifications = HashMap(v1 -> b1.blockHash),
-                 result = true
+                 equivocationExpected = true
                )
-          _ <- findEquivocatorFromViewOfBlock(b3, Set.empty)
+          _ <- checkEquivocatorsFromViewOfBlock(b3, Set.empty)
           b4 <- createBlockAndTestEquivocateDetector(
                  Seq(b2.blockHash),
                  v0,
                  justifications = HashMap(v1 -> b2.blockHash),
-                 result = false
+                 equivocationExpected = false
                )
-          _ <- findEquivocatorFromViewOfBlock(b4, Set.empty)
+          _ <- checkEquivocatorsFromViewOfBlock(b4, Set.empty)
           b5 <- createBlock[Task](
                  Seq(b3.blockHash),
                  v1,
                  justifications = HashMap(v0 -> b4.blockHash, v1 -> b3.blockHash)
                )
-          _ <- findEquivocatorFromViewOfBlock(b5, Set(v1))
+          _ <- checkEquivocatorsFromViewOfBlock(b5, Set(v1))
           b6 <- createBlock[Task](
                  Seq(b5.blockHash),
                  v1,
                  justifications = HashMap(v1 -> b5.blockHash)
                )
-          _ <- findEquivocatorFromViewOfBlock(b6, Set(v1))
+          _ <- checkEquivocatorsFromViewOfBlock(b6, Set(v1))
         } yield ()
   }
 }
