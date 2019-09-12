@@ -3,7 +3,7 @@ use engine_core::engine_state::MAX_PAYMENT;
 use std::collections::HashMap;
 
 use crate::support::test_support::{
-    DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT, WasmTestBuilder,
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
@@ -17,9 +17,9 @@ fn should_run_mint_purse_contract() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "transfer_to_account_01.wasm",
-            (SYSTEM_ADDR, ),
+            (SYSTEM_ADDR,),
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
         )

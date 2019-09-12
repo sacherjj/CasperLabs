@@ -364,10 +364,10 @@ mod tests {
     use std::cell::RefCell;
     use std::iter;
 
-    use crate::{bond, BOND_DELAY, step, unbond, UNBOND_DELAY};
     use crate::error::Result;
     use crate::queue::{Queue, QueueProvider};
     use crate::stakes::{Stakes, StakesProvider};
+    use crate::{bond, step, unbond, BOND_DELAY, UNBOND_DELAY};
 
     const KEY1: [u8; 32] = [1; 32];
     const KEY2: [u8; 32] = [2; 32];

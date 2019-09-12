@@ -1,15 +1,15 @@
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::U512;
 use contract_ffi::value::Value;
+use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 use std::collections::{BTreeMap, HashMap};
 
 use crate::support::exec_with_return;
 use crate::support::test_support::{
-    DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT, WasmTestBuilder,
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
@@ -35,9 +35,9 @@ fn should_run_pos_install_contract() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "transfer_to_account_01.wasm",
-            (SYSTEM_ADDR, ),
+            (SYSTEM_ADDR,),
             DEFAULT_BLOCK_TIME,
             DEPLOY_HASH_1,
         )
@@ -60,7 +60,7 @@ fn should_run_pos_install_contract() {
         (mint_uref, genesis_validators),
         vec![mint_uref],
     )
-        .expect("should run successfully");
+    .expect("should run successfully");
 
     let prestate = builder.get_post_state_hash();
     builder.commit_effects(prestate, effect.transforms.clone());
@@ -72,11 +72,11 @@ fn should_run_pos_install_contract() {
     let known_urefs = match effect
         .transforms
         .get(&Key::URef(ret_value.remove_access_rights()))
-        {
-            Some(Transform::Write(Value::Contract(contract))) => contract.urefs_lookup(),
+    {
+        Some(Transform::Write(Value::Contract(contract))) => contract.urefs_lookup(),
 
-            _ => panic!("Expected contract to be written under the key"),
-        };
+        _ => panic!("Expected contract to be written under the key"),
+    };
 
     assert_eq!(known_urefs.len(), EXPECTED_UREFS_LEN);
 

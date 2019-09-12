@@ -8,7 +8,7 @@ use engine_shared::transform::Transform;
 use std::collections::HashMap;
 
 use crate::support::test_support::{
-    DEFAULT_BLOCK_TIME, get_exec_costs, STANDARD_PAYMENT_CONTRACT, WasmTestBuilder,
+    get_exec_costs, WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
@@ -54,7 +54,7 @@ fn should_insert_mint_add_keys_transform() {
             .exec_with_args(
                 GENESIS_ADDR,
                 STANDARD_PAYMENT_CONTRACT,
-                (U512::from(MAX_PAYMENT), ),
+                (U512::from(MAX_PAYMENT),),
                 "transfer_purse_to_account.wasm",
                 (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
                 DEFAULT_BLOCK_TIME,
@@ -65,9 +65,9 @@ fn should_insert_mint_add_keys_transform() {
             .exec_with_args(
                 ACCOUNT_1_ADDR,
                 STANDARD_PAYMENT_CONTRACT,
-                (U512::from(MAX_PAYMENT), ),
+                (U512::from(MAX_PAYMENT),),
                 "create_purse_01.wasm",
-                (TEST_PURSE_NAME, ),
+                (TEST_PURSE_NAME,),
                 DEFAULT_BLOCK_TIME,
                 [1; 32],
             )
@@ -90,7 +90,7 @@ fn should_insert_into_account_known_urefs() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
             (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
@@ -101,9 +101,9 @@ fn should_insert_into_account_known_urefs() {
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "create_purse_01.wasm",
-            (TEST_PURSE_NAME, ),
+            (TEST_PURSE_NAME,),
             DEFAULT_BLOCK_TIME,
             [1; 32],
         )
@@ -128,7 +128,7 @@ fn should_create_usable_purse_id() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
             (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
             DEFAULT_BLOCK_TIME,
@@ -139,9 +139,9 @@ fn should_create_usable_purse_id() {
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT), ),
+            (U512::from(MAX_PAYMENT),),
             "create_purse_01.wasm",
-            (TEST_PURSE_NAME, ),
+            (TEST_PURSE_NAME,),
             DEFAULT_BLOCK_TIME,
             [1; 32],
         )

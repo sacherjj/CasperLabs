@@ -81,10 +81,10 @@ pub extern "C" fn call() {
         (POS_PAYMENT_PURSE, payment_purse.value()),
         (POS_REWARDS_PURSE, rewards_purse.value()),
     ]
-        .iter()
-        .for_each(|(name, uref)| {
-            known_urefs.insert(String::from(*name), Key::URef(*uref));
-        });
+    .iter()
+    .for_each(|(name, uref)| {
+        known_urefs.insert(String::from(*name), Key::URef(*uref));
+    });
 
     let contract = contract_api::fn_by_name("pos_ext", known_urefs);
     let uref: URef = contract_api::new_uref(contract).into();

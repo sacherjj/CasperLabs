@@ -5,7 +5,7 @@ use engine_shared::transform::Transform;
 use std::collections::HashMap;
 
 use crate::support::exec_with_return;
-use crate::support::test_support::{DEFAULT_BLOCK_TIME, WasmTestBuilder};
+use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
@@ -26,7 +26,7 @@ fn should_run_mint_install_contract() {
         (),
         vec![],
     )
-        .expect("should run successfully");
+    .expect("should run successfully");
 
     // should return a uref
     assert_eq!(ret_value, ret_urefs[0]);
@@ -35,9 +35,9 @@ fn should_run_mint_install_contract() {
     match effect
         .transforms
         .get(&Key::URef(ret_value.remove_access_rights()))
-        {
-            Some(Transform::Write(Value::Contract(_))) => (),
+    {
+        Some(Transform::Write(Value::Contract(_))) => (),
 
-            _ => panic!("Expected contract to be written under the key"),
-        }
+        _ => panic!("Expected contract to be written under the key"),
+    }
 }
