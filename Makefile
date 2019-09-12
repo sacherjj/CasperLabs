@@ -32,7 +32,7 @@ all: \
 
 # Push the local artifacts to repositories.
 publish: docker-push-all
-	$(MAKE) -C exection-engine publish
+	$(MAKE) -C execution-engine publish
 
 clean:
 	$(MAKE) -C execution-engine clean
