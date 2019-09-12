@@ -53,7 +53,7 @@ package object gossiping {
       egressScheduler: Scheduler
   )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
 
-    val (cert, key) = conf.tls.readCertAndKey
+    val (cert, key) = conf.tls.readIntraNodeCertAndKey
 
     // SSL context to use when connecting to another node.
     val clientSslContext = SslContexts.forClient(cert, key)

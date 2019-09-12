@@ -41,6 +41,7 @@ class DockerConfig:
     socket_volume: Optional[str] = None
     node_account: Account = None
     grpc_encryption: bool = False
+    is_read_only: bool = False
 
     def __post_init__(self):
         if self.rand_str is None:
@@ -70,12 +71,15 @@ class DockerConfig:
         options = {
             "--server-default-timeout": "10second",
             "--server-host": server_host,
-            "--casper-validator-private-key": self.node_private_key,
             "--grpc-socket": "/root/.casperlabs/sockets/.casper-node.sock",
             "--metrics-prometheus": "",
             "--tls-certificate": self.tls_certificate_path(),
             "--tls-key": self.tls_key_path(),
+            "--tls-api-certificate": self.tls_certificate_path(),
+            "--tls-api-key": self.tls_key_path(),
         }
+        if not self.is_read_only:
+            options["--casper-validator-private-key"] = self.node_private_key
         if self.grpc_encryption:
             options["--grpc-use-tls"] = ""
         if self.bootstrap_address:

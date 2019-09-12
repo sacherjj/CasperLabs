@@ -235,18 +235,30 @@ class OneNodeNetwork(CasperLabsNetwork):
     grpc_encryption = False
 
     def create_cl_network(self):
-        kp = self.get_key()
+        account = self.get_key()
+        self.add_bootstrap(self.docker_config(account))
+        wait_for_genesis_block(self.docker_nodes[0])
+
+    def docker_config(self, account):
         config = DockerConfig(
             self.docker_client,
-            node_private_key=kp.private_key,
-            node_public_key=kp.public_key,
+            node_private_key=account.private_key,
+            node_public_key=account.public_key,
             network=self.create_docker_network(),
             initial_motes=self.initial_motes,
-            node_account=kp,
+            node_account=account,
             grpc_encryption=self.grpc_encryption,
         )
-        self.add_bootstrap(config)
-        wait_for_genesis_block(self.docker_nodes[0])
+        return config
+
+
+class ReadOnlyNodeNetwork(OneNodeNetwork):
+    is_payment_code_enabled = True
+
+    def docker_config(self, account):
+        config = super().docker_config(account)
+        config.is_read_only = True
+        return config
 
 
 class PaymentNodeNetwork(OneNodeNetwork):
