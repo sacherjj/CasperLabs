@@ -124,12 +124,13 @@ def test_transfer_with_overdraft(one_node_network):
 
 def test_transfer_to_accounts(one_node_network):
     node: DockerNode = one_node_network.docker_nodes[0]
+    transfer_amt = 100000000
     # Setup accounts with enough to transfer and pay for transfer
-    node.transfer_to_accounts([(1, 100000000), (2, 100000000)])
+    node.transfer_to_accounts([(1, transfer_amt), (2, transfer_amt)])
     with raises(Exception):
         # Acct 1 has not enough funds so it should fail
         node.transfer_to_account(
-            to_account_id=4, amount=100000000000, from_account_id=1
+            to_account_id=4, amount=transfer_amt * 10, from_account_id=1
         )
     node.transfer_to_account(to_account_id=3, amount=700, from_account_id=2)
 
@@ -137,9 +138,16 @@ def test_transfer_to_accounts(one_node_network):
     block = blocks.__next__()
     block_hash = block.summary.block_hash.hex()
 
-    assert node.p_client.balance(Account(1).public_key_hex, block_hash) == 100000000
-    assert node.p_client.balance(Account(2).public_key_hex, block_hash) < 100000000
-    assert node.p_client.balance(Account(3).public_key_hex, block_hash) == 700
+    assert (
+        node.p_client.balance(Account(1).public_key_hex, block_hash) < transfer_amt
+    ), "Should not have transferred any money, but spent on payment"
+    assert (
+        node.p_client.balance(Account(2).public_key_hex, block_hash)
+        < transfer_amt - 700
+    ), "Should be transfer_amt - 700 - payment for transfer"
+    assert (
+        node.p_client.balance(Account(3).public_key_hex, block_hash) == 700
+    ), "Should be result of only transfer in"
 
 
 def balance(node, account_address, block_hash):
