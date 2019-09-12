@@ -386,6 +386,7 @@ class EquivocationDetectorTest
                  justifications = HashMap(v1 -> b2.blockHash),
                  result = false
                )
+          _ <- findEquivocatorFromViewOfBlock(b4, Set.empty)
           b5 <- createBlock[Task](
                  Seq(b3.blockHash),
                  v1,
