@@ -27,7 +27,7 @@ fn regression_test_genesis_hash_mismatch() {
     // empty trie. Step 1b)
     let genesis_transforms_hash = builder
         .commit_effects(empty_root_hash.to_vec(), genesis_transforms)
-        .get_poststate_hash();
+        .get_post_state_hash();
 
     // They should match.
     assert_eq!(genesis_run_hash, genesis_transforms_hash);
@@ -54,7 +54,7 @@ fn regression_test_genesis_hash_mismatch() {
     // Step 4b)
     let second_genesis_transforms_hash = builder
         .commit_effects(empty_root_hash.to_vec(), second_genesis_transforms)
-        .get_poststate_hash();
+        .get_post_state_hash();
 
     assert_eq!(second_genesis_run_hash, second_genesis_transforms_hash);
 
