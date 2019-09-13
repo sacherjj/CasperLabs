@@ -38,7 +38,7 @@ package object effects {
       gossipingRelaySaturation: Int,
       ingressScheduler: Scheduler,
       egressScheduler: Scheduler
-  )(init: Option[Node])(
+  )(init: List[Node])(
       implicit
       peerNodeAsk: NodeAsk[Task],
       log: Log[Task],

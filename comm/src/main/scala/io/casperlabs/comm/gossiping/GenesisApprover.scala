@@ -15,6 +15,7 @@ import io.casperlabs.shared.Log
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Random
 import scala.util.control.NonFatal
+import cats.data.NonEmptyList
 
 /** Accumulate approvals for the Genesis block. When enough of them is
   * present to pass a threshold which is the preorgative of this node,
@@ -61,12 +62,12 @@ object GenesisApproverImpl {
   case class Status(candidate: GenesisCandidate, block: Block)
 
   /** Use by non-standalone nodes while there is no DAG. */
-  def fromBootstrap[F[_]: Concurrent: Log: Timer](
+  def fromBootstraps[F[_]: Concurrent: Log: Timer](
       backend: GenesisApproverImpl.Backend[F],
       nodeDiscovery: NodeDiscovery[F],
       connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
-      bootstrap: Node,
+      bootstraps: NonEmptyList[Node],
       pollInterval: FiniteDuration,
       downloadManager: DownloadManager[F]
   ): Resource[F, GenesisApprover[F]] =
@@ -85,7 +86,7 @@ object GenesisApproverImpl {
           relayFactor
         )
         poll <- Concurrent[F].start {
-                 approver.pollBootstrap(bootstrap, pollInterval, downloadManager)
+                 approver.pollBootstraps(bootstraps.toList, pollInterval, downloadManager)
                }
       } yield (approver, poll)
     } {
@@ -190,13 +191,13 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
     }
 
   /** Get the Genesis candidate from the bootstrap node and keep polling until we can do the transition. */
-  private def pollBootstrap(
-      bootstrap: Node,
+  private def pollBootstraps(
+      bootstraps: List[Node],
       pollInterval: FiniteDuration,
       downloadManager: DownloadManager[F]
   ): F[Unit] = {
 
-    def download(service: GossipService[F], blockHash: ByteString): F[Block] =
+    def download(bootstrap: Node, service: GossipService[F], blockHash: ByteString): F[Block] =
       for {
         maybeSummary <- service
                          .streamBlockSummaries(StreamBlockSummariesRequest(Seq(blockHash)))
@@ -217,13 +218,17 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
 
     // Establish th status by downloading the block if we don't have it yet.
     // Return our own approval if we can indeed sign it.
-    def maybeDownload(service: GossipService[F], blockHash: ByteString): F[Option[Approval]] =
+    def maybeDownload(
+        bootstrap: Node,
+        service: GossipService[F],
+        blockHash: ByteString
+    ): F[Option[Approval]] =
       statusRef.get.flatMap {
         case None =>
           for {
             maybeBlock <- backend.getBlock(blockHash)
             block <- maybeBlock.toOptionT[F].getOrElseF {
-                      download(service, blockHash)
+                      download(bootstrap, service, blockHash)
                     }
             maybeApproval <- Sync[F].rethrow(backend.validateCandidate(block))
             // Add empty candidate so we can verify all approvals one by one.
@@ -235,11 +240,13 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
           none.pure[F]
       }
 
-    def loop(prevApprovals: Set[Approval]): F[Unit] = {
+    def loop(bootstraps: List[Node], prevApprovals: Set[Approval]): F[Unit] = {
+      val bootstrap = bootstraps.head
+
       val trySync: F[(Set[Approval], Boolean)] = for {
         service       <- connectToGossip(bootstrap)
         candidate     <- service.getGenesisCandidate(GetGenesisCandidateRequest())
-        maybeApproval <- maybeDownload(service, candidate.blockHash)
+        maybeApproval <- maybeDownload(bootstrap, service, candidate.blockHash)
         newApprovals  = candidate.approvals.toSet ++ maybeApproval -- prevApprovals
         transitioned  <- addApprovals(candidate.blockHash, newApprovals.toList)
       } yield (newApprovals ++ prevApprovals, transitioned)
@@ -254,11 +261,13 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
           case (_, transitioned) if transitioned =>
             ().pure[F]
           case (checkedApprovals, _) =>
-            Timer[F].sleep(pollInterval) >> loop(checkedApprovals)
+            // Cycle through bootstrap nodes.
+            val nextBootstraps = bootstraps.tail :+ bootstrap
+            Timer[F].sleep(pollInterval) >> loop(nextBootstraps, checkedApprovals)
         }
     }
 
-    loop(Set.empty)
+    loop(bootstraps, Set.empty)
   }
 
   /** Add the approval to the state if it's new and matches what we accept. Return the new state if it changed. */

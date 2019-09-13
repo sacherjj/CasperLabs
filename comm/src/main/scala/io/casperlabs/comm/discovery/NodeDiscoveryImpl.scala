@@ -32,7 +32,7 @@ object NodeDiscoveryImpl {
       ingressScheduler: Scheduler,
       egressScheduler: Scheduler
   )(
-      init: Option[Node]
+      init: List[Node]
   ): Resource[F, NodeDiscovery[F]] = {
 
     def makeKademliaRpc: Resource[F, GrpcKademliaService[F]] =
@@ -85,7 +85,7 @@ object NodeDiscoveryImpl {
                             alivePeersCacheSize = alivePeersCacheSize
                           )
                         }
-        _ <- init.fold(().pure[F])(nodeDiscovery.addNode)
+        _ <- init.traverse(nodeDiscovery.addNode)
       } yield nodeDiscovery)
 
     def scheduleRecentlyAlivePeersCacheUpdate(implicit N: NodeDiscoveryImpl[F]): Resource[F, Unit] =

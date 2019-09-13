@@ -71,9 +71,12 @@ object scallopImpl {
   private def tomlTypeDefinition(c: blackbox.Context)(tpe: c.Tree) = {
     import c.universe._
 
+    // To see what we're dealing with: `println(showRaw(tpe))`
     val t = tpe match {
       case Ident(TypeName("Flag")) => Ident(TypeName("Boolean"))
-      case x                       => x
+      case AppliedTypeTree(Ident(TypeName("List")), List(Ident(TypeName("Node")))) =>
+        Ident(TypeName("Node"))
+      case x => x
     }
 
     q"""
@@ -82,7 +85,7 @@ object scallopImpl {
             case "int" | "long" | "BigInt"                                   => "Integer"
             case "boolean"                                                   => "Boolean"
             case "double"                                                    => "Double"
-            case other => sys.error(s"Unexpected @scallop type: $$other")
+            case other => sys.error(s"Unexpected field type in io.casperlabs.configuration.cli.scallop annotation: $$other")
           }"""
   }
 
