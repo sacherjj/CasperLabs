@@ -79,6 +79,7 @@ object Configuration extends ParserImplicits {
       initSyncSkipFailedNodes: Boolean,
       initSyncRoundPeriod: FiniteDuration,
       initSyncMaxBlockCount: Int Refined Positive,
+      periodicSyncRoundPeriod: FiniteDuration,
       downloadMaxParallelBlocks: Int,
       downloadMaxRetries: Int Refined NonNegative,
       downloadRetryInitialBackoffPeriod: FiniteDuration,
