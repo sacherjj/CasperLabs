@@ -20,16 +20,21 @@ impl LmdbProtocolDataStore {
         maybe_name: Option<&str>,
         flags: DatabaseFlags,
     ) -> Result<Self, error::Error> {
-        let name = maybe_name
-            .map(|name| format!("{}-{}", protocol_data_store::NAME, name))
-            .unwrap_or_else(|| String::from(protocol_data_store::NAME));
+        let name = Self::name(maybe_name);
         let db = env.env().create_db(Some(&name), flags)?;
         Ok(LmdbProtocolDataStore { db })
     }
 
-    pub fn open(env: &LmdbEnvironment, name: Option<&str>) -> Result<Self, error::Error> {
-        let db = env.env().open_db(name)?;
+    pub fn open(env: &LmdbEnvironment, maybe_name: Option<&str>) -> Result<Self, error::Error> {
+        let name = Self::name(maybe_name);
+        let db = env.env().open_db(Some(&name))?;
         Ok(LmdbProtocolDataStore { db })
+    }
+
+    fn name(maybe_name: Option<&str>) -> String {
+        maybe_name
+            .map(|name| format!("{}-{}", protocol_data_store::NAME, name))
+            .unwrap_or_else(|| String::from(protocol_data_store::NAME))
     }
 }
 
