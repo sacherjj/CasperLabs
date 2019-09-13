@@ -8,10 +8,12 @@ use std::sync::Arc;
 use grpc::RequestOptions;
 use lmdb::DatabaseFlags;
 
+use contract_ffi::key::Key;
 use contract_ffi::value::U512;
+use engine_core::engine_state::genesis::GenesisConfig;
 use engine_core::engine_state::utils::WasmiBytes;
-use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT};
-use engine_core::execution::{self, POS_NAME};
+use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT, SYSTEM_ACCOUNT_ADDR};
+use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
     DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisRequest, GenesisResponse,
@@ -213,7 +215,9 @@ pub fn read_wasm_file_bytes(contract_file: &str) -> Vec<u8> {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum SystemContractType {
     Mint,
+    MintInstall,
     ProofOfStake,
+    ProofOfStakeInstall,
 }
 
 #[allow(clippy::implicit_hasher)]
@@ -677,6 +681,57 @@ where
         self.bonded_validators.push(genesis_validators);
         self.genesis_transforms = Some(genesis_transforms);
         self
+    }
+
+    pub fn run_genesis_with_genesis_config(
+        &mut self,
+        genesis_config: GenesisConfig,
+    ) -> Result<&mut Self, ipc::GenesisDeployError> {
+        let system_account = Key::Account(SYSTEM_ACCOUNT_ADDR);
+        let genesis_config = genesis_config.try_into().expect("could not parse");
+
+        let genesis_response = self
+            .engine_state
+            .run_genesis_with_chainspec(RequestOptions::new(), genesis_config)
+            .wait_drop_metadata()
+            .expect("Unable to get genesis response");
+
+        if genesis_response.has_failed_deploy() {
+            return Err(genesis_response.get_failed_deploy().to_owned());
+        }
+
+        let state_root_hash: Blake2bHash = genesis_response
+            .get_success()
+            .get_poststate_hash()
+            .try_into()
+            .expect("Unable to get root hash");
+
+        let transforms = get_genesis_transforms(&genesis_response);
+
+        let genesis_account =
+            get_account(&transforms, &system_account).expect("Unable to get system account");
+
+        let known_keys = genesis_account.urefs_lookup();
+
+        let mint_contract_uref = known_keys
+            .get(MINT_NAME)
+            .and_then(Key::as_uref)
+            .cloned()
+            .expect("Unable to get mint contract URef");
+
+        let pos_contract_uref = known_keys
+            .get(POS_NAME)
+            .and_then(Key::as_uref)
+            .cloned()
+            .expect("Unable to get pos contract URef");
+
+        self.genesis_hash = Some(state_root_hash.to_vec());
+        self.post_state_hash = Some(state_root_hash.to_vec());
+        self.mint_contract_uref = Some(mint_contract_uref);
+        self.pos_contract_uref = Some(pos_contract_uref);
+        self.genesis_account = Some(genesis_account);
+        self.genesis_transforms = Some(transforms);
+        Ok(self)
     }
 
     pub fn query(

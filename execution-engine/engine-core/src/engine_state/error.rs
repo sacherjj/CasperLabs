@@ -2,6 +2,9 @@ use failure::Fail;
 
 use engine_shared::newtypes::Blake2bHash;
 
+use contract_ffi::bytesrepr;
+use contract_ffi::system_contracts::mint;
+
 use crate::execution;
 
 #[derive(Fail, Debug)]
@@ -15,7 +18,7 @@ pub enum Error {
     #[fail(display = "Wasm serialization error: {:?}", _0)]
     WasmSerializationError(parity_wasm::SerializationError),
     #[fail(display = "Execution error: {}", _0)]
-    ExecError(crate::execution::Error),
+    ExecError(execution::Error),
     #[fail(display = "Storage error: {}", _0)]
     StorageError(engine_storage::error::Error),
     #[fail(display = "Authorization failure: not authorized.")]
@@ -28,6 +31,10 @@ pub enum Error {
     FinalizationError,
     #[fail(display = "Missing system contract association: {}", _0)]
     MissingSystemContractError(String),
+    #[fail(display = "Serialization error: {}", _0)]
+    SerializationError(bytesrepr::Error),
+    #[fail(display = "Mint error: {}", _0)]
+    MintError(mint::error::Error),
 }
 
 impl From<engine_wasm_prep::PreprocessingError> for Error {
@@ -51,6 +58,18 @@ impl From<execution::Error> for Error {
 impl From<engine_storage::error::Error> for Error {
     fn from(error: engine_storage::error::Error) -> Self {
         Error::StorageError(error)
+    }
+}
+
+impl From<bytesrepr::Error> for Error {
+    fn from(error: bytesrepr::Error) -> Self {
+        Error::SerializationError(error)
+    }
+}
+
+impl From<mint::error::Error> for Error {
+    fn from(error: mint::error::Error) -> Self {
+        Error::MintError(error)
     }
 }
 

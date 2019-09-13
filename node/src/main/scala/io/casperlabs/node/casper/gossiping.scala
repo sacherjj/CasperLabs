@@ -36,7 +36,7 @@ import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import monix.eval.TaskLike
 import monix.execution.Scheduler
-
+import eu.timepit.refined.auto._
 import scala.concurrent.duration._
 import scala.util.Random
 import scala.util.control.NoStackTrace
@@ -153,7 +153,7 @@ package object gossiping {
       _ <- Resource
             .liftF(isInitialRef.get)
             .ifM(
-              makeInitialSynchronization(
+              makeInitialSynchronizer(
                 conf,
                 gossipServiceServer,
                 connectToGossip,
@@ -162,6 +162,14 @@ package object gossiping {
               ),
               Resource.liftF(().pure[F])
             )
+
+      _ <- makePeriodicSynchronizer(
+            conf,
+            gossipServiceServer,
+            connectToGossip,
+            awaitApproval.join,
+            isInitialRef
+          )
 
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
       _ <- makePeerCountPrinter
@@ -623,7 +631,7 @@ package object gossiping {
     } yield server
 
   /** Initially sync with the bootstrap node and/or some others. */
-  private def makeInitialSynchronization[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery](
+  private def makeInitialSynchronizer[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery](
       conf: Configuration,
       gossipServiceServer: GossipServiceServer[F],
       connectToGossip: GossipService.Connector[F],
@@ -654,6 +662,45 @@ package object gossiping {
           }
     } yield ()
 
+  /** Periodically sync with a random node. */
+  private def makePeriodicSynchronizer[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery](
+      conf: Configuration,
+      gossipServiceServer: GossipServiceServer[F],
+      connectToGossip: GossipService.Connector[F],
+      awaitApproved: F[Unit],
+      isInitialRef: Ref[F, Boolean]
+  ): Resource[F, Unit] = {
+    def loop(synchronizer: InitialSynchronization[F]): F[Unit] = {
+      val syncOne: F[Unit] = for {
+        _         <- Time[F].sleep(conf.server.periodicSyncRoundPeriod)
+        hasPeers  <- NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map(_.nonEmpty)
+        isInitial <- isInitialRef.get
+        // While the initial sync is running let's not pile on top.
+        _ <- synchronizer.sync().flatMap(identity).whenA(hasPeers && !isInitial)
+      } yield ()
+
+      syncOne.attempt >> loop(synchronizer)
+    }
+
+    for {
+      periodicSync <- Resource.pure[F, InitialSynchronization[F]] {
+                       new InitialSynchronizationImpl(
+                         NodeDiscovery[F],
+                         gossipServiceServer,
+                         selectNodes = ns => List(ns(Random.nextInt(ns.length))),
+                         minSuccessful = 1,
+                         memoizeNodes = false,
+                         skipFailedNodesInNextRounds = false,
+                         roundPeriod = conf.server.periodicSyncRoundPeriod,
+                         connector = connectToGossip
+                       )
+                     }
+      _ <- makeFiberResource {
+            awaitApproved >> loop(periodicSync)
+          }
+    } yield ()
+  }
+
   /** The TransportLayer setup prints the number of peers now and then which integration tests
     * may depend upon. We aren't using the `Connect` functionality so have to do it another way. */
   private def makePeerCountPrinter[F[_]: Concurrent: Time: Log: NodeDiscovery]
@@ -672,12 +719,10 @@ package object gossiping {
         _ <- Time[F].sleep(15.seconds)
       } yield peers
 
-      Time[F].sleep(5.seconds) *> newPeers flatMap { peers =>
-        loop(peers)
-      }
+      Time[F].sleep(5.seconds) *> newPeers >>= (loop(_))
     }
 
-    makeFiberResource(loop(Set.empty)).map(_ => ())
+    makeFiberResource(loop(Set.empty)).void
   }
 
   /** Start something in a fiber. Make sure it stops if the resource is released. */

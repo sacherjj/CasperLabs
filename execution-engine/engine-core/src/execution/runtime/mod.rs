@@ -210,7 +210,7 @@ where
         }
     }
 
-    pub fn get_result(&self) -> &[u8] {
+    pub fn result(&self) -> &[u8] {
         self.result.as_slice()
     }
 

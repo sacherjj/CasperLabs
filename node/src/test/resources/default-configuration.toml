@@ -32,6 +32,7 @@ init-sync-memoize-nodes = false
 init-sync-skip-failed-nodes = false
 init-sync-round-period = "1second"
 init-sync-max-block-count = 1
+periodic-sync-round-period = "1second"
 download-max-parallel-blocks = 1
 download-max-retries = 1
 download-retry-initial-backoff-period = "1second"
