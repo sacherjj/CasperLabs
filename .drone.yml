@@ -221,8 +221,8 @@ steps:
 
 - name: run-rust-benchmarks-bors
   commands:
-  - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
   - "cd execution-engine/"
+  - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
   - "make bench"
   image: "casperlabs/buildenv:latest"
   when:
