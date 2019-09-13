@@ -17,7 +17,6 @@ import io.casperlabs.ipc._
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
-import io.casperlabs.shared.Sorting.blockSummaryOrdering
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
@@ -406,6 +405,7 @@ object ExecEngineUtil {
 
     val candidateParents = candidateParentBlocks.map(BlockSummary.fromBlock).toVector
 
+    import io.casperlabs.shared.Sorting.blockSummaryOrdering
     for {
       merged <- abstractMerge[F, TransformMap, BlockSummary, state.Key](
                  candidateParents,

@@ -1,6 +1,5 @@
 package io.casperlabs.storage.deploy
 
-import cats.data.NonEmptyList
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
@@ -8,6 +7,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.ArbitraryConsensus
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen, Shrink}
+import org.scalacheck.Arbitrary.arbBool
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
@@ -366,6 +366,28 @@ trait DeployStorageSpec
             got <- reader.readAccountPendingOldest().compile.toList
           } yield got should contain theSameElementsAs expected
         }
+      }
+    }
+
+    "(addAsPending | addAsProcessed) + getPendingOrProcessed" should {
+      "be able to properly (de)serialize data" in forAll(deploysGen(), arbBool.arbitrary) {
+        (deploys, b) =>
+          testFixture { (reader, writer) =>
+            for {
+              _ <- b.pure[Task].ifM(writer.addAsPending(deploys), writer.addAsProcessed(deploys))
+              got <- deploys.flatTraverse[Task, Deploy](
+                      d => reader.getPendingOrProcessed(d.deployHash).map(_.toList)
+                    )
+              _ <- Task {
+                    val serialized = got.sortedByHash
+                    val expected   = deploys.sortedByHash
+                    Inspectors.forAll(serialized.zip(expected)) {
+                      case (a, b) =>
+                        assert(a.toByteArray.sameElements(b.toByteArray))
+                    }
+                  }
+            } yield ()
+          }
       }
     }
   }

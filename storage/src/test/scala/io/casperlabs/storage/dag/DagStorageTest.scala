@@ -104,6 +104,24 @@ trait DagStorageTest
       }
     }
   }
+
+  "DAG Storage" should "be able to properly (de)serialize data" in {
+    forAll { b: Block =>
+      withDagStorage { storage =>
+        val before = BlockSummary.fromBlock(b).toByteArray
+        for {
+          _                 <- storage.insert(b)
+          dag               <- storage.getRepresentation
+          maybeBlockSummary <- dag.lookup(b.blockHash)
+          _ <- Task {
+                maybeBlockSummary should not be None
+                val got = maybeBlockSummary.get.toByteArray
+                assert(before.sameElements(got))
+              }
+        } yield ()
+      }
+    }
+  }
 }
 
 class FileDagStorageTest extends DagStorageTest {
