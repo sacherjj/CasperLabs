@@ -182,10 +182,7 @@ class NewAccountFormData extends CleanableFormData {
       return 'Name cannot be empty!';
 
     if (this.name.indexOf(' ') > -1)
-      return "Please don't include spaces in the name. " +
-        "It will be the default name of the key files intended to be used with " +
-        "CLI tools which don't play that well with spaces, and it's just easier " +
-        "if the key and file names match.";
+      return "The account name should not include spaces.";
 
     if (this.accounts.some(x => x.name === this.name))
       return `An account with name '${this.name}' already exists.`;
