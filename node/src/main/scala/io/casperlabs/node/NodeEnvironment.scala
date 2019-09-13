@@ -3,11 +3,11 @@ package io.casperlabs.node
 import java.io.File
 import java.security.cert.X509Certificate
 
-import cats.data.EitherT.{leftT, rightT}
-import cats.syntax.applicativeError._
-import cats.syntax.either._
+import cats.syntax._
+import cats.implicits._
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.NodeIdentifier
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.CertificateHelper
 import io.casperlabs.node.configuration.Configuration
@@ -30,15 +30,21 @@ object NodeEnvironment {
     } yield NodeIdentifier(name)
 
   private def isValid(pred: Boolean, msg: String): Effect[Unit] =
-    if (pred) Left[CommError, Unit](InitializationError(msg)).toEitherT
-    else Right(()).toEitherT
+    if (pred) MonadThrowable[Effect].raiseError(new java.lang.IllegalArgumentException(msg))
+    else ().pure[Effect]
 
   private def name(conf: Configuration): Effect[String] = {
     val certificate: Effect[X509Certificate] =
       Task
         .delay(CertificateHelper.fromFile(conf.tls.certificate.toFile))
-        .attemptT
-        .leftMap(e => InitializationError(s"Failed to read the X.509 certificate: ${e.getMessage}"))
+        .recoverWith {
+          case e =>
+            MonadThrowable[Effect].raiseError(
+              new java.lang.IllegalArgumentException(
+                s"Failed to read the X.509 certificate: ${e.getMessage}"
+              )
+            )
+        }
 
     for {
       cert <- certificate
@@ -49,10 +55,10 @@ object NodeEnvironment {
 
   private def certBase16(maybePubAddr: Option[Array[Byte]]): Effect[String] =
     maybePubAddr match {
-      case Some(bytes) => rightT(Base16.encode(bytes))
+      case Some(bytes) => Base16.encode(bytes).pure[Effect]
       case None =>
-        leftT(
-          InitializationError(
+        MonadThrowable[Effect].raiseError(
+          new java.lang.IllegalArgumentException(
             "Certificate must contain a secp256r1 EC Public Key"
           )
         )

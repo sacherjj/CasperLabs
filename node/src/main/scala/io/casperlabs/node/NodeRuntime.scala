@@ -80,12 +80,12 @@ class NodeRuntime private[node] (
   private[this] val dbIOScheduler =
     Scheduler.cached("db-io", 1, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
-  private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
-    catsConcurrentEffectForEffect(
-      mainScheduler
-    )
-
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
+
+  implicit val concurrentEffectForEffect = {
+    implicit val s = mainScheduler
+    implicitly[ConcurrentEffect[Effect]]
+  }
 
   // intra-node gossiping port.
   private val port             = conf.server.port
@@ -108,12 +108,9 @@ class NodeRuntime private[node] (
       conf       <- rpConf[Task](local, bootstraps)
     } yield conf).toEffect
 
-    implicit val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
-
     implicit val logId: Log[Id]         = Log.logId
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
-    implicit val parForEff: Par[Effect] = catsParForEffect
-    implicit val filesApiEff            = FilesAPI.create[Effect](Sync[Effect], logEff)
+    implicit val filesApiEff            = FilesAPI.create[Effect](Sync[Effect], log)
 
     // SSL context to use for the public facing API.
     val maybeApiSslContext = if (conf.grpc.useTls) {
@@ -127,8 +124,6 @@ class NodeRuntime private[node] (
       implicit val jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
       implicit val nodeAsk     = eitherTApplicativeAsk(effects.peerNodeAsk(state))
 
-      implicit val metricsEff: Metrics[Effect] =
-        Metrics.eitherT[CommError, Task](Monad[Task], metrics)
       val resources = for {
         implicit0(executionEngineService: ExecutionEngineService[Effect]) <- GrpcExecutionEngineService[
                                                                               Effect
@@ -179,9 +174,9 @@ class NodeRuntime private[node] (
                                                           100L * 1024L * 1024L * 4096L
                                                         )(
                                                           Concurrent[Effect],
-                                                          logEff,
+                                                          log,
                                                           raiseIOError,
-                                                          metricsEff
+                                                          metrics
                                                         ) evalMap { underlying =>
                                                           CachingBlockStorage[Effect](
                                                             underlying,
@@ -189,7 +184,7 @@ class NodeRuntime private[node] (
                                                               conf.blockstorage.cacheMaxSizeBytes
                                                           )(
                                                             Sync[Effect],
-                                                            metricsEff
+                                                            metrics
                                                           )
                                                         }
 
@@ -199,9 +194,9 @@ class NodeRuntime private[node] (
                                                       blockStorage
                                                     )(
                                                       Concurrent[Effect],
-                                                      logEff,
+                                                      log,
                                                       raiseIOError,
-                                                      metricsEff
+                                                      metrics
                                                     )
 
         _ <- Resource.liftF {
@@ -234,7 +229,7 @@ class NodeRuntime private[node] (
           Effect
         ]()(
           Monad[Effect],
-          logEff
+          log
         )
 
         blockApiLock <- Resource.liftF(Semaphore[Effect](1))
@@ -280,12 +275,7 @@ class NodeRuntime private[node] (
                 egressScheduler
               )
             } else {
-              casper.transport.apply(
-                port,
-                conf,
-                ingressScheduler,
-                egressScheduler
-              )
+              sys.error("The transport layer can no longer be used!")
             }
       } yield (nodeDiscovery, multiParentCasperRef, deployBuffer)
 
@@ -352,14 +342,14 @@ class NodeRuntime private[node] (
     for {
       _ <- addShutdownHook(release).toEffect
       _ <- info
-      _ <- Task.defer(fetchLoop.forever.value).executeOn(loopScheduler).start.toEffect
+      _ <- Task.defer(fetchLoop.forever).executeOn(loopScheduler).start.toEffect
       _ <- Task
-            .defer(cleanupDiscardedDeploysLoop.forever.value)
+            .defer(cleanupDiscardedDeploysLoop.forever)
             .executeOn(loopScheduler)
             .start
             .toEffect
       _ <- Task
-            .defer(checkPendingDeploysExpirationLoop.forever.value)
+            .defer(checkPendingDeploysExpirationLoop.forever)
             .executeOn(loopScheduler)
             .start
             .toEffect
@@ -376,7 +366,7 @@ class NodeRuntime private[node] (
     // Everything has been moved to Resources.
     val task = for {
       _ <- log.info("Shutting down...")
-      _ <- release.value
+      _ <- release
       _ <- log.info("Goodbye.")
     } yield ()
     // Run the release synchronously so that we can see the final message.
@@ -393,14 +383,12 @@ class NodeRuntime private[node] (
     * configured environment and they mean immediate termination of the program
     */
   private def handleUnrecoverableErrors(prog: Effect[Unit]): Effect[Unit] =
-    EitherT[Task, CommError, Unit](
-      prog.value
-        .onErrorHandleWith { th =>
-          log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
-            th.printStackTrace()
-          }
-        } *> Task.delay(System.exit(1)).as(Right(()))
-    )
+    prog
+      .onErrorHandleWith { th =>
+        log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
+          th.printStackTrace()
+        }
+      } *> Task.delay(System.exit(1)).as(Right(()))
 
   private def rpConf[F[_]: Sync](local: Node, bootstraps: List[Node]) =
     Ref.of[F, RPConf](
