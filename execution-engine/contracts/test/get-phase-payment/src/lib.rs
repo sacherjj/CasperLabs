@@ -4,7 +4,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::pointers::UPointer;
+use contract_ffi::contract_api::pointers::TURef;
 use contract_ffi::contract_api::{self, PurseTransferResult};
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
@@ -24,8 +24,8 @@ enum Error {
 fn standard_payment(amount: U512) {
     let main_purse = contract_api::main_purse();
 
-    let pos_public: UPointer<Key> = contract_api::get_uref(POS_CONTRACT_NAME)
-        .and_then(Key::to_u_ptr)
+    let pos_public: TURef<Key> = contract_api::get_uref(POS_CONTRACT_NAME)
+        .and_then(Key::to_turef)
         .unwrap_or_else(|| contract_api::revert(Error::GetPosOuterURef as u32));
 
     let pos_contract = contract_api::read(pos_public)

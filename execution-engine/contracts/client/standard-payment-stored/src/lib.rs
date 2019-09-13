@@ -7,7 +7,7 @@ extern crate contract_ffi;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 
-use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{self, PurseTransferResult};
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
@@ -35,11 +35,11 @@ pub extern "C" fn pay() {
     let main_purse: PurseId = contract_api::main_purse();
 
     let pos_pointer: ContractPointer = {
-        let outer: UPointer<Key> = contract_api::get_uref(POS_CONTRACT_NAME)
-            .and_then(Key::to_u_ptr)
+        let outer: TURef<Key> = contract_api::get_uref(POS_CONTRACT_NAME)
+            .and_then(Key::to_turef)
             .unwrap_or_else(|| contract_api::revert(Error::GetPosInnerURef as u32));
         if let Some(ContractPointer::URef(inner)) = contract_api::read::<Key>(outer).to_c_ptr() {
-            ContractPointer::URef(UPointer::new(inner.0, AccessRights::READ))
+            ContractPointer::URef(TURef::new(inner.get_addr(), AccessRights::READ))
         } else {
             contract_api::revert(Error::GetPosOuterURef as u32);
         }
