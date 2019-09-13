@@ -583,6 +583,14 @@ where
 
         grpc::SingleResponse::completed(genesis_response)
     }
+
+    fn upgrade(
+        &self,
+        _request_options: ::grpc::RequestOptions,
+        _upgrade_request: ipc::UpgradeRequest,
+    ) -> ::grpc::SingleResponse<ipc::UpgradeResponse> {
+        unimplemented!("todo: impl upgrade endpoint")
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
