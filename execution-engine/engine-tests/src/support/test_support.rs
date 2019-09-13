@@ -23,6 +23,7 @@ use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_grpc_server::engine_server::{ipc, transforms};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::Blake2bHash;
+use engine_shared::os::get_page_size;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -36,7 +37,11 @@ pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
 pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
-const DEFAULT_MAP_SIZE: usize = 805_306_368_000; // 750 GiB as per grpc-server default
+
+/// LMDB initial map size is calculated based on DEFAULT_LMDB_PAGES and systems page size.
+///
+/// This default value should give 1MiB initial map size by default.
+const DEFAULT_LMDB_PAGES: usize = 2560;
 
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
@@ -570,8 +575,9 @@ impl LmdbWasmTestBuilder {
         data_dir: &T,
         engine_config: EngineConfig,
     ) -> Self {
+        let page_size = get_page_size().expect("should get page size");
         let environment = Arc::new(
-            LmdbEnvironment::new(&data_dir.into(), DEFAULT_MAP_SIZE)
+            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
                 .expect("should create LmdbEnvironment"),
         );
         let trie_store = Arc::new(
