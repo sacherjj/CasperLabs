@@ -29,7 +29,8 @@ import io.casperlabs.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.rp._
 import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node._
+import io.casperlabs.node.CommErrorEffect._
+import io.casperlabs.node.effects
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.p2p.effects._
 import io.casperlabs.shared.PathOps._
