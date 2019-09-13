@@ -202,8 +202,7 @@ fn should_validate_with_metrics() {
 
     let wasm_bytes = test_utils::create_empty_wasm_module_bytes();
 
-    validate_request.set_payment_code(wasm_bytes.clone());
-    validate_request.set_session_code(wasm_bytes);
+    validate_request.set_wasm_code(wasm_bytes);
 
     let _validate_response_result = engine_state
         .validate(RequestOptions::new(), validate_request)

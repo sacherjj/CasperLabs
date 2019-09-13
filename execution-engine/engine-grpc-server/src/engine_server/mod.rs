@@ -333,8 +333,8 @@ where
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
-        let pay_mod = wabt::Module::read_binary(
-            validate_request.payment_code,
+        let module = wabt::Module::read_binary(
+            validate_request.wasm_code,
             &wabt::ReadBinaryOptions::default(),
         )
         .and_then(|x| x.validate());
@@ -342,24 +342,11 @@ where
         log_duration(
             correlation_id,
             METRIC_DURATION_VALIDATE,
-            "pay_mod",
+            "module",
             start.elapsed(),
         );
 
-        let ses_mod = wabt::Module::read_binary(
-            validate_request.session_code,
-            &wabt::ReadBinaryOptions::default(),
-        )
-        .and_then(|x| x.validate());
-
-        log_duration(
-            correlation_id,
-            METRIC_DURATION_VALIDATE,
-            "ses_mod",
-            start.elapsed(),
-        );
-
-        let validate_result = match pay_mod.and(ses_mod) {
+        let validate_result = match module {
             Ok(_) => {
                 let mut validate_result = ipc::ValidateResponse::new();
                 validate_result.set_success(ipc::ValidateResponse_ValidateSuccess::new());
