@@ -143,9 +143,9 @@ export class AuthContainer {
     }
   }
 
-  private addAccount(account: UserAccount) {
+  private async addAccount(account: UserAccount) {
     this.accounts!.push(account);
-    this.errors.capture(this.saveAccounts());
+    await this.errors.capture(this.saveAccounts());
   }
 
   private async saveAccounts() {
@@ -178,7 +178,11 @@ class NewAccountFormData extends CleanableFormData {
   @observable privateKeyBase64: string = '';
 
   protected check() {
-    if (this.name === '') return 'Name cannot be empty!';
+    if (this.name === '')
+      return 'Name cannot be empty!';
+
+    if (this.name.indexOf(' ') > -1)
+      return "The account name should not include spaces.";
 
     if (this.accounts.some(x => x.name === this.name))
       return `An account with name '${this.name}' already exists.`;
