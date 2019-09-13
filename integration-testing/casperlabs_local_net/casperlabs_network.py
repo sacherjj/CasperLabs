@@ -302,13 +302,29 @@ class TwoNodeNetwork(CasperLabsNetwork):
             grpc_encryption=self.grpc_encryption,
         )
         self.add_bootstrap(config)
-
         self.add_new_node_to_network()
-        wait_for_genesis_block(self.docker_nodes[1])
 
 
 class EncryptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
+
+
+class InterceptedTwoNodeNetwork(TwoNodeNetwork):
+    grpc_encryption = True
+
+    def create_cl_network(self):
+        kp = self.get_key()
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+            behind_proxy=True,
+        )
+        self.add_bootstrap(config)
+        self.add_new_node_to_network()
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):

@@ -15,6 +15,7 @@ from casperlabs_local_net.python_client import PythonClient
 from casperlabs_local_net.docker_base import DockerConfig
 from casperlabs_local_net.casperlabs_accounts import is_valid_account, Account
 from casperlabs_local_net.graphql import GraphQL
+from casperlabs_client import grpc_proxy, extract_common_name
 
 FIRST_VALIDATOR_ACCOUNT = 100
 
@@ -36,7 +37,7 @@ class DockerNode(LoggingDockerBase):
 
     NUMBER_OF_BONDS = 10
 
-    NETWORK_PORT = 40400
+    GRPC_SERVER_PORT = 40400
     GRPC_EXTERNAL_PORT = 40401
     GRPC_INTERNAL_PORT = 40402
     HTTP_PORT = 40403
@@ -49,6 +50,32 @@ class DockerNode(LoggingDockerBase):
         super().__init__(config)
         self.graphql = GraphQL(self)
         self.cl_network = cl_network
+
+        def local_path(p):
+            return "resources/bootstrap_certificate/" + p.split("/")[-1]
+
+        self.proxy_server = None
+        self.proxy_kademlia = None
+        if config.behind_proxy:
+            tls_certificate_path = local_path(self.config.tls_certificate_path())
+            tls_key_path = local_path(self.config.tls_key_path())
+            logging.info(
+                f"SETUP PROXIES: tls_certificate_path: {tls_certificate_path}, tls_key_path={tls_key_path}"
+            )
+            self.proxy_server = grpc_proxy.proxy_server(
+                node_port=self.GRPC_SERVER_PORT + 10000,
+                node_host=self.container_name,
+                proxy_port=self.GRPC_SERVER_PORT,
+                certificate_file=tls_certificate_path,
+                key_file=tls_key_path,
+            )
+            self.proxy_kademlia = grpc_proxy.proxy_kademlia(
+                node_port=self.KADEMLIA_PORT + 10000,
+                node_host=self.container_name,
+                proxy_port=self.KADEMLIA_PORT,
+                certificate_file=tls_certificate_path,
+                key_file=tls_key_path,
+            )
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
@@ -60,6 +87,13 @@ class DockerNode(LoggingDockerBase):
             return 0
         else:
             return self.config.number * 10
+
+    @property
+    def grpc_server_docker_port(self) -> int:
+        n = self.GRPC_SERVER_PORT + self.docker_port_offset
+        if self.config.behind_proxy:
+            return n + 10000  # 50400 + self.docker_port_offset
+        return n
 
     @property
     def grpc_external_docker_port(self) -> int:
@@ -132,6 +166,7 @@ class DockerNode(LoggingDockerBase):
         :return: dict for use in docker container run to open ports based on node number
         """
         ports = (
+            (self.GRPC_SERVER_PORT, self.grpc_server_docker_port),
             (self.GRPC_INTERNAL_PORT, self.grpc_internal_docker_port),
             (self.GRPC_EXTERNAL_PORT, self.grpc_external_docker_port),
             (self.HTTP_PORT, self.http_port),
@@ -198,6 +233,10 @@ class DockerNode(LoggingDockerBase):
 
     def cleanup(self):
         super().cleanup()
+        if self.proxy_server:
+            self.proxy_server.stop()
+        if self.proxy_kademlia:
+            self.proxy_kademlia.stop()
         if os.path.exists(self.host_mount_dir):
             shutil.rmtree(self.host_mount_dir)
         if os.path.exists(self.deploy_dir):
@@ -385,6 +424,16 @@ class DockerNode(LoggingDockerBase):
 
     @property
     def address(self) -> str:
+        if self.config.behind_proxy:
+            # s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
+            try:
+                node_id = extract_common_name(self.config.tls_certificate_local_path())
+            except FileNotFoundError:
+                node_id = extract_common_name(self.config.tls_certificate_path())
+
+            # TODO: get actual protocol and discovery
+            return f"casperlabs://{node_id}@{self.container_name}?protocol=40400&discovery=40404"
+
         m = re.search(
             f"Listening for traffic on (casperlabs://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$",
             self.logs(),
