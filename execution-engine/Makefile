@@ -117,4 +117,4 @@ setup: rust-toolchain
 	$(RUSTUP) update
 	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
-	$(RUSTUP) component add --toolchain $(RUST_TOOLCHAIN) rustfmt
+	$(RUSTUP) component add --toolchain $(RUST_TOOLCHAIN) rustfmt clippy
