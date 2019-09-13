@@ -303,26 +303,6 @@ trait DeployBufferSpec
         timeout = 15.seconds
       )
     }
-
-    "readAccountPendingOldest" should {
-      val existMultipleDeploysPerAccount: List[Deploy] => Boolean =
-        deploys => deploys.groupBy(_.getHeader.accountPublicKey).exists(_._2.size > 1)
-      "return PENDING deploys, one per account, with the lowest creation_time_second" in forAll(
-        deploysGen().suchThat(existMultipleDeploysPerAccount)
-      ) { deploys =>
-        testFixture { db =>
-          for {
-            _ <- db.addAsPending(deploys)
-            expected = deploys
-              .groupBy(_.getHeader.accountPublicKey)
-              .mapValues(_.minBy(_.getHeader.timestamp))
-              .values
-              .map(_.deployHash)
-            got <- db.readAccountPendingOldest().compile.toList
-          } yield got should contain theSameElementsAs expected
-        }
-      }
-    }
   }
 
   private def chooseHash(deploys: List[Deploy]): ByteString =
