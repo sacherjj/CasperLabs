@@ -119,7 +119,7 @@ def test_transfer_with_overdraft(node):
         )
 
 
-def ignore_test_transfer_to_accounts(node):
+def test_transfer_to_accounts(node):
     # Notated uses of account ids in common.py
     a_id = 300
     b_id = 299
