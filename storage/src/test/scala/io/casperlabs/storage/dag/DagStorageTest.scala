@@ -546,4 +546,38 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
 
   override def createTestResource: Task[DagStorage[Task]] =
     SQLiteStorage.create[Task](wrap = Task.pure)
+
+  "SQLite DAG Storage" should "override validator's latest block hash only if rank is higher" in {
+    forAll { (initial: Block, a: Block, c: Block) =>
+      withDagStorage { storage =>
+        def update(b: Block, validator: ByteString, rank: Long): Block =
+          b.withHeader(b.getHeader.withValidatorPublicKey(validator).withRank(rank))
+
+        val validator  = initial.validatorPublicKey
+        val rank       = initial.rank
+        val lowerRank  = update(a, validator, rank - 1)
+        val higherRank = update(c, validator, rank + 1)
+
+        for {
+          _      <- storage.insert(initial)
+          before <- storage.getRepresentation.flatMap(_.latestMessageHashes)
+
+          _ <- storage.insert(lowerRank)
+          // block with lower rank should be ignored
+          _ <- storage.getRepresentation.flatMap(_.latestMessageHashes).map { got =>
+                got shouldBe before
+              }
+
+          // not checking new blocks with same rank because they should be invalidated
+          // before storing because of equivocation
+
+          _ <- storage.insert(higherRank)
+          // only block with higher rank should override previous message
+          _ <- storage.getRepresentation.flatMap(_.latestMessageHashes).map { got =>
+                got shouldBe Map(validator -> higherRank.blockHash)
+              }
+        } yield ()
+      }
+    }
+  }
 }
