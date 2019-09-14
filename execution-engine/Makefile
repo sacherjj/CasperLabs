@@ -1,5 +1,8 @@
 # This supports environments where $HOME/.cargo/env has not been sourced (CI, CLion Makefile runner)
-CARGO = $(or $(shell which cargo), $(HOME)/.cargo/bin/cargo)
+CARGO  = $(or $(shell which cargo),  $(HOME)/.cargo/bin/cargo)
+RUSTUP = $(or $(shell which rustup), $(HOME)/.cargo/bin/rustup)
+
+RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 
 # Directory names should match crate names
 CLIENT_CONTRACTS    = $(shell find ./contracts/client    -mindepth 1 -maxdepth 1 -exec basename {} \;)
@@ -61,6 +64,7 @@ lint:
 .PHONY: check
 check: \
 	check-format \
+	build \
 	lint \
 	test \
 	test-contracts
@@ -74,11 +78,11 @@ clean:
 deb:
 	cd engine-grpc-server && $(CARGO) deb
 
-comm/.rpm:
+engine-grpc-server/.rpm:
 	cd engine-grpc-server && $(CARGO) rpm init
 
 .PHONY: rpm
-rpm: comm/.rpm
+rpm: engine-grpc-server/.rpm
 	cd engine-grpc-server && $(CARGO) rpm build
 
 target/system-contracts.tar.gz: $(SYSTEM_CONTRACTS)
@@ -86,6 +90,10 @@ target/system-contracts.tar.gz: $(SYSTEM_CONTRACTS)
 
 .PHONY: package-system-contracts
 package-system-contracts: target/system-contracts.tar.gz
+
+.PHONY: package
+package:
+	cd contract-ffi && $(CARGO) package
 
 .PHONY: publish
 publish:
@@ -98,3 +106,15 @@ check-publish:
 .PHONY: bench
 bench:
 	$(CARGO) bench
+
+.PHONY: setup-cargo-packagers
+setup-cargo-packagers:
+	$(CARGO) install cargo-rpm || exit 0
+	$(CARGO) install cargo-deb || exit 0
+
+.PHONY: setup
+setup: rust-toolchain
+	$(RUSTUP) update
+	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
+	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
+	$(RUSTUP) component add --toolchain $(RUST_TOOLCHAIN) rustfmt clippy
