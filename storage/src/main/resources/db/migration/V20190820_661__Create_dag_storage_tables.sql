@@ -24,8 +24,9 @@ CREATE INDEX idx_block_justifications
 
 CREATE TABLE validator_latest_messages
 (
-    validator  BLOB NOT NULL PRIMARY KEY,
-    block_hash BLOB NOT NULL,
+    validator  BLOB    NOT NULL PRIMARY KEY,
+    block_hash BLOB    NOT NULL,
+    rank       INTEGER NOT NULL,
     FOREIGN KEY (block_hash) REFERENCES block_metadata (block_hash)
 );
 
