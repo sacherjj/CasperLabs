@@ -63,7 +63,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       } else {
         // Insert by selecting blocks with the highest rank per validator
         // The query will see effects of previous queries in transaction
-        sql"""|INSERT OR REPLACE INTO validator_latest_messagesw
+        sql"""|INSERT OR REPLACE INTO validator_latest_messages
               |SELECT validator, block_hash
               |FROM block_metadata a
               |WHERE validator != ${ByteString.EMPTY}
