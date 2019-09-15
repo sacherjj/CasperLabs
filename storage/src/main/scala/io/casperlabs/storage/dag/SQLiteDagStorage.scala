@@ -4,7 +4,6 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
-import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
@@ -55,23 +54,22 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           .diff(block.justifications.map(_.validatorPublicKey).toSet)
           .toList
         // Will ignore existing entries, because genesis should only be the first block and can't be added twice
-        Update[(Validator, BlockHash)](
+        Update[(Validator, BlockHash, Long)](
           """|INSERT OR IGNORE INTO validator_latest_messages
-             |(validator, block_hash)
-             |VALUES (?, ?)""".stripMargin
-        ).updateMany(newValidators.map((_, blockSummary.blockHash)))
+             |(validator, block_hash, rank)
+             |VALUES (?, ?, ?)""".stripMargin
+        ).updateMany(newValidators.map((_, blockSummary.blockHash, 0L)))
       } else {
-        // Insert by selecting blocks with the highest rank per validator
-        // The query will see effects of previous queries in transaction
+        // Insert in case if new block has a higher rank than the previous max rank of validator
         sql"""|INSERT OR REPLACE INTO validator_latest_messages
-              |SELECT validator, block_hash
-              |FROM block_metadata a
-              |WHERE validator != ${ByteString.EMPTY}
-              |  AND NOT exists(
+              |SELECT ${blockSummary.validatorPublicKey} as validator,
+              |       ${blockSummary.blockHash} as block_hash,
+              |       ${blockSummary.rank} as rank
+              |WHERE NOT exists(
               |        SELECT 1
-              |        FROM block_metadata b
-              |        WHERE a.validator = b.validator
-              |          AND a.rank < b.rank
+              |        FROM validator_latest_messages
+              |        WHERE validator = ${blockSummary.validatorPublicKey}
+              |          AND rank > ${blockSummary.rank}
               |    )""".stripMargin.update.run
       }
     }
