@@ -146,17 +146,17 @@ def test_transfer_to_accounts(node):
     block = blocks.__next__()
     block_hash = block.summary.block_hash.hex()
 
-    acct_a_bal = node.p_client.balance(acct_a.public_key_hex, block_hash)
+    acct_a_bal = node.d_client.get_balance(acct_a.public_key_hex, block_hash)
     assert (
         acct_a_bal < initial_amt
     ), "Should not have transferred any money, but spent on payment"
 
-    acct_b_bal = node.p_client.balance(acct_b.public_key_hex, block_hash)
+    acct_b_bal = node.d_client.get_balance(acct_b.public_key_hex, block_hash)
     assert (
         acct_b_bal < initial_amt - 700
     ), "Should be transfer_amt - 700 - payment for transfer"
 
-    acct_c_bal = node.p_client.balance(acct_c.public_key_hex, block_hash)
+    acct_c_bal = node.d_client.get_balance(acct_c.public_key_hex, block_hash)
     assert acct_c_bal == 700, "Should be result of only transfers in"
 
 
