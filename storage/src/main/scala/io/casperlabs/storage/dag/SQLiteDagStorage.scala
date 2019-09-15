@@ -47,27 +47,30 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       )
 
     val latestMessagesQuery = {
-      val newValidators = block.state.bonds
-        .map(_.validatorPublicKey)
-        .toSet
-        .diff(block.justifications.map(_.validatorPublicKey).toSet)
-      val validator = block.validatorPublicKey
-
-      val toUpdateValidators = if (block.isGenesisLike) {
-        // For Genesis, all validators are "new".
-        newValidators.toList
+      if (block.isGenesisLike) {
+        val newValidators = block.state.bonds
+          .map(_.validatorPublicKey)
+          .toSet
+          .diff(block.justifications.map(_.validatorPublicKey).toSet)
+          .toList
+        // Will ignore existing entries, because genesis should only be the first block and can't be added twice
+        Update[(Validator, BlockHash)](
+          """|INSERT OR IGNORE INTO validator_latest_messages
+             |(validator, block_hash)
+             |VALUES (?, ?)""".stripMargin
+        ).updateMany(newValidators.map((_, blockSummary.blockHash)))
       } else {
-        // For any other block, only validator that produced it
-        // needs to have its "latest message" updated.
-        List(validator)
+        // Insert in case if new block has a higher rank than the previous max rank of validator
+        sql"""|INSERT OR REPLACE INTO validator_latest_messages
+              |SELECT ${blockSummary.validatorPublicKey} as validator,
+              |       ${blockSummary.blockHash} as block_hash
+              |WHERE NOT exists(
+              |        SELECT 1
+              |        FROM block_metadata
+              |        WHERE validator = ${blockSummary.validatorPublicKey}
+              |          AND rank > ${blockSummary.rank}
+              |    )""".stripMargin.update.run
       }
-
-      Update[(Validator, BlockHash, Long)](
-        """|INSERT OR IGNORE INTO validator_latest_messages
-           |(validator, block_hash, rank)
-           |VALUES (?, ?, ?)
-           |""".stripMargin
-      ).updateMany(toUpdateValidators.map((_, blockSummary.blockHash, blockSummary.rank)))
     }
 
     val topologicalSortingQuery =
@@ -179,60 +182,34 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
   override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
     sql"""|SELECT block_hash
-          |FROM validator_latest_messages a
-          |WHERE validator = $validator
-          |  AND NOT EXISTS(
-          |        SELECT 1
-          |        FROM validator_latest_messages b
-          |        WHERE a.validator = b.validator
-          |          AND a.rank < b.rank
-          |    )""".stripMargin
+          |FROM validator_latest_messages
+          |WHERE validator=$validator""".stripMargin
       .query[BlockHash]
       .option
       .transact(xa)
 
   override def latestMessage(validator: Validator): F[Option[BlockSummary]] =
-    sql"""|SELECT data
-          |FROM (SELECT validator, block_hash
-          |      FROM validator_latest_messages a
-          |      WHERE validator = $validator
-          |        AND NOT EXISTS(
-          |              SELECT 1
-          |              FROM validator_latest_messages b
-          |              WHERE a.validator = b.validator
-          |                AND a.rank < b.rank
-          |          )) c
-          |         INNER JOIN block_metadata ON c.block_hash = block_metadata.block_hash""".stripMargin
+    sql"""|SELECT m.data
+          |FROM validator_latest_messages v
+          |INNER JOIN block_metadata m
+          |ON v.validator=$validator AND v.block_hash=m.block_hash""".stripMargin
       .query[BlockSummary]
       .option
       .transact(xa)
 
   override def latestMessageHashes: F[Map[Validator, BlockHash]] =
-    sql"""|SELECT validator, block_hash
-          |FROM validator_latest_messages a
-          |WHERE NOT EXISTS(
-          |    SELECT 1
-          |    FROM validator_latest_messages b
-          |    WHERE a.validator = b.validator
-          |      AND a.rank < b.rank
-          |)""".stripMargin
+    sql"""|SELECT *
+          |FROM validator_latest_messages""".stripMargin
       .query[(Validator, BlockHash)]
       .to[List]
       .transact(xa)
       .map(_.toMap)
 
   override def latestMessages: F[Map[Validator, BlockSummary]] =
-    sql"""|SELECT c.validator, data
-          |FROM (SELECT validator, block_hash
-          |      FROM validator_latest_messages a
-          |      WHERE NOT EXISTS(
-          |              SELECT 1
-          |              FROM validator_latest_messages b
-          |              WHERE a.validator = b.validator
-          |                AND a.rank < b.rank
-          |          )) c
-          |         INNER JOIN block_metadata 
-          |                    ON c.block_hash = block_metadata.block_hash""".stripMargin
+    sql"""|SELECT v.validator, m.data
+          |FROM validator_latest_messages v
+          |INNER JOIN block_metadata m
+          |ON m.block_hash=v.block_hash""".stripMargin
       .query[(Validator, BlockSummary)]
       .to[List]
       .transact(xa)

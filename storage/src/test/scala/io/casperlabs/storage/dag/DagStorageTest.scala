@@ -63,9 +63,20 @@ trait DagStorageTest
   def withDagStorage[R](f: DagStorage[Task] => Task[R]): R
 
   "DAG Storage" should "be able to lookup a stored block" in {
-    forAll(genBlockMsgWithTransformDagFromGenesis.map(zeroedRanks)) { blockElements =>
-      val validatorsToBlocks      = blockElements.groupBy(_.getBlockMessage.getHeader.validatorPublicKey)
+    def setRank(blockMsg: BlockMsgWithTransform, rank: Int): BlockMsgWithTransform =
+      blockMsg.withBlockMessage(
+        blockMsg.getBlockMessage.withHeader(
+          blockMsg.getBlockMessage.getHeader.withRank(rank.toLong)
+        )
+      )
+
+    forAll(genBlockMsgWithTransformDagFromGenesis) { initial =>
+      val validatorsToBlocks = initial
+        .groupBy(_.getBlockMessage.getHeader.validatorPublicKey)
+        .mapValues(_.zipWithIndex.map { case (block, i) => setRank(block, i) })
       val latestBlocksByValidator = validatorsToBlocks.mapValues(_.maxBy(_.getBlockMessage.rank))
+      val blockElements           = validatorsToBlocks.values.toList.flatten
+
       withDagStorage { dagStorage =>
         for {
           _ <- blockElements.traverse_(
