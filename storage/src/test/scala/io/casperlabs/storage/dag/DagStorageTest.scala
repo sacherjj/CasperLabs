@@ -65,7 +65,7 @@ trait DagStorageTest
   "DAG Storage" should "be able to lookup a stored block" in {
     forAll(genBlockMsgWithTransformDagFromGenesis.map(zeroedRanks)) { blockElements =>
       val validatorsToBlocks      = blockElements.groupBy(_.getBlockMessage.getHeader.validatorPublicKey)
-      val latestBlocksByValidator = validatorsToBlocks.mapValues(_.last)
+      val latestBlocksByValidator = validatorsToBlocks.mapValues(_.maxBy(_.getBlockMessage.rank))
       withDagStorage { dagStorage =>
         for {
           _ <- blockElements.traverse_(
@@ -558,14 +558,38 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
         val lowerRank  = update(a, validator, rank - 1)
         val higherRank = update(c, validator, rank + 1)
 
+        val readLatestMessages = storage.getRepresentation.flatMap(
+          dag =>
+            (
+              dag.latestMessageHashes,
+              dag.latestMessages,
+              dag.latestMessage(validator),
+              dag.latestMessageHash(validator)
+            ).mapN((_, _, _, _))
+        )
+
         for {
-          _      <- storage.insert(initial)
-          before <- storage.getRepresentation.flatMap(_.latestMessageHashes)
+          _ <- storage.insert(initial)
+          (
+            latestMessageHashesBefore,
+            latestMessagesBefore,
+            latestMessageBefore,
+            latestMessageHashBefore
+          ) <- readLatestMessages
 
           _ <- storage.insert(lowerRank)
           // block with lower rank should be ignored
-          _ <- storage.getRepresentation.flatMap(_.latestMessageHashes).map { got =>
-                got shouldBe before
+          _ <- readLatestMessages.map {
+                case (
+                    latestMessageHashesGot,
+                    latestMessagesGot,
+                    latestMessageGot,
+                    latestMessageHashGot
+                    ) =>
+                  latestMessageHashesGot shouldBe latestMessageHashesBefore
+                  latestMessagesGot shouldBe latestMessagesBefore
+                  latestMessageGot shouldBe latestMessageBefore
+                  latestMessageHashGot shouldBe latestMessageHashBefore
               }
 
           // not checking new blocks with same rank because they should be invalidated
@@ -573,8 +597,17 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
 
           _ <- storage.insert(higherRank)
           // only block with higher rank should override previous message
-          _ <- storage.getRepresentation.flatMap(_.latestMessageHashes).map { got =>
-                got shouldBe Map(validator -> higherRank.blockHash)
+          _ <- readLatestMessages.map {
+                case (
+                    latestMessageHashesGot,
+                    latestMessagesGot,
+                    latestMessageGot,
+                    latestMessageHashGot
+                    ) =>
+                  latestMessageHashesGot shouldBe Map(validator -> higherRank.blockHash)
+                  latestMessagesGot shouldBe Map(validator      -> BlockSummary.fromBlock(higherRank))
+                  latestMessageGot shouldBe Some(BlockSummary.fromBlock(higherRank))
+                  latestMessageHashGot shouldBe Some(higherRank.blockHash)
               }
         } yield ()
       }
