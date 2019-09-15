@@ -162,6 +162,23 @@ trait BlockStorageTest
     }
   }
 
+  it should "be able to properly (de)serialize data" in {
+    forAll { b: BlockMsgWithTransform =>
+      withStorage { storage =>
+        val before = b.toByteArray
+        for {
+          _          <- storage.put(b)
+          maybeBlock <- storage.get(b.getBlockMessage.blockHash)
+          _ <- Task {
+                maybeBlock should not be None
+                val got = maybeBlock.get.toByteArray
+                assert(before.sameElements(got))
+              }
+        } yield ()
+      }
+    }
+  }
+
   //TODO: update this test to properly test rollback feature.
   //https://casperlabs.atlassian.net/browse/STOR-95
   it should "rollback the transaction on error" ignore {

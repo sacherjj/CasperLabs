@@ -4,6 +4,7 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
+import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
@@ -47,27 +48,32 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       )
 
     val latestMessagesQuery = {
-      val newValidators = block.state.bonds
-        .map(_.validatorPublicKey)
-        .toSet
-        .diff(block.justifications.map(_.validatorPublicKey).toSet)
-      val validator = block.validatorPublicKey
-
-      val toUpdateValidators = if (block.isGenesisLike) {
-        // For Genesis, all validators are "new".
-        newValidators.toList
+      if (block.isGenesisLike) {
+        val newValidators = block.state.bonds
+          .map(_.validatorPublicKey)
+          .toSet
+          .diff(block.justifications.map(_.validatorPublicKey).toSet)
+          .toList
+        // Will ignore existing entries, because genesis should only be the first block and can't be added twice
+        Update[(Validator, BlockHash)](
+          """|INSERT OR IGNORE INTO validator_latest_messages
+             |(validator, block_hash)
+             |VALUES (?, ?)""".stripMargin
+        ).updateMany(newValidators.map((_, blockSummary.blockHash)))
       } else {
-        // For any other block, only validator that produced it
-        // needs to have its "latest message" updated.
-        List(validator)
+        // Insert by selecting blocks with the highest rank per validator
+        // The query will see effects of previous queries in transaction
+        sql"""|INSERT OR REPLACE INTO validator_latest_messages
+              |SELECT validator, block_hash
+              |FROM block_metadata a
+              |WHERE validator != ${ByteString.EMPTY}
+              |  AND NOT exists(
+              |        SELECT 1
+              |        FROM block_metadata b
+              |        WHERE a.validator = b.validator
+              |          AND a.rank < b.rank
+              |    )""".stripMargin.update.run
       }
-
-      Update[(Validator, BlockHash)](
-        """|INSERT OR REPLACE INTO validator_latest_messages
-           |(validator, block_hash)
-           |VALUES (?, ?)
-           |""".stripMargin
-      ).updateMany(toUpdateValidators.map((_, blockSummary.blockHash)))
     }
 
     val topologicalSortingQuery =
