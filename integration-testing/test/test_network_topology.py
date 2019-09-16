@@ -1,11 +1,11 @@
 import logging
 
-from test.cl_node.wait import (
+from casperlabs_local_net.wait import (
     wait_for_block_contains,
     wait_for_new_fork_choice_tip_block,
 )
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
-from test.cl_node.common import Contract
+from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
+from casperlabs_local_net.common import Contract
 
 
 def test_metrics_api_socket(two_node_network):

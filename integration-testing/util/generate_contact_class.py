@@ -1,9 +1,9 @@
 import os
 
-from test.cl_node.common import testing_root_path
+from casperlabs_local_net.common import testing_root_path
 
 # This file generates the code for
-# test.cl_node.common.py :: Contract class
+# casperlabs_local_net.common.py :: Contract class
 
 
 def get_wasm_files() -> list:

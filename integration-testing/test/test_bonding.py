@@ -1,9 +1,9 @@
-from test.cl_node.common import Contract
-from test.cl_node.client_parser import parse_show_block
-from test.cl_node.client_parser import parse_show_blocks
-from test.cl_node.casperlabs_network import OneNodeNetwork
-from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.wait import wait_for_block_hash_propagated_to_all_nodes
+from casperlabs_local_net.common import Contract
+from casperlabs_local_net.client_parser import parse_show_block
+from casperlabs_local_net.client_parser import parse_show_blocks
+from casperlabs_local_net.casperlabs_network import OneNodeNetwork
+from casperlabs_local_net.casperlabs_accounts import Account
+from casperlabs_local_net.wait import wait_for_block_hash_propagated_to_all_nodes
 from casperlabs_client import ABI, InternalError
 
 from typing import List

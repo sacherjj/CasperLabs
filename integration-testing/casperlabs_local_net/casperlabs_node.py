@@ -1,6 +1,6 @@
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.docker_execution_engine import DockerExecutionEngine
-from test.cl_node.common import random_string
+from casperlabs_local_net.docker_node import DockerNode
+from casperlabs_local_net.docker_execution_engine import DockerExecutionEngine
+from casperlabs_local_net.common import random_string
 import docker.errors
 
 

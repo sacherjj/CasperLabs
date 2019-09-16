@@ -4,8 +4,8 @@ import docker.errors
 import json
 from pathlib import Path
 
-from test.cl_node import LoggingMixin
-from test.cl_node.common import (
+from casperlabs_local_net import LoggingMixin
+from casperlabs_local_net.common import (
     extract_block_count_from_show_blocks,
     extract_block_hash_from_propose_output,
     random_string,
@@ -13,9 +13,9 @@ from test.cl_node.common import (
     MAX_PAYMENT_COST,
     resources_path,
 )
-from test.cl_node.client_base import CasperLabsClient
-from test.cl_node.errors import NonZeroExitCodeError
-from test.cl_node.client_parser import parse, parse_show_deploys
+from casperlabs_local_net.client_base import CasperLabsClient
+from casperlabs_local_net.errors import NonZeroExitCodeError
+from casperlabs_local_net.client_parser import parse, parse_show_deploys
 from casperlabs_client import extract_common_name
 
 

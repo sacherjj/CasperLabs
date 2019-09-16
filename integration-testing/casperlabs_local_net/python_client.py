@@ -4,8 +4,8 @@ import logging
 import time
 from pathlib import Path  # noqa: F401
 
-from test.cl_node import LoggingMixin
-from test.cl_node.common import Contract, MAX_PAYMENT_ABI
+from casperlabs_local_net import LoggingMixin
+from casperlabs_local_net.common import Contract, MAX_PAYMENT_ABI
 from casperlabs_client import CasperLabsClient, ABI, InternalError, extract_common_name
 
 
@@ -52,6 +52,7 @@ class PythonClient(CasperLabsClient, LoggingMixin):
         public_key: Optional[str] = None,
         session_args: list = None,
         payment_args: list = MAX_PAYMENT_ABI,
+        resources_path: Optional[Union[Path, str]] = None,
     ) -> str:
 
         assert session_contract is not None
@@ -61,7 +62,8 @@ class PythonClient(CasperLabsClient, LoggingMixin):
 
         address = from_address or self.node.from_address
 
-        resources_path = self.node.resources_folder
+        if not resources_path:
+            resources_path = self.node.resources_folder
         session_contract_path = str(resources_path / session_contract)
         payment_contract_path = str(resources_path / payment_contract)
 

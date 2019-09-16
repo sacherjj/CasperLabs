@@ -1,17 +1,20 @@
 import threading
-from test.cl_node.docker_node import DockerNode
+from casperlabs_local_net.docker_node import DockerNode
 from typing import List
 import pytest
 import logging
-from .cl_node.casperlabs_network import ThreeNodeNetwork, CustomConnectionNetwork
-from .cl_node.common import extract_block_hash_from_propose_output, Contract
-from .cl_node.wait import (
+from casperlabs_local_net.casperlabs_network import (
+    ThreeNodeNetwork,
+    CustomConnectionNetwork,
+)
+from casperlabs_local_net.common import extract_block_hash_from_propose_output, Contract
+from casperlabs_local_net.wait import (
     wait_for_genesis_block,
     wait_for_block_hash_propagated_to_all_nodes,
     wait_for_block_hashes_propagated_to_all_nodes,
     wait_for_peers_count_exactly,
 )
-from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
+from casperlabs_local_net.casperlabs_accounts import Account, GENESIS_ACCOUNT
 
 
 class DeployThread(threading.Thread):

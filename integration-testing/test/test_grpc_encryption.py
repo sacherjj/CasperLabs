@@ -1,6 +1,6 @@
 import os
 import logging
-from test.cl_node.cli import DockerCLI, CLI
+from casperlabs_local_net.cli import DockerCLI, CLI
 from casperlabs_client import CasperLabsClient, extract_common_name
 
 
@@ -30,7 +30,7 @@ def test_grpc_encryption_python_lib(encrypted_two_node_network):
         node.config.tls_certificate_local_path(),
     )
     blocks = list(client.showBlocks(1))
-    assert len(blocks)
+    assert len(blocks) > 0
     logging.debug(f"{blocks}")
 
 
@@ -53,5 +53,5 @@ def test_grpc_encryption_python_cli(encrypted_two_node_network):
         f"""EXECUTING {' '.join(cli.expand_args(["show-blocks", "--depth", 1]))}"""
     )
     blocks = cli("show-blocks", "--depth", 1)
-    assert len(blocks)
+    assert len(blocks) > 0
     logging.debug(f"{blocks}")
