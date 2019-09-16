@@ -60,14 +60,25 @@ class EquivocationDetectorTest
       _     = state.equivocationTracker.contains(b.getHeader.validatorPublicKey) shouldBe (equivocationExpected)
     } yield b
 
-  def checkEquivocatorsFromViewOfBlock(
-      block: Block,
-      expected: Set[Validator]
+  def createBlockAndCheckEquivocatorsFromViewOfBlock(
+      parentsHashList: Seq[BlockHash],
+      creator: Validator = ByteString.EMPTY,
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      equivocationExpected: Boolean,
+      visibleEquivocatorExpected: Set[Validator]
   )(
       implicit dagStorage: IndexedDagStorage[Task],
-      casperState: Cell[Task, CasperState]
-  ): Task[Unit] =
+      blockStorage: BlockStorage[Task],
+      casperState: Cell[Task, CasperState],
+      log: LogStub[Task]
+  ): Task[Block] =
     for {
+      block <- createBlockAndTestEquivocateDetector(
+                parentsHashList,
+                creator,
+                justifications,
+                equivocationExpected
+              )
       dag            <- dagStorage.getRepresentation
       latestMessages <- ProtoUtil.getJustificationMsgs[Task](dag, block.getHeader.justifications)
       state          <- casperState.read
@@ -75,8 +86,8 @@ class EquivocationDetectorTest
             dag,
             latestMessages.mapValues(f => f.blockHash),
             state.equivocationTracker
-          ) shouldBeF expected
-    } yield ()
+          ) shouldBeF visibleEquivocatorExpected
+    } yield block
 
   "EquivocationDetector" should "detect simple equivocation" in withStorage {
     implicit blockStorage =>
@@ -320,79 +331,59 @@ class EquivocationDetectorTest
         } yield ()
   }
 
-  "equivocatorDetectFromLatestMessage" should "" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
-        /*
-         * The Dag looks like
-         *
-         *     v0   |      v1     |
-         *          |             |
-         *          |         b6  |
-         *          |         |   |
-         *          |         |   |
-         *          |         b5  |
-         *          |     /   |   |
-         *          |  /      |   |
-         *         /|         |   |
-         *     b4   |         |   |
-         *         \|         |   |
-         *          | \       |   |
-         *          |   b2    b3  |
-         *          |     \   /   |
-         *          |      b1     |
-         *                  \
-         *                    genesis
-         *
-         */
+  // See [[casper/src/test/resources/casper/tipsHavingEquivocating.png]]
+  "detectVisibleFromJustificationMsgHashes" should "find validators who has equivocated from the j-past-cone of block's justifications" in withStorage {
+    implicit blockStorage => implicit dagStorage =>
+      implicit val logEff: LogStub[Task] = new LogStub[Task]()
+      val v1                             = generateValidator("V1")
+      val v2                             = generateValidator("V2")
 
-        implicit val logEff: LogStub[Task] = new LogStub[Task]()
-        val v0                             = generateValidator("V0")
-        val v1                             = generateValidator("V1")
-
-        for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
-          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                              CasperState()
-                                                            )
-          b1 <- createBlockAndTestEquivocateDetector(
-                 Seq(genesis.blockHash),
-                 v1,
-                 justifications = HashMap(v1 -> genesis.blockHash),
-                 equivocationExpected = false
-               )
-          b2 <- createBlockAndTestEquivocateDetector(
-                 Seq(b1.blockHash),
-                 v1,
-                 justifications = HashMap(v1 -> b1.blockHash),
-                 equivocationExpected = false
-               )
-          b3 <- createBlockAndTestEquivocateDetector(
-                 Seq(b1.blockHash),
-                 v1,
-                 justifications = HashMap(v1 -> b1.blockHash),
-                 equivocationExpected = true
-               )
-          _ <- checkEquivocatorsFromViewOfBlock(b3, Set.empty)
-          b4 <- createBlockAndTestEquivocateDetector(
-                 Seq(b2.blockHash),
-                 v0,
-                 justifications = HashMap(v1 -> b2.blockHash),
-                 equivocationExpected = false
-               )
-          _ <- checkEquivocatorsFromViewOfBlock(b4, Set.empty)
-          b5 <- createBlock[Task](
-                 Seq(b3.blockHash),
-                 v1,
-                 justifications = HashMap(v0 -> b4.blockHash, v1 -> b3.blockHash)
-               )
-          _ <- checkEquivocatorsFromViewOfBlock(b5, Set(v1))
-          b6 <- createBlock[Task](
-                 Seq(b5.blockHash),
-                 v1,
-                 justifications = HashMap(v1 -> b5.blockHash)
-               )
-          _ <- checkEquivocatorsFromViewOfBlock(b6, Set(v1))
-        } yield ()
+      for {
+        implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
+                                                            CasperState()
+                                                          )
+        genesis <- createBlockAndCheckEquivocatorsFromViewOfBlock(
+                    Seq(),
+                    ByteString.EMPTY,
+                    equivocationExpected = false,
+                    visibleEquivocatorExpected = Set.empty
+                  )
+        a1 <- createBlockAndCheckEquivocatorsFromViewOfBlock(
+               Seq(genesis.blockHash),
+               v1,
+               justifications = HashMap(v1 -> genesis.blockHash),
+               equivocationExpected = false,
+               visibleEquivocatorExpected = Set.empty
+             )
+        a2 <- createBlockAndCheckEquivocatorsFromViewOfBlock(
+               Seq(genesis.blockHash),
+               v1,
+               justifications = HashMap(v1 -> genesis.blockHash),
+               equivocationExpected = true,
+               visibleEquivocatorExpected = Set.empty
+             )
+        b <- createBlockAndCheckEquivocatorsFromViewOfBlock(
+              Seq(a2.blockHash),
+              v2,
+              justifications = HashMap(v1 -> a2.blockHash, v2 -> genesis.blockHash),
+              equivocationExpected = false,
+              visibleEquivocatorExpected = Set.empty
+            )
+        c <- createBlockAndCheckEquivocatorsFromViewOfBlock(
+              Seq(b.blockHash),
+              v1,
+              justifications = HashMap(v1 -> a1.blockHash, v2 -> b.blockHash),
+              equivocationExpected = true,
+              visibleEquivocatorExpected = Set(v1)
+            )
+        // this block doesn't show in the diagram
+        _ <- createBlockAndCheckEquivocatorsFromViewOfBlock(
+              Seq(c.blockHash),
+              v1,
+              justifications = HashMap(v1 -> c.blockHash, v2 -> b.blockHash),
+              equivocationExpected = true,
+              visibleEquivocatorExpected = Set(v1)
+            )
+      } yield ()
   }
 }
