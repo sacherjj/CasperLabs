@@ -1,9 +1,12 @@
 import pytest
+import json
+import time
 
 from casperlabs_client import ABI
 from test.cl_node.casperlabs_accounts import Account
 from test.cl_node.casperlabs_network import TrillionPaymentNodeNetwork
-from test.cl_node.common import MAX_PAYMENT_ABI, PAYMENT_CONTRACT, HELLO_NAME_CONTRACT
+from test.cl_node.common import Contract
+
 
 """
 Accounts have two threshold values:
@@ -35,75 +38,89 @@ def _add_update_associate_key(
     session_args = ABI.args(
         [ABI.account(bytes.fromhex(key.public_key_hex)), ABI.u32(weight)]
     )
-    return node.deploy_and_propose(
+    return node.p_client.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=PAYMENT_CONTRACT,
         session_contract=contract,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=session_args,
-        payment_args=MAX_PAYMENT_ABI,
     )
 
 
 def add_associated_key(node, weight_key: Account, key: Account, weight: int):
     """ Associates a key to the IDENTITY_KEY account """
-    return _add_update_associate_key(node, weight_key, key, weight, ADD_KEY_CONTRACT)
+    return _add_update_associate_key(
+        node, weight_key, key, weight, Contract.ADD_ASSOCIATED_KEY
+    )
 
 
 def update_associated_key(node, weight_key: Account, key: Account, weight: int):
     """ Updates weight of a key for the IDENTITY_KEY account """
-    return _add_update_associate_key(node, weight_key, key, weight, UPDATE_KEY_CONTRACT)
+    return _add_update_associate_key(
+        node, weight_key, key, weight, Contract.UPDATE_ASSOCIATED_KEY
+    )
 
 
 def remove_associated_key(node, weight_key: Account, key: Account):
     """ Removes a key from the IDENTITY_KEY account """
     args = ABI.args([ABI.account(bytes.fromhex(key.public_key_hex))])
-    return node.deploy_and_propose(
+    return node.p_client.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=PAYMENT_CONTRACT,
-        session_contract=REMOVE_KEY_CONTRACT,
+        session_contract=Contract.REMOVE_ASSOCIATED_KEY,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=args,
-        payment_args=MAX_PAYMENT_ABI,
     )
 
 
 def set_key_thresholds(node, weight_key, key_mgmt_weight: int, deploy_weight: int):
     """ Sets key management and deploy thresholds for IDENTITY_KEY account """
     args = ABI.args([ABI.u32(key_mgmt_weight), ABI.u32(deploy_weight)])
-    return node.deploy_and_propose(
+    return node.p_client.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=PAYMENT_CONTRACT,
-        session_contract=SET_THRESHOLDS_CONTRACT,
+        session_contract=Contract.SET_KEY_THRESHOLDS,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=args,
-        payment_args=MAX_PAYMENT_ABI,
+    )
+
+
+def set_key_thresholds_scala(
+    node, weight_key, key_mgmt_weight: int, deploy_weight: int
+):
+    """ Sets key management and deploy thresholds for IDENTITY_KEY account """
+    args = [
+        {"value": {"long_value": key_mgmt_weight}},
+        {"value": {"long_value": deploy_weight}},
+    ]
+    json_args = json.dumps(args)
+    return node.d_client.deploy_and_propose(
+        from_address=IDENTITY_KEY.public_key_hex,
+        session_contract=Contract.SET_KEY_THRESHOLDS,
+        public_key=weight_key.public_key_path,
+        private_key=weight_key.private_key_path,
+        session_args=json_args,
     )
 
 
 def hello_name_deploy(node, weight_key: Account) -> str:
     """ Simple deploy to test deploy permissions """
-    return node.deploy_and_propose(
+    return node.p_client.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        payment_contract=PAYMENT_CONTRACT,
-        session_contract=HELLO_NAME_CONTRACT,
+        session_contract=Contract.HELLONAME,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=None,
-        payment_args=MAX_PAYMENT_ABI,
     )
 
 
 def assert_deploy_is_not_error(node, block_hash):
-    for deploy in node.client.show_deploys(block_hash):
+    for deploy in node.p_client.show_deploys(block_hash):
         assert not deploy.is_error, deploy.error_message
 
 
 def assert_deploy_is_error(node, block_hash: str, error_message: str = None):
-    for deploy in node.client.show_deploys(block_hash):
+    for deploy in node.p_client.show_deploys(block_hash):
         assert deploy.is_error
         if error_message:
             assert deploy.error_message == error_message
@@ -118,7 +135,6 @@ def account_setup(docker_client_fixture):
     with TrillionPaymentNodeNetwork(docker_client_fixture) as onn:
         onn.create_cl_network()
         node = onn.docker_nodes[0]
-        node.use_python_client()
 
         node.transfer_to_account(IDENTITY_KEY.file_id, INITIAL_ACCOUNT_VALUE)
 
@@ -192,6 +208,7 @@ def test_key_can_deploy_with_weight_at_and_above_threshold(account_setup):
             key_mgmt_weight=KEY_MGMT_KEY_WEIGHT,
             deploy_weight=set_weight,
         )
+        time.sleep(1)
         assert_deploy_is_not_error(node, block_hash)
 
         # Test deploy

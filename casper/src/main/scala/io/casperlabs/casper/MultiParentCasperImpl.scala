@@ -425,7 +425,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       dag: DagRepresentation[F],
       parents: Seq[Block]
   ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
-    val candidateBlockHashesF = for {
+    for {
       // We have re-queued orphan deploys already, so we can just look at pending ones.
       pendingDeployHashes <- DeployBuffer[F].readPendingHashes
 
@@ -438,15 +438,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             .markAsDiscardedByHashes(deploysToDiscard.toList)
             .whenA(deploysToDiscard.nonEmpty)
     } yield candidateBlockHashes.toSet
-
-    (for {
-      candidateBlockHashes <- fs2.Stream.eval(candidateBlockHashesF)
-      // Only send the next nonce per account. This will change once the nonce check is removed in the EE
-      // and support for SEQ/PAR blocks is added, then we can send all deploys for the account.
-      remainingHashes <- DeployBuffer[F]
-                          .readAccountPendingOldest()
-                          .filter(candidateBlockHashes.contains(_))
-    } yield remainingHashes).compile.to[Set]
   }
 
   /** If another node proposed a block which orphaned something proposed by this node,

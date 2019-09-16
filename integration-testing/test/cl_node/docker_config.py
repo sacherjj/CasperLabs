@@ -37,7 +37,6 @@ class DockerConfig:
     is_signed_deploy: bool = True
     bootstrap_address: Optional[str] = None
     use_new_gossiping: bool = True
-    is_payment_code_enabled: bool = False
     initial_motes: int = 100 * (10 ** 9)  # 100 billion
     socket_volume: Optional[str] = None
     node_account: Account = None
