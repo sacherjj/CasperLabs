@@ -841,6 +841,10 @@ steps:
       from_secret: mac-port
     script:
     - rm -rf DRONE_BUILD_${DRONE_BUILD_NUMBER}
+  when:
+    status:
+    - failure
+    - success
 
 - name: notify-mac-cron
   image: plugins/slack
@@ -852,6 +856,10 @@ steps:
     - |
       macOS Build Status: {{#success build.status}}✔{{ else }}✘{{/success}}*{{ uppercasefirst build.status }}*
       Drone Build: <{{ build.link }}|#{{ build.number }}>
+  when:
+    status:
+    - failure
+    - success
 
 trigger:
   cron: [ mac-hourly-cron ]
