@@ -3,7 +3,6 @@ package io.casperlabs.casper
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
@@ -89,7 +88,7 @@ object Estimator {
     * @param stopHash Block at which we stop computing scores. Should be latest common ancestor of `latestMessagesHashes`.
     * @return Scores map.
     */
-  def lmdScoring[F[_]: Monad](
+  def lmdScoring[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       stopHash: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]

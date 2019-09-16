@@ -8,14 +8,13 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{Key, Value}
-import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Deploy}
+import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
-import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.models.{DeployResult => _}
+import io.casperlabs.models.{MBlock, MessageSummary, DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
@@ -375,12 +374,13 @@ object ExecEngineUtil {
       dag: DagRepresentation[F]
   ): F[MergeResult[TransformMap, Block]] = {
 
-    def parents(b: BlockSummary): F[List[BlockSummary]] =
-      b.parents.toList.traverse(b => dag.lookup(b).map(_.get))
+    def parents(b: MBlock): F[List[MBlock]] =
+      b.parents.toList
+        .flatTraverse(b => dag.lookup(b).map(_.collect { case b: MBlock => b }.toList))
 
-    def effect(blockMeta: BlockSummary): F[Option[TransformMap]] =
+    def effect(blockMeta: MBlock): F[Option[TransformMap]] =
       BlockStorage[F]
-        .get(blockMeta.blockHash)
+        .get(blockMeta.messageHash)
         .map(_.map { blockWithTransforms =>
           val blockHash  = blockWithTransforms.getBlockMessage.blockHash
           val transforms = blockWithTransforms.transformEntry
@@ -403,18 +403,23 @@ object ExecEngineUtil {
 
     def toOps(t: TransformMap): OpMap[state.Key] = Op.fromTransforms(t)
 
-    val candidateParents = candidateParentBlocks.map(BlockSummary.fromBlock).toVector
-
-    import io.casperlabs.shared.Sorting.blockSummaryOrdering
+    import io.casperlabs.shared.Sorting.messageSummaryOrdering
     for {
-      merged <- abstractMerge[F, TransformMap, BlockSummary, state.Key](
+      candidateParents <- MonadThrowable[F]
+                           .fromTry(
+                             candidateParentBlocks.toList.traverse(MessageSummary.fromBlock(_))
+                           )
+                           .map(_.collect {
+                             case b: MBlock => b
+                           }.toVector)
+      merged <- abstractMerge[F, TransformMap, MBlock, state.Key](
                  candidateParents,
                  parents,
                  effect,
                  toOps
                )
       // TODO: Aren't these parents already in `candidateParentBlocks`?
-      blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
+      blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.messageHash))
     } yield merged.transform.fold(MergeResult.empty[TransformMap, Block])(
       MergeResult.result(blocks.head, _, blocks.tail)
     )

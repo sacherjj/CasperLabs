@@ -12,9 +12,8 @@ import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.MessageSummary
 import io.casperlabs.shared.Log
-import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.storage.dag.DagRepresentation
 
 class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)(
@@ -37,10 +36,10 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
       votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)
       result <- votedBranch match {
                  case Some(branch) =>
-                   val blockSummary = BlockSummary.fromBlock(block)
                    for {
-                     _      <- updateVoterPerspective[F](dag, blockSummary, branch)
-                     result <- checkForCommittee[F](rFTT)
+                     msgSummary <- MonadThrowable[F].fromTry(MessageSummary.fromBlock(block))
+                     _          <- updateVoterPerspective[F](dag, msgSummary, branch)
+                     result     <- checkForCommittee[F](rFTT)
                      _ <- result match {
                            case Some(newLFB) =>
                              // On new LFB we rebuild VotingMatrix and start the new game.

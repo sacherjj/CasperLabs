@@ -7,10 +7,12 @@ import cats.implicits._
 import doobie._
 import doobie.implicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.MessageSummary
 import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
@@ -126,13 +128,17 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .to[Set]
       .transact(xa)
 
-  override def lookup(blockHash: BlockHash): F[Option[BlockSummary]] =
+  override def lookup(blockHash: BlockHash): F[Option[MessageSummary]] =
     sql"""|SELECT data 
           |FROM block_metadata 
           |WHERE block_hash=$blockHash""".stripMargin
       .query[BlockSummary]
       .option
       .transact(xa)
+      .flatMap {
+        case None     => (None: Option[MessageSummary]).pure[F]
+        case Some(bs) => toMessageSummaryF(bs).map(Some(_))
+      }
 
   override def contains(blockHash: BlockHash): F[Boolean] =
     sql"""|SELECT 1 
@@ -189,7 +195,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .option
       .transact(xa)
 
-  override def latestMessage(validator: Validator): F[Option[BlockSummary]] =
+  override def latestMessage(validator: Validator): F[Option[MessageSummary]] =
     sql"""|SELECT m.data
           |FROM validator_latest_messages v
           |INNER JOIN block_metadata m
@@ -197,6 +203,10 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .query[BlockSummary]
       .option
       .transact(xa)
+      .flatMap {
+        case None     => (None: Option[MessageSummary]).pure[F]
+        case Some(bs) => toMessageSummaryF(bs).map(Some(_))
+      }
 
   override def latestMessageHashes: F[Map[Validator, BlockHash]] =
     sql"""|SELECT *
@@ -206,7 +216,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .transact(xa)
       .map(_.toMap)
 
-  override def latestMessages: F[Map[Validator, BlockSummary]] =
+  override def latestMessages: F[Map[Validator, MessageSummary]] =
     sql"""|SELECT v.validator, m.data
           |FROM validator_latest_messages v
           |INNER JOIN block_metadata m
@@ -214,7 +224,11 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .query[(Validator, BlockSummary)]
       .to[List]
       .transact(xa)
+      .flatMap(_.traverse { case (v, bs) => toMessageSummaryF(bs).map(v -> _) })
       .map(_.toMap)
+
+  private val toMessageSummaryF: BlockSummary => F[MessageSummary] = bs =>
+    MonadThrowable[F].fromTry(MessageSummary.fromBlockSummary(bs))
 }
 
 object SQLiteDagStorage {

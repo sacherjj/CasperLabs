@@ -9,6 +9,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.MessageSummary
 import io.casperlabs.shared
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
@@ -87,7 +88,7 @@ trait DagStorageTest
                 case BlockMsgWithTransform(Some(b), _) =>
                   for {
                     blockSummary <- dag.lookup(b.blockHash)
-                  } yield blockSummary shouldBe Some(BlockSummary.fromBlock(b))
+                  } yield blockSummary shouldBe MessageSummary.fromBlock(b).toOption
                 case _ => ???
               }
           _ <- latestBlocksByValidator.toList.traverse {
@@ -97,7 +98,7 @@ trait DagStorageTest
                     latestMessage     <- dag.latestMessage(validator)
                   } yield {
                     latestMessageHash shouldBe Some(b.blockHash)
-                    latestMessage shouldBe Some(BlockSummary.fromBlock(b))
+                    latestMessage shouldBe MessageSummary.fromBlock(b).toOption
                   }
                 case _ => ???
               }
@@ -108,7 +109,7 @@ trait DagStorageTest
               }
           _ <- dag.latestMessages.map { got =>
                 got.toList should contain theSameElementsAs latestBlocksByValidator.toList.map {
-                  case (v, b) => (v, BlockSummary.fromBlock(b.getBlockMessage))
+                  case (v, b) => (v, MessageSummary.fromBlock(b.getBlockMessage).get)
                 }
               }
         } yield ()
@@ -123,10 +124,10 @@ trait DagStorageTest
         for {
           _                 <- storage.insert(b)
           dag               <- storage.getRepresentation
-          maybeBlockSummary <- dag.lookup(b.blockHash)
+          messageSummaryOpt <- dag.lookup(b.blockHash)
           _ <- Task {
-                maybeBlockSummary should not be None
-                val got = maybeBlockSummary.get.toByteArray
+                messageSummaryOpt should not be None
+                val got = messageSummaryOpt.get.blockSummary.toByteArray
                 assert(before.sameElements(got))
               }
         } yield ()
@@ -210,11 +211,11 @@ class FileDagStorageTest extends DagStorageTest {
         List[
           (
               //dag.lookup
-              Option[BlockSummary],
+              Option[MessageSummary],
               //dag.latestMessageHash
               Option[BlockHash],
               //dag.latestMessage
-              Option[BlockSummary],
+              Option[MessageSummary],
               //dag.children
               Set[BlockHash],
               //dag.justificationToBlocks
@@ -226,7 +227,7 @@ class FileDagStorageTest extends DagStorageTest {
         //dag.latestMessageHashes
         Map[Validator, BlockHash],
         //dag.latestMessages
-        Map[Validator, BlockSummary],
+        Map[Validator, MessageSummary],
         //dag.topoSort
         Vector[Vector[BlockHash]],
         //dag.topoSortTail
@@ -273,11 +274,11 @@ class FileDagStorageTest extends DagStorageTest {
       topoSortTailLength: Int = 5
   ): Assertion = {
     val (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) = lookupResult
-    val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockSummary]) {
+    val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, MessageSummary]) {
       case (lm, b) =>
         // Ignore empty sender for genesis block
         if (b.getHeader.validatorPublicKey != ByteString.EMPTY)
-          lm.updated(b.getHeader.validatorPublicKey, BlockSummary.fromBlock(b))
+          lm.updated(b.getHeader.validatorPublicKey, MessageSummary.fromBlock(b).get)
         else
           lm
     }
@@ -293,10 +294,10 @@ class FileDagStorageTest extends DagStorageTest {
           ),
           b
           ) =>
-        blockSummary shouldBe Some(BlockSummary.fromBlock(b))
+        blockSummary shouldBe MessageSummary.fromBlock(b).toOption
         latestMessageHash shouldBe realLatestMessages
           .get(b.getHeader.validatorPublicKey)
-          .map(_.blockHash)
+          .map(_.messageHash)
         latestMessage shouldBe realLatestMessages.get(b.getHeader.validatorPublicKey)
         children shouldBe
           blockElements
@@ -310,7 +311,7 @@ class FileDagStorageTest extends DagStorageTest {
             .toSet
         contains shouldBe true
     }
-    latestMessageHashes shouldBe realLatestMessages.mapValues(_.blockHash)
+    latestMessageHashes shouldBe realLatestMessages.mapValues(_.messageHash)
     latestMessages shouldBe realLatestMessages
 
     def normalize(topoSort: Vector[Vector[BlockHash]]): Vector[Vector[BlockHash]] =
@@ -616,8 +617,10 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
                     latestMessageHashGot
                     ) =>
                   latestMessageHashesGot shouldBe Map(validator -> higherRank.blockHash)
-                  latestMessagesGot shouldBe Map(validator      -> BlockSummary.fromBlock(higherRank))
-                  latestMessageGot shouldBe Some(BlockSummary.fromBlock(higherRank))
+                  latestMessagesGot shouldBe Map(
+                    validator -> MessageSummary.fromBlock(higherRank).get
+                  )
+                  latestMessageGot shouldBe MessageSummary.fromBlock(higherRank).toOption
                   latestMessageHashGot shouldBe Some(higherRank.blockHash)
               }
         } yield ()

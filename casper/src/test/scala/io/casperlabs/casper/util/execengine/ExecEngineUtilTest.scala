@@ -66,34 +66,45 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
        */
 
       for {
-        genesis                                     <- createAndStoreBlock[Task](Seq.empty, deploys = genesisDeploysCost)
-        b1                                          <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysCost)
-        b2                                          <- createAndStoreBlock[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
-        b3                                          <- createAndStoreBlock[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
-        dag1                                        <- dagStorage.getRepresentation
-        blockCheckpoint                             <- computeBlockCheckpoint(genesis, genesis, dag1)
-        (postGenStateHash, postGenProcessedDeploys) = blockCheckpoint
-        _                                           <- injectPostStateHash[Task](0, genesis, postGenStateHash, postGenProcessedDeploys)
-        dag2                                        <- dagStorage.getRepresentation
-        blockCheckpointB1                           <- computeBlockCheckpoint(b1, genesis, dag2)
-        (postB1StateHash, postB1ProcessedDeploys)   = blockCheckpointB1
-        _                                           <- injectPostStateHash[Task](1, b1, postB1StateHash, postB1ProcessedDeploys)
-        dag3                                        <- dagStorage.getRepresentation
-        blockCheckpointB2 <- computeBlockCheckpoint(
-                              b2,
-                              genesis,
-                              dag3
-                            )
-        (postB2StateHash, postB2ProcessedDeploys) = blockCheckpointB2
-        _                                         <- injectPostStateHash[Task](2, b2, postB2StateHash, postB2ProcessedDeploys)
+        genesis         <- createAndStoreBlock[Task](Seq.empty, deploys = genesisDeploysCost)
+        b1              <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysCost)
+        b2              <- createAndStoreBlock[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
+        b3              <- createAndStoreBlock[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
+        dag1            <- dagStorage.getRepresentation
+        blockCheckpoint <- computeBlockCheckpointFromDeploys(genesis, genesis, dag1)
+        _ <- injectPostStateHash[Task](
+              0,
+              genesis,
+              blockCheckpoint.postStateHash,
+              blockCheckpoint.deploysForBlock
+            )
+        dag2         <- dagStorage.getRepresentation
+        b1Checkpoint <- computeBlockCheckpointFromDeploys(b1, genesis, dag2)
+        _ <- injectPostStateHash[Task](
+              1,
+              b1,
+              b1Checkpoint.postStateHash,
+              b1Checkpoint.deploysForBlock
+            )
+        dag3 <- dagStorage.getRepresentation
+        b2Checkpoint <- computeBlockCheckpointFromDeploys(
+                         b2,
+                         genesis,
+                         dag3
+                       )
+        _ <- injectPostStateHash[Task](
+              2,
+              b2,
+              b2Checkpoint.postStateHash,
+              b2Checkpoint.deploysForBlock
+            )
 
         dag4 <- dagStorage.getRepresentation
-        blockCheckpointB4 <- computeBlockCheckpoint(
-                              b3,
-                              genesis,
-                              dag4
-                            )
-        (_, _) = blockCheckpointB4
+        _ <- computeBlockCheckpointFromDeploys(
+              b3,
+              genesis,
+              dag4
+            )
 //          b3PostState          = runtimeManager.storageRepr(postb3StateHash).get
 //
 //          _      = b3PostState.contains("@{1}!(1)") should be(true)
@@ -216,12 +227,13 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         for {
           b1  <- dagStorage.lookupByIdUnsafe(index)
           dag <- dagStorage.getRepresentation
-          computeBlockCheckpointResult <- computeBlockCheckpoint(
+          computeBlockCheckpointResult <- computeBlockCheckpointFromDeploys(
                                            b1,
                                            genesis,
                                            dag
                                          )
-          (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
+          postB1StateHash        = computeBlockCheckpointResult.postStateHash
+          postB1ProcessedDeploys = computeBlockCheckpointResult.deploysForBlock
           _ <- injectPostStateHash[Task](
                 index,
                 b1,
@@ -235,8 +247,8 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
         b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
         _       <- createAndStoreBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
-        _       <- step(0, genesis)
         _       <- step(1, genesis)
+        _       <- step(2, genesis)
         r1 <- step(2, genesis)(failedExecEEService).onErrorHandleWith { ex =>
                Task.now {
                  ex.getMessage should startWith("failed when exec")

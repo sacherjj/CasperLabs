@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.MessageSummary
 
 object Sorting {
 
@@ -16,4 +17,11 @@ object Sorting {
       case 0 => Ordering[ByteString].compare(x.blockHash, y.blockHash)
       case n => n
     }
+
+  implicit def messageSummaryOrdering[A <: MessageSummary]: Ordering[A] =
+    (x: A, y: A) =>
+      x.rank.compare(y.rank) match {
+        case 0 => Ordering[ByteString].compare(x.messageHash, y.messageHash)
+        case n => n
+      }
 }

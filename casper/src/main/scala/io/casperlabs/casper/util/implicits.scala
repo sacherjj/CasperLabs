@@ -1,10 +1,11 @@
 package io.casperlabs.casper.util
-import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.models.MessageSummary
 
 object implicits {
   implicit class RichBlockMessage(b: BlockMessage) {
@@ -20,4 +21,6 @@ object implicits {
   implicit val eqBlockHash: cats.Eq[BlockHash] = (x: BlockHash, y: BlockHash) => x == y
   implicit val eqBlockSummary: cats.Eq[BlockSummary] = (x: BlockSummary, y: BlockSummary) =>
     x.blockHash == y.blockHash
+  implicit val eqMessageSummary: cats.Eq[MessageSummary] = (x: MessageSummary, y: MessageSummary) =>
+    x.messageHash == y.messageHash
 }

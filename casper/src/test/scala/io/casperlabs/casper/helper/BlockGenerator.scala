@@ -13,7 +13,6 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -35,27 +34,18 @@ object BlockGenerator {
     for {
       b   <- IndexedDagStorage[F].lookupByIdUnsafe(id)
       dag <- IndexedDagStorage[F].getRepresentation
-      computeBlockCheckpointResult <- computeBlockCheckpoint[F](
-                                       b,
-                                       genesis,
-                                       dag
-                                     )
-      (postStateHash, processedDeploys) = computeBlockCheckpointResult
-      _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
+      blockCheckpoint <- computeBlockCheckpointFromDeploys[F](
+                          b,
+                          genesis,
+                          dag
+                        )
+      _ <- injectPostStateHash[F](
+            id,
+            b,
+            blockCheckpoint.postStateHash,
+            blockCheckpoint.deploysForBlock
+          )
     } yield b
-
-  def computeBlockCheckpoint[F[_]: Sync: BlockStorage: DeployStorage: ExecutionEngineService: Log](
-      b: Block,
-      genesis: Block,
-      dag: DagRepresentation[F]
-  ): F[(StateHash, Seq[ProcessedDeploy])] =
-    for {
-      result <- computeBlockCheckpointFromDeploys[F](
-                 b,
-                 genesis,
-                 dag
-               )
-    } yield (result.postStateHash, result.deploysForBlock)
 
   def injectPostStateHash[F[_]: Monad: BlockStorage: IndexedDagStorage](
       id: Int,
@@ -130,10 +120,10 @@ trait BlockGenerator {
                                     .lookup(b)
                                     .map(
                                       _.fold(acc) { block =>
-                                        if (acc.contains(block.validatorPublicKey)) {
+                                        if (acc.contains(block.validatorId)) {
                                           acc
                                         } else {
-                                          acc + (block.validatorPublicKey -> block.blockHash)
+                                          acc + (block.validatorId -> block.messageHash)
                                         }
                                       }
                                     )

@@ -11,12 +11,14 @@ import cats.{Apply, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.catscontrib.MonadStateOps._
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.MessageSummary
 import io.casperlabs.shared.{Log, LogSource}
 import io.casperlabs.storage._
 import io.casperlabs.storage.block.BlockStorage
@@ -124,12 +126,19 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
           } yield result
       }
 
-    def lookup(blockHash: BlockHash): F[Option[BlockSummary]] =
+    def lookup(blockHash: BlockHash): F[Option[MessageSummary]] =
       dataLookup
         .get(blockHash)
-        .fold(
-          BlockStorage[F].getBlockMessage(blockHash).map(_.map(BlockSummary.fromBlock))
-        )(blockSummary => Option(blockSummary).pure[F])
+        .fold[F[Option[MessageSummary]]](
+          BlockStorage[F]
+            .getBlockMessage(blockHash)
+            .map(_.map(BlockSummary.fromBlock))
+            .flatMap {
+              case None => (None: Option[MessageSummary]).pure[F]
+              case Some(bs) =>
+                MonadThrowable[F].fromTry(MessageSummary.fromBlockSummary(bs)).map(Some(_))
+            }
+        )(bs => MonadThrowable[F].fromTry(MessageSummary.fromBlockSummary(bs)).map(Some(_)))
 
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.get(blockHash).fold(BlockStorage[F].contains(blockHash))(_ => true.pure[F])
@@ -182,13 +191,15 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
 
-    def latestMessage(validator: Validator): F[Option[BlockSummary]] =
-      latestMessagesMap.get(validator).flatTraverse(lookup)
+    def latestMessage(validator: Validator): F[Option[MessageSummary]] =
+      latestMessagesMap
+        .get(validator)
+        .flatTraverse(lookup)
 
     def latestMessageHashes: F[Map[Validator, BlockHash]] =
       latestMessagesMap.pure[F]
 
-    def latestMessages: F[Map[Validator, BlockSummary]] =
+    def latestMessages: F[Map[Validator, MessageSummary]] =
       latestMessagesMap.toList
         .traverse {
           case (validator, hash) => lookup(hash).map(validator -> _.get)

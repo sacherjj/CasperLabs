@@ -81,7 +81,7 @@ class ValidationTest
           bprev         <- block
           dag           <- IndexedDagStorage[F].getRepresentation
           latestMsgs    <- dag.latestMessages
-          justification = latestMsgs.map { case (v, b) => (v, b.blockHash) }
+          justification = latestMsgs.map { case (v, b) => (v, b.messageHash) }
           bnext <- createAndStoreBlock[F](
                     Seq(bprev.blockHash),
                     creator = creator,
@@ -384,7 +384,11 @@ class ValidationTest
       for {
         _     <- createChain[Task](1)
         block <- dagStorage.lookupByIdUnsafe(0)
-        dag   <- dagStorage.getRepresentation
+        _ = assert(
+          block.getHeader.justifications.isEmpty,
+          "Justification list of Genesis block should be empty."
+        )
+        dag <- dagStorage.getRepresentation
         _ <- ValidationImpl[Task]
               .sequenceNumber(
                 block.withHeader(block.getHeader.withValidatorBlockSeqNum(1)),
@@ -393,9 +397,11 @@ class ValidationTest
               .attempt shouldBeF Left(
               InvalidSequenceNumber
             )
-        _      <- ValidationImpl[Task].sequenceNumber(block, dag) shouldBeF Unit
-        result = log.warns.size should be(1)
-      } yield result
+        _ <- ValidationImpl[Task].sequenceNumber(
+              block.withHeader(block.getHeader.withValidatorBlockSeqNum(0)),
+              dag
+            ) shouldBeF Unit
+      } yield ()
   }
 
   it should "return false for non-sequential numbering" in withStorage {
@@ -406,7 +412,7 @@ class ValidationTest
         dag   <- dagStorage.getRepresentation
         _ <- ValidationImpl[Task]
               .sequenceNumber(
-                block.withHeader(block.getHeader.withValidatorBlockSeqNum(1)),
+                block.withHeader(block.getHeader.withValidatorBlockSeqNum(2)),
                 dag
               )
               .attempt shouldBeF Left(
@@ -422,7 +428,7 @@ class ValidationTest
       val validatorCount = 3
       for {
         _ <- createChainWithRoundRobinValidators[Task](n, validatorCount)
-        _ <- (0 until n).toList.forallM[Task](
+        _ <- (1 to n).toList.forallM[Task](
               i =>
                 for {
                   block <- dagStorage.lookupByIdUnsafe(i)

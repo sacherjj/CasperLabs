@@ -3,9 +3,9 @@ package io.casperlabs.storage.dag
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.metrics.Metered
-import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.MessageSummary
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 
@@ -40,7 +40,7 @@ trait DagRepresentation[F[_]] {
 
   /** Return blocks that having a specify justification */
   def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]]
-  def lookup(blockHash: BlockHash): F[Option[BlockSummary]]
+  def lookup(blockHash: BlockHash): F[Option[MessageSummary]]
   def contains(blockHash: BlockHash): F[Boolean]
 
   /** Return the ranks of blocks in the DAG between start and end, inclusive. */
@@ -52,9 +52,9 @@ trait DagRepresentation[F[_]] {
   def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockHash]]
 
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]
-  def latestMessage(validator: Validator): F[Option[BlockSummary]]
+  def latestMessage(validator: Validator): F[Option[MessageSummary]]
   def latestMessageHashes: F[Map[Validator, BlockHash]]
-  def latestMessages: F[Map[Validator, BlockSummary]]
+  def latestMessages: F[Map[Validator, MessageSummary]]
 }
 
 object DagRepresentation {

@@ -392,7 +392,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           //final fork-choice.
           latestMessages   <- dag.latestMessages
           bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
-          justifications   = toJustification(bondedLatestMsgs)
+          justifications   = toJustification(bondedLatestMsgs.values.toSeq)
           rank             = ProtoUtil.calculateRank(bondedLatestMsgs.values.toSeq)
           protocolVersion  = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(rank)
           proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
@@ -401,7 +401,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                          merged,
                          remainingHashes,
                          justifications,
-                         protocolVersion
+                         protocolVersion,
+                         rank
                        )
                      } else {
                        CreateBlockStatus.noNewDeploys.pure[F]
@@ -517,7 +518,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
       deploys: Set[DeployHash],
       justifications: Seq[Justification],
-      protocolVersion: ProtocolVersion
+      protocolVersion: ProtocolVersion,
+      rank: Long
   ): F[CreateBlockStatus] = Metrics[F].timer("createProposal") {
     (for {
       now <- Time[F].currentMillis
@@ -534,9 +536,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
               now,
               protocolVersion
             )
-      dag               <- dag
-      justificationMsgs <- justifications.toList.traverse(j => dag.lookup(j.latestBlockHash))
-      rank              = ProtoUtil.calculateRank(justificationMsgs.flatten)
       status = if (deploysForBlock.isEmpty) {
         CreateBlockStatus.noNewDeploys
       } else {

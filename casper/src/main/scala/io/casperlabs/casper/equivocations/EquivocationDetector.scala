@@ -4,10 +4,10 @@ import cats.Monad
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.{CasperState, EquivocatedBlock, InvalidBlock, PrettyPrinter}
-import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.MessageSummary
 import io.casperlabs.shared.{Cell, Log, LogSource}
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -90,9 +90,9 @@ object EquivocationDetector {
                             latestMessageOfCreator <- dag
                                                        .lookup(latestMessageHashOfCreator)
                                                        .map(_.get)
-                            implicit0(blockTopoOrdering: Ordering[BlockSummary]) = DagOperations.blockTopoOrderingDesc
+                            implicit0(blockTopoOrdering: Ordering[MessageSummary]) = DagOperations.blockTopoOrderingDesc
                             stream = DagOperations.bfToposortTraverseF(
-                              List(BlockSummary.fromBlock(block))
+                              MessageSummary.fromBlock(block).toList
                             )(
                               b =>
                                 b.justifications.toList
