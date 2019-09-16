@@ -220,7 +220,7 @@ impl bytesrepr::ToBytes for Vec<URef> {
 
 impl<T> From<TURef<T>> for URef {
     fn from(input: TURef<T>) -> Self {
-        URef(input.get_addr(), Some(input.get_access_rights()))
+        URef(input.addr(), Some(input.access_rights()))
     }
 }
 

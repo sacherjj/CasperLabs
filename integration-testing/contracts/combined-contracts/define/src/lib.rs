@@ -66,7 +66,7 @@ pub extern "C" fn mailing_list_ext() {
     match method_name.as_str() {
         "sub" => match sub(get_arg(1)) {
             Some(turef) => {
-                let extra_uref = URef::new(turef.get_addr(), turef.get_access_rights());
+                let extra_uref = URef::new(turef.addr(), turef.access_rights());
                 let extra_urefs = vec![extra_uref];
                 ret(&Some(Key::from(turef)), &extra_urefs);
             }

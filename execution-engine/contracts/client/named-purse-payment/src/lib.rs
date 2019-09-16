@@ -46,7 +46,7 @@ pub extern "C" fn call() {
             .and_then(Key::to_turef)
             .unwrap_or_else(|| contract_api::revert(Error::GetPosInnerURef as u32));
         if let Some(ContractPointer::URef(inner)) = contract_api::read::<Key>(outer).to_c_ptr() {
-            ContractPointer::URef(TURef::new(inner.get_addr(), AccessRights::READ))
+            ContractPointer::URef(TURef::new(inner.addr(), AccessRights::READ))
         } else {
             contract_api::revert(Error::GetPosOuterURef as u32);
         }

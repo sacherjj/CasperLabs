@@ -47,11 +47,11 @@ impl<T> TURef<T> {
         }
     }
 
-    pub fn get_addr(&self) -> [u8; 32] {
+    pub fn addr(&self) -> [u8; 32] {
         self.addr
     }
 
-    pub fn get_access_rights(&self) -> AccessRights {
+    pub fn access_rights(&self) -> AccessRights {
         self.access_rights
     }
 
@@ -68,7 +68,7 @@ pub enum ContractPointer {
 
 impl<T> From<TURef<T>> for Key {
     fn from(turef: TURef<T>) -> Self {
-        let uref = URef::new(turef.get_addr(), turef.get_access_rights());
+        let uref = URef::new(turef.addr(), turef.access_rights());
         Key::URef(uref)
     }
 }

@@ -23,7 +23,7 @@ fn get_pos_contract() -> ContractPointer {
         .and_then(Key::to_turef)
         .unwrap_or_else(|| revert(Error::GetPosInnerURef as u32));
     if let Some(ContractPointer::URef(inner)) = read::<Key>(outer).to_c_ptr() {
-        ContractPointer::URef(TURef::new(inner.get_addr(), AccessRights::READ))
+        ContractPointer::URef(TURef::new(inner.addr(), AccessRights::READ))
     } else {
         revert(Error::GetPosOuterURef as u32)
     }

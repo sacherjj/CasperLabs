@@ -78,8 +78,8 @@ macro_rules! into_try_from_turef_impl {
             type Error = ();
 
             fn try_from(u: TURef<T>) -> Result<Self, Self::Error> {
-                if u.get_access_rights() & $min_access == $min_access {
-                    Ok($type(u.get_addr(), PhantomData))
+                if u.access_rights() & $min_access == $min_access {
+                    Ok($type(u.addr(), PhantomData))
                 } else {
                     Err(())
                 }
