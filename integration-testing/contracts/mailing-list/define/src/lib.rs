@@ -2,18 +2,20 @@
 
 #[macro_use]
 extern crate alloc;
+
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
 extern crate contract_ffi;
+
+use contract_ffi::contract_api::pointers::TURef;
 use contract_ffi::contract_api::*;
-use contract_ffi::contract_api::pointers::UPointer;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 
-fn get_list_key(name: &str) -> UPointer<Vec<String>> {
-    get_uref(name).unwrap().to_u_ptr().unwrap()
+fn get_list_key(name: &str) -> TURef<Vec<String>> {
+    get_uref(name).unwrap().to_turef().unwrap()
 }
 
 fn update_list(name: String) {
@@ -23,14 +25,14 @@ fn update_list(name: String) {
     write(list_key, list);
 }
 
-fn sub(name: String) -> Option<UPointer<Vec<String>>> {
+fn sub(name: String) -> Option<TURef<Vec<String>>> {
     if has_uref(&name) {
         let init_message = vec![String::from("Hello again!")];
-        let new_key = new_uref(init_message);
+        let new_key = new_turef(init_message);
         Some(new_key) //already subscribed
     } else {
         let init_message = vec![String::from("Welcome!")];
-        let new_key = new_uref(init_message);
+        let new_key = new_turef(init_message);
         add_uref(&name, &new_key.clone().into());
         update_list(name);
         Some(new_key)
@@ -47,33 +49,33 @@ fn publish(msg: String) {
     }
 }
 
- #[no_mangle]
- pub extern "C" fn mailing_list_ext() {
-     let method_name: String = get_arg(0);
-     match method_name.as_str() {
-         "sub" => match sub(get_arg(1)) {
-             Some(upointer) => {
-                 let extra_uref = URef::new(upointer.0, upointer.1);
-                 let extra_urefs = vec![extra_uref];
-                 ret(&Some(Key::from(upointer)), &extra_urefs);
-             }
-             _ => ret(&Option::<Key>::None, &Vec::new()),
-         },
-         //Note that this is totally insecure. In reality
-         //the pub method would be only available under an
-         //unforgable reference because otherwise anyone could
-         //spam the mailing list.
-         "pub" => {
-             publish(get_arg(1));
-         }
-         _ => panic!("Unknown method name!"),
-     }
- }
+#[no_mangle]
+pub extern "C" fn mailing_list_ext() {
+    let method_name: String = get_arg(0);
+    match method_name.as_str() {
+        "sub" => match sub(get_arg(1)) {
+            Some(turef) => {
+                let extra_uref = URef::new(turef.addr(), turef.access_rights());
+                let extra_urefs = vec![extra_uref];
+                ret(&Some(Key::from(turef)), &extra_urefs);
+            }
+            _ => ret(&Option::<Key>::None, &Vec::new()),
+        },
+        //Note that this is totally insecure. In reality
+        //the pub method would be only available under an
+        //unforgable reference because otherwise anyone could
+        //spam the mailing list.
+        "pub" => {
+            publish(get_arg(1));
+        }
+        _ => panic!("Unknown method name!"),
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn call() {
     let init_list: Vec<String> = Vec::new();
-    let list_key = new_uref(init_list);
+    let list_key = new_turef(init_list);
 
     //create map of references for stored contract
     let mut mailing_list_urefs: BTreeMap<String, Key> = BTreeMap::new();

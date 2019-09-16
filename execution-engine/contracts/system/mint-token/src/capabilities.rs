@@ -2,13 +2,13 @@ use core::convert::TryFrom;
 use core::marker::PhantomData;
 
 use contract_ffi::contract_api;
-use contract_ffi::contract_api::pointers::UPointer;
+use contract_ffi::contract_api::pointers::TURef;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::Value;
 
 /// Trait representing the ability to read a value. Use case: a key
-/// for the blockdag global state (`UPointer`) is obviously Readable,
+/// for the blockdag global state (`TURef`) is obviously Readable,
 /// however if we abstract over it then we can write unit tests for
 /// smart contracts much more easily.
 pub trait Readable<T> {
@@ -22,8 +22,8 @@ macro_rules! readable_impl {
             T: TryFrom<Value> + Clone,
         {
             fn read(&self) -> T {
-                let ptr: UPointer<T> = self.clone().into();
-                contract_api::read(ptr)
+                let turef: TURef<T> = self.clone().into();
+                contract_api::read(turef)
             }
         }
     };
@@ -43,8 +43,8 @@ macro_rules! writeable_impl {
             T: Clone,
         {
             fn write(&self, t: T) {
-                let ptr: UPointer<T> = self.clone().into();
-                contract_api::write(ptr, t);
+                let turef: TURef<T> = self.clone().into();
+                contract_api::write(turef, t);
             }
         }
     };
@@ -64,35 +64,34 @@ macro_rules! addable_impl {
             T: Clone,
         {
             fn add(&self, t: T) {
-                let ptr: UPointer<T> = self.clone().into();
-                contract_api::add(ptr, t);
+                let turef: TURef<T> = self.clone().into();
+                contract_api::add(turef, t);
             }
         }
     };
 }
 
-/// Macro for deriving conversion traits to/from UPointer
-macro_rules! into_try_from_upointer_impl {
+/// Macro for deriving conversion traits to/from TURef
+macro_rules! into_try_from_turef_impl {
     ($type:ident, $min_access:expr) => {
-        impl<T> TryFrom<UPointer<T>> for $type<T> {
+        impl<T> TryFrom<TURef<T>> for $type<T> {
             type Error = ();
 
-            fn try_from(u: UPointer<T>) -> Result<Self, Self::Error> {
-                let UPointer(id, access, phantom) = u;
-                if access & $min_access == $min_access {
-                    Ok($type(id, phantom))
+            fn try_from(u: TURef<T>) -> Result<Self, Self::Error> {
+                if u.access_rights() & $min_access == $min_access {
+                    Ok($type(u.addr(), PhantomData))
                 } else {
                     Err(())
                 }
             }
         }
 
-        // Can't implement From<$type<T>> for UPointer<T> because of the
-        // type parameter on UPointer and UPointer is not part of this crate.
-        impl<T> Into<UPointer<T>> for $type<T> {
-            fn into(self) -> UPointer<T> {
+        // Can't implement From<$type<T>> for TURef<T> because of the
+        // type parameter on TURef and TURef is not part of this crate.
+        impl<T> Into<TURef<T>> for $type<T> {
+            fn into(self) -> TURef<T> {
                 let access = $min_access;
-                UPointer::new(self.0, access)
+                TURef::new(self.0, access)
             }
         }
     };
@@ -127,7 +126,7 @@ macro_rules! from_try_from_key_impl {
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct ARef<T>(pub [u8; 32], PhantomData<T>);
 
-into_try_from_upointer_impl!(ARef, AccessRights::ADD);
+into_try_from_turef_impl!(ARef, AccessRights::ADD);
 from_try_from_key_impl!(ARef, AccessRights::ADD);
 addable_impl!(ARef<T>);
 
@@ -135,7 +134,7 @@ addable_impl!(ARef<T>);
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct RAWRef<T>(pub [u8; 32], PhantomData<T>);
 
-into_try_from_upointer_impl!(RAWRef, AccessRights::READ_ADD_WRITE);
+into_try_from_turef_impl!(RAWRef, AccessRights::READ_ADD_WRITE);
 from_try_from_key_impl!(RAWRef, AccessRights::READ_ADD_WRITE);
 readable_impl!(RAWRef<T>);
 addable_impl!(RAWRef<T>);
