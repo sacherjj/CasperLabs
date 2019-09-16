@@ -73,13 +73,13 @@ package object gossiping {
       connectToGossip: GossipService.Connector[F] = (node: Node) => {
         cachedConnections.connection(node, enforce = true) map { chan =>
           new GossipingGrpcMonix.GossipServiceStub(chan)
-        } map {
+        } map { stub =>
           implicit val s = egressScheduler
           GrpcGossipService.toGossipService(
-            _,
+            stub,
             onError = {
-              case Unavailable(_)      => disconnect(cachedConnections, node)
-              case _: TimeoutException => disconnect(cachedConnections, node)
+              case Unavailable(_) | _: TimeoutException =>
+                disconnect(cachedConnections, node) *> NodeDiscovery[F].banTemp(node)
             },
             timeout = conf.server.defaultTimeout
           )

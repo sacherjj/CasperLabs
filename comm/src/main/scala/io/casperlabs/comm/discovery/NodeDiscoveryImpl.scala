@@ -70,6 +70,7 @@ object NodeDiscoveryImpl {
       Resource.liftF(for {
         table              <- PeerTable[F](id)
         recentlyAlivePeers <- Ref.of[F, (Set[Node], Millis)]((Set.empty, 0L))
+        temporaryBans      <- Ref.of[F, Map[Node, Millis]](Map.empty)
         nodeDiscovery <- Sync[F].delay {
                           val alivePeersCacheSize =
                             if (gossipingRelaySaturation == 100) {
@@ -81,6 +82,7 @@ object NodeDiscoveryImpl {
                             id = id,
                             table = table,
                             recentlyAlivePeersRef = recentlyAlivePeers,
+                            temporaryBansRef = temporaryBans,
                             gossipingEnabled = gossipingEnabled,
                             alivePeersCacheSize = alivePeersCacheSize
                           )
@@ -119,6 +121,8 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
     id: NodeIdentifier,
     val table: PeerTable[F],
     recentlyAlivePeersRef: Ref[F, (Set[Node], Millis)],
+    // Remember the last time a peer was banned.
+    temporaryBansRef: Ref[F, Map[Node, Millis]],
     alpha: Int = 3,
     k: Int = PeerTable.Redundancy,
     gossipingEnabled: Boolean,
@@ -155,7 +159,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
       _     <- addNode(peer)
     } yield peers
 
-  def discover: F[Unit] = {
+  override def discover: F[Unit] = {
 
     val initRPC = KademliaService[F].receive(pingHandler, lookupHandler)
 
@@ -183,7 +187,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
     } yield ()
   }
 
-  def lookup(toLookup: NodeIdentifier): F[Option[Node]] = {
+  override def lookup(toLookup: NodeIdentifier): F[Option[Node]] = {
     def loop(successQueriesN: Int, alreadyQueried: Set[NodeIdentifier], shortlist: Seq[Node])(
         maybeClosestPeerNode: Option[Node]
     ): F[Option[Node]] =
@@ -237,26 +241,37 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
   override def recentlyAlivePeersAscendingDistance: F[List[Node]] =
     recentlyAlivePeersAscendingDistance(id)
 
-  def recentlyAlivePeersAscendingDistance(anchorId: NodeIdentifier): F[List[Node]] =
-    if (gossipingEnabled)
-      recentlyAlivePeersRef.get.map {
-        case (recentlyAlivePeers, _) => PeerTable.sort(recentlyAlivePeers.toList, anchorId)(_.id)
-      } else
-      // TODO: this is misleading because returned peers won't necessarily be alive.
-      // Though, this is fine because it's only used by
-      // the old legacy communication layer code which should go away eventually
-      // io.casperlabs.comm.rp.Connect#findAndConnect
-      // The old code maintains its own list of alive connections
-      table.peersAscendingDistance
+  private def recentlyAlivePeersAscendingDistance(anchorId: NodeIdentifier): F[List[Node]] = {
+    val peersF =
+      if (gossipingEnabled)
+        recentlyAlivePeersRef.get.map {
+          case (recentlyAlivePeers, _) => PeerTable.sort(recentlyAlivePeers.toList, anchorId)(_.id)
+        } else
+        // TODO: this is misleading because returned peers won't necessarily be alive.
+        // Though, this is fine because it's only used by
+        // the old legacy communication layer code which should go away eventually
+        // io.casperlabs.comm.rp.Connect#findAndConnect
+        // The old code maintains its own list of alive connections
+        table.peersAscendingDistance
 
-  def schedulePeriodicRecentlyAlivePeersCacheUpdate: F[Unit] =
+    for {
+      bans      <- temporaryBansRef.get
+      peers     <- peersF
+      now       <- Timer[F].clock.realTime(MILLISECONDS)
+      threshold = now - alivePeersCacheExpirationPeriod.toMillis
+    } yield peers.filter { node =>
+      !bans.contains(node) || bans(node) < threshold
+    }
+  }
+
+  private[discovery] def schedulePeriodicRecentlyAlivePeersCacheUpdate: F[Unit] =
     updateRecentlyAlivePeers >>
       Timer[F].sleep(alivePeersCacheUpdatePeriod) >>
       schedulePeriodicRecentlyAlivePeersCacheUpdate
 
   // TODO: The logic might be too complex here
   // Possible simplification would be pinging all known peers in some period and cache responded ones
-  def updateRecentlyAlivePeers: F[Unit] =
+  private[discovery] def updateRecentlyAlivePeers: F[Unit] =
     for {
       (recentlyAlivePeers, lastTimeAccess) <- recentlyAlivePeersRef.get
       currentTime                          <- Timer[F].clock.realTime(MILLISECONDS)
@@ -278,12 +293,12 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
       _ <- Metrics[F].setGauge("peers_alive", newAlivePeers.size.toLong)
     } yield ()
 
-  def filterAlive(peers: List[Node]): F[List[Node]] =
+  private def filterAlive(peers: List[Node]): F[List[Node]] =
     peers.parFlatTraverse { peer =>
       KademliaService[F].ping(peer).map(success => if (success) List(peer) else Nil)
     }
 
-  def filterAlive(peers: List[Node], max: Int): F[List[Node]] = {
+  private def filterAlive(peers: List[Node], max: Int): F[List[Node]] = {
     val batches = peers.grouped(alivePeersCachePingsBatchSize).toList
     batches.foldLeftM(List.empty[Node]) {
       case (acc, _) if acc.size >= max   => acc.pure[F]
@@ -291,4 +306,10 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
       case (acc, batch)                  => filterAlive(batch).map(acc ++ _)
     }
   }
+
+  override def banTemp(node: Node): F[Unit] =
+    for {
+      now <- Timer[F].clock.realTime(MILLISECONDS)
+      _   <- temporaryBansRef.update(_ + (node -> now))
+    } yield ()
 }

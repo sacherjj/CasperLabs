@@ -152,6 +152,7 @@ object RelayingSpec {
         override def discover: Task[Unit]                                  = ???
         override def lookup(id: NodeIdentifier): Task[Option[Node]]        = ???
         override def recentlyAlivePeersAscendingDistance: Task[List[Node]] = Task.now(peers)
+        override def banTemp(node: Node): Task[Unit]                       = ???
       }
       val asked                 = AtomicInt(0)
       val concurrency           = AtomicInt(0)

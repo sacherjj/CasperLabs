@@ -45,6 +45,7 @@ object EffectsTestInstances {
     def discover: F[Unit]                                          = ???
     def lookup(id: NodeIdentifier): F[Option[Node]]                = ???
     def handleCommunications: Protocol => F[CommunicationResponse] = ???
+    def banTemp(node: Node): F[Unit]                               = ???
   }
 
   def createRPConfAsk[F[_]: Applicative](
