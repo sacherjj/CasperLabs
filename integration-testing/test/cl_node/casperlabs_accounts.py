@@ -4,7 +4,9 @@ from contextlib import contextmanager
 from typing import Union, List
 from pathlib import Path
 import base64
-import os
+
+from test.cl_node.common import resources_path
+from casperlabs_client import read_pem_key
 
 
 def is_valid_account(account_id: Union[int, str]) -> bool:
@@ -22,10 +24,7 @@ class Account:
 
     @property
     def account_path(self) -> Path:
-        cur_path = Path(os.path.realpath(__file__)).parent
-        while cur_path.name != "integration-testing":
-            cur_path = cur_path.parent
-        return cur_path / "resources" / "accounts"
+        return resources_path() / "accounts"
 
     @property
     def public_key_path(self) -> Path:
@@ -34,6 +33,14 @@ class Account:
     @property
     def private_key_path(self) -> Path:
         return self.account_path / self.private_key_filename
+
+    @property
+    def public_key_docker_path(self) -> Path:
+        return f"/data/accounts/{self.public_key_filename}"
+
+    @property
+    def private_key_docker_path(self) -> Path:
+        return f"/data/accounts/{self.private_key_filename}"
 
     @property
     def private_key_filename(self) -> str:
@@ -47,6 +54,10 @@ class Account:
     def public_key(self) -> str:
         with open(self.account_path / f"account-id-{self.file_id}") as f:
             return f.read().strip()
+
+    @property
+    def private_key(self) -> str:
+        return base64.b64encode(read_pem_key(self.private_key_path)).decode("utf-8")
 
     @property
     def public_key_hex(self) -> str:

@@ -176,7 +176,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
             BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
 
             request = GenesisRequest.parseFrom(
-              genesis.getBody.deploys.head.getDeploy.getBody.getSession.code.toByteArray
+              genesis.getBody.deploys.head.getDeploy.getBody.getSession.getWasm.toByteArray
             )
           } yield {
             request.initialMotes.get shouldBe state.BigInt("123", 512)

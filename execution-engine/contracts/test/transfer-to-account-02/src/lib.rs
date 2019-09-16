@@ -1,22 +1,21 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api::TransferResult;
-use cl_std::value::account::PublicKey;
-use cl_std::value::U512;
+use contract_ffi::contract_api::TransferResult;
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::U512;
 
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
-const TRANSFER_AMOUNT: u32 = 750;
 
 #[no_mangle]
 pub extern "C" fn call() {
     let public_key = PublicKey::new(ACCOUNT_2_ADDR);
-    let amount = U512::from(TRANSFER_AMOUNT);
+    let amount: U512 = contract_ffi::contract_api::get_arg(0);
 
-    let result = cl_std::contract_api::transfer_to_account(public_key, amount);
+    let result = contract_ffi::contract_api::transfer_to_account(public_key, amount);
 
     assert_ne!(result, TransferResult::TransferError);
 }

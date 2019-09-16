@@ -1,18 +1,18 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 #[macro_use]
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::string::String;
-use cl_std::contract_api::{
+use contract_ffi::contract_api::{
     add_uref, create_purse, get_arg, get_balance, get_uref, has_uref, main_purse, new_uref, revert,
     transfer_from_purse_to_purse,
 };
-use cl_std::key::Key;
-use cl_std::value::account::PurseId;
-use cl_std::value::U512;
+use contract_ffi::key::Key;
+use contract_ffi::value::account::PurseId;
+use contract_ffi::value::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {

@@ -3,7 +3,7 @@
 Python CasperLabs client unit tests suite.
 
 The tests are very rudimentary currently. They only check that
-correct objects are sent to the server. 
+correct objects are sent to the server.
 """
 
 import os
@@ -50,7 +50,6 @@ def mock_server_setup(request):
 
 def test_deploy(casper_service):
     response, deploy_hash = client.deploy(from_addr = 32 * b"0",
-                                          gas_limit = 100000000,
                                           gas_price = 1,
                                           session = SESSION,
                                           payment = PAYMENT)

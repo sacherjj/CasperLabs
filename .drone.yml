@@ -37,6 +37,15 @@ name: build-bors-merge
 
 steps:
 # Below is for pull_request webhooks only
+
+# - name: markdown-link-check
+#   commands:
+#   - "ci/markdown-link-check.sh"
+#   image: "casperlabs/buildenv:latest"
+#   when:
+#     event:
+#     - pull_request
+
 - name: sbt-compile-test-pr
   commands:
   - "sbt test"
@@ -58,19 +67,21 @@ steps:
   depends_on:
   - sbt-compile-test-pr
 
+#Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-pr
   environment:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
+  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
   - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
   - "make test test-contracts"
-  - "cd ../long-running-tests"
-  - "./build-contracts.sh"
   image: "casperlabs/buildenv:latest"
   when:
     event:
     - pull_request
+  depends_on:
+  - sbt-compile-test-pr
 
 - name: run-cargo-fmt-pr
   commands:
@@ -111,6 +122,16 @@ steps:
   - rust-compile-test-pr
 
 # This section is for bors' branches only
+
+# - name: markdown-link-check-bors
+#   commands:
+#   - "ci/markdown-link-check.sh"
+#   image: "casperlabs/buildenv:latest"
+#   when:
+#     branch:
+#     - staging
+#     - trying
+
 - name: sbt-test-docker-bors
   commands:
   - "sbt test"
@@ -119,7 +140,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -138,6 +159,7 @@ steps:
   depends_on:
   - sbt-test-docker-bors
 
+#Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-bors
   environment:
     CARGO_FLAGS: "--locked"
@@ -149,6 +171,8 @@ steps:
     branch:
     - staging
     - trying
+  depends_on:
+  - sbt-test-docker-bors
 
 # Note: Added the dependency on the sbt step to be finished first because in testing,
 # Drone was getting random sbt build failures when too many steps were running simultaneously.
@@ -198,6 +222,7 @@ steps:
 - name: run-rust-benchmarks-bors
   commands:
   - "cd execution-engine/"
+  - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
   - "make bench"
   image: "casperlabs/buildenv:latest"
   when:
@@ -220,7 +245,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -237,7 +262,7 @@ steps:
   - "rm -rf /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   - name: temp
     path: "/tmp"
@@ -258,7 +283,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   - name: temp
     path: "/tmp"
@@ -293,7 +318,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -309,7 +334,7 @@ steps:
   - "make docker-build/key-generator"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -325,7 +350,7 @@ steps:
   - "make docker-build/explorer"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -341,7 +366,7 @@ steps:
   - "make docker-build/grpcwebproxy"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -384,7 +409,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -487,7 +512,7 @@ steps:
     DOCKER_USERNAME:
       from_secret: docker_username
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
   when:
     branch:
@@ -558,7 +583,7 @@ steps:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
-  - name: docker_sock	
+  - name: docker_sock
     path: "/var/run/docker.sock"
 
 volumes:
@@ -650,6 +675,9 @@ steps:
   - "cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm artifacts/${DRONE_BRANCH}"
   - "WORKING_DIR=$(pwd) ; cd execution-engine/target/release/rpmbuild/SOURCES ; OS=$(uname -s | tr '[:upper:]' '[:lower:]') ; ARCH=$(uname -p) ; SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed \"s/.tar.gz//\") ; TARGET=$(ls $SOURCE*.tar.gz | sed \"s/.tar.gz/_\"$OS\"_\"$ARCH\".tar.gz/\") ; tar -xzf $SOURCE.tar.gz ; tar -czf $TARGET -C $SOURCE/usr/bin/ . && cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}"
   image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
   when:
     ref:
     - refs/tags/v*

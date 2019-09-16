@@ -10,7 +10,6 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.configuration.cli.scallop
 import io.casperlabs.node.BuildInfo
 import io.casperlabs.node.configuration.Utils._
-import io.casperlabs.shared.StoreType
 import org.rogach.scallop._
 
 import scala.collection.mutable
@@ -53,17 +52,6 @@ private[configuration] object Converter extends ParserImplicits {
 
       override val argType: ArgType.V = ArgType.SINGLE
     }
-
-  implicit val storeTypeConverter: ValueConverter[StoreType] = new ValueConverter[StoreType] {
-    def parse(s: List[(String, List[String])]): Either[String, Option[StoreType]] =
-      s match {
-        case (_, storeType :: Nil) :: Nil =>
-          Parser[StoreType].parse(storeType).map(_.some)
-        case Nil => Right(None)
-        case _   => Left("provide the store type")
-      }
-    val argType: ArgType.V = ArgType.SINGLE
-  }
 }
 
 private[configuration] object Options {
@@ -228,9 +216,15 @@ private[configuration] final case class Options private (
       )
 
     @scallop
-    val tlsSecureRandomNonBlocking =
-      gen[Flag](
-        "Use a non blocking secure random instance."
+    val tlsApiCertificate =
+      gen[Path](
+        "Path to an optional X.509 certificate file signed by a trusted root CA, to be used in the with public API."
+      )
+
+    @scallop
+    val tlsApiKey =
+      gen[Path](
+        "Path to the unencrypted secp256r1 PKCS#8 private key file corresponding to the API certificate, if given."
       )
 
     @scallop
@@ -320,6 +314,10 @@ private[configuration] final case class Options private (
       gen[Int]("Number of deploys to accumulate before proposing.")
 
     @scallop
+    val casperMaxBlockSizeBytes =
+      gen[Int]("Maximum block size [in bytes].")
+
+    @scallop
     val serverBootstrap =
       gen[Node](
         "Bootstrap casperlabs node address for initial seed.",
@@ -403,6 +401,10 @@ private[configuration] final case class Options private (
       gen[FiniteDuration]("Time to wait between initial synchronization attempts.")
 
     @scallop
+    val serverPeriodicSyncRoundPeriod =
+      gen[FiniteDuration]("Time to wait between periodic synchronization attempts.")
+
+    @scallop
     val serverDownloadMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads initiated by the download manager.")
     @scallop
@@ -470,12 +472,6 @@ private[configuration] final case class Options private (
     @scallop
     val serverDataDir =
       gen[Path]("Path to data directory. ")
-
-    @scallop
-    val serverStoreType =
-      gen[StoreType](
-        s"Type of Casperlabs space backing store. Valid values are: ${StoreType.values.mkString(",")}"
-      )
 
     @scallop
     val serverMaxNumOfConnections =

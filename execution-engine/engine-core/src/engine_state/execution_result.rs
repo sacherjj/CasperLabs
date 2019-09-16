@@ -1,8 +1,14 @@
 use std::collections::HashMap;
 
+use crate::tracking_copy;
+
 use contract_ffi::key::Key;
-use contract_ffi::value::{Value, U512};
+use contract_ffi::value::Value;
+use engine_shared::gas::Gas;
+use engine_shared::motes::Motes;
+use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
+use engine_storage::global_state::StateReader;
 
 use super::execution_effect::ExecutionEffect;
 use super::op::Op;
@@ -14,21 +20,21 @@ pub enum ExecutionResult {
     Failure {
         error: error::Error,
         effect: ExecutionEffect,
-        cost: u64,
+        cost: Gas,
     },
     /// Execution was finished successfully
-    Success { effect: ExecutionEffect, cost: u64 },
+    Success { effect: ExecutionEffect, cost: Gas },
 }
 
 impl ExecutionResult {
     /// Constructs [ExecutionResult::Failure] that has 0 cost and no effects.
-    /// This is the case for failures that we can't (or don't want to) charge for,
-    /// like `PreprocessingError` or `InvalidNonce`.
+    /// This is the case for failures that we can't (or don't want to) charge
+    /// for, like `PreprocessingError` or `InvalidNonce`.
     pub fn precondition_failure(error: error::Error) -> ExecutionResult {
         ExecutionResult::Failure {
             error,
             effect: Default::default(),
-            cost: 0,
+            cost: Gas::default(),
         }
     }
 
@@ -46,7 +52,7 @@ impl ExecutionResult {
         }
     }
 
-    pub fn cost(&self) -> u64 {
+    pub fn cost(&self) -> Gas {
         match self {
             ExecutionResult::Failure { cost, .. } => *cost,
             ExecutionResult::Success { cost, .. } => *cost,
@@ -60,7 +66,7 @@ impl ExecutionResult {
         }
     }
 
-    pub fn with_cost(self, cost: u64) -> Self {
+    pub fn with_cost(self, cost: Gas) -> Self {
         match self {
             ExecutionResult::Failure { error, effect, .. } => ExecutionResult::Failure {
                 error,
@@ -132,7 +138,7 @@ impl ExecutionResultBuilder {
         self
     }
 
-    pub fn total_cost(&self) -> u64 {
+    pub fn total_cost(&self) -> Gas {
         let payment_cost = self
             .payment_execution_result
             .as_ref()
@@ -148,9 +154,9 @@ impl ExecutionResultBuilder {
 
     pub fn check_forced_transfer(
         &mut self,
-        max_payment_cost: U512,
-        account_main_purse_balance: U512,
-        payment_purse_balance: U512,
+        max_payment_cost: Motes,
+        account_main_purse_balance: Motes,
+        payment_purse_balance: Motes,
         account_main_purse: Key,
         rewards_purse: Key,
     ) -> Option<ExecutionResult> {
@@ -161,9 +167,10 @@ impl ExecutionResultBuilder {
         let payment_result_cost = payment_result.cost();
         let payment_result_is_failure = payment_result.is_failure();
 
-        // payment_code_spec_3_b_ii: if (balance of PoS pay purse) < (gas spent during payment code execution) * conv_rate, no session
+        // payment_code_spec_3_b_ii: if (balance of PoS pay purse) < (gas spent during
+        // payment code execution) * conv_rate, no session
         let insufficient_balance_to_continue =
-            payment_purse_balance < (payment_result_cost * CONV_RATE).into();
+            payment_purse_balance < Motes::from_gas(payment_result_cost, CONV_RATE)?;
 
         // payment_code_spec_4: insufficient payment
         if !(insufficient_balance_to_continue || payment_result_is_failure) {
@@ -181,18 +188,18 @@ impl ExecutionResultBuilder {
         ops.insert(account_main_purse_normalize, Op::Write);
         transforms.insert(
             account_main_purse_normalize,
-            Transform::Write(Value::UInt512(new_balance)),
+            Transform::Write(Value::UInt512(new_balance.value())),
         );
 
         ops.insert(rewards_purse_normalize, Op::Add);
         transforms.insert(
             rewards_purse_normalize,
-            Transform::AddUInt512(max_payment_cost),
+            Transform::AddUInt512(max_payment_cost.value()),
         );
 
         let error = error::Error::InsufficientPaymentError;
         let effect = ExecutionEffect::new(ops, transforms);
-        let cost = (max_payment_cost / CONV_RATE).as_u64();
+        let cost = Gas::from_motes(max_payment_cost, CONV_RATE).unwrap_or_default();
 
         Some(ExecutionResult::Failure {
             error,
@@ -201,7 +208,11 @@ impl ExecutionResultBuilder {
         })
     }
 
-    pub fn build(self) -> Result<ExecutionResult, ExecutionResultBuilderError> {
+    pub fn build<R: StateReader<Key, Value>>(
+        self,
+        reader: &R,
+        correlation_id: CorrelationId,
+    ) -> Result<ExecutionResult, ExecutionResultBuilderError> {
         let cost = self.total_cost();
         let mut ops = HashMap::new();
         let mut transforms = HashMap::new();
@@ -216,23 +227,20 @@ impl ExecutionResultBuilder {
                 if result.is_failure() {
                     return Ok(result);
                 } else {
-                    let effect = result.effect().to_owned();
-                    ops.extend(effect.ops.into_iter());
-                    transforms.extend(effect.transforms.into_iter());
+                    Self::add_effects(&mut ops, &mut transforms, result.effect());
                 }
             }
             None => return Err(ExecutionResultBuilderError::MissingPaymentExecutionResult),
         };
 
-        // session_code_spec_3: only include session exec effects if there is no session exec error
+        // session_code_spec_3: only include session exec effects if there is no session
+        // exec error
         match self.session_execution_result {
             Some(result) => {
                 if result.is_failure() {
                     ret = result.with_cost(cost);
                 } else {
-                    let effect = result.effect().to_owned();
-                    ops.extend(effect.ops.into_iter());
-                    transforms.extend(effect.transforms.into_iter());
+                    Self::add_effects(&mut ops, &mut transforms, result.effect());
                 }
             }
             None => return Err(ExecutionResultBuilderError::MissingSessionExecutionResult),
@@ -246,14 +254,62 @@ impl ExecutionResultBuilder {
                         error::Error::FinalizationError,
                     ));
                 } else {
-                    let effect = result.effect().to_owned();
-                    ops.extend(effect.ops.into_iter());
-                    transforms.extend(effect.transforms.into_iter());
+                    Self::add_effects(&mut ops, &mut transforms, result.effect());
                 }
             }
             None => return Err(ExecutionResultBuilderError::MissingFinalizeExecutionResult),
         }
 
-        Ok(ret.with_effect(ExecutionEffect::new(ops, transforms)))
+        // Remove redundant writes to allow more opportunity to commute
+        let reduced_effect = Self::reduce_identity_writes(ops, transforms, reader, correlation_id);
+
+        Ok(ret.with_effect(reduced_effect))
+    }
+
+    fn add_effects(
+        ops: &mut HashMap<Key, Op>,
+        transforms: &mut HashMap<Key, Transform>,
+        effect: &ExecutionEffect,
+    ) {
+        for (k, op) in effect.ops.iter() {
+            tracking_copy::utils::add(ops, *k, op.clone());
+        }
+        for (k, t) in effect.transforms.iter() {
+            tracking_copy::utils::add(transforms, *k, t.clone());
+        }
+    }
+
+    /// In the case we are writing the same value as was there originally,
+    /// it is equivalent to having a `Transform::Identity` and `Op::Read`.
+    /// This function makes that reduction before returning the `ExecutionEffect`.
+    fn reduce_identity_writes<R: StateReader<Key, Value>>(
+        mut ops: HashMap<Key, Op>,
+        mut transforms: HashMap<Key, Transform>,
+        reader: &R,
+        correlation_id: CorrelationId,
+    ) -> ExecutionEffect {
+        let kvs: Vec<(Key, Value)> = transforms
+            .keys()
+            .filter_map(|k| match transforms.get(k) {
+                Some(Transform::Write(_)) => reader
+                    .read(correlation_id, k)
+                    .ok()
+                    .and_then(|maybe_v| maybe_v.map(|v| (*k, v.clone()))),
+                _ => None,
+            })
+            .collect();
+
+        for (k, old_value) in kvs {
+            if let Some(Transform::Write(new_value)) = transforms.remove(&k) {
+                if new_value == old_value {
+                    transforms.insert(k, Transform::Identity);
+                    ops.insert(k, Op::Read);
+                } else {
+                    transforms.insert(k, Transform::Write(new_value));
+                }
+            }
+        }
+
+        ExecutionEffect::new(ops, transforms)
     }
 }

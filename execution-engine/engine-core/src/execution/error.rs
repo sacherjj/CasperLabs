@@ -12,7 +12,7 @@ use contract_ffi::value::account::{
 };
 use engine_shared::transform::TypeMismatch;
 
-use resolvers::error::ResolverError;
+use crate::resolvers::error::ResolverError;
 
 #[derive(Debug)]
 pub enum Error {
@@ -34,10 +34,6 @@ pub enum Error {
     Ret(Vec<URef>),
     Rng(rand::Error),
     ResolverError(ResolverError),
-    InvalidNonce {
-        deploy_nonce: u64,
-        expected_nonce: u64,
-    },
     /// Reverts execution with a provided status
     Revert(u32),
     AddKeyFailure(AddKeyFailure),
@@ -46,6 +42,8 @@ pub enum Error {
     SetThresholdFailure(SetThresholdFailure),
     SystemContractError(system_contracts::error::Error),
     DeploymentAuthorizationFailure,
+    ExpectedReturnValue,
+    UnexpectedReturnValue,
 }
 
 impl fmt::Display for Error {

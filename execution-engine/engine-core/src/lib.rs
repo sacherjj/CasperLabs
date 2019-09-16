@@ -33,16 +33,17 @@ extern crate proptest;
 extern crate num_derive;
 extern crate num_traits;
 
-pub mod args;
-pub mod byte_size;
+use contract_ffi::key::Key;
+use std::collections::BTreeMap;
+
 pub mod engine_state;
 pub mod execution;
-pub mod function_index;
-pub mod meter;
 pub mod resolvers;
 pub mod runtime_context;
 pub mod tracking_copy;
-pub mod tracking_copy_ext;
-pub mod utils;
 
-type URefAddr = [u8; 32];
+pub const ADDRESS_LENGTH: usize = 32;
+
+type Address = [u8; ADDRESS_LENGTH];
+
+type KnownKeys = BTreeMap<String, Key>;

@@ -4,14 +4,25 @@ import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, IndexedDagStorage}
+import io.casperlabs.blockstorage.{
+  BlockMetadata,
+  BlockStorage,
+  DagRepresentation,
+  IndexedDagStorage
+}
+import io.casperlabs.casper.DeploySelection
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
-import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.execengine.DeploysCheckpoint
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
+import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
+import io.casperlabs.casper.finality.CommitteeWithConsensusValue
+import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
+import io.casperlabs.casper.finality.votingmatrix.{FinalityDetectorVotingMatrix, VotingMatrix}
+import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -83,10 +94,15 @@ object BlockGenerator {
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
       )
-      merged <- ExecEngineUtil.merge[F](parents, dag)
+      merged                                   <- ExecEngineUtil.merge[F](parents, dag)
+      implicit0(deployBuffer: DeployBuffer[F]) <- MockDeployBuffer.create[F]()
+      implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
+        5 * 1024 * 1024
+      )
+      _ <- deployBuffer.addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
-                 deploys,
+                 deploys.map(_.deployHash).toSet,
                  b.getHeader.timestamp,
                  ProtocolVersion(1)
                )
@@ -113,7 +129,23 @@ trait BlockGenerator {
         .withPostStateHash(postStateHash)
         .withBonds(bonds)
       body = Block.Body().withDeploys(deploys)
-      serializedJustifications = justifications.toList.map {
+      dag  <- IndexedDagStorage[F].getRepresentation
+      // Every parent should also include in the justification,by doing this we can avoid passing parameter justifications when creating block in test
+      updatedJustifications <- parentsHashList.toList.foldLeftM(justifications) {
+                                case (acc, b) =>
+                                  dag
+                                    .lookup(b)
+                                    .map(
+                                      _.fold(acc) { block =>
+                                        if (acc.contains(block.validatorPublicKey)) {
+                                          acc
+                                        } else {
+                                          acc + (block.validatorPublicKey -> block.blockHash)
+                                        }
+                                      }
+                                    )
+                              }
+      serializedJustifications = updatedJustifications.toList.map {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Block.Justification(creator, latestBlockHash)
       }

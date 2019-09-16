@@ -1,6 +1,8 @@
 syntax = "proto3";
 package io.casperlabs.casper.consensus;
 
+import "io/casperlabs/casper/consensus/state.proto";
+
 // Signature over for example a deploy or a block. The location of the public key depends
 // on the subject; for example if it's a block then the key is actually part of the data
 // that needs to be signed over.
@@ -31,12 +33,10 @@ message Deploy {
     repeated Approval approvals = 4;
 
     message Header {
+        // Removed the nonce.
+        reserved 2;
         // Identifying the Account is the key used to sign the Deploy.
         bytes account_public_key = 1;
-        // Monotonic nonce of the Account. Only the Deploy with the expected nonce can be executed straight away;
-        // anything higher has to wait until the Account gets into the correct state, i.e. the pending Deploys get
-        // executed on whichever Node they are currently waiting.
-        uint64 nonce = 2;
         // Current time milliseconds.
         uint64 timestamp = 3;
         // Conversion rate between the cost of Wasm opcodes and the motes sent by the `payment_code`.
@@ -58,8 +58,43 @@ message Deploy {
     // Includes both binary instructions (wasm) and optionally, arguments
     // to those instructions encoded via our ABI
     message Code {
-        bytes code = 1; // wasm byte code
-        bytes args = 2; // ABI-encoded arguments
+        oneof contract {
+            // Wasm byte code.
+            bytes wasm = 1;
+            // Public hash address of an already stored contract.
+            bytes hash = 3;
+            // Name of a stored contract associated with the executing account (uref or hash).
+            string name = 4;
+            // URef of a stored contract.
+            bytes uref = 5;
+        }
+        // Deprecated, use `args` instead.
+        bytes abi_args = 2; // ABI-encoded arguments
+        // Keyword arguments. Note that while the execution engine works with the original
+        // positional argument passing style, the order of the arguments matters.
+        repeated Arg args = 6;
+    }
+
+    message Arg {
+        string name = 1;
+        // Note that until the EE doesn't support kwargs directly, missing an Empty values are
+        // not allowed because they would be ambiguous.
+        Value value = 2;
+        // Subset of cases in `state.Value` that can be used as input for contract calls.
+        message Value {
+            oneof value {
+                // Explicitly mark a value as Some or None in the ABI.
+                Value optional_value = 1;
+                bytes bytes_value = 2;
+                int32 int_value = 3;
+                state.IntList int_list = 4;
+                string string_value = 5;
+                state.StringList string_list = 6;
+                int64 long_value = 7;
+                state.BigInt big_int = 8;
+                state.Key key = 9;
+            }
+        }
     }
 }
 
@@ -95,6 +130,16 @@ message Block {
         bytes validator_public_key = 10;
         // Distance from Genesis.
         uint64 rank = 11;
+        Role role_type = 12;
+    }
+
+    enum Role {
+        // Regular block (with deploys, multiple parents etc).
+        BLOCK  = 0;
+        // A message that doesn't have any deploys,
+        // targets one block (no secondary parents),
+        // and cannot be used as a parent (is a leaf in the DAG).
+        BALLOT = 1;
     }
 
     message Body {

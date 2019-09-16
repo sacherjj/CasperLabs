@@ -1,0 +1,16 @@
+[package]
+name = "do-nothing"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+name = "do_nothing"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["contract-ffi/std" ]
+
+[dependencies]
+contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

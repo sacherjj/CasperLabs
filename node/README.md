@@ -33,7 +33,7 @@ The node module comes with an executable (jar, docker image, debian or fedora pa
 To see the list of available flags you can run `./casperlabs-node --help`
 
 ### 2.1 The Node
-By default when you execute the program, it will fire up a running node instance. That instance will become either a bootstrap node (see `--standalone` flag) or will try to connect to existing bootstrap.
+By default when you execute the program, it will fire up a running node instance. That instance will become either a bootstrap node (see `--casper-standalone` flag) or will try to connect to existing bootstrap.
 
 Node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentially acting as bootstrap node). __Note__ This release prints a great deal of diagnostic information.
 
@@ -53,7 +53,7 @@ Using flags you can specify which bootstrapping node should be used or if the no
 
 #### 2.1.1 gRPC API
 
-Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [models/src/main/protobuf/CasperMessage.proto](https://github.com/CasperLabs/CasperLabs/blob/dev/models/src/main/protobuf/CasperMessage.proto)
+Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [CasperMessage.proto](https://github.com/CasperLabs/CasperLabs/blob/dev/protobuf/io/casperlabs/casper/protocol/CasperMessage.proto)
 
 #### 2.1.2 Data directory
 
@@ -70,7 +70,7 @@ An easy way to run CasperLabs Node is by using Docker. Use this pull command in 
 
 ```docker pull casperlabs/node```
 
-You can also [build a docker image yourself](#building-via-docker) and then run it.
+You can also [build a docker image yourself](https://github.com/CasperLabs/CasperLabs/tree/dev/node#12-building-docker-image) and then run it.
 
 ```console
 $ docker run -ti casperlabs/node run
@@ -107,7 +107,7 @@ $ docker run -ti casperlabs/node run
 
 ##### 2.1.2.2 Running Node directly from Packages
 
-This will run Node from a package that was built in [Building from source](#building-from-source).  Select the package for your system and install.
+This will run Node from a package that was built in [Building from source](https://github.com/CasperLabs/CasperLabs/tree/dev/node#1-building-from-source). Select the package for your system and install.
 
 ```console
 $ ./node/target/universal/stage/bin/casperlabs-node run -s
@@ -209,7 +209,7 @@ where bootstrapped node should log that it has connected to the new one:
 5df2d57}
 ```
 
-Another option to set up local network is to look at the [docker](../docker/README.md) directory:
+Another option to set up local network is to look at the [docker](../hack/docker/README.md) directory:
 
 ```console
 $ make node-0/up
@@ -234,7 +234,7 @@ $ docker logs -f node-0
 
 The current version of the node produces metrics on some communications-related activities in Prometheus format.
 
-To see metrics in action check out the [docker](../docker/README.md) setup. Once you run `make up` you should be able to see Prometheus metrics at http://localhost:9090 and Grafana at http://localhost:3000
+To see metrics in action check out the [docker](../hack/docker/README.md) setup. Once you run `make up` you should be able to see Prometheus metrics at http://localhost:9090 and Grafana at http://localhost:3000
 
 ### 3.4 Caveats
 

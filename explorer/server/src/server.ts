@@ -29,8 +29,14 @@ const contractKeys =
 
 // Faucet contract and deploy factory.
 const faucet = new BoundContract(
-  new Contract(process.env.FAUCET_CONTRACT_PATH!),
-  contractKeys, process.env.FAUCET_NONCE_PATH!);
+  new Contract(
+    process.env.FAUCET_CONTRACT_PATH!,
+    process.env.PAYMENT_CONTRACT_PATH!
+  ),
+  contractKeys);
+
+// Constant payment amount.
+const paymentAmount = BigInt(process.env.PAYMENT_AMOUNT!);
 
 // gRPC client to the node.
 const deployService = new DeployService(process.env.CASPER_SERVICE_URL!);
@@ -109,7 +115,7 @@ app.post("/api/faucet", checkJwt, (req, res) => {
 
   // Prepare the signed deploy.
   const accountPublicKey = decodeBase64(accountPublicKeyBase64);
-  const deploy = faucet.deploy(Faucet.args(accountPublicKey));
+  const deploy = faucet.deploy(Faucet.args(accountPublicKey), paymentAmount);
 
   // Send the deploy to the node and return the deploy hash to the browser.
   deployService
@@ -121,7 +127,6 @@ app.post("/api/faucet", checkJwt, (req, res) => {
       res.send(response);
     })
     .catch((err) => {
-      // TODO: Rollback nonce?
       const msg = err.toString();
       // The service already logged it.
       res.status(500).send({ error: msg });

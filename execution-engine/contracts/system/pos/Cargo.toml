@@ -6,11 +6,12 @@ edition = "2018"
 
 [lib]
 name = "pos"
-crate-type = ["cdylib"]
+crate-type = ["lib", "cdylib"]
 
 [features]
 default = []
-std = ["cl_std/std"]
+std = ["contract-ffi/std"]
+lib = []
 
 [dependencies]
-cl_std = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
+contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

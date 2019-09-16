@@ -1,23 +1,26 @@
 package io.casperlabs.casper.api
 
-import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.blockstorage.{BlockStorage, DagStorage}
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.{DagStorageFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.finality.singlesweep.{
+  FinalityDetector,
+  FinalityDetectorBySingleSweepImpl
+}
+import io.casperlabs.casper.helper.{DagStorageFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 
@@ -58,7 +61,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
   val deployCount          = 10L
   val randomDeploys =
     (0L until deployCount).toList
-      .traverse(ProtoUtil.basicProcessedDeploy[Task])
+      .traverse(_ => ProtoUtil.basicProcessedDeploy[Task]())
       .unsafeRunSync(scheduler)
   val body                             = Block.Body().withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
@@ -203,7 +206,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
+      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()(Sync[Task], logEff)
     } yield (logEff, casperRef, finalityDetectorEffect)
 
   private def emptyEffects(
@@ -226,6 +229,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorInstancesImpl[Task]()(Sync[Task], logEff)
+      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()(Sync[Task], logEff)
     } yield (logEff, casperRef, finalityDetectorEffect)
 }

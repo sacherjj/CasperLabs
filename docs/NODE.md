@@ -33,13 +33,13 @@ Or you can run the following commands from the root directory of the repo, using
 
 ### Running a validator on the CasperLabs Network
 
-##### Step 1: Create an account at [explorer.casperlabs.io](https://explorer.casperlabs.io)
+##### Step 1: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
 
 Create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine where you will run the node.  This will be your validator account and keypair.
 
 ##### Step 2: Add coins to this account
 
-Add coins to this account using the [faucet](https://explorer.casperlabs.io/#/faucet).
+Add coins to this account using the [faucet](https://clarity.casperlabs.io/#/faucet).
 
 ##### Step 3: Bond your validator onto the network
 
@@ -48,7 +48,6 @@ casperlabs-client \
     --host deploy.casperlabs.io \
     bond \
     --amount <bond-amount> \
-    --nonce <nonce> \
     --private-key <path-to-private-key>
 ```
 
@@ -70,7 +69,7 @@ casperlabs-node run \
     --server-bootstrap "casperlabs://a605c8ddc4ed3dc9b881bfe006cc8175fb31e125@100.24.117.48?protocol=40400&discovery=40404"
 ```
 
-##### Stopping a bonded validator 
+##### Stopping a bonded validator
 
 First, you must unbond:
 ```
@@ -78,7 +77,6 @@ casperlabs-client \
     --host deploy.casperlabs.io \
     unbond \
     --amount <unbond-amount> \
-    --nonce <nonce> \
     --private-key <path-to-private-key>
 ```
 
@@ -98,7 +96,7 @@ You can run a single Node in standalone mode for testing purposes.
 
 ```
 mkdir -p ~/.casperlabs/genesis
-(cat keys/validator-id; echo "100") >> ~/.casperlabs/genesis/bonds.txt
+(cat keys/validator-id; echo " 100") >> ~/.casperlabs/genesis/bonds.txt
 ```
 
 ##### Step 2: Start the Execution Engine
@@ -112,7 +110,7 @@ casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 
 ```
 casperlabs-node run \
-    --standalone \
+    --casper-standalone \
     --tls-key ./keys/node.key.pem \
     --tls-certificate ./keys/node.certificate.pem \
     --casper-validator-private-key-path ./keys/validator-private.pem \

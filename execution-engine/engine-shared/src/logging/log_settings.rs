@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::logging::log_level::*;
 
-static mut LOG_SETTINGS_PROVIDER: &'static LogSettingsProvider = &NopLogSettingsProvider;
+static mut LOG_SETTINGS_PROVIDER: &'static dyn LogSettingsProvider = &NopLogSettingsProvider;
 
 static LOG_SETTINGS_STATE: AtomicUsize = AtomicUsize::new(0);
 
@@ -36,7 +36,7 @@ impl From<usize> for LogSettingsState {
     }
 }
 
-pub fn set_log_settings_provider(log_settings_provider: &'static LogSettingsProvider) {
+pub fn set_log_settings_provider(log_settings_provider: &'static dyn LogSettingsProvider) {
     match LOG_SETTINGS_STATE
         .compare_and_swap(
             <usize>::from(LogSettingsState::Uninitialized),
@@ -66,7 +66,7 @@ pub fn set_log_settings_provider(log_settings_provider: &'static LogSettingsProv
     }
 }
 
-pub(crate) fn get_log_settings_provider() -> &'static LogSettingsProvider {
+pub(crate) fn get_log_settings_provider() -> &'static dyn LogSettingsProvider {
     match LOG_SETTINGS_STATE.load(Ordering::SeqCst).into() {
         LogSettingsState::Initializing => get_log_settings_provider(),
         _ => unsafe { LOG_SETTINGS_PROVIDER },
@@ -87,10 +87,9 @@ pub struct LogSettings {
 impl LogSettings {
     /// # Arguments
     ///
-    /// * `process_name` - Name or key identifying the current process;
-    ///       should have no spaces or punctuations by convention
-    /// * `log_level_filter` - Only log messages with priority >= to this
-    ///       log level will be logged
+    /// * `process_name` - Name or key identifying the current process; should have no spaces or
+    ///   punctuations by convention
+    /// * `log_level_filter` - Only log messages with priority >= to this log level will be logged
     pub fn new(process_name: &str, log_level_filter: LogLevelFilter) -> LogSettings {
         LogSettings {
             log_level_filter,
@@ -100,7 +99,8 @@ impl LogSettings {
         }
     }
 
-    /// if lvl is less than settings loglevel, associated msg should be filtered out
+    /// if lvl is less than settings loglevel, associated msg should be filtered
+    /// out
     pub fn filter(&self, log_level: LogLevel) -> bool {
         log_level < self.log_level_filter.0
     }

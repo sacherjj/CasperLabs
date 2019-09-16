@@ -1,3 +1,4 @@
+use crate::execution::Phase;
 use crate::key::*;
 use crate::uref::{AccessRights, URef};
 use crate::value::account::{
@@ -32,6 +33,14 @@ pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
         Just(AccessRights::READ_WRITE),
         Just(AccessRights::ADD_WRITE),
         Just(AccessRights::READ_ADD_WRITE),
+    ]
+}
+
+pub fn phase_arb() -> impl Strategy<Value = Phase> {
+    prop_oneof![
+        Just(Phase::Payment),
+        Just(Phase::Session),
+        Just(Phase::FinalizePayment),
     ]
 }
 
@@ -81,7 +90,6 @@ pub fn account_activity_arb() -> impl Strategy<Value = AccountActivity> {
 prop_compose! {
     pub fn account_arb()(
         pub_key in u8_slice_32(),
-        nonce in any::<u64>(),
         urefs in uref_map_arb(3),
         purse_id in uref_arb(),
         thresholds in action_threshold_arb(),
@@ -92,7 +100,6 @@ prop_compose! {
             associated_keys.add_key(pub_key.into(), Weight::new(1)).unwrap();
             Account::new(
                 pub_key,
-                nonce,
                 urefs,
                 purse_id,
                 associated_keys.clone(),
@@ -124,8 +131,8 @@ pub fn u512_arb() -> impl Strategy<Value = U512> {
 }
 
 pub fn value_arb() -> impl Strategy<Value = Value> {
-    // If compiler brings you here it most probably means you've added a variant to `Value` enum
-    // but forgot to add generator for it.
+    // If compiler brings you here it most probably means you've added a variant to
+    // `Value` enum but forgot to add generator for it.
     let stub: Option<Value> = None;
     if let Some(v) = stub {
         match v {

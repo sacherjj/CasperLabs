@@ -1,7 +1,7 @@
-use cl_std::value::U512;
+use contract_ffi::value::U512;
 
-use capabilities::{Addable, Readable, Writable};
-use cl_std::system_contracts::mint::error::Error;
+use crate::capabilities::{Addable, Readable, Writable};
+use contract_ffi::system_contracts::mint::error::Error;
 
 pub trait Mint<A, RW>
 where
@@ -11,9 +11,14 @@ where
     type PurseId;
     type DepOnlyId;
 
-    fn create(&self) -> Self::PurseId;
+    fn mint(&self, initial_balance: U512) -> Result<Self::PurseId, Error>;
     fn lookup(&self, p: Self::PurseId) -> Option<RW>;
     fn dep_lookup(&self, p: Self::DepOnlyId) -> Option<A>;
+
+    fn create(&self) -> Self::PurseId {
+        self.mint(U512::zero())
+            .expect("Creating a zero balance purse should always be allowed.")
+    }
 
     fn transfer(
         &self,
@@ -41,10 +46,10 @@ mod tests {
     use core::cell::{Cell, RefCell};
     use core::ops::Add;
 
-    use cl_std::value::U512;
+    use contract_ffi::value::U512;
 
-    use capabilities::{Addable, Readable, Writable};
-    use mint::{Error, Mint};
+    use crate::capabilities::{Addable, Readable, Writable};
+    use crate::mint::{Error, Mint};
 
     const GENESIS_PURSE_AMOUNT: u32 = 150;
     const GENESIS_PURSE: FullId = FullId(0);
@@ -123,14 +128,13 @@ mod tests {
         type PurseId = FullId;
         type DepOnlyId = DepId;
 
-        fn create(&self) -> Self::PurseId {
+        fn mint(&self, balance: U512) -> Result<Self::PurseId, Error> {
             let id = self.1.get();
             self.1.set(id + 1);
 
-            let balance = U512::from(0);
             let balance = Rc::new(Cell::new(balance));
             self.0.borrow_mut().insert(id, balance);
-            FullId(id)
+            Ok(FullId(id))
         }
 
         fn lookup(&self, p: Self::PurseId) -> Option<Balance> {

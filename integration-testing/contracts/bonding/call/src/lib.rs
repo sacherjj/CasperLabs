@@ -1,31 +1,45 @@
 #![no_std]
-#![feature(alloc)]
 
 #[macro_use]
 extern crate alloc;
-//extern crate cl_std;
+extern crate contract_ffi;
 
-extern crate common;
-use common::contract_api;
-use common::contract_api::pointers::UPointer;
-use common::key::Key;
-use common::value::uint::U512;
-use common::contract_api::{call_contract, PurseTransferResult, get_uref, transfer_from_purse_to_purse, revert};
+use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::contract_api::{
+    call_contract, create_purse, get_arg, get_uref, main_purse, read, revert,
+    transfer_from_purse_to_purse, PurseTransferResult,
+};
+use contract_ffi::key::Key;
+use contract_ffi::uref::AccessRights;
+use contract_ffi::value::uint::U512;
+
+enum Error {
+    GetPosOuterURef = 1000,
+    GetPosInnerURef = 1001,
+}
+
+fn get_pos_contract() -> ContractPointer {
+    let outer: UPointer<Key> = get_uref("pos")
+        .and_then(Key::to_u_ptr)
+        .unwrap_or_else(|| revert(Error::GetPosInnerURef as u32));
+    if let Some(ContractPointer::URef(inner)) = read::<Key>(outer).to_c_ptr() {
+        ContractPointer::URef(UPointer::new(inner.0, AccessRights::READ))
+    } else {
+        revert(Error::GetPosOuterURef as u32)
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_public: UPointer<Key> = get_uref("pos").unwrap().to_u_ptr().unwrap();
-    let pos_contract: Key = contract_api::read(pos_public);
-    let pos_pointer = pos_contract.to_c_ptr().unwrap();
-
-    let source_purse = contract_api::main_purse();
-    let bonding_purse = contract_api::create_purse();
-    let bond_amount:U512 = U512::from(contract_api::get_arg::<u32>(0));
+    let pos_contract = get_pos_contract();
+    let source_purse = main_purse();
+    let bonding_purse = create_purse();
+    let bond_amount: U512 = U512::from(get_arg::<u32>(0));
 
     match transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount) {
         PurseTransferResult::TransferSuccessful => {
             let _result: () = call_contract(
-                pos_pointer,
+                pos_contract,
                 &("bond", bond_amount, bonding_purse),
                 &vec![Key::URef(bonding_purse.value())],
             );

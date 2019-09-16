@@ -1,12 +1,12 @@
 #![no_std]
 
-extern crate cl_std;
+extern crate contract_ffi;
 
-use cl_std::contract_api::{self, TransferResult};
-use cl_std::value::account::PublicKey;
-use cl_std::value::U512;
+use contract_ffi::contract_api::{self, TransferResult};
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::U512;
 
-/// Executes token transfer to supplied public key.
+/// Executes mote transfer to supplied public key.
 /// Transfers the requested amount.
 ///
 /// Revert status codes:
@@ -15,8 +15,8 @@ use cl_std::value::U512;
 pub extern "C" fn call() {
     let public_key: PublicKey = contract_api::get_arg(0);
     let transfer_amount: u64 = contract_api::get_arg(1);
-    let u512_tokens = U512::from(transfer_amount);
-    let transfer_result = contract_api::transfer_to_account(public_key, u512_tokens);
+    let u512_motes = U512::from(transfer_amount);
+    let transfer_result = contract_api::transfer_to_account(public_key, u512_motes);
     if let TransferResult::TransferError = transfer_result {
         contract_api::revert(2);
     }

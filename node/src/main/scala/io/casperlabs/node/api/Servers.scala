@@ -6,9 +6,9 @@ import cats.effect.{Effect => _, _}
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.FinalityDetector
 import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
@@ -46,7 +46,7 @@ object Servers {
   def internalServersR(
       port: Int,
       maxMessageSize: Int,
-      grpcExecutor: Scheduler,
+      ingressScheduler: Scheduler,
       blockApiLock: Semaphore[Effect],
       maybeSslContext: Option[SslContext]
   )(
@@ -59,20 +59,20 @@ object Servers {
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
-      multiParentCasperRef: MultiParentCasperRef[Effect],
-      scheduler: Scheduler
-  ): Resource[Effect, Unit] =
+      multiParentCasperRef: MultiParentCasperRef[Effect]
+  ): Resource[Effect, Unit] = {
+    implicit val s = ingressScheduler
     GrpcServer[Effect](
       port = port,
       maxMessageSize = Some(maxMessageSize),
       services = List(
         (_: Scheduler) =>
           Task.delay {
-            DiagnosticsGrpcMonix.bindService(diagnosticsService, grpcExecutor)
+            DiagnosticsGrpcMonix.bindService(diagnosticsService, ingressScheduler)
           }.toEffect,
         (_: Scheduler) =>
           GrpcControlService(blockApiLock) map {
-            ControlGrpcMonix.bindService(_, grpcExecutor)
+            ControlGrpcMonix.bindService(_, ingressScheduler)
           }
       ),
       interceptors = List(
@@ -83,21 +83,23 @@ object Servers {
     ) *> Resource.liftF(
       logStarted[Effect]("Internal", port, maybeSslContext.isDefined)
     )
+  }
 
   /** Start a gRPC server with services meant for users and dApp developers. */
   def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployBuffer: Validation](
       port: Int,
       maxMessageSize: Int,
-      grpcExecutor: Scheduler,
+      ingressScheduler: Scheduler,
       maybeSslContext: Option[SslContext]
-  )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] =
+  )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
+    implicit val s = ingressScheduler
     GrpcServer(
       port = port,
       maxMessageSize = Some(maxMessageSize),
       services = List(
         (_: Scheduler) =>
           GrpcCasperService() map {
-            CasperGrpcMonix.bindService(_, grpcExecutor)
+            CasperGrpcMonix.bindService(_, ingressScheduler)
           }
       ),
       interceptors = List(
@@ -109,6 +111,7 @@ object Servers {
       Resource.liftF(
         logStarted[F]("External", port, maybeSslContext.isDefined)
       )
+  }
 
   def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployBuffer](
       port: Int,

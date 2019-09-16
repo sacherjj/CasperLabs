@@ -13,7 +13,11 @@ import eu.timepit.refined.auto._
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.finality.singlesweep.{
+  FinalityDetector,
+  FinalityDetectorBySingleSweepImpl
+}
+import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
@@ -24,6 +28,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.shared.{Cell, Log, Time}
+import monix.eval.Task
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
@@ -36,7 +41,6 @@ class GossipServiceCasperTestNode[F[_]](
     blockStorageDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
-    validateNonces: Boolean = true,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainId: String = "casperlabs",
     relaying: Relaying[F],
@@ -56,12 +60,11 @@ class GossipServiceCasperTestNode[F[_]](
       genesis,
       dagDir,
       blockStorageDir,
-      validateNonces,
       maybeMakeEE
     )(concurrentF, blockStorage, dagStorage, metricEff, casperState) {
   implicit val deployBufferEff: DeployBuffer[F] =
     MockDeployBuffer.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
-  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorInstancesImpl[F]
+  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorBySingleSweepImpl[F]
 
   //val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 
@@ -72,13 +75,15 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
+  implicit val deploySelection = DeploySelection.create[F](5 * 1024 * 1024)
+
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it
   // - test tries to give a block created by node A to node B without gossiping
   // - the download manager tries to validate a block
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
-      new MultiParentCasperImpl.StatelessExecutor(chainId),
+      new MultiParentCasperImpl.StatelessExecutor[F](chainId),
       MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
       Some(validatorId),
       genesis,
@@ -170,7 +175,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit errorHandler: ErrorHandler[F],
@@ -209,7 +213,10 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             nodeDiscovery,
             connectToGossip = connectToGossip,
             relayFactor = peers.size - 1,
-            relaySaturation = 100
+            relaySaturation = 100,
+            // Some tests assume that once `addBlock` has finished all the notifications
+            // have also been sent.
+            isSynchronous = true
           )
 
           initStorage(genesis) flatMap {
@@ -229,7 +236,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
-                  validateNonces = validateNonces,
                   maybeMakeEE = maybeMakeEE
                 )(
                   concurrentF,
@@ -314,10 +320,10 @@ object GossipServiceCasperTestNodeFactory {
                                      Log[F].debug(s"Validated and stored block ${PrettyPrinter
                                        .buildString(block.blockHash)}")
 
-                                   case AdmissibleEquivocation =>
+                                   case EquivocatedBlock =>
                                      Log[F].debug(
-                                       s"Detected AdmissibleEquivocation on block ${PrettyPrinter
-                                         .buildString(block.blockHash)} Carry on down downloading children."
+                                       s"Detected Equivocation on block ${PrettyPrinter
+                                         .buildString(block.blockHash)}"
                                      )
 
                                    case other =>

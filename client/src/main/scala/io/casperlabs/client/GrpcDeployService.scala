@@ -1,77 +1,100 @@
 package io.casperlabs.client
 
+import java.io.Closeable
+import java.security.KeyStore
+import java.util.concurrent.{ThreadFactory, TimeUnit}
+
 import cats.Id
 import cats.data.StateT
-import cats.implicits._
 import cats.mtl.implicits._
-import java.io.Closeable
-import java.util.concurrent.TimeUnit
-import java.security.KeyStore
-
-import javax.net.ssl._
-import com.google.protobuf.ByteString
-import com.google.protobuf.empty.Empty
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.util.HostnameTrustManager
+import cats.syntax.option._
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.state.Value
-import io.casperlabs.graphz
-import io.casperlabs.node.api.casper.{
-  CasperGrpcMonix,
-  DeployRequest,
-  GetBlockInfoRequest,
-  GetBlockStateRequest,
-  GetDeployInfoRequest,
-  StateQuery,
-  StreamBlockDeploysRequest,
-  StreamBlockInfosRequest
-}
-import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
 import io.casperlabs.client.configuration.ConnectOptions
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.util.HostnameTrustManager
+import io.casperlabs.graphz
+import io.casperlabs.node.api.casper._
+import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
 import io.grpc.ManagedChannel
-import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
-import io.grpc.netty.{GrpcSslContexts, NegotiationType}
+import io.grpc.netty.{GrpcSslContexts, NegotiationType, NettyChannelBuilder}
+import io.netty.channel.DefaultEventLoopGroup
+import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.handler.ssl.util.SimpleTrustManagerFactory
+import javax.net.ssl._
 import monix.eval.Task
+import monix.execution.Scheduler
 
 import scala.util.Either
 
-class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with Closeable {
+class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
+    extends DeployService[Task]
+    with Closeable {
   private val DefaultMaxMessageSize = 256 * 1024 * 1024
 
   private var externalConnected = false
   private var internalConnected = false
 
   private def makeChannel(port: Int): ManagedChannel = {
-    var builder = NettyChannelBuilder
+    val builder = NettyChannelBuilder
       .forAddress(conn.host, port)
       .maxInboundMessageSize(DefaultMaxMessageSize)
+      //.eventLoopGroup(new NioEventLoopGroup(0, scheduler))
+      // The above line is commented out on purpose; it causes
+      // a problem on some systems. The reason for this is still
+      // under investigation (see NODE-832).
+      .executor(scheduler)
 
-    builder = conn.nodeId match {
-      case Some(hash) =>
-        // Server side TLS only. The client will compare the Node ID it's expecting the server
-        // to have with the hash of the public key from the TLS certificate.
-        val trustManagerFactory = new SimpleTrustManagerFactory {
-          private val hostNameTrustManager = new HostnameTrustManager()
+    // Decide whether to use SSL encryption.
+    val maybeSslContext: Option[io.netty.handler.ssl.SslContext] =
+      (conn.nodeId, conn.tlsApiCertificate, conn.useTls) match {
+        case (None, None, None) | (_, _, Some(false)) =>
+          none
 
-          def engineInit(keyStore: KeyStore): Unit                                 = {}
-          def engineInit(managerFactoryParameters: ManagerFactoryParameters): Unit = {}
-          def engineGetTrustManagers(): Array[TrustManager] =
-            Array[TrustManager](hostNameTrustManager)
-        }
+        case (None, None, Some(true)) =>
+          // We expect that the server will have a normal SSL certificate signed by a Root CA that
+          // we can verify using the systems built-in certs. PAssing `null` as a file should do the same.
+          GrpcSslContexts.forClient.build.some
 
-        val sslContext = GrpcSslContexts.forClient
-          .trustManager(trustManagerFactory)
-          .build
+        case (_, Some(crt), _) =>
+          // Server side TLS only. The client will compare the server side cert with
+          // what it has on disk. An example of obtaining a cert programmatically:
+          // openssl s_client -showcerts -connect localhost:40401 </dev/null 2>/dev/null | openssl x509 -outform PEM > node.crt
+          GrpcSslContexts.forClient
+            .trustManager(crt)
+            .build
+            .some
 
+        case (Some(_), _, _) =>
+          // Server side TLS only. The client will compare the Node ID it's expecting the server
+          // to have with the hash of the public key from the TLS certificate.
+          val trustManagerFactory = new SimpleTrustManagerFactory {
+            private val hostNameTrustManager = new HostnameTrustManager()
+
+            def engineInit(keyStore: KeyStore): Unit                                 = {}
+            def engineInit(managerFactoryParameters: ManagerFactoryParameters): Unit = {}
+            def engineGetTrustManagers(): Array[TrustManager] =
+              Array[TrustManager](hostNameTrustManager)
+          }
+
+          GrpcSslContexts.forClient
+            .trustManager(trustManagerFactory)
+            .build
+            .some
+      }
+
+    maybeSslContext match {
+      case None =>
+        builder.usePlaintext
+      case Some(sslContext) =>
         builder
           .negotiationType(NegotiationType.TLS)
           .sslContext(sslContext)
-          .overrideAuthority(hash) // So it doesn't expect for the host name.
-
-      case None =>
-        builder.usePlaintext
+        // If the node ID is given then assume the cert is made for that name.
+        conn.nodeId foreach { hash =>
+          builder.overrideAuthority(hash) // So it doesn't expect for the host name to match the Common Name in the cert.
+        }
     }
 
     builder.build()
@@ -102,16 +125,12 @@ class GrpcDeployService(conn: ConnectOptions) extends DeployService[Task] with C
   def propose(): Task[Either[Throwable, String]] =
     controlServiceStub
       .propose(ProposeRequest())
-      .map { response =>
-        val hash = Base16.encode(response.blockHash.toByteArray)
-        s"Success! Block $hash created and added."
-      }
+      .map(response => Base16.encode(response.blockHash.toByteArray))
       .attempt
 
-  def showBlock(hash: String): Task[Either[Throwable, String]] =
+  def showBlock(hash: String): Task[Either[Throwable, BlockInfo]] =
     casperServiceStub
       .getBlockInfo(GetBlockInfoRequest(hash, BlockInfo.View.FULL))
-      .map(Printer.printToUnicodeString(_))
       .attempt
 
   def showDeploy(hash: String): Task[Either[Throwable, String]] =

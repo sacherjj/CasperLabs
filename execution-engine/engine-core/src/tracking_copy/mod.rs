@@ -1,5 +1,9 @@
+mod byte_size;
+mod ext;
+pub(self) mod meter;
 #[cfg(test)]
 mod tests;
+pub mod utils;
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -12,11 +16,12 @@ use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_shared::transform::{self, Transform, TypeMismatch};
 use engine_storage::global_state::StateReader;
 
-use engine_state::execution_effect::ExecutionEffect;
-use engine_state::op::Op;
-use meter::heap_meter::HeapSize;
-use meter::Meter;
-use utils::add;
+use crate::engine_state::execution_effect::ExecutionEffect;
+use crate::engine_state::op::Op;
+
+pub use self::ext::TrackingCopyExt;
+use self::meter::heap_meter::HeapSize;
+use self::meter::Meter;
 
 #[derive(Debug)]
 pub enum QueryResult {
@@ -38,7 +43,8 @@ pub struct TrackingCopyCache<M> {
 impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
     /// Creates instance of `TrackingCopyCache` with specified `max_cache_size`,
     /// above which least-recently-used elements of the cache are invalidated.
-    /// Measurements of elements' "size" is done with the usage of `Meter` instance.
+    /// Measurements of elements' "size" is done with the usage of `Meter`
+    /// instance.
     pub fn new(max_cache_size: usize, meter: M) -> TrackingCopyCache<M> {
         TrackingCopyCache {
             max_cache_size,
@@ -102,10 +108,32 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
-            cache: TrackingCopyCache::new(1024 * 16, HeapSize), //TODO: Should `max_cache_size` be fraction of Wasm memory limit?
+            cache: TrackingCopyCache::new(1024 * 16, HeapSize), /* TODO: Should `max_cache_size`
+                                                                 * be fraction of wasm memory
+                                                                 * limit? */
             ops: HashMap::new(),
             fns: HashMap::new(),
         }
+    }
+
+    pub fn reader(&self) -> &R {
+        &self.reader
+    }
+
+    /// Creates a new TrackingCopy, using this one (including its mutations) as
+    /// the base state to read against. The intended use case for this
+    /// function is to "snapshot" the current `TrackingCopy` and produce a
+    /// new `TrackingCopy` where further changes can be made. This
+    /// allows isolating a specific set of changes (those in the new
+    /// `TrackingCopy`) from existing changes. Note that mutations to state
+    /// caused by new changes (i.e. writes and adds) only impact the new
+    /// `TrackingCopy`, not this one. Note that currently there is no `join` /
+    /// `merge` function to bring changes from a fork back to the main
+    /// `TrackingCopy`. this means the current usage requires repeated
+    /// forking, however we recognize this is sub-optimal and will revisit
+    /// in the future.
+    pub fn fork(&self) -> TrackingCopy<&TrackingCopy<R>> {
+        TrackingCopy::new(self)
     }
 
     pub fn get(
@@ -131,8 +159,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     ) -> Result<Option<Value>, R::Error> {
         let k = k.normalize();
         if let Some(value) = self.get(correlation_id, &k)? {
-            add(&mut self.ops, k, Op::Read);
-            add(&mut self.fns, k, Transform::Identity);
+            utils::add(&mut self.ops, k, Op::Read);
+            utils::add(&mut self.fns, k, Transform::Identity);
             Ok(Some(value))
         } else {
             Ok(None)
@@ -143,13 +171,14 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         let v_local = v.into_raw();
         let k = k.normalize();
         self.cache.insert_write(k, v_local.clone());
-        add(&mut self.ops, k, Op::Write);
-        add(&mut self.fns, k, Transform::Write(v_local));
+        utils::add(&mut self.ops, k, Op::Write);
+        utils::add(&mut self.fns, k, Transform::Write(v_local));
     }
 
     /// Ok(None) represents missing key to which we want to "add" some value.
     /// Ok(Some(unit)) represents successful operation.
-    /// Err(error) is reserved for unexpected errors when accessing global state.
+    /// Err(error) is reserved for unexpected errors when accessing global
+    /// state.
     pub fn add(
         &mut self,
         correlation_id: CorrelationId,
@@ -159,7 +188,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         let k = k.normalize();
         match self.get(correlation_id, &k)? {
             None => Ok(AddResult::KeyNotFound(k)),
-            Some(curr) => {
+            Some(current_value) => {
                 let t = match v.into_raw() {
                     Value::Int32(i) => Transform::AddInt32(i),
                     Value::UInt128(i) => Transform::AddUInt128(i),
@@ -177,11 +206,11 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                         )))
                     }
                 };
-                match t.clone().apply(curr) {
+                match t.clone().apply(current_value) {
                     Ok(new_value) => {
                         self.cache.insert_write(k, new_value);
-                        add(&mut self.ops, k, Op::Add);
-                        add(&mut self.fns, k, t);
+                        utils::add(&mut self.ops, k, Op::Add);
+                        utils::add(&mut self.fns, k, t);
                         Ok(AddResult::Success)
                     }
                     Err(transform::Error::TypeMismatch(type_mismatch)) => {
@@ -218,8 +247,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                     // QueryResult::ValueNotFound and Err(_) corresponds to
                     // a storage-related error. The information in the Ok(_) case is used
                     // to build an informative error message about why the query was not successful.
-                    |curr_value, (i, name)| -> Result<Value, Result<(usize, String), R::Error>> {
-                        match curr_value {
+                    |current_value, (i, name)| -> Result<Value, Result<(usize, String), R::Error>> {
+                        match current_value {
                             Value::Account(account) => {
                                 if let Some(key) = account.urefs_lookup().get(name) {
                                     let validated_key = Validated::new(*key, Validated::valid)?;
@@ -263,11 +292,11 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         i: usize,
     ) -> Result<Value, Result<(usize, String), R::Error>> {
         match self.read(correlation_id, &key) {
-            // continue recursing
+            // continue recursion
             Ok(Some(value)) => Ok(value),
-            // key not found in the global state; stop recursing
+            // key not found in the global state; stop recursion
             Ok(None) => Err(Ok((i, format!("Name {:?} not found: ", *key)))),
-            // global state access error; stop recursing
+            // global state access error; stop recursion
             Err(error) => Err(Err(error)),
         }
     }
@@ -286,5 +315,25 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
             error_msg.push_str(p);
         }
         error_msg
+    }
+}
+
+/// The purpose of this implementation is to allow a "snapshot" mechanism for
+/// TrackingCopy. The state of a TrackingCopy (including the effects of
+/// any transforms it has accumulated) can be read using an immutable
+/// reference to that TrackingCopy via this trait implementation. See
+/// `TrackingCopy::fork` for more information.
+impl<R: StateReader<Key, Value>> StateReader<Key, Value> for &TrackingCopy<R> {
+    type Error = R::Error;
+
+    fn read(&self, correlation_id: CorrelationId, key: &Key) -> Result<Option<Value>, Self::Error> {
+        if let Some(value) = self.cache.muts_cached.get(key) {
+            return Ok(Some(value.to_owned()));
+        }
+        if let Some(value) = self.reader.read(correlation_id, key)? {
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
     }
 }

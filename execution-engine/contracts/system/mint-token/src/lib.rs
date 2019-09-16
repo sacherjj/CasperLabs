@@ -1,9 +1,9 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 #[macro_use]
 extern crate alloc;
-extern crate cl_std;
+extern crate contract_ffi;
 
 mod capabilities;
 
@@ -18,15 +18,18 @@ mod mint;
 use alloc::string::String;
 use core::convert::TryInto;
 
-use cl_std::contract_api;
-use cl_std::key::Key;
-use cl_std::system_contracts::mint::error::Error;
-use cl_std::uref::{AccessRights, URef};
-use cl_std::value::U512;
+use contract_ffi::contract_api;
+use contract_ffi::key::Key;
+use contract_ffi::system_contracts::mint::error::Error;
+use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::value::account::KEY_SIZE;
+use contract_ffi::value::U512;
 
 use capabilities::{ARef, RAWRef};
 use internal_purse_id::{DepositId, WithdrawId};
 use mint::Mint;
+
+const SYSTEM_ACCOUNT: [u8; KEY_SIZE] = [0u8; KEY_SIZE];
 
 struct CLMint;
 
@@ -34,8 +37,12 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     type PurseId = WithdrawId;
     type DepOnlyId = DepositId;
 
-    fn create(&self) -> Self::PurseId {
-        let initial_balance = U512::from(0);
+    fn mint(&self, initial_balance: U512) -> Result<Self::PurseId, Error> {
+        let caller = contract_api::get_caller();
+        if !initial_balance.is_zero() && caller.value() != SYSTEM_ACCOUNT {
+            return Err(Error::InvalidNonEmptyPurseCreation);
+        }
+
         let balance_uref: Key = contract_api::new_uref(initial_balance).into();
 
         let purse_key: URef = contract_api::new_uref(()).into();
@@ -50,13 +57,14 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
         //
         // Gorski writes:
         //   I'm worried that this can lead to overwriting of values in the local state.
-        //   Since it accepts a raw byte array it's possible to construct one by hand. Of course,
-        //   a key can be overwritten only when that write is performed in the "owner" context
-        //   so it aligns with other semantics of write but I would prefer if were able to enforce
-        //   uniqueness somehow.
+        //   Since it accepts a raw byte array it's possible to construct one by hand.
+        // Of course,   a key can be overwritten only when that write is
+        // performed in the "owner" context   so it aligns with other semantics
+        // of write but I would prefer if were able to enforce   uniqueness
+        // somehow.
         contract_api::write_local(purse_id.raw_id(), balance_uref);
 
-        purse_id
+        Ok(purse_id)
     }
 
     fn lookup(&self, p: Self::PurseId) -> Option<RAWRef<U512>> {
@@ -68,12 +76,27 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn call() {
+pub fn delegate() {
     let mint = CLMint;
     let method_name: String = contract_api::get_arg(0);
 
     match method_name.as_str() {
+        // argument: U512
+        // return: Result<URef, mint::error::Error>
+        "mint" => {
+            let amount: U512 = contract_api::get_arg(1);
+
+            let maybe_purse_key = mint
+                .mint(amount)
+                .map(|purse_id| URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE));
+
+            if let Ok(purse_key) = maybe_purse_key {
+                contract_api::ret(&maybe_purse_key, &vec![purse_key])
+            } else {
+                contract_api::ret(&maybe_purse_key, &vec![])
+            }
+        }
+
         "create" => {
             let purse_id = mint.create();
             let purse_key = URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
@@ -115,4 +138,10 @@ pub extern "C" fn call() {
 
         _ => panic!("Unknown method name!"),
     }
+}
+
+#[cfg(not(feature = "lib"))]
+#[no_mangle]
+pub extern "C" fn call() {
+    delegate();
 }

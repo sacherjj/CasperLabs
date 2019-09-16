@@ -1,12 +1,12 @@
 # CasperLabs Python Client API library and command line tool
 
-[CasperLabs](https://casperlabs.io/) Python client is a library that can be used to 
-interact with a CasperLabs node via its gRPC API. 
+[CasperLabs](https://casperlabs.io/) Python client is a library that can be used to
+interact with a CasperLabs node via its gRPC API.
 
 ## Installation
 
 `casperlabs-client` is a Python 3.6+ module, it does not support Python 2.7.
-You can install it with 
+You can install it with
 
 ```
 pip install casperlabs-client
@@ -18,10 +18,10 @@ or, if you have both Python 2 and Python 3 installed:
 pip3 install casperlabs-client
 ```
 
-## Getting started 
+## Getting started
 
 After installing `casperlabs-client` you can start interacting with
-[CasperLabs devnet](https://explorer.casperlabs.io).
+[CasperLabs devnet](https://clarity.casperlabs.io).
 
 
 ```python
@@ -46,7 +46,7 @@ d286526663ca3766c80781543a148c635f2388bfe128981c3e4ac69cea88dc35: 3000000000
 
 To deploy a smart contract to CasperLabs devnet you have to first:
 
-1. Create an account using [CasperLabs Explorer](https://explorer.casperlabs.io/#/)
+1. Create an account using [CasperLabs Explorer](https://clarity.casperlabs.io/#/)
 and transfer (free) tokens to the account from the faucet.
 
    An account address is a public key in hex format such as:
@@ -56,7 +56,7 @@ and transfer (free) tokens to the account from the faucet.
 
 2. Compile a contract to the [WASM](https://webassembly.org) format,
 see CasperLabs [contract examples](https://github.com/CasperLabs/contract-examples)
-to see example contracts and instructions on 
+to see example contracts and instructions on
 [how to compile](https://github.com/CasperLabs/contract-examples/blob/master/README.md)
 them.
 
@@ -64,17 +64,15 @@ To deploy a compiled contract from your account address:
 
 ```python
 response = client.deploy(from_addr="f2cbd19d054bd2b2c06ea26714275271663a5e4503d5d059de159c3b60d81ab7",
-                         gas_limit=1000000,
                          gas_price=1,
                          payment="helloname.wasm",
-                         session="helloname.wasm",
-                         nonce=1)
+                         session="helloname.wasm")
 ```
 
 ### Return values
 
-Return values of the API functions defined in the `CasperLabsClient` are generally deserialized gRPC response objects 
-of the corresponding requests defined in the node's gRPC service, see 
+Return values of the API functions defined in the `CasperLabsClient` are generally deserialized gRPC response objects
+of the corresponding requests defined in the node's gRPC service, see
 [casper.proto](https://github.com/CasperLabs/CasperLabs/blob/master/protobuf/io/casperlabs/node/api/casper.proto).
 
 Response to requests like `showBlocks` or `showDeploys` is a stream of objects.
@@ -87,7 +85,7 @@ for block in client.showBlocks(depth=10):
 
 ### Error handling
 
-Some requests' response objects (see their definitions in 
+Some requests' response objects (see their definitions in
 [casper.proto](https://github.com/CasperLabs/CasperLabs/blob/master/protobuf/io/casperlabs/node/api/casper.proto)
 ) have fields indicating success.
 
@@ -95,4 +93,4 @@ Some requests' response objects (see their definitions in
 
 
 ### Learn more about CasperLabs blockchain
-See [Usage of the CasperLabs system](https://github.com/CasperLabs/CasperLabs/blob/master/USAGE.md).
+See [Usage of the CasperLabs system](https://github.com/CasperLabs/CasperLabs/blob/master/hack/USAGE.md).

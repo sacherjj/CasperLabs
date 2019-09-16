@@ -1,18 +1,17 @@
 #![no_std]
-#![feature(alloc)]
 #[macro_use]
 
 extern crate alloc;
-extern crate common;
+extern crate contract_ffi;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use common::contract_api::*;
-use common::contract_api::pointers::UPointer;
-use common::key::Key;
-use common::uref::URef;
+use contract_ffi::contract_api::*;
+use contract_ffi::contract_api::pointers::UPointer;
+use contract_ffi::key::Key;
+use contract_ffi::uref::URef;
 
 fn hello_name(name: &str) -> String {
     let mut result = String::from("Hello, ");

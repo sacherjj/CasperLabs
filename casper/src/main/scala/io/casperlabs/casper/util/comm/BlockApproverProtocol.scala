@@ -180,10 +180,10 @@ object BlockApproverProtocol {
       protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
         postState.blockNumber
       )
+      eeDeploys <- EitherT.liftF(deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_)))
       genesisResult <- EitherT(
                         ExecutionEngineService[F].runGenesis(
-                          deploys
-                            .map(ProtoUtil.deployDataToEEDeploy),
+                          eeDeploys,
                           protocolVersion
                         )
                       ).leftMap(_.getMessage)
@@ -210,7 +210,6 @@ object BlockApproverProtocol {
         x.address == y.address &&
         x.gasPrice === y.gasPrice &&
         x.gasLimit === y.gasLimit &&
-        x.nonce === y.nonce &&
         x.getSession.code == y.getSession.code &&
         x.getSession.args == y.getSession.args &&
         x.getPayment.code == y.getPayment.code &&

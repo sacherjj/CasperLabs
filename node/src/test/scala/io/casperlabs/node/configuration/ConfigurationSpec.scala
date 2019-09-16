@@ -16,7 +16,6 @@ import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.ignore
 import io.casperlabs.node.configuration.Utils._
-import io.casperlabs.shared.StoreType
 import org.scalacheck.ScalacheckShapeless._
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -58,7 +57,6 @@ class ConfigurationSpec
         1,
         1
       ).some,
-      storeType = StoreType.LMDB,
       dataDir = Paths.get("/tmp"),
       maxNumOfConnections = 1,
       maxMessageSize = 1,
@@ -78,6 +76,7 @@ class ConfigurationSpec
       initSyncSkipFailedNodes = false,
       initSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       initSyncMaxBlockCount = 1,
+      periodicSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       downloadMaxParallelBlocks = 1,
       downloadMaxRetries = 1,
       downloadRetryInitialBackoffPeriod = FiniteDuration(1, TimeUnit.SECONDS),
@@ -119,12 +118,14 @@ class ConfigurationSpec
       autoProposeEnabled = false,
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeMaxInterval = FiniteDuration(1, TimeUnit.SECONDS),
-      autoProposeMaxCount = 1
+      autoProposeMaxCount = 1,
+      maxBlockSizeBytes = 1
     )
     val tls = Tls(
-      certificate = Paths.get("/tmp/test"),
-      key = Paths.get("/tmp/test"),
-      secureRandomNonBlocking = false
+      certificate = Paths.get("/tmp/test.crt"),
+      key = Paths.get("/tmp/test.key"),
+      apiCertificate = Paths.get("/tmp/test.api.crt"),
+      apiKey = Paths.get("/tmp/test.api.key")
     )
     val lmdb = LMDBBlockStorage.Config(
       dir = Paths.get("/tmp/lmdb-block-storage"),
@@ -162,49 +163,6 @@ class ConfigurationSpec
       kamonSettings,
       influx.some
     )
-  }
-
-  test("""
-        |Configuration.updateTls should update
-        |'customCertificateLocation' and 'customKeyLocation'
-        |if certificate and key are custom""".stripMargin) {
-    forAll { (maybeDataDir: Option[Path], maybeCert: Option[Path], maybeKey: Option[Path]) =>
-      import shapeless._
-
-      /*_*/
-      val confUpdatedDataDir =
-        maybeDataDir.fold(defaultConf)(lens[Configuration].server.dataDir.set(defaultConf))
-      val confUpdatedCert =
-        maybeCert.fold(confUpdatedDataDir)(
-          lens[Configuration].tls.certificate.set(confUpdatedDataDir)
-        )
-      val confUpdatedKey =
-        maybeKey.fold(confUpdatedCert)(lens[Configuration].tls.key.set(confUpdatedCert))
-      /*_*/
-
-      val Right(defaults) = readFile(Source.fromResource("default-configuration.toml")) map Configuration.parseToml
-      val Right(res) = Configuration
-        .updateTls(Configuration.updatePaths(confUpdatedKey, defaultConf.server.dataDir), defaults)
-      val Right(defaultCert) =
-        Parser[java.nio.file.Path].parse(defaults(CamelCase("tlsCertificate")))
-      val Right(defaultKey) = Parser[java.nio.file.Path].parse(defaults(CamelCase("tlsKey")))
-
-      maybeCert match {
-        case Some(c) =>
-          val certStrippedPath        = stripPrefix(c, res.server.dataDir)
-          val defaultCertStrippedPath = stripPrefix(defaultCert, defaultConf.server.dataDir)
-          assert(res.tls.customCertificateLocation && certStrippedPath != defaultCertStrippedPath)
-        case None =>
-          assert(!res.tls.customCertificateLocation)
-      }
-      maybeKey match {
-        case Some(k) =>
-          val keyStrippedPath        = stripPrefix(k, res.server.dataDir)
-          val defaultKeyStrippedPath = stripPrefix(defaultKey, defaultConf.server.dataDir)
-          assert(res.tls.customKeyLocation && keyStrippedPath != defaultKeyStrippedPath)
-        case None => assert(!res.tls.customKeyLocation)
-      }
-    }
   }
 
   test("""
@@ -376,14 +334,11 @@ class ConfigurationSpec
         .toLowerCase
 
     val tables = reduce(conf, Map.empty[String, Map[String, String]]) {
-      case s: String               => s""""$s""""
-      case d: FiniteDuration       => s""""${d.toString.replace(" ", "")}""""
-      case _: StoreType.Mixed.type => s""""mixed""""
-      case _: StoreType.LMDB.type  => s""""lmdb""""
-      case _: StoreType.InMem.type => s""""inmem""""
-      case p: Node                 => s""""${p.show}""""
-      case p: java.nio.file.Path   => s""""${p.toString}""""
-      case x                       => x.toString
+      case s: String             => s""""$s""""
+      case d: FiniteDuration     => s""""${d.toString.replace(" ", "")}""""
+      case p: Node               => s""""${p.show}""""
+      case p: java.nio.file.Path => s""""${p.toString}""""
+      case x                     => x.toString
     } { (acc, fullFieldName, field) =>
       val tableName :: fieldName = fullFieldName
       val table                  = dashify(tableName)

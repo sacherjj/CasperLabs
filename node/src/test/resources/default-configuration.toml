@@ -13,7 +13,6 @@ default-timeout = "1second"
 standalone = false
 map-size = 1
 bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1"
-store-type = "lmdb"
 data-dir = "/tmp"
 max-num-of-connections = 1
 max-message-size = 1
@@ -33,6 +32,7 @@ init-sync-memoize-nodes = false
 init-sync-skip-failed-nodes = false
 init-sync-round-period = "1second"
 init-sync-max-block-count = 1
+periodic-sync-round-period = "1second"
 download-max-parallel-blocks = 1
 download-max-retries = 1
 download-retry-initial-backoff-period = "1second"
@@ -54,9 +54,10 @@ port-internal = 1
 use-tls = false
 
 [tls]
-certificate = "/tmp/test"
-key = "/tmp/test"
-secure-random-non-blocking = false
+certificate = "/tmp/test.crt"
+key = "/tmp/test.key"
+api-certificate = "/tmp/test.api.crt"
+api-key = "/tmp/test.api.key"
 
 [casper]
 validator-public-key = "test"
@@ -85,6 +86,7 @@ auto-propose-enabled = false
 auto-propose-check-interval = "1second"
 auto-propose-max-interval = "1second"
 auto-propose-max-count = 1
+max-block-size-bytes = 1
 
 [blockstorage]
 latest-messages-log-max-size-factor = 1

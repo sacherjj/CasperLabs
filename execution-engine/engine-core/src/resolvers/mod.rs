@@ -1,11 +1,12 @@
 pub mod error;
 pub mod memory_resolver;
-mod resolver_v1;
+pub mod v1_function_index;
+mod v1_resolver;
 
 use wasmi::ModuleImportResolver;
 
 use self::error::ResolverError;
-use resolvers::memory_resolver::MemoryResolver;
+use crate::resolvers::memory_resolver::MemoryResolver;
 
 /// Creates a module resolver for given protocol version.
 ///
@@ -14,7 +15,7 @@ pub fn create_module_resolver(
     protocol_version: u64,
 ) -> Result<impl ModuleImportResolver + MemoryResolver, ResolverError> {
     match protocol_version {
-        1 => Ok(resolver_v1::RuntimeModuleImportResolver::default()),
+        1 => Ok(v1_resolver::RuntimeModuleImportResolver::default()),
         _ => Err(ResolverError::UnknownProtocolVersion(protocol_version)),
     }
 }

@@ -7,7 +7,6 @@ from typing import List
 import pytest
 import typing_extensions
 
-from .common import Network
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
 
@@ -56,11 +55,7 @@ class LogsContainOneOf:
 
 class NodeStarted(LogsContainMessage):
     def __init__(self, node: DockerNode, times: int) -> None:
-        super().__init__(
-            node,
-            "io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs",
-            times,
-        )
+        super().__init__(node, "Listening for traffic on casperlabs://", times)
 
 
 class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):
@@ -526,28 +521,8 @@ def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> No
     raise WaitTimeoutError(predicate, timeout)
 
 
-def wait_for_approved_block_received(network: "Network", timeout: int) -> None:
-    for peer in network.peers:
-        predicate = ApprovedBlockReceived(peer)
-        wait_on_using_wall_clock_time(predicate, timeout)
-
-
 def wait_for_connected_to_node(
     node: DockerNode, other_node_name: str, timeout: int, times: int = 1
 ) -> None:
     predicate = ConnectedToOtherNode(node, other_node_name, times)
     wait_on_using_wall_clock_time(predicate, timeout)
-
-
-def wait_for_started_network(node_startup_timeout: int, network: "Network"):
-    for peer in network.peers:
-        wait_for_node_started(peer, node_startup_timeout)
-
-
-def wait_for_converged_network(timeout: int, network: "Network", peer_connections: int):
-    bootstrap_predicate = HasAtLeastPeers(network.bootstrap, len(network.peers))
-    wait_on_using_wall_clock_time(bootstrap_predicate, timeout)
-
-    for peer in network.peers:
-        peer_predicate = HasAtLeastPeers(peer, peer_connections)
-        wait_on_using_wall_clock_time(peer_predicate, timeout)

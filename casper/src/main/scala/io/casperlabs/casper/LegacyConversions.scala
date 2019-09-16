@@ -159,18 +159,17 @@ object LegacyConversions {
       .withSession(
         protocol
           .DeployCode()
-          .withCode(deploy.getBody.getSession.code)
-          .withArgs(deploy.getBody.getSession.args)
+          .withCode(deploy.getBody.getSession.getWasm)
+          .withArgs(deploy.getBody.getSession.abiArgs)
       )
       .withPayment(
         protocol
           .DeployCode()
-          .withCode(deploy.getBody.getPayment.code)
-          .withArgs(deploy.getBody.getPayment.args)
+          .withCode(deploy.getBody.getPayment.getWasm)
+          .withArgs(deploy.getBody.getPayment.abiArgs)
       )
       .withGasLimit(gasLimit) // New version doesn't have it.
       .withGasPrice(deploy.getHeader.gasPrice)
-      .withNonce(deploy.getHeader.nonce)
       .withSigAlgorithm(deploy.approvals.headOption.fold("")(_.getSignature.sigAlgorithm))
       .withSignature(deploy.approvals.headOption.fold(ByteString.EMPTY)(_.getSignature.sig))
   //.withUser() // We weren't using signing when this was in use.
@@ -181,14 +180,14 @@ object LegacyConversions {
       .withSession(
         consensus.Deploy
           .Code()
-          .withCode(deploy.getSession.code)
-          .withArgs(deploy.getSession.args)
+          .withWasm(deploy.getSession.code)
+          .withAbiArgs(deploy.getSession.args)
       )
       .withPayment(
         consensus.Deploy
           .Code()
-          .withCode(deploy.getPayment.code)
-          .withArgs(deploy.getPayment.args)
+          .withWasm(deploy.getPayment.code)
+          .withAbiArgs(deploy.getPayment.args)
       )
 
     val header = consensus.Deploy
@@ -197,7 +196,6 @@ object LegacyConversions {
       // If they signed the deploy, we can derive the account address from the key.
       //.withAccountPublicKey(x.getDeploy.user)
       .withAccountPublicKey(deploy.address)
-      .withNonce(deploy.nonce)
       .withTimestamp(deploy.timestamp)
       .withGasPrice(deploy.gasPrice)
       .withBodyHash(ProtoUtil.protoHash(body)) // Legacy doesn't have it.

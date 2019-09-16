@@ -1,15 +1,14 @@
 #![no_std]
-#![feature(alloc)]
 
 extern crate alloc;
-extern crate common;
+extern crate contract_ffi;
 
 use alloc::string::String;
 use alloc::vec::Vec;
-use common::contract_api::pointers::ContractPointer;
-use common::contract_api::{add_uref, call_contract, get_uref, new_uref, revert};
-use common::key::Key;
-use common::value::Value;
+use contract_ffi::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api::{add_uref, call_contract, get_uref, new_uref, revert};
+use contract_ffi::key::Key;
+use contract_ffi::value::Value;
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -22,7 +21,7 @@ pub extern "C" fn call() {
     };
 
     let arg = "World";
-    let result: String = call_contract(pointer, &arg, &Vec::new());
+    let result: String = call_contract(pointer, &(arg,), &Vec::new());
     assert_eq!("Hello, World", result);
 
     //store the result at a uref so it can be seen as an effect on the global state

@@ -14,6 +14,7 @@ const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
 const LOCAL_ID: u8 = 3;
 
+pub const HASH_SIZE: usize = 32;
 pub const LOCAL_KEY_SIZE: usize = 32;
 pub const LOCAL_SEED_SIZE: usize = 32;
 
@@ -37,7 +38,7 @@ fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_SIZE] {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Key {
     Account([u8; 32]),
-    Hash([u8; 32]),
+    Hash([u8; HASH_SIZE]),
     URef(URef),
     Local([u8; LOCAL_KEY_SIZE]),
 }
@@ -47,6 +48,15 @@ impl Key {
         let bytes_to_hash: Vec<u8> = seed.iter().chain(key_bytes.iter()).cloned().collect();
         let hash: [u8; LOCAL_KEY_SIZE] = hash(&bytes_to_hash);
         Key::Local(hash)
+    }
+
+    pub fn type_string(&self) -> String {
+        match self {
+            Key::Account(_) => String::from("Key::Account"),
+            Key::Hash(_) => String::from("Key::Hash"),
+            Key::URef(_) => String::from("Key::URef"),
+            Key::Local(_) => String::from("Key::Local"),
+        }
     }
 }
 
@@ -66,7 +76,8 @@ impl core::fmt::Display for Key {
         match self {
             Key::Account(addr) => write!(f, "Key::Account({})", addr_to_hex(addr)),
             Key::Hash(addr) => write!(f, "Key::Hash({})", addr_to_hex(addr)),
-            Key::URef(uref) => write!(f, "Key::{}", uref), // Display impl for URef will append URef(…).
+            Key::URef(uref) => write!(f, "Key::{}", uref), /* Display impl for URef will append */
+            // URef(…).
             Key::Local(hash) => write!(f, "Key::Local({})", addr_to_hex(hash)),
         }
     }
@@ -121,8 +132,8 @@ impl Key {
         }
     }
 
-    /// Creates an instance of [Key::Hash] variant from the base16 encoded String.
-    /// Returns `None` if [addr] is not valid Blake2b hash.
+    /// Creates an instance of [Key::Hash] variant from the base16 encoded
+    /// String. Returns `None` if [addr] is not valid Blake2b hash.
     pub fn parse_hash(addr: &str) -> Option<Key> {
         let mut buff = [0u8; 32];
         let parsed_addr = drop_hex_prefix(addr);
@@ -132,8 +143,8 @@ impl Key {
         }
     }
 
-    /// Creates an instance of [Key::URef] variant from the base16 encoded String.
-    /// Returns `None` if [addr] is not valid Blake2b hash.
+    /// Creates an instance of [Key::URef] variant from the base16 encoded
+    /// String. Returns `None` if [addr] is not valid Blake2b hash.
     pub fn parse_uref(addr: &str, access_rights: AccessRights) -> Option<Key> {
         let mut buff = [0u8; 32];
         let parsed_addr = drop_hex_prefix(&addr);
@@ -143,8 +154,9 @@ impl Key {
         }
     }
 
-    /// Creates an instance of [Key::Local] variant from the base16 encoded String.
-    /// Returns `None` if either [seed] or [key_hash] is not valid Blake2b hash.
+    /// Creates an instance of [Key::Local] variant from the base16 encoded
+    /// String. Returns `None` if either [seed] or [key_hash] is not valid
+    /// Blake2b hash.
     pub fn parse_local(seed: &str, key_hash: &str) -> Option<Key> {
         let mut seed_buff = [0u8; 32];
         let parsed_seed = drop_hex_prefix(seed);

@@ -1,15 +1,15 @@
 #![no_std]
-#![feature(alloc, cell_update)]
+#![feature(cell_update)]
 
 extern crate alloc;
 
-extern crate cl_std;
+extern crate contract_ffi;
 
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 
-use cl_std::contract_api;
-use cl_std::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api;
+use contract_ffi::contract_api::pointers::ContractPointer;
 
 #[no_mangle]
 pub extern "C" fn hello_ext() {
@@ -22,5 +22,6 @@ pub extern "C" fn hello_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let known_urefs = BTreeMap::new();
-    let _contract_pointer: ContractPointer = contract_api::store_function("hello_ext", known_urefs);
+    let contract_pointer: ContractPointer = contract_api::store_function("hello_ext", known_urefs);
+    contract_api::add_uref("hello_ext", &contract_pointer.into());
 }

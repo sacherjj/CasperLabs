@@ -8,7 +8,6 @@ use core::convert::TryFrom;
 use core::fmt::{Debug, Display, Formatter};
 use failure::Fail;
 
-const DEFAULT_NONCE: u64 = 0;
 const DEFAULT_CURRENT_BLOCK_TIME: BlockTime = BlockTime(0);
 const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
 
@@ -49,7 +48,8 @@ impl FromBytes for PurseId {
 pub enum ActionType {
     /// Required by deploy execution.
     Deployment = 0,
-    /// Required when adding/removing associated keys, changing threshold levels.
+    /// Required when adding/removing associated keys, changing threshold
+    /// levels.
     KeyManagement = 1,
 }
 
@@ -76,18 +76,19 @@ pub struct ActionThresholds {
     key_management: Weight,
 }
 
-/// Represents an error that occurs during the change of a thresholds on an account.
+/// Represents an error that occurs during the change of a thresholds on an
+/// account.
 ///
-/// It is represented by `i32` to be easily able to transform this value in an out
-/// through FFI boundaries as a number.
+/// It is represented by `i32` to be easily able to transform this value in an
+/// out through FFI boundaries as a number.
 ///
-/// The explicit numbering of the variants is done on purpose and whenever you plan to add
-/// new variant, you should always extend it, and add a variant that does not exist already.
-/// When adding new variants you should also remember to change
-/// `From<i32> for SetThresholdFailure`.
+/// The explicit numbering of the variants is done on purpose and whenever you
+/// plan to add new variant, you should always extend it, and add a variant that
+/// does not exist already. When adding new variants you should also remember to
+/// change `From<i32> for SetThresholdFailure`.
 ///
-/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
-/// reviewed and tested.
+/// This way we can ensure safety and backwards compatibility. Any changes
+/// should be carefully reviewed and tested.
 #[repr(i32)]
 #[derive(Debug, Fail, PartialEq, Eq)]
 pub enum SetThresholdFailure {
@@ -144,9 +145,11 @@ impl ActionThresholds {
         })
     }
     /// Sets new threshold for [ActionType::Deployment].
-    /// Should return an error if setting new threshold for `action_type` breaks one of the invariants.
-    /// Currently, invariant is that `ActionType::Deployment` threshold shouldn't be higher than any other,
-    /// which should be checked both when increasing `Deployment` threshold and decreasing the other.
+    /// Should return an error if setting new threshold for `action_type` breaks
+    /// one of the invariants. Currently, invariant is that
+    /// `ActionType::Deployment` threshold shouldn't be higher than any
+    /// other, which should be checked both when increasing `Deployment`
+    /// threshold and decreasing the other.
     pub fn set_deployment_threshold(
         &mut self,
         new_threshold: Weight,
@@ -219,8 +222,9 @@ pub struct AccountActivity {
 
 impl AccountActivity {
     // TODO: We need default for inactivity_period_limit.
-    // `current_block_time` value is passed in from the node and is coming from the parent block.
-    // [inactivity_period_limit] block time period after which account is eligible for recovery.
+    // `current_block_time` value is passed in from the node and is coming from the
+    // parent block. [inactivity_period_limit] block time period after which
+    // account is eligible for recovery.
     pub fn new(
         current_block_time: BlockTime,
         inactivity_period_limit: BlockTime,
@@ -293,11 +297,12 @@ impl Debug for PublicKey {
     }
 }
 
-// TODO: This needs to be updated, `PUBLIC_KEY_SIZE` is not 32 bytes as KEY_SIZE * U8_SIZE.
-// I am not changing that as I don't want to deal with ripple effect.
+// TODO: This needs to be updated, `PUBLIC_KEY_SIZE` is not 32 bytes as KEY_SIZE
+// * U8_SIZE. I am not changing that as I don't want to deal with ripple effect.
 
 // Public key is encoded as its underlying [u8; 32] array, which in turn
-// is serialized as u8 + [u8; 32], u8 represents the length and then 32 element array.
+// is serialized as u8 + [u8; 32], u8 represents the length and then 32 element
+// array.
 pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
 
 impl PublicKey {
@@ -344,16 +349,16 @@ impl FromBytes for PublicKey {
 /// Represents an error that happens when trying to add a new associated key
 /// on an account.
 ///
-/// It is represented by `i32` to be easily able to transform this value in an out
-/// through FFI boundaries as a number.
+/// It is represented by `i32` to be easily able to transform this value in an
+/// out through FFI boundaries as a number.
 ///
-/// The explicit numbering of the variants is done on purpose and whenever you plan to add
-/// new variant, you should always extend it, and add a variant that does not exist already.
-/// When adding new variants you should also remember to change
-/// `From<i32> for AddKeyFailure`.
+/// The explicit numbering of the variants is done on purpose and whenever you
+/// plan to add new variant, you should always extend it, and add a variant that
+/// does not exist already. When adding new variants you should also remember to
+/// change `From<i32> for AddKeyFailure`.
 ///
-/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
-/// reviewed and tested.
+/// This way we can ensure safety and backwards compatibility. Any changes
+/// should be carefully reviewed and tested.
 #[derive(PartialEq, Eq, Fail, Debug)]
 #[repr(i32)]
 pub enum AddKeyFailure {
@@ -382,16 +387,16 @@ impl TryFrom<i32> for AddKeyFailure {
 /// Represents an error that happens when trying to remove an associated key
 /// from an account.
 ///
-/// It is represented by `i32` to be easily able to transform this value in an out
-/// through FFI boundaries as a number.
+/// It is represented by `i32` to be easily able to transform this value in an
+/// out through FFI boundaries as a number.
 ///
-/// The explicit numbering of the variants is done on purpose and whenever you plan to add
-/// new variant, you should always extend it, and add a variant that does not exist already.
-/// When adding new variants you should also remember to change
-/// `From<i32> for RemoveKeyFailure`.
+/// The explicit numbering of the variants is done on purpose and whenever you
+/// plan to add new variant, you should always extend it, and add a variant that
+/// does not exist already. When adding new variants you should also remember to
+/// change `From<i32> for RemoveKeyFailure`.
 ///
-/// This way we can ensure safety and backwards compatibility. Any changes should be carefully
-/// reviewed and tested.
+/// This way we can ensure safety and backwards compatibility. Any changes
+/// should be carefully reviewed and tested.
 #[derive(Fail, Debug, Eq, PartialEq)]
 #[repr(i32)]
 pub enum RemoveKeyFailure {
@@ -422,15 +427,16 @@ impl TryFrom<i32> for RemoveKeyFailure {
     }
 }
 
-/// Represents an error that happens when trying to update the value under a public key
-/// associated with an account.
+/// Represents an error that happens when trying to update the value under a
+/// public key associated with an account.
 ///
-/// It is represented by `i32` to be easily able to transform this value in and out
-/// through FFI boundaries as a number.
+/// It is represented by `i32` to be easily able to transform this value in and
+/// out through FFI boundaries as a number.
 ///
-/// For backwards compatibility, the variants are explicitly ordered and will not be reordered;
-/// variants added in future versions will be appended to extend the enum
-/// and in the event that a variant is removed its ordinal will not be reused.
+/// For backwards compatibility, the variants are explicitly ordered and will
+/// not be reordered; variants added in future versions will be appended to
+/// extend the enum and in the event that a variant is removed its ordinal will
+/// not be reused.
 #[derive(PartialEq, Eq, Fail, Debug)]
 #[repr(i32)]
 pub enum UpdateKeyFailure {
@@ -490,7 +496,8 @@ impl AssociatedKeys {
     }
 
     /// Removes key from the associated keys set.
-    /// Returns true if value was found in the set prior to the removal, false otherwise.
+    /// Returns true if value was found in the set prior to the removal, false
+    /// otherwise.
     pub fn remove_key(&mut self, key: &PublicKey) -> Result<(), RemoveKeyFailure> {
         self.0
             .remove(key)
@@ -551,7 +558,6 @@ impl AssociatedKeys {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Account {
     public_key: [u8; 32],
-    nonce: u64,
     known_urefs: BTreeMap<String, Key>,
     purse_id: PurseId,
     associated_keys: AssociatedKeys,
@@ -562,7 +568,6 @@ pub struct Account {
 impl Account {
     pub fn new(
         public_key: [u8; 32],
-        nonce: u64,
         known_urefs: BTreeMap<String, Key>,
         purse_id: PurseId,
         associated_keys: AssociatedKeys,
@@ -571,7 +576,6 @@ impl Account {
     ) -> Self {
         Account {
             public_key,
-            nonce,
             known_urefs,
             purse_id,
             associated_keys,
@@ -585,14 +589,12 @@ impl Account {
         known_urefs: BTreeMap<String, Key>,
         purse_id: PurseId,
     ) -> Self {
-        let nonce = DEFAULT_NONCE;
         let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();
         let account_activity =
             AccountActivity::new(DEFAULT_CURRENT_BLOCK_TIME, DEFAULT_INACTIVITY_PERIOD_TIME);
         Account::new(
             account_addr,
-            nonce,
             known_urefs,
             purse_id,
             associated_keys,
@@ -638,16 +640,6 @@ impl Account {
 
     pub fn account_activity(&self) -> &AccountActivity {
         &self.account_activity
-    }
-
-    pub fn nonce(&self) -> u64 {
-        self.nonce
-    }
-
-    /// Consumes instance of account and returns new one
-    /// with old contents but with nonce increased by 1.
-    pub fn increment_nonce(&mut self) {
-        self.nonce += 1;
     }
 
     pub fn add_associated_key(
@@ -731,8 +723,8 @@ impl Account {
             .all(|e| self.associated_keys.contains_key(e))
     }
 
-    /// Checks whether the sum of the weights of all authorization keys is greater
-    /// or equal to deploy threshold.
+    /// Checks whether the sum of the weights of all authorization keys is
+    /// greater or equal to deploy threshold.
     pub fn can_deploy_with(&self, authorization_keys: &BTreeSet<PublicKey>) -> bool {
         let total_weight = self
             .associated_keys
@@ -741,8 +733,8 @@ impl Account {
         total_weight >= *self.action_thresholds().deployment()
     }
 
-    /// Checks whether the sum of the weights of all authorization keys is greater
-    /// or equal to key management threshold.
+    /// Checks whether the sum of the weights of all authorization keys is
+    /// greater or equal to key management threshold.
     pub fn can_manage_keys_with(&self, authorization_keys: &BTreeSet<PublicKey>) -> bool {
         let total_weight = self
             .associated_keys
@@ -776,9 +768,9 @@ impl FromBytes for AssociatedKeys {
         let (keys_map, rem): (BTreeMap<PublicKey, Weight>, &[u8]) = FromBytes::from_bytes(bytes)?;
         let mut keys = AssociatedKeys::empty();
         keys_map.into_iter().for_each(|(k, v)| {
-            // NOTE: we're ignoring potential errors (duplicate key, maximum number of elements).
-            // This is safe, for now, as we were the ones that serialized `AssociatedKeys` in the
-            // first place.
+            // NOTE: we're ignoring potential errors (duplicate key, maximum number of
+            // elements). This is safe, for now, as we were the ones that
+            // serialized `AssociatedKeys` in the first place.
             keys.add_key(k, v).unwrap();
         });
         Ok((keys, rem))
@@ -896,7 +888,6 @@ impl ToBytes for Account {
         let known_urefs_size = UREF_SIZE * self.known_urefs.len() + U32_SIZE;
         let purse_id_size = UREF_SIZE;
         let serialized_account_size = KEY_SIZE // pub key
-            + U64_SIZE // nonce
             + known_urefs_size
             + purse_id_size
             + associated_keys_size
@@ -907,7 +898,6 @@ impl ToBytes for Account {
         }
         let mut result: Vec<u8> = Vec::with_capacity(serialized_account_size);
         result.extend(&self.public_key.to_bytes()?);
-        result.append(&mut self.nonce.to_bytes()?);
         result.append(&mut self.known_urefs.to_bytes()?);
         result.append(&mut self.purse_id.value().to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
@@ -920,7 +910,6 @@ impl ToBytes for Account {
 impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (public_key, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (nonce, rem): (u64, &[u8]) = FromBytes::from_bytes(rem)?;
         let (known_urefs, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
         let (purse_id, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
         let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
@@ -930,7 +919,6 @@ impl FromBytes for Account {
         Ok((
             Account {
                 public_key,
-                nonce,
                 known_urefs,
                 purse_id,
                 associated_keys,
@@ -954,22 +942,6 @@ mod tests {
     use alloc::vec::Vec;
     use core::convert::TryFrom;
     use core::iter::FromIterator;
-
-    #[test]
-    fn incremented_nonce() {
-        let mut account = Account::new(
-            [0u8; 32],
-            0,
-            BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
-            AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1)),
-            Default::default(),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
-        );
-        assert_eq!(account.nonce(), 0);
-        account.increment_nonce();
-        assert_eq!(account.nonce(), 1);
-    }
 
     #[test]
     fn associated_keys_add() {
@@ -1032,7 +1004,6 @@ mod tests {
 
         let account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             keys,
@@ -1101,7 +1072,6 @@ mod tests {
         };
         let account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -1165,7 +1135,6 @@ mod tests {
         };
         let account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -1248,7 +1217,6 @@ mod tests {
         };
         let mut account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -1290,7 +1258,6 @@ mod tests {
         };
         let mut account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -1325,7 +1292,6 @@ mod tests {
         };
         let mut account = Account::new(
             [0u8; 32],
-            0,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,

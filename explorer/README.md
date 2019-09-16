@@ -31,10 +31,16 @@ cd -
 
 If we are not using the Genesis account (the one with all the initial tokens) as the Faucet account, we have to establish the latter by transfering some tokens to it that it can later pass on.
 
+Generate the necessary contracts first:
+
+```console
+cd .. ; make build-explorer-contracts ; cd -
+```
+
 The `server` component has a utility program to do the initial token transfer, let's build that first (not necessary if we already built everything with docker):
 
 ```console
-cd server && npm run build && cd -
+cd server ; npm run build ; cd -
 ```
 
 Run the transfer from the genesis account to our test faucet account.
@@ -42,12 +48,13 @@ Run the transfer from the genesis account to our test faucet account.
 ```sh
 node ./server/dist/transfer.js \
   --host-url http://localhost:8401 \
-  --transfer-contract-path contracts/target/wasm32-unknown-unknown/release/transfer.wasm \
+  --transfer-contract-path contracts/client/transfer_to_account.wasm \
+  --payment-contract-path contracts/client/standard_payment.wasm \
+  --payment-amount 100000 \
   --from-private-key-path ../hack/docker/.casperlabs/genesis/system-account/account-private.pem \
   --from-public-key-path ../hack/docker/.casperlabs/genesis/system-account/account-public.pem \
   --to-public-key-path ./server/test.public.key \
-  --amount 100000000 \
-  --nonce 1
+  --amount 100000000
 ```
 
 NOTE: If you are connecting to a HTTPS endpoint which uses a self-signed certificate, which is the case in local testing, you have to relax the SSL certificate checks in Node.js like so:
@@ -90,7 +97,6 @@ deploy {
   deploy_hash: "7401ecbe8b2c4e4de2c1e6422fddcfd1ae9d128058e2e6dba97ba62fc51db734"
   header {
     account_public_key: "f78786150599b50a1353476f5e2f12cd13c214e512096741c48e7ec63639af56"
-    nonce: 1
     timestamp: 1562350425051
     gas_price: 0
     body_hash: "1ba3a8335e68cbfd461865876bccc9225c560db9045d862ad16d26e3bbbe0a87"
@@ -128,7 +134,6 @@ $ ./client.sh node-0 query-state \
 
 account {
   public_key: "045499d51a013e06c6cbb5734843cf3c7f08d66af312d81238ffeb54244f1800"
-  nonce: 0
   purse_id {
     uref: "e698d314cd8004ca6cdfc5b5ea94b8c930aa3cd108bb32d6a5e9f53bcc201f75"
     access_rights: READ_ADD_WRITE

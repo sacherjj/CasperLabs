@@ -101,8 +101,7 @@ object Genesis {
       deploy = ProtoUtil.basicDeploy(
         timestamp = 0L,
         sessionCode = ByteString.copyFrom(request.toByteArray),
-        accountPublicKey = ByteString.copyFrom(accountPublicKey),
-        nonce = 1
+        accountPublicKey = ByteString.copyFrom(accountPublicKey)
       )
     } yield deploy
 
@@ -120,11 +119,12 @@ object Genesis {
       blessedTerms: List[Deploy]
   ): F[BlockMsgWithTransform] =
     for {
-      _ <- Log[F].debug(s"Processing ${blessedTerms.size} blessed contracts...")
+      _         <- Log[F].debug(s"Processing ${blessedTerms.size} blessed contracts...")
+      eeDeploys <- blessedTerms.traverse(deployDataToEEDeploy[F](_))
       genesisResult <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F]
                           .runGenesis(
-                            blessedTerms.map(deployDataToEEDeploy),
+                            eeDeploys,
                             CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(
                               initial
                             )

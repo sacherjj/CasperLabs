@@ -25,7 +25,8 @@ import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
-import io.casperlabs.casper.consensus.state.{Unit => _, BigInt => _, _}
+import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
@@ -50,7 +51,6 @@ abstract class HashSetCasperTestNode[F[_]](
     val genesis: Block,
     val dagStorageDir: Path,
     val blockStorageDir: Path,
-    val validateNonces: Boolean,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]]
 )(
     implicit
@@ -75,8 +75,8 @@ abstract class HashSetCasperTestNode[F[_]](
     .toMap
 
   implicit val casperSmartContractsApi =
-    maybeMakeEE.map(_(bonds, validateNonces)) getOrElse
-      HashSetCasperTestNode.simpleEEApi[F](bonds, validateNonces)
+    maybeMakeEE.map(_(bonds)) getOrElse
+      HashSetCasperTestNode.simpleEEApi[F](bonds)
 
   /** Handle one message. */
   def receive(): F[Unit]
@@ -153,7 +153,6 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit errorHandler: ErrorHandler[F],
@@ -168,7 +167,6 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      validateNonces: Boolean = true,
       maybeMakeEE: Option[MakeExecutionEngineService[Effect]] = None
   ): Effect[IndexedSeq[TestNode[Effect]]] =
     networkF[Effect](
@@ -177,7 +175,6 @@ trait HashSetCasperTestNodeFactory {
       transforms,
       storageSize,
       faultToleranceThreshold,
-      validateNonces,
       maybeMakeEE
     )(
       ApplicativeError_[Effect, CommError],
@@ -203,7 +200,7 @@ trait HashSetCasperTestNodeFactory {
 object HashSetCasperTestNode {
   type Effect[A]                        = EitherT[Task, CommError, A]
   type Bonds                            = Map[Keys.PublicKey, Long]
-  type MakeExecutionEngineService[F[_]] = (Bonds, Boolean) => ExecutionEngineService[F]
+  type MakeExecutionEngineService[F[_]] = Bonds => ExecutionEngineService[F]
 
   val appErrId = new ApplicativeError[Id, CommError] {
     def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
@@ -273,26 +270,25 @@ object HashSetCasperTestNode {
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Defer: Applicative](
       initialBonds: Map[PublicKey, Long],
-      validateNonces: Boolean = true,
       generateConflict: Boolean = false
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
       import ipc.{Bond => _, _}
 
-      // NOTE: Some tests would benefit from tacking this per pre-state-hash,
-      // but when I tried to do that a great many more failed.
-      private val accountNonceTracker: MutMap[ByteString, Long] =
-        MutMap.empty.withDefaultValue(0)
-
       private val zero  = Array.fill(32)(0.toByte)
       private val bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
-      private def getExecutionEffect(deploy: ipc.Deploy) = {
+      private def getExecutionEffect(deploy: ipc.DeployItem) = {
         // The real execution engine will get the keys from what the code changes, which will include
         // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
         // here isn't more specific to a deploy then the real thing would be.
+        val code = deploy.getSession.payload match {
+          case ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(code, _)) =>
+            code
+          case _ => sys.error("Expected DeployPayload.Code")
+        }
         val key = Key(
-          Key.Value.Hash(Key.Hash(deploy.session.fold(ByteString.EMPTY)(_.code)))
+          Key.Value.Hash(Key.Hash(code))
         )
         val (op, transform) = if (!generateConflict) {
           Op(Op.OpInstance.Read(ReadOp())) ->
@@ -312,57 +308,30 @@ object HashSetCasperTestNode {
         ExecutionEffect(Seq(opEntry), Seq(transforEntry))
       }
 
-      // Validate that account's nonces increment monotonically by 1.
-      // Assumes that any account address already exists in the GlobalState with nonce = 0.
-      private def validateNonce(deploy: ipc.Deploy): Int = synchronized {
-        if (!validateNonces) {
-          0
-        } else {
-          val deployAccount = deploy.address
-          val deployNonce   = deploy.nonce
-          val oldNonce      = accountNonceTracker(deployAccount)
-          val expected      = oldNonce + 1
-          val sign          = math.signum(deployNonce - expected)
-          if (sign == 0) accountNonceTracker(deployAccount) = deployNonce
-          sign.toInt
-        }
-      }
-
       override def emptyStateHash: ByteString = ByteString.EMPTY
 
       override def exec(
           prestate: ByteString,
           blocktime: Long,
-          deploys: Seq[ipc.Deploy],
+          deploys: Seq[ipc.DeployItem],
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =
         //This function returns the same `DeployResult` for all deploys,
         //regardless of their wasm code. It pretends to have run all the deploys,
         //but it doesn't really; it just returns the same result no matter what.
         deploys
-          .map { d =>
-            validateNonce(d) match {
-              case 0 =>
-                DeployResult(
-                  ExecutionResult(
-                    ipc.DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
-                  )
-                )
-              case 1 =>
-                DeployResult(DeployResult.Value.InvalidNonce(DeployResult.InvalidNonce(d.nonce)))
-              case -1 =>
-                DeployResult(
-                  DeployResult.Value.PreconditionFailure(
-                    DeployResult.PreconditionFailure("Nonce was less then expected.")
-                  )
-                )
-            }
-          }
+          .map(getExecutionEffect(_))
+          .map(
+            effect =>
+              DeployResult(
+                ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, 10))
+              )
+          )
           .asRight[Throwable]
           .pure[F]
 
       override def runGenesis(
-          deploys: Seq[ipc.Deploy],
+          deploys: Seq[ipc.DeployItem],
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, GenesisResult]] =
         commit(emptyStateHash, Seq.empty).map {

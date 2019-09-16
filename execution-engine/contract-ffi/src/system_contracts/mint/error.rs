@@ -8,16 +8,23 @@ use crate::system_contracts::mint::purse_id::PurseIdError;
 
 /// An enum error that is capable of carrying a value across FFI-Host
 /// boundary.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Fail, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Error {
+    #[fail(display = "Insufficient funds")]
     InsufficientFunds = 0,
+    #[fail(display = "Source not found")]
     SourceNotFound = 1,
+    #[fail(display = "Destination not found")]
     DestNotFound = 2,
     /// See [`PurseIdError::InvalidURef`]
+    #[fail(display = "Invalid URef")]
     InvalidURef = 3,
     /// See [`PurseIdError::InvalidAccessRights`]
+    #[fail(display = "Invalid AccessRights")]
     InvalidAccessRights = 4,
+    #[fail(display = "Invalid non-empty purse creation")]
+    InvalidNonEmptyPurseCreation = 5,
 }
 
 impl From<PurseIdError> for Error {

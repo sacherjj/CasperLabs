@@ -3,15 +3,17 @@ from typing import Generator
 import docker as docker_py
 import pytest
 
-from .cl_node.casperlabs_network import (
+from test.cl_node.casperlabs_network import (
     CustomConnectionNetwork,
     OneNodeNetwork,
     ThreeNodeNetwork,
     TwoNodeNetwork,
     PaymentNodeNetwork,
     PaymentNodeNetworkWithNoMinBalance,
-    PaymentNodForOnlyPaymentContract,
     TrillionPaymentNodeNetwork,
+    OneNodeWithGRPCEncryption,
+    EncryptedTwoNodeNetwork,
+    ReadOnlyNodeNetwork,
 )
 from docker.client import DockerClient
 
@@ -26,9 +28,16 @@ def docker_client_fixture() -> Generator[DockerClient, None, None]:
         docker_client.networks.prune()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def one_node_network(docker_client_fixture):
     with OneNodeNetwork(docker_client_fixture) as onn:
+        onn.create_cl_network()
+        yield onn
+
+
+@pytest.fixture(scope="module")
+def read_only_node_network(docker_client_fixture):
+    with ReadOnlyNodeNetwork(docker_client_fixture) as onn:
         onn.create_cl_network()
         yield onn
 
@@ -62,17 +71,22 @@ def payment_node_network_no_min_balance(docker_client_fixture):
 
 
 @pytest.fixture(scope="function")
-def payment_node_network_with_just_enough_to_run_payment_contract(
-    docker_client_fixture
-):
-    with PaymentNodForOnlyPaymentContract(docker_client_fixture) as onn:
-        onn.create_cl_network()
-        yield onn
+def encrypted_one_node_network(docker_client_fixture):
+    with OneNodeWithGRPCEncryption(docker_client_fixture) as net:
+        net.create_cl_network()
+        yield net
 
 
 @pytest.fixture()
 def two_node_network(docker_client_fixture):
     with TwoNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture()
+def encrypted_two_node_network(docker_client_fixture):
+    with EncryptedTwoNodeNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
 

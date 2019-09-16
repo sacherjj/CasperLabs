@@ -4,27 +4,64 @@ import re
 import random
 import string
 import tempfile
-import typing
 from pathlib import Path
 
-from docker.client import DockerClient
 from .errors import (
     UnexpectedProposeOutputFormatError,
     UnexpectedShowBlocksOutputFormatError,
 )
+from casperlabs_client import ABI
 
-HELLO_NAME = "test_helloname.wasm"
-HELLO_WORLD = "test_helloworld.wasm"
-COUNTER_CALL = "test_countercall.wasm"
-MAILING_LIST_CALL = "test_mailinglistcall.wasm"
-COMBINED_CONTRACT = "test_combinedcontractsdefine.wasm"
-BONDING_CONTRACT = "test_bondingcall.wasm"
-UNBONDING_CONTRACT = "test_unbondingcall.wasm"
-INVALID_BONDING_CONTRACT = "test_invalid_bondingcall.wasm"
-INVALID_UNBONDING_CONTRACT = "test_invalid_unbondingcall.wasm"
-PAYMENT_PURSE_CONTRACT = "test_payment_purse.wasm"
-MAX_PAYMENT_COST = 10000000  # ten million
+
+class Contract:
+    """ This is generated with util/generate_contract_class.py """
+
+    ADD_ASSOCIATED_KEY = "add_associated_key.wasm"
+    ARGS_MULTI = "test_args_multi.wasm"
+    ARGS_U32 = "test_args_u32.wasm"
+    ARGS_U512 = "test_args_u512.wasm"
+    BONDINGCALL = "test_bondingcall.wasm"
+    COMBINEDCONTRACTSDEFINE = "test_combinedcontractsdefine.wasm"
+    COUNTERCALL = "test_countercall.wasm"
+    COUNTERDEFINE = "test_counterdefine.wasm"
+    DIRECT_REVERT_CALL = "test_direct_revert_call.wasm"
+    DIRECT_REVERT_DEFINE = "test_direct_revert_define.wasm"
+    ENDLESS_LOOP = "endless_loop.wasm"
+    ERR_STANDARD_PAYMENT = "err_standard_payment.wasm"
+    ERR_TRANSFER_TO_ACCOUNT = "err_transfer_to_account.wasm"
+    FINALIZE_PAYMENT = "test_finalize_payment.wasm"
+    GETCALLERCALL = "getcallercall.wasm"
+    GETCALLERDEFINE = "getcallerdefine.wasm"
+    HELLONAME = "test_helloname.wasm"
+    HELLOWORLD = "test_helloworld.wasm"
+    LISTKNOWNUREFSCALL = "listknownurefscall.wasm"
+    LISTKNOWNUREFSDEFINE = "listknownurefsdefine.wasm"
+    MAILINGLISTCALL = "test_mailinglistcall.wasm"
+    MAILINGLISTDEFINE = "test_mailinglistdefine.wasm"
+    PAYMENT_PURSE = "test_payment_purse.wasm"
+    POS_BONDING = "pos_bonding.wasm"
+    REFUND_PURSE = "test_refund_purse.wasm"
+    REMOVE_ASSOCIATED_KEY = "remove_associated_key.wasm"
+    SET_KEY_THRESHOLDS = "set_key_thresholds.wasm"
+    STANDARD_PAYMENT = "standard_payment.wasm"
+    SUBCALL_REVERT_CALL = "test_subcall_revert_call.wasm"
+    SUBCALL_REVERT_DEFINE = "test_subcall_revert_define.wasm"
+    TRANSFER_TO_ACCOUNT = "transfer_to_account.wasm"
+    UNBONDINGCALL = "test_unbondingcall.wasm"
+    UPDATE_ASSOCIATED_KEY = "update_associated_key.wasm"
+
+
+# TEST Account Use Notes
+# test_transfer_to_accounts: 300, 299, 298
+# test_transfer_with_overdraft: 297, 296
+
+MAX_PAYMENT_COST = 10000000
+INITIAL_MOTES_AMOUNT = 10 ** 20
+MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
 CONV_RATE = 10
+TEST_ACCOUNT_INITIAL_BALANCE = 100000000
+
+BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
 
 
 @dataclasses.dataclass(eq=True, frozen=True)
@@ -40,22 +77,8 @@ def testing_root_path() -> Path:
     return cur_path
 
 
-@dataclasses.dataclass
-class TestingContext:
-    # Tell pytest this isn't Unittest class due to 'Test' name start
-    __test__ = False
-
-    peer_count: int
-    node_startup_timeout: int
-    network_converge_timeout: int
-    receive_timeout: int
-    command_timeout: int
-    blocks: int
-    mount_dir: str
-    bonds_file: str
-    bootstrap_keypair: KeyPair
-    peers_keypairs: typing.List[KeyPair]
-    docker: DockerClient
+def resources_path() -> Path:
+    return testing_root_path() / "resources"
 
 
 def random_string(length: int) -> str:
@@ -73,15 +96,6 @@ def make_tempfile(prefix: str, content: str) -> str:
 
 def make_tempdir(prefix: str) -> str:
     return tempfile.mkdtemp(dir="/tmp", prefix=prefix)
-
-
-class Network:
-    def __init__(self, network, bootstrap, peers, engines):
-        self.network = network
-        self.bootstrap = bootstrap
-        self.peers = peers
-        self.nodes = [bootstrap] + peers
-        self.engines = engines
 
 
 def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:

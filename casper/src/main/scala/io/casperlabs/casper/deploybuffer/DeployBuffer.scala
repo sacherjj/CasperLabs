@@ -1,13 +1,14 @@
 package io.casperlabs.casper.deploybuffer
 
 import cats._
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
-import io.casperlabs.casper.CasperMetricsSource
 import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.casper.{CasperMetricsSource, DeployHash}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
@@ -76,9 +77,11 @@ import scala.concurrent.duration.FiniteDuration
   def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]]
 
   def sizePendingOrProcessed(): F[Long]
+
+  def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy]
 }
 
-class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
+class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
     implicit val xa: Transactor[F]
 ) extends DeployBuffer[F] {
   // Do not forget updating Flyway migration scripts at:
@@ -131,7 +134,8 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
 
     for {
       t <- Time[F].currentMillis
-      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t)).transact(xa)
+      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t))
+            .transact(xa)
       _ <- updateMetrics()
     } yield ()
   }
@@ -156,7 +160,7 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
     for {
       now       <- Time[F].currentMillis
       threshold = now - expirationPeriod.toMillis
-      _ <- sql"""|UPDATE buffered_deploys 
+      _ <- sql"""|UPDATE buffered_deploys
                  |SET status=$DiscardedStatusCode, update_time_seconds=$now
                  |WHERE status=$PendingStatusCode AND receive_time_seconds<$threshold""".stripMargin.update.run
             .transact(xa)
@@ -253,15 +257,25 @@ class DeployBufferImpl[F[_]: Metrics: Time: Bracket[?[_], Throwable]](
       .query[Deploy]
       .option
       .transact(xa)
+
+  override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] =
+    NonEmptyList
+      .fromList[ByteString](l.toList)
+      .fold(fs2.Stream.fromIterator[F, Deploy](List.empty[Deploy].toIterator))(nel => {
+        val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
+        q.query.streamWithChunkSize(chunkSize).transact(xa)
+      })
 }
 
 object DeployBufferImpl {
   private implicit val metricsSource: Source = Metrics.Source(CasperMetricsSource, "DeployBuffers")
 
-  def create[F[_]: Metrics: Time: Sync](implicit xa: Transactor[F]): F[DeployBufferImpl[F]] =
+  def create[F[_]: Metrics: Time: Sync](
+      deployBufferChunkSize: Int
+  )(implicit xa: Transactor[F]): F[DeployBufferImpl[F]] =
     for {
       _            <- establishMetrics[F]
-      deployBuffer <- Sync[F].delay(new DeployBufferImpl[F])
+      deployBuffer <- Sync[F].delay(new DeployBufferImpl[F](deployBufferChunkSize))
     } yield deployBuffer
 
   /** Export base 0 values so we have non-empty series for charts. */

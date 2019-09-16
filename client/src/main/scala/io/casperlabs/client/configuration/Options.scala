@@ -1,13 +1,137 @@
 package io.casperlabs.client.configuration
 
 import java.io.File
+import java.nio.file.Files
 
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
 import io.casperlabs.client.BuildInfo
+import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
 
+object Options {
+  val hexCheck: String => Boolean  = _.matches("[0-9a-fA-F]+")
+  val hashCheck: String => Boolean = x => hexCheck(x) && x.length == 64
+
+  val fileCheck: File => Boolean = file =>
+    file.exists() && file.canRead && !file.isDirectory && file.isFile
+
+  trait DeployOptions { self: Subcommand =>
+    def sessionRequired: Boolean = true
+    def paymentPathName: String  = "payment"
+
+    // Session code on disk.
+    val session =
+      opt[File](
+        required = false,
+        descr = "Path to the file with session code.",
+        validate = fileCheck
+      )
+
+    val sessionHash =
+      opt[String](
+        required = false,
+        descr = "Hash of the stored contract to be called in the session; base16 encoded.",
+        validate = hashCheck
+      )
+
+    val sessionName =
+      opt[String](
+        required = false,
+        descr =
+          "Name of the stored contract (associated with the executing account) to be called in the session."
+      )
+
+    val sessionUref =
+      opt[String](
+        required = false,
+        descr = "URef of the stored contract to be called in the session; base16 encoded.",
+        validate = hashCheck
+      )
+
+    val sessionArgs =
+      opt[Args](
+        required = false,
+        descr =
+          """JSON encoded list of Deploy.Arg protobuf messages for the session, e.g. '[{"name": "amount", "value": {"long_value": 123456}}]'"""
+      )
+
+    val payment =
+      opt[File](
+        name = paymentPathName,
+        required = false,
+        descr = "Path to the file with payment code.",
+        validate = fileCheck
+      )
+
+    val paymentHash =
+      opt[String](
+        required = false,
+        descr = "Hash of the stored contract to be called in the payment; base16 encoded.",
+        validate = hashCheck
+      )
+
+    val paymentName =
+      opt[String](
+        required = false,
+        descr =
+          "Name of the stored contract (associated with the executing account) to be called in the payment."
+      )
+
+    val paymentUref =
+      opt[String](
+        required = false,
+        descr = "URef of the stored contract to be called in the payment; base16 encoded.",
+        validate = hashCheck
+      )
+
+    val paymentArgs =
+      opt[Args](
+        required = false,
+        descr =
+          """JSON encoded list of Deploy.Arg protobuf messages for the payment, e.g. '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'"""
+      )
+
+    val gasPrice = opt[Long](
+      descr = "The price of gas for this transaction in motes/gas. Must be positive integer.",
+      validate = _ > 0,
+      required = false,
+      default = 10L.some
+    )
+
+    val paymentAmount = opt[BigInt](
+      descr =
+        "Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.",
+      validate = _ > 0,
+      required = false
+    )
+
+    addValidation {
+      val sessionsProvided =
+        List(session.isDefined, sessionHash.isDefined, sessionName.isDefined, sessionUref.isDefined)
+          .count(identity)
+      val paymentsProvided =
+        List(payment.isDefined, paymentHash.isDefined, paymentName.isDefined, paymentUref.isDefined)
+          .count(identity)
+      if (sessionRequired && sessionsProvided == 0)
+        Left("No session contract options provided; please specify exactly one.")
+      else if (sessionsProvided > 1)
+        Left("Multiple session contract options provided; please specify exactly one.")
+      else if (paymentsProvided > 1)
+        Left("Multiple payment contract options provided; please specify exactly one.")
+      else if (paymentsProvided == 0 && paymentAmount.isEmpty)
+        Left(
+          "No payment contract options provided; please specify --payment-amount for the standard payment."
+        )
+      else Right(())
+    }
+  }
+
+}
+
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
+  import Options._
+
   implicit val streamingConverter: ValueConverter[Streaming] = new ValueConverter[Streaming] {
     override def parse(s: List[(String, List[String])]): Either[String, Option[Streaming]] =
       s match {
@@ -41,17 +165,79 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val nodeId =
     opt[String](
       descr =
-        "Node ID (i.e. the Keccak256 hash of the public key the node uses for TLS) in case secure communication is needed.",
+        "Node ID (i.e. the Keccak256 hash of the public key the node uses for TLS) in case secure communication is based on the intra-node certificates.",
       required = false
     )
 
-  val hexCheck: String => Boolean = _.matches("[0-9a-fA-F]+")
-  val fileCheck: File => Boolean = file =>
-    file.exists() && file.canRead && !file.isDirectory && file.isFile
+  val tlsApiCertificate =
+    opt[File](
+      descr =
+        "Certificate of the node to be used for TLS communication. If the --node-id is also provided it will override the authority in the certificate, otherwise we expect the certificate to match the domain. " +
+          "A certificate can be downloaded using OpenSSL: `openssl s_client -showcerts -connect localhost:40401 </dev/null 2>/dev/null | openssl x509 -outform PEM > node.crt`"
+    )
 
-  val deploy = new Subcommand("deploy") {
+  val useTls =
+    opt[String](
+      descr =
+        "Optionally, force the TLS to be on or off. When it's on without node-id or tls-api-certificate it will rely on the default system certificate chain. [true | false]",
+      validate = Set("true", "false").contains(_)
+    )
+
+  val makeDeploy = new Subcommand("make-deploy") with DeployOptions {
+    descr("Constructs a deploy that can be signed and sent to a node.")
+
+    val from = opt[String](
+      descr =
+        "The public key of the account which is the context of this deployment, base16 encoded.",
+      required = false
+    )
+
+    val publicKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck
+      )
+
+    val deployPath =
+      opt[File](
+        required = false,
+        descr = "Path to the file where deploy will be saved. " +
+          "Optional, if not provided the deploy will be printed to STDOUT.",
+        short = 'o'
+      )
+
+    addValidation {
+      if (publicKey.isDefined && from.isDefined)
+        Left("Both --from  and --public-key were provided. Please provide one of them.")
+      else if (publicKey.isEmpty && from.isEmpty)
+        Left("Neither --from nor --public-key were provided. Please provide one of them.")
+      else Right(())
+    }
+  }
+  addSubcommand(makeDeploy)
+
+  val sendDeploy = new Subcommand("send-deploy") {
     descr(
       "Deploy a smart contract source file to Casper on an existing running node. " +
+        "The deploy will be packaged and sent as a block to the network depending " +
+        "on the configuration of the Casper instance."
+    )
+
+    val deployPath = opt[File](
+      required = false,
+      descr = "Path to the file with signed Deploy.",
+      validate = fileCheck,
+      short = 'i'
+    ).map(file => Files.readAllBytes(file.toPath))
+      .orElse(Some(IOUtils.toByteArray(System.in)))
+
+  }
+  addSubcommand(sendDeploy)
+
+  val deploy = new Subcommand("deploy") with DeployOptions {
+    descr(
+      "Constructs a Deploy and sends it to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
         "on the configuration of the Casper instance."
     )
@@ -61,37 +247,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "The public key of the account which is the context of this deployment, base16 encoded.",
       required = false
     )
-
-    val gasLimit =
-      opt[Long](
-        descr =
-          "[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
-        validate = _ > 0,
-        required = false // Leaving it here for now so old examples don't complain about its presence.
-      )
-
-    val gasPrice = opt[Long](
-      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
-      validate = _ > 0,
-      required = false,
-      default = 10L.some
-    )
-
-    val nonce = opt[Long](
-      descr = "This allows you to overwrite your own pending transactions that use the same nonce.",
-      validate = _ > 0,
-      required = true
-    )
-
-    val session =
-      opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
-
-    val payment =
-      opt[File](
-        required = false,
-        descr = "Path to the file with payment code, by default fallbacks to the --session code",
-        validate = fileCheck
-      )
 
     val publicKey =
       opt[File](
@@ -109,6 +264,45 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(deploy)
 
+  val signDeploy = new Subcommand("sign-deploy") {
+    descr("Cryptographically signs a deploy. The signature is appended to existing approvals.")
+
+    val publicKey =
+      opt[File](
+        required = true,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck,
+        noshort = true
+      )
+
+    val privateKey =
+      opt[File](
+        required = true,
+        descr = "Path to the file with account private key (Ed25519)",
+        validate = fileCheck,
+        noshort = true
+      )
+
+    val signedDeployPath =
+      opt[File](
+        required = false,
+        descr = "Path to the file where signed deploy will be saved." +
+          "If not provided, the signed deploy will be sent to stdout.",
+        short = 'o'
+      )
+
+    val deployPath =
+      opt[File](
+        required = false,
+        descr = "Path to the deploy file.",
+        validate = fileCheck,
+        short = 'i'
+      ).map(file => Files.readAllBytes(file.toPath))
+        .orElse(Some(IOUtils.toByteArray(System.in)))
+  }
+
+  addSubcommand(signDeploy)
+
   val propose = new Subcommand("propose") {
     descr(
       "Force a node to propose a block based on its accumulated deploys."
@@ -125,7 +319,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       trailArg[String](
         name = "hash",
         required = true,
-        descr = "Value of the block hash, base16 encoded."
+        descr = "Value of the block hash, base16 encoded.",
+        validate = hexCheck
       )
   }
   addSubcommand(showBlock)
@@ -139,7 +334,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       trailArg[String](
         name = "hash",
         required = true,
-        descr = "Value of the block hash, base16 encoded."
+        descr = "Value of the block hash, base16 encoded.",
+        validate = hexCheck
       )
   }
   addSubcommand(showDeploys)
@@ -153,7 +349,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       trailArg[String](
         name = "hash",
         required = true,
-        descr = "Value of the deploy hash, base16 encoded."
+        descr = "Value of the deploy hash, base16 encoded.",
+        validate = hashCheck
       )
   }
   addSubcommand(showDeploy)
@@ -173,8 +370,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showBlocks)
 
-  val unbond = new Subcommand("unbond") {
+  val unbond = new Subcommand("unbond") with DeployOptions {
     descr("Issues unbonding request")
+
+    override def sessionRequired = false
+    override def paymentPathName = "payment-path"
 
     val amount = opt[Long](
       name = "amount",
@@ -183,49 +383,25 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made."
     )
 
-    val session =
-      opt[File](
-        descr = "Path to the file with unbonding contract.",
-        validate = fileCheck
-      )
-
-    val nonce = opt[Long](
-      descr =
-        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
-      validate = _ > 0,
-      required = true
-    )
-
     val privateKey =
       opt[File](
         descr = "Path to the file with account private key (Ed25519)",
         validate = fileCheck,
         required = true
       )
-
   }
   addSubcommand(unbond)
 
-  val bond = new Subcommand("bond") {
+  val bond = new Subcommand("bond") with DeployOptions {
     descr("Issues bonding request")
+
+    override def sessionRequired = false
+    override def paymentPathName = "payment-path"
 
     val amount = opt[Long](
       name = "amount",
       validate = _ > 0,
       descr = "amount of motes to bond",
-      required = true
-    )
-
-    val session =
-      opt[File](
-        descr = "Path to the file with bonding contract.",
-        validate = fileCheck
-      )
-
-    val nonce = opt[Long](
-      descr =
-        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
-      validate = _ > 0,
       required = true
     )
 
@@ -238,27 +414,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(bond)
 
-  val transfer = new Subcommand("transfer") {
+  val transfer = new Subcommand("transfer") with DeployOptions {
     descr("Transfers funds between accounts")
+
+    override def sessionRequired = false
+    override def paymentPathName = "payment-path"
 
     val amount = opt[Long](
       name = "amount",
       validate = _ > 0,
       descr =
         "Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.",
-      required = true
-    )
-
-    val session =
-      opt[File](
-        descr = "Path to the file with transfer contract.",
-        validate = fileCheck
-      )
-
-    val nonce = opt[Long](
-      descr =
-        "Nonce of the account. Sequences deploys from that account. Every new deploy has to use nonce one higher than current account's nonce.",
-      validate = _ > 0,
       required = true
     )
 
@@ -334,7 +500,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[String](
         name = "key",
         descr = "Base16 encoding of the base key.",
-        required = true
+        required = true,
+        validate = hexCheck
       )
 
     val path =
