@@ -854,7 +854,7 @@ steps:
     channel: alerts
     template:
     - |
-      macOS Build Status: {{#success build.status}}✔{{ else }}✘{{/success}}*{{ uppercasefirst build.status }}*
+      macOS Build Status: {{#success build.status}}✔{{ else }}✘ @sreteam {{/success}}*{{ uppercasefirst build.status }}*
       Drone Build: <{{ build.link }}|#{{ build.number }}>
   when:
     status:
