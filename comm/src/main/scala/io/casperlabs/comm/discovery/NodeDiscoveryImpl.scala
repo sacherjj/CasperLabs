@@ -5,6 +5,7 @@ import scala.concurrent.duration._
 import cats.implicits._
 import cats.effect.implicits._
 import cats.temp.par._
+import com.google.common.cache.{Cache, CacheBuilder}
 import io.casperlabs.catscontrib._
 import Catscontrib._
 import cats.Monad
@@ -14,9 +15,9 @@ import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.NodeDiscoveryImpl.Millis
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
+import java.util.concurrent.TimeUnit
 import monix.eval.{TaskLift, TaskLike}
 import monix.execution.Scheduler
-
 import scala.util.Random
 
 object NodeDiscoveryImpl {
@@ -30,7 +31,15 @@ object NodeDiscoveryImpl {
       gossipingRelayFactor: Int,
       gossipingRelaySaturation: Int,
       ingressScheduler: Scheduler,
-      egressScheduler: Scheduler
+      egressScheduler: Scheduler,
+      /* Threshold to start gradually pinging peers to fill cache */
+      alivePeersCacheMinThreshold: Int = 10,
+      /* Period to re-fill cache */
+      alivePeersCacheExpirationPeriod: FiniteDuration = 5.minutes,
+      /* Period to update the cache */
+      alivePeersCacheUpdatePeriod: FiniteDuration = 15.seconds,
+      /* Batches pinged in parallel */
+      alivePeersCachePingsBatchSize: Int = 10
   )(
       init: Option[Node]
   ): Resource[F, NodeDiscovery[F]] = {
@@ -70,7 +79,7 @@ object NodeDiscoveryImpl {
       Resource.liftF(for {
         table              <- PeerTable[F](id)
         recentlyAlivePeers <- Ref.of[F, (Set[Node], Millis)]((Set.empty, 0L))
-        temporaryBans      <- Ref.of[F, Map[Node, Millis]](Map.empty)
+        temporaryBans      = NodeCache(alivePeersCacheExpirationPeriod)
         nodeDiscovery <- Sync[F].delay {
                           val alivePeersCacheSize =
                             if (gossipingRelaySaturation == 100) {
@@ -82,9 +91,13 @@ object NodeDiscoveryImpl {
                             id = id,
                             table = table,
                             recentlyAlivePeersRef = recentlyAlivePeers,
-                            temporaryBansRef = temporaryBans,
+                            temporaryBans = temporaryBans,
                             gossipingEnabled = gossipingEnabled,
-                            alivePeersCacheSize = alivePeersCacheSize
+                            alivePeersCacheSize = alivePeersCacheSize,
+                            alivePeersCacheMinThreshold = alivePeersCacheMinThreshold,
+                            alivePeersCacheExpirationPeriod = alivePeersCacheExpirationPeriod,
+                            alivePeersCacheUpdatePeriod = alivePeersCacheUpdatePeriod,
+                            alivePeersCachePingsBatchSize = alivePeersCachePingsBatchSize
                           )
                         }
         _ <- init.fold(().pure[F])(nodeDiscovery.addNode)
@@ -115,28 +128,52 @@ object NodeDiscoveryImpl {
       _                                                      <- initializeMetrics
     } yield nodeDiscovery: NodeDiscovery[F]
   }
+
+  /** Cache nodes temporarily. */
+  class NodeCache(cache: Cache[Node, NodeCache.Marker]) {
+    def contains(node: Node) =
+      cache.getIfPresent(node) != null
+    def add(node: Node) =
+      cache.put(node, NodeCache.Marker)
+  }
+
+  object NodeCache {
+    private object Marker
+    private type Marker = Marker.type
+
+    def apply(duration: FiniteDuration): NodeCache = {
+      val cache = CacheBuilder
+        .newBuilder()
+        .expireAfterWrite(
+          duration.toMillis,
+          TimeUnit.MILLISECONDS
+        )
+        .build[Node, Marker]()
+      new NodeCache(cache)
+    }
+  }
+
 }
 
-private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: KademliaService: Par](
+private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Timer: Metrics: KademliaService: Par](
     id: NodeIdentifier,
     val table: PeerTable[F],
     recentlyAlivePeersRef: Ref[F, (Set[Node], Millis)],
-    // Remember the last time a peer was banned.
-    temporaryBansRef: Ref[F, Map[Node, Millis]],
+    temporaryBans: NodeDiscoveryImpl.NodeCache,
     alpha: Int = 3,
     k: Int = PeerTable.Redundancy,
     gossipingEnabled: Boolean,
     /** Actual size can be greater due to batched parallel pings, but not less.
       * Stops early without pinging all peers if reached required size. */
-    alivePeersCacheSize: Int = 20,
+    alivePeersCacheSize: Int,
     /* Threshold to start gradually pinging peers to fill cache */
-    alivePeersCacheMinThreshold: Int = 10,
+    alivePeersCacheMinThreshold: Int,
     /* Period to re-fill cache */
-    alivePeersCacheExpirationPeriod: FiniteDuration = 5.minutes,
+    alivePeersCacheExpirationPeriod: FiniteDuration,
     /* Period to update the cache */
-    alivePeersCacheUpdatePeriod: FiniteDuration = 15.seconds,
+    alivePeersCacheUpdatePeriod: FiniteDuration,
     /* Batches pinged in parallel */
-    alivePeersCachePingsBatchSize: Int = 10
+    alivePeersCachePingsBatchSize: Int
 ) extends NodeDiscovery[F] {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
@@ -254,13 +291,8 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
         // The old code maintains its own list of alive connections
         table.peersAscendingDistance
 
-    for {
-      bans      <- temporaryBansRef.get
-      peers     <- peersF
-      now       <- Timer[F].clock.realTime(MILLISECONDS)
-      threshold = now - alivePeersCacheExpirationPeriod.toMillis
-    } yield peers.filter { node =>
-      !bans.contains(node) || bans(node) < threshold
+    peersF.map {
+      _.filterNot(temporaryBans.contains(_))
     }
   }
 
@@ -308,8 +340,5 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
   }
 
   override def banTemp(node: Node): F[Unit] =
-    for {
-      now <- Timer[F].clock.realTime(MILLISECONDS)
-      _   <- temporaryBansRef.update(_ + (node -> now))
-    } yield ()
+    Sync[F].delay(temporaryBans.add(node))
 }

@@ -572,7 +572,7 @@ object NodeDiscoverySpec {
       val effect = for {
         table                 <- PeerTable[Task](id, k)
         recentlyAlivePeersRef <- Ref.of[Task, (Set[Node], Millis)]((Set.empty[Node], 0L))
-        temporaryBansRef      <- Ref.of[Task, Map[Node, Millis]](Map.empty)
+        temporaryBans         = NodeDiscoveryImpl.NodeCache(alivePeersCacheExpirationPeriod)
         implicit0(kademliaMock: KademliaMock) = new KademliaMock(
           connections,
           pings.getOrElse(_ => true)
@@ -582,7 +582,7 @@ object NodeDiscoverySpec {
           id,
           table,
           recentlyAlivePeersRef,
-          temporaryBansRef,
+          temporaryBans,
           alpha,
           k,
           true,
