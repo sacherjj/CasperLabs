@@ -82,13 +82,6 @@ import scala.concurrent.duration._
 
   /** @return List of blockHashes and processing results in descendant order by execution time (block creation timestamp)*/
   def getProcessingResults(hash: ByteString): F[List[(BlockHash, ProcessedDeploy)]]
-
-  /** Reads deploys in PENDING state, unique per account, returning oldest one.
-    *
-    * NOTE: Since deploy buffer tables don't have deploy's nonce we pick entry
-    * with the lowest `creation_time_seconds` value.
-    */
-  def readAccountPendingOldest(): fs2.Stream[F, DeployHash]
 }
 
 @typeclass trait DeployStorage[F[_]] extends DeployStorageWriter[F] with DeployStorageReader[F] {}
@@ -150,9 +143,6 @@ object DeployStorage {
 
     override def getProcessingResults(hash: BlockHash): F[List[(BlockHash, ProcessedDeploy)]] =
       reader.getProcessingResults(hash)
-
-    override def readAccountPendingOldest(): fs2.Stream[F, DeployHash] =
-      reader.readAccountPendingOldest()
 
     override def clear(): F[Unit] = writer.clear()
 

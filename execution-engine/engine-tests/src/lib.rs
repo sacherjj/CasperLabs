@@ -1,6 +1,7 @@
 extern crate grpc;
-#[macro_use]
+
 #[cfg(test)]
+#[macro_use]
 extern crate lazy_static;
 extern crate lmdb;
 extern crate protobuf;
@@ -13,5 +14,4 @@ extern crate engine_storage;
 extern crate engine_wasm_prep;
 
 pub mod support;
-#[cfg(test)]
 pub mod test;
