@@ -5,6 +5,7 @@ RUSTUP = $(or $(shell which rustup), $(HOME)/.cargo/bin/rustup)
 RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 
 # Directory names should match crate names
+BENCH_CONTRACTS     = $(shell find ./contracts/bench     -mindepth 1 -maxdepth 1 -exec basename {} \;)
 CLIENT_CONTRACTS    = $(shell find ./contracts/client    -mindepth 1 -maxdepth 1 -exec basename {} \;)
 EXPLORER_CONTRACTS  = $(shell find ./contracts/explorer  -mindepth 1 -maxdepth 1 -exec basename {} \;)
 PROFILING_CONTRACTS = $(shell find ./contracts/profiling -mindepth 1 -maxdepth 1 -exec basename {} \;)
@@ -12,6 +13,7 @@ SRE_CONTRACTS       = $(shell find ./contracts/SRE       -mindepth 1 -maxdepth 1
 SYSTEM_CONTRACTS    = $(shell find ./contracts/system    -mindepth 1 -maxdepth 1 -exec basename {} \;)
 TEST_CONTRACTS      = $(shell find ./contracts/test      -mindepth 1 -maxdepth 1 -exec basename {} \;)
 
+BENCH_CONTRACTS     := $(patsubst %, build-contract/%, $(BENCH_CONTRACTS))
 CLIENT_CONTRACTS    := $(patsubst %, build-contract/%, $(CLIENT_CONTRACTS))
 EXPLORER_CONTRACTS  := $(patsubst %, build-contract/%, $(EXPLORER_CONTRACTS))
 PROFILING_CONTRACTS := $(patsubst %, build-contract/%, $(PROFILING_CONTRACTS))
@@ -34,6 +36,7 @@ build-contract/%:
 
 .PHONY: build-contracts
 build-contracts: \
+	$(BENCH_CONTRACTS) \
 	$(CLIENT_CONTRACTS) \
 	$(EXPLORER_CONTRACTS) \
 	$(PROFILING_CONTRACTS) \
@@ -104,7 +107,7 @@ check-publish:
 	cd contract-ffi && $(CARGO) publish --dry-run
 
 .PHONY: bench
-bench:
+bench: build-contracts
 	$(CARGO) bench
 
 .PHONY: setup-cargo-packagers

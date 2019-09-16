@@ -25,6 +25,7 @@ use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_grpc_server::engine_server::{ipc, transforms};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::Blake2bHash;
+use engine_shared::os::get_page_size;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -34,12 +35,15 @@ use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
 use engine_storage::transaction_source::lmdb::LmdbEnvironment;
 use engine_storage::trie_store::lmdb::LmdbTrieStore;
 use transforms::TransformEntry;
-
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
 pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
-const DEFAULT_MAP_SIZE: usize = 805_306_368_000; // 750 GiB as per grpc-server default
+
+/// LMDB initial map size is calculated based on DEFAULT_LMDB_PAGES and systems page size.
+///
+/// This default value should give 1MiB initial map size by default.
+const DEFAULT_LMDB_PAGES: usize = 2560;
 
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
@@ -513,6 +517,7 @@ impl Default for InMemoryWasmTestBuilder {
         let engine_config = EngineConfig::new().set_use_payment_code(true);
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, engine_config);
+
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
@@ -570,9 +575,13 @@ impl InMemoryWasmTestBuilder {
 }
 
 impl LmdbWasmTestBuilder {
-    pub fn new<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> Self {
+    pub fn new_with_config<T: AsRef<OsStr> + ?Sized>(
+        data_dir: &T,
+        engine_config: EngineConfig,
+    ) -> Self {
+        let page_size = get_page_size().expect("should get page size");
         let environment = Arc::new(
-            LmdbEnvironment::new(&data_dir.into(), DEFAULT_MAP_SIZE)
+            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
                 .expect("should create LmdbEnvironment"),
         );
         let trie_store = Arc::new(
@@ -585,7 +594,7 @@ impl LmdbWasmTestBuilder {
         );
         let global_state = LmdbGlobalState::empty(environment, trie_store, protocol_data_store)
             .expect("should create LmdbGlobalState");
-        let engine_state = EngineState::new(global_state, Default::default());
+        let engine_state = EngineState::new(global_state, engine_config);
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
@@ -598,6 +607,28 @@ impl LmdbWasmTestBuilder {
             pos_contract_uref: None,
             genesis_transforms: None,
         }
+    }
+
+    pub fn new<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> Self {
+        Self::new_with_config(data_dir, Default::default())
+    }
+
+    /// Creates new instance of builder and pplies values only which allows the engine state to be
+    /// swapped with a new one, possibly after running genesis once and reusing existing database
+    /// (i.e. LMDB).
+    pub fn new_with_config_and_result<T: AsRef<OsStr> + ?Sized>(
+        data_dir: &T,
+        engine_config: EngineConfig,
+        result: &WasmTestResult<LmdbGlobalState>,
+    ) -> Self {
+        let mut builder = Self::new_with_config(data_dir, engine_config);
+        // Applies existing properties from gi
+        builder.genesis_hash = result.0.genesis_hash.clone();
+        builder.post_state_hash = result.0.post_state_hash.clone();
+        builder.bonded_validators = result.0.bonded_validators.clone();
+        builder.mint_contract_uref = result.0.mint_contract_uref;
+        builder.pos_contract_uref = result.0.pos_contract_uref;
+        builder
     }
 }
 
