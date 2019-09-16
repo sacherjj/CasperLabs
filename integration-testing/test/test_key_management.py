@@ -1,4 +1,6 @@
 import pytest
+import json
+import time
 
 from casperlabs_client import ABI
 from test.cl_node.casperlabs_accounts import Account
@@ -80,6 +82,20 @@ def set_key_thresholds(node, weight_key, key_mgmt_weight: int, deploy_weight: in
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=args,
+    )
+
+
+def set_key_thresholds_scala(node, weight_key, key_mgmt_weight: int, deploy_weight: int):
+    """ Sets key management and deploy thresholds for IDENTITY_KEY account """
+    args = [{'value': {'long_value': key_mgmt_weight}},
+            {'value': {'long_value': deploy_weight}}]
+    json_args = json.dumps(args)
+    return node.d_client.deploy_and_propose(
+        from_address=IDENTITY_KEY.public_key_hex,
+        session_contract=Contract.SET_KEY_THRESHOLDS,
+        public_key=weight_key.public_key_path,
+        private_key=weight_key.private_key_path,
+        session_args=json_args,
     )
 
 
@@ -188,6 +204,7 @@ def test_key_can_deploy_with_weight_at_and_above_threshold(account_setup):
             key_mgmt_weight=KEY_MGMT_KEY_WEIGHT,
             deploy_weight=set_weight,
         )
+        time.sleep(1)
         assert_deploy_is_not_error(node, block_hash)
 
         # Test deploy
