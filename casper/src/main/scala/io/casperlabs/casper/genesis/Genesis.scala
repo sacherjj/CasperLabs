@@ -153,8 +153,7 @@ object Genesis {
         timestamp = initial.getHeader.timestamp,
         chainId = initial.getHeader.chainId
       )
-      updatedHeader = header.withValidatorBlockSeqNum(-1)
-      unsignedBlock = unsignedBlockProto(body, updatedHeader)
+      unsignedBlock = unsignedBlockProto(body, header)
     } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
   /** Fill out the basic fields in the block. */
