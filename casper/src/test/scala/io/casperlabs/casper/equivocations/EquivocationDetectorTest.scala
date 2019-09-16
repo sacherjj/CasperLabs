@@ -48,7 +48,6 @@ class EquivocationDetectorTest
             creator,
             justifications = justifications
           )
-      _ <- EquivocationDetector.checkEquivocations(dag, b) shouldBeF (equivocationExpected)
       blockStatus <- EquivocationDetector
                       .checkEquivocationWithUpdate(dag, b)
                       .attempt
@@ -267,7 +266,7 @@ class EquivocationDetectorTest
         } yield ()
   }
 
-  it should "checkEquivocations failed detecting equivocation when receiving a block created by a validator who has been detected as equivocator but checkEquivocationWithUpdate should work well." in withStorage {
+  it should "checkEquivocationsWithUpdate should detect equivocation when receiving a block created by a validator who has been detected equivocating" in withStorage {
     implicit blockStorage =>
       implicit dagStorage =>
         /*
@@ -312,15 +311,11 @@ class EquivocationDetectorTest
                  justifications = HashMap(v0 -> b1.blockHash),
                  equivocationExpected = true
                )
-          dag <- dagStorage.getRepresentation
-          b4 <- createBlock[Task](
-                 Seq(b3.blockHash),
-                 v0,
-                 justifications = HashMap(v0 -> b3.blockHash)
-               )
-          _ <- EquivocationDetector.checkEquivocations(dag, b4) shouldBeF false
-          _ <- EquivocationDetector.checkEquivocationWithUpdate(dag, b4).attempt shouldBeF Left(
-                EquivocatedBlock
+          _ <- createBlockAndTestEquivocateDetector(
+                Seq(b3.blockHash),
+                v0,
+                justifications = HashMap(v0 -> b3.blockHash),
+                equivocationExpected = true
               )
         } yield ()
   }

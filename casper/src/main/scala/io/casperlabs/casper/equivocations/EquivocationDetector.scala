@@ -84,7 +84,7 @@ object EquivocationDetector {
     *   then when adding B4, this method doesn't work, it return false but actually B4
     *   equivocated with B2.
     */
-  private[casper] def checkEquivocations[F[_]: Monad: Log](
+  private def checkEquivocations[F[_]: Monad: Log](
       dag: DagRepresentation[F],
       block: Block
   ): F[Boolean] =
