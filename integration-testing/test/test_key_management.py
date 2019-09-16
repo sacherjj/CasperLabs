@@ -85,10 +85,14 @@ def set_key_thresholds(node, weight_key, key_mgmt_weight: int, deploy_weight: in
     )
 
 
-def set_key_thresholds_scala(node, weight_key, key_mgmt_weight: int, deploy_weight: int):
+def set_key_thresholds_scala(
+    node, weight_key, key_mgmt_weight: int, deploy_weight: int
+):
     """ Sets key management and deploy thresholds for IDENTITY_KEY account """
-    args = [{'value': {'long_value': key_mgmt_weight}},
-            {'value': {'long_value': deploy_weight}}]
+    args = [
+        {"value": {"long_value": key_mgmt_weight}},
+        {"value": {"long_value": deploy_weight}},
+    ]
     json_args = json.dumps(args)
     return node.d_client.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
