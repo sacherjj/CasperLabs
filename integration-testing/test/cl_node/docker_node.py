@@ -7,18 +7,13 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
-from test.cl_node.common import extract_block_hash_from_propose_output
+from test.cl_node.common import MAX_PAYMENT_ABI, Contract
 from test.cl_node.docker_base import LoggingDockerBase
 from test.cl_node.docker_client import DockerClient
 from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
 from test.cl_node.python_client import PythonClient
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_accounts import is_valid_account, Account
-from test.cl_node.common import (
-    PAYMENT_CONTRACT,
-    TRANSFER_TO_ACCOUNT_CONTRACT,
-    MAX_PAYMENT_ABI,
-)
 
 
 FIRST_VALIDATOR_ACCOUNT = 100
@@ -232,49 +227,14 @@ class DockerNode(LoggingDockerBase):
         output = self.shell_out("curl", "-s", "http://localhost:40403/metrics")
         return output
 
-    def deploy_and_propose(self, **deploy_kwargs) -> str:
-        if "from_address" not in deploy_kwargs:
-            deploy_kwargs["from_address"] = self.from_address
-        deploy_output = self.client.deploy(**deploy_kwargs)
-
-        # Hash is returned, rather than message for Python Client
-        if self._client == self.DOCKER_CLIENT:
-            assert "Success!" in deploy_output
-
-        propose_output = self.client.propose()
-
-        block_hash = None
-        if self._client == self.PYTHON_CLIENT:
-            block_hash = propose_output.block_hash.hex()
-        elif self._client == self.DOCKER_CLIENT:
-            block_hash = extract_block_hash_from_propose_output(propose_output)
-
-        assert block_hash is not None
-        logging.info(
-            f"The block hash: {block_hash} generated for {self.container.name}"
-        )
-        return block_hash
-
-    def deploy_and_propose_with_retry(
-        self, max_attempts: int, retry_seconds: int, **deploy_kwargs
-    ) -> str:
-        deploy_output = self.client.deploy(**deploy_kwargs)
-        assert "Success!" in deploy_output
-        block_hash = self.client.propose_with_retry(max_attempts, retry_seconds)
-        assert block_hash is not None
-        logging.info(
-            f"The block hash: {block_hash} generated for {self.container.name}"
-        )
-        return block_hash
-
     def transfer_to_account(
         self,
         to_account_id: int,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
-        session_contract: str = TRANSFER_TO_ACCOUNT_CONTRACT,
-        payment_contract: str = PAYMENT_CONTRACT,
-        payment_args: bytes = None,
+        session_contract: str = Contract.TRANSFER_TO_ACCOUNT,
+        payment_contract: str = Contract.STANDARD_PAYMENT,
+        payment_args: bytes = MAX_PAYMENT_ABI,
         gas_price: int = 1,
         is_deploy_error_check: bool = True,
     ) -> str:
@@ -286,6 +246,7 @@ class DockerNode(LoggingDockerBase):
         :param from_account_id: default 'genesis' account, but previously funded account_id is also valid.
         :param session_contract: session contract to execute.
         :param payment_contract: Payment contract to execute.
+        :param payment_args: Payment Amount ABI
         :param gas_price: Gas price
         :param is_deploy_error_check: Check that amount transfer is success.
 
@@ -307,17 +268,6 @@ class DockerNode(LoggingDockerBase):
 
         session_args = ABI.args(
             [ABI.account(to_account.public_key_binary), ABI.u32(amount)]
-        )
-        # Until payment is on for all, we have to fix the default payment args
-        if not self.config.is_payment_code_enabled:
-            logging.info("===== transfer_to_account: payment not enabled")
-            payment_contract = session_contract
-
-        # "Compatibility mode": supply payment if a test forgot to do it
-        payment_args = (
-            None
-            if payment_contract == session_contract
-            else (payment_args or MAX_PAYMENT_ABI)
         )
 
         response, deploy_hash_bytes = self.p_client.deploy(
@@ -349,23 +299,19 @@ class DockerNode(LoggingDockerBase):
     def bond(
         self,
         session_contract: str,
-        payment_contract: str,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
-        session_args: bytes = None,
-        payment_args: bytes = None,
     ) -> str:
         # NOTE: The Scala client is bundled with a bond contract that expects long_value,
         #       but the integration test version expects int.
         json_args = json.dumps([{"name": "amount", "value": {"int_value": amount}}])
         return self._deploy_and_propose_with_abi_args(
-            session_contract, payment_contract, Account(from_account_id), json_args
+            session_contract, Account(from_account_id), json_args
         )
 
     def unbond(
         self,
         session_contract: str,
-        payment_contract: str,
         maybe_amount: Optional[int] = None,
         from_account_id: Union[str, int] = "genesis",
     ) -> str:
@@ -380,27 +326,24 @@ class DockerNode(LoggingDockerBase):
             [{"name": "amount", "value": {"int_value": maybe_amount or 0}}]
         )
         return self._deploy_and_propose_with_abi_args(
-            session_contract, payment_contract, Account(from_account_id), json_args
+            session_contract, Account(from_account_id), json_args
         )
 
     def _deploy_and_propose_with_abi_args(
         self,
         session_contract: str,
-        payment_contract: str,
         from_account: Account,
         json_args: str,
         gas_price: int = 1,
-        payment_args: bytes = None,
     ) -> str:
+
         response, deploy_hash_bytes = self.p_client.deploy(
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
-            payment_contract=payment_contract,
             gas_price=gas_price,
             public_key=from_account.public_key_path,
             private_key=from_account.private_key_path,
             session_args=self.p_client.abi.args_from_json(json_args),
-            payment_args=payment_args,
         )
 
         response = self.p_client.propose()
@@ -425,13 +368,7 @@ class DockerNode(LoggingDockerBase):
             to_addr_id, amount = avl[:2]
             from_addr_id = "genesis" if len(avl) == 2 else avl[2]
             block_hashes.append(
-                # TODO: don't pass payment_contract when execution cost on
-                self.transfer_to_account(
-                    to_addr_id,
-                    amount,
-                    from_addr_id,
-                    payment_contract="transfer_to_account.wasm",
-                )
+                self.transfer_to_account(to_addr_id, amount, from_addr_id)
             )
         return block_hashes
 
