@@ -140,23 +140,24 @@ object EquivocationDetector {
   }
 
   /**
-    * Find equivocators basing latestMessageHashes
+    * Find equivocating validators that a block can see based on its direct justifications
     *
-    * We use `bfToposortTraverseF` to traverse from `latestMessageHashes` down to minimal rank
-    * of base block of equivocationRecord. `bfToposortTraverseF` guarantee that we will only
-    * meet a specific block only once, and `validatorBlockSeqNum` is equal to 1 plus
-    * validatorBlock of creator's previous created block. So that once we find duplicated
-    * (Validator, validatorBlockSeqNum), we know the validator has equivocated.
+    * This method is not used to detect new equivocations when receiving new blocks. It is used to help calculating main parent in the `forkchoice`.
+    *
+    * We use `bfToposortTraverseF` to traverse from `latestMessageHashes` down beyond the minimal rank
+    * of base block of equivocationRecords. Since we have already validated `validatorBlockSeqNum`
+    * equals 1 plus that of previous block created by the same validator, if we find a duplicated
+    * value, we know the validator has equivocated.
     *
     * @param dag the block dag
-    * @param latestMessagesHashes generate from direct justifications
+    * @param justificationMsgHashes generate from direct justifications
     * @param equivocationTracker local tracker of equivocations
     * @tparam F effect type
-    * @return equivocators that can be seen from view of latestMessages
+    * @return validators that can be seen equivocating from the view of latestMessages
     */
-  def detectVisibleFromLatestMessages[F[_]: Monad](
+  def detectVisibleFromJustificationMsgHashes[F[_]: Monad](
       dag: DagRepresentation[F],
-      latestMessagesHashes: Map[Validator, BlockHash],
+      justificationMsgHashes: Map[Validator, BlockHash],
       equivocationTracker: EquivocationTracker
   ): F[Set[Validator]] =
     if (equivocationTracker.isEmpty) {
@@ -165,10 +166,12 @@ object EquivocationDetector {
       val minRank = equivocationTracker.values.min
 
       for {
-        latestMessages                                        <- latestMessagesHashes.values.toList.traverse(dag.lookup).map(_.flatten)
+        justificationMessages <- justificationMsgHashes.values.toList
+                                  .traverse(dag.lookup)
+                                  .map(_.flatten)
         implicit0(blockTopoOrdering: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingDesc
 
-        toposortJDagFromBlock = DagOperations.bfToposortTraverseF(latestMessages)(
+        toposortJDagFromBlock = DagOperations.bfToposortTraverseF(justificationMessages)(
           _.justifications.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
         )
         acc <- toposortJDagFromBlock
@@ -183,7 +186,7 @@ object EquivocationDetector {
                     val creatorBlockSeqNam = b.validatorBlockSeqNum
                     if (detectedEquivocators == equivocationTracker.keySet || b.rank <= minRank) {
                       // Stop traversal if all known equivocations has been found in j-past-cone of `b`
-                      // or we reached a block older than oldest equivocation
+                      // or we traversed beyond the minimum rank of all equivocations.
                       Right(
                         (detectedEquivocators, visitedValidatorAndBlockSeqNums)
                       )
