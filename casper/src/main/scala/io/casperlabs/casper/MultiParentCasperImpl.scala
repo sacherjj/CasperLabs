@@ -45,7 +45,9 @@ import scala.util.control.NonFatal
   *
   * @param blockBuffer
   * @param invalidBlockTracker
-  * @param equivocationTracker : Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
+  * @param equivocationTracker Stores the lowest rank of any base block, that is, a block from the
+  *                            equivocating validator which precedes the two or more blocks which
+  *                            equivocated by sharing the same sequence number.
   */
 final case class CasperState(
     blockBuffer: Map[ByteString, Block] = Map.empty,

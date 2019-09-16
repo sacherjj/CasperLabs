@@ -14,16 +14,38 @@ import scala.collection.immutable.{Map, Set}
 
 object EquivocationDetector {
 
-  type EquivocationTracker = Map[Validator, Long] // Map[Validator, Rank]
+  // Stores the lowest rank of any base block, that is, a block from the equivocating validator which
+  // precedes the two or more blocks which equivocated by sharing the same sequence number.
+  type EquivocationTracker = Map[Validator, Long]
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   /**
-    * Check whether a block creates equivocations, and if so add it and the rank of the lowest base block to `EquivocationsTracker`.
+    * Check whether a block creates equivocations when adding a new block to the block dag,
+    * if so store the validator with the lowest rank of any base block from
+    * the same validator to `EquivocationsTracker`, then an error is `EquivocatedBlock` returned.
+    * The base block of equivocation record is the latest unequivocating block from the same validator.
     *
-    * Since we had added all equivocating messages to the BlockDag, then once
+    * For example:
+    *
+    *    v0            v1             v2
+    *
+    *           |  b3    b4    |
+    *           |     \   /    |
+    *           |     b2     b5|
+    *           |      |    /  |
+    *           |      b1      |
+    *
+    * When the node receives b4, `checkEquivocations` will detect that b4 and b3 don't cite each other;
+    * in other words, b4 creates an equivocation. Then the base block of b4 and b3 is b2, so we add
+    * a record (v1,the rank of b2) to `equivocationTracker`. After a while, the node receives b5,
+    * since we had added all equivocating messages to the BlockDag, then once
     * a validator has been detected as equivocating, then for every message M1 he creates later,
-    * we can find least one message M2 that M1 and M2 don't cite each other.
+    * we can find least one message M2 that M1 and M2 don't cite each other. In other words, a block
+    * created by a validator who has equivocated will create another equivocation. In this way, b5
+    * doesn't cite blocks (b2, b3, and b4), and blocks (b2, b3, and b4) don't cite b5 either. So b5
+    * creates equivocations. And the base block of b5 is b1, whose rank is smaller than that of b2, so
+    * we will update the `equivocationTracker`, setting the value of key v1 to be rank of b1.
     */
   def checkEquivocationWithUpdate[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
       dag: DagRepresentation[F],
@@ -215,7 +237,9 @@ object EquivocationDetector {
     }
 
   /**
-    * From j-past-cone of the block, find the maximum rank of blocks created by the same validator.
+    * Returns rank of last but one block by the same validator, as seen in the j-past-cone of the block.
+    *
+    * This method assumes that the system has removed redundant justifications.
     *
     * @param dag The block dag
     * @param block Block to run
