@@ -387,7 +387,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                               )
                             }
                           }
-      calculatedRank = ProtoUtil.calculateRank(justificationMsgs)
+      calculatedRank = ProtoUtil.nextRank(justificationMsgs)
       actuallyRank   = b.getHeader.rank
       result         = calculatedRank == actuallyRank
       _ <- if (result) {
@@ -416,7 +416,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F]
   ): F[Unit] =
     for {
-      creatorJustificationSeqNumber <- ProtoUtil.calculateValidatorBlockSeqNum(
+      creatorJustificationSeqNumber <- ProtoUtil.nextValidatorBlockSeqNum(
                                         dag,
                                         b.getHeader.justifications,
                                         b.getHeader.validatorPublicKey
@@ -579,7 +579,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
 
     for {
-      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.getHeader.justifications).pure[F]
+      latestMessagesHashes <- ProtoUtil
+                               .getJustificationMsgHashes(b.getHeader.justifications)
+                               .pure[F]
       tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocationsTracker)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])

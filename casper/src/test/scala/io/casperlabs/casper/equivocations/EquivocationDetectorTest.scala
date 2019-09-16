@@ -66,12 +66,11 @@ class EquivocationDetectorTest
       expected: Set[Validator]
   )(
       implicit dagStorage: IndexedDagStorage[Task],
-      blockStorage: BlockStorage[Task],
       casperState: Cell[Task, CasperState]
   ): Task[Unit] =
     for {
       dag            <- dagStorage.getRepresentation
-      latestMessages <- ProtoUtil.toLatestMessage[Task](block.getHeader.justifications)
+      latestMessages <- ProtoUtil.getJustificationMsgs[Task](dag, block.getHeader.justifications)
       state          <- casperState.read
       _ <- EquivocationDetector.detectVisibleFromLatestMessages(
             dag,

@@ -156,12 +156,12 @@ object ProtoUtil {
               }
     } yield block
 
-  def calculateRank(justificationMsgs: Seq[BlockMetadata]): Long =
+  def nextRank(justificationMsgs: Seq[BlockMetadata]): Long =
     1L + justificationMsgs.foldLeft(-1L) {
       case (acc, blockMetadata) => math.max(acc, blockMetadata.rank)
     }
 
-  def calculateValidatorBlockSeqNum[F[_]: MonadThrowable](
+  def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       justifications: Seq[Justification],
       creator: Validator
@@ -179,8 +179,8 @@ object ProtoUtil {
 
             case None =>
               MonadThrowable[F].raiseError[Int](
-                new Exception(
-                  s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
+                new NoSuchElementException(
+                  s"DagStorage is missing hash ${PrettyPrinter.buildString(latestBlockHash)}"
                 )
               )
           }
@@ -335,7 +335,7 @@ object ProtoUtil {
           .withLatestBlockHash(blockMetadata.blockHash)
     }
 
-  def toLatestMessageHashes(
+  def getJustificationMsgHashes(
       justifications: Seq[Justification]
   ): immutable.Map[Validator, BlockHash] =
     justifications.foldLeft(Map.empty[Validator, BlockHash]) {
@@ -343,14 +343,23 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: MonadThrowable: BlockStorage](
+  def getJustificationMsgs[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
       justifications: Seq[Justification]
-  ): F[immutable.Map[Validator, BlockMetadata]] =
+  ): F[Map[Validator, BlockMetadata]] =
     justifications.toList.foldM(Map.empty[Validator, BlockMetadata]) {
       case (acc, Justification(validator, hash)) =>
-        for {
-          block <- ProtoUtil.unsafeGetBlock[F](hash)
-        } yield acc.updated(validator, BlockMetadata.fromBlock(block))
+        dag.lookup(hash).flatMap {
+          case Some(meta) =>
+            acc.updated(validator, meta).pure[F]
+
+          case None =>
+            MonadThrowable[F].raiseError[Map[Validator, BlockMetadata]](
+              new NoSuchElementException(
+                s"DagStorage is missing hash ${PrettyPrinter.buildString(hash)}"
+              )
+            )
+        }
     }
 
   def protoHash[A <: scalapb.GeneratedMessage](protoSeq: A*): ByteString =
@@ -408,7 +417,7 @@ object ProtoUtil {
   ): F[Block] = {
     val validator = ByteString.copyFrom(pk)
     for {
-      seqNum <- calculateValidatorBlockSeqNum(dag, block.getHeader.justifications, validator)
+      seqNum <- nextValidatorBlockSeqNum(dag, block.getHeader.justifications, validator)
       header = {
         assert(block.header.isDefined, "A block without a header doesn't make sense")
         block.getHeader

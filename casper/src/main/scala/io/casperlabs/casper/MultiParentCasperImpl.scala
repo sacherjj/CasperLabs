@@ -394,7 +394,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           latestMessages   <- dag.latestMessages
           bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
           justifications   = toJustification(bondedLatestMsgs)
-          rank             = ProtoUtil.calculateRank(bondedLatestMsgs.values.toSeq)
+          rank             = ProtoUtil.nextRank(bondedLatestMsgs.values.toSeq)
           protocolVersion  = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(rank)
           proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
                        createProposal(
@@ -537,7 +537,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       )                 = result
       dag               <- dag
       justificationMsgs <- justifications.toList.traverse(j => dag.lookup(j.latestBlockHash))
-      rank              = ProtoUtil.calculateRank(justificationMsgs.flatten)
+      rank              = ProtoUtil.nextRank(justificationMsgs.flatten)
       status = if (deploysForBlock.isEmpty) {
         CreateBlockStatus.noNewDeploys
       } else {
