@@ -51,25 +51,34 @@ class PythonClient(CasperLabsClient, LoggingMixin):
         private_key: Optional[str] = None,
         public_key: Optional[str] = None,
         session_args: list = None,
-        payment_args: list = MAX_PAYMENT_ABI,
-        resources_path: Optional[Union[Path, str]] = None,
+        payment_args: bytes = MAX_PAYMENT_ABI,
+        alt_session_path: Optional[Path] = None,
+        alt_payment_path: Optional[Path] = None,
     ) -> str:
 
-        assert session_contract is not None
+        if session_contract is None:
+            raise Exception("session_contract is required.")
 
         public_key = public_key or self.node.test_account.public_key_path
         private_key = private_key or self.node.test_account.private_key_path
 
         address = from_address or self.node.from_address
 
-        if not resources_path:
-            resources_path = self.node.resources_folder
-        session_contract_path = str(resources_path / session_contract)
-        payment_contract_path = str(resources_path / payment_contract)
+        # dApp test framework will specify alternate location for non-framework contracts
+        session_path = (
+            alt_session_path if alt_session_path else self.node.resources_folder
+        )
+        session_contract_path = session_path / session_contract
+        payment_path = (
+            alt_payment_path if alt_payment_path else self.node.resources_folder
+        )
+        payment_contract_path = payment_path / payment_contract
 
         logging.info(
-            f"PY_CLIENT.deploy(from_address={address}, gas_price={gas_price}, "
-            f"payment_contract={payment_contract_path}, session_contract={session_contract_path}, "
+            f"PY_CLIENT.deploy(from_address={address}, "
+            f"gas_price={gas_price}, "
+            f"payment_contract={payment_contract_path}, "
+            f"session_contract={session_contract_path}, "
             f"private_key={private_key}, "
             f"public_key={public_key} "
         )
