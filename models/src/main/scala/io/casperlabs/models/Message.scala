@@ -70,10 +70,10 @@ object Message {
       val justifications     = header.justifications
       val rank               = header.rank
       val validatorMsgSeqNum = header.validatorBlockSeqNum
-      val messageType        = header.roleType
+      val role               = header.roleType
       val signature          = b.getSignature
 
-      messageType match {
+      role match {
         case BALLOT =>
           Success(
             Ballot(
