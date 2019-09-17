@@ -288,7 +288,7 @@ let amount = get_arg::<u64>(0);
 **Supported types of contract arguments**
 
 
-| protobuf [Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78) | Contract API type | Example value in protobuf JSON format
+| protobuf [Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78) | Contract API type | Example value in [protobuf JSON format](https://developers.google.com/protocol-buffers/docs/proto3#json)
 | ------------- | ------------- | -------------------------------------
 | `int_value`   | `u32`  | `'[{"name": "amount", "value": {"int_value": 123456}}]'`
 | `long_value`  | `u64`  | `'[{"name": "amount", "value": {"long_value": 123456}}]'`
