@@ -26,8 +26,9 @@ no-upnp = false
 # Default timeout for roundtrip connections.
 default-timeout = "5second"
 
-# Bootstrap casperlabs node address for initial seed.
+# Bootstrap casperlabs node addresses for initial seeds. Empty defaut provided for standalone mode.
 # bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
+bootstrap = ""
 
 # Path to data directory.
 data-dir = "$HOME/.casperlabs"

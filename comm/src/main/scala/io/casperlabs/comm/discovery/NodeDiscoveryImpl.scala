@@ -42,7 +42,7 @@ object NodeDiscoveryImpl {
       /* Batches pinged in parallel */
       alivePeersCachePingsBatchSize: Int = 10
   )(
-      init: Option[Node]
+      init: List[Node]
   ): Resource[F, NodeDiscovery[F]] = {
 
     def makeKademliaRpc: Resource[F, GrpcKademliaService[F]] =
@@ -101,7 +101,7 @@ object NodeDiscoveryImpl {
                             alivePeersCachePingsBatchSize = alivePeersCachePingsBatchSize
                           )
                         }
-        _ <- init.fold(().pure[F])(nodeDiscovery.addNode)
+        _ <- init.traverse(nodeDiscovery.addNode)
       } yield nodeDiscovery)
 
     def scheduleRecentlyAlivePeersCacheUpdate(implicit N: NodeDiscoveryImpl[F]): Resource[F, Unit] =

@@ -84,7 +84,7 @@ object CommUtil {
       : F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
     for {
-      maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
+      maybeBootstrap <- RPConfAsk[F].reader(_.bootstraps.headOption)
       local          <- RPConfAsk[F].reader(_.local)
       _ <- maybeBootstrap match {
             case Some(bootstrap) =>
