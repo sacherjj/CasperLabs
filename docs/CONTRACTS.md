@@ -233,11 +233,6 @@ by calling Contract API function `get_arg`
 with index of an argument.
 First argument is indexed with `0`.
 
-Note: contract arguments are currently positional
-but we plan to name them instead,
-so in the future you will call `get_arg`
-with a string that is a name of a parameter,
-rather than an integer index.
 
 **Command line client's syntax of contract arguments**
 
@@ -252,10 +247,18 @@ For example: `--session-args '[{"name": "amount", "value": {"long_value": 123456
 
 
 Note,
-the contract arguments are positional,
+contract arguments are positional,
 and so the `"name"` attribute is currently not used.
-However, we plan a change to keyword (named) arguments,
-so this format is future-proof.
+However, we plan to change contract arguments
+to be keyword (named) arguments.
+The structure of the `Arg` protobuf message
+and its JSON serialized form is ready for this change.
+
+In a future release
+Contract API `get_arg` function
+will change
+to accept a string with a name of an argument
+instead of it's index.
 
 **Accessing arguments in contracts**
 
