@@ -136,7 +136,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .option
       .transact(xa)
       .flatMap {
-        case None     => (None: Option[Message]).pure[F]
+        case None     => none[Message].pure[F]
         case Some(bs) => toMessageSummaryF(bs).map(Some(_))
       }
 
@@ -204,7 +204,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .option
       .transact(xa)
       .flatMap {
-        case None     => (None: Option[Message]).pure[F]
+        case None     => none[Message].pure[F]
         case Some(bs) => toMessageSummaryF(bs).map(Some(_))
       }
 

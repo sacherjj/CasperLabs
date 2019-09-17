@@ -45,7 +45,7 @@ class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStorage](
       justificationMap.getOrElse(blockHash, Set.empty).pure[F]
     def lookup(blockHash: BlockHash): F[Option[Message]] =
       dataLookup.get(blockHash) match {
-        case None     => (None: Option[Message]).pure[F]
+        case None     => none[Message].pure[F]
         case Some(bs) => MonadThrowable[F].fromTry(Message.fromBlockSummary(bs)).map(Some(_))
       }
     def contains(blockHash: BlockHash): F[Boolean] =

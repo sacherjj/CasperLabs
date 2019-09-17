@@ -134,7 +134,7 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
             .getBlockMessage(blockHash)
             .map(_.map(BlockSummary.fromBlock))
             .flatMap {
-              case None => (None: Option[Message]).pure[F]
+              case None => none[Message].pure[F]
               case Some(bs) =>
                 MonadThrowable[F].fromTry(Message.fromBlockSummary(bs)).map(Some(_))
             }
