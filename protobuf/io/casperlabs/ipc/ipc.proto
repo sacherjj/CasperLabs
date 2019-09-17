@@ -352,7 +352,7 @@ message UpgradeRequest{
 }
 
 message UpgradeResult {
-    bytes poststate_hash = 1;
+    bytes post_state_hash = 1;
     ExecutionEffect effect = 2;
 }
 
