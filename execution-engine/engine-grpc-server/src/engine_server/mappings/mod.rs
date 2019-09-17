@@ -177,9 +177,7 @@ impl From<contract_ffi::value::Contract> for super::state::Contract {
         let urefs = URefMap(known_urefs).into();
         contract.set_body(bytes);
         contract.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
-        let mut protocol = super::state::ProtocolVersion::new();
-        protocol.set_value(protocol_version.value());
-        contract.set_protocol_version(protocol);
+        contract.set_protocol_version(protocol_version.into());
         contract
     }
 }
@@ -1079,9 +1077,7 @@ impl From<GenesisConfig> for ipc::ChainSpec_GenesisConfig {
         ret.set_name(genesis_config.name().to_string());
         ret.set_timestamp(genesis_config.timestamp());
         {
-            let mut protocol_version = state::ProtocolVersion::new();
-            protocol_version.set_value(genesis_config.protocol_version().value());
-            ret.set_protocol_version(protocol_version);
+            ret.set_protocol_version(genesis_config.protocol_version().into());
         }
         ret.set_mint_installer(genesis_config.mint_installer_bytes().to_vec());
         ret.set_pos_installer(genesis_config.proof_of_stake_installer_bytes().to_vec());
@@ -1106,6 +1102,14 @@ impl From<GenesisConfig> for ipc::ChainSpec_GenesisConfig {
 impl From<&state::ProtocolVersion> for contract_ffi::value::ProtocolVersion {
     fn from(protocol_version: &state::ProtocolVersion) -> Self {
         contract_ffi::value::ProtocolVersion::new(protocol_version.value)
+    }
+}
+
+impl From<contract_ffi::value::ProtocolVersion> for state::ProtocolVersion {
+    fn from(protocol_version: ProtocolVersion) -> Self {
+        let mut protocol = super::state::ProtocolVersion::new();
+        protocol.set_value(protocol_version.value());
+        protocol
     }
 }
 
