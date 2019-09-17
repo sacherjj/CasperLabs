@@ -334,8 +334,8 @@ message ChainSpec {
         ActivationPoint activation_point = 1;
         // The protocol version as of this upgrade
         io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
-        // path to contract to run that applies the upgrades to system contracts
-        string upgrade_contract_path = 3;
+        // bytes for a contract to run that applies the upgrades to system contracts
+        DeployCode upgrade_installer = 3;
         // Note: this is optional; only needed when costs are changing
         CostTable new_costs = 4;
     }
