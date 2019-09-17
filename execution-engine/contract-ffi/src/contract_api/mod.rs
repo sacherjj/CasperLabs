@@ -23,11 +23,11 @@ use core::convert::{TryFrom, TryInto};
 const MINT_NAME: &str = "mint";
 
 /// Read value under the key in the global state
-pub fn read<T>(u_ptr: UPointer<T>) -> T
+pub fn read<T>(turef: TURef<T>) -> T
 where
     T: TryFrom<Value>,
 {
-    let key: Key = u_ptr.into();
+    let key: Key = turef.into();
     let value = read_untyped(&key);
     value
         .unwrap() // TODO: return an Option instead of unwrapping (https://casperlabs.atlassian.net/browse/EE-349)
@@ -78,11 +78,11 @@ fn read_untyped_local(key_bytes: &[u8]) -> Option<Value> {
 }
 
 /// Write the value under the key in the global state
-pub fn write<T>(u_ptr: UPointer<T>, t: T)
+pub fn write<T>(turef: TURef<T>, t: T)
 where
     Value: From<T>,
 {
-    let key = u_ptr.into();
+    let key = turef.into();
     let value = t.into();
     write_untyped(&key, &value)
 }
@@ -116,11 +116,11 @@ fn write_untyped_local(key_bytes: &[u8], value: &Value) {
 }
 
 /// Add the given value to the one currently under the key in the global state
-pub fn add<T>(u_ptr: UPointer<T>, t: T)
+pub fn add<T>(turef: TURef<T>, t: T)
 where
     Value: From<T>,
 {
-    let key = u_ptr.into();
+    let key = turef.into();
     let value = t.into();
     add_untyped(&key, &value)
 }
@@ -136,7 +136,7 @@ fn add_untyped(key: &Key, value: &Value) {
 }
 
 /// Returns a new unforgable pointer, where value is initialized to `init`
-pub fn new_uref<T>(init: T) -> UPointer<T>
+pub fn new_turef<T>(init: T) -> TURef<T>
 where
     Value: From<T>,
 {
@@ -149,7 +149,7 @@ where
     };
     let key: Key = deserialize(&bytes).unwrap();
     if let Key::URef(uref) = key {
-        UPointer::from_uref(uref).unwrap()
+        TURef::from_uref(uref).unwrap()
     } else {
         panic!("URef FFI did not return a valid URef!");
     }
@@ -205,7 +205,7 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Contrac
 }
 
 /// Finds function by the name and stores it at the unforgable name.
-pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: UPointer<Contract>) {
+pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: TURef<Contract>) {
     let contract = fn_by_name(name, known_urefs);
     write(uref, contract);
 }
@@ -560,7 +560,7 @@ pub fn get_mint() -> Option<ContractPointer> {
     let mint_public_uref = get_uref(MINT_NAME)?;
 
     if let Some(Value::Key(Key::URef(mint_private_uref))) = read_untyped(&mint_public_uref) {
-        let pointer = pointers::UPointer::new(mint_private_uref.addr(), AccessRights::READ);
+        let pointer = pointers::TURef::new(mint_private_uref.addr(), AccessRights::READ);
         Some(ContractPointer::URef(pointer))
     } else {
         None

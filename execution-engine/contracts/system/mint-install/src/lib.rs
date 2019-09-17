@@ -17,7 +17,7 @@ pub extern "C" fn mint_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let contract = contract_api::fn_by_name("mint_ext", BTreeMap::new());
-    let uref: URef = contract_api::new_uref(contract).into();
+    let uref: URef = contract_api::new_turef(contract).into();
 
     contract_api::ret(&uref, &vec![uref]);
 }

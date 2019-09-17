@@ -1,10 +1,12 @@
 #![no_std]
 
 extern crate alloc;
+
 use alloc::string::String;
 use alloc::vec::Vec;
 
 extern crate contract_ffi;
+
 use contract_ffi::contract_api::pointers::*;
 use contract_ffi::contract_api::*;
 use contract_ffi::key::Key;
@@ -36,14 +38,14 @@ pub extern "C" fn call() {
             let args = (method, message);
             let _result: () = call_contract(pointer, &args, &Vec::new());
 
-            let list_key: UPointer<Vec<String>> = sub_key.to_u_ptr().unwrap();
-            let messages = read(list_key);
+            let turef: TURef<Vec<String>> = sub_key.to_turef().unwrap();
+            let messages = read(turef);
 
-            if  messages.is_empty(){
+            if messages.is_empty() {
                 revert(2);
             }
-        },
-        None=>{
+        }
+        None => {
             revert(3);
         }
     }

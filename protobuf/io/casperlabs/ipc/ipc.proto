@@ -242,8 +242,7 @@ message ValidateResponse {
 }
 
 message ValidateRequest {
-    bytes session_code = 1;
-    bytes payment_code = 2;
+    bytes wasm_code = 1;
 }
 
 message GenesisRequest {

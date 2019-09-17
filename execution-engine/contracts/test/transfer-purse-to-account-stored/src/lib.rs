@@ -31,11 +31,11 @@ pub extern "C" fn transfer() {
 
     let result = format!("{:?}", transfer_result);
 
-    let result_uref: Key = contract_api::new_uref(result).into();
+    let result_uref: Key = contract_api::new_turef(result).into();
     contract_api::add_uref(TRANSFER_RESULT_UREF_NAME, &result_uref);
     contract_api::add_uref(
         MAIN_PURSE_FINAL_BALANCE_UREF_NAME,
-        &contract_api::new_uref(final_balance).into(),
+        &contract_api::new_turef(final_balance).into(),
     );
 }
 
@@ -43,6 +43,6 @@ pub extern "C" fn transfer() {
 pub extern "C" fn call() {
     let known_urefs: BTreeMap<String, Key> = BTreeMap::new();
     let contract = contract_api::fn_by_name(TRANSFER_FUNCTION_NAME, known_urefs);
-    let u_ptr = contract_api::new_uref(contract);
-    contract_api::add_uref(TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME, &u_ptr.into());
+    let key = contract_api::new_turef(contract).into();
+    contract_api::add_uref(TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME, &key);
 }

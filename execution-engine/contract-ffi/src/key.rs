@@ -101,9 +101,9 @@ fn drop_hex_prefix(s: &str) -> &str {
 }
 
 impl Key {
-    pub fn to_u_ptr<T>(self) -> Option<UPointer<T>> {
+    pub fn to_turef<T>(self) -> Option<TURef<T>> {
         if let Key::URef(uref) = self {
-            UPointer::from_uref(uref).ok()
+            TURef::from_uref(uref).ok()
         } else {
             None
         }
@@ -111,7 +111,7 @@ impl Key {
 
     pub fn to_c_ptr(self) -> Option<ContractPointer> {
         match self {
-            Key::URef(uref) => UPointer::from_uref(uref).map(ContractPointer::URef).ok(),
+            Key::URef(uref) => TURef::from_uref(uref).map(ContractPointer::URef).ok(),
             Key::Hash(id) => Some(ContractPointer::Hash(id)),
             _ => None,
         }
