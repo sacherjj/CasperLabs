@@ -403,18 +403,34 @@ def test_args_parser():
         b"\x00\x00\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07"
     )
 
-    amount = 123456
+    long_value = 123456
+    big_int_value = 123456789012345678901234567890
 
-    args = [{"name": "amount", "value": {"long_value": amount}},
+    long_value_abi = ABI.long_value(long_value)
+    assert long_value_abi == b"@\xe2\x01\x00\x00\x00\x00\x00"
+
+    bytes_value_abi = ABI.account(account)
+    assert bytes_value_abi == b" \x00\x00\x00\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08" \
+                              b"\x00\x00\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07"
+
+    optional_value_abi = ABI.optional_value(None)
+    assert optional_value_abi == b"\x00"
+
+    big_int_value_abi = ABI.big_int(big_int_value)
+    assert big_int_value_abi == b"\r\xd2\n?N\xee\xe0s\xc3\xf6\x0f\xe9\x8e\x01"
+
+    args = [{"name": "amount", "value": {"long_value": long_value}},
             {"name": "account", "value": {"bytes_value": account.hex()}},
             {"name": "purse_id", "value": {"optional_value": {}}},
-            {"name": "number", "value": {"big_int": {"value": "2", "bit_width": 512}}}]
+            {"name": "number", "value": {"big_int": {"value": f"{big_int_value}", "bit_width": 512}}}]
 
     json_str = json.dumps(args)
 
-    assert ABI.args_from_json(json_str) == ABI.args(
-        [ABI.long_value(amount), ABI.account(account), ABI.optional_value(None), ABI.big_int(2)]
+    json_abi = ABI.args_from_json(json_str)
+    raw_abi = ABI.args(
+        [long_value_abi, bytes_value_abi, optional_value_abi, big_int_value_abi]
     )
+    assert json_abi == raw_abi
 
 
 @fixture()
