@@ -7,11 +7,17 @@ extern crate contract_ffi;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::convert::From;
 
 use contract_ffi::contract_api::pointers::TURef;
 use contract_ffi::contract_api::*;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
+
+enum Error {
+    GetURef = 1001,
+    FindURef = 1002,
+}
 
 fn hello_name(name: &str) -> String {
     let mut result = String::from("Hello, ");
@@ -32,7 +38,9 @@ fn get_list_key(name: &str) -> TURef<Vec<String>> {
 
 fn update_list(name: String) {
     let list_key = get_list_key("list");
-    let mut list = read(list_key.clone());
+    let mut list = read(list_key.clone())
+        .unwrap_or_else(|_| revert(Error::GetURef as u32))
+        .unwrap_or_else(|| revert(Error::FindURef as u32));
     list.push(name);
     write(list_key, list);
 }
@@ -51,10 +59,14 @@ fn sub(name: String) -> Option<TURef<Vec<String>>> {
 }
 
 fn publish(msg: String) {
-    let curr_list = read(get_list_key("list"));
+    let curr_list = read(get_list_key("list"))
+        .unwrap_or_else(|_| revert(Error::GetURef as u32))
+        .unwrap_or_else(|| revert(Error::FindURef as u32));
     for name in curr_list.iter() {
         let uref = get_list_key(name);
-        let mut messages = read(uref.clone());
+        let mut messages = read(uref.clone())
+            .unwrap_or_else(|_| revert(Error::GetURef as u32))
+            .unwrap_or_else(|| revert(Error::FindURef as u32));
         messages.push(msg.clone());
         write(uref, messages);
     }
@@ -90,7 +102,9 @@ pub extern "C" fn counter_ext() {
     match method_name.as_str() {
         "inc" => add(turef, 1),
         "get" => {
-            let result = read(turef);
+            let result = read(turef)
+                .unwrap_or_else(|_| revert(Error::GetURef as u32))
+                .unwrap_or_else(|| revert(Error::FindURef as u32));
             ret(&result, &Vec::new());
         }
         _ => panic!("Unknown method name!"),

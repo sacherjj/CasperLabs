@@ -12,6 +12,11 @@ use contract_ffi::contract_api::pointers::TURef;
 use contract_ffi::contract_api::*;
 use contract_ffi::key::Key;
 
+enum Error {
+    GetURef = 1001,
+    FindURef = 1002,
+}
+
 #[no_mangle]
 pub extern "C" fn counter_ext() {
     let turef: TURef<i32> = get_uref("count").unwrap().to_turef().unwrap();
@@ -19,7 +24,9 @@ pub extern "C" fn counter_ext() {
     match method_name.as_str() {
         "inc" => add(turef, 1),
         "get" => {
-            let result = read(turef);
+            let result = read(turef)
+                .unwrap_or_else(|_| revert(Error::GetURef as u32))
+                .unwrap_or_else(|| revert(Error::FindURef as u32));
             ret(&result, &Vec::new());
         }
         _ => panic!("Unknown method name!"),

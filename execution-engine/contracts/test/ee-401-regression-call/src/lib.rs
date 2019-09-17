@@ -4,7 +4,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use alloc::string::String;
+use alloc::string::ToString;
 
 use contract_ffi::contract_api;
 use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
@@ -29,7 +29,7 @@ pub extern "C" fn call() {
 
     let result: URef = contract_api::call_contract(contract_pointer, &(), &extra_urefs);
 
-    let value: String = contract_api::read(TURef::from_uref(result).unwrap());
+    let value = contract_api::read(TURef::from_uref(result).unwrap());
 
-    assert_eq!("Hello, world!", &value);
+    assert_eq!(Ok(Some("Hello, world!".to_string())), value);
 }

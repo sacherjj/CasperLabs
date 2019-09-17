@@ -9,4 +9,5 @@ name = "test_bondingcall"
 crate-type = ["cdylib"]
 
 [dependencies]
-contract-ffi = {package = "casperlabs-contract-ffi", path = "../../../../execution-engine/contract-ffi" }
+contract-ffi = { package = "casperlabs-contract-ffi", path = "../../../../execution-engine/contract-ffi" }
+contracts-common = { package = "casperlabs-contracts-common", path = "../../../../execution-engine/contracts/contracts-common" }

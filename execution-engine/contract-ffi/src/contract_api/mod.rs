@@ -4,7 +4,7 @@ pub mod pointers;
 
 use self::alloc_util::*;
 use self::pointers::*;
-use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
+use crate::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
@@ -15,7 +15,7 @@ use crate::value::account::{
 };
 use crate::value::{Contract, ProtocolVersion, Value, U512};
 use alloc::collections::BTreeMap;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
 use core::convert::{TryFrom, TryInto};
@@ -24,20 +24,16 @@ const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
 
 /// Read value under the key in the global state
-pub fn read<T>(turef: TURef<T>) -> T
+pub fn read<T>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error>
 where
     T: TryFrom<Value>,
 {
     let key: Key = turef.into();
-    let value = read_untyped(&key);
-    value
-        .unwrap() // TODO: return an Option instead of unwrapping (https://casperlabs.atlassian.net/browse/EE-349)
-        .try_into()
-        .map_err(|_| "T could not be derived from Value")
-        .unwrap()
+    let maybe_value = read_untyped(&key)?;
+    try_into(maybe_value)
 }
 
-fn read_untyped(key: &Key) -> Option<Value> {
+fn read_untyped(key: &Key) -> Result<Option<Value>, bytesrepr::Error> {
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
     //      dropped then key_ptr becomes invalid.
 
@@ -48,25 +44,22 @@ fn read_untyped(key: &Key) -> Option<Value> {
         ext_ffi::get_read(value_ptr);
         Vec::from_raw_parts(value_ptr, value_size, value_size)
     };
-    deserialize(&value_bytes).unwrap()
+    deserialize(&value_bytes)
 }
 
 /// Reads the value at the given key in the context-local partition of global
 /// state
-pub fn read_local<K, V>(key: K) -> Option<V>
+pub fn read_local<K, V>(key: K) -> Result<Option<V>, bytesrepr::Error>
 where
     K: ToBytes,
     V: TryFrom<Value>,
 {
-    let key_bytes = key.to_bytes().unwrap();
-    read_untyped_local(&key_bytes).map(|v| {
-        v.try_into()
-            .map_err(|_| "T could not be derived from Value")
-            .unwrap()
-    })
+    let key_bytes = key.to_bytes()?;
+    let maybe_value = read_untyped_local(&key_bytes)?;
+    try_into(maybe_value)
 }
 
-fn read_untyped_local(key_bytes: &[u8]) -> Option<Value> {
+fn read_untyped_local(key_bytes: &[u8]) -> Result<Option<Value>, bytesrepr::Error> {
     let key_bytes_ptr = key_bytes.as_ptr();
     let key_bytes_size = key_bytes.len();
     let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
@@ -75,7 +68,19 @@ fn read_untyped_local(key_bytes: &[u8]) -> Option<Value> {
         ext_ffi::get_read(value_ptr);
         Vec::from_raw_parts(value_ptr, value_size, value_size)
     };
-    deserialize(&value_bytes).unwrap()
+    deserialize(&value_bytes)
+}
+
+fn try_into<T>(maybe_value: Option<Value>) -> Result<Option<T>, bytesrepr::Error>
+where
+    T: TryFrom<Value>,
+{
+    match maybe_value {
+        None => Ok(None),
+        Some(value) => value.try_into().map(Some).map_err(|_| {
+            bytesrepr::Error::CustomError("T could not be derived from Value".to_string())
+        }),
+    }
 }
 
 /// Write the value under the key in the global state
@@ -439,7 +444,7 @@ pub fn main_purse() -> PurseId {
     // https://casperlabs.atlassian.net/browse/EE-439
     let account_pk = get_caller();
     let key = Key::Account(account_pk.value());
-    let account: Account = read_untyped(&key).unwrap().try_into().unwrap();
+    let account: Account = read_untyped(&key).unwrap().unwrap().try_into().unwrap();
     account.purse_id()
 }
 
@@ -561,7 +566,7 @@ pub fn transfer_from_purse_to_purse(
 fn get_system_contract(name: &str) -> Option<ContractPointer> {
     let public_uref = get_uref(name)?;
 
-    if let Some(Value::Key(Key::URef(private_uref))) = read_untyped(&public_uref) {
+    if let Ok(Some(Value::Key(Key::URef(private_uref)))) = read_untyped(&public_uref) {
         let pointer = pointers::TURef::new(private_uref.addr(), AccessRights::READ);
         Some(ContractPointer::URef(pointer))
     } else {

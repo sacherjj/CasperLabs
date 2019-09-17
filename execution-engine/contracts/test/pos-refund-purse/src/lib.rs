@@ -3,23 +3,22 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
+extern crate contracts_common;
 
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
+use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::contract_api::{self, PurseTransferResult};
 use contract_ffi::key::Key;
-use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
+use contracts_common::RESERVED_ERROR_MAX;
 
 enum Error {
-    GetPosOuterURef = 1,
-    GetPosInnerURef = 2,
-    RefundPurseShouldNotExist = 3,
-    RefundPurseNotFound = 4,
-    RefundPurseInvalid = 5,
-    RefundPurseIncorrectAccessRights = 6,
+    ShouldNotExist = RESERVED_ERROR_MAX as isize + 1,
+    NotFound = RESERVED_ERROR_MAX as isize + 2,
+    Invalid = RESERVED_ERROR_MAX as isize + 3,
+    IncorrectAccessRights = RESERVED_ERROR_MAX as isize + 4,
 }
 
 fn purse_to_key(p: &PurseId) -> Key {
@@ -54,16 +53,7 @@ fn submit_payment(pos: &ContractPointer, amount: U512) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = {
-        let outer: TURef<Key> = contract_api::get_uref("pos")
-            .and_then(Key::to_turef)
-            .unwrap_or_else(|| contract_api::revert(Error::GetPosInnerURef as u32));
-        if let Some(ContractPointer::URef(inner)) = contract_api::read::<Key>(outer).to_c_ptr() {
-            ContractPointer::URef(TURef::new(inner.addr(), AccessRights::READ))
-        } else {
-            contract_api::revert(Error::GetPosOuterURef as u32);
-        }
-    };
+    let pos_pointer = contracts_common::get_pos_contract_read_only();
 
     let p1 = contract_api::create_purse();
     let p2 = contract_api::create_purse();
@@ -71,28 +61,28 @@ pub extern "C" fn call() {
     // get_refund_purse should return None before setting it
     let refund_result = get_refund_purse(&pos_pointer);
     if refund_result.is_some() {
-        contract_api::revert(Error::RefundPurseShouldNotExist as u32);
+        contract_api::revert(Error::ShouldNotExist as u32);
     }
 
     // it should return Some(x) after calling set_refund_purse(x)
     set_refund_purse(&pos_pointer, &p1);
     let refund_purse = match get_refund_purse(&pos_pointer) {
-        None => contract_api::revert(Error::RefundPurseNotFound as u32),
+        None => contract_api::revert(Error::NotFound as u32),
         Some(x) if x.value().addr() == p1.value().addr() => x.value(),
-        Some(_) => contract_api::revert(Error::RefundPurseInvalid as u32),
+        Some(_) => contract_api::revert(Error::Invalid as u32),
     };
 
     // the returned purse should not have any access rights
     if refund_purse.is_addable() || refund_purse.is_writeable() || refund_purse.is_readable() {
-        contract_api::revert(Error::RefundPurseIncorrectAccessRights as u32)
+        contract_api::revert(Error::IncorrectAccessRights as u32)
     }
 
     // get_refund_purse should return correct value after setting a second time
     set_refund_purse(&pos_pointer, &p2);
     match get_refund_purse(&pos_pointer) {
-        None => contract_api::revert(Error::RefundPurseNotFound as u32),
+        None => contract_api::revert(Error::NotFound as u32),
         Some(x) if x.value().addr() == p2.value().addr() => (),
-        Some(_) => contract_api::revert(Error::RefundPurseInvalid as u32),
+        Some(_) => contract_api::revert(Error::Invalid as u32),
     }
 
     let payment_amount: U512 = contract_api::get_arg(0);

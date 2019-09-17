@@ -22,7 +22,9 @@ const TRANSFER_AMOUNT: u32 = 10_000_000;
 pub extern "C" fn call() {
     let public_key: PublicKey = get_arg(0);
     // Maybe we will decide to allow multiple funds up until some maximum value.
-    let already_funded = read_local::<PublicKey, U512>(public_key).is_some();
+    let already_funded = read_local::<PublicKey, U512>(public_key)
+        .unwrap_or_default()
+        .is_some();
     if already_funded {
         revert(1);
     } else {

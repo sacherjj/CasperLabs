@@ -68,11 +68,15 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     }
 
     fn lookup(&self, p: Self::PurseId) -> Option<RAWRef<U512>> {
-        contract_api::read_local(p.raw_id()).and_then(|key: Key| key.try_into().ok())
+        contract_api::read_local(p.raw_id())
+            .ok()?
+            .and_then(|key: Key| key.try_into().ok())
     }
 
     fn dep_lookup(&self, p: Self::DepOnlyId) -> Option<ARef<U512>> {
-        contract_api::read_local(p.raw_id()).and_then(|key: Key| key.try_into().ok())
+        contract_api::read_local(p.raw_id())
+            .ok()?
+            .and_then(|key: Key| key.try_into().ok())
     }
 }
 
@@ -107,7 +111,8 @@ pub fn delegate() {
             let key: URef = contract_api::get_arg(1);
             let purse_id: WithdrawId = WithdrawId::from_uref(key).unwrap();
             let balance_uref = mint.lookup(purse_id);
-            let balance: Option<U512> = balance_uref.map(|uref| contract_api::read(uref.into()));
+            let balance: Option<U512> =
+                balance_uref.and_then(|uref| contract_api::read(uref.into()).unwrap_or_default());
             contract_api::ret(&balance, &vec![])
         }
 

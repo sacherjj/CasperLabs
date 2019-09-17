@@ -11,7 +11,8 @@ crate-type = ["cdylib"]
 
 [features]
 default = []
-std = ["contract-ffi/std" ]
+std = ["contract-ffi/std", "contracts-common/std"]
 
 [dependencies]
 contract-ffi = { package = "casperlabs-contract-ffi", path = "../../../execution-engine/contract-ffi" }
+contracts-common = { path = "../../../execution-engine/contracts/contracts-common", package = "casperlabs-contracts-common" }

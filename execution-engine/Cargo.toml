@@ -4,7 +4,14 @@ cargo-features = ["profile-overrides"]
 
 members = [
     "contract-ffi",
-    "contracts/[!.]*/*",
+    "contracts/bench/*",
+    "contracts/client/*",
+    "contracts/contracts-common",
+    "contracts/explorer/*",
+    "contracts/profiling/*",
+    "contracts/SRE/*",
+    "contracts/system/*",
+    "contracts/test/*",
     "engine-core",
     "engine-grpc-server",
     "engine-metrics-scraper",

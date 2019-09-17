@@ -3,16 +3,15 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
+extern crate contracts_common;
 
 use alloc::string::String;
-use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{self, PurseTransferResult};
 use contract_ffi::key::Key;
-use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
+use contracts_common::{Error as CommonError, RESERVED_ERROR_MAX};
 
-const POS_CONTRACT_NAME: &str = "pos";
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const SET_REFUND_PURSE: &str = "set_refund_purse";
 
@@ -22,11 +21,8 @@ enum Arg {
 }
 
 enum Error {
-    GetPosInnerURef = 1,
-    GetPosOuterURef = 2,
-    Transfer = 3,
-    InvalidPurseName = 4,
-    InvalidPurse = 5,
+    InvalidPurseName = RESERVED_ERROR_MAX as isize + 1,
+    InvalidPurse = RESERVED_ERROR_MAX as isize + 2,
 }
 
 #[no_mangle]
@@ -41,16 +37,7 @@ pub extern "C" fn call() {
 
     let amount: U512 = contract_api::get_arg(Arg::Amount as u32);
 
-    let pos_pointer: ContractPointer = {
-        let outer: TURef<Key> = contract_api::get_uref(POS_CONTRACT_NAME)
-            .and_then(Key::to_turef)
-            .unwrap_or_else(|| contract_api::revert(Error::GetPosInnerURef as u32));
-        if let Some(ContractPointer::URef(inner)) = contract_api::read::<Key>(outer).to_c_ptr() {
-            ContractPointer::URef(TURef::new(inner.addr(), AccessRights::READ))
-        } else {
-            contract_api::revert(Error::GetPosOuterURef as u32);
-        }
-    };
+    let pos_pointer = contracts_common::get_pos_contract_read_only();
 
     let payment_purse: PurseId =
         contract_api::call_contract(pos_pointer.clone(), &(GET_PAYMENT_PURSE,), &vec![]);
@@ -64,6 +51,6 @@ pub extern "C" fn call() {
     if let PurseTransferResult::TransferError =
         contract_api::transfer_from_purse_to_purse(purse, payment_purse, amount)
     {
-        contract_api::revert(Error::Transfer as u32);
+        contract_api::revert(CommonError::Transfer as u32);
     }
 }

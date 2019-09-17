@@ -1,0 +1,12 @@
+[package]
+name = "casperlabs-contracts-common"
+version = "0.1.0"
+authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
+edition = "2018"
+
+[features]
+default = []
+std = ["contract-ffi/std"]
+
+[dependencies]
+contract-ffi = { path = "../../contract-ffi", package = "casperlabs-contract-ffi" }
