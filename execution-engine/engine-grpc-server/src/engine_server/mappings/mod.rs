@@ -10,7 +10,7 @@ use contract_ffi::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
     KEY_SIZE,
 };
-use contract_ffi::value::U512;
+use contract_ffi::value::{ProtocolVersion, U512};
 use engine_core::engine_state::error::{Error as EngineError, RootNotFound};
 use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 use engine_core::engine_state::execution_effect::ExecutionEffect;
@@ -178,7 +178,7 @@ impl From<contract_ffi::value::Contract> for super::state::Contract {
         contract.set_body(bytes);
         contract.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
         let mut protocol = super::state::ProtocolVersion::new();
-        protocol.set_value(protocol_version);
+        protocol.set_value(protocol_version.get());
         contract.set_protocol_version(protocol);
         contract
     }
@@ -192,7 +192,7 @@ impl TryFrom<&super::state::Contract> for contract_ffi::value::Contract {
         Ok(contract_ffi::value::Contract::new(
             value.get_body().to_vec(),
             known_urefs.0,
-            value.get_protocol_version().value,
+            ProtocolVersion::new(value.get_protocol_version().value),
         ))
     }
 }
@@ -1064,7 +1064,7 @@ impl TryFrom<ipc::ChainSpec_GenesisConfig> for GenesisConfig {
         Ok(GenesisConfig::new(
             name,
             timestamp,
-            protocol_version,
+            ProtocolVersion::new(protocol_version),
             mint_initializer_bytes,
             proof_of_stake_initializer_bytes,
             accounts,
@@ -1080,7 +1080,7 @@ impl From<GenesisConfig> for ipc::ChainSpec_GenesisConfig {
         ret.set_timestamp(genesis_config.timestamp());
         {
             let mut protocol_version = state::ProtocolVersion::new();
-            protocol_version.set_value(genesis_config.protocol_version());
+            protocol_version.set_value(genesis_config.protocol_version().get());
             ret.set_protocol_version(protocol_version);
         }
         ret.set_mint_installer(genesis_config.mint_installer_bytes().to_vec());
@@ -1100,6 +1100,12 @@ impl From<GenesisConfig> for ipc::ChainSpec_GenesisConfig {
             ret.set_costs(cost_table);
         }
         ret
+    }
+}
+
+impl From<&state::ProtocolVersion> for contract_ffi::value::ProtocolVersion {
+    fn from(protocol_version: &state::ProtocolVersion) -> Self {
+        contract_ffi::value::ProtocolVersion::new(protocol_version.value)
     }
 }
 

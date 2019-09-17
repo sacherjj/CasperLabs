@@ -251,7 +251,7 @@ where
             }
 
             FunctionIndex::ProtocolVersionFuncIndex => {
-                Ok(Some(self.context.protocol_version().into()))
+                Ok(Some(self.context.protocol_version().get().into()))
             }
 
             FunctionIndex::IsValidFnIndex => {

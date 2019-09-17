@@ -3,6 +3,7 @@ use super::alloc::collections::TryReserveError;
 use super::alloc::string::{String, ToString};
 use super::alloc::vec::Vec;
 
+use crate::value::ProtocolVersion;
 use core::fmt::Display;
 use core::mem::{size_of, MaybeUninit};
 use failure::Fail;
@@ -487,6 +488,22 @@ impl<T: FromBytes, E: FromBytes> FromBytes for Result<T, E> {
             }
             _ => Err(Error::FormattingError),
         }
+    }
+}
+
+impl ToBytes for ProtocolVersion {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.get().to_le_bytes().to_vec())
+    }
+}
+
+impl FromBytes for ProtocolVersion {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let mut result: [u8; 8] = [0u8; 8];
+        let (bytes, rem) = safe_split_at(bytes, 8)?;
+        result.copy_from_slice(bytes);
+        let protocol_version = ProtocolVersion::new(u64::from_le_bytes(result));
+        Ok((protocol_version, rem))
     }
 }
 
