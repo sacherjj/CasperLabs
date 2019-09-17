@@ -631,5 +631,10 @@ mod proptests {
         fn test_phase_serialization(phase in phase_arb()) {
             assert!(test_serialization_roundtrip(&phase));
         }
+
+        #[test]
+        fn test_protocol_version(protocol_version in protocol_version_arb()) {
+            assert!(test_serialization_roundtrip(&protocol_version))
+        }
     }
 }

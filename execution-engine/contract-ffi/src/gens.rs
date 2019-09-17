@@ -119,6 +119,10 @@ pub fn contract_arb() -> impl Strategy<Value = Contract> {
     })
 }
 
+pub fn protocol_version_arb() -> impl Strategy<Value = ProtocolVersion> {
+    prop_oneof![Just(ProtocolVersion::new(1)),]
+}
+
 pub fn u128_arb() -> impl Strategy<Value = U128> {
     vec(any::<u8>(), 0..16).prop_map(|b| U128::from_little_endian(b.as_slice()))
 }
