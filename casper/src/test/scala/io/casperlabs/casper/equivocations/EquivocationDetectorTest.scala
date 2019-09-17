@@ -333,7 +333,7 @@ class EquivocationDetectorTest
         } yield ()
   }
 
-  it should "detect equivocation and update lowest rank of base block correctly when receiving a block created by a validator who has been detected equivocating" in withStorage {
+  it should "detect equivocation and update the rank of lowest base block correctly when receiving a block created by a validator who has been detected equivocating" in withStorage {
     implicit blockStorage =>
       implicit dagStorage =>
         /*
@@ -380,12 +380,15 @@ class EquivocationDetectorTest
                 justifications = HashMap(v0 -> b2.blockHash),
                 rankOfLowestBaseBlockExpect = None
               )
+          // When v0 creates first equivocation, then the rank of lowest base block is the rank of b2
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b2.blockHash),
                 v0,
                 justifications = HashMap(v0 -> b2.blockHash),
                 rankOfLowestBaseBlockExpect = b2.getHeader.rank.some
               )
+          // When v0 creates another equivocation, and the base block(i.e. block b1) of the
+          // equivocation is smaller, then update the rank of lowest base block to be the rank of b1
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b1.blockHash),
                 v0,
