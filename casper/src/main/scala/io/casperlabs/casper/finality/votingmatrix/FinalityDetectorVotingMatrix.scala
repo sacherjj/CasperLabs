@@ -9,6 +9,7 @@ import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.equivocations.EquivocationDetector.EquivocationTracker
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.util.ProtoUtil
@@ -29,7 +30,8 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
   def onNewBlockAddedToTheBlockDag(
       dag: DagRepresentation[F],
       block: Block,
-      latestFinalizedBlock: BlockHash
+      latestFinalizedBlock: BlockHash,
+      equivocationTrack: EquivocationTracker
   ): F[Option[CommitteeWithConsensusValue]] =
     matrix.withPermit(for {
       votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)
@@ -37,8 +39,9 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
                  case Some(branch) =>
                    val blockMetadata = BlockMetadata.fromBlock(block)
                    for {
-                     _      <- updateVoterPerspective[F](dag, blockMetadata, branch)
-                     result <- checkForCommittee[F](rFTT)
+                     _ <- updateVoterPerspective[F](dag, blockMetadata, branch)
+                           .whenA(!equivocationTrack.contains(blockMetadata.validatorPublicKey))
+                     result <- checkForCommittee[F](rFTT, equivocationTrack)
                      _ <- result match {
                            case Some(newLFB) =>
                              // On new LFB we rebuild VotingMatrix and start the new game.

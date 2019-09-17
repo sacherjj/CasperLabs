@@ -272,7 +272,8 @@ class FinalityDetectorByVotingMatrixTest
       finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewBlockAddedToTheBlockDag(
                             dag,
                             block,
-                            lastFinalizedBlockHash
+                            lastFinalizedBlockHash,
+                            Map.empty[Validator, Long]
                           )
     } yield block -> finalizedBlockOpt
 }
