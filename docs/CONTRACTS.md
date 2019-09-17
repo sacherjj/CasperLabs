@@ -250,6 +250,7 @@ in a [protobuf JSON format](https://developers.google.com/protocol-buffers/docs/
 
 For example: `--session-args '[{"name": "amount", "value": {"long_value": 123456}}]'`.
 
+
 Note,
 the contract arguments are positional,
 and so the `"name"` attribute is currently not used.
@@ -258,7 +259,7 @@ so this format is future-proof.
 
 **Accessing arguments in contracts**
 
-Contract API function `get_arg` can be used to access contract arguments,
+Contract API function `get_arg` allows to access contract arguments,
 for example: 
 
 ```
@@ -272,6 +273,14 @@ The matching type for protobuf
 [Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78)
 type `long_value`
 is currently `u64`.
+
+The same can be achieved by declaring return type of `get_value` explicitly,
+for example:
+
+```
+let amount = get_arg::<u64>(0);
+```
+
 
 **Supported types of contract arguments**
 
