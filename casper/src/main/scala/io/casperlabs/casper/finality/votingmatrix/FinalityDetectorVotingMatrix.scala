@@ -12,7 +12,7 @@ import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.models.MessageSummary
+import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -37,7 +37,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
       result <- votedBranch match {
                  case Some(branch) =>
                    for {
-                     msgSummary <- MonadThrowable[F].fromTry(MessageSummary.fromBlock(block))
+                     msgSummary <- MonadThrowable[F].fromTry(Message.fromBlock(block))
                      _          <- updateVoterPerspective[F](dag, msgSummary, branch)
                      result     <- checkForCommittee[F](rFTT)
                      _ <- result match {

@@ -16,7 +16,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.models.{MBallot, MBlock, MessageSummary}
+import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.Abi
 import io.casperlabs.storage.block.BlockStorage
@@ -31,7 +31,7 @@ object ProtoUtil {
   // TODO: Move into DAG and remove corresponding param once that is moved over from simulator
   def isInMainChain[F[_]: Monad](
       dag: DagRepresentation[F],
-      candidateBlockSummary: MBlock,
+      candidateBlockSummary: Message.Block,
       targetBlockHash: BlockHash
   ): F[Boolean] =
     if (candidateBlockSummary.messageHash == targetBlockHash) {
@@ -67,8 +67,8 @@ object ProtoUtil {
       result <- messageSummary match {
                  // Ballot is never in a main-chain because it's not a block and main-chain
                  // is a sub-DAG of a p-DAG.
-                 case _: MBallot => false.pure[F]
-                 case b: MBlock  => isInMainChain(dag, b, targetBlockHash)
+                 case _: Message.Ballot => false.pure[F]
+                 case b: Message.Block  => isInMainChain(dag, b, targetBlockHash)
                }
     } yield result
 
@@ -86,8 +86,8 @@ object ProtoUtil {
 
   def votedBranch[F[_]: Monad](
       dag: DagRepresentation[F],
-      latestFinalizedBlock: MessageSummary,
-      newBlock: MessageSummary
+      latestFinalizedBlock: Message,
+      newBlock: Message
   ): F[Option[BlockHash]] =
     if (newBlock.rank <= latestFinalizedBlock.rank) {
       none[BlockHash].pure[F]
@@ -164,7 +164,7 @@ object ProtoUtil {
               }
     } yield block
 
-  def calculateRank(justificationMsgs: Seq[MessageSummary]): Long =
+  def calculateRank(justificationMsgs: Seq[Message]): Long =
     1L + justificationMsgs.foldLeft(-1L) {
       case (acc, msgSummary) => math.max(acc, msgSummary.rank)
     }
@@ -243,12 +243,12 @@ object ProtoUtil {
       val message = messageOpt.get
       if (message.isGenesisLike) {
 
-        /** We know that Gensis is of [[MBlock]] type */
-        message.asInstanceOf[MBlock].weightMap.pure[F]
+        /** We know that Gensis is of [[Message.Block]] type */
+        message.asInstanceOf[Message.Block].weightMap.pure[F]
       } else {
         dag.lookup(message.parentBlock).flatMap {
-          case Some(b: MBlock) => b.weightMap.pure[F]
-          case Some(b: MBallot) =>
+          case Some(b: Message.Block) => b.weightMap.pure[F]
+          case Some(b: Message.Ballot) =>
             MonadThrowable[F].raiseError[Map[ByteString, Long]](
               new IllegalArgumentException(
                 s"A ballot ${PrettyPrinter.buildString(b.messageHash)} was a parent block for ${PrettyPrinter
@@ -256,7 +256,7 @@ object ProtoUtil {
               )
             )
           // For some reason scalac produces a warning that we are missing a case
-          // Some(x for x not in {MBlock, MBallot}), which is strange b/c such type doesn't exist.
+          // Some(x for x not in {Message.Block, Message.Ballot}), which is strange b/c such type doesn't exist.
           case Some(_) => ???
           case None =>
             MonadThrowable[F].raiseError[Map[ByteString, Long]](
@@ -309,7 +309,7 @@ object ProtoUtil {
     b.getHeader.rank
 
   def toJustification(
-      latestMessages: Seq[MessageSummary]
+      latestMessages: Seq[Message]
   ): Seq[Justification] =
     latestMessages.map { messageSummary =>
       Block

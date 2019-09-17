@@ -10,7 +10,7 @@ import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.models.{MBallot, MBlock}
+import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
@@ -44,9 +44,9 @@ object VotingMatrix {
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
       message <- dag.lookup(newFinalizedBlock)
       block <- message.get match {
-                case b: MBlock => b.pure[F]
-                case ballot: MBallot =>
-                  MonadThrowable[F].raiseError[MBlock](
+                case b: Message.Block => b.pure[F]
+                case ballot: Message.Ballot =>
+                  MonadThrowable[F].raiseError[Message.Block](
                     new IllegalArgumentException(
                       s"Cannot create an instance of VotingMatrix from a ballot ${PrettyPrinter
                         .buildString(ballot.messageHash)}"

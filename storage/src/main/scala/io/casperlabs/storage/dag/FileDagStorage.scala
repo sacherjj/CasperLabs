@@ -18,7 +18,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.models.MessageSummary
+import io.casperlabs.models.Message
 import io.casperlabs.shared.{Log, LogSource}
 import io.casperlabs.storage._
 import io.casperlabs.storage.block.BlockStorage
@@ -126,19 +126,19 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
           } yield result
       }
 
-    def lookup(blockHash: BlockHash): F[Option[MessageSummary]] =
+    def lookup(blockHash: BlockHash): F[Option[Message]] =
       dataLookup
         .get(blockHash)
-        .fold[F[Option[MessageSummary]]](
+        .fold[F[Option[Message]]](
           BlockStorage[F]
             .getBlockMessage(blockHash)
             .map(_.map(BlockSummary.fromBlock))
             .flatMap {
-              case None => (None: Option[MessageSummary]).pure[F]
+              case None => (None: Option[Message]).pure[F]
               case Some(bs) =>
-                MonadThrowable[F].fromTry(MessageSummary.fromBlockSummary(bs)).map(Some(_))
+                MonadThrowable[F].fromTry(Message.fromBlockSummary(bs)).map(Some(_))
             }
-        )(bs => MonadThrowable[F].fromTry(MessageSummary.fromBlockSummary(bs)).map(Some(_)))
+        )(bs => MonadThrowable[F].fromTry(Message.fromBlockSummary(bs)).map(Some(_)))
 
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.get(blockHash).fold(BlockStorage[F].contains(blockHash))(_ => true.pure[F])
@@ -191,7 +191,7 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
 
-    def latestMessage(validator: Validator): F[Option[MessageSummary]] =
+    def latestMessage(validator: Validator): F[Option[Message]] =
       latestMessagesMap
         .get(validator)
         .flatTraverse(lookup)
@@ -199,7 +199,7 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
     def latestMessageHashes: F[Map[Validator, BlockHash]] =
       latestMessagesMap.pure[F]
 
-    def latestMessages: F[Map[Validator, MessageSummary]] =
+    def latestMessages: F[Map[Validator, Message]] =
       latestMessagesMap.toList
         .traverse {
           case (validator, hash) => lookup(hash).map(validator -> _.get)

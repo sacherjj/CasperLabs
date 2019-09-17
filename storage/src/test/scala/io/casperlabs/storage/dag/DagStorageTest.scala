@@ -9,7 +9,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.models.MessageSummary
+import io.casperlabs.models.Message
 import io.casperlabs.shared
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
@@ -88,7 +88,7 @@ trait DagStorageTest
                 case BlockMsgWithTransform(Some(b), _) =>
                   for {
                     blockSummary <- dag.lookup(b.blockHash)
-                  } yield blockSummary shouldBe MessageSummary.fromBlock(b).toOption
+                  } yield blockSummary shouldBe Message.fromBlock(b).toOption
                 case _ => ???
               }
           _ <- latestBlocksByValidator.toList.traverse {
@@ -98,7 +98,7 @@ trait DagStorageTest
                     latestMessage     <- dag.latestMessage(validator)
                   } yield {
                     latestMessageHash shouldBe Some(b.blockHash)
-                    latestMessage shouldBe MessageSummary.fromBlock(b).toOption
+                    latestMessage shouldBe Message.fromBlock(b).toOption
                   }
                 case _ => ???
               }
@@ -109,7 +109,7 @@ trait DagStorageTest
               }
           _ <- dag.latestMessages.map { got =>
                 got.toList should contain theSameElementsAs latestBlocksByValidator.toList.map {
-                  case (v, b) => (v, MessageSummary.fromBlock(b.getBlockMessage).get)
+                  case (v, b) => (v, Message.fromBlock(b.getBlockMessage).get)
                 }
               }
         } yield ()
@@ -211,11 +211,11 @@ class FileDagStorageTest extends DagStorageTest {
         List[
           (
               //dag.lookup
-              Option[MessageSummary],
+              Option[Message],
               //dag.latestMessageHash
               Option[BlockHash],
               //dag.latestMessage
-              Option[MessageSummary],
+              Option[Message],
               //dag.children
               Set[BlockHash],
               //dag.justificationToBlocks
@@ -227,7 +227,7 @@ class FileDagStorageTest extends DagStorageTest {
         //dag.latestMessageHashes
         Map[Validator, BlockHash],
         //dag.latestMessages
-        Map[Validator, MessageSummary],
+        Map[Validator, Message],
         //dag.topoSort
         Vector[Vector[BlockHash]],
         //dag.topoSortTail
@@ -274,11 +274,11 @@ class FileDagStorageTest extends DagStorageTest {
       topoSortTailLength: Int = 5
   ): Assertion = {
     val (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) = lookupResult
-    val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, MessageSummary]) {
+    val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, Message]) {
       case (lm, b) =>
         // Ignore empty sender for genesis block
         if (b.getHeader.validatorPublicKey != ByteString.EMPTY)
-          lm.updated(b.getHeader.validatorPublicKey, MessageSummary.fromBlock(b).get)
+          lm.updated(b.getHeader.validatorPublicKey, Message.fromBlock(b).get)
         else
           lm
     }
@@ -294,7 +294,7 @@ class FileDagStorageTest extends DagStorageTest {
           ),
           b
           ) =>
-        blockSummary shouldBe MessageSummary.fromBlock(b).toOption
+        blockSummary shouldBe Message.fromBlock(b).toOption
         latestMessageHash shouldBe realLatestMessages
           .get(b.getHeader.validatorPublicKey)
           .map(_.messageHash)
@@ -618,9 +618,9 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
                     ) =>
                   latestMessageHashesGot shouldBe Map(validator -> higherRank.blockHash)
                   latestMessagesGot shouldBe Map(
-                    validator -> MessageSummary.fromBlock(higherRank).get
+                    validator -> Message.fromBlock(higherRank).get
                   )
-                  latestMessageGot shouldBe MessageSummary.fromBlock(higherRank).toOption
+                  latestMessageGot shouldBe Message.fromBlock(higherRank).toOption
                   latestMessageHashGot shouldBe Some(higherRank.blockHash)
               }
         } yield ()

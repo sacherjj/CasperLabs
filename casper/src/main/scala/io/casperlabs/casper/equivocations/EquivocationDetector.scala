@@ -7,7 +7,7 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.{CasperState, EquivocatedBlock, InvalidBlock, PrettyPrinter}
-import io.casperlabs.models.MessageSummary
+import io.casperlabs.models.Message
 import io.casperlabs.shared.{Cell, Log, LogSource}
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -90,9 +90,9 @@ object EquivocationDetector {
                             latestMessageOfCreator <- dag
                                                        .lookup(latestMessageHashOfCreator)
                                                        .map(_.get)
-                            implicit0(blockTopoOrdering: Ordering[MessageSummary]) = DagOperations.blockTopoOrderingDesc
+                            implicit0(blockTopoOrdering: Ordering[Message]) = DagOperations.blockTopoOrderingDesc
                             stream = DagOperations.bfToposortTraverseF(
-                              MessageSummary.fromBlock(block).toList
+                              Message.fromBlock(block).toList
                             )(
                               b =>
                                 b.justifications.toList

@@ -12,7 +12,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.models.MessageSummary
+import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.block.BlockStorage.BlockHash
@@ -43,10 +43,10 @@ class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStorage](
       childMap.getOrElse(blockHash, Set.empty).pure[F]
     def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
       justificationMap.getOrElse(blockHash, Set.empty).pure[F]
-    def lookup(blockHash: BlockHash): F[Option[MessageSummary]] =
+    def lookup(blockHash: BlockHash): F[Option[Message]] =
       dataLookup.get(blockHash) match {
-        case None     => (None: Option[MessageSummary]).pure[F]
-        case Some(bs) => MonadThrowable[F].fromTry(MessageSummary.fromBlockSummary(bs)).map(Some(_))
+        case None     => (None: Option[Message]).pure[F]
+        case Some(bs) => MonadThrowable[F].fromTry(Message.fromBlockSummary(bs)).map(Some(_))
       }
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.contains(blockHash).pure[F]
@@ -62,11 +62,11 @@ class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStorage](
       fs2.Stream.emits[F, Vector[BlockHash]](topoSortVector.takeRight(tailLength))
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
-    def latestMessage(validator: Validator): F[Option[MessageSummary]] =
+    def latestMessage(validator: Validator): F[Option[Message]] =
       latestMessagesMap.get(validator).flatTraverse(lookup)
     def latestMessageHashes: F[Map[Validator, BlockHash]] =
       latestMessagesMap.pure[F]
-    def latestMessages: F[Map[Validator, MessageSummary]] =
+    def latestMessages: F[Map[Validator, Message]] =
       latestMessagesMap.toList
         .traverse {
           case (validator, hash) => lookup(hash).map(validator -> _.get)

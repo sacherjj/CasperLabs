@@ -12,7 +12,7 @@ import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetec
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.models.MessageSummary
+import io.casperlabs.models.Message
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.block.BlockStorage
@@ -258,7 +258,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
       votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlockHash, b.blockHash)
       _ <- updateVoterPerspective(
             dag,
-            MessageSummary.fromBlock(b).get,
+            Message.fromBlock(b).get,
             votedBranch.get
           )
     } yield b

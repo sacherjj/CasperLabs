@@ -5,7 +5,7 @@ import cats.{Eq, Eval, Monad, Show}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.models.MessageSummary
+import io.casperlabs.models.Message
 import io.casperlabs.shared.StreamT
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
@@ -32,7 +32,7 @@ object DagOperations {
     def identity[A]                = instance[A, A](a => a)
     implicit val blockKey          = instance[Block, BlockHash](_.blockHash)
     implicit val blockSummaryKey   = instance[BlockSummary, BlockHash](_.blockHash)
-    implicit val messageSummaryKey = instance[MessageSummary, BlockHash](_.messageHash)
+    implicit val messageSummaryKey = instance[Message, BlockHash](_.messageHash)
     implicit val blockHashKey      = identity[BlockHash]
   }
 
@@ -57,21 +57,21 @@ object DagOperations {
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[k.K])))
   }
 
-  val blockTopoOrderingAsc: Ordering[MessageSummary] =
-    Ordering.by[MessageSummary, Long](_.rank).reverse
+  val blockTopoOrderingAsc: Ordering[Message] =
+    Ordering.by[Message, Long](_.rank).reverse
 
-  val blockTopoOrderingDesc: Ordering[MessageSummary] = Ordering.by(_.rank)
+  val blockTopoOrderingDesc: Ordering[Message] = Ordering.by(_.rank)
 
   def bfToposortTraverseF[F[_]: Monad](
-      start: List[MessageSummary]
+      start: List[Message]
   )(
-      neighbours: MessageSummary => F[List[MessageSummary]]
-  )(implicit ord: Ordering[MessageSummary]): StreamT[F, MessageSummary] = {
+      neighbours: Message => F[List[Message]]
+  )(implicit ord: Ordering[Message]): StreamT[F, Message] = {
     def build(
-        q: mutable.PriorityQueue[MessageSummary],
+        q: mutable.PriorityQueue[Message],
         prevVisited: HashSet[BlockHash]
-    ): F[StreamT[F, MessageSummary]] =
-      if (q.isEmpty) StreamT.empty[F, MessageSummary].pure[F]
+    ): F[StreamT[F, Message]] =
+      if (q.isEmpty) StreamT.empty[F, Message].pure[F]
       else {
         val curr = q.dequeue
         if (prevVisited(curr.messageHash)) build(q, prevVisited)
@@ -85,7 +85,7 @@ object DagOperations {
 
     StreamT.delay(
       Eval.now(
-        build(mutable.PriorityQueue.empty[MessageSummary] ++ start, HashSet.empty[BlockHash])
+        build(mutable.PriorityQueue.empty[Message] ++ start, HashSet.empty[BlockHash])
       )
     )
   }
@@ -241,15 +241,15 @@ object DagOperations {
   }
 
   def uncommonAncestors[F[_]: Monad](
-      blocks: IndexedSeq[MessageSummary],
+      blocks: IndexedSeq[Message],
       dag: DagRepresentation[F]
   )(
-      implicit topoSort: Ordering[MessageSummary]
-  ): F[Map[MessageSummary, BitSet]] = {
-    def parents(b: MessageSummary): F[List[MessageSummary]] =
+      implicit topoSort: Ordering[Message]
+  ): F[Map[Message, BitSet]] = {
+    def parents(b: Message): F[List[Message]] =
       b.parents.toList.traverse(b => dag.lookup(b).map(_.get))
 
-    abstractUncommonAncestors[F, MessageSummary](blocks, parents)
+    abstractUncommonAncestors[F, Message](blocks, parents)
   }
 
   //Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
@@ -343,7 +343,7 @@ object DagOperations {
   ): F[BlockHash] = {
     implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
     import io.casperlabs.casper.util.implicits.{eqMessageSummary, showBlockHash}
-    def lookup[A](f: A => BlockHash): A => F[MessageSummary] =
+    def lookup[A](f: A => BlockHash): A => F[Message] =
       el =>
         dag
           .lookup(f(el))
@@ -352,7 +352,7 @@ object DagOperations {
     starters
       .traverse(lookup(identity))
       .flatMap(
-        latestCommonAncestorF[F, MessageSummary](_)(lookup[MessageSummary](_.parents.head)(_))
+        latestCommonAncestorF[F, Message](_)(lookup[Message](_.parents.head)(_))
       )
       .map(_.messageHash)
   }

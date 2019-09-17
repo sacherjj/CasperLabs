@@ -9,7 +9,7 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.models.MessageSummary
+import io.casperlabs.models.Message
 import io.casperlabs.shared.Sorting.messageSummaryOrdering
 import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
@@ -59,17 +59,16 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
 
           dag                <- dagStorage.getRepresentation
           dagTopoOrderingAsc = DagOperations.blockTopoOrderingAsc
-          stream = DagOperations.bfToposortTraverseF[Task](MessageSummary.fromBlock(genesis).toList) {
-            b =>
-              dag
-                .children(b.messageHash)
-                .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
+          stream = DagOperations.bfToposortTraverseF[Task](Message.fromBlock(genesis).toList) { b =>
+            dag
+              .children(b.messageHash)
+              .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
           }(Monad[Task], dagTopoOrderingAsc)
           _                   <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 2, 3, 3, 4, 4))
           dagTopoOrderingDesc = DagOperations.blockTopoOrderingDesc
           stream2 = DagOperations
             .bfToposortTraverseF[Task](
-              MessageSummary.fromBlock(b6).toList ++ MessageSummary.fromBlock(b7).toList
+              Message.fromBlock(b6).toList ++ Message.fromBlock(b7).toList
             ) { b =>
               b.parents.toList.traverse(l => dag.lookup(l).map(_.get))
             }(Monad[Task], dagTopoOrderingDesc)
@@ -286,7 +285,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
          *              |  /
          *  0         genesis
          */
-        implicit def toMessageSummary: Block => MessageSummary = MessageSummary.fromBlock(_).get
+        implicit def toMessageSummary: Block => Message = Message.fromBlock(_).get
         for {
           genesis <- createAndStoreBlock[Task](Seq.empty)
           b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
@@ -321,7 +320,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
               )
 
           result <- DagOperations.uncommonAncestors[Task](Vector(b1), dag) shouldBeF Map
-                     .empty[MessageSummary, BitSet]
+                     .empty[Message, BitSet]
         } yield result
   }
 

@@ -15,7 +15,7 @@ import scala.util.{Failure, Success, Try}
   * This way we can do necessary validation of protobuf fields (like existence of required fields)
   * and represent different messages in type-safe way.
   */
-abstract class MessageSummary {
+abstract class Message {
   type Id = ByteString
   val messageHash: Id
   val validatorId: ByteString
@@ -29,38 +29,39 @@ abstract class MessageSummary {
   val blockSummary: BlockSummary
 }
 
-case class MBlock private (
-    messageHash: MessageSummary#Id,
-    validatorId: ByteString,
-    parentBlock: MessageSummary#Id,
-    justifications: Seq[consensus.Block.Justification],
-    rank: Long,
-    validatorMsgSeqNum: Int,
-    signature: consensus.Signature,
-    secondaryParents: Seq[MessageSummary#Id],
-    weightMap: Map[ByteString, Long],
-    blockSummary: BlockSummary
-) extends MessageSummary {
-  // For Genesis block we expect it to have no parents.
-  // We could either encode it as separate ADT variant or keep the assumptions.
-  override val parents: Seq[Id] = (parentBlock +: secondaryParents).filterNot(_ == ByteString.EMPTY)
-}
+object Message {
+  case class Block private (
+      messageHash: Message#Id,
+      validatorId: ByteString,
+      parentBlock: Message#Id,
+      justifications: Seq[consensus.Block.Justification],
+      rank: Long,
+      validatorMsgSeqNum: Int,
+      signature: consensus.Signature,
+      secondaryParents: Seq[Message#Id],
+      weightMap: Map[ByteString, Long],
+      blockSummary: BlockSummary
+  ) extends Message {
+    // For Genesis block we expect it to have no parents.
+    // We could either encode it as separate ADT variant or keep the assumptions.
+    override val parents: Seq[Id] =
+      (parentBlock +: secondaryParents).filterNot(_ == ByteString.EMPTY)
+  }
 
-case class MBallot private (
-    messageHash: MessageSummary#Id,
-    validatorId: ByteString,
-    parentBlock: MessageSummary#Id,
-    justifications: Seq[consensus.Block.Justification],
-    rank: Long,
-    validatorMsgSeqNum: Int,
-    signature: consensus.Signature,
-    blockSummary: BlockSummary
-) extends MessageSummary {
-  override val parents: Seq[Id] = Seq(parentBlock)
-}
+  case class Ballot private (
+      messageHash: Message#Id,
+      validatorId: ByteString,
+      parentBlock: Message#Id,
+      justifications: Seq[consensus.Block.Justification],
+      rank: Long,
+      validatorMsgSeqNum: Int,
+      signature: consensus.Signature,
+      blockSummary: BlockSummary
+  ) extends Message {
+    override val parents: Seq[Id] = Seq(parentBlock)
+  }
 
-object MessageSummary {
-  def fromBlockSummary(b: consensus.BlockSummary): Try[MessageSummary] =
+  def fromBlockSummary(b: consensus.BlockSummary): Try[Message] =
     try {
       val messageHash        = b.blockHash
       val header             = b.getHeader
@@ -75,7 +76,7 @@ object MessageSummary {
       messageType match {
         case BALLOT =>
           Success(
-            MBallot(
+            Ballot(
               messageHash,
               creator,
               parentBlock,
@@ -93,7 +94,7 @@ object MessageSummary {
             case Bond(validatorPk, stake) => validatorPk -> stake
           }.toMap
           Success(
-            MBlock(
+            Block(
               messageHash,
               creator,
               parentBlock,
@@ -120,6 +121,6 @@ object MessageSummary {
         Failure(new IllegalArgumentException(message, ex))
     }
 
-  def fromBlock(b: consensus.Block): Try[MessageSummary] =
+  def fromBlock(b: consensus.Block): Try[Message] =
     fromBlockSummary(BlockSummary.fromBlock(b))
 }

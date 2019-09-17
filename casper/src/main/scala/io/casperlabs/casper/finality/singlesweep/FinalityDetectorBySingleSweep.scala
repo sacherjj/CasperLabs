@@ -5,7 +5,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.models.MessageSummary
+import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -31,8 +31,8 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
       dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
       validators: List[Validator]
-  ): F[Map[Validator, List[MessageSummary]]] =
-    validators.foldLeftM(Map.empty[Validator, List[MessageSummary]]) {
+  ): F[Map[Validator, List[Message]]] =
+    validators.foldLeftM(Map.empty[Validator, List[Message]]) {
       case (acc, v) =>
         FinalityDetectorUtil
           .levelZeroMsgsOfValidator[F](dag, v, candidateBlockHash)
@@ -45,7 +45,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
   def pruningLoop(
       dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
-      levelZeroMsgs: Map[Validator, List[MessageSummary]],
+      levelZeroMsgs: Map[Validator, List[Message]],
       weightMap: Map[Validator, Long],
       q: Long,
       k: Int = 1
@@ -87,7 +87,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
   def findBestQLoop(
       dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
-      levelZeroMsgs: Map[Validator, List[MessageSummary]],
+      levelZeroMsgs: Map[Validator, List[Message]],
       weightMap: Map[Validator, Long],
       q: Long,
       k: Int = 1,
@@ -121,7 +121,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
   def sweep(
       dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
-      levelZeroMsgs: Map[Validator, List[MessageSummary]],
+      levelZeroMsgs: Map[Validator, List[Message]],
       q: Long,
       k: Int,
       weightMap: Map[Validator, Long]
@@ -130,7 +130,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
       .flatMap(v => levelZeroMsgs(v).lastOption)
       .toList
 
-    implicit val blockTopoOrdering: Ordering[MessageSummary] =
+    implicit val blockTopoOrdering: Ordering[Message] =
       DagOperations.blockTopoOrderingAsc
 
     val stream = DagOperations.bfToposortTraverseF(lowestLevelZeroMsgs)(
@@ -295,7 +295,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
   * Here "level" is what Inspector Finality Detector calls a level.
   */
 case class BlockScoreAccumulator(
-    msg: MessageSummary,
+    msg: Message,
     highestLevelBySeenBlocks: Map[Validator, Int],
     estimateQ: Long,
     blockLevel: Int,
@@ -303,7 +303,7 @@ case class BlockScoreAccumulator(
 )
 
 object BlockScoreAccumulator {
-  def empty(msg: MessageSummary): BlockScoreAccumulator =
+  def empty(msg: Message): BlockScoreAccumulator =
     BlockScoreAccumulator(msg, Map.empty, 0, 0)
 
   // Children will inherit seen blocks from the parent

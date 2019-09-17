@@ -5,7 +5,7 @@ import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.{Vote, VotingMatrix}
 import io.casperlabs.catscontrib.MonadStateOps._
-import io.casperlabs.models.MessageSummary
+import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.annotation.tailrec
@@ -22,7 +22,7 @@ package object votingmatrix {
     */
   def updateVoterPerspective[F[_]: Monad](
       dag: DagRepresentation[F],
-      msg: MessageSummary,
+      msg: Message,
       currentVoteValue: BlockHash
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
@@ -86,7 +86,7 @@ package object votingmatrix {
 
   private[votingmatrix] def updateVotingMatrixOnNewBlock[F[_]: Monad](
       dag: DagRepresentation[F],
-      msg: MessageSummary
+      msg: Message
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get

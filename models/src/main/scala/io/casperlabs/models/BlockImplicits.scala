@@ -52,7 +52,7 @@ object BlockImplicits {
     def fromBlock(b: Block): BlockSummary = BlockSummary(b.blockHash, b.header, b.signature)
   }
 
-  implicit class MessageSummaryOps[M <: MessageSummary](msg: M) {
+  implicit class MessageSummaryOps[M <: Message](msg: M) {
     def isGenesisLike: Boolean =
       msg.parents.isEmpty &&
         msg.validatorId.isEmpty &&

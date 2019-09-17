@@ -14,12 +14,14 @@ import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
-import io.casperlabs.models.{MBlock, MessageSummary, DeployResult => _}
+import io.casperlabs.models.Message
+import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.models.BlockImplicits._
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -195,7 +197,7 @@ object ExecEngineUtil {
     val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(block)
     val blocktime       = block.getHeader.timestamp
 
-    if (isGenesisLike(block)) {
+    if (block.isGenesisLike) {
       for {
         genesisResult <- processGenesisDeploys[F](deploys, protocolVersion)
         transformMap  = genesisResult.getEffect.transformMap
@@ -374,11 +376,11 @@ object ExecEngineUtil {
       dag: DagRepresentation[F]
   ): F[MergeResult[TransformMap, Block]] = {
 
-    def parents(b: MBlock): F[List[MBlock]] =
+    def parents(b: Message.Block): F[List[Message.Block]] =
       b.parents.toList
-        .flatTraverse(b => dag.lookup(b).map(_.collect { case b: MBlock => b }.toList))
+        .flatTraverse(b => dag.lookup(b).map(_.collect { case b: Message.Block => b }.toList))
 
-    def effect(blockMeta: MBlock): F[Option[TransformMap]] =
+    def effect(blockMeta: Message.Block): F[Option[TransformMap]] =
       BlockStorage[F]
         .get(blockMeta.messageHash)
         .map(_.map { blockWithTransforms =>
@@ -407,12 +409,12 @@ object ExecEngineUtil {
     for {
       candidateParents <- MonadThrowable[F]
                            .fromTry(
-                             candidateParentBlocks.toList.traverse(MessageSummary.fromBlock(_))
+                             candidateParentBlocks.toList.traverse(Message.fromBlock(_))
                            )
                            .map(_.collect {
-                             case b: MBlock => b
+                             case b: Message.Block => b
                            }.toVector)
-      merged <- abstractMerge[F, TransformMap, MBlock, state.Key](
+      merged <- abstractMerge[F, TransformMap, Message.Block, state.Key](
                  candidateParents,
                  parents,
                  effect,
