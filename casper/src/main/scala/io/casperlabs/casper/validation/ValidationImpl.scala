@@ -122,6 +122,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           )
       _ <- summaryHash(summary)
       _ <- chainIdentifier(summary, chainId)
+      _ <- ballot(summary)
     } yield ()
   }
 
@@ -390,6 +391,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
             } yield ()
           }
     } yield ()
+
+  override def ballot(b: BlockSummary): F[Unit] =
+    FunctorRaise[F, InvalidBlock]
+      .raise[Unit](InvalidTargetHash)
+      .whenA(b.getHeader.roleType.isBallot && b.getHeader.parentHashes.size != 1)
 
   /**
     * Works with either efficient justifications or full explicit justifications.

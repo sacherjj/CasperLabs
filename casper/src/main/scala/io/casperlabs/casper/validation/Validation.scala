@@ -42,6 +42,9 @@ trait Validation[F[_]] {
 
   def formatOfFields(b: BlockSummary, treatAsGenesis: Boolean = false): F[Boolean]
 
+  // Validates that a message that is supposed to be a ballot adheres to ballot's specification.
+  def ballot(b: BlockSummary): F[Unit]
+
   def bondsCache(b: Block, computedBonds: Seq[Bond]): F[Unit]
 
   def transactions(

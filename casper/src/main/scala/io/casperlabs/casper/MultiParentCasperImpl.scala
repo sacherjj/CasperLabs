@@ -835,7 +835,8 @@ object MultiParentCasperImpl {
         case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
             NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
             InvalidChainId | InvalidBlockHash | InvalidDeployCount | InvalidDeployHash |
-            InvalidDeploySignature | InvalidPreStateHash | InvalidPostStateHash =>
+            InvalidDeploySignature | InvalidPreStateHash | InvalidPostStateHash |
+            InvalidTargetHash =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
 
         case Processing | Processed =>
@@ -946,7 +947,8 @@ object MultiParentCasperImpl {
                 InvalidSequenceNumber | NeglectedInvalidBlock | InvalidTransaction |
                 InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash |
                 InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
-                InvalidPreStateHash | InvalidPostStateHash | Processing | Processed =>
+                InvalidPreStateHash | InvalidPostStateHash | Processing | Processed |
+                InvalidTargetHash =>
               Log[F].debug(
                 s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $status"
               )
@@ -1013,7 +1015,8 @@ object MultiParentCasperImpl {
               InvalidSequenceNumber | NeglectedInvalidBlock | InvalidTransaction |
               InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash |
               InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
-              InvalidPreStateHash | InvalidPostStateHash | Processing | Processed =>
+              InvalidPreStateHash | InvalidPostStateHash | Processing | Processed |
+              InvalidTargetHash =>
             ().pure[F]
 
           case UnexpectedBlockException(_) =>

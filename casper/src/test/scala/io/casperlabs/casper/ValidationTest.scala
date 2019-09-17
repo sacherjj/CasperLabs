@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.Block.{Justification, Role}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -893,6 +893,25 @@ class ValidationTest
                          )
         Right(postStateHash) = validateResult
       } yield postStateHash should be(computedPostStateHash)
+  }
+
+  it should "return InvalidTargetHash for a message of type ballot that has invalid number of parents" in withStorage {
+    _ => implicit dagStorage => _ =>
+      import io.casperlabs.models.BlockImplicits._
+      for {
+        blockA <- createBlock[Task](parentsHashList = Seq.empty, roleType = Role.BALLOT)
+        blockB <- createBlock[Task](
+                   parentsHashList =
+                     Seq(ByteString.EMPTY, ByteString.copyFrom(Array.ofDim[Byte](32))),
+                   roleType = Role.BALLOT
+                 )
+        _ <- ValidationImpl[Task].ballot(BlockSummary.fromBlock(blockA)).attempt shouldBeF Left(
+              ValidateErrorWrapper(InvalidTargetHash)
+            )
+        _ <- ValidationImpl[Task].ballot(BlockSummary.fromBlock(blockB)).attempt shouldBeF Left(
+              ValidateErrorWrapper(InvalidTargetHash)
+            )
+      } yield ()
   }
 
 }
