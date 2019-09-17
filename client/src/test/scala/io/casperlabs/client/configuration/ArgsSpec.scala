@@ -4,6 +4,7 @@ import org.scalatest._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.Deploy.Arg
 import io.casperlabs.casper.consensus.state.BigInt
+import io.casperlabs.casper.consensus.state.Key
 import com.google.protobuf.ByteString
 
 class ArgsSpec extends FlatSpec with Matchers {
@@ -19,7 +20,9 @@ class ArgsSpec extends FlatSpec with Matchers {
       {"name": "purse_id", "value": {"optional_value": {}}},
       {"name": "purse_id", "value": {"optional_value": {"long_value": ${amount}}}},
       {"name": "surname", "value": {"string_value": "Nakamoto"}},
-      {"name": "number", "value": {"big_int": {"value": "2", "bit_width": 512}}}
+      {"name": "number", "value": {"big_int": {"value": "2", "bit_width": 512}}},
+      {"name": "my_hash", "value": {"key": {"hash": {"hash": "${Base16.encode(account)}"}}}},
+      {"name": "my_address", "value": {"key": {"address": {"account": "${Base16.encode(account)}"}}}}
     ]
     """
 
@@ -27,7 +30,7 @@ class ArgsSpec extends FlatSpec with Matchers {
       case Left(error) =>
         fail(error)
       case Right(args) =>
-        args should have size 6
+        args should have size 8
         args(0) shouldBe Arg("amount").withValue(Arg.Value(Arg.Value.Value.LongValue(amount)))
         args(1) shouldBe Arg("account").withValue(
           Arg.Value(Arg.Value.Value.BytesValue(ByteString.copyFrom(account)))
@@ -43,6 +46,14 @@ class ArgsSpec extends FlatSpec with Matchers {
         )
         args(5) shouldBe Arg("number").withValue(
           Arg.Value(Arg.Value.Value.BigInt(BigInt("2", 512)))
+        )
+        args(6) shouldBe Arg("my_hash").withValue(
+          Arg.Value(Arg.Value.Value.Key(Key().withHash(Key.Hash(ByteString.copyFrom(account)))))
+        )
+        args(7) shouldBe Arg("my_address").withValue(
+          Arg.Value(
+            Arg.Value.Value.Key(Key().withAddress(Key.Address(ByteString.copyFrom(account))))
+          )
         )
     }
   }

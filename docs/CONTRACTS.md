@@ -295,6 +295,8 @@ let amount = get_arg::<u64>(0);
 | `big_int`        | `u512`        | `'[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'`
 | `string_value`   | `string`      | `'[{"name": "surname", "value": {"string_value": "Nakamoto"}}]'`
 | `optional_value` | `Option<T>`   | `{"name": "maybe_number", "value": {"optional_value": {}}}` or  `{"name": "maybe_number", "value": {"optional_value": {"long_value": 1000000}}}`
+| `hash`           | `Key.Hash`    | `{"name": "my_hash", "value": {"key": {"hash": {"hash": "${Base16.encode(account)}"}}}}`
+| `address`        | `Key.Address` | `{"name": "my_address", "value": {"key": {"address": {"account": "${Base16.encode(account)}"}}}}`
 
 
 ####  Using a local standalone node
