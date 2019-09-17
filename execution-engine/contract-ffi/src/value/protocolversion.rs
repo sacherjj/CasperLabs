@@ -8,7 +8,7 @@ impl ProtocolVersion {
         ProtocolVersion(version)
     }
 
-    pub fn get(self) -> u64 {
+    pub fn value(self) -> u64 {
         self.0
     }
 }
@@ -27,7 +27,7 @@ mod tests {
     fn should_be_able_to_get_instance() {
         let initial_value = 1;
         let item = ProtocolVersion::new(initial_value);
-        assert_eq!(initial_value, item.get(), "should have equal value")
+        assert_eq!(initial_value, item.value(), "should have equal value")
     }
 
     #[test]

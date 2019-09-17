@@ -178,7 +178,7 @@ impl From<contract_ffi::value::Contract> for super::state::Contract {
         contract.set_body(bytes);
         contract.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
         let mut protocol = super::state::ProtocolVersion::new();
-        protocol.set_value(protocol_version.get());
+        protocol.set_value(protocol_version.value());
         contract.set_protocol_version(protocol);
         contract
     }
@@ -1080,7 +1080,7 @@ impl From<GenesisConfig> for ipc::ChainSpec_GenesisConfig {
         ret.set_timestamp(genesis_config.timestamp());
         {
             let mut protocol_version = state::ProtocolVersion::new();
-            protocol_version.set_value(genesis_config.protocol_version().get());
+            protocol_version.set_value(genesis_config.protocol_version().value());
             ret.set_protocol_version(protocol_version);
         }
         ret.set_mint_installer(genesis_config.mint_installer_bytes().to_vec());

@@ -35,7 +35,7 @@ pub struct WasmCosts {
 
 impl WasmCosts {
     pub fn from_version(protocol_version: ProtocolVersion) -> Option<WasmCosts> {
-        match protocol_version.get() {
+        match protocol_version.value() {
             1 => Some(WasmCosts {
                 regular: 1,
                 div: 16,

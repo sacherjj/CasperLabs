@@ -493,7 +493,7 @@ impl<T: FromBytes, E: FromBytes> FromBytes for Result<T, E> {
 
 impl ToBytes for ProtocolVersion {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.get().to_le_bytes().to_vec())
+        Ok(self.value().to_le_bytes().to_vec())
     }
 }
 
