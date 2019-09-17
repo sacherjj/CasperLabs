@@ -289,10 +289,12 @@ let amount = get_arg::<u64>(0);
 
 
 | protobuf [Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78) | Contract API type | Example value in [protobuf JSON format](https://developers.google.com/protocol-buffers/docs/proto3#json)
-| ------------- | ------------- | -------------------------------------
-| `int_value`   | `u32`  | `'[{"name": "amount", "value": {"int_value": 123456}}]'`
-| `long_value`  | `u64`  | `'[{"name": "amount", "value": {"long_value": 123456}}]'`
-| `big_int`     | `u512` | `'[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'`
+| ---------------  | ------------- | -------------------------------------
+| `int_value`      | `u32`         | `'[{"name": "amount", "value": {"int_value": 123456}}]'`
+| `long_value`     | `u64`         | `'[{"name": "amount", "value": {"long_value": 123456}}]'`
+| `big_int`        | `u512`        | `'[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'`
+| `string_value`   | `string`      | `'[{"name": "surname", "value": {"string_value": "Nakamoto"}}]'`
+| `optional_value` | `Option<T>`   | `{"name": "maybe_number", "value": {"optional_value": {}}}` or  `{"name": "maybe_number", "value": {"optional_value": {"long_value": 1000000}}}`
 
 
 ####  Using a local standalone node
