@@ -241,7 +241,8 @@ that can be used to specify types and values of contract arguments
 as a serialized sequence of
 [Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78)
 values
-in a [protobuf JSON format](https://developers.google.com/protocol-buffers/docs/proto3#json).
+in a [protobuf JSON format](https://developers.google.com/protocol-buffers/docs/proto3#json),
+with binary data represented in Base16 format.
 
 For example: `--session-args '[{"name": "amount", "value": {"long_value": 123456}}]'`.
 
@@ -295,8 +296,8 @@ let amount = get_arg::<u64>(0);
 | `big_int`        | `u512`        | `'[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'`
 | `string_value`   | `string`      | `'[{"name": "surname", "value": {"string_value": "Nakamoto"}}]'`
 | `optional_value` | `Option<T>`   | `{"name": "maybe_number", "value": {"optional_value": {}}}` or  `{"name": "maybe_number", "value": {"optional_value": {"long_value": 1000000}}}`
-| `hash`           | `Key.Hash`    | `{"name": "my_hash", "value": {"key": {"hash": {"hash": "${Base16.encode(account)}"}}}}`
-| `address`        | `Key.Address` | `{"name": "my_address", "value": {"key": {"address": {"account": "${Base16.encode(account)}"}}}}`
+| `hash`           | `Key.Hash`    | `{"name": "my_hash", "value": {"key": {"hash": {"hash": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}`
+| `address`        | `Key.Address` | `{"name": "my_address", "value": {"key": {"address": {"account": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}`
 
 
 ####  Using a local standalone node
