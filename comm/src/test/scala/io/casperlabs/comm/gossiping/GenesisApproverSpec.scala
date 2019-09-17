@@ -479,6 +479,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     override def discover                            = ???
     override def lookup(id: NodeIdentifier)          = ???
     override def recentlyAlivePeersAscendingDistance = Task.now(peers)
+    override def banTemp(node: Node): Task[Unit]     = ???
   }
 
   class MockGossipService extends GossipService[Task] {
