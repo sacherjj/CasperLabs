@@ -8,7 +8,8 @@ impl ProtocolVersion {
         ProtocolVersion(version)
     }
 
-    pub fn value(self) -> u64 {
+    #[allow(clippy::trivially_copy_pass_by_ref)] //TODO: remove attr after switch to SemVer
+    pub fn value(&self) -> u64 {
         self.0
     }
 }
