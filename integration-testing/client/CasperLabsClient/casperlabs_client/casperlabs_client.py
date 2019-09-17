@@ -149,10 +149,12 @@ class ABI:
         # TODO: should be signed 32 bits
         return ABI.u32(a)
 
+    @staticmethod
     def long_value(a: int) -> bytes:
         # TODO: should be signed 64 bits
         return ABI.u64(a)
 
+    @staticmethod
     def big_int(a) -> bytes:
         try:
             return ABI.u512(int(a["value"]))
