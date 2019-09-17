@@ -17,13 +17,14 @@ class ArgsSpec extends FlatSpec with Matchers {
     [
       {"name": "amount", "value": {"long_value": ${amount}}},
       {"name": "account", "value": {"bytes_value": "${Base16.encode(account)}"}},
-      {"name": "purse_id", "value": {"optional_value": {}}},
-      {"name": "purse_id", "value": {"optional_value": {"long_value": ${amount}}}},
+      {"name": "maybe_long", "value": {"optional_value": {}}},
+      {"name": "maybe_long", "value": {"optional_value": {"long_value": ${amount}}}},
       {"name": "surname", "value": {"string_value": "Nakamoto"}},
       {"name": "number", "value": {"big_int": {"value": "2", "bit_width": 512}}},
       {"name": "my_hash", "value": {"key": {"hash": {"hash": "${Base16.encode(account)}"}}}},
       {"name": "my_address", "value": {"key": {"address": {"account": "${Base16.encode(account)}"}}}},
-      {"name": "my_uref", "value": {"key": {"uref": {"uref": "${Base16.encode(account)}", "access_rights": 5}}}}
+      {"name": "my_uref", "value": {"key": {"uref": {"uref": "${Base16.encode(account)}", "access_rights": 5}}}},
+      {"name": "my_local", "value": {"key": {"local": {"hash": "${Base16.encode(account)}"}}}}
     ]
     """
 
@@ -31,15 +32,15 @@ class ArgsSpec extends FlatSpec with Matchers {
       case Left(error) =>
         fail(error)
       case Right(args) =>
-        args should have size 9
+        args should have size 10
         args(0) shouldBe Arg("amount").withValue(Arg.Value(Arg.Value.Value.LongValue(amount)))
         args(1) shouldBe Arg("account").withValue(
           Arg.Value(Arg.Value.Value.BytesValue(ByteString.copyFrom(account)))
         )
-        args(2) shouldBe Arg("purse_id").withValue(
+        args(2) shouldBe Arg("maybe_long").withValue(
           Arg.Value(Arg.Value.Value.OptionalValue(Arg.Value(Arg.Value.Value.Empty)))
         )
-        args(3) shouldBe Arg("purse_id").withValue(
+        args(3) shouldBe Arg("maybe_long").withValue(
           Arg.Value(Arg.Value.Value.OptionalValue(Arg.Value(Arg.Value.Value.LongValue(amount))))
         )
         args(4) shouldBe Arg("surname").withValue(
@@ -62,6 +63,9 @@ class ArgsSpec extends FlatSpec with Matchers {
               Key().withUref(Key.URef(ByteString.copyFrom(account), Key.URef.AccessRights.READ_ADD))
             )
           )
+        )
+        args(9) shouldBe Arg("my_local").withValue(
+          Arg.Value(Arg.Value.Value.Key(Key().withLocal(Key.Local(ByteString.copyFrom(account)))))
         )
     }
   }
