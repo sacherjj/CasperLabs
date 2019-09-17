@@ -22,7 +22,8 @@ class ArgsSpec extends FlatSpec with Matchers {
       {"name": "surname", "value": {"string_value": "Nakamoto"}},
       {"name": "number", "value": {"big_int": {"value": "2", "bit_width": 512}}},
       {"name": "my_hash", "value": {"key": {"hash": {"hash": "${Base16.encode(account)}"}}}},
-      {"name": "my_address", "value": {"key": {"address": {"account": "${Base16.encode(account)}"}}}}
+      {"name": "my_address", "value": {"key": {"address": {"account": "${Base16.encode(account)}"}}}},
+      {"name": "my_uref", "value": {"key": {"uref": {"uref": "${Base16.encode(account)}", "access_rights": 5}}}}
     ]
     """
 
@@ -30,7 +31,7 @@ class ArgsSpec extends FlatSpec with Matchers {
       case Left(error) =>
         fail(error)
       case Right(args) =>
-        args should have size 8
+        args should have size 9
         args(0) shouldBe Arg("amount").withValue(Arg.Value(Arg.Value.Value.LongValue(amount)))
         args(1) shouldBe Arg("account").withValue(
           Arg.Value(Arg.Value.Value.BytesValue(ByteString.copyFrom(account)))
@@ -53,6 +54,13 @@ class ArgsSpec extends FlatSpec with Matchers {
         args(7) shouldBe Arg("my_address").withValue(
           Arg.Value(
             Arg.Value.Value.Key(Key().withAddress(Key.Address(ByteString.copyFrom(account))))
+          )
+        )
+        args(8) shouldBe Arg("my_uref").withValue(
+          Arg.Value(
+            Arg.Value.Value.Key(
+              Key().withUref(Key.URef(ByteString.copyFrom(account), Key.URef.AccessRights.READ_ADD))
+            )
           )
         )
     }

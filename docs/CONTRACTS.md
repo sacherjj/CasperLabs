@@ -298,6 +298,7 @@ let amount = get_arg::<u64>(0);
 | `optional_value` | `Option<T>`   | `{"name": "maybe_number", "value": {"optional_value": {}}}` or  `{"name": "maybe_number", "value": {"optional_value": {"long_value": 1000000}}}`
 | `hash`           | `Key.Hash`    | `{"name": "my_hash", "value": {"key": {"hash": {"hash": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}`
 | `address`        | `Key.Address` | `{"name": "my_address", "value": {"key": {"address": {"account": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}`
+| `uref`           | `Key.URef`    | `{"name": "my_uref", "value": {"key": {"uref": {"uref": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414", "access_rights": 5}}}}`       
 
 
 ####  Using a local standalone node
