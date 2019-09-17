@@ -24,7 +24,7 @@ private[configuration] object Converter extends ParserImplicits {
     new ValueConverter[List[Node]] {
       def parse(s: List[(String, List[String])]): Either[String, Option[List[Node]]] = {
         val all = s.unzip._2.flatten.mkString(" ")
-        Parser[List[Node]].parse(all).map(Option(_))
+        Parser[List[Node]].parse(all).map(Option(_).filterNot(_.isEmpty))
       }
 
       val argType: ArgType.V = ArgType.LIST
