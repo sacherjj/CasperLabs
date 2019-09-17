@@ -274,7 +274,7 @@ The matching type for protobuf
 type `long_value`
 is currently `u64`.
 
-The same can be achieved by declaring return type of `get_value` explicitly,
+The same can be achieved by declaring return type of `get_arg` explicitly,
 for example:
 
 ```
