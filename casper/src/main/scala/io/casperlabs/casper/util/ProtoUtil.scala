@@ -65,6 +65,8 @@ object ProtoUtil {
     for {
       messageSummary <- dag.lookup(candidateBlockHash).map(_.get)
       result <- messageSummary match {
+                 // Ballot is never in a main-chain because it's not a block and main-chain
+                 // is a sub-DAG of a p-DAG.
                  case _: MBallot => false.pure[F]
                  case b: MBlock  => isInMainChain(dag, b, targetBlockHash)
                }
