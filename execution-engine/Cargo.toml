@@ -1,3 +1,5 @@
+cargo-features = ["profile-overrides"]
+
 [workspace]
 
 members = [
@@ -22,3 +24,8 @@ default-members = [
     "engine-tests",
     "engine-wasm-prep",
 ]
+
+# Include debug symbols in the release build of `casperlabs-engine-tests` so that `simple-transfer` will yield useful
+# perf data.
+[profile.release.overrides.casperlabs-engine-tests]
+debug = true
