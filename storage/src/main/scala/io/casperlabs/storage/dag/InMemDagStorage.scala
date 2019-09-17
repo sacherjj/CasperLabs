@@ -44,10 +44,7 @@ class InMemDagStorage[F[_]: MonadThrowable: Log: BlockStorage](
     def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
       justificationMap.getOrElse(blockHash, Set.empty).pure[F]
     def lookup(blockHash: BlockHash): F[Option[Message]] =
-      dataLookup.get(blockHash) match {
-        case None     => none[Message].pure[F]
-        case Some(bs) => MonadThrowable[F].fromTry(Message.fromBlockSummary(bs)).map(Some(_))
-      }
+      Message.fromOptionalSummary[F](dataLookup.get(blockHash))
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.contains(blockHash).pure[F]
     def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]] =

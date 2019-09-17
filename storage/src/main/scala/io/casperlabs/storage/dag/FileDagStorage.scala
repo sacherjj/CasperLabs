@@ -133,11 +133,7 @@ class FileDagStorage[F[_]: Concurrent: Log: BlockStorage: RaiseIOError] private 
           BlockStorage[F]
             .getBlockMessage(blockHash)
             .map(_.map(BlockSummary.fromBlock))
-            .flatMap {
-              case None => none[Message].pure[F]
-              case Some(bs) =>
-                MonadThrowable[F].fromTry(Message.fromBlockSummary(bs)).map(Some(_))
-            }
+            .flatMap(Message.fromOptionalSummary[F](_))
         )(bs => MonadThrowable[F].fromTry(Message.fromBlockSummary(bs)).map(Some(_)))
 
     def contains(blockHash: BlockHash): F[Boolean] =

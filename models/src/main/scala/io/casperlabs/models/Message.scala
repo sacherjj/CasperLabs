@@ -6,6 +6,8 @@ import io.casperlabs.casper.consensus.Block.Role.{BALLOT, BLOCK, Unrecognized}
 import io.casperlabs.casper.consensus.{BlockSummary, Bond}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.catscontrib.MonadThrowable
+import cats.implicits._
 
 import scala.util.{Failure, Success, Try}
 
@@ -121,4 +123,11 @@ object Message {
 
   def fromBlock(b: consensus.Block): Try[Message] =
     fromBlockSummary(BlockSummary.fromBlock(b))
+
+  def fromOptionalSummary[F[_]: MonadThrowable](
+      b: Option[consensus.BlockSummary]
+  ): F[Option[Message]] =
+    b.fold(none[Message].pure[F])(
+      bs => MonadThrowable[F].fromTry(fromBlockSummary(bs)).map(Some(_))
+    )
 }

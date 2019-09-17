@@ -135,10 +135,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .query[BlockSummary]
       .option
       .transact(xa)
-      .flatMap {
-        case None     => none[Message].pure[F]
-        case Some(bs) => toMessageSummaryF(bs).map(Some(_))
-      }
+      .flatMap(Message.fromOptionalSummary[F](_))
 
   override def contains(blockHash: BlockHash): F[Boolean] =
     sql"""|SELECT 1 
