@@ -221,6 +221,67 @@ may not work as expected when called directly.
 They may, for instance, attempt to read or modify a `URef` that they expect to exist in their context,
 but find it missing in the context that they are actually run in, that is of the deployer's account.
 
+**Passing arguments to contracts**
+
+Smart contracts can be parametrized.
+A list of contract arguments can be specified
+on command line when the contract is deployed.
+
+When the contract code is executed
+it can access individual arguments
+by calling Contract API function `get_arg`
+with index of an argument.
+First argument is indexed with `0`.
+
+Note: contract arguments are currently positional
+but we plan to name them instead,
+so in the future you will call `get_arg`
+with a string that is a name of a parameter,
+rather than an integer index.
+
+**Command line client's syntax of contract arguments**
+
+Client's `deploy` command accepts parameter `--session-args`
+that can be used to specify types and values of contract arguments 
+as a serialized sequence of
+[Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78)
+values
+in a [protobuf JSON format](https://developers.google.com/protocol-buffers/docs/proto3#json).
+
+For example: `--session-args '[{"name": "amount", "value": {"long_value": 123456}}]'`.
+
+Note,
+the contract arguments are positional,
+and so the `"name"` attribute is currently not used.
+However, we plan a change to keyword (named) arguments,
+so this format is future-proof.
+
+**Accessing arguments in contracts**
+
+Contract API function `get_arg` can be used to access contract arguments,
+for example: 
+
+```
+let amount: u64 = get_arg(0);
+```
+
+will deserialize first contract argument as a value of type `u64`.
+Note, types of the arguments specified when deploying
+and the types in the Rust code must match.
+The matching type for protobuf 
+[Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78)
+type `long_value`
+is currently `u64`.
+
+**Supported types of contract arguments**
+
+
+| protobuf [Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78) | Contract API type | Example value in protobuf JSON format
+| ------------- | ------------- | -------------------------------------
+| `int_value`   | `u32`  | `'[{"name": "amount", "value": {"int_value": 123456}}]'`
+| `long_value`  | `u64`  | `'[{"name": "amount", "value": {"long_value": 123456}}]'`
+| `big_int`     | `u512` | `'[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'`
+
 
 ####  Using a local standalone node
 
