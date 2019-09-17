@@ -38,14 +38,19 @@ object Message {
       rank: Long,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
-      secondaryParents: Seq[Message#Id],
-      weightMap: Map[ByteString, Long],
       blockSummary: BlockSummary
   ) extends Message {
     // For Genesis block we expect it to have no parents.
     // We could either encode it as separate ADT variant or keep the assumptions.
     override val parents: Seq[Id] =
       (parentBlock +: secondaryParents).filterNot(_ == ByteString.EMPTY)
+
+    lazy val secondaryParents =
+      if (blockSummary.getHeader.parentHashes.isEmpty) Seq.empty
+      else blockSummary.getHeader.parentHashes.tail
+    lazy val weightMap = blockSummary.getHeader.getState.bonds.map {
+      case Bond(validatorPk, stake) => validatorPk -> stake
+    }.toMap
   }
 
   case class Ballot private (
@@ -88,11 +93,6 @@ object Message {
             )
           )
         case BLOCK =>
-          val secondaryParents =
-            if (header.parentHashes.isEmpty) Seq.empty else header.parentHashes.tail
-          val weightMap = header.getState.bonds.map {
-            case Bond(validatorPk, stake) => validatorPk -> stake
-          }.toMap
           Success(
             Block(
               messageHash,
@@ -102,8 +102,6 @@ object Message {
               rank,
               validatorMsgSeqNum,
               signature,
-              secondaryParents,
-              weightMap,
               b
             )
           )
