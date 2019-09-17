@@ -22,16 +22,10 @@ private[configuration] object Converter extends ParserImplicits {
 
   implicit val bootstrapAddressConverter: ValueConverter[List[Node]] =
     new ValueConverter[List[Node]] {
-      def parse(s: List[(String, List[String])]): Either[String, Option[List[Node]]] =
-        s.unzip._2.flatten
-          .flatMap(_.split(' '))
-          .filterNot(_.isEmpty)
-          .map(uri => Parser[Node].parse(uri))
-          .sequence
-          .map {
-            case Nil   => None
-            case nodes => Some(nodes)
-          }
+      def parse(s: List[(String, List[String])]): Either[String, Option[List[Node]]] = {
+        val all = s.unzip._2.flatten.mkString(" ")
+        Parser[List[Node]].parse(all).map(Option(_))
+      }
 
       val argType: ArgType.V = ArgType.LIST
     }
