@@ -10,6 +10,7 @@ import io.casperlabs.casper.{CasperState, EquivocatedBlock, InvalidBlock, Pretty
 import io.casperlabs.models.Message
 import io.casperlabs.shared.{Cell, Log, LogSource}
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.catscontrib.MonadThrowable
 
 object EquivocationDetector {
 
@@ -22,7 +23,7 @@ object EquivocationDetector {
     * a validator has been detected as equivocating, then for every message M1 he creates later,
     * we can find least one message M2 that M1 and M2 don't cite each other.
     */
-  def checkEquivocationWithUpdate[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
+  def checkEquivocationWithUpdate[F[_]: MonadThrowable: Log: FunctorRaise[?[_], InvalidBlock]](
       dag: DagRepresentation[F],
       block: Block
   )(
@@ -70,7 +71,7 @@ object EquivocationDetector {
     *   then when adding B4, this method doesn't work, it return false but actually B4
     *   equivocated with B2.
     */
-  private[casper] def checkEquivocations[F[_]: Monad: Log](
+  private[casper] def checkEquivocations[F[_]: MonadThrowable: Log](
       dag: DagRepresentation[F],
       block: Block
   ): F[Boolean] =
@@ -90,9 +91,10 @@ object EquivocationDetector {
                             latestMessageOfCreator <- dag
                                                        .lookup(latestMessageHashOfCreator)
                                                        .map(_.get)
+                            message                                         <- MonadThrowable[F].fromTry(Message.fromBlock(block))
                             implicit0(blockTopoOrdering: Ordering[Message]) = DagOperations.blockTopoOrderingDesc
                             stream = DagOperations.bfToposortTraverseF(
-                              Message.fromBlock(block).toList
+                              List(message)
                             )(
                               b =>
                                 b.justifications.toList
