@@ -108,14 +108,14 @@ object Message {
         case Unrecognized(_) =>
           Failure(
             new IllegalArgumentException(
-              s"A message ${Base16.encode(messageHash.toByteArray).take(10)} has unrecognized message type."
+              s"The message ${Base16.encode(messageHash.toByteArray).take(10)} has unrecognized message type."
             )
           )
       }
     } catch {
       case ex: Throwable =>
         val message =
-          s"A message ${Base16.encode(b.blockHash.toByteArray).take(10)} could not be parsed to either Block type or a Ballot."
+          s"The message ${Base16.encode(b.blockHash.toByteArray).take(10)} could not be parsed to either Block type or a Ballot."
         Failure(new IllegalArgumentException(message, ex))
     }
 
