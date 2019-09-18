@@ -40,7 +40,6 @@ object Genesis {
   def defaultBlessedTerms[F[_]: MonadThrowable: FilesAPI: Log](
       accountPublicKeyPath: Option[Path],
       initialMotes: BigInt,
-      posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       bondsFile: Option[Path],
       mintCodePath: Option[Path],
@@ -196,8 +195,6 @@ object Genesis {
   ): F[BlockMsgWithTransform] = apply[F](
     conf.walletsFile,
     conf.bondsFile,
-    conf.minimumBond,
-    conf.maximumBond,
     conf.chainId,
     conf.deployTimestamp,
     conf.genesisAccountPublicKeyPath,
@@ -209,8 +206,6 @@ object Genesis {
   def apply[F[_]: MonadThrowable: Log: FilesAPI: ExecutionEngineService](
       walletsPath: Path,
       bondsPath: Path,
-      minimumBond: Long,
-      maximumBond: Long,
       chainId: String,
       deployTimestamp: Option[Long],
       accountPublicKeyPath: Option[Path],
@@ -227,11 +222,9 @@ object Genesis {
         timestamp = timestamp,
         chainId = chainId
       )
-      validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq.sortBy(_.id)
       blessedContracts <- defaultBlessedTerms[F](
                            accountPublicKeyPath = accountPublicKeyPath,
                            initialMotes = initialMotes,
-                           posParams = ProofOfStakeParams(minimumBond, maximumBond, validators),
                            wallets = wallets,
                            mintCodePath = mintCodePath,
                            posCodePath = posCodePath,

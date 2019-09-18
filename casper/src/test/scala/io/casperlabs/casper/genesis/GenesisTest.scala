@@ -164,8 +164,6 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
             genesisWithTransform <- Genesis[Task](
                                      walletsPath = nonExistentPath,
                                      bondsPath = bondsFile,
-                                     minimumBond = 1L,
-                                     maximumBond = Long.MaxValue,
                                      chainId = casperlabsChainId,
                                      deployTimestamp = System.currentTimeMillis.some,
                                      accountPublicKeyPath = keyFile.some,
@@ -247,8 +245,6 @@ object GenesisTest {
       genesis <- Genesis[Task](
                   walletsPath = nonExistentPath,
                   bondsPath = bondsPath,
-                  minimumBond = 1L,
-                  maximumBond = Long.MaxValue,
                   chainId = casperlabsChainId,
                   deployTimestamp = System.currentTimeMillis.some,
                   accountPublicKeyPath = none[Path],

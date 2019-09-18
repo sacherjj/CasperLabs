@@ -98,8 +98,6 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
     val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.buildGenesis(
       wallets,
       bonds,
-      1L,
-      Long.MaxValue,
       deployTimestamp
     )
     for {
@@ -107,11 +105,8 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
       node  = nodes.head
     } yield new BlockApproverProtocol(
       node.validatorId,
-      bonds,
       wallets,
       BlockApproverProtocol.GenesisConf(
-        minimumBond = 1L,
-        maximumBond = Long.MaxValue,
         requiredSigs = requiredSigs,
         genesisAccountPublicKeyPath = None,
         initialMotes = 0L,

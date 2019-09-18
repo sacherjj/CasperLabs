@@ -64,7 +64,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     val requiredSigs               = 1
     val deployTimestamp            = 1L
     val BlockMsgWithTransform(Some(genesis), transforms) =
-      buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, deployTimestamp)
+      buildGenesis(Seq.empty, bonds, deployTimestamp)
     val validatorId       = ValidatorIdentity(validatorPk, validatorSk, Ed25519)
     val storageSize: Long = 1024L * 1024
 
@@ -72,11 +72,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
     val bap = new BlockApproverProtocol(
       validatorId,
-      bonds,
       Seq.empty,
       BlockApproverProtocol.GenesisConf(
-        minimumBond = 1L,
-        maximumBond = Long.MaxValue,
         requiredSigs = requiredSigs,
         genesisAccountPublicKeyPath = None,
         initialMotes = 0L,

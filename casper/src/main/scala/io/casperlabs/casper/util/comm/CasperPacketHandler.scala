@@ -169,11 +169,9 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     for {
       _           <- Log[F].info("Starting in approve genesis mode")
       wallets     <- Genesis.getWallets[F](conf.walletsFile)
-      bonds       <- Genesis.getBonds[F](conf.bondsFile)
       validatorId <- ValidatorIdentity.fromConfig[F](conf)
       bap = new BlockApproverProtocol(
         validatorId.get,
-        bonds,
         wallets,
         BlockApproverProtocol.GenesisConf.fromCasperConf(conf)
       )
