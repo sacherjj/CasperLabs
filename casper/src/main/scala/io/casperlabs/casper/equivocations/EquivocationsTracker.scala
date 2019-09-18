@@ -4,7 +4,7 @@ import io.casperlabs.casper.Estimator.Validator
 
 // Stores the lowest rank of any base block, that is, a block from the equivocating validator which
 // precedes the two or more blocks which equivocated by sharing the same sequence number.
-class EquivocationTracker(private val map: Map[Validator, Long]) {
+final class EquivocationsTracker(private val map: Map[Validator, Long]) {
   def isEmpty: Boolean = map.isEmpty
 
   def updated(validator: Validator, rank: Long): EquivocationTracker =
@@ -27,6 +27,6 @@ class EquivocationTracker(private val map: Map[Validator, Long]) {
     }
 }
 
-object EquivocationTracker {
-  val empty: EquivocationTracker = new EquivocationTracker(Map.empty)
+object EquivocationsTracker {
+  val empty: EquivocationsTracker = new EquivocationsTracker(Map.empty)
 }

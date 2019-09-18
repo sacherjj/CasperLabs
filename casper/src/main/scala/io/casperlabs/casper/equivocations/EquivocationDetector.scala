@@ -19,7 +19,7 @@ object EquivocationDetector {
   /**
     * Check whether a block creates equivocations when adding a new block to the block dag,
     * if so store the validator with the lowest rank of any base block from
-    * the same validator to `EquivocationTracker`, then an error is `EquivocatedBlock` returned.
+    * the same validator to `EquivocationsTracker`, then an error is `EquivocatedBlock` returned.
     * The base block of equivocation record is the latest unequivocating block from the same validator.
     *
     * For example:
@@ -34,14 +34,14 @@ object EquivocationDetector {
     *
     * When the node receives b4, `checkEquivocations` will detect that b4 and b3 don't cite each other;
     * in other words, b4 creates an equivocation. Then the base block of b4 and b3 is b2, so we add
-    * a record (v1,the rank of b2) to `equivocationTracker`. After a while, the node receives b5,
+    * a record (v1,the rank of b2) to `equivocationsTracker`. After a while, the node receives b5,
     * since we had added all equivocating messages to the BlockDag, then once
     * a validator has been detected as equivocating, then for every message M1 he creates later,
     * we can find least one message M2 that M1 and M2 don't cite each other. In other words, a block
     * created by a validator who has equivocated will create another equivocation. In this way, b5
     * doesn't cite blocks (b2, b3, and b4), and blocks (b2, b3, and b4) don't cite b5 either. So b5
     * creates equivocations. And the base block of b5 is b1, whose rank is smaller than that of b2, so
-    * we will update the `equivocationTracker`, setting the value of key v1 to be rank of b1.
+    * we will update the `equivocationsTracker`, setting the value of key v1 to be rank of b1.
     */
   def checkEquivocationWithUpdate[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
       dag: DagRepresentation[F],
@@ -52,7 +52,7 @@ object EquivocationDetector {
     for {
       s       <- state.read
       creator = block.getHeader.validatorPublicKey
-      equivocated <- if (s.equivocationTracker.contains(creator)) {
+      equivocated <- if (s.equivocationsTracker.contains(creator)) {
                       Log[F].debug(
                         s"The creator of Block ${PrettyPrinter.buildString(block)} has equivocated before}"
                       ) *> true.pure[F]
@@ -63,14 +63,14 @@ object EquivocationDetector {
       _ <- rankOfEarlierMessageFromCreator(dag, block)
             .flatMap { earlierRank =>
               state.modify { s =>
-                s.equivocationTracker.get(creator) match {
+                s.equivocationsTracker.get(creator) match {
                   case Some(lowestBaseSeqNum) if earlierRank < lowestBaseSeqNum =>
                     s.copy(
-                      equivocationTracker = s.equivocationTracker.updated(creator, earlierRank)
+                      equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank)
                     )
                   case None =>
                     s.copy(
-                      equivocationTracker = s.equivocationTracker.updated(creator, earlierRank)
+                      equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank)
                     )
                   case _ =>
                     s
@@ -170,16 +170,16 @@ object EquivocationDetector {
     *
     * @param dag the block dag
     * @param justificationMsgHashes generate from direct justifications
-    * @param equivocationTracker local tracker of equivocations
+    * @param equivocationsTracker local tracker of equivocations
     * @tparam F effect type
     * @return validators that can be seen equivocating from the view of latestMessages
     */
   def detectVisibleFromJustifications[F[_]: Monad](
       dag: DagRepresentation[F],
       justificationMsgHashes: Map[Validator, BlockHash],
-      equivocationTracker: EquivocationTracker
+      equivocationsTracker: EquivocationsTracker
   ): F[Set[Validator]] =
-    equivocationTracker.min match {
+    equivocationsTracker.min match {
       case None =>
         Set.empty[Validator].pure[F]
       case Some(minRank) =>
@@ -197,7 +197,7 @@ object EquivocationDetector {
                     case (state, b) =>
                       val creator            = b.validatorPublicKey
                       val creatorBlockSeqNum = b.validatorBlockSeqNum
-                      if (state.alreadyDetected(equivocationTracker.keySet) || b.rank <= minRank) {
+                      if (state.alreadyDetected(equivocationsTracker.keySet) || b.rank <= minRank) {
                         // Stop traversal if all known equivocations has been found in j-past-cone
                         // of `b` or we traversed beyond the minimum rank of all equivocations.
                         Right(state)

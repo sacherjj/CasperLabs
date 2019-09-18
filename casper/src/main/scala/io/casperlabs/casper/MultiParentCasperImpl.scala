@@ -14,7 +14,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.DeployBuffer
-import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationTracker}
+import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.ProtoUtil._
@@ -44,7 +44,7 @@ import scala.util.control.NonFatal
   *
   * @param blockBuffer
   * @param invalidBlockTracker
-  * @param equivocationTracker Stores the lowest rank of any base block, that is, a block from the
+  * @param equivocationsTracker Stores the lowest rank of any base block, that is, a block from the
   *                            equivocating validator which precedes the two or more blocks which
   *                            equivocated by sharing the same sequence number.
   */
@@ -52,7 +52,7 @@ final case class CasperState(
     blockBuffer: Map[ByteString, Block] = Map.empty,
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationTracker: EquivocationTracker = EquivocationTracker.empty
+    equivocationsTracker: EquivocationsTracker = EquivocationsTracker.empty
 )
 
 class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection](
@@ -357,7 +357,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     Metrics[F].timer("estimator") {
       Cell[F, CasperState].read
         .flatMap(
-          casperState => Estimator.tips[F](dag, genesis.blockHash, casperState.equivocationTracker)
+          casperState => Estimator.tips[F](dag, genesis.blockHash, casperState.equivocationsTracker)
         )
     }
 
@@ -587,7 +587,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     for {
       state   <- Cell[F, CasperState].read
-      tracker = state.equivocationTracker
+      tracker = state.equivocationsTracker
     } yield tracker.keySet
       .flatMap(weights.get)
       .sum
@@ -739,7 +739,7 @@ object MultiParentCasperImpl {
                        .pure[F]
                    ) { ctx =>
                      Validation[F]
-                       .parents(block, ctx.genesis.blockHash, dag, casperState.equivocationTracker)
+                       .parents(block, ctx.genesis.blockHash, dag, casperState.equivocationsTracker)
                    }
           _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
           preStateHash <- ExecEngineUtil.computePrestate[F](merged)

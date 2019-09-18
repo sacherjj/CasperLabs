@@ -7,7 +7,7 @@ import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.{consensus, protocol}
-import io.casperlabs.casper.equivocations.EquivocationTracker
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.ipc
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -28,7 +28,7 @@ trait Validation[F[_]] {
       b: Block,
       lastFinalizedBlockHash: BlockHash,
       dag: DagRepresentation[F],
-      equivocationTracker: EquivocationTracker
+      equivocationsTracker: EquivocationsTracker
   )(implicit bs: BlockStorage[F]): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]]
 
   def blockSignature(b: BlockSummary): F[Boolean]

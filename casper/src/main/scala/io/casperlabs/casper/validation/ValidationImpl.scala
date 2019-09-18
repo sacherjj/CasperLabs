@@ -14,7 +14,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper._
-import io.casperlabs.casper.equivocations.EquivocationTracker
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
@@ -571,7 +571,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       b: Block,
       genesisHash: BlockHash,
       dag: DagRepresentation[F],
-      equivocationsTracker: EquivocationTracker
+      equivocationsTracker: EquivocationsTracker
   )(
       implicit bs: BlockStorage[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {

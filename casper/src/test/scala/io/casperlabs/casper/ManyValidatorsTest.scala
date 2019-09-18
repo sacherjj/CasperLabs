@@ -8,7 +8,7 @@ import io.casperlabs.blockstorage.IndexedDagStorage
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Bond
-import io.casperlabs.casper.equivocations.EquivocationTracker
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.singlesweep.FinalityDetectorBySingleSweepImpl
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
@@ -72,7 +72,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
                       )
       newIndexedDagStorage <- IndexedDagStorage.create(newDagStorage)
       dag                  <- newIndexedDagStorage.getRepresentation
-      tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationTracker.empty)(
+      tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationsTracker.empty)(
                MonadThrowable[Task]
              )
       casperEffect <- NoOpsCasperEffect[Task](

@@ -59,7 +59,7 @@ class EquivocationDetectorTest
           blockStatus shouldBe Left(ValidateErrorWrapper(EquivocatedBlock))
       }
       state <- Cell[Task, CasperState].read
-      _     = state.equivocationTracker.get(b.getHeader.validatorPublicKey) shouldBe rankOfLowestBaseBlockExpect
+      _     = state.equivocationsTracker.get(b.getHeader.validatorPublicKey) shouldBe rankOfLowestBaseBlockExpect
     } yield b
 
   def createBlockAndCheckEquivocatorsFromViewOfBlock(
@@ -87,7 +87,7 @@ class EquivocationDetectorTest
       _ <- EquivocationDetector.detectVisibleFromJustifications(
             dag,
             latestMessages.mapValues(f => f.blockHash),
-            state.equivocationTracker
+            state.equivocationsTracker
           ) shouldBeF visibleEquivocatorExpected
     } yield block
 
