@@ -14,7 +14,7 @@ import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
-import io.casperlabs.storage.dag.DagStorage.MeteredDagStorage
+import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 import io.casperlabs.storage.util.DoobieCodecs
 
 class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
@@ -282,13 +282,16 @@ object SQLiteDagStorage {
   private[storage] def create[F[_]: Sync](
       implicit xa: Transactor[F],
       met: Metrics[F]
-  ): F[DagStorage[F]] =
+  ): F[DagStorage[F] with DagRepresentation[F]] =
     for {
-      dagStorage <- Sync[F].delay(new SQLiteDagStorage[F](xa) with MeteredDagStorage[F] {
-                     override implicit val m: Metrics[F] = met
-                     override implicit val ms: Source =
-                       Metrics.Source(DagStorageMetricsSource, "sqlite")
-                     override implicit val a: Apply[F] = Sync[F]
-                   })
-    } yield dagStorage: DagStorage[F]
+      dagStorage <- Sync[F].delay(
+                     new SQLiteDagStorage[F](xa) with MeteredDagStorage[F]
+                     with MeteredDagRepresentation[F] {
+                       override implicit val m: Metrics[F] = met
+                       override implicit val ms: Source =
+                         Metrics.Source(DagStorageMetricsSource, "sqlite")
+                       override implicit val a: Apply[F] = Sync[F]
+                     }
+                   )
+    } yield dagStorage: DagStorage[F] with DagRepresentation[F]
 }
