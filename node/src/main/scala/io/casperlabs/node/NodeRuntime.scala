@@ -144,11 +144,21 @@ class NodeRuntime private[node] (
           ) <- Resource.liftF(
                 SQLiteStorage.create[Effect](
                   deployStorageChunkSize = deployStorageChunkSize,
-                  wrap = underlyingBlockStorage =>
+                  wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Effect]) =>
                     CachingBlockStorage[Effect](
                       underlyingBlockStorage,
                       maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
-                    )
+                    ),
+                  wrapDagStorage =
+                    (underlyingDagStorage: DagStorage[Effect] with DagRepresentation[Effect]) =>
+                      CachingDagStorage[Effect](
+                        underlyingDagStorage,
+                        maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
+                      ).map(
+                        cache =>
+                          // Compiler fails to inference the proper type without this
+                          cache: DagStorage[Effect] with DagRepresentation[Effect]
+                      )
                 )
               )
           bootstraps <- Resource.liftF(initPeers[Effect])

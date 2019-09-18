@@ -499,7 +499,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val blockstorageCacheMaxSizeBytes =
-      gen[Long]("Maximum size of the in-memory block cache in bytes.")
+      gen[Long]("Maximum size of each of in-memory block/dag/justifications caches in bytes.")
 
     @scallop
     val casperValidatorPublicKey =

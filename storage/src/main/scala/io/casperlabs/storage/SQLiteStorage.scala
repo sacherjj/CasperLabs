@@ -4,26 +4,37 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
+import fs2._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
+import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, SQLiteDeployStorage}
-import fs2._
 
 import scala.concurrent.duration.FiniteDuration
 
 object SQLiteStorage {
   def create[F[_]: Sync: Transactor: Metrics: Time](
-      deployStorageChunkSize: Int = 100,
-      wrap: BlockStorage[F] => F[BlockStorage[F]]
+      deployStorageChunkSize: Int = 100
+  ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F]] = create[F](
+    deployStorageChunkSize = deployStorageChunkSize,
+    wrapBlockStorage = (_: BlockStorage[F]).pure[F],
+    wrapDagStorage = (_: DagStorage[F] with DagRepresentation[F]).pure[F]
+  )
+
+  def create[F[_]: Sync: Transactor: Metrics: Time](
+      deployStorageChunkSize: Int,
+      wrapBlockStorage: BlockStorage[F] => F[BlockStorage[F]],
+      wrapDagStorage: DagStorage[F] with DagRepresentation[F] => F[
+        DagStorage[F] with DagRepresentation[F]
+      ]
   ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F]] =
     for {
-      blockStorage  <- SQLiteBlockStorage.create[F] >>= wrap
-      dagStorage    <- SQLiteDagStorage.create[F]
+      blockStorage  <- SQLiteBlockStorage.create[F] >>= wrapBlockStorage
+      dagStorage    <- SQLiteDagStorage.create[F] >>= wrapDagStorage
       deployStorage <- SQLiteDeployStorage.create[F](deployStorageChunkSize)
     } yield new BlockStorage[F] with DagStorage[F] with DeployStorage[F] {
 

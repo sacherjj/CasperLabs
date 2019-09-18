@@ -556,7 +556,7 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
   override def db: String = "/tmp/dag_storage.db"
 
   override def createTestResource: Task[DagStorage[Task]] =
-    SQLiteStorage.create[Task](wrap = Task.pure)
+    SQLiteStorage.create[Task]()
 
   "SQLite DAG Storage" should "override validator's latest block hash only if rank is higher" in {
     forAll { (initial: Block, a: Block, c: Block) =>
