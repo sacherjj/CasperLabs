@@ -1,7 +1,8 @@
+use contract_ffi::value::ProtocolVersion;
 use lmdb::{Database, DatabaseFlags};
 
 use crate::protocol_data::ProtocolData;
-use crate::protocol_data_store::{ProtocolDataStore, ProtocolVersion};
+use crate::protocol_data_store::ProtocolDataStore;
 use crate::store::Store;
 use crate::transaction_source::lmdb::LmdbEnvironment;
 use crate::{error, protocol_data_store};

@@ -19,7 +19,7 @@ use casperlabs_contract_ffi::value::{
     account::Account,
     contract::Contract,
     uint::{U128, U256, U512},
-    Value,
+    ProtocolVersion, Value,
 };
 
 static KB: usize = 1024;
@@ -359,7 +359,7 @@ fn make_purse_id() -> PurseId {
 
 fn make_contract() -> Contract {
     let known_urefs = make_known_urefs();
-    Contract::new(vec![0u8; 1024], known_urefs, 1)
+    Contract::new(vec![0u8; 1024], known_urefs, ProtocolVersion::new(1))
 }
 
 fn make_account() -> Account {

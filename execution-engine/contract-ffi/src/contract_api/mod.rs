@@ -13,7 +13,7 @@ use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
-use crate::value::{Contract, Value, U512};
+use crate::value::{Contract, ProtocolVersion, Value, U512};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -187,6 +187,7 @@ pub fn list_known_urefs() -> BTreeMap<String, Key> {
 pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
     let bytes = fn_bytes_by_name(name);
     let protocol_version = unsafe { ext_ffi::protocol_version() };
+    let protocol_version = ProtocolVersion::new(protocol_version);
     Contract::new(bytes, known_urefs, protocol_version)
 }
 

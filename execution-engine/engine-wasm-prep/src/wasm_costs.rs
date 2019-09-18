@@ -1,5 +1,6 @@
 use contract_ffi::bytesrepr;
 use contract_ffi::bytesrepr::{FromBytes, ToBytes, U32_SIZE};
+use contract_ffi::value::ProtocolVersion;
 
 const NUM_FIELDS: usize = 10;
 pub const WASM_COSTS_SIZE_SERIALIZED: usize = NUM_FIELDS * U32_SIZE;
@@ -33,8 +34,8 @@ pub struct WasmCosts {
 }
 
 impl WasmCosts {
-    pub fn from_version(protocol_version: u64) -> Option<WasmCosts> {
-        match protocol_version {
+    pub fn from_version(protocol_version: ProtocolVersion) -> Option<WasmCosts> {
+        match protocol_version.value() {
             1 => Some(WasmCosts {
                 regular: 1,
                 div: 16,
@@ -154,10 +155,11 @@ mod tests {
     use engine_shared::test_utils;
 
     use super::{gens, WasmCosts};
+    use contract_ffi::value::ProtocolVersion;
 
     #[test]
     fn should_serialize_and_deserialize() {
-        let v1 = WasmCosts::from_version(1).unwrap();
+        let v1 = WasmCosts::from_version(ProtocolVersion::new(1)).unwrap();
         let free = WasmCosts::free();
         assert!(test_utils::test_serialization_roundtrip(&v1));
         assert!(test_utils::test_serialization_roundtrip(&free));
