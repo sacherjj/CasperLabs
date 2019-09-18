@@ -32,6 +32,34 @@ object DagStorage {
       incAndMeasure("checkpoint", super.checkpoint())
   }
 
+  trait MeteredDagRepresentation[F[_]] extends DagRepresentation[F] with Metered[F] {
+    // Not measuring 'latestMessage*' because they return fs2.Stream which doesn't work with 'incAndMeasure'
+
+    abstract override def children(blockHash: BlockHash): F[Set[BlockHash]] =
+      incAndMeasure("children", super.children(blockHash))
+
+    abstract override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
+      incAndMeasure("justificationToBlocks", super.justificationToBlocks(blockHash))
+
+    abstract override def lookup(blockHash: BlockHash): F[Option[BlockSummary]] =
+      incAndMeasure("lookup", super.lookup(blockHash))
+
+    abstract override def contains(blockHash: BlockHash): F[Boolean] =
+      incAndMeasure("contains", super.contains(blockHash))
+
+    abstract override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
+      incAndMeasure("latestMessageHash", super.latestMessageHash(validator))
+
+    abstract override def latestMessage(validator: Validator): F[Option[BlockSummary]] =
+      incAndMeasure("latestMessage", super.latestMessage(validator))
+
+    abstract override def latestMessageHashes: F[Map[Validator, BlockHash]] =
+      incAndMeasure("latestMessageHashes", super.latestMessageHashes)
+
+    abstract override def latestMessages: F[Map[Validator, BlockSummary]] =
+      incAndMeasure("latestMessages", super.latestMessages)
+  }
+
   def apply[F[_]](implicit B: DagStorage[F]): DagStorage[F] = B
 }
 
