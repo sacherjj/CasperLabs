@@ -126,7 +126,7 @@ object EquivocationDetector {
                             latestMessageOfCreator <- dag
                                                        .lookup(latestMessageHashOfCreator)
                                                        .map(_.get)
-                            stream = toposortJDagFromBlock(dag, block)
+                            stream = toposortJDagDesc(dag, block)
                             // Find whether the block cite latestMessageOfCreator
                             decisionPointBlock <- stream.find(
                                                    b =>
@@ -147,7 +147,7 @@ object EquivocationDetector {
   private def creatorJustificationHash(block: Block): Option[BlockHash] =
     ProtoUtil.creatorJustification(block.getHeader).map(_.latestBlockHash)
 
-  private def toposortJDagFromBlock[F[_]: Monad: Log](
+  private def toposortJDagDesc[F[_]: Monad: Log](
       dag: DagRepresentation[F],
       block: Block
   ): StreamT[F, BlockMetadata] = {
@@ -250,7 +250,7 @@ object EquivocationDetector {
       dag: DagRepresentation[F],
       block: Block
   ): F[Long] =
-    toposortJDagFromBlock(dag, block)
+    toposortJDagDesc(dag, block)
       .filter(b => b.validatorPublicKey == block.getHeader.validatorPublicKey)
       .take(2)
       .toList
