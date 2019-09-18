@@ -294,12 +294,14 @@ let amount = get_arg::<u64>(0);
 | `int_value`      | `u32`         | `'[{"name": "amount", "value": {"int_value": 123456}}]'`
 | `long_value`     | `u64`         | `'[{"name": "amount", "value": {"long_value": 123456}}]'`
 | `big_int`        | `u512`        | `'[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'`
-| `string_value`   | `string`      | `'[{"name": "surname", "value": {"string_value": "Nakamoto"}}]'`
+| `string_value`   | `String`      | `'[{"name": "surname", "value": {"string_value": "Nakamoto"}}]'`
 | `optional_value` | `Option<T>`   | `'{"name": "maybe_number", "value": {"optional_value": {}}}` or  `{"name": "maybe_number", "value": {"optional_value": {"long_value": 1000000}}}'`
-| `hash`           | `Key.Hash`    | `'{"name": "my_hash", "value": {"key": {"hash": {"hash": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
-| `address`        | `Key.Address` | `'{"name": "my_address", "value": {"key": {"address": {"account": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
-| `uref`           | `Key.URef`    | `'{"name": "my_uref", "value": {"key": {"uref": {"uref": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414", "access_rights": 5}}}}'`
-| `local`          | `Key.Local`   | `'{"name": "my_local", "value": {"key": {"local": {"hash": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
+| `hash`           | `Key::Hash`    | `'{"name": "my_hash", "value": {"key": {"hash": {"hash": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
+| `address`        | `Key::Address` | `'{"name": "my_address", "value": {"key": {"address": {"account": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
+| `uref`           | `Key::URef`    | `'{"name": "my_uref", "value": {"key": {"uref": {"uref": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414", "access_rights": 5}}}}'`
+| `local`          | `Key::Local`   | `'{"name": "my_local", "value": {"key": {"local": {"hash": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
+| `int_list`       | `Vec<i32>`         | `'{"name": "my_int_list", "value": {"int_list": {"values": [0, 1, 2]}}}'`
+| `string_list`    | `Vec<String>`         | `'{"name": "my_string_list", "value": {"string_list": {"values": ["A", "B", "C"]}}}'`
 
 Numeric values of `access_rights` in `uref` are defined in
 [`enum AccessRights in state.proto](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/state.proto#L58).
