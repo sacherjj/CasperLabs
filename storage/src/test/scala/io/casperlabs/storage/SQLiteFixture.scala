@@ -47,11 +47,19 @@ trait SQLiteFixture[A] extends BeforeAndAfterEach with BeforeAndAfterAll { self:
     conf.load()
   }
 
-  protected def runSQLiteTest[B](test: A => Task[B], timeout: FiniteDuration = 5.seconds): B = {
+  protected def runSQLiteTest[B](test: A => Task[B], timeout: FiniteDuration = 5.seconds): B =
+    runSQLiteTest(createTestResource, test, timeout)
+
+  /* If you need customise resources creation for some tests */
+  protected def runSQLiteTest[B](
+      resources: Task[A],
+      test: A => Task[B],
+      timeout: FiniteDuration
+  ): B = {
     val program = for {
       _ <- Task(cleanupTables())
       _ <- Task(setupTables())
-      a <- createTestResource
+      a <- resources
       b <- test(a)
     } yield b
     program.runSyncUnsafe(timeout)
