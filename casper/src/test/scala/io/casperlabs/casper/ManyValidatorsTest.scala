@@ -39,8 +39,6 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
       .map(Bond(_, 10))
     val v1 = bonds(0).validatorPublicKey
 
-    val emptyEquivocationTracker = EquivocationTracker.empty
-
     val testProgram = for {
       blockStorage <- DagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
       dagStorage <- DagStorageTestFixture.createDagStorage(dagStorageDir)(
@@ -74,7 +72,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
                       )
       newIndexedDagStorage <- IndexedDagStorage.create(newDagStorage)
       dag                  <- newIndexedDagStorage.getRepresentation
-      tips <- Estimator.tips[Task](dag, genesis.blockHash, emptyEquivocationTracker)(
+      tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationTracker.empty)(
                MonadThrowable[Task]
              )
       casperEffect <- NoOpsCasperEffect[Task](

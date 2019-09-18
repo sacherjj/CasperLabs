@@ -28,6 +28,5 @@ class EquivocationTracker(private val map: Map[Validator, Long]) {
 }
 
 object EquivocationTracker {
-  def empty: EquivocationTracker =
-    new EquivocationTracker(Map.empty)
+  val empty: EquivocationTracker = new EquivocationTracker(Map.empty)
 }

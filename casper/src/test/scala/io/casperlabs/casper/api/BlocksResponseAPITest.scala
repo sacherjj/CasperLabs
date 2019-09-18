@@ -40,8 +40,6 @@ class BlocksResponseAPITest
   val v3Bond = Bond(v3, 15)
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-  val emptyEquivocationTracker = EquivocationTracker.empty
-
   "showMainChain" should "return only blocks in the main chain" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       for {
@@ -89,7 +87,7 @@ class BlocksResponseAPITest
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
         dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash, emptyEquivocationTracker)
+        tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationTracker.empty)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
@@ -155,7 +153,7 @@ class BlocksResponseAPITest
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
         dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash, emptyEquivocationTracker)
+        tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationTracker.empty)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
@@ -235,7 +233,7 @@ class BlocksResponseAPITest
             HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
           )
       dag  <- dagStorage.getRepresentation
-      tips <- Estimator.tips[Task](dag, genesis.blockHash, emptyEquivocationTracker)
+      tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationTracker.empty)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips

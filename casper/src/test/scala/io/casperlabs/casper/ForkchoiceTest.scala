@@ -29,8 +29,6 @@ class ForkchoiceTest
     with BlockGenerator
     with DagStorageFixture {
 
-  val emptyEquivocationTracker = EquivocationTracker.empty
-
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       val v1     = generateValidator("V1")
@@ -87,7 +85,7 @@ class ForkchoiceTest
                        dag,
                        genesis.blockHash,
                        Map.empty[Estimator.Validator, Estimator.BlockHash],
-                       emptyEquivocationTracker
+                       EquivocationTracker.empty
                      )
       } yield forkchoice.head should be(genesis.blockHash)
   }
@@ -150,7 +148,7 @@ class ForkchoiceTest
                        dag,
                        genesis.blockHash,
                        latestBlocks,
-                       emptyEquivocationTracker
+                       EquivocationTracker.empty
                      )
         _      = forkchoice.head should be(b6.blockHash)
         result = forkchoice(1) should be(b8.blockHash)
@@ -217,7 +215,7 @@ class ForkchoiceTest
                        dag,
                        genesis.blockHash,
                        latestBlocks,
-                       emptyEquivocationTracker
+                       EquivocationTracker.empty
                      )
         _      = forkchoice.head should be(b8.blockHash)
         result = forkchoice(1) should be(b7.blockHash)
@@ -514,7 +512,7 @@ class ForkchoiceTest
           i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, emptyEquivocationTracker)
+          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, EquivocationTracker.empty)
           _            = tips.head shouldEqual i.blockHash
         } yield ()
   }
