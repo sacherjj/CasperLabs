@@ -264,10 +264,22 @@ class ForkchoiceTest
       } yield ()
   }
 
+  /**
+    * Property-based test for lcmScoring when having equivocation.
+    *
+    * It chooses randomly the set of validators from bonded validators to be equivocated,
+    * and check lcmScoring return correct scores.
+    *
+    * @param dag The block dag
+    * @param bonds Bonded validators and its stake
+    * @param supporterForBlocks Supported validators for each block when traversal in lcmScoring
+    * @param stopHash Block at which we stop computing scores. Should be latest common ancestor of `latestMessagesHashes`.
+    * @param latestMessageHashes The latest messages from currently bonded validators
+    */
   def testLcmScoringWithEquivocation(
       dag: DagRepresentation[Task],
       bonds: Seq[Bond],
-      supportersWithoutEquivocating: Map[Validator, Seq[Validator]],
+      supporterForBlocks: Map[BlockHash, Seq[Validator]],
       stopHash: BlockHash,
       latestMessageHashes: Map[Validator, BlockHash]
   ): Unit = {
@@ -287,7 +299,7 @@ class ForkchoiceTest
             (validator, stake)
           }
       }.toMap
-      val expectScores = supportersWithoutEquivocating.mapValues(_.map(weightMap).sum)
+      val expectScores = supporterForBlocks.mapValues(_.map(weightMap).sum)
       val scores = Estimator
         .lmdScoring(dag, stopHash, latestMessageHashes, equivocators)
         .runSyncUnsafe(5.seconds)
