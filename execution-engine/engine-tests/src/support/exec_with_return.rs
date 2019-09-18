@@ -4,6 +4,7 @@ use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::BlockTime;
+use contract_ffi::value::ProtocolVersion;
 use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::EngineState;
@@ -44,7 +45,7 @@ where
     T: FromBytes,
 {
     let prestate = builder
-        .get_poststate_hash()
+        .get_post_state_hash()
         .as_slice()
         .try_into()
         .expect("should be able to make Blake2bHash from post-state hash");
@@ -64,7 +65,7 @@ where
     let gas_counter = Gas::default();
     let fn_store_id = INIT_FN_STORE_ID;
     let gas_limit = Gas::from_u64(std::u64::MAX);
-    let protocol_version = INIT_PROTOCOL_VERSION;
+    let protocol_version = ProtocolVersion::new(INIT_PROTOCOL_VERSION);
     let correlation_id = CorrelationId::new();
     let arguments: Vec<Vec<u8>> = args.parse().expect("should be able to serialize args");
 
@@ -136,7 +137,7 @@ where
                         let effect = runtime.context().effect();
                         let urefs = ret_urefs.clone();
 
-                        let value: T = bytesrepr::deserialize(runtime.get_result())
+                        let value: T = bytesrepr::deserialize(runtime.result())
                             .expect("should deserialize return value");
 
                         Some((value, urefs, effect))

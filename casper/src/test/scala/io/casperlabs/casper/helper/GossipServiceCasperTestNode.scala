@@ -213,7 +213,10 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             nodeDiscovery,
             connectToGossip = connectToGossip,
             relayFactor = peers.size - 1,
-            relaySaturation = 100
+            relaySaturation = 100,
+            // Some tests assume that once `addBlock` has finished all the notifications
+            // have also been sent.
+            isSynchronous = true
           )
 
           initStorage(genesis) flatMap {
@@ -265,6 +268,7 @@ object GossipServiceCasperTestNodeFactory {
     def discover: F[Unit]                                  = ???
     def lookup(id: NodeIdentifier): F[Option[Node]]        = ???
     def recentlyAlivePeersAscendingDistance: F[List[Node]] = peers.pure[F]
+    def banTemp(node: Node): F[Unit]                       = ???
   }
 
   def makeNodeAsk[F[_]](node: Node)(implicit ev: Applicative[F]) =

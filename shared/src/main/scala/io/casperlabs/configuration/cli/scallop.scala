@@ -71,18 +71,32 @@ object scallopImpl {
   private def tomlTypeDefinition(c: blackbox.Context)(tpe: c.Tree) = {
     import c.universe._
 
-    val t = tpe match {
-      case Ident(TypeName("Flag")) => Ident(TypeName("Boolean"))
-      case x                       => x
+    def tomlClassName(typeName: String) =
+      typeName match {
+        case "Flag" => "Boolean"
+        case "Node" => "String"
+        case other  => other
+      }
+
+    // To see what we're dealing with: `println(showRaw(tpe))`
+    val (t, isMulti) = tpe match {
+      case Ident(TypeName(name)) =>
+        Ident(TypeName(tomlClassName(name))) -> false
+      case AppliedTypeTree(Ident(TypeName("List")), List(Ident(TypeName(name)))) =>
+        Ident(TypeName(tomlClassName(name))) -> true
+      case x => x -> false
     }
 
     q"""
-          val tomlType: String = classOf[$t].getSimpleName match {
-            case "Path" | "String" | "Node" | "StoreType" | "FiniteDuration" => "String"
-            case "int" | "long" | "BigInt"                                   => "Integer"
-            case "boolean"                                                   => "Boolean"
-            case "double"                                                    => "Double"
-            case other => sys.error(s"Unexpected @scallop type: $$other")
+          val tomlType: String = {
+            val primitiveType = classOf[$t].getSimpleName match {
+              case "Path" | "String" | "Node" | "StoreType" | "FiniteDuration" => "String"
+              case "int" | "long" | "BigInt"                                   => "Integer"
+              case "boolean"                                                   => "Boolean"
+              case "double"                                                    => "Double"
+              case other => sys.error(s"Unexpected field type in io.casperlabs.configuration.cli.scallop annotation: $$other")
+            }
+            primitiveType + (if ($isMulti) "..." else "")
           }"""
   }
 

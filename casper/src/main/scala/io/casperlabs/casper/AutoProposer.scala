@@ -40,7 +40,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
       snapshot flatMap {
         // Reset time when we see a new deploy.
         case (currentMillis, _, deploys) if deploys.nonEmpty && startMillis == 0 =>
-          Time[F].sleep(checkInterval) *> loop(prevDeploys, currentMillis)
+          Time[F].sleep(checkInterval) >> loop(prevDeploys, currentMillis)
 
         case (_, elapsedMillis, deploys)
             if deploys.nonEmpty
@@ -49,11 +49,11 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
           Log[F].info(
             s"Proposing block after ${elapsedMillis} ms with ${deploys.size} pending deploys."
           ) *>
-            tryPropose() *>
+            tryPropose() >>
             loop(deploys, 0)
 
         case _ =>
-          Time[F].sleep(checkInterval) *> loop(prevDeploys, startMillis)
+          Time[F].sleep(checkInterval) >> loop(prevDeploys, startMillis)
       }
     }
 

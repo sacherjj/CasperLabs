@@ -603,8 +603,9 @@ object DownloadManagerSpec {
   class MockRelaying extends Relaying[Task] {
     @volatile var relayed = Vector.empty[ByteString]
 
-    override def relay(hashes: List[ByteString]): Task[Unit] = Task.delay {
+    override def relay(hashes: List[ByteString]): Task[Task[Unit]] = Task.delay {
       synchronized { relayed = relayed ++ hashes }
+      Task.unit
     }
   }
   object MockRelaying {

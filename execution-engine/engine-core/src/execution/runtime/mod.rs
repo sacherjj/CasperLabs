@@ -16,7 +16,7 @@ use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE};
-use contract_ffi::value::{Account, Value, U512};
+use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
 use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
@@ -53,7 +53,7 @@ pub fn rename_export_to_call(module: &mut Module, name: String) {
 
 pub fn instance_and_memory(
     parity_module: Module,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 ) -> Result<(ModuleRef, MemoryRef), Error> {
     let module = wasmi::Module::from_parity_wasm_module(parity_module)?;
     let resolver = create_module_resolver(protocol_version)?;
@@ -130,7 +130,7 @@ fn sub_call<R: StateReader<Key, Value>>(
     // Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 ) -> Result<Vec<u8>, Error>
 where
     R::Error: Into<Error>,
@@ -210,7 +210,7 @@ where
         }
     }
 
-    pub fn get_result(&self) -> &[u8] {
+    pub fn result(&self) -> &[u8] {
         self.result.as_slice()
     }
 

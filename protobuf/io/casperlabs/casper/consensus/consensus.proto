@@ -90,7 +90,7 @@ message Deploy {
                 state.IntList int_list = 4;
                 string string_value = 5;
                 state.StringList string_list = 6;
-                uint64 long_value = 7;
+                int64 long_value = 7;
                 state.BigInt big_int = 8;
                 state.Key key = 9;
             }

@@ -1,11 +1,7 @@
 from casperlabs_client import ABI
-from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.common import (
-    PAYMENT_CONTRACT,
-    MAX_PAYMENT_ABI,
-    ADD_ASSOCIATED_KEY_CONTRACT,
-)
-from test.cl_node.wait import wait_for_good_bye, wait_for_node_started
+from casperlabs_local_net.casperlabs_accounts import Account
+from casperlabs_local_net.common import Contract
+from casperlabs_local_net.wait import wait_for_good_bye, wait_for_node_started
 
 
 def test_deploy_buffer_persistence(trillion_payment_node_network):
@@ -28,12 +24,10 @@ def test_deploy_buffer_persistence(trillion_payment_node_network):
         args = ABI.args([ABI.account(associated_acct.public_key_binary), ABI.u32(1)])
         _, deploy_hash_bytes = node.p_client.deploy(
             from_address=acct.public_key_hex,
-            session_contract=ADD_ASSOCIATED_KEY_CONTRACT,
-            payment_contract=PAYMENT_CONTRACT,
+            session_contract=Contract.ADD_ASSOCIATED_KEY,
             public_key=acct.public_key_path,
             private_key=acct.private_key_path,
             session_args=args,
-            payment_args=MAX_PAYMENT_ABI,
         )
         return deploy_hash_bytes.hex()
 

@@ -6,7 +6,7 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use contract_ffi::contract_api;
-use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::key::Key;
 
 const POS_CONTRACT_NAME: &str = "pos";
@@ -19,8 +19,8 @@ enum Error {
 }
 
 fn get_pos() -> ContractPointer {
-    let pos_public: UPointer<Key> = contract_api::get_uref(POS_CONTRACT_NAME)
-        .and_then(Key::to_u_ptr)
+    let pos_public: TURef<Key> = contract_api::get_uref(POS_CONTRACT_NAME)
+        .and_then(Key::to_turef)
         .unwrap_or_else(|| contract_api::revert(Error::GetPosOuterURef as u32));
 
     contract_api::read(pos_public)

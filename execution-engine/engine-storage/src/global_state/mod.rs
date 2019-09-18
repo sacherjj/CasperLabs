@@ -7,13 +7,12 @@ use std::hash::BuildHasher;
 use std::time::Instant;
 
 use contract_ffi::key::Key;
-use contract_ffi::value::Value;
+use contract_ffi::value::{ProtocolVersion, Value};
 use engine_shared::logging::{log_duration, log_metric, GAUGE};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::{self, Transform, TypeMismatch};
 
 use crate::protocol_data::ProtocolData;
-use crate::protocol_data_store::ProtocolVersion;
 use crate::transaction_source::{Transaction, TransactionSource};
 use crate::trie::Trie;
 use crate::trie_store::operations::{read, write, ReadResult, WriteResult};

@@ -4,7 +4,8 @@ from contextlib import contextmanager
 from typing import Union, List
 from pathlib import Path
 import base64
-import os
+
+from casperlabs_local_net.common import resources_path
 from casperlabs_client import read_pem_key
 
 
@@ -23,10 +24,7 @@ class Account:
 
     @property
     def account_path(self) -> Path:
-        cur_path = Path(os.path.realpath(__file__)).parent
-        while cur_path.name != "integration-testing":
-            cur_path = cur_path.parent
-        return cur_path / "resources" / "accounts"
+        return resources_path() / "accounts"
 
     @property
     def public_key_path(self) -> Path:

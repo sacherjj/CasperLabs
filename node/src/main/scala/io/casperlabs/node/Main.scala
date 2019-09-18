@@ -21,27 +21,29 @@ object Main {
 
   implicit val uncaughtExceptionHandler = new UncaughtExceptionHandler(shutdownTimeout = 1.minute)
 
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit =
+    Configuration
+      .parse(args.toArray, sys.env)
+      .fold(
+        errors => println(errors.mkString_("", "\n", "")), {
+          case (command, conf) =>
+            // Create a scheduler to execute the program and block waiting on it to finish.
+            implicit val scheduler: Scheduler = Scheduler.forkJoin(
+              parallelism = Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 4),
+              // We could move this to config, but NodeRuntime creates even more.
+              // Let's see if it helps with the issue we see in long term tests where
+              // block processing just stops at some point.
+              maxThreads = 64,
+              name = "node-runner",
+              reporter = uncaughtExceptionHandler
+            )
 
-    val exec: Task[Unit] =
-      for {
-        commandAndConf <- Task(Configuration.parse(args.toArray, sys.env))
-        _ <- commandAndConf
-              .fold(
-                errors => log.error(errors.mkString_("", "\n", "")),
-                { case (command, conf) => updateLoggingProps(conf) >> mainProgram(command, conf) }
-              )
-      } yield ()
+            val exec = updateLoggingProps(conf) >> mainProgram(command, conf)
 
-    // Create a scheduler to execute the program and block waiting on it to finish.
-    implicit val scheduler: Scheduler = Scheduler.computation(
-      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
-      "node-runner",
-      reporter = uncaughtExceptionHandler
-    )
-
-    exec.runSyncUnsafe()
-  }
+            // This uses Scala `blocking` under the hood, so make sure the thread pool we use supports it.
+            exec.runSyncUnsafe()
+        }
+      )
 
   private def updateLoggingProps(conf: Configuration): Task[Unit] = Task {
     //https://github.com/grpc/grpc-java/issues/1577#issuecomment-228342706
@@ -50,7 +52,9 @@ object Main {
     sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
-  private def mainProgram(command: Configuration.Command, conf: Configuration): Task[Unit] = {
+  private def mainProgram(command: Configuration.Command, conf: Configuration)(
+      implicit scheduler: Scheduler
+  ): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
         conf.server.host.getOrElse("localhost"),
@@ -81,7 +85,7 @@ object Main {
       }
   }
 
-  private def nodeProgram(conf: Configuration): Task[Unit] = {
+  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     val node =
       for {
         _       <- log.info(api.VersionInfo.get).toEffect

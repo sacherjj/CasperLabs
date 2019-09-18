@@ -22,7 +22,7 @@ trait InitialSynchronization[F[_]] {
     *
     * @return Handle which will be resolved when node is considered to be fully synced
     */
-  def sync(): F[F[Unit]]
+  def sync(): F[WaitHandle[F]]
 }
 
 /**
@@ -46,7 +46,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
     skipFailedNodesInNextRounds: Boolean,
     roundPeriod: FiniteDuration
 ) extends InitialSynchronization[F] {
-  override def sync(): F[F[Unit]] = {
+  override def sync(): F[WaitHandle[F]] = {
     def sync(node: Node): F[Unit] =
       for {
         service <- connector(node)

@@ -8,10 +8,12 @@ use std::sync::Arc;
 use grpc::RequestOptions;
 use lmdb::DatabaseFlags;
 
+use contract_ffi::key::Key;
 use contract_ffi::value::U512;
+use engine_core::engine_state::genesis::GenesisConfig;
 use engine_core::engine_state::utils::WasmiBytes;
-use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT};
-use engine_core::execution::{self, POS_NAME};
+use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT, SYSTEM_ACCOUNT_ADDR};
+use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
     DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisRequest, GenesisResponse,
@@ -23,6 +25,7 @@ use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_grpc_server::engine_server::{ipc, transforms};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::Blake2bHash;
+use engine_shared::os::get_page_size;
 use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -32,12 +35,15 @@ use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
 use engine_storage::transaction_source::lmdb::LmdbEnvironment;
 use engine_storage::trie_store::lmdb::LmdbTrieStore;
 use transforms::TransformEntry;
-
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
 pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
-const DEFAULT_MAP_SIZE: usize = 805_306_368_000; // 750 GiB as per grpc-server default
+
+/// LMDB initial map size is calculated based on DEFAULT_LMDB_PAGES and systems page size.
+///
+/// This default value should give 1MiB initial map size by default.
+const DEFAULT_LMDB_PAGES: usize = 2560;
 
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
@@ -213,7 +219,9 @@ pub fn read_wasm_file_bytes(contract_file: &str) -> Vec<u8> {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum SystemContractType {
     Mint,
+    MintInstall,
     ProofOfStake,
+    ProofOfStakeInstall,
 }
 
 #[allow(clippy::implicit_hasher)]
@@ -509,6 +517,7 @@ impl Default for InMemoryWasmTestBuilder {
         let engine_config = EngineConfig::new().set_use_payment_code(true);
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, engine_config);
+
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
@@ -566,9 +575,13 @@ impl InMemoryWasmTestBuilder {
 }
 
 impl LmdbWasmTestBuilder {
-    pub fn new<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> Self {
+    pub fn new_with_config<T: AsRef<OsStr> + ?Sized>(
+        data_dir: &T,
+        engine_config: EngineConfig,
+    ) -> Self {
+        let page_size = get_page_size().expect("should get page size");
         let environment = Arc::new(
-            LmdbEnvironment::new(&data_dir.into(), DEFAULT_MAP_SIZE)
+            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
                 .expect("should create LmdbEnvironment"),
         );
         let trie_store = Arc::new(
@@ -581,12 +594,69 @@ impl LmdbWasmTestBuilder {
         );
         let global_state = LmdbGlobalState::empty(environment, trie_store, protocol_data_store)
             .expect("should create LmdbGlobalState");
-        let engine_state = EngineState::new(global_state, Default::default());
+        let engine_state = EngineState::new(global_state, engine_config);
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
+            transforms: Vec::new(),
+            bonded_validators: Vec::new(),
+            genesis_account: None,
+            mint_contract_uref: None,
+            pos_contract_uref: None,
+            genesis_transforms: None,
+        }
+    }
+
+    pub fn new<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> Self {
+        Self::new_with_config(data_dir, Default::default())
+    }
+
+    /// Creates new instance of builder and applies values only which allows the engine state to be
+    /// swapped with a new one, possibly after running genesis once and reusing existing database
+    /// (i.e. LMDB).
+    pub fn new_with_config_and_result<T: AsRef<OsStr> + ?Sized>(
+        data_dir: &T,
+        engine_config: EngineConfig,
+        result: &WasmTestResult<LmdbGlobalState>,
+    ) -> Self {
+        let mut builder = Self::new_with_config(data_dir, engine_config);
+        // Applies existing properties from gi
+        builder.genesis_hash = result.0.genesis_hash.clone();
+        builder.post_state_hash = result.0.post_state_hash.clone();
+        builder.bonded_validators = result.0.bonded_validators.clone();
+        builder.mint_contract_uref = result.0.mint_contract_uref;
+        builder.pos_contract_uref = result.0.pos_contract_uref;
+        builder
+    }
+
+    /// Creates a new instance of builder using the supplied configurations, opening wrapped LMDBs
+    /// (e.g. in the Trie and Data stores) rather than creating them.
+    pub fn open<T: AsRef<OsStr> + ?Sized>(
+        data_dir: &T,
+        engine_config: EngineConfig,
+        post_state_hash: Vec<u8>,
+    ) -> Self {
+        let page_size = get_page_size().expect("should get page size");
+        let environment = Arc::new(
+            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
+                .expect("should create LmdbEnvironment"),
+        );
+        let trie_store =
+            Arc::new(LmdbTrieStore::open(&environment, None).expect("should open LmdbTrieStore"));
+        let protocol_data_store = Arc::new(
+            LmdbProtocolDataStore::open(&environment, None)
+                .expect("should open LmdbProtocolDataStore"),
+        );
+        let global_state = LmdbGlobalState::empty(environment, trie_store, protocol_data_store)
+            .expect("should create LmdbGlobalState");
+        let engine_state = EngineState::new(global_state, engine_config);
+        WasmTestBuilder {
+            engine_state: Rc::new(engine_state),
+            exec_responses: Vec::new(),
+            genesis_hash: None,
+            post_state_hash: Some(post_state_hash),
             transforms: Vec::new(),
             bonded_validators: Vec::new(),
             genesis_account: None,
@@ -677,6 +747,57 @@ where
         self.bonded_validators.push(genesis_validators);
         self.genesis_transforms = Some(genesis_transforms);
         self
+    }
+
+    pub fn run_genesis_with_genesis_config(
+        &mut self,
+        genesis_config: GenesisConfig,
+    ) -> Result<&mut Self, ipc::GenesisDeployError> {
+        let system_account = Key::Account(SYSTEM_ACCOUNT_ADDR);
+        let genesis_config = genesis_config.try_into().expect("could not parse");
+
+        let genesis_response = self
+            .engine_state
+            .run_genesis_with_chainspec(RequestOptions::new(), genesis_config)
+            .wait_drop_metadata()
+            .expect("Unable to get genesis response");
+
+        if genesis_response.has_failed_deploy() {
+            return Err(genesis_response.get_failed_deploy().to_owned());
+        }
+
+        let state_root_hash: Blake2bHash = genesis_response
+            .get_success()
+            .get_poststate_hash()
+            .try_into()
+            .expect("Unable to get root hash");
+
+        let transforms = get_genesis_transforms(&genesis_response);
+
+        let genesis_account =
+            get_account(&transforms, &system_account).expect("Unable to get system account");
+
+        let known_keys = genesis_account.urefs_lookup();
+
+        let mint_contract_uref = known_keys
+            .get(MINT_NAME)
+            .and_then(Key::as_uref)
+            .cloned()
+            .expect("Unable to get mint contract URef");
+
+        let pos_contract_uref = known_keys
+            .get(POS_NAME)
+            .and_then(Key::as_uref)
+            .cloned()
+            .expect("Unable to get pos contract URef");
+
+        self.genesis_hash = Some(state_root_hash.to_vec());
+        self.post_state_hash = Some(state_root_hash.to_vec());
+        self.mint_contract_uref = Some(mint_contract_uref);
+        self.pos_contract_uref = Some(pos_contract_uref);
+        self.genesis_account = Some(genesis_account);
+        self.genesis_transforms = Some(transforms);
+        Ok(self)
     }
 
     pub fn query(
@@ -945,7 +1066,7 @@ where
             .expect("Genesis hash should be present. Should be called after run_genesis.")
     }
 
-    pub fn get_poststate_hash(&self) -> Vec<u8> {
+    pub fn get_post_state_hash(&self) -> Vec<u8> {
         self.post_state_hash
             .clone()
             .expect("Should have post-state hash.")

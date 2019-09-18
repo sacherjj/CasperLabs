@@ -314,21 +314,30 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             .widen
 
         case (Some(session), Some(payment)) =>
-          val req: F[Either[String, Unit]] =
-            if (session.contract.isWasm && payment.contract.isWasm)
-              ExecutionEngineService[F]
-                .verifyWasm(ValidateRequest(session.getWasm, payment.getWasm))
-            else
-              Log[F]
-                .warn(
-                  s"Cannot verify contracts unless both are Wasm. ${session.contract.getClass} & ${payment.contract.getClass()}"
+          List(
+            "session" -> session,
+            "payment" -> payment
+          ).collect {
+              case (name, code) if code.contract.isWasm =>
+                ExecutionEngineService[F]
+                  .verifyWasm(ValidateRequest(code.getWasm))
+                  .map(name -> _)
+            }
+            .sequence
+            .map { results =>
+              results.collect {
+                case (name, Left(message)) => name -> message
+              }
+            }
+            .flatMap {
+              case Nil =>
+                addDeploy(deploy)
+              case errors =>
+                val ex: Throwable = new IllegalArgumentException(
+                  s"Contract verification failed: ${errors.map(e => s"${e._1}: ${e._2}").mkString("; ")}"
                 )
-                .as(().asRight[String])
-
-          EitherT(req)
-            .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
-            .flatMapF(_ => addDeploy(deploy))
-            .value
+                ex.asLeft[Unit].pure[F]
+            }
       }
     case None =>
       new IllegalStateException(s"Node is in read-only mode.").asLeft[Unit].pure[F].widen
@@ -425,7 +434,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       dag: DagRepresentation[F],
       parents: Seq[Block]
   ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
-    val candidateBlockHashesF = for {
+    for {
       // We have re-queued orphan deploys already, so we can just look at pending ones.
       pendingDeployHashes <- DeployBuffer[F].readPendingHashes
 
@@ -438,15 +447,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             .markAsDiscardedByHashes(deploysToDiscard.toList)
             .whenA(deploysToDiscard.nonEmpty)
     } yield candidateBlockHashes.toSet
-
-    (for {
-      candidateBlockHashes <- fs2.Stream.eval(candidateBlockHashesF)
-      // Only send the next nonce per account. This will change once the nonce check is removed in the EE
-      // and support for SEQ/PAR blocks is added, then we can send all deploys for the account.
-      remainingHashes <- DeployBuffer[F]
-                          .readAccountPendingOldest()
-                          .filter(candidateBlockHashes.contains(_))
-    } yield remainingHashes).compile.to[Set]
   }
 
   /** If another node proposed a block which orphaned something proposed by this node,
@@ -996,7 +996,7 @@ object MultiParentCasperImpl {
           case Valid | EquivocatedBlock =>
             maybeOwnPublickKey match {
               case Some(key) if key == block.getHeader.validatorPublicKey =>
-                relaying.relay(List(block.blockHash))
+                relaying.relay(List(block.blockHash)).void
               case _ =>
                 // We were adding somebody else's block. The DownloadManager did the gossiping.
                 ().pure[F]

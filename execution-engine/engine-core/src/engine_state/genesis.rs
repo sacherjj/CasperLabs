@@ -11,13 +11,16 @@ use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::{Account, Contract, Value, U512};
+use contract_ffi::value::{Account, Contract, ProtocolVersion, Value, U512};
+use engine_shared::motes::Motes;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{Transform, TypeMismatch};
 use engine_storage::global_state::CommitResult;
+use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::execution::AddressGenerator;
 use contract_ffi::execution::Phase;
+use num_traits::Zero;
 
 pub const DEPLOY_HASH: [u8; 32] = [0u8; 32];
 
@@ -110,7 +113,7 @@ fn create_mint_effects(
     initial_motes: U512,
     mint_code_bytes: WasmiBytes,
     pos_bonded_balance: U512,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 ) -> Result<HashMap<Key, Value>, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
 
@@ -235,7 +238,7 @@ fn create_pos_effects(
     urefs_source: &GenesisURefsSource,
     pos_code: WasmiBytes,
     genesis_validators: Vec<(PublicKey, U512)>,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 ) -> Result<HashMap<Key, Value>, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
 
@@ -300,7 +303,7 @@ pub fn create_genesis_effects(
     mint_code_bytes: WasmiBytes,
     pos_code_bytes: WasmiBytes,
     genesis_validators: Vec<(PublicKey, U512)>,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 ) -> Result<ExecutionEffect, execution::Error> {
     let urefs_source = GenesisURefsSource::default();
 
@@ -395,7 +398,7 @@ mod tests {
     use crate::engine_state::utils::{pos_validator_key, WasmiBytes};
     use contract_ffi::key::Key;
     use contract_ffi::value::account::PublicKey;
-    use contract_ffi::value::{Contract, Value, U512};
+    use contract_ffi::value::{Contract, ProtocolVersion, Value, U512};
     use engine_shared::test_utils;
     use engine_shared::transform::Transform;
     use engine_wasm_prep::wasm_costs::WasmCosts;
@@ -436,7 +439,7 @@ mod tests {
             mint_code_bytes,
             pos_code_bytes,
             genesis_validators,
-            PROTOCOL_VERSION,
+            ProtocolVersion::new(PROTOCOL_VERSION),
         )
         .expect("should create effects")
         .transforms
@@ -582,7 +585,11 @@ mod tests {
             ret
         };
 
-        let mint_contract: Contract = Contract::new(mint_code_bytes.into(), mint_known_urefs, 1);
+        let mint_contract: Contract = Contract::new(
+            mint_code_bytes.into(),
+            mint_known_urefs,
+            ProtocolVersion::new(1),
+        );
 
         // the value under the mint_contract_uref_key should be the current contract
         // bytes
@@ -781,7 +788,7 @@ mod tests {
                 &urefs_source,
                 pos_contract_bytes.clone(),
                 genesis_validators,
-                1,
+                ProtocolVersion::new(1),
             )
             .expect("Creating PoS effects in test should not fail.")
         };
@@ -826,5 +833,111 @@ mod tests {
             Some(&Key::URef(pos_bonding_purse)),
             "create_pos_effects should store POS_BONDING_PURSE in PoS contract's known urefs map."
         );
+    }
+}
+
+/* --- NEW GENESIS STARTS HERE --- */
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct GenesisAccount {
+    public_key: PublicKey,
+    balance: Motes,
+    bonded_amount: Motes,
+}
+
+impl GenesisAccount {
+    pub fn new(public_key: PublicKey, balance: Motes, bonded_amount: Motes) -> Self {
+        GenesisAccount {
+            public_key,
+            balance,
+            bonded_amount,
+        }
+    }
+
+    pub fn public_key(&self) -> PublicKey {
+        self.public_key
+    }
+
+    pub fn balance(&self) -> Motes {
+        self.balance
+    }
+
+    pub fn bonded_amount(&self) -> Motes {
+        self.bonded_amount
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenesisConfig {
+    name: String,
+    timestamp: u64,
+    protocol_version: ProtocolVersion,
+    mint_installer_bytes: Vec<u8>,
+    proof_of_stake_installer_bytes: Vec<u8>,
+    accounts: Vec<GenesisAccount>,
+    wasm_costs: WasmCosts,
+}
+
+impl GenesisConfig {
+    pub fn new(
+        name: String,
+        timestamp: u64,
+        protocol_version: ProtocolVersion,
+        mint_installer_bytes: Vec<u8>,
+        proof_of_stake_installer_bytes: Vec<u8>,
+        accounts: Vec<GenesisAccount>,
+        wasm_costs: WasmCosts,
+    ) -> Self {
+        GenesisConfig {
+            name,
+            timestamp,
+            protocol_version,
+            mint_installer_bytes,
+            proof_of_stake_installer_bytes,
+            accounts,
+            wasm_costs,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    pub fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        self.protocol_version
+    }
+
+    pub fn mint_installer_bytes(&self) -> &[u8] {
+        self.mint_installer_bytes.as_slice()
+    }
+
+    pub fn proof_of_stake_installer_bytes(&self) -> &[u8] {
+        self.proof_of_stake_installer_bytes.as_slice()
+    }
+
+    pub fn wasm_costs(&self) -> WasmCosts {
+        self.wasm_costs
+    }
+
+    pub fn get_bonded_validators(&self) -> impl Iterator<Item = (PublicKey, Motes)> + '_ {
+        let zero = Motes::zero();
+        self.accounts.iter().filter_map(move |genesis_account| {
+            if genesis_account.bonded_amount() > zero {
+                Some((
+                    genesis_account.public_key(),
+                    genesis_account.bonded_amount(),
+                ))
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn accounts(&self) -> &[GenesisAccount] {
+        self.accounts.as_slice()
     }
 }

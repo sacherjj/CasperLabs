@@ -1,6 +1,7 @@
 use std::fmt;
 
 use contract_ffi::value::U512;
+use num::Zero;
 
 use crate::motes::Motes;
 
@@ -77,6 +78,16 @@ impl std::ops::Mul for Gas {
     fn mul(self, rhs: Self) -> Self::Output {
         let val = self.value() * rhs.value();
         Gas::new(val)
+    }
+}
+
+impl Zero for Gas {
+    fn zero() -> Self {
+        Gas::new(U512::zero())
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0.is_zero()
     }
 }
 

@@ -15,6 +15,11 @@ trait NodeDiscovery[F[_]] {
 
   /** Return the recently active peers. */
   def recentlyAlivePeersAscendingDistance: F[List[Node]]
+
+  /** Explicitly mark some node as faulty so it's not considered alive even
+    * it responds to ping requests.
+    */
+  def banTemp(node: Node): F[Unit]
 }
 
 object NodeDiscovery extends NodeDiscoveryInstances {
@@ -28,6 +33,8 @@ object NodeDiscovery extends NodeDiscoveryInstances {
       def lookup(id: NodeIdentifier): T[F, Option[Node]] = C.lookup(id).liftM[T]
       def recentlyAlivePeersAscendingDistance: T[F, List[Node]] =
         C.recentlyAlivePeersAscendingDistance.liftM[T]
+      def banTemp(node: Node): T[F, Unit] =
+        C.banTemp(node).liftM[T]
     }
 }
 
