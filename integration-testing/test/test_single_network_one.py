@@ -750,20 +750,23 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
 
 
 def test_multiple_deploys_per_block(cli):
+    """
+    Deploy from two different accounts then propose.
+    Both deploys should be be included in the new block.
+    """
     account = cli.node.test_account
-    cli.set_default_deploy_args('--from', account.public_key_hex,
-                                '--private-key', cli.private_key_path(account),
-                                '--public-key', cli.public_key_path(account))
+    genesis_account = cli.node.genesis_account
     deploy_hash1 = cli('deploy',
-                       '--session-name', cli.resource('test_counterdefine.wasm'),
-                       '--payment-name', cli.resource('test_counterdefine.wasm'))
+                       '--from', genesis_account.public_key_hex,
+                       '--session', cli.resource('test_counterdefine.wasm'),
+                       '--private-key', cli.private_key_path(genesis_account),
+                       '--public-key', cli.public_key_path(genesis_account))
     deploy_hash2 = cli('deploy',
-                       '--session-name', cli.resource('test_countercall.wasm'),
-                       '--payment-name', cli.resource('test_countercall.wasm'))
+                       '--from', account.public_key_hex,
+                       '--session', cli.resource('test_mailinglistdefine.wasm'),
+                       '--private-key', cli.private_key_path(account),
+                       '--public-key', cli.public_key_path(account))
     block_hash = cli("propose")
     deploys = list(cli("show-deploys", block_hash))
     assert len(deploys) == 2
-    for deploy_info in deploys:
-        assert deploy_info.deploy.deploy_hash in (deploy_hash1, deploy_hash2)
-        assert not deploy_info.is_error
-        assert deploy_info.error_message == ''
+    assert set(d.deploy.deploy_hash for d in deploys) == set((deploy_hash1, deploy_hash2))
