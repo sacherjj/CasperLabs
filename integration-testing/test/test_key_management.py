@@ -3,9 +3,9 @@ import json
 import time
 
 from casperlabs_client import ABI
-from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.casperlabs_network import TrillionPaymentNodeNetwork
-from test.cl_node.common import Contract
+from casperlabs_local_net.casperlabs_accounts import Account
+from casperlabs_local_net.casperlabs_network import TrillionPaymentNodeNetwork
+from casperlabs_local_net.common import Contract
 
 
 """

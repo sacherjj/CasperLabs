@@ -47,9 +47,14 @@ Add coins to this account using the [faucet](https://clarity.casperlabs.io/#/fau
 casperlabs-client \
     --host deploy.casperlabs.io \
     bond \
+    --payment-amount 1 \
     --amount <bond-amount> \
     --private-key <path-to-private-key>
 ```
+
+Note: `--payment-amount` is used in the standard payment code to pay for the execution.
+For now, the value is not used, but payment code will be enabled on the DEVNET
+in an upcoming release.
 
 ##### Step 4: Start the Execution Engine
 
@@ -76,11 +81,13 @@ First, you must unbond:
 casperlabs-client \
     --host deploy.casperlabs.io \
     unbond \
+    --payment-amount 1 \
     --amount <unbond-amount> \
     --private-key <path-to-private-key>
 ```
 
 The `--amount` argument here is optional: you can partially unbond by providing an amount that is smaller than your bond amount, or you can omit this argument to unbond your full bond amount.
+(See note above about `--payment-amount`).
 
 After that, you can safely stop processes:
 ```

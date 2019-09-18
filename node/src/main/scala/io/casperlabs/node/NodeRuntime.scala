@@ -97,9 +97,9 @@ class NodeRuntime private[node] (
 
   val main: Effect[Unit] = {
     val rpConfState = (for {
-      local     <- localPeerNode[Task]
-      bootstrap <- initPeer[Task]
-      conf      <- rpConf[Task](local, bootstrap)
+      local      <- localPeerNode[Task]
+      bootstraps <- initPeers[Task]
+      conf       <- rpConf[Task](local, bootstraps)
     } yield conf).toEffect
 
     implicit val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
@@ -151,7 +151,7 @@ class NodeRuntime private[node] (
                     )
                 )
               )
-          maybeBootstrap <- Resource.liftF(initPeer[Effect])
+          bootstraps <- Resource.liftF(initPeers[Effect])
 
           implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
                                                                               FinalizedBlocksStream
@@ -168,7 +168,7 @@ class NodeRuntime private[node] (
                                                             ingressScheduler,
                                                             egressScheduler
                                                           )(
-                                                            maybeBootstrap
+                                                            bootstraps
                                                           )(
                                                             effects.peerNodeAsk,
                                                             log,
@@ -295,10 +295,11 @@ class NodeRuntime private[node] (
     val time        = effects.time
 
     val info: Effect[Unit] =
-      if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
+      if (conf.casper.standalone)
+        Log[Effect].info(s"Starting stand-alone node.")
       else
         Log[Effect].info(
-          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).getOrElse("n/a")}"
+          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).mkString(", ")}"
         )
 
     val fetchLoop: Effect[Unit] =
@@ -371,11 +372,11 @@ class NodeRuntime private[node] (
         } *> Task.delay(System.exit(1)).as(Right(()))
     )
 
-  private def rpConf[F[_]: Sync](local: Node, maybeBootstrap: Option[Node]) =
+  private def rpConf[F[_]: Sync](local: Node, bootstraps: List[Node]) =
     Ref.of[F, RPConf](
       RPConf(
         local,
-        maybeBootstrap,
+        bootstraps,
         conf.server.defaultTimeout,
         ClearConnectionsConf(
           conf.server.maxNumOfConnections,
@@ -395,16 +396,16 @@ class NodeRuntime private[node] (
         id
       )
 
-  private def initPeer[F[_]: MonadThrowable]: F[Option[Node]] =
+  private def initPeers[F[_]: MonadThrowable]: F[List[Node]] =
     conf.server.bootstrap match {
-      case None if !conf.casper.standalone =>
+      case Nil if !conf.casper.standalone =>
         MonadThrowable[F].raiseError(
           new java.lang.IllegalStateException(
             "Not in standalone mode but there's no bootstrap configured!"
           )
         )
-      case other =>
-        other.pure[F]
+      case nodes =>
+        nodes.pure[F]
     }
 
 }

@@ -209,6 +209,7 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
     def discover                            = ???
     def lookup(id: NodeIdentifier)          = ???
     def recentlyAlivePeersAscendingDistance = Task.now(nodes)
+    def banTemp(node: Node): Task[Unit]     = ???
   }
 
   object MockBackend extends GossipServiceServer.Backend[Task] {

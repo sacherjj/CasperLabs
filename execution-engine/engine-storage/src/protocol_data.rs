@@ -54,6 +54,7 @@ pub(crate) mod gens {
 mod tests {
     use proptest::proptest;
 
+    use contract_ffi::value::ProtocolVersion;
     use engine_shared::test_utils;
     use engine_wasm_prep::wasm_costs::WasmCosts;
 
@@ -62,7 +63,7 @@ mod tests {
     #[test]
     fn should_serialize_and_deserialize() {
         let v1 = {
-            let costs = WasmCosts::from_version(1).unwrap();
+            let costs = WasmCosts::from_version(ProtocolVersion::new(1)).unwrap();
             ProtocolData::new(costs)
         };
         let free = {

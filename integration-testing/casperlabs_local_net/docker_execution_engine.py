@@ -1,4 +1,4 @@
-from test.cl_node.docker_base import LoggingDockerBase
+from casperlabs_local_net.docker_base import LoggingDockerBase
 
 
 class DockerExecutionEngine(LoggingDockerBase):

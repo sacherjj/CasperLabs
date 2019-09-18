@@ -5,7 +5,7 @@ from typing import Union, List
 from pathlib import Path
 import base64
 
-from test.cl_node.common import resources_path
+from casperlabs_local_net.common import resources_path
 from casperlabs_client import read_pem_key
 
 

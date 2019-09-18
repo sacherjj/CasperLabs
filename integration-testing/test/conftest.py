@@ -3,7 +3,7 @@ from typing import Generator
 import docker as docker_py
 import pytest
 
-from test.cl_node.casperlabs_network import (
+from casperlabs_local_net.casperlabs_network import (
     CustomConnectionNetwork,
     OneNodeNetwork,
     ThreeNodeNetwork,
