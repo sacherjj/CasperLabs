@@ -241,7 +241,7 @@ class ForkchoiceTest
         latestBlocks <- dag.latestMessageHashes
         // Set the equivocationTracker manually
         equivocationTracker = Map(v2 -> genesis.getHeader.rank)
-        equivocatingValidators <- EquivocationDetector.detectVisibleFromJustificationMsgHashes(
+        equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
                                    dag,
                                    latestBlocks,
                                    equivocationTracker

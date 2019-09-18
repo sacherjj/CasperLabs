@@ -84,7 +84,7 @@ class EquivocationDetectorTest
       dag            <- dagStorage.getRepresentation
       latestMessages <- ProtoUtil.getJustificationMsgs[Task](dag, block.getHeader.justifications)
       state          <- casperState.read
-      _ <- EquivocationDetector.detectVisibleFromJustificationMsgHashes(
+      _ <- EquivocationDetector.detectVisibleFromJustifications(
             dag,
             latestMessages.mapValues(f => f.blockHash),
             state.equivocationTracker
