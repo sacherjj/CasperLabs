@@ -300,6 +300,8 @@ let amount = get_arg::<u64>(0);
 | `address`        | `Key.Address` | `'{"name": "my_address", "value": {"key": {"address": {"account": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
 | `uref`           | `Key.URef`    | `'{"name": "my_uref", "value": {"key": {"uref": {"uref": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414", "access_rights": 5}}}}'`
 | `local`          | `Key.Local`   | `'{"name": "my_local", "value": {"key": {"local": {"hash": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
+| `int_list`       | `???`         | `'{"name": "my_int_list", "value": {"int_list": {"values": [0, 1, 2]}}}'`
+| `string_list`    | `???`         | `'{"name": "my_string_list", "value": {"string_list": {"values": ["A", "B", "C"]}}}'`
 
 Numeric values of `access_rights` in `uref` are defined in
 [`enum AccessRights in state.proto](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/state.proto#L58).
