@@ -160,7 +160,8 @@ object EquivocationDetector {
   /**
     * Find equivocating validators that a block can see based on its direct justifications
     *
-    * This method is not used to detect new equivocations when receiving new blocks. It is used to help calculating main parent in the `forkchoice`.
+    * This method is not used to detect new equivocations when receiving new blocks.
+    * It is used to help calculating main parent in the `forkchoice`.
     *
     * We use `bfToposortTraverseF` to traverse from `latestMessageHashes` down beyond the minimal rank
     * of base block of equivocationRecords. Since we have already validated `validatorBlockSeqNum`
@@ -192,44 +193,37 @@ object EquivocationDetector {
             _.justifications.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
           )
           acc <- toposortJDagFromBlock
-                  .foldWhileLeft(
-                    (Set.empty[Validator], Set.empty[(Validator, Int)])
-                  ) {
-                    case (
-                        (detectedEquivocators, visitedValidatorAndBlockSeqNums),
-                        b
-                        ) =>
+                  .foldWhileLeft(State()) {
+                    case (state, b) =>
                       val creator            = b.validatorPublicKey
-                      val creatorBlockSeqNam = b.validatorBlockSeqNum
-                      if (detectedEquivocators == equivocationTracker.keySet || b.rank <= minRank) {
-                        // Stop traversal if all known equivocations has been found in j-past-cone of `b`
-                        // or we traversed beyond the minimum rank of all equivocations.
-                        Right(
-                          (detectedEquivocators, visitedValidatorAndBlockSeqNums)
-                        )
-                      } else if (detectedEquivocators.contains(creator)) {
-                        Left((detectedEquivocators, visitedValidatorAndBlockSeqNums))
-                      } else if (visitedValidatorAndBlockSeqNums.contains(
-                                   (creator, creatorBlockSeqNam)
-                                 )) {
-                        Left(
-                          (
-                            detectedEquivocators + creator,
-                            visitedValidatorAndBlockSeqNums
-                          )
-                        )
+                      val creatorBlockSeqNum = b.validatorBlockSeqNum
+                      if (state.alreadyDetected(equivocationTracker.keySet) || b.rank <= minRank) {
+                        // Stop traversal if all known equivocations has been found in j-past-cone
+                        // of `b` or we traversed beyond the minimum rank of all equivocations.
+                        Right(state)
+                      } else if (state.alreadyDetected(creator)) {
+                        Left(state)
+                      } else if (state.alreadyVisited(creator, creatorBlockSeqNum)) {
+                        Left(state.addEquivocator(creator))
                       } else {
-                        Left(
-                          (
-                            detectedEquivocators,
-                            visitedValidatorAndBlockSeqNums + (creator -> creatorBlockSeqNam)
-                          )
-                        )
+                        Left(state.addVisited(creator, creatorBlockSeqNum))
                       }
                   }
-          (detectedEquivocator, _) = acc
-        } yield detectedEquivocator
+        } yield acc.detectedEquivocators
     }
+
+  private case class State(
+      detectedEquivocators: Set[Validator] = Set.empty,
+      visitedBlocks: Map[Validator, Int] = Map.empty
+  ) {
+    def addEquivocator(v: Validator): State = copy(detectedEquivocators = detectedEquivocators + v)
+    def addVisited(v: Validator, blockSeqNum: Int): State =
+      copy(visitedBlocks = visitedBlocks + (v -> blockSeqNum))
+    def alreadyVisited(v: Validator, blockSeqNum: Int): Boolean =
+      visitedBlocks.get(v).contains(blockSeqNum)
+    def alreadyDetected(v: Validator): Boolean       = detectedEquivocators.contains(v)
+    def alreadyDetected(vs: Set[Validator]): Boolean = detectedEquivocators == vs
+  }
 
   /**
     * Returns rank of last but one block by the same validator, as seen in the j-past-cone of the block.
