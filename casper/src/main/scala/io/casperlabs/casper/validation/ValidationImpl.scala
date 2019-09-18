@@ -578,10 +578,10 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     def printHashes(hashes: Iterable[ByteString]) =
       hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
 
+    val latestMessagesHashes = ProtoUtil
+      .getJustificationMsgHashes(b.getHeader.justifications)
+
     for {
-      latestMessagesHashes <- ProtoUtil
-                               .getJustificationMsgHashes(b.getHeader.justifications)
-                               .pure[F]
       tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocationsTracker)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])

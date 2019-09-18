@@ -7,8 +7,15 @@ import io.casperlabs.casper.Estimator.Validator
 final class EquivocationsTracker(private val map: Map[Validator, Long]) {
   def isEmpty: Boolean = map.isEmpty
 
-  def updated(validator: Validator, rank: Long): EquivocationTracker =
-    new EquivocationTracker(map.updated(validator, rank))
+  def updated(validator: Validator, rank: Long): EquivocationsTracker =
+    get(validator) match {
+      case Some(lowestBaseSeqNum) if rank < lowestBaseSeqNum =>
+        new EquivocationsTracker(map.updated(validator, rank))
+      case None =>
+        new EquivocationsTracker(map.updated(validator, rank))
+      case _ =>
+        this
+    }
 
   def get(validator: Validator): Option[Long] =
     map.get(validator)

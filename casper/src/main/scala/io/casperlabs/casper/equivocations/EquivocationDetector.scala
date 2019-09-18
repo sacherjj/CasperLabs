@@ -63,18 +63,7 @@ object EquivocationDetector {
       _ <- rankOfEarlierMessageFromCreator(dag, block)
             .flatMap { earlierRank =>
               state.modify { s =>
-                s.equivocationsTracker.get(creator) match {
-                  case Some(lowestBaseSeqNum) if earlierRank < lowestBaseSeqNum =>
-                    s.copy(
-                      equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank)
-                    )
-                  case None =>
-                    s.copy(
-                      equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank)
-                    )
-                  case _ =>
-                    s
-                }
+                s.copy(equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank))
               }
             }
             .whenA(equivocated)
