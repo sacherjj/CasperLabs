@@ -177,7 +177,7 @@ object EquivocationDetector {
     * @tparam F effect type
     * @return validators that can be seen equivocating from the view of latestMessages
     */
-  def detectVisibleFromJustificationMsgHashes[F[_]: Monad](
+  def detectVisibleFromJustifications[F[_]: Monad](
       dag: DagRepresentation[F],
       justificationMsgHashes: Map[Validator, BlockHash],
       equivocationTracker: EquivocationTracker
