@@ -786,8 +786,7 @@ steps:
     script:
     - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
     - cd execution-engine
-    - ~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)
-    - ~/.cargo/bin/rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown
+    - make setup
 
 - name: build-ee
   image: appleboy/drone-ssh:latest
