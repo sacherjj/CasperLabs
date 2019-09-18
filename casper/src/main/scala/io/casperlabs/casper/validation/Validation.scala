@@ -7,7 +7,7 @@ import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.{consensus, protocol}
-import io.casperlabs.casper.equivocations.EquivocationDetector.EquivocationTracker
+import io.casperlabs.casper.equivocations.EquivocationTracker
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.ipc
 import io.casperlabs.smartcontracts.ExecutionEngineService

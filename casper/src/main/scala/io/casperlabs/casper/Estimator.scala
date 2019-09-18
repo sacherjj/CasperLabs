@@ -9,8 +9,7 @@ import io.casperlabs.casper.util.{implicits, DagOperations}
 import implicits.{eqBlockHash, showBlockHash}
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.casper.Estimator.Validator
-import io.casperlabs.casper.equivocations.EquivocationDetector
-import io.casperlabs.casper.equivocations.EquivocationDetector.EquivocationTracker
+import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationTracker}
 
 import scala.collection.immutable.{Map, Set}
 

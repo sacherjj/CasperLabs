@@ -10,6 +10,7 @@ import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
+import io.casperlabs.casper.equivocations.EquivocationTracker
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture, HashSetCasperTestNode}
@@ -466,7 +467,7 @@ class ValidationTest
         case (v, i) => Bond(v, 2L * i.toLong + 1L)
       }
 
-      val emptyEquivocationsTracker = Map.empty[Validator, Long]
+      val emptyEquivocationsTracker = EquivocationTracker.empty
 
       def latestMessages(messages: Seq[Block]): Map[Validator, BlockHash] =
         messages.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap

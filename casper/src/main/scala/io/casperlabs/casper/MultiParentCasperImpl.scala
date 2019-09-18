@@ -14,7 +14,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.DeployBuffer
-import io.casperlabs.casper.equivocations.EquivocationDetector
+import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationTracker}
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.ProtoUtil._
@@ -22,7 +22,6 @@ import io.casperlabs.casper.util.comm.CommUtil
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.casper.equivocations.EquivocationDetector.EquivocationTracker
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.gossiping
@@ -53,7 +52,7 @@ final case class CasperState(
     blockBuffer: Map[ByteString, Block] = Map.empty,
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationTracker: EquivocationTracker = Map.empty
+    equivocationTracker: EquivocationTracker = EquivocationTracker.empty
 )
 
 class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection](
@@ -589,7 +588,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     for {
       state   <- Cell[F, CasperState].read
       tracker = state.equivocationTracker
-    } yield tracker.keys
+    } yield tracker.keySet
       .flatMap(weights.get)
       .sum
       .toFloat / weightMapTotal(weights)

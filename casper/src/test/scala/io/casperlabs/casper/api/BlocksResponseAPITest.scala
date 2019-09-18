@@ -15,6 +15,7 @@ import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.equivocations.EquivocationTracker
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -38,6 +39,8 @@ class BlocksResponseAPITest
   val v2Bond = Bond(v2, 20)
   val v3Bond = Bond(v3, 15)
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+
+  val emptyEquivocationTracker = EquivocationTracker.empty
 
   "showMainChain" should "return only blocks in the main chain" in withStorage {
     implicit blockStorage => implicit dagStorage =>
@@ -86,7 +89,7 @@ class BlocksResponseAPITest
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
         dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash, Map.empty[Validator, Long])
+        tips <- Estimator.tips[Task](dag, genesis.blockHash, emptyEquivocationTracker)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
@@ -152,7 +155,7 @@ class BlocksResponseAPITest
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
         dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash, Map.empty[Validator, Long])
+        tips <- Estimator.tips[Task](dag, genesis.blockHash, emptyEquivocationTracker)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
@@ -232,7 +235,7 @@ class BlocksResponseAPITest
             HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
           )
       dag  <- dagStorage.getRepresentation
-      tips <- Estimator.tips[Task](dag, genesis.blockHash, Map.empty[Validator, Long])
+      tips <- Estimator.tips[Task](dag, genesis.blockHash, emptyEquivocationTracker)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips

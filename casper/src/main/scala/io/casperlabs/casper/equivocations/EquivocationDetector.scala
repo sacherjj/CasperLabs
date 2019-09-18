@@ -14,16 +14,12 @@ import scala.collection.immutable.{Map, Set}
 
 object EquivocationDetector {
 
-  // Stores the lowest rank of any base block, that is, a block from the equivocating validator which
-  // precedes the two or more blocks which equivocated by sharing the same sequence number.
-  type EquivocationTracker = Map[Validator, Long]
-
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   /**
     * Check whether a block creates equivocations when adding a new block to the block dag,
     * if so store the validator with the lowest rank of any base block from
-    * the same validator to `EquivocationsTracker`, then an error is `EquivocatedBlock` returned.
+    * the same validator to `EquivocationTracker`, then an error is `EquivocatedBlock` returned.
     * The base block of equivocation record is the latest unequivocating block from the same validator.
     *
     * For example:
@@ -182,58 +178,57 @@ object EquivocationDetector {
       justificationMsgHashes: Map[Validator, BlockHash],
       equivocationTracker: EquivocationTracker
   ): F[Set[Validator]] =
-    if (equivocationTracker.isEmpty) {
-      Set.empty[Validator].pure[F]
-    } else {
-      val minRank = equivocationTracker.values.min
+    equivocationTracker.min match {
+      case None =>
+        Set.empty[Validator].pure[F]
+      case Some(minRank) =>
+        for {
+          justificationMessages <- justificationMsgHashes.values.toList
+                                    .traverse(dag.lookup)
+                                    .map(_.flatten)
+          implicit0(blockTopoOrdering: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingDesc
 
-      for {
-        justificationMessages <- justificationMsgHashes.values.toList
-                                  .traverse(dag.lookup)
-                                  .map(_.flatten)
-        implicit0(blockTopoOrdering: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingDesc
-
-        toposortJDagFromBlock = DagOperations.bfToposortTraverseF(justificationMessages)(
-          _.justifications.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
-        )
-        acc <- toposortJDagFromBlock
-                .foldWhileLeft(
-                  (Set.empty[Validator], Set.empty[(Validator, Int)])
-                ) {
-                  case (
-                      (detectedEquivocators, visitedValidatorAndBlockSeqNums),
-                      b
-                      ) =>
-                    val creator            = b.validatorPublicKey
-                    val creatorBlockSeqNam = b.validatorBlockSeqNum
-                    if (detectedEquivocators == equivocationTracker.keySet || b.rank <= minRank) {
-                      // Stop traversal if all known equivocations has been found in j-past-cone of `b`
-                      // or we traversed beyond the minimum rank of all equivocations.
-                      Right(
-                        (detectedEquivocators, visitedValidatorAndBlockSeqNums)
-                      )
-                    } else if (detectedEquivocators.contains(creator)) {
-                      Left((detectedEquivocators, visitedValidatorAndBlockSeqNums))
-                    } else if (visitedValidatorAndBlockSeqNums.contains(
-                                 (creator, creatorBlockSeqNam)
-                               )) {
-                      Left(
-                        (
-                          detectedEquivocators + creator,
-                          visitedValidatorAndBlockSeqNums
+          toposortJDagFromBlock = DagOperations.bfToposortTraverseF(justificationMessages)(
+            _.justifications.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
+          )
+          acc <- toposortJDagFromBlock
+                  .foldWhileLeft(
+                    (Set.empty[Validator], Set.empty[(Validator, Int)])
+                  ) {
+                    case (
+                        (detectedEquivocators, visitedValidatorAndBlockSeqNums),
+                        b
+                        ) =>
+                      val creator            = b.validatorPublicKey
+                      val creatorBlockSeqNam = b.validatorBlockSeqNum
+                      if (detectedEquivocators == equivocationTracker.keySet || b.rank <= minRank) {
+                        // Stop traversal if all known equivocations has been found in j-past-cone of `b`
+                        // or we traversed beyond the minimum rank of all equivocations.
+                        Right(
+                          (detectedEquivocators, visitedValidatorAndBlockSeqNums)
                         )
-                      )
-                    } else {
-                      Left(
-                        (
-                          detectedEquivocators,
-                          visitedValidatorAndBlockSeqNums + (creator -> creatorBlockSeqNam)
+                      } else if (detectedEquivocators.contains(creator)) {
+                        Left((detectedEquivocators, visitedValidatorAndBlockSeqNums))
+                      } else if (visitedValidatorAndBlockSeqNums.contains(
+                                   (creator, creatorBlockSeqNam)
+                                 )) {
+                        Left(
+                          (
+                            detectedEquivocators + creator,
+                            visitedValidatorAndBlockSeqNums
+                          )
                         )
-                      )
-                    }
-                }
-        (detectedEquivocator, _) = acc
-      } yield detectedEquivocator
+                      } else {
+                        Left(
+                          (
+                            detectedEquivocators,
+                            visitedValidatorAndBlockSeqNums + (creator -> creatorBlockSeqNam)
+                          )
+                        )
+                      }
+                  }
+          (detectedEquivocator, _) = acc
+        } yield detectedEquivocator
     }
 
   /**

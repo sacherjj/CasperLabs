@@ -9,7 +9,7 @@ import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.equivocations.EquivocationDetector
+import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationTracker}
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -28,6 +28,8 @@ class ForkchoiceTest
     with GeneratorDrivenPropertyChecks
     with BlockGenerator
     with DagStorageFixture {
+
+  val emptyEquivocationTracker = EquivocationTracker.empty
 
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
     implicit blockStorage => implicit dagStorage =>
@@ -85,7 +87,7 @@ class ForkchoiceTest
                        dag,
                        genesis.blockHash,
                        Map.empty[Estimator.Validator, Estimator.BlockHash],
-                       Map.empty[Estimator.Validator, Long]
+                       emptyEquivocationTracker
                      )
       } yield forkchoice.head should be(genesis.blockHash)
   }
@@ -148,7 +150,7 @@ class ForkchoiceTest
                        dag,
                        genesis.blockHash,
                        latestBlocks,
-                       Map.empty[Validator, Long]
+                       emptyEquivocationTracker
                      )
         _      = forkchoice.head should be(b6.blockHash)
         result = forkchoice(1) should be(b8.blockHash)
@@ -215,7 +217,7 @@ class ForkchoiceTest
                        dag,
                        genesis.blockHash,
                        latestBlocks,
-                       Map.empty[Validator, Long]
+                       emptyEquivocationTracker
                      )
         _      = forkchoice.head should be(b8.blockHash)
         result = forkchoice(1) should be(b7.blockHash)
@@ -240,7 +242,7 @@ class ForkchoiceTest
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
         // Set the equivocationTracker manually
-        equivocationTracker = Map(v2 -> genesis.getHeader.rank)
+        equivocationTracker = new EquivocationTracker(Map(v2 -> genesis.getHeader.rank))
         equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
                                    dag,
                                    latestBlocks,
@@ -512,7 +514,7 @@ class ForkchoiceTest
           i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, Map.empty[Validator, Long])
+          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, emptyEquivocationTracker)
           _            = tips.head shouldEqual i.blockHash
         } yield ()
   }
