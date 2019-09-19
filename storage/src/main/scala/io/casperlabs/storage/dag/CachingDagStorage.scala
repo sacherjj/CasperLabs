@@ -77,6 +77,11 @@ class CachingDagStorage[F[_]: Sync](
   // at SQLiteStorage.scala
   override def lookup(blockHash: BlockHash): F[Option[BlockSummary]] = underlying.lookup(blockHash)
 
+  // TODO: Remove DagRepresentation#contains because
+  // we already have BlockStorage#contains with the same semantics
+  // and which also cached in CachingBlockStorage.
+  // We don't use 'contains' directly because it's overriden by BlockStorage#contains
+  // at SQLiteStorage.scala
   override def contains(blockHash: BlockHash): F[Boolean] =
     Sync[F]
       .delay {
