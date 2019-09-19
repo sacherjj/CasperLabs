@@ -1,7 +1,3 @@
-# The whole file should deserialize into
-# io.casperlabs.node.configuration.ChainSpec.InitialConf
-
-# io.casperlabs.node.configuration.ChainSpec.GenesisConf
 [genesis]
 
 # Human readable name for convenience; the genesis_hash is the true identifier.

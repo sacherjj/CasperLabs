@@ -25,19 +25,10 @@ import io.casperlabs.node.configuration.ChainSpec.WasmCosts
   */
 object ChainSpec extends ParserImplicits {
 
-  /** The first set of changes should define the Genesis section and the costs. */
-  final case class InitialConf(
-      genesis: GenesisConf,
-      wasmCosts: WasmCosts
-  )
-
-  object InitialConf {
-
-    /** Parse the manifest. */
-    def parse(manifest: => Source): ValidatedNel[String, InitialConf] =
+  class ConfCompanion[T](confParser: ConfParser[T]) {
+    def parseManifest(manifest: => Source): ValidatedNel[String, T] =
       Utils.readFile(manifest).toValidatedNel[String].andThen { raw =>
-        ConfParser
-          .gen[InitialConf]
+        confParser
           .parse(
             cliByName = _ => None,
             envVars = Map.empty,
@@ -48,12 +39,33 @@ object ChainSpec extends ParserImplicits {
       }
   }
 
+  /** The first set of changes should define the Genesis section and the costs. */
   final case class GenesisConf(
+      genesis: Genesis,
+      wasmCosts: WasmCosts
+  )
+  object GenesisConf extends ConfCompanion[GenesisConf](ConfParser.gen[GenesisConf])
+
+  /** Subsequent changes describe upgrades. */
+  final case class UpgradeConf(
+      upgrade: Upgrade,
+      wasmCosts: Option[WasmCosts]
+  )
+  object UpgradeConf extends ConfCompanion[UpgradeConf](ConfParser.gen[UpgradeConf])
+
+  final case class Genesis(
       name: String,
       timestamp: Long,
       mintCodePath: Path,
       posCodePath: Path,
       initialAccountsPath: Path,
+      // TODO: Change this later to semver.
+      protocolVersion: Long
+  ) extends SubConfig
+
+  final case class Upgrade(
+      activationPointRank: Long,
+      installerCodePath: Option[Path],
       // TODO: Change this later to semver.
       protocolVersion: Long
   ) extends SubConfig
@@ -114,7 +126,22 @@ object ChainSpec extends ParserImplicits {
 }
 
 trait ChainSpecReader {
-  import ChainSpec.{Accounts, InitialConf}
+  import ChainSpec.{Accounts, GenesisConf, UpgradeConf}
+
+  private def withManifest[A, B](dir: Path, parseManifest: (=> Source) => ValidatedNel[String, A])(
+      read: A => Either[String, B]
+  ): ValidatedNel[String, B] = {
+    val manifest = new File(dir.toFile, "manifest.toml")
+    if (!manifest.exists)
+      Validated.invalidNel(s"Manifest file '$manifest' is missing!")
+    else {
+      parseManifest(Source.fromFile(manifest)) andThen { conf =>
+        read(conf)
+          .leftMap(err => s"Could not read chainspec sub-directory $dir: $err")
+          .toValidatedNel
+      }
+    }
+  }
 
   implicit class ChainSpecOps(typ: ipc.ChainSpec.type) {
 
@@ -150,43 +177,62 @@ trait ChainSpecReader {
   }
 
   implicit class GenesisConfigOps(typ: ipc.ChainSpec.GenesisConfig.type) {
-    def fromDirectory(path: Path): ValidatedNel[String, ipc.ChainSpec.GenesisConfig] = {
-      val manifest = new File(path.toFile, "manifest.toml")
-      if (!manifest.exists)
-        Validated.invalidNel(s"Manifest file '$manifest' is missing!")
-      else {
-        InitialConf.parse(Source.fromFile(manifest)) andThen {
-          case InitialConf(genesis, wasmCosts) =>
-            val tryRead = for {
-              mintCodeBytes <- Utils.readBytes(path.resolve(genesis.mintCodePath))
-              posCodeBytes  <- Utils.readBytes(path.resolve(genesis.posCodePath))
-              accountsCsv   <- Utils.readFile(path.resolve(genesis.initialAccountsPath))
-              accounts      <- Accounts.parseCsv(accountsCsv, skipHeader = false)
-            } yield {
-              ipc.ChainSpec
-                .GenesisConfig()
-                .withName(genesis.name)
-                .withTimestamp(genesis.timestamp)
-                .withProtocolVersion(state.ProtocolVersion(genesis.protocolVersion))
-                .withMintInstaller(ByteString.copyFrom(mintCodeBytes))
-                .withPosInstaller(ByteString.copyFrom(posCodeBytes))
-                .withAccounts(accounts.map { account =>
-                  ipc.ChainSpec
-                    .GenesisAccount()
-                    .withPublicKey(ByteString.copyFrom(account.publicKey))
-                    .withBalance(state.BigInt(account.initialBalance.toString, bitWidth = 512))
-                    .withBondedAmount(
-                      state.BigInt(account.initialBondedAmount.toString, bitWidth = 512)
-                    )
-                })
-                .withCosts(ipc.ChainSpec.CostTable.fromConfig(wasmCosts))
-            }
-            tryRead
-              .leftMap(err => s"Could not parse Genesis from directory $path: $err")
-              .toValidatedNel
-        }
+    def fromDirectory(path: Path): ValidatedNel[String, ipc.ChainSpec.GenesisConfig] =
+      withManifest[GenesisConf, ipc.ChainSpec.GenesisConfig](path, GenesisConf.parseManifest) {
+        case GenesisConf(genesis, wasmCosts) =>
+          for {
+            mintCodeBytes <- Utils.readBytes(path.resolve(genesis.mintCodePath))
+            posCodeBytes  <- Utils.readBytes(path.resolve(genesis.posCodePath))
+            accountsCsv   <- Utils.readFile(path.resolve(genesis.initialAccountsPath))
+            accounts      <- Accounts.parseCsv(accountsCsv, skipHeader = false)
+          } yield {
+            ipc.ChainSpec
+              .GenesisConfig()
+              .withName(genesis.name)
+              .withTimestamp(genesis.timestamp)
+              .withProtocolVersion(state.ProtocolVersion(genesis.protocolVersion))
+              .withMintInstaller(ByteString.copyFrom(mintCodeBytes))
+              .withPosInstaller(ByteString.copyFrom(posCodeBytes))
+              .withAccounts(accounts.map { account =>
+                ipc.ChainSpec
+                  .GenesisAccount()
+                  .withPublicKey(ByteString.copyFrom(account.publicKey))
+                  .withBalance(state.BigInt(account.initialBalance.toString, bitWidth = 512))
+                  .withBondedAmount(
+                    state.BigInt(account.initialBondedAmount.toString, bitWidth = 512)
+                  )
+              })
+              .withCosts(ipc.ChainSpec.CostTable.fromConfig(wasmCosts))
+          }
       }
-    }
+  }
+
+  implicit class UpgradePointOps(typ: ipc.ChainSpec.UpgradePoint.type) {
+    def fromDirectory(path: Path): ValidatedNel[String, ipc.ChainSpec.UpgradePoint] =
+      withManifest[UpgradeConf, ipc.ChainSpec.UpgradePoint](path, UpgradeConf.parseManifest) {
+        case UpgradeConf(upgrade, maybeWasmCosts) =>
+          upgrade.installerCodePath.fold(
+            none[Array[Byte]].asRight[String]
+          ) { x =>
+            Utils.readBytes(path.resolve(x)).map(_.some)
+          } map { maybeInstallerCodeBytes =>
+            ipc.ChainSpec
+              .UpgradePoint(
+                upgradeInstaller = maybeInstallerCodeBytes.map { bytes =>
+                  ipc.DeployCode(
+                    code = ByteString.copyFrom(bytes)
+                  )
+                },
+                newCosts = maybeWasmCosts.map { wasmCosts =>
+                  ipc.ChainSpec.CostTable.fromConfig(wasmCosts)
+                }
+              )
+              .withActivationPoint(
+                ipc.ChainSpec.ActivationPoint(upgrade.activationPointRank)
+              )
+              .withProtocolVersion(state.ProtocolVersion(upgrade.protocolVersion))
+          }
+      }
   }
 
   implicit class CostTableOps(typ: ipc.ChainSpec.CostTable.type) {
@@ -207,10 +253,5 @@ trait ChainSpecReader {
             .withOpcodesMul(wasmCosts.opcodesMultiplier.value)
             .withOpcodesDiv(wasmCosts.opcodesDivisor.value)
         )
-  }
-
-  implicit class UpgradePointOps(typ: ipc.ChainSpec.UpgradePoint.type) {
-    def fromDirectory(path: Path): ValidatedNel[String, ipc.ChainSpec.UpgradePoint] =
-      sys.error(s"Did not expect upgrades yet: $path")
   }
 }
