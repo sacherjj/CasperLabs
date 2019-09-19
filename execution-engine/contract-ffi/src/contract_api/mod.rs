@@ -15,7 +15,7 @@ use crate::value::account::{
 };
 use crate::value::{Contract, ProtocolVersion, Value, U512};
 use alloc::collections::BTreeMap;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
 use core::convert::{TryFrom, TryInto};
@@ -77,9 +77,10 @@ where
 {
     match maybe_value {
         None => Ok(None),
-        Some(value) => value.try_into().map(Some).map_err(|_| {
-            bytesrepr::Error::CustomError("T could not be derived from Value".to_string())
-        }),
+        Some(value) => value
+            .try_into()
+            .map(Some)
+            .map_err(|_| bytesrepr::Error::custom("T could not be derived from Value")),
     }
 }
 
