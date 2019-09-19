@@ -58,6 +58,19 @@ object DagStorage {
 
     abstract override def latestMessages: F[Map[Validator, BlockSummary]] =
       incAndMeasure("latestMessages", super.latestMessages)
+
+    abstract override def topoSort(
+        startBlockNumber: Long,
+        endBlockNumber: Long
+    ): fs2.Stream[F, Vector[BlockHash]] =
+      fs2.Stream.eval(m.incrementCounter("topoSort")) >> super
+        .topoSort(startBlockNumber, endBlockNumber)
+
+    abstract override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]] =
+      fs2.Stream.eval(m.incrementCounter("topoSort")) >> super.topoSort(startBlockNumber)
+
+    abstract override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockHash]] =
+      fs2.Stream.eval(m.incrementCounter("topoSortTail")) >> super.topoSortTail(tailLength)
   }
 
   def apply[F[_]](implicit B: DagStorage[F]): DagStorage[F] = B
