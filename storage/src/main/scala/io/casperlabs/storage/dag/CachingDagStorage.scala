@@ -39,7 +39,8 @@ class CachingDagStorage[F[_]: Sync](
       underlying.justificationToBlocks(blockHash)
     )
 
-  override def getRepresentation: F[DagRepresentation[F]] = underlying.getRepresentation
+  override def getRepresentation: F[DagRepresentation[F]] =
+    (this: DagRepresentation[F]).pure[F]
 
   override private[storage] def insert(block: Block): F[DagRepresentation[F]] =
     Sync[F].delay {
