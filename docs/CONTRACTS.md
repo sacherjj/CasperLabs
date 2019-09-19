@@ -42,13 +42,15 @@ Create an account, which automatically creates a new keypair.  This keypair shou
 Add coins to this account using the [faucet](https://clarity.casperlabs.io/#/faucet).
 
 ##### Step 5: Deploy `counterdefine.wasm`
+
+Note: `--payment-amount` is used to define the maximum number of motes to spend on the execution of the deploy. 
 ```
 casperlabs-client \
     --host deploy.casperlabs.io \
     deploy \
     --private-key <path-to-private-key> \
     --session $COUNTER_DEFINE
-    --payment-amount 1
+    --payment-amount <int>
 ```
 
 You should see the following output:
@@ -62,13 +64,15 @@ See the instructions [here](QUERYING.md).
 
 
 ##### Step 7: Deploy `countercall.wasm`
+
+Note: `--payment-amount` is used to define the maximum number of motes to spend on the execution of the deploy.
 ```
 casperlabs-client \
     --host deploy.casperlabs.io \
     deploy \
     --private-key <path-to-private-key> \
     --session $COUNTER_CALL
-    --payment-amount 1
+    --payment-amount <int>
 ```
 
 You should see the following output:
