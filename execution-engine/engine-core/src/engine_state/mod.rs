@@ -35,9 +35,10 @@ pub use self::engine_config::EngineConfig;
 use self::error::{Error, RootNotFound};
 use self::executable_deploy_item::ExecutableDeployItem;
 use self::execution_result::ExecutionResult;
-use self::genesis::{create_genesis_effects, GenesisResult};
-use self::genesis::{GenesisAccount, GenesisConfig, POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
-use self::utils::WasmiBytes;
+use self::genesis::{
+    GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
+};
+use crate::engine_state::error::Error::MissingSystemContractError;
 use crate::execution::AddressGenerator;
 use crate::execution::{self, Executor, WasmiExecutor, MINT_NAME, POS_NAME};
 use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
@@ -54,16 +55,18 @@ const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
 const MINT_METHOD_NAME: &str = "mint";
 
+// TODO: delete the following after migration to new genesis
+const LEGACY_CHAIN_NAME: &str = "gerald";
+const LEGACY_TIMESTAMP: u64 = 0;
+const MINT_INSTALL_BYTES: &[u8] =
+    include_bytes!("../../../target/wasm32-unknown-unknown/release/mint_install.wasm");
+const PROOF_OF_STAKE_INSTALL_BYTES: &[u8] =
+    include_bytes!("../../../target/wasm32-unknown-unknown/release/pos_install.wasm");
+
 #[derive(Debug)]
 pub struct EngineState<S> {
     config: EngineConfig,
     state: S,
-}
-
-pub enum GetBondedValidatorsError<E> {
-    StateError(E),
-    PostStateHashNotFound(Blake2bHash),
-    ProofOfStakeNotFound(Key),
 }
 
 impl<S> EngineState<S>
@@ -85,31 +88,51 @@ where
         correlation_id: CorrelationId,
         genesis_account_addr: [u8; 32],
         initial_motes: U512,
-        mint_code_bytes: &[u8],
-        proof_of_stake_code_bytes: &[u8],
+        _mint_code_bytes: &[u8],
+        _proof_of_stake_code_bytes: &[u8],
         genesis_validators: Vec<(PublicKey, U512)>,
         protocol_version: ProtocolVersion,
     ) -> Result<GenesisResult, Error> {
-        let mint_code = WasmiBytes::new(mint_code_bytes, WasmCosts::free())?;
-        let pos_code = WasmiBytes::new(proof_of_stake_code_bytes, WasmCosts::free())?;
+        assert_eq!(
+            protocol_version.value(),
+            1,
+            "legacy genesis only supports protocol version 1"
+        );
+        let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
 
-        let effects = create_genesis_effects(
-            genesis_account_addr,
-            initial_motes,
-            mint_code,
-            pos_code,
-            genesis_validators,
+        let mut accounts = Vec::new();
+
+        {
+            let genesis_account = GenesisAccount::new(
+                PublicKey::new(genesis_account_addr),
+                Motes::new(initial_motes),
+                Motes::zero(),
+            );
+            accounts.push(genesis_account);
+        }
+
+        for (key, bonded_amount) in genesis_validators {
+            let balance = Motes::new(bonded_amount); // this is bullshit
+            let bonded_amount = Motes::new(bonded_amount);
+            let account = GenesisAccount::new(key, balance, bonded_amount);
+            accounts.push(account);
+        }
+
+        let legacy_chain_name = LEGACY_CHAIN_NAME.to_string();
+        let mint_install_bytes = MINT_INSTALL_BYTES.to_vec();
+        let proof_of_stake_install_bytes = PROOF_OF_STAKE_INSTALL_BYTES.to_vec();
+
+        let genesis_config = GenesisConfig::new(
+            legacy_chain_name,
+            LEGACY_TIMESTAMP,
             protocol_version,
-        )?;
-        let prestate_hash = self.state.empty_root();
-        let commit_result = self
-            .state
-            .commit(correlation_id, prestate_hash, effects.transforms.to_owned())
-            .map_err(Into::into)?;
+            mint_install_bytes,
+            proof_of_stake_install_bytes,
+            accounts,
+            wasm_costs,
+        );
 
-        let genesis_result = GenesisResult::from_commit_result(commit_result, effects);
-
-        Ok(genesis_result)
+        self.commit_genesis_with_chainspec(correlation_id, genesis_config)
     }
 
     pub fn commit_genesis_with_chainspec(
@@ -128,14 +151,6 @@ where
         let protocol_version = genesis_config.protocol_version();
         let wasm_costs = genesis_config.wasm_costs();
         let preprocessor = WasmiPreprocessor::new(wasm_costs);
-
-        // Spec #2: Associate given CostTable with given ProtocolVersion.
-        {
-            let protocol_data = ProtocolData::new(wasm_costs);
-            self.state
-                .put_protocol_data(protocol_version, &protocol_data)
-                .map_err(Into::into)?
-        }
 
         // Spec #3: Create "virtual system account" object.
         let virtual_system_account = {
@@ -267,6 +282,15 @@ where
                 phase,
             )?
         };
+
+        // Spec #2: Associate given CostTable with given ProtocolVersion.
+        {
+            let protocol_data =
+                ProtocolData::new(wasm_costs, mint_reference, proof_of_stake_reference);
+            self.state
+                .put_protocol_data(protocol_version, &protocol_data)
+                .map_err(Into::into)?
+        }
 
         //
         // NOTE: The following stanzas deviate from the implementation strategy described in the
@@ -704,7 +728,7 @@ where
 
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
-        let mint_inner_uref = {
+        let mint_reference = {
             // Get mint system contract URef from account (an account on a different network
             // may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
@@ -730,7 +754,7 @@ where
 
             // Safe to unwrap here, as `get_system_contract_info` checks that the key is
             // the proper variant.
-            *mint_info.inner_key().as_uref().unwrap()
+            *mint_info.key().as_uref().unwrap()
         };
 
         // Get proof of stake system contract URef from account (an account on a
@@ -775,7 +799,7 @@ where
 
             match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
-                mint_inner_uref,
+                mint_reference,
                 rewards_purse_key,
             ) {
                 Ok(key) => key,
@@ -791,7 +815,7 @@ where
             let account_key = Key::URef(account.purse_id().value());
             match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
-                mint_inner_uref,
+                mint_reference,
                 account_key,
             ) {
                 Ok(key) => key,
@@ -889,7 +913,7 @@ where
 
             let purse_balance_key = match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
-                mint_inner_uref,
+                mint_reference,
                 payment_purse,
             ) {
                 Ok(key) => key,
@@ -996,7 +1020,7 @@ where
                 .urefs_lookup()
                 .clone();
 
-            let base_key = proof_of_stake_info.inner_key();
+            let base_key = proof_of_stake_info.key();
             let gas_limit = Gas::from_u64(std::u64::MAX);
 
             executor.exec_direct(
@@ -1032,37 +1056,62 @@ where
     pub fn apply_effect(
         &self,
         correlation_id: CorrelationId,
-        prestate_hash: Blake2bHash,
+        protocol_version: ProtocolVersion,
+        pre_state_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, S::Error> {
-        self.state.commit(correlation_id, prestate_hash, effects)
+    ) -> Result<CommitResult, Error>
+    where
+        Error: From<S::Error>,
+    {
+        match self.state.commit(correlation_id, pre_state_hash, effects)? {
+            CommitResult::Success { state_root, .. } => {
+                let bonded_validators =
+                    self.get_bonded_validators(correlation_id, protocol_version, state_root)?;
+                Ok(CommitResult::Success {
+                    state_root,
+                    bonded_validators,
+                })
+            }
+            commit_result => Ok(commit_result),
+        }
     }
 
     /// Calculates bonded validators at `root_hash` state.
     pub fn get_bonded_validators(
         &self,
-        root_hash: Blake2bHash,
-        pos_key: &Key, /* Address of the PoS as currently bonded validators are stored in its
-                        * known urefs map. */
         correlation_id: CorrelationId,
-    ) -> Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<S::Error>> {
-        self.state
-            .checkout(root_hash)
-            .map_err(GetBondedValidatorsError::StateError)
-            .and_then(|maybe_reader| match maybe_reader {
-                Some(reader) => match reader.read(correlation_id, &pos_key.normalize()) {
-                    Ok(Some(Value::Contract(contract))) => {
-                        let bonded_validators = contract
-                            .urefs_lookup()
-                            .keys()
-                            .filter_map(|entry| utils::pos_validator_to_tuple(entry))
-                            .collect::<HashMap<PublicKey, U512>>();
-                        Ok(bonded_validators)
-                    }
-                    Ok(_) => Err(GetBondedValidatorsError::ProofOfStakeNotFound(*pos_key)),
-                    Err(error) => Err(GetBondedValidatorsError::StateError(error)),
-                },
-                None => Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)),
-            })
+        protocol_version: ProtocolVersion,
+        root_hash: Blake2bHash,
+    ) -> Result<HashMap<PublicKey, U512>, Error>
+    where
+        Error: From<S::Error>,
+    {
+        let protocol_data = match self.state.get_protocol_data(protocol_version)? {
+            Some(protocol_data) => protocol_data,
+            None => return Err(Error::InvalidProtocolVersion),
+        };
+
+        let proof_of_stake = {
+            let tmp = protocol_data.proof_of_stake();
+            Key::URef(tmp).normalize()
+        };
+
+        let reader = match self.state.checkout(root_hash)? {
+            Some(reader) => reader,
+            None => panic!("get_bonded_validators called with an invalid root hash"),
+        };
+
+        let contract = match reader.read(correlation_id, &proof_of_stake)? {
+            Some(Value::Contract(contract)) => contract,
+            _ => return Err(MissingSystemContractError("proof of stake".to_string())),
+        };
+
+        let bonded_validators = contract
+            .urefs_lookup()
+            .keys()
+            .filter_map(|entry| utils::pos_validator_to_tuple(entry))
+            .collect::<HashMap<PublicKey, U512>>();
+
+        Ok(bonded_validators)
     }
 }

@@ -13,6 +13,7 @@ use crate::support::test_support::{
     self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME,
     STANDARD_PAYMENT_CONTRACT,
 };
+use crate::test::DEFAULT_PAYMENT;
 
 const FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const LOCAL_REFUND_PURSE: &str = "local_refund_purse";
@@ -29,7 +30,7 @@ fn initialize() -> InMemoryWasmTestBuilder {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             "transfer_purse_to_account.wasm",
             (SYSTEM_ADDR, U512::from(MAX_PAYMENT)),
             DEFAULT_BLOCK_TIME,
@@ -40,7 +41,7 @@ fn initialize() -> InMemoryWasmTestBuilder {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             "transfer_purse_to_account.wasm",
             (ACCOUNT_ADDR, U512::from(MAX_PAYMENT)),
             DEFAULT_BLOCK_TIME,
@@ -70,7 +71,7 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             FINALIZE_PAYMENT,
             args,
             DEFAULT_BLOCK_TIME,
@@ -81,7 +82,7 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
         .exec_with_args(
             ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             FINALIZE_PAYMENT,
             args,
             DEFAULT_BLOCK_TIME,

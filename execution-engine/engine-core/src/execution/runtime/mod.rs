@@ -21,7 +21,7 @@ use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
-use crate::execution::Error::{KeyNotFound, URefNotFound};
+use crate::execution::Error::URefNotFound;
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
 use crate::runtime_context::RuntimeContext;
@@ -678,39 +678,24 @@ where
     }
 
     /// looks up the public mint contract key in the caller's [uref_lookup] map.
-    fn get_mint_contract_public_uref_key(&mut self) -> Result<Key, Error> {
+    fn get_mint_contract_uref_key(&mut self) -> Result<Key, Error> {
         match self.context.get_uref(MINT_NAME) {
             Some(key @ Key::URef(_)) => Ok(*key),
             _ => Err(URefNotFound(String::from(MINT_NAME))),
         }
     }
 
-    fn get_pos_contract_public_uref_key(&mut self) -> Result<Key, Error> {
+    fn get_pos_contract_uref_key(&mut self) -> Result<Key, Error> {
         match self.context.get_uref(POS_NAME) {
             Some(key @ Key::URef(_)) => Ok(*key),
             _ => Err(URefNotFound(String::from(POS_NAME))),
         }
     }
 
-    /// looks up the public mint contract key in the caller's [uref_lookup] map
-    /// and then gets the "internal" mint contract uref stored under the
-    /// public mint contract key.
     fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
-        let public_mint_key = self.get_mint_contract_public_uref_key()?;
-        let internal_mint_uref = match self.context.read_gs(&public_mint_key)? {
-            Some(Value::Key(Key::URef(uref))) => URef::new(uref.addr(), AccessRights::READ),
-            _ => return Err(KeyNotFound(public_mint_key)),
-        };
-        Ok(internal_mint_uref)
-    }
-
-    fn get_pos_contract_uref(&mut self) -> Result<URef, Error> {
-        let public_pos_key = self.get_pos_contract_public_uref_key()?;
-        let internal_mint_uref = match self.context.read_gs(&public_pos_key)? {
-            Some(Value::Key(Key::URef(uref))) => uref,
-            _ => return Err(KeyNotFound(public_pos_key)),
-        };
-        Ok(internal_mint_uref)
+        let key = self.get_mint_contract_uref_key()?;
+        let reference = *key.as_uref().unwrap();
+        Ok(reference)
     }
 
     /// Calls the "create" method on the mint contract at the given mint
@@ -773,9 +758,7 @@ where
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let mint_contract_uref = self.get_mint_contract_uref()?;
-        let pos_contract_uref = self.get_pos_contract_uref()?;
         let mint_contract_key = Key::URef(mint_contract_uref);
-        let pos_contract_key = Key::URef(pos_contract_uref);
         let target_addr = target.value();
         let target_key = Key::Account(target_addr);
 
@@ -794,16 +777,8 @@ where
         match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
             Ok(_) => {
                 let known_urefs = vec![
-                    (
-                        String::from(MINT_NAME),
-                        self.get_mint_contract_public_uref_key()?,
-                    ),
-                    (
-                        String::from(POS_NAME),
-                        self.get_pos_contract_public_uref_key()?,
-                    ),
-                    (pos_contract_uref.as_string(), pos_contract_key),
-                    (mint_contract_uref.as_string(), mint_contract_key),
+                    (String::from(MINT_NAME), self.get_mint_contract_uref_key()?),
+                    (String::from(POS_NAME), self.get_pos_contract_uref_key()?),
                 ]
                 .into_iter()
                 .map(|(name, key)| {

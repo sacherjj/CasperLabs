@@ -40,7 +40,7 @@ fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemory
         .expect("Creation of mocked account should be a success.");
 
     let new_hash = match commit_result {
-        CommitResult::Success(new_hash) => new_hash,
+        CommitResult::Success { state_root, .. } => state_root,
         other => panic!("Commiting changes to test History failed: {:?}.", other),
     };
 

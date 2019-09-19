@@ -5,10 +5,13 @@ use std::rc::Rc;
 
 use grpc::RequestOptions;
 
+use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::U512;
 use engine_core::engine_state::utils::WasmiBytes;
-use engine_core::engine_state::{EngineConfig, EngineState};
-use engine_core::execution::POS_NAME;
+use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
+use engine_core::execution::{MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, DeployCode, DeployItem, DeployPayload, DeployResult,
     DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
@@ -16,7 +19,7 @@ use engine_grpc_server::engine_server::ipc::{
     StoredContractName, StoredContractURef,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use engine_grpc_server::engine_server::mappings::{to_domain_validators, CommitTransforms};
+use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
 use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
 use engine_grpc_server::engine_server::{ipc, transforms};
 use engine_shared::newtypes::Blake2bHash;
@@ -325,11 +328,10 @@ pub enum SystemContractType {
 pub fn create_genesis_request(
     address: [u8; 32],
     genesis_validators: HashMap<contract_ffi::value::account::PublicKey, contract_ffi::value::U512>,
-) -> (GenesisRequest, HashMap<SystemContractType, WasmiBytes>) {
+) -> GenesisRequest {
     let genesis_account_addr = address.to_vec();
-    let mut contracts: HashMap<SystemContractType, WasmiBytes> = HashMap::new();
 
-    let initial_tokens = {
+    let initial_motes = {
         let mut ret = BigInt::new();
         ret.set_bit_width(512);
         ret.set_value(format!("{}", GENESIS_INITIAL_BALANCE));
@@ -340,10 +342,6 @@ pub fn create_genesis_request(
         let mut ret = DeployCode::new();
         let contract_file = "mint_token.wasm";
         let wasm_bytes = read_wasm_file_bytes(contract_file);
-        let wasmi_bytes =
-            WasmiBytes::new(&wasm_bytes, engine_wasm_prep::wasm_costs::WasmCosts::free())
-                .expect("should have wasmi bytes");
-        contracts.insert(SystemContractType::Mint, wasmi_bytes);
         ret.set_code(wasm_bytes);
         ret
     };
@@ -352,10 +350,6 @@ pub fn create_genesis_request(
         let mut ret = DeployCode::new();
         let contract_file = "pos.wasm";
         let wasm_bytes = read_wasm_file_bytes(contract_file);
-        let wasmi_bytes =
-            WasmiBytes::new(&wasm_bytes, engine_wasm_prep::wasm_costs::WasmCosts::free())
-                .expect("should have wasmi bytes");
-        contracts.insert(SystemContractType::ProofOfStake, wasmi_bytes);
         ret.set_code(wasm_bytes);
         ret
     };
@@ -378,18 +372,17 @@ pub fn create_genesis_request(
 
     let mut ret = GenesisRequest::new();
     ret.set_address(genesis_account_addr.to_vec());
-    ret.set_initial_motes(initial_tokens);
+    ret.set_initial_motes(initial_motes);
     ret.set_mint_code(mint_code);
     ret.set_proof_of_stake_code(proof_of_stake_code);
     ret.set_protocol_version(protocol_version);
     ret.set_genesis_validators(grpc_genesis_validators.into());
-
-    (ret, contracts)
+    ret
 }
 
 pub fn create_query_request(
     post_state: Vec<u8>,
-    base_key: &contract_ffi::key::Key,
+    base_key: contract_ffi::key::Key,
     path: Vec<String>,
 ) -> QueryRequest {
     let mut query_request = QueryRequest::new();
@@ -662,8 +655,9 @@ impl WasmTestBuilder {
             contract_ffi::value::U512,
         >,
     ) -> &mut WasmTestBuilder {
-        let (genesis_request, contracts) =
-            create_genesis_request(genesis_addr, genesis_validators.clone());
+        let system_account = Key::Account(SYSTEM_ACCOUNT_ADDR);
+
+        let genesis_request = create_genesis_request(genesis_addr, genesis_validators.clone());
 
         let genesis_response = self
             .engine_state
@@ -680,25 +674,22 @@ impl WasmTestBuilder {
         // Cache genesis response transforms for easy access later
         let genesis_transforms = get_genesis_transforms(&genesis_response);
 
-        let mint_contract_uref = get_mint_contract_uref(&genesis_transforms, &contracts)
-            .expect("Unable to get mint contract uref");
+        let system_account = get_account(&genesis_transforms, &system_account)
+            .expect("Unable to get system account");
+
+        let known_keys = system_account.urefs_lookup();
+
+        let mint_contract_uref = known_keys
+            .get(MINT_NAME)
+            .and_then(Key::as_uref)
+            .cloned()
+            .expect("Unable to get mint contract URef");
 
         // Cache mint uref
         self.mint_contract_uref = Some(mint_contract_uref);
 
         // Cache the account
-        self.genesis_account = Some(
-            get_account(
-                &genesis_transforms,
-                &contract_ffi::key::Key::Account(genesis_addr),
-            )
-            .unwrap_or_else(|| {
-                panic!(
-                    "Unable to obtain genesis account from genesis response: {:?}",
-                    genesis_response
-                )
-            }),
-        );
+        self.genesis_account = Some(system_account);
 
         let genesis_hash = genesis_response.get_success().get_poststate_hash().to_vec();
         assert_eq!(state_root_hash.to_vec(), genesis_hash);
@@ -722,7 +713,7 @@ impl WasmTestBuilder {
 
         let path_vec: Vec<String> = path.iter().map(|s| String::from(*s)).collect();
 
-        let query_request = create_query_request(post_state, &base_key, path_vec);
+        let query_request = create_query_request(post_state, base_key, path_vec);
 
         let query_response = self
             .engine_state
@@ -870,8 +861,9 @@ impl WasmTestBuilder {
         let bonded_validators = commit_success
             .get_bonded_validators()
             .iter()
-            .map(|bond| to_domain_validators(bond).unwrap())
-            .collect();
+            .map(TryInto::try_into)
+            .collect::<Result<HashMap<PublicKey, U512>, MappingError>>()
+            .unwrap();
         self.bonded_validators.push(bonded_validators);
         self
     }
@@ -969,19 +961,10 @@ impl WasmTestBuilder {
     }
 
     pub fn get_pos_contract(&self) -> contract_ffi::value::contract::Contract {
-        let genesis_account = self
-            .genesis_account
-            .clone()
-            .expect("should run genesis process first");
-        let genesis_key = contract_ffi::key::Key::Account(genesis_account.pub_key());
-        let pos_uref: contract_ffi::key::Key = self
-            .query(None, genesis_key, &[POS_NAME])
+        let system_account = contract_ffi::key::Key::Account(SYSTEM_ACCOUNT_ADDR);
+        self.query(None, system_account, &[POS_NAME])
             .and_then(|v| v.try_into().ok())
-            .expect("should find PoS URef");
-
-        self.query(None, pos_uref, &[])
-            .and_then(|v| v.try_into().ok())
-            .expect("should find PoS Contract")
+            .expect("should find PoS URef")
     }
 
     pub fn get_purse_balance(

@@ -7,7 +7,8 @@ use std::hash::BuildHasher;
 use std::time::Instant;
 
 use contract_ffi::key::Key;
-use contract_ffi::value::{ProtocolVersion, Value};
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::{ProtocolVersion, Value, U512};
 use engine_shared::logging::{log_duration, log_metric, GAUGE};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::{self, Transform, TypeMismatch};
@@ -37,7 +38,10 @@ pub trait StateReader<K, V> {
 #[derive(Debug)]
 pub enum CommitResult {
     RootNotFound,
-    Success(Blake2bHash),
+    Success {
+        state_root: Blake2bHash,
+        bonded_validators: HashMap<PublicKey, U512>,
+    },
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
 }
@@ -46,7 +50,14 @@ impl fmt::Display for CommitResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             CommitResult::RootNotFound => write!(f, "Root not found"),
-            CommitResult::Success(hash) => write!(f, "Success: {}", hash),
+            CommitResult::Success {
+                state_root,
+                bonded_validators,
+            } => write!(
+                f,
+                "Success: state_root: {}, bonded_validators: {:?}",
+                state_root, bonded_validators
+            ),
             CommitResult::KeyNotFound(key) => write!(f, "Key not found: {}", key),
             CommitResult::TypeMismatch(type_mismatch) => {
                 write!(f, "Type mismatch: {:?}", type_mismatch)
@@ -110,9 +121,9 @@ where
     H: BuildHasher,
 {
     let mut txn = environment.create_read_write_txn()?;
-    let mut current_root = prestate_hash;
+    let mut state_root = prestate_hash;
 
-    let maybe_root: Option<Trie<Key, Value>> = store.get(&txn, &current_root)?;
+    let maybe_root: Option<Trie<Key, Value>> = store.get(&txn, &state_root)?;
 
     if maybe_root.is_none() {
         return Ok(CommitResult::RootNotFound);
@@ -123,7 +134,7 @@ where
     let mut writes: i32 = 0;
 
     for (key, transform) in effects.into_iter() {
-        let read_result = read::<_, _, _, _, E>(correlation_id, &txn, store, &current_root, &key)?;
+        let read_result = read::<_, _, _, _, E>(correlation_id, &txn, store, &state_root, &key)?;
 
         log_duration(
             correlation_id,
@@ -147,7 +158,7 @@ where
         };
 
         let write_result =
-            write::<_, _, _, _, E>(correlation_id, &mut txn, store, &current_root, &key, &value)?;
+            write::<_, _, _, _, E>(correlation_id, &mut txn, store, &state_root, &key, &value)?;
 
         log_duration(
             correlation_id,
@@ -158,7 +169,7 @@ where
 
         match write_result {
             WriteResult::Written(root_hash) => {
-                current_root = root_hash;
+                state_root = root_hash;
                 writes += 1;
             }
             WriteResult::AlreadyExists => (),
@@ -191,5 +202,10 @@ where
         f64::from(writes),
     );
 
-    Ok(CommitResult::Success(current_root))
+    let bonded_validators = Default::default();
+
+    Ok(CommitResult::Success {
+        state_root,
+        bonded_validators,
+    })
 }
