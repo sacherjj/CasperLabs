@@ -70,6 +70,11 @@ class CachingDagStorage[F[_]: Sync](
 
   override def close(): F[Unit] = underlying.close()
 
+  // TODO: Remove DagRepresentation#lookup because
+  // we already have BlockStorage#getBlockSummary with the same semantics
+  // and which also cached in CachingBlockStorage.
+  // We don't use 'lookup' directly because it's overriden by BlockStorage#getBlockSummary
+  // at SQLiteStorage.scala
   override def lookup(blockHash: BlockHash): F[Option[BlockSummary]] = underlying.lookup(blockHash)
 
   override def contains(blockHash: BlockHash): F[Boolean] =
