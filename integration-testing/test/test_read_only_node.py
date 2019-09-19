@@ -1,6 +1,6 @@
 from pytest import raises
 
-from test.cl_node.common import Contract
+from casperlabs_local_net.common import Contract
 
 
 def test_read_only_node_does_not_accept_deploy(read_only_node_network):

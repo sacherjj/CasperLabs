@@ -268,6 +268,7 @@ object GossipServiceCasperTestNodeFactory {
     def discover: F[Unit]                                  = ???
     def lookup(id: NodeIdentifier): F[Option[Node]]        = ???
     def recentlyAlivePeersAscendingDistance: F[List[Node]] = peers.pure[F]
+    def banTemp(node: Node): F[Unit]                       = ???
   }
 
   def makeNodeAsk[F[_]](node: Node)(implicit ev: Applicative[F]) =

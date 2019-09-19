@@ -1,11 +1,13 @@
 #![no_std]
 
 extern crate alloc;
+
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
 extern crate contract_ffi;
+
 use contract_ffi::contract_api::{add_uref, get_arg, ret, store_function};
 
 fn hello_name(name: &str) -> String {

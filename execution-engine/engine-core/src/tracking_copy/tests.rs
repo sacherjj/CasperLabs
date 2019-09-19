@@ -12,7 +12,7 @@ use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{
     AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight, KEY_SIZE,
 };
-use contract_ffi::value::{Account, Contract, Value};
+use contract_ffi::value::{Account, Contract, ProtocolVersion, Value};
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
@@ -384,7 +384,7 @@ proptest! {
         let correlation_id = CorrelationId::new();
         let mut known_urefs = BTreeMap::new();
         known_urefs.insert(name.clone(), k);
-        let contract: Value = Contract::new(body, known_urefs, 1).into();
+        let contract: Value = Contract::new(body, known_urefs, ProtocolVersion::new(1)).into();
         let contract_key = Key::Hash(hash);
 
         let (gs, root_hash) = InMemoryGlobalState::from_pairs(
@@ -464,7 +464,7 @@ proptest! {
         // create contract which knows about value
         let mut contract_known_urefs = BTreeMap::new();
         contract_known_urefs.insert(state_name.clone(), k);
-        let contract: Value = Contract::new(body, contract_known_urefs, 1).into();
+        let contract: Value = Contract::new(body, contract_known_urefs, ProtocolVersion::new(1)).into();
         let contract_key = Key::Hash(hash);
 
         // create account which knows about contract

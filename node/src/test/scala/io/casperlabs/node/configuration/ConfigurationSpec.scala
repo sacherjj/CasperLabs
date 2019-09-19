@@ -37,7 +37,7 @@ class ConfigurationSpec
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(
-      minSuccessful = 500,
+      minSuccessful = 100,
       workers = 1
     )
 
@@ -51,12 +51,20 @@ class ConfigurationSpec
       dynamicHostAddress = false,
       noUpnp = false,
       defaultTimeout = FiniteDuration(1, TimeUnit.SECONDS),
-      bootstrap = Node(
-        NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
-        "52.119.8.109",
-        1,
-        1
-      ).some,
+      bootstrap = List(
+        Node(
+          NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
+          "52.119.8.109",
+          1,
+          1
+        ),
+        Node(
+          NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
+          "127.0.0.1",
+          1,
+          1
+        )
+      ),
       dataDir = Paths.get("/tmp"),
       maxNumOfConnections = 1,
       maxMessageSize = 1,
@@ -322,6 +330,10 @@ class ConfigurationSpec
             case (None, None)       => None
           }
       implicit def optionPlain[A: NotSubConfig: NotOption]: Merge[Option[A]] = _ orElse _
+      implicit def listMerge[A]: Merge[List[A]] = {
+        case (Nil, b) => b
+        case (a, _)   => a
+      }
     }
 
     Merge.gen[Configuration].merge(a, b)
@@ -339,13 +351,16 @@ class ConfigurationSpec
       case p: Node               => s""""${p.show}""""
       case p: java.nio.file.Path => s""""${p.toString}""""
       case x                     => x.toString
-    } { (acc, fullFieldName, field) =>
-      val tableName :: fieldName = fullFieldName
-      val table                  = dashify(tableName)
-      val key                    = dashify(fieldName.mkString("-"))
-      val previousTable          = acc.getOrElse(table, Map.empty[String, String])
-      val updatedKeys            = previousTable + (key -> field)
-      acc.updated(table, updatedKeys)
+    } {
+      case (acc, _, "") =>
+        acc
+      case (acc, fullFieldName, field) =>
+        val tableName :: fieldName = fullFieldName
+        val table                  = dashify(tableName)
+        val key                    = dashify(fieldName.mkString("-"))
+        val previousTable          = acc.getOrElse(table, Map.empty[String, String])
+        val updatedKeys            = previousTable + (key -> field)
+        acc.updated(table, updatedKeys)
     }
 
     val sb = new StringBuilder
@@ -369,6 +384,7 @@ class ConfigurationSpec
           v match {
             case "true"  => Some(s"$key")
             case "false" => None
+            case ""      => None
             case _       => Some(s"$key=$v")
           }
       }
@@ -383,8 +399,11 @@ class ConfigurationSpec
     reduce(conf, Map.empty[String, String])({
       case n: Node => mapper(n.show)
       case x       => mapper(x.toString)
-    }) { (envVars, fieldName, field) =>
-      envVars + (snakify(("CL" :: fieldName).mkString("_")) -> field)
+    }) {
+      case (envVars, _, "") =>
+        envVars
+      case (envVars, fieldName, field) =>
+        envVars + (snakify(("CL" :: fieldName).mkString("_")) -> field)
     }
   }
 
@@ -417,10 +436,16 @@ class ConfigurationSpec
 
       implicit val peerNode: Flattener[Node] =
         (path, a) => List((path, innerFieldsMapper(a)))
+
+      implicit val peerNodes: Flattener[List[Node]] =
+        (path, xs) => List((path, xs.map(innerFieldsMapper).mkString(" ")))
+
       implicit def default[A: NotSubConfig]: Flattener[A] =
         (path, a) => List((path, innerFieldsMapper(a)))
+
       implicit def optionSubConfig[A: IsSubConfig](implicit F: Flattener[A]): Flattener[Option[A]] =
         (path, opt) => opt.toList.flatMap(subconfig => F.flatten(path, subconfig))
+
       implicit def optionPlain[A: NotSubConfig]: Flattener[Option[A]] =
         (path, opt) => opt.toList.map(a => (path, innerFieldsMapper(a)))
     }

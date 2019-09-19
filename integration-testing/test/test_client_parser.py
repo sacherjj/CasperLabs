@@ -1,4 +1,4 @@
-from test.cl_node.client_parser import parse, parse_show_blocks
+from casperlabs_local_net.client_parser import parse, parse_show_blocks
 
 
 SHOW_BLOCKS = """

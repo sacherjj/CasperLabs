@@ -15,7 +15,7 @@ use contract_ffi::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight,
 };
-use contract_ffi::value::{Contract, Value};
+use contract_ffi::value::{Contract, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_storage::global_state::StateReader;
@@ -48,7 +48,7 @@ pub struct RuntimeContext<'a, R> {
     gas_counter: Gas,
     fn_store_id: u32,
     address_generator: Rc<RefCell<AddressGenerator>>,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
     correlation_id: CorrelationId,
     phase: Phase,
 }
@@ -72,7 +72,7 @@ where
         gas_counter: Gas,
         fn_store_id: u32,
         address_generator: Rc<RefCell<AddressGenerator>>,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         phase: Phase,
     ) -> Self {
@@ -253,7 +253,7 @@ where
         }
     }
 
-    pub fn protocol_version(&self) -> u64 {
+    pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
     }
 

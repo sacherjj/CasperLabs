@@ -1,5 +1,5 @@
-from test.cl_node.common import Contract
-from test.cl_node.wait import (
+from casperlabs_local_net.common import Contract
+from casperlabs_local_net.wait import (
     get_new_blocks_requests_total,
     wait_for_block_hashes_propagated_to_all_nodes,
     wait_for_gossip_metrics_and_assert_blocks_gossiped,

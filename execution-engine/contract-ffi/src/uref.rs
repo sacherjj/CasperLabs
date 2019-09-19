@@ -5,7 +5,7 @@ use crate::alloc::vec::Vec;
 use crate::base16;
 use crate::bytesrepr;
 use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};
-use crate::contract_api::pointers::UPointer;
+use crate::contract_api::pointers::TURef;
 
 pub const UREF_ADDR_SIZE: usize = 32;
 pub const ACCESS_RIGHTS_SIZE: usize = 1;
@@ -218,10 +218,9 @@ impl bytesrepr::ToBytes for Vec<URef> {
     }
 }
 
-impl<T> From<UPointer<T>> for URef {
-    fn from(uptr: UPointer<T>) -> Self {
-        let UPointer(id, access_rights, _) = uptr;
-        URef(id, Some(access_rights))
+impl<T> From<TURef<T>> for URef {
+    fn from(input: TURef<T>) -> Self {
+        URef(input.addr(), Some(input.access_rights()))
     }
 }
 

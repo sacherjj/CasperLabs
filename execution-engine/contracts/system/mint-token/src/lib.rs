@@ -43,9 +43,9 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
             return Err(Error::InvalidNonEmptyPurseCreation);
         }
 
-        let balance_uref: Key = contract_api::new_uref(initial_balance).into();
+        let balance_uref: Key = contract_api::new_turef(initial_balance).into();
 
-        let purse_key: URef = contract_api::new_uref(()).into();
+        let purse_key: URef = contract_api::new_turef(()).into();
         let purse_uref_name = purse_key.remove_access_rights().as_string();
 
         let purse_id: WithdrawId = WithdrawId::from_uref(purse_key).unwrap();

@@ -1,7 +1,7 @@
 from casperlabs_client import ABI
-from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.common import Contract
-from test.cl_node.wait import wait_for_good_bye, wait_for_node_started
+from casperlabs_local_net.casperlabs_accounts import Account
+from casperlabs_local_net.common import Contract
+from casperlabs_local_net.wait import wait_for_good_bye, wait_for_node_started
 
 
 def test_deploy_buffer_persistence(trillion_payment_node_network):

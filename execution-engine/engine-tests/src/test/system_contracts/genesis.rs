@@ -4,7 +4,7 @@ use grpc::RequestOptions;
 
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::{Value, U512};
+use contract_ffi::value::{ProtocolVersion, Value, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
@@ -108,12 +108,13 @@ fn should_run_genesis_with_chainspec() {
     let mint_installer_bytes = test_support::read_wasm_file_bytes(MINT_INSTALL);
     let pos_installer_bytes = test_support::read_wasm_file_bytes(POS_INSTALL);
     let accounts = vec![account_1, account_2];
-    let wasm_costs = WasmCosts::from_version(PROTOCOL_VERSION).unwrap();
+    let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
+    let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
 
     let genesis_config = GenesisConfig::new(
         name,
         TIMESTAMP,
-        PROTOCOL_VERSION,
+        protocol_version,
         mint_installer_bytes,
         pos_installer_bytes,
         accounts,
@@ -193,11 +194,12 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
         let mint_installer_bytes = test_support::read_wasm_file_bytes(BAD_INSTALL);
         let pos_installer_bytes = test_support::read_wasm_file_bytes(POS_INSTALL);
         let accounts = vec![account_1, account_2];
-        let wasm_costs = WasmCosts::from_version(PROTOCOL_VERSION).unwrap();
+        let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
+        let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
         GenesisConfig::new(
             name,
             TIMESTAMP,
-            PROTOCOL_VERSION,
+            protocol_version,
             mint_installer_bytes,
             pos_installer_bytes,
             accounts,
@@ -246,11 +248,12 @@ fn should_fail_if_bad_pos_install_contract_is_provided() {
         let mint_installer_bytes = test_support::read_wasm_file_bytes(MINT_INSTALL);
         let pos_installer_bytes = test_support::read_wasm_file_bytes(BAD_INSTALL);
         let accounts = vec![account_1, account_2];
-        let wasm_costs = WasmCosts::from_version(PROTOCOL_VERSION).unwrap();
+        let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
+        let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
         GenesisConfig::new(
             name,
             TIMESTAMP,
-            PROTOCOL_VERSION,
+            protocol_version,
             mint_installer_bytes,
             pos_installer_bytes,
             accounts,

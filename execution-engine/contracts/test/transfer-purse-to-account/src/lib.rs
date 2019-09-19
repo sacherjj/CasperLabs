@@ -26,10 +26,10 @@ pub extern "C" fn call() {
 
     let result = format!("{:?}", transfer_result);
 
-    let result_uref: Key = contract_api::new_uref(result).into();
+    let result_uref: Key = contract_api::new_turef(result).into();
     contract_api::add_uref(TRANSFER_RESULT_UREF_NAME, &result_uref);
     contract_api::add_uref(
         MAIN_PURSE_FINAL_BALANCE_UREF_NAME,
-        &contract_api::new_uref(final_balance).into(),
+        &contract_api::new_turef(final_balance).into(),
     );
 }

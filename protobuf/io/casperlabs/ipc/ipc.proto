@@ -242,8 +242,7 @@ message ValidateResponse {
 }
 
 message ValidateRequest {
-    bytes session_code = 1;
-    bytes payment_code = 2;
+    bytes wasm_code = 1;
 }
 
 message GenesisRequest {
@@ -335,8 +334,8 @@ message ChainSpec {
         ActivationPoint activation_point = 1;
         // The protocol version as of this upgrade
         io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
-        // path to contract to run that applies the upgrades to system contracts
-        string upgrade_contract_path = 3;
+        // bytes for a contract to run that applies the upgrades to system contracts
+        DeployCode upgrade_installer = 3;
         // Note: this is optional; only needed when costs are changing
         CostTable new_costs = 4;
     }
@@ -344,6 +343,27 @@ message ChainSpec {
     message ActivationPoint {
         // equal to Block.Header.rank
         uint64 rank = 1;
+    }
+}
+
+message UpgradeRequest{
+    bytes parent_state_hash = 1;
+    ChainSpec.UpgradePoint upgrade_point =2;
+}
+
+message UpgradeResult {
+    bytes post_state_hash = 1;
+    ExecutionEffect effect = 2;
+}
+
+message UpgradeDeployError {
+    string message = 1;
+}
+
+message UpgradeResponse {
+    oneof result {
+        UpgradeResult success = 1;
+        UpgradeDeployError failed_deploy = 2;
     }
 }
 
@@ -357,4 +377,5 @@ service ExecutionEngineService {
     rpc run_genesis (GenesisRequest) returns (GenesisResponse) {}
     rpc execute (ExecuteRequest) returns (ExecuteResponse) {}
     rpc run_genesis_with_chainspec (ChainSpec.GenesisConfig) returns (GenesisResponse) {}
+    rpc upgrade(UpgradeRequest) returns (UpgradeResponse) {}
 }

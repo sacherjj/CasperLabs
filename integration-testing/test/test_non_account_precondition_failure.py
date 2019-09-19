@@ -1,7 +1,7 @@
 import pytest
 
-from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.common import Contract
+from casperlabs_local_net.casperlabs_accounts import Account
+from casperlabs_local_net.common import Contract
 
 
 def test_non_account_precondition_failure(trillion_payment_node_network):

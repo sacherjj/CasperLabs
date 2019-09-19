@@ -1,4 +1,4 @@
-from test.cl_node.contract_address import contract_address
+from casperlabs_local_net.contract_address import contract_address
 
 
 def disabled_test_contract_address():

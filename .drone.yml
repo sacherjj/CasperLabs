@@ -710,6 +710,159 @@ trigger:
   ref:
   - refs/tags/v*
 
+---
+kind: pipeline
+name: mac-nightly-cron
+
+clone:
+  disable: true
+
+steps:
+- name: mac-clone
+  image: appleboy/drone-ssh:latest
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+  settings:
+    command_timeout: 60m
+    port:
+      from_secret: mac-port
+    script:
+    - mkdir -p DRONE_BUILD_${DRONE_BUILD_NUMBER}
+    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
+    - git clone -b dev https://github.com/CasperLabs/CasperLabs.git
+
+- name: build-node
+  image: appleboy/drone-ssh:latest
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+  settings:
+    command_timeout: 60m
+    port:
+      from_secret: mac-port
+    script:
+    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
+    - /usr/local/bin/sbt node/universal:stage
+
+- name: build-client
+  image: appleboy/drone-ssh:latest
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+  settings:
+    command_timeout: 60m
+    port:
+      from_secret: mac-port
+    script:
+    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
+    - /usr/local/bin/sbt client/universal:stage
+
+- name: rust-toolchain
+  image: appleboy/drone-ssh:latest
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+  settings:
+    command_timeout: 60m
+    port:
+      from_secret: mac-port
+    script:
+    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
+    - cd execution-engine
+    - make setup
+
+- name: build-ee
+  image: appleboy/drone-ssh:latest
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+  settings:
+    command_timeout: 60m
+    port:
+      from_secret: mac-port
+    script:
+    - export PATH=$PATH:/usr/local/bin/
+    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
+    - cd execution-engine
+    - ~/.cargo/bin/cargo build --release
+
+- name: build-system-contracts
+  image: appleboy/drone-ssh:latest
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+  settings:
+    command_timeout: 60m
+    port:
+      from_secret: mac-port
+    script:
+    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
+    - cd execution-engine
+    - ~/.cargo/bin/cargo build -p pos --release --target wasm32-unknown-unknown
+    - ~/.cargo/bin/cargo build -p mint-token --release --target wasm32-unknown-unknown
+
+- name: cleanup-mac
+  image: appleboy/drone-ssh:latest
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+  settings:
+    port:
+      from_secret: mac-port
+    script:
+    - rm -rf DRONE_BUILD_${DRONE_BUILD_NUMBER}
+  when:
+    status:
+    - failure
+    - success
+
+- name: notify-mac-cron
+  image: plugins/slack
+  settings:
+    webhook:
+      from_secret: slack_webhook
+    channel: alerts
+    template:
+    - |
+      macOS Build Status: {{#success build.status}}✔{{ else }}✘ @sreteam {{/success}}*{{ uppercasefirst build.status }}*
+      Drone Build: <{{ build.link }}|#{{ build.number }}>
+  when:
+    status:
+    - failure
+    - success
+
+trigger:
+  cron: [ mac-hourly-cron ]
+
 # Signature for Drone
 ---
 kind: signature

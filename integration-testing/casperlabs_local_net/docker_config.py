@@ -4,8 +4,8 @@ from typing import Any, Optional
 from docker import DockerClient
 
 
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, Account
-from test.cl_node.common import random_string, BOOTSTRAP_PATH, testing_root_path
+from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT, Account
+from casperlabs_local_net.common import random_string, BOOTSTRAP_PATH, testing_root_path
 
 
 DEFAULT_NODE_ENV = {
