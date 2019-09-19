@@ -7,13 +7,22 @@ import io.casperlabs.casper.Estimator.Validator
 final class EquivocationsTracker(private val map: Map[Validator, Long]) {
   def isEmpty: Boolean = map.isEmpty
 
+  /**
+    * Add a new equivocation record to EquivocationsTracker
+    * @param validator validator who equivocated
+    * @param rank the rank of the base block
+    * @return
+    */
   def updated(validator: Validator, rank: Long): EquivocationsTracker =
     get(validator) match {
       case Some(lowestBaseSeqNum) if rank < lowestBaseSeqNum =>
+        // The validator equivocated again, and the rank is smaller than previously stored rank
         new EquivocationsTracker(map.updated(validator, rank))
       case None =>
+        // The first time we detect the validator equivocated
         new EquivocationsTracker(map.updated(validator, rank))
       case _ =>
+        // The validator equivocated again, but the rank is bigger than previously stored rank
         this
     }
 
@@ -26,6 +35,7 @@ final class EquivocationsTracker(private val map: Map[Validator, Long]) {
   def keySet: Set[Validator] =
     map.keySet
 
+  // Return the minimal rank of all base blocks
   def min: Option[Long] =
     if (isEmpty) {
       None
