@@ -1,5 +1,6 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE};
 use crate::key::{Key, UREF_SIZE};
+use crate::value::ProtocolVersion;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -8,11 +9,15 @@ use alloc::vec::Vec;
 pub struct Contract {
     bytes: Vec<u8>,
     known_urefs: BTreeMap<String, Key>,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 }
 
 impl Contract {
-    pub fn new(bytes: Vec<u8>, known_urefs: BTreeMap<String, Key>, protocol_version: u64) -> Self {
+    pub fn new(
+        bytes: Vec<u8>,
+        known_urefs: BTreeMap<String, Key>,
+        protocol_version: ProtocolVersion,
+    ) -> Self {
         Contract {
             bytes,
             known_urefs,
@@ -32,7 +37,7 @@ impl Contract {
         &mut self.known_urefs
     }
 
-    pub fn destructure(self) -> (Vec<u8>, BTreeMap<String, Key>, u64) {
+    pub fn destructure(self) -> (Vec<u8>, BTreeMap<String, Key>, ProtocolVersion) {
         (self.bytes, self.known_urefs, self.protocol_version)
     }
 
@@ -40,7 +45,7 @@ impl Contract {
         &self.bytes
     }
 
-    pub fn protocol_version(&self) -> u64 {
+    pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
     }
 }
@@ -70,7 +75,7 @@ impl FromBytes for Contract {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (bytes, rem1): (Vec<u8>, &[u8]) = FromBytes::from_bytes(bytes)?;
         let (known_urefs, rem2): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem1)?;
-        let (protocol_version, rem3): (u64, &[u8]) = FromBytes::from_bytes(rem2)?;
+        let (protocol_version, rem3): (ProtocolVersion, &[u8]) = FromBytes::from_bytes(rem2)?;
         Ok((
             Contract {
                 bytes,

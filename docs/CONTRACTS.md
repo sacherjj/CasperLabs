@@ -221,6 +221,91 @@ may not work as expected when called directly.
 They may, for instance, attempt to read or modify a `URef` that they expect to exist in their context,
 but find it missing in the context that they are actually run in, that is of the deployer's account.
 
+**Passing arguments to contracts**
+
+Smart contracts can be parametrized.
+A list of contract arguments can be specified
+on command line when the contract is deployed.
+
+When the contract code is executed
+it can access individual arguments
+by calling Contract API function `get_arg`
+with index of an argument.
+First argument is indexed with `0`.
+
+
+**Command line client's syntax of contract arguments**
+
+Client's `deploy` command accepts parameter `--session-args`
+that can be used to specify types and values of contract arguments 
+as a serialized sequence of
+[Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78)
+values
+in a [protobuf JSON format](https://developers.google.com/protocol-buffers/docs/proto3#json),
+with binary data represented in Base16 format.
+
+For example: `--session-args '[{"name": "amount", "value": {"long_value": 123456}}]'`.
+
+
+Note,
+contract arguments are positional,
+and so the `"name"` attribute is currently not used.
+However, we plan to change contract arguments
+to be keyword (named) arguments.
+The structure of the `Arg` protobuf message
+and its JSON serialized form is ready for this change.
+
+In a future release
+Contract API `get_arg` function
+will change
+to accept a string with a name of an argument
+instead of it's index.
+
+**Accessing arguments in contracts**
+
+Contract API function `get_arg` allows to access contract arguments,
+for example: 
+
+```
+let amount: u64 = get_arg(0);
+```
+
+will deserialize first contract argument as a value of type `u64`.
+Note, types of the arguments specified when deploying
+and the types in the Rust code must match.
+The matching type for protobuf 
+[Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78)
+type `long_value`
+is currently `u64`.
+
+The same can be achieved by declaring return type of `get_arg` explicitly,
+for example:
+
+```
+let amount = get_arg::<u64>(0);
+```
+
+
+**Supported types of contract arguments**
+
+
+| protobuf [Arg](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/consensus.proto#L78) | Contract API type | Example value in [protobuf JSON format](https://developers.google.com/protocol-buffers/docs/proto3#json)
+| ---------------  | ------------- | -------------------------------------
+| `int_value`      | `u32`         | `'[{"name": "amount", "value": {"int_value": 123456}}]'`
+| `long_value`     | `u64`         | `'[{"name": "amount", "value": {"long_value": 123456}}]'`
+| `big_int`        | `u512`        | `'[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'`
+| `string_value`   | `String`      | `'[{"name": "surname", "value": {"string_value": "Nakamoto"}}]'`
+| `optional_value` | `Option<T>`   | `'{"name": "maybe_number", "value": {"optional_value": {}}}` or  `{"name": "maybe_number", "value": {"optional_value": {"long_value": 1000000}}}'`
+| `hash`           | `Key::Hash`    | `'{"name": "my_hash", "value": {"key": {"hash": {"hash": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
+| `address`        | `Key::Address` | `'{"name": "my_address", "value": {"key": {"address": {"account": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
+| `uref`           | `Key::URef`    | `'{"name": "my_uref", "value": {"key": {"uref": {"uref": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414", "access_rights": 5}}}}'`
+| `local`          | `Key::Local`   | `'{"name": "my_local", "value": {"key": {"local": {"hash": "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"}}}}'`
+| `int_list`       | `Vec<i32>`         | `'{"name": "my_int_list", "value": {"int_list": {"values": [0, 1, 2]}}}'`
+| `string_list`    | `Vec<String>`         | `'{"name": "my_string_list", "value": {"string_list": {"values": ["A", "B", "C"]}}}'`
+
+Numeric values of `access_rights` in `uref` are defined in
+[`enum AccessRights in state.proto](https://github.com/CasperLabs/CasperLabs/blob/ca35f324179c93f0687ed4cf67d887176525b73b/protobuf/io/casperlabs/casper/consensus/state.proto#L58).
+
 
 ####  Using a local standalone node
 

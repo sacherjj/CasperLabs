@@ -12,7 +12,7 @@ use contract_ffi::value::account::{
     AccountActivity, ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
     RemoveKeyFailure, SetThresholdFailure, Weight,
 };
-use contract_ffi::value::{self, Account, Contract, Value};
+use contract_ffi::value::{self, Account, Contract, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
@@ -119,7 +119,7 @@ fn mock_runtime_context<'a>(
         Gas::default(),
         0,
         Rc::new(RefCell::new(address_generator)),
-        1,
+        ProtocolVersion::new(1),
         CorrelationId::new(),
         Phase::Session,
     )
@@ -190,7 +190,7 @@ fn store_contract_with_uref_valid() {
     let contract = Value::Contract(Contract::new(
         Vec::new(),
         iter::once(("ValidURef".to_owned(), uref)).collect(),
-        1,
+        ProtocolVersion::new(1),
     ));
 
     let query_result = test(known_urefs, |mut rc| {
@@ -215,7 +215,7 @@ fn store_contract_with_uref_forged() {
     let contract = Value::Contract(Contract::new(
         Vec::new(),
         iter::once(("ForgedURef".to_owned(), uref)).collect(),
-        1,
+        ProtocolVersion::new(1),
     ));
 
     let query_result = test(HashMap::new(), |mut rc| rc.store_contract(contract.clone()));
@@ -233,7 +233,7 @@ fn store_contract_under_uref_valid() {
     let contract: Value = Contract::new(
         Vec::new(),
         iter::once(("ValidURef".to_owned(), contract_uref)).collect(),
-        1,
+        ProtocolVersion::new(1),
     )
     .into();
 
@@ -256,7 +256,8 @@ fn store_contract_under_uref_forged() {
     // ForgedReference error.
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ_WRITE);
-    let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
+    let contract: Value =
+        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::new(1)).into();
 
     let query_result = test(HashMap::new(), |mut rc| {
         rc.write_gs(contract_uref, contract.clone())
@@ -272,7 +273,8 @@ fn store_contract_uref_invalid_access() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ);
     let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
-    let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
+    let contract: Value =
+        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::new(1)).into();
 
     let query_result = test(known_urefs, |mut rc| {
         rc.write_gs(contract_uref, contract.clone())
@@ -396,7 +398,8 @@ fn contract_key_addable_valid() {
     let mut address_generator = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
-    let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
+    let contract: Value =
+        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::new(1)).into();
     let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
     // Store contract in the GlobalState so that we can mainpulate it later.
     tc.borrow_mut().write(
@@ -422,7 +425,7 @@ fn contract_key_addable_valid() {
         Gas::default(),
         0,
         Rc::new(RefCell::new(address_generator)),
-        1,
+        ProtocolVersion::new(1),
         CorrelationId::new(),
         PHASE,
     );
@@ -434,8 +437,12 @@ fn contract_key_addable_valid() {
         .add_gs(contract_key, named_key)
         .expect("Adding should work.");
 
-    let updated_contract: Value =
-        Contract::new(Vec::new(), iter::once((uref_name, uref)).collect(), 1).into();
+    let updated_contract: Value = Contract::new(
+        Vec::new(),
+        iter::once((uref_name, uref)).collect(),
+        ProtocolVersion::new(1),
+    )
+    .into();
 
     assert_eq!(
         *tc.borrow().effect().transforms.get(&contract_key).unwrap(),
@@ -453,7 +460,8 @@ fn contract_key_addable_invalid() {
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let other_contract_key = random_contract_key(&mut rng);
-    let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
+    let contract: Value =
+        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::new(1)).into();
     let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
     // Store contract in the GlobalState so that we can mainpulate it later.
     tc.borrow_mut().write(
@@ -478,7 +486,7 @@ fn contract_key_addable_invalid() {
         Gas::default(),
         0,
         Rc::new(RefCell::new(address_generator)),
-        1,
+        ProtocolVersion::new(1),
         CorrelationId::new(),
         PHASE,
     );

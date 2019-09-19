@@ -1,8 +1,8 @@
-from test.cl_node.client_parser import parse_show_blocks
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
-from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.common import (
+from casperlabs_local_net.client_parser import parse_show_blocks
+from casperlabs_local_net.docker_node import DockerNode
+from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
+from casperlabs_local_net.casperlabs_accounts import Account
+from casperlabs_local_net.common import (
     Contract,
     CONV_RATE,
     INITIAL_MOTES_AMOUNT,

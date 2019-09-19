@@ -13,7 +13,7 @@ use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
-use crate::value::{Contract, Value, U512};
+use crate::value::{Contract, ProtocolVersion, Value, U512};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -21,13 +21,14 @@ use argsparser::ArgsParser;
 use core::convert::{TryFrom, TryInto};
 
 const MINT_NAME: &str = "mint";
+const POS_NAME: &str = "pos";
 
 /// Read value under the key in the global state
-pub fn read<T>(u_ptr: UPointer<T>) -> T
+pub fn read<T>(turef: TURef<T>) -> T
 where
     T: TryFrom<Value>,
 {
-    let key: Key = u_ptr.into();
+    let key: Key = turef.into();
     let value = read_untyped(&key);
     value
         .unwrap() // TODO: return an Option instead of unwrapping (https://casperlabs.atlassian.net/browse/EE-349)
@@ -78,11 +79,11 @@ fn read_untyped_local(key_bytes: &[u8]) -> Option<Value> {
 }
 
 /// Write the value under the key in the global state
-pub fn write<T>(u_ptr: UPointer<T>, t: T)
+pub fn write<T>(turef: TURef<T>, t: T)
 where
     Value: From<T>,
 {
-    let key = u_ptr.into();
+    let key = turef.into();
     let value = t.into();
     write_untyped(&key, &value)
 }
@@ -116,11 +117,11 @@ fn write_untyped_local(key_bytes: &[u8], value: &Value) {
 }
 
 /// Add the given value to the one currently under the key in the global state
-pub fn add<T>(u_ptr: UPointer<T>, t: T)
+pub fn add<T>(turef: TURef<T>, t: T)
 where
     Value: From<T>,
 {
-    let key = u_ptr.into();
+    let key = turef.into();
     let value = t.into();
     add_untyped(&key, &value)
 }
@@ -136,7 +137,7 @@ fn add_untyped(key: &Key, value: &Value) {
 }
 
 /// Returns a new unforgable pointer, where value is initialized to `init`
-pub fn new_uref<T>(init: T) -> UPointer<T>
+pub fn new_turef<T>(init: T) -> TURef<T>
 where
     Value: From<T>,
 {
@@ -149,7 +150,7 @@ where
     };
     let key: Key = deserialize(&bytes).unwrap();
     if let Key::URef(uref) = key {
-        UPointer::from_uref(uref).unwrap()
+        TURef::from_uref(uref).unwrap()
     } else {
         panic!("URef FFI did not return a valid URef!");
     }
@@ -187,6 +188,7 @@ pub fn list_known_urefs() -> BTreeMap<String, Key> {
 pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
     let bytes = fn_bytes_by_name(name);
     let protocol_version = unsafe { ext_ffi::protocol_version() };
+    let protocol_version = ProtocolVersion::new(protocol_version);
     Contract::new(bytes, known_urefs, protocol_version)
 }
 
@@ -205,7 +207,7 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Contrac
 }
 
 /// Finds function by the name and stores it at the unforgable name.
-pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: UPointer<Contract>) {
+pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: TURef<Contract>) {
     let contract = fn_by_name(name, known_urefs);
     write(uref, contract);
 }
@@ -556,15 +558,23 @@ pub fn transfer_from_purse_to_purse(
     .expect("Should parse result")
 }
 
-pub fn get_mint() -> Option<ContractPointer> {
-    let mint_public_uref = get_uref(MINT_NAME)?;
+fn get_system_contract(name: &str) -> Option<ContractPointer> {
+    let public_uref = get_uref(name)?;
 
-    if let Some(Value::Key(Key::URef(mint_private_uref))) = read_untyped(&mint_public_uref) {
-        let pointer = pointers::UPointer::new(mint_private_uref.addr(), AccessRights::READ);
+    if let Some(Value::Key(Key::URef(private_uref))) = read_untyped(&public_uref) {
+        let pointer = pointers::TURef::new(private_uref.addr(), AccessRights::READ);
         Some(ContractPointer::URef(pointer))
     } else {
         None
     }
+}
+
+pub fn get_mint() -> Option<ContractPointer> {
+    get_system_contract(MINT_NAME)
+}
+
+pub fn get_pos() -> Option<ContractPointer> {
+    get_system_contract(POS_NAME)
 }
 
 pub fn get_phase() -> Phase {

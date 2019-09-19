@@ -43,6 +43,7 @@ import scala.util.control.NoStackTrace
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
+  import cats.data.NonEmptyList
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
@@ -73,13 +74,13 @@ package object gossiping {
       connectToGossip: GossipService.Connector[F] = (node: Node) => {
         cachedConnections.connection(node, enforce = true) map { chan =>
           new GossipingGrpcMonix.GossipServiceStub(chan)
-        } map {
+        } map { stub =>
           implicit val s = egressScheduler
           GrpcGossipService.toGossipService(
-            _,
+            stub,
             onError = {
-              case Unavailable(_)      => disconnect(cachedConnections, node)
-              case _: TimeoutException => disconnect(cachedConnections, node)
+              case Unavailable(_) | _: TimeoutException =>
+                disconnect(cachedConnections, node) *> NodeDiscovery[F].banTemp(node)
             },
             timeout = conf.server.defaultTimeout
           )
@@ -501,12 +502,12 @@ package object gossiping {
                    } yield approver
                  } else {
                    for {
-                     bootstrap <- unsafeGetBootstrap[F](conf)
-                     approver <- GenesisApproverImpl.fromBootstrap(
+                     bootstraps <- unsafeGetBootstraps[F](conf)
+                     approver <- GenesisApproverImpl.fromBootstraps(
                                   backend,
                                   NodeDiscovery[F],
                                   connectToGossip,
-                                  bootstrap = bootstrap,
+                                  bootstraps = bootstraps,
                                   relayFactor = conf.server.approvalRelayFactor,
                                   pollInterval = conf.server.approvalPollInterval,
                                   downloadManager = downloadManager
@@ -737,11 +738,13 @@ package object gossiping {
     PrettyPrinter.buildString(hash)
 
   // Should only be called in non-stand alone mode.
-  private def unsafeGetBootstrap[F[_]: MonadThrowable](conf: Configuration): Resource[F, Node] =
+  private def unsafeGetBootstraps[F[_]: MonadThrowable](
+      conf: Configuration
+  ): Resource[F, NonEmptyList[Node]] =
     Resource.liftF(
       MonadThrowable[F]
         .fromOption(
-          conf.server.bootstrap,
+          NonEmptyList.fromList(conf.server.bootstrap),
           new java.lang.IllegalStateException("Bootstrap node hasn't been configured.")
         )
     )

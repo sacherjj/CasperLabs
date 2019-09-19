@@ -9,7 +9,7 @@ use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey};
-use contract_ffi::value::{Account, Value};
+use contract_ffi::value::{Account, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateReader;
@@ -36,7 +36,7 @@ pub trait Executor<A> {
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
@@ -56,7 +56,7 @@ pub trait Executor<A> {
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
@@ -77,7 +77,7 @@ pub trait Executor<A> {
         deploy_hash: [u8; 32],
         gas_limit: Gas,
         address_generator: Rc<RefCell<AddressGenerator>>,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
@@ -138,7 +138,7 @@ impl Executor<Module> for WasmiExecutor {
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
@@ -214,7 +214,7 @@ impl Executor<Module> for WasmiExecutor {
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
@@ -326,7 +326,7 @@ impl Executor<Module> for WasmiExecutor {
         deploy_hash: [u8; 32],
         gas_limit: Gas,
         address_generator: Rc<RefCell<AddressGenerator>>,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,

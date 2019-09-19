@@ -11,12 +11,11 @@ use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::{Account, Contract, Value, U512};
+use contract_ffi::value::{Account, Contract, ProtocolVersion, Value, U512};
 use engine_shared::motes::Motes;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{Transform, TypeMismatch};
 use engine_storage::global_state::CommitResult;
-use engine_storage::protocol_data_store::ProtocolVersion;
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::execution::AddressGenerator;
@@ -114,7 +113,7 @@ fn create_mint_effects(
     initial_motes: U512,
     mint_code_bytes: WasmiBytes,
     pos_bonded_balance: U512,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 ) -> Result<HashMap<Key, Value>, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
 
@@ -239,7 +238,7 @@ fn create_pos_effects(
     urefs_source: &GenesisURefsSource,
     pos_code: WasmiBytes,
     genesis_validators: Vec<(PublicKey, U512)>,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 ) -> Result<HashMap<Key, Value>, execution::Error> {
     let mut tmp: HashMap<Key, Value> = HashMap::new();
 
@@ -304,7 +303,7 @@ pub fn create_genesis_effects(
     mint_code_bytes: WasmiBytes,
     pos_code_bytes: WasmiBytes,
     genesis_validators: Vec<(PublicKey, U512)>,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 ) -> Result<ExecutionEffect, execution::Error> {
     let urefs_source = GenesisURefsSource::default();
 
@@ -399,7 +398,7 @@ mod tests {
     use crate::engine_state::utils::{pos_validator_key, WasmiBytes};
     use contract_ffi::key::Key;
     use contract_ffi::value::account::PublicKey;
-    use contract_ffi::value::{Contract, Value, U512};
+    use contract_ffi::value::{Contract, ProtocolVersion, Value, U512};
     use engine_shared::test_utils;
     use engine_shared::transform::Transform;
     use engine_wasm_prep::wasm_costs::WasmCosts;
@@ -440,7 +439,7 @@ mod tests {
             mint_code_bytes,
             pos_code_bytes,
             genesis_validators,
-            PROTOCOL_VERSION,
+            ProtocolVersion::new(PROTOCOL_VERSION),
         )
         .expect("should create effects")
         .transforms
@@ -586,7 +585,11 @@ mod tests {
             ret
         };
 
-        let mint_contract: Contract = Contract::new(mint_code_bytes.into(), mint_known_urefs, 1);
+        let mint_contract: Contract = Contract::new(
+            mint_code_bytes.into(),
+            mint_known_urefs,
+            ProtocolVersion::new(1),
+        );
 
         // the value under the mint_contract_uref_key should be the current contract
         // bytes
@@ -785,7 +788,7 @@ mod tests {
                 &urefs_source,
                 pos_contract_bytes.clone(),
                 genesis_validators,
-                1,
+                ProtocolVersion::new(1),
             )
             .expect("Creating PoS effects in test should not fail.")
         };

@@ -8,14 +8,14 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use contract_ffi::contract_api;
-use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 
 const CONTRACT_POINTER: u32 = 0;
 
 const GET_ARG_ERROR: u32 = 100;
-const CREATE_UPOINTER_ERROR: u32 = 200;
+const CREATE_TUREF_ERROR: u32 = 200;
 
 const REPLACEMENT_DATA: &str = "bawitdaba";
 
@@ -27,9 +27,9 @@ pub extern "C" fn call() {
 
     let reference: URef = contract_api::call_contract(contract_pointer, &(), &Vec::new());
 
-    let forged_reference: UPointer<String> = {
+    let forged_reference: TURef<String> = {
         let ret = URef::new(reference.addr(), AccessRights::READ_ADD_WRITE);
-        UPointer::from_uref(ret).unwrap_or_else(|_| contract_api::revert(CREATE_UPOINTER_ERROR))
+        TURef::from_uref(ret).unwrap_or_else(|_| contract_api::revert(CREATE_TUREF_ERROR))
     };
 
     contract_api::write(forged_reference, REPLACEMENT_DATA.to_string())

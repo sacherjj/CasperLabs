@@ -1,5 +1,6 @@
 pub mod account;
 pub mod contract;
+pub mod protocol_version;
 pub mod uint;
 
 use crate::bytesrepr::{
@@ -15,6 +16,7 @@ use core::mem::size_of;
 
 pub use self::account::Account;
 pub use self::contract::Contract;
+pub use self::protocol_version::ProtocolVersion;
 pub use self::uint::{U128, U256, U512};
 
 #[derive(PartialEq, Eq, Clone, Debug)]

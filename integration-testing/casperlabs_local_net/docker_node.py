@@ -7,14 +7,14 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
-from test.cl_node.common import MAX_PAYMENT_ABI, Contract
-from test.cl_node.docker_base import LoggingDockerBase
-from test.cl_node.docker_client import DockerClient
-from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
-from test.cl_node.python_client import PythonClient
-from test.cl_node.docker_base import DockerConfig
-from test.cl_node.casperlabs_accounts import is_valid_account, Account
-
+from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract
+from casperlabs_local_net.docker_base import LoggingDockerBase
+from casperlabs_local_net.docker_client import DockerClient
+from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
+from casperlabs_local_net.python_client import PythonClient
+from casperlabs_local_net.docker_base import DockerConfig
+from casperlabs_local_net.casperlabs_accounts import is_valid_account, Account
+from casperlabs_local_net.graphql import GraphQL
 
 FIRST_VALIDATOR_ACCOUNT = 100
 
@@ -47,6 +47,7 @@ class DockerNode(LoggingDockerBase):
 
     def __init__(self, cl_network, config: DockerConfig):
         super().__init__(config)
+        self.graphql = GraphQL(self)
         self.cl_network = cl_network
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
@@ -67,6 +68,10 @@ class DockerNode(LoggingDockerBase):
     @property
     def grpc_internal_docker_port(self) -> int:
         return self.GRPC_INTERNAL_PORT + self.docker_port_offset
+
+    @property
+    def http_port(self) -> int:
+        return self.HTTP_PORT + self.docker_port_offset
 
     @property
     def resources_folder(self) -> Path:
@@ -126,10 +131,13 @@ class DockerNode(LoggingDockerBase):
 
         :return: dict for use in docker container run to open ports based on node number
         """
-        return {
-            f"{self.GRPC_INTERNAL_PORT}/tcp": self.grpc_internal_docker_port,
-            f"{self.GRPC_EXTERNAL_PORT}/tcp": self.grpc_external_docker_port,
-        }
+        ports = (
+            (self.GRPC_INTERNAL_PORT, self.grpc_internal_docker_port),
+            (self.GRPC_EXTERNAL_PORT, self.grpc_external_docker_port),
+            (self.HTTP_PORT, self.http_port),
+        )
+        port_dict = {f"{int_port}/tcp": ext_port for int_port, ext_port in ports}
+        return port_dict
 
     @property
     def volumes(self) -> dict:

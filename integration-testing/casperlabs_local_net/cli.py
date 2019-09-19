@@ -5,8 +5,13 @@ import json
 import subprocess
 from operator import add
 from functools import reduce
-from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
-from test.cl_node.common import MAX_PAYMENT_COST, resources_path
+
+from casperlabs_local_net.client_parser import (
+    parse_show_blocks,
+    parse_show_deploys,
+    parse,
+)
+from casperlabs_local_net.common import MAX_PAYMENT_COST, resources_path
 
 
 class CLIErrorExit(Exception):
@@ -57,7 +62,8 @@ class CLI:
 
         return "--help" in args and string_args or connection_details + string_args
 
-    def parse_output(self, command, binary_output):
+    @staticmethod
+    def parse_output(command, binary_output):
 
         if command in ("make-deploy", "sign-deploy"):
             return binary_output

@@ -141,7 +141,7 @@ class ClearConnectionsSpec
         clearConnections = ClearConnectionsConf(maxNumOfConnections, numOfConnectionsPinged),
         defaultTimeout = 1.milli,
         local = peer("src"),
-        bootstrap = None
+        bootstraps = Nil
       )
     )
 

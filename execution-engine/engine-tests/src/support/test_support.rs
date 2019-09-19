@@ -613,7 +613,7 @@ impl LmdbWasmTestBuilder {
         Self::new_with_config(data_dir, Default::default())
     }
 
-    /// Creates new instance of builder and pplies values only which allows the engine state to be
+    /// Creates new instance of builder and applies values only which allows the engine state to be
     /// swapped with a new one, possibly after running genesis once and reusing existing database
     /// (i.e. LMDB).
     pub fn new_with_config_and_result<T: AsRef<OsStr> + ?Sized>(
@@ -629,6 +629,41 @@ impl LmdbWasmTestBuilder {
         builder.mint_contract_uref = result.0.mint_contract_uref;
         builder.pos_contract_uref = result.0.pos_contract_uref;
         builder
+    }
+
+    /// Creates a new instance of builder using the supplied configurations, opening wrapped LMDBs
+    /// (e.g. in the Trie and Data stores) rather than creating them.
+    pub fn open<T: AsRef<OsStr> + ?Sized>(
+        data_dir: &T,
+        engine_config: EngineConfig,
+        post_state_hash: Vec<u8>,
+    ) -> Self {
+        let page_size = get_page_size().expect("should get page size");
+        let environment = Arc::new(
+            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
+                .expect("should create LmdbEnvironment"),
+        );
+        let trie_store =
+            Arc::new(LmdbTrieStore::open(&environment, None).expect("should open LmdbTrieStore"));
+        let protocol_data_store = Arc::new(
+            LmdbProtocolDataStore::open(&environment, None)
+                .expect("should open LmdbProtocolDataStore"),
+        );
+        let global_state = LmdbGlobalState::empty(environment, trie_store, protocol_data_store)
+            .expect("should create LmdbGlobalState");
+        let engine_state = EngineState::new(global_state, engine_config);
+        WasmTestBuilder {
+            engine_state: Rc::new(engine_state),
+            exec_responses: Vec::new(),
+            genesis_hash: None,
+            post_state_hash: Some(post_state_hash),
+            transforms: Vec::new(),
+            bonded_validators: Vec::new(),
+            genesis_account: None,
+            mint_contract_uref: None,
+            pos_contract_uref: None,
+            genesis_transforms: None,
+        }
     }
 }
 

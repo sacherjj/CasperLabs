@@ -1,19 +1,19 @@
 import logging
 import os
 import threading
-from test.cl_node.casperlabs_node import CasperLabsNode
-from test.cl_node.common import (
+from casperlabs_local_net.casperlabs_node import CasperLabsNode
+from casperlabs_local_net.common import (
     random_string,
     MAX_PAYMENT_COST,
     INITIAL_MOTES_AMOUNT,
     TEST_ACCOUNT_INITIAL_BALANCE,
 )
-from test.cl_node.docker_base import DockerConfig
-from test.cl_node.docker_execution_engine import DockerExecutionEngine
-from test.cl_node.docker_node import DockerNode, FIRST_VALIDATOR_ACCOUNT
-from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, Account
-from test.cl_node.wait import (
+from casperlabs_local_net.docker_base import DockerConfig
+from casperlabs_local_net.docker_execution_engine import DockerExecutionEngine
+from casperlabs_local_net.docker_node import DockerNode, FIRST_VALIDATOR_ACCOUNT
+from casperlabs_local_net.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
+from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT, Account
+from casperlabs_local_net.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,

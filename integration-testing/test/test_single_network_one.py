@@ -4,19 +4,19 @@ import pytest
 import json
 from pytest import fixture, raises
 
-from test.cl_node.contract_address import contract_address
-from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
-from test.cl_node.common import (
+from casperlabs_local_net.contract_address import contract_address
+from casperlabs_local_net.casperlabs_accounts import Account, GENESIS_ACCOUNT
+from casperlabs_local_net.common import (
     resources_path,
     extract_block_hash_from_propose_output,
     Contract,
     MAX_PAYMENT_ABI,
 )
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.errors import NonZeroExitCodeError
-from test.cl_node.wait import wait_for_genesis_block
+from casperlabs_local_net.docker_node import DockerNode
+from casperlabs_local_net.errors import NonZeroExitCodeError
+from casperlabs_local_net.wait import wait_for_genesis_block
 from casperlabs_client import ABI
-from test.cl_node.cli import CLI, DockerCLI, CLIErrorExit
+from casperlabs_local_net.cli import CLI, DockerCLI, CLIErrorExit
 
 """
 Test account state retrieval with query-state.

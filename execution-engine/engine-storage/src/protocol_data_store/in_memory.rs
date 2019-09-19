@@ -1,6 +1,8 @@
+use contract_ffi::value::ProtocolVersion;
+
 use crate::error::in_memory::Error;
 use crate::protocol_data::ProtocolData;
-use crate::protocol_data_store::{self, ProtocolDataStore, ProtocolVersion};
+use crate::protocol_data_store::{self, ProtocolDataStore};
 use crate::store::Store;
 use crate::transaction_source::in_memory::InMemoryEnvironment;
 

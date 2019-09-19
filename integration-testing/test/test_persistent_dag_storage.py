@@ -1,5 +1,5 @@
-from test.cl_node.common import Contract
-from test.cl_node.wait import (
+from casperlabs_local_net.common import Contract
+from casperlabs_local_net.wait import (
     wait_for_connected_to_node,
     wait_for_finalised_hash,
     wait_for_metrics_and_assert_blocks_avaialable,
@@ -8,7 +8,7 @@ from test.cl_node.wait import (
     wait_for_streamed_packet,
     wait_for_block_hashes_propagated_to_all_nodes,
 )
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT
+from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
 
 
 # TODO: Fix finalized hash portion

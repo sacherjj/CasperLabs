@@ -10,7 +10,7 @@ use core::clone::Clone;
 use core::convert::Into;
 
 use contract_ffi::contract_api;
-use contract_ffi::contract_api::pointers::UPointer;
+use contract_ffi::contract_api::pointers::TURef;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 
@@ -19,11 +19,11 @@ const CONTRACT_NAME: &str = "create";
 
 #[no_mangle]
 pub extern "C" fn create() {
-    let reference: UPointer<String> = contract_api::new_uref(DATA.to_string());
+    let reference: TURef<String> = contract_api::new_turef(DATA.to_string());
 
     let read_only_reference: URef = {
-        let mut ret: UPointer<String> = reference.clone();
-        ret.1 = AccessRights::READ;
+        let mut ret: TURef<String> = reference.clone();
+        ret.set_access_rights(AccessRights::READ);
         ret.into()
     };
 

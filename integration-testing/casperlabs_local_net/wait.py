@@ -1,14 +1,14 @@
 import logging
 import re
 import time
-from test.cl_node.errors import NonZeroExitCodeError
+from casperlabs_local_net.errors import NonZeroExitCodeError
 from typing import List
 
 import pytest
 import typing_extensions
 
-from test.cl_node.client_parser import parse_show_blocks
-from test.cl_node.docker_node import DockerNode
+from casperlabs_local_net.client_parser import parse_show_blocks
+from casperlabs_local_net.docker_node import DockerNode
 
 
 class PredicateProtocol(typing_extensions.Protocol):
