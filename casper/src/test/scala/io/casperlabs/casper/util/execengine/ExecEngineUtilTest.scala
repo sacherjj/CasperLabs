@@ -165,6 +165,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
           (_, _) => new Throwable("failed when run genesis").asLeft.pure[Task],
+          (_) => new Throwable("failed when run genesis").asLeft.pure[Task],
           (_, _, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
@@ -174,6 +175,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       val failedCommitEEService: ExecutionEngineService[Task] =
         mock[Task](
           (_, _) => new Throwable("failed when run genesis").asLeft.pure[Task],
+          (_) => new Throwable("failed when run genesis").asLeft.pure[Task],
           (_, _, deploys, _) =>
             Task.now {
               def getExecutionEffect(deploy: ipc.DeployItem) = {

@@ -1198,7 +1198,7 @@ object HashSetCasperTest {
       timestamp: Long
   ): BlockMsgWithTransform = {
     implicit val logEff                  = new LogStub[Task]()
-    val initial                          = Genesis.withoutContracts(bonds, timestamp, "casperlabs")
+    val initial                          = Genesis.withoutContracts(bonds, timestamp, "casperlabs", 1L)
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
     implicit val filesApi                = FilesAPI.create[Task]
     val validators = bonds.map {

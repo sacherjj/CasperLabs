@@ -3,6 +3,7 @@ package io.casperlabs.node.casper
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import cats._
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
@@ -27,8 +28,9 @@ import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.configuration.{ChainSpecReader, Configuration}
 import io.casperlabs.shared.{Cell, FilesAPI, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
@@ -42,8 +44,8 @@ import scala.util.Random
 import scala.util.control.NoStackTrace
 
 /** Create the Casper stack using the GossipService. */
-package object gossiping {
-  import cats.data.NonEmptyList
+package object gossiping extends ChainSpecReader {
+
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
@@ -378,6 +380,7 @@ package object gossiping {
                       } yield id
                     }
 
+      // Produce an approval for a valid candiate if this node is a validator.
       maybeApproveBlock = (block: Block) =>
         validatorId.map { id =>
           val sig = id.signature(block.blockHash.toByteArray)
@@ -440,8 +443,23 @@ package object gossiping {
                    for {
                      genesis <- Resource.liftF {
                                  for {
-                                   _       <- Log[F].info("Constructing Genesis candidate...")
-                                   genesis <- Genesis[F](conf.casper).map(_.getBlockMessage)
+                                   _ <- Log[F].info("Constructing Genesis candidate...")
+                                   genesis <- conf.casper.chainSpecDir
+                                               .fold(Genesis[F](conf.casper)) { dir =>
+                                                 ipc.ChainSpec
+                                                   .fromDirectory(dir)
+                                                   .fold(
+                                                     errors =>
+                                                       MonadThrowable[F].raiseError(
+                                                         new IllegalArgumentException(
+                                                           errors.toList.mkString(", ")
+                                                         )
+                                                       ),
+                                                     spec =>
+                                                       Genesis.fromChainSpec[F](spec.getGenesis)
+                                                   )
+                                               }
+                                               .map(_.getBlockMessage)
                                    // Store it so others can pull it from the bootstrap node.
                                    _ <- Log[F].info(
                                          s"Trying to store generated Genesis candidate ${show(genesis.blockHash)}"
@@ -463,6 +481,7 @@ package object gossiping {
                                 )
                    } yield approver
                  } else {
+                   // TODO: Get rid of this, everyone should start with ChainSpec.
                    for {
                      bootstraps <- unsafeGetBootstraps[F](conf)
                      approver <- GenesisApproverImpl.fromBootstraps(

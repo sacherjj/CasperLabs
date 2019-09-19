@@ -10,6 +10,7 @@ import cats.implicits._
 import cats.{Applicative, Monad, MonadError}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
+import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.contracts._
@@ -192,20 +193,29 @@ object Genesis {
     unsignedBlockProto(body, header)
   }
 
-  def apply[F[_]: MonadThrowable: Log: FilesAPI: ExecutionEngineService](
+  //@deprecated("Use fromChainSpec instead.", "0.8")
+  def apply[F[_]: MonadThrowable: Log: FilesAPI: ExecutionEngineService: BlockStorage](
       conf: CasperConf
-  ): F[BlockMsgWithTransform] = apply[F](
-    conf.walletsFile,
-    conf.bondsFile,
-    conf.minimumBond,
-    conf.maximumBond,
-    conf.chainId,
-    conf.deployTimestamp,
-    conf.genesisAccountPublicKeyPath,
-    conf.initialMotes,
-    conf.mintCodePath,
-    conf.posCodePath
-  )
+  ): F[BlockMsgWithTransform] =
+    if (conf.chainSpecDir.isDefined)
+      MonadThrowable[F].raiseError(
+        new IllegalStateException(
+          s"Call `fromChainSpec` since the directory is defined: ${conf.chainSpecDir.get}"
+        )
+      )
+    else
+      apply[F](
+        conf.walletsFile,
+        conf.bondsFile,
+        conf.minimumBond,
+        conf.maximumBond,
+        conf.chainId,
+        conf.deployTimestamp,
+        conf.genesisAccountPublicKeyPath,
+        conf.initialMotes,
+        conf.mintCodePath,
+        conf.posCodePath
+      )
 
   def apply[F[_]: MonadThrowable: Log: FilesAPI: ExecutionEngineService](
       walletsPath: Path,
@@ -246,34 +256,10 @@ object Genesis {
     } yield withContr
 
   // https://casperlabs.atlassian.net/wiki/spaces/EN/pages/135528449/Genesis+Process+Specification
-  def fromChainSpec[F[_]: Sync: Log: ExecutionEngineService](
+  def fromChainSpec[F[_]: MonadThrowable: Log: ExecutionEngineService: BlockStorage](
       genesisConfig: ipc.ChainSpec.GenesisConfig
   ): F[BlockMsgWithTransform] =
     for {
-      bondsMap <- Sync[F].delay {
-                   genesisConfig.accounts.collect {
-                     case account
-                         if account.bondedAmount.isDefined && account.getBondedAmount.value != "0" =>
-                       PublicKey(account.publicKey.toByteArray) -> account.getBondedAmount.value.toLong
-                   }.toMap
-                 }
-
-      initial = withoutContracts(
-        bonds = bondsMap,
-        timestamp = genesisConfig.timestamp,
-        chainId = genesisConfig.name,
-        protocolVersion = genesisConfig.getProtocolVersion.value
-      )
-
-      // The genesis will have no deploys, everyone is supposed to have the chainspec.
-      withContr <- withContracts(
-                    initial,
-                    blessedTerms = Nil
-                  )
-
-      // We need to add the post state hash to Genesis.
-      genesis = withContr.getBlockMessage
-
       // Execute the EE genesis setup based on the chain spec.
       genesisResult <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F]
@@ -281,31 +267,54 @@ object Genesis {
                             genesisConfig
                           )
                       )
+      bondsMap = genesisConfig.accounts.collect {
+        case account if account.bondedAmount.isDefined && account.getBondedAmount.value != "0" =>
+          PublicKey(account.publicKey.toByteArray) -> account.getBondedAmount.value.toLong
+      }.toMap
+
+      initial = withoutContracts(
+        bonds = bondsMap,
+        timestamp = genesisConfig.timestamp,
+        chainId = genesisConfig.name,
+        protocolVersion = genesisConfig.getProtocolVersion.value
+      )
       transforms    = genesisResult.getEffect.transformMap
       postStateHash = genesisResult.poststateHash
+
+      stateWithContracts = initial.getHeader.getState
+        .withPreStateHash(ExecutionEngineService[F].emptyStateHash)
+        .withPostStateHash(postStateHash)
+
+      // Chain spec based Genesis will have an empty body,
+      // no deploys, so everyone has to calculate it themselves.
+      body = Block.Body()
+
+      header = blockHeader(
+        body,
+        parentHashes = Nil,
+        justifications = Nil,
+        state = stateWithContracts,
+        rank = initial.getHeader.rank,
+        protocolVersion = initial.getHeader.protocolVersion,
+        timestamp = initial.getHeader.timestamp,
+        chainId = initial.getHeader.chainId
+      )
+      unsignedBlock = unsignedBlockProto(body, header)
+
+      genesis = BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
       // Since we are not passing the deploys in the body,
       // we must commit the effects here.
       _ <- MonadError[F, Throwable].rethrow(
             ExecutionEngineService[F]
               .commit(
-                genesis.getHeader.getState.preStateHash,
+                genesis.getBlockMessage.getHeader.getState.preStateHash,
                 transforms
               )
           )
-
-      withEffects = withContr
-        .withBlockMessage(
-          genesis.withHeader(
-            genesis.getHeader.withState(
-              genesis.getHeader.getState
-                .withPostStateHash(postStateHash)
-            )
-          )
-        )
-        .withTransformEntry(transforms)
-
-    } yield withEffects
+      // And store the block as well since we won't have any other means of retrieving its effects.
+      _ <- BlockStorage[F].put(genesis)
+    } yield genesis
 
   private def toFile[F[_]: Applicative: Log](
       path: Path

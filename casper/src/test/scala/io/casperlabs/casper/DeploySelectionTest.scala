@@ -313,6 +313,7 @@ object DeploySelectionTest {
       ) => F[Either[Throwable, Seq[DeployResult]]]
   ): ExecutionEngineService[F] = ExecutionEngineServiceStub.mock(
     (_, _) => raiseNotImplemented[F, Either[Throwable, GenesisResult]],
+    (_) => raiseNotImplemented[F, Either[Throwable, GenesisResult]],
     execFunc,
     (_, _) => raiseNotImplemented[F, Either[Throwable, CommitResult]],
     (_, _, _) => raiseNotImplemented[F, Either[Throwable, Value]],
