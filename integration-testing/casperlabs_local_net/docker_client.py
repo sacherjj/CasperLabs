@@ -27,7 +27,9 @@ _STANDARD_PAYMENT_JSON = json.dumps(
     [
         {
             "name": "amount",
-            "value": {"big_int": {"value": f"{DEFAULT_PAYMENT_COST}", "bit_width": 512}},
+            "value": {
+                "big_int": {"value": f"{DEFAULT_PAYMENT_COST}", "bit_width": 512}
+            },
         }
     ]
 )
